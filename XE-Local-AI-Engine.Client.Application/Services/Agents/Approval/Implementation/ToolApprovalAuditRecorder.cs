@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Agents.Approval.Implementation;
 
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -45,8 +43,7 @@ internal sealed class ToolApprovalAuditRecorder : IToolApprovalAuditRecorder
 
             await using var scope = _scopeFactory.CreateAsyncScope();
             var store = scope.ServiceProvider.GetRequiredService<IAgentExecutionLogStore>();
-            await store.AddApprovalDecisionAsync(
-                new ApprovalDecisionAuditInput(invocationId, toolName ?? string.Empty, categoryLabel, decision, source, latencyMs),
+            await store.AddApprovalDecisionAsync(new ApprovalDecisionAuditInput(invocationId, toolName ?? string.Empty, categoryLabel, decision, source, latencyMs),
                 cancellationToken).ConfigureAwait(false);
         }
         catch (Exception exception)

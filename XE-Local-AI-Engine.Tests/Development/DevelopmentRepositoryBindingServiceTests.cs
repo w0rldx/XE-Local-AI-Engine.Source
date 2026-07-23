@@ -45,10 +45,9 @@ public sealed class DevelopmentRepositoryBindingServiceTests : IDisposable
         AssertEx.Equal(selectedFolderId.ToString(), result.Id);
         AssertEx.Equal("repo", result.Alias);
         AssertEx.Equal("Available", result.Availability);
-        _ = selectedFolders.Received(1).RegisterAsync(
-            Arg.Is<SelectedFolderRegistration>(registration => registration.Alias == "Repo"
-                                                               && registration.HostPath == DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)
-                                                               && registration.Mode == SelectedFolderMode.Copy),
+        _ = selectedFolders.Received(1).RegisterAsync(Arg.Is<SelectedFolderRegistration>(registration => registration.Alias == "Repo"
+                                                                                                         && registration.HostPath == DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)
+                                                                                                         && registration.Mode == SelectedFolderMode.Copy),
             Arg.Any<CancellationToken>());
     }
 
@@ -149,8 +148,7 @@ public sealed class DevelopmentRepositoryBindingServiceTests : IDisposable
                        .Returns(new ResolvedSelectedFolder(selectedFolderId, "repo", repository, SelectedFolderMode.Copy));
         var service = CreateService(selectedFolders);
 
-        _ = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => service.ResolveExecutionAsync(
-            ExecutionSnapshot(selectedFolderId, repositoryIdentityHash: "different-repository")));
+        _ = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => service.ResolveExecutionAsync(ExecutionSnapshot(selectedFolderId, repositoryIdentityHash: "different-repository")));
     }
 
     [Test]
@@ -167,7 +165,11 @@ public sealed class DevelopmentRepositoryBindingServiceTests : IDisposable
                        .Returns(new ResolvedSelectedFolder(selectedFolderId, "repo", repository, SelectedFolderMode.Copy));
         var store = Substitute.For<IDevelopmentStore>();
         var disconnectedProject = ProjectSnapshot(projectId, selectedFolderId: null, repositoryIdentityHash, version: expectedVersion);
-        var reconnectedProject = disconnectedProject with { SelectedFolderId = selectedFolderId, Version = expectedVersion + 1 };
+        var reconnectedProject = disconnectedProject with
+        {
+            SelectedFolderId = selectedFolderId,
+            Version = expectedVersion + 1
+        };
         store.GetProjectAsync(projectId, Arg.Any<CancellationToken>()).Returns(disconnectedProject);
         store.ReconnectProjectRepositoryAsync(projectId, selectedFolderId, expectedVersion, Arg.Any<CancellationToken>())
              .Returns(reconnectedProject);
@@ -183,10 +185,13 @@ public sealed class DevelopmentRepositoryBindingServiceTests : IDisposable
     }
 
     private static DevelopmentRepositoryBindingService CreateService(ISelectedFolderResolver selectedFolders,
-        IDevelopmentStore? store = null)
-        => new(selectedFolders,
+        IDevelopmentStore? store = null) =>
+        new(selectedFolders,
             store ?? Substitute.For<IDevelopmentStore>(),
-            Options.Create(new DevelopmentOptions { MaxAttemptDurationSeconds = 30 }));
+            Options.Create(new DevelopmentOptions
+            {
+                MaxAttemptDurationSeconds = 30
+            }));
 
     private async Task<string> CreateRepositoryAsync()
     {
@@ -214,7 +219,10 @@ public sealed class DevelopmentRepositoryBindingServiceTests : IDisposable
             startInfo.ArgumentList.Add(argument);
         }
 
-        using var process = new Process { StartInfo = startInfo };
+        using var process = new Process
+        {
+            StartInfo = startInfo
+        };
         process.Start();
         var stdout = process.StandardOutput.ReadToEndAsync();
         var stderr = process.StandardError.ReadToEndAsync();
@@ -222,8 +230,8 @@ public sealed class DevelopmentRepositoryBindingServiceTests : IDisposable
         return new CommandResult(process.ExitCode, await stdout.ConfigureAwait(false), await stderr.ConfigureAwait(false));
     }
 
-    private static DevelopmentExecutionSnapshot ExecutionSnapshot(Guid selectedFolderId, string repositoryIdentityHash)
-        => new(Guid.NewGuid(),
+    private static DevelopmentExecutionSnapshot ExecutionSnapshot(Guid selectedFolderId, string repositoryIdentityHash) =>
+        new(Guid.NewGuid(),
             Guid.NewGuid(),
             Guid.NewGuid(),
             selectedFolderId,
@@ -250,8 +258,8 @@ public sealed class DevelopmentRepositoryBindingServiceTests : IDisposable
     private static DevelopmentProjectSnapshot ProjectSnapshot(Guid projectId,
         Guid? selectedFolderId,
         string repositoryIdentityHash,
-        long version)
-        => new(projectId,
+        long version) =>
+        new(projectId,
             "objective",
             selectedFolderId,
             repositoryIdentityHash,

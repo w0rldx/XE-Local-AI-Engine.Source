@@ -65,7 +65,11 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
     {
         using var provider = CreateProvider();
         var agentHomeKey = Key();
-        var developmentKey = agentHomeKey with { RuntimeProfile = "development-local", ManifestVersion = 2 };
+        var developmentKey = agentHomeKey with
+        {
+            RuntimeProfile = "development-local",
+            ManifestVersion = 2
+        };
 
         var agentHome = await provider.CreateOrAttachAsync(CreateRequest(agentHomeKey));
         var development = await provider.CreateOrAttachAsync(new SandboxCreateRequest

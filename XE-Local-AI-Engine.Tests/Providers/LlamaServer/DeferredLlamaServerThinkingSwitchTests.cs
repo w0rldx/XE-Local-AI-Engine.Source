@@ -4,6 +4,7 @@ using System.ClientModel;
 using System.ClientModel.Primitives;
 using System.Net;
 using System.Text;
+using System.Text.Json;
 using Microsoft.Extensions.AI;
 using OpenAI;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
@@ -41,7 +42,7 @@ public sealed class DeferredLlamaServerThinkingSwitchTests
         AssertEx.Contains(body, "chat_template_kwargs", StringComparison.Ordinal);
         AssertEx.Contains(body, "enable_thinking", StringComparison.Ordinal);
         // Parse to assert the actual value rather than substring-matching a coincidental token.
-        using var doc = System.Text.Json.JsonDocument.Parse(body);
+        using var doc = JsonDocument.Parse(body);
         var kwargs = doc.RootElement.GetProperty("chat_template_kwargs");
         AssertEx.Equal(expected: false, kwargs.GetProperty("enable_thinking").GetBoolean());
     }

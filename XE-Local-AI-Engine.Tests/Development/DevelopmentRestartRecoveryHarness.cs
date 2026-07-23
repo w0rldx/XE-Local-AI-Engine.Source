@@ -71,8 +71,7 @@ internal sealed class DevelopmentAttempt
 
 internal sealed class DevelopmentArtifact
 {
-    public DevelopmentArtifact(
-        Guid id,
+    public DevelopmentArtifact(Guid id,
         Guid taskId,
         Guid attemptId,
         DevelopmentArtifactKind kind,
@@ -438,7 +437,10 @@ internal sealed class DevelopmentRestartRecoveryHarness : IAsyncDisposable
             startInfo.ArgumentList.Add(argument);
         }
 
-        using var process = new Process { StartInfo = startInfo };
+        using var process = new Process
+        {
+            StartInfo = startInfo
+        };
         process.Start();
         var standardOutput = process.StandardOutput.ReadToEndAsync();
         var standardError = process.StandardError.ReadToEndAsync();

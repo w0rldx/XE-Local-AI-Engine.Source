@@ -116,8 +116,7 @@ public sealed class DevelopmentRestartRecoveryTests
         await harness.CommitWorkspaceMutationOutsideCoordinatorAsync("unexpected committed mutation\n").ConfigureAwait(false);
 
         var recovery = await harness.RecoverAsync().ConfigureAwait(false);
-        var exception = await AssertEx.ThrowsAsync<InvalidOperationException>(
-            () => harness.CreateReplacementAttemptAsync(interrupted.Id)).ConfigureAwait(false);
+        var exception = await AssertEx.ThrowsAsync<InvalidOperationException>(() => harness.CreateReplacementAttemptAsync(interrupted.Id)).ConfigureAwait(false);
 
         AssertEx.False(recovery.ReplacementAllowed);
         AssertEx.True(harness.Task.IsBlocked);

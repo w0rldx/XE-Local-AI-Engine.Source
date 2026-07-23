@@ -156,8 +156,8 @@ internal sealed class DevelopmentApplyService(
                      ?? throw new DevelopmentInvalidTransitionException("The approved validation report is invalid.");
         EnsureEvidenceMatches(artifact, report.BaseCommit, report.SubjectHash, report.ManifestHash, current);
         var latestCoder = (await _store.ListAttemptsAsync(taskId, cancellationToken).ConfigureAwait(false))
-                          .LastOrDefault(attempt => attempt.Role == DevelopmentAttemptRole.Coder
-                                                    && attempt.Status == DevelopmentAttemptStatus.Succeeded);
+            .LastOrDefault(attempt => attempt.Role == DevelopmentAttemptRole.Coder
+                                      && attempt.Status == DevelopmentAttemptStatus.Succeeded);
         if (!report.Passed
             || !string.Equals(report.CommandProfileVersion, DevelopmentValidationRunner.ProfileVersion, StringComparison.Ordinal)
             || !string.Equals(artifact.CommandProfileVersion, DevelopmentValidationRunner.ProfileVersion, StringComparison.Ordinal)

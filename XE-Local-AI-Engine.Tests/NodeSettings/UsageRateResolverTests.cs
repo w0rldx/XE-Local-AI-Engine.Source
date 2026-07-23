@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Tests.NodeSettings;
 
-using System.Collections.Generic;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
@@ -18,10 +17,17 @@ public sealed class UsageRateResolverTests
         var models = new Dictionary<string, ModelRate>();
         foreach (var (model, input, output) in entries)
         {
-            models[model] = new ModelRate { InputPer1M = input, OutputPer1M = output };
+            models[model] = new ModelRate
+            {
+                InputPer1M = input,
+                OutputPer1M = output
+            };
         }
 
-        return UsageRateResolver.FromSettings(new NodeUsageRateSettings { Models = models });
+        return UsageRateResolver.FromSettings(new NodeUsageRateSettings
+        {
+            Models = models
+        });
     }
 
     [Test]
@@ -95,8 +101,7 @@ public sealed class UsageRateResolverTests
     {
         // Belt-and-suspenders at the resolver boundary (the store's Normalize is the authority): a negative and a NaN
         // entry are dropped (fall through to the default table / zero), a valid override is kept.
-        var resolver = WithOverrides(
-            ("bad-negative", -1, 5),
+        var resolver = WithOverrides(("bad-negative", -1, 5),
             ("bad-nan", double.NaN, 5),
             ("good", 2, 3));
 

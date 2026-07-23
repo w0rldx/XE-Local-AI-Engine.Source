@@ -1,27 +1,17 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests.Development;
 
-using Microsoft.Data.Sqlite;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Migrations;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Options;
-using XE_Local_AI_Engine.Client.DependencyInjection.Modules;
-using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
-using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Client.Services.Development;
-using XE_Local_AI_Engine.Providers.Abstractions;
 
 public sealed class DevelopmentApplyRecoveryTests : IDisposable
 {
     private readonly DevelopmentTestFixture _fixture = new();
 
-    public void Dispose() => _fixture.Dispose();
+    public void Dispose() =>
+        _fixture.Dispose();
 
     [Test]
     public async Task CrashAfterHostMutation_SameKeyFinalizesWithoutApplyingTwice()
@@ -138,14 +128,14 @@ public sealed class DevelopmentApplyRecoveryTests : IDisposable
         var (seed, version) = await SeedAwaitingApplyAsync(store).ConfigureAwait(false);
 
         await AssertEx.ThrowsAsync<DevelopmentInvalidTransitionException>(() => store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
-                                                                                                                      Guid.NewGuid(),
-                                                                                                                      DevelopmentTaskStatus.Completed,
-                                                                                                                      version)))
+                          Guid.NewGuid(),
+                          DevelopmentTaskStatus.Completed,
+                          version)))
                       .ConfigureAwait(false);
     }
 
-    private static DevelopmentApprovedApplySubject CreateSubject(DevelopmentCreateProjectCommand seed, long version)
-        => new(seed.ProjectId,
+    private static DevelopmentApprovedApplySubject CreateSubject(DevelopmentCreateProjectCommand seed, long version) =>
+        new(seed.ProjectId,
             seed.TaskId,
             version,
             "base",
@@ -157,8 +147,8 @@ public sealed class DevelopmentApplyRecoveryTests : IDisposable
             SubjectHash: "subject",
             RepositoryIdentityHash: seed.RepositoryIdentityHash);
 
-    private static DevelopmentRepositoryBinding Repository(DevelopmentCreateProjectCommand seed)
-        => new(seed.ProjectId,
+    private static DevelopmentRepositoryBinding Repository(DevelopmentCreateProjectCommand seed) =>
+        new(seed.ProjectId,
             seed.SelectedFolderId,
             "repository",
             "repo",
@@ -179,12 +169,12 @@ public sealed class DevelopmentApplyRecoveryTests : IDisposable
                  })
         {
             var result = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
-                                                                         Guid.NewGuid(),
-                                                                         status,
-                                                                         version,
-                                                                         ApprovedSubjectHash: status == DevelopmentTaskStatus.AwaitingApply
-                                                                             ? "subject"
-                                                                             : null))
+                                        Guid.NewGuid(),
+                                        status,
+                                        version,
+                                        ApprovedSubjectHash: status == DevelopmentTaskStatus.AwaitingApply
+                                            ? "subject"
+                                            : null))
                                     .ConfigureAwait(false);
             version = result.Version;
         }

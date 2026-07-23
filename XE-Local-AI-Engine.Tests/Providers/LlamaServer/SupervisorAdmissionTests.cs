@@ -25,8 +25,8 @@ public sealed class SupervisorAdmissionTests
         try
         {
             var lease = await supervisor.TryAcquireRuntimeMutationLeaseAsync(CancellationToken.None)
-                .WaitAsync(TimeSpan.FromSeconds(2))
-                .ConfigureAwait(false);
+                                        .WaitAsync(TimeSpan.FromSeconds(2))
+                                        .ConfigureAwait(false);
             AssertEx.Null(lease);
         }
         finally

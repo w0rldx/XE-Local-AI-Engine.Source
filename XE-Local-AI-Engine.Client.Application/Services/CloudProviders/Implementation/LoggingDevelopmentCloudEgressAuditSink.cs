@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 
-using Microsoft.Extensions.Logging;
-
 public sealed partial class LoggingDevelopmentCloudEgressAuditSink(ILogger<LoggingDevelopmentCloudEgressAuditSink> logger)
     : IDevelopmentCloudEgressAuditSink
 {
@@ -23,7 +21,8 @@ public sealed partial class LoggingDevelopmentCloudEgressAuditSink(ILogger<Loggi
 
     [LoggerMessage(EventId = 4701,
         Level = LogLevel.Information,
-        Message = "Development cloud egress authorized for project {ProjectId}, task {TaskId}, attempt {AttemptId}, provider {ProviderName}, model {ModelId}, bundle {BundleId}, hash {BundleHash}, at {AuthorizedAt}.")]
+        Message =
+            "Development cloud egress authorized for project {ProjectId}, task {TaskId}, attempt {AttemptId}, provider {ProviderName}, model {ModelId}, bundle {BundleId}, hash {BundleHash}, at {AuthorizedAt}.")]
     private static partial void CloudEgressAuthorized(ILogger logger,
         string projectId,
         string taskId,

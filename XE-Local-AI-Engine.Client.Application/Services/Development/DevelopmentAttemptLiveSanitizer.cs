@@ -69,7 +69,8 @@ internal static partial class DevelopmentAttemptLiveSanitizer
     [GeneratedRegex(@"![A-Za-z][A-Za-z0-9]{11,}", RegexOptions.CultureInvariant | RegexOptions.NonBacktracking | RegexOptions.ExplicitCapture, 100)]
     private static partial Regex DevelopmentCredential();
 
-    [GeneratedRegex(@"(?i)(?<label>password|passwd|secret|api[-_]?key|authorization|bearer)\s*[:=]\s*[^\s,;]+", RegexOptions.CultureInvariant | RegexOptions.NonBacktracking | RegexOptions.ExplicitCapture, 100)]
+    [GeneratedRegex(@"(?i)(?<label>password|passwd|secret|api[-_]?key|authorization|bearer)\s*[:=]\s*[^\s,;]+",
+        RegexOptions.CultureInvariant | RegexOptions.NonBacktracking | RegexOptions.ExplicitCapture, 100)]
     private static partial Regex CommonCredential();
 
     [GeneratedRegex("""(?:[A-Za-z]:\\|\\\\)[^\r\n\t"']+""", RegexOptions.CultureInvariant | RegexOptions.NonBacktracking | RegexOptions.ExplicitCapture, 100)]

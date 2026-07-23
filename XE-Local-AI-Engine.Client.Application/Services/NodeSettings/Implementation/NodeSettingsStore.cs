@@ -225,7 +225,12 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
             cleaned[trimmed] = rate;
         }
 
-        return cleaned.Count == 0 ? null : new NodeUsageRateSettings { Models = cleaned };
+        return cleaned.Count == 0
+            ? null
+            : new NodeUsageRateSettings
+            {
+                Models = cleaned
+            };
     }
 
     private static string? TrimToNull(string? value)

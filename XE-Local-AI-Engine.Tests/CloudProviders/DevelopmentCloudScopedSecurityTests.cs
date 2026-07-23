@@ -5,13 +5,11 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
-using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 using XE_Local_AI_Engine.Client.Services.Development;
-using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class DevelopmentCloudScopedSecurityTests
@@ -21,7 +19,10 @@ public sealed class DevelopmentCloudScopedSecurityTests
     [Test]
     public void Build_WhenInputChangesAfterApproval_PreservesImmutableContentAndHash()
     {
-        var excerpts = new List<DevelopmentCloudContextExcerpt> { new("src/Feature.cs", "sealed class Feature { }") };
+        var excerpts = new List<DevelopmentCloudContextExcerpt>
+        {
+            new("src/Feature.cs", "sealed class Feature { }")
+        };
         var builder = new DevelopmentCloudContextBuilder(new FixedTimeProvider(Now));
 
         var bundle = builder.Build(CreateBuildRequest(excerpts: excerpts));
@@ -41,10 +42,8 @@ public sealed class DevelopmentCloudScopedSecurityTests
 
         await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => Task.FromResult(builder.Build(
             CreateBuildRequest(excerpts: [new DevelopmentCloudContextExcerpt("../secret.txt", "content")]))));
-        await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => Task.FromResult(builder.Build(
-            CreateBuildRequest(requirements: "password=not-a-real-secret"))));
-        await AssertEx.ThrowsAsync<InvalidOperationException>(() => Task.FromResult(builder.Build(
-            CreateBuildRequest(requirements: new string('x', 512)))));
+        await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => Task.FromResult(builder.Build(CreateBuildRequest(requirements: "password=not-a-real-secret"))));
+        await AssertEx.ThrowsAsync<InvalidOperationException>(() => Task.FromResult(builder.Build(CreateBuildRequest(requirements: new string('x', 512)))));
     }
 
     [Test]
@@ -237,7 +236,10 @@ public sealed class DevelopmentCloudScopedSecurityTests
             new DevelopmentCloudRoleRouteFactory(catalog),
             blob,
             store,
-            Options.Create(new DevelopmentOptions { MaxAttemptDurationSeconds = 120 }),
+            Options.Create(new DevelopmentOptions
+            {
+                MaxAttemptDurationSeconds = 120
+            }),
             new FixedTimeProvider(Now));
 
         var result = await service.CreateAsync(snapshot,
@@ -256,13 +258,12 @@ public sealed class DevelopmentCloudScopedSecurityTests
         AssertEx.Equal(expected: 1, result.Route.Options.Tools?.Count ?? 0);
     }
 
-    private static DevelopmentCloudContextBundle BuildBundle()
-        => new DevelopmentCloudContextBuilder(new FixedTimeProvider(Now)).Build(CreateBuildRequest());
+    private static DevelopmentCloudContextBundle BuildBundle() =>
+        new DevelopmentCloudContextBuilder(new FixedTimeProvider(Now)).Build(CreateBuildRequest());
 
-    private static DevelopmentCloudContextBuildRequest CreateBuildRequest(
-        IReadOnlyList<DevelopmentCloudContextExcerpt>? excerpts = null,
-        string requirements = "Implement the bounded change")
-        => new("bundle-1",
+    private static DevelopmentCloudContextBuildRequest CreateBuildRequest(IReadOnlyList<DevelopmentCloudContextExcerpt>? excerpts = null,
+        string requirements = "Implement the bounded change") =>
+        new("bundle-1",
             "project-1",
             "task-1",
             "attempt-1",
@@ -301,7 +302,8 @@ public sealed class DevelopmentCloudScopedSecurityTests
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     {
-        public override DateTimeOffset GetUtcNow() => now;
+        public override DateTimeOffset GetUtcNow() =>
+            now;
     }
 
     private sealed class CapturingAuditSink(List<string>? events = null) : IDevelopmentCloudEgressAuditSink
@@ -323,8 +325,12 @@ public sealed class DevelopmentCloudScopedSecurityTests
             return true;
         }
 
-        public bool IsCloudProviderSelected(string? requestedModelId = null) => true;
-        public string? ResolveActiveCloudProviderName(string? requestedModelId = null) => providerName;
+        public bool IsCloudProviderSelected(string? requestedModelId = null) =>
+            true;
+
+        public string? ResolveActiveCloudProviderName(string? requestedModelId = null) =>
+            providerName;
+
         public void InvalidateSelectionCache()
         {
         }
@@ -343,10 +349,12 @@ public sealed class DevelopmentCloudScopedSecurityTests
             if (TransportCount == 1)
             {
                 return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant,
-                    [new FunctionCallContent("call-1", "development_read_approved_context", new Dictionary<string, object?>
+                [
+                    new FunctionCallContent("call-1", "development_read_approved_context", new Dictionary<string, object?>
                     {
                         ["resource"] = "requirements"
-                    })])));
+                    })
+                ])));
             }
 
             return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, $"done-{route}")));
@@ -398,7 +406,10 @@ public sealed class DevelopmentCloudScopedSecurityTests
                 {
                     ["summary"] = "Added the bounded file.",
                     ["patch"] = "diff --git a/src/New.cs b/src/New.cs",
-                    ["changedFiles"] = new[] { "src/New.cs" },
+                    ["changedFiles"] = new[]
+                    {
+                        "src/New.cs"
+                    },
                     ["notes"] = null
                 }, cancellationToken).ConfigureAwait(false);
             }
@@ -416,7 +427,8 @@ public sealed class DevelopmentCloudScopedSecurityTests
 
         public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
             ChatOptions? options = null,
-            [EnumeratorCancellation] CancellationToken cancellationToken = default)
+            [EnumeratorCancellation]
+            CancellationToken cancellationToken = default)
         {
             var response = await GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
             foreach (var update in response.ToChatResponseUpdates())
@@ -425,7 +437,9 @@ public sealed class DevelopmentCloudScopedSecurityTests
             }
         }
 
-        public object? GetService(Type serviceType, object? serviceKey = null) => null;
+        public object? GetService(Type serviceType, object? serviceKey = null) =>
+            null;
+
         public void Dispose() { }
     }
 
@@ -433,17 +447,32 @@ public sealed class DevelopmentCloudScopedSecurityTests
     {
         public string? AppliedPatch { get; private set; }
         public IReadOnlyList<DevelopmentCommandEvidence> CommandEvidence => [];
-        public Task<string> ListFilesAsync(string? path, CancellationToken cancellationToken = default) => Task.FromResult(string.Empty);
-        public Task<string> ReadFileAsync(string path, CancellationToken cancellationToken = default) => Task.FromResult(string.Empty);
-        public Task<string> SearchTextAsync(string pattern, string? path, CancellationToken cancellationToken = default) => Task.FromResult(string.Empty);
-        public Task<string> WriteFileAsync(string path, string content, CancellationToken cancellationToken = default) => throw new InvalidOperationException();
+
+        public Task<string> ListFilesAsync(string? path, CancellationToken cancellationToken = default) =>
+            Task.FromResult(string.Empty);
+
+        public Task<string> ReadFileAsync(string path, CancellationToken cancellationToken = default) =>
+            Task.FromResult(string.Empty);
+
+        public Task<string> SearchTextAsync(string pattern, string? path, CancellationToken cancellationToken = default) =>
+            Task.FromResult(string.Empty);
+
+        public Task<string> WriteFileAsync(string path, string content, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException();
+
         public Task<string> ApplyPatchAsync(string patch, CancellationToken cancellationToken = default)
         {
             AppliedPatch = patch;
             return Task.FromResult("applied");
         }
-        public Task<string> GetStatusAsync(CancellationToken cancellationToken = default) => Task.FromResult(string.Empty);
-        public Task<string> GetDiffAsync(CancellationToken cancellationToken = default) => Task.FromResult(string.Empty);
-        public Task<string> RunCommandAsync(string commandId, CancellationToken cancellationToken = default) => throw new InvalidOperationException();
+
+        public Task<string> GetStatusAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(string.Empty);
+
+        public Task<string> GetDiffAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(string.Empty);
+
+        public Task<string> RunCommandAsync(string commandId, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException();
     }
 }

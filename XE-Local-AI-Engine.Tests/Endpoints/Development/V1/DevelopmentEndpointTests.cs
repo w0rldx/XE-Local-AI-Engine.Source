@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Endpoints.Development.V1;
 
 using System.Net;
 using System.Net.Http.Json;
+using System.Text;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using NSubstitute;
@@ -36,12 +37,15 @@ public sealed class DevelopmentEndpointTests
     [Arguments("POST", "/api/local/v1/development/projects/11111111-1111-1111-1111-111111111111/repository-connection")]
     public async Task ManagementRoute_WhenOperatorTokenIsMissing_ReturnsUnauthorized(string method, string route)
     {
-        await using var factory = new TestingWebAppFactory { EnableDevelopmentMode = true };
+        await using var factory = new TestingWebAppFactory
+        {
+            EnableDevelopmentMode = true
+        };
         using var client = factory.CreateClient();
         using var request = new HttpRequestMessage(new HttpMethod(method), route);
         if (method == "POST")
         {
-            request.Content = new StringContent("{}", System.Text.Encoding.UTF8, "application/json");
+            request.Content = new StringContent("{}", Encoding.UTF8, "application/json");
         }
 
         using var response = await client.SendAsync(request).ConfigureAwait(false);
@@ -93,7 +97,7 @@ public sealed class DevelopmentEndpointTests
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/development/repositories")
         {
             Content = new StringContent("{\"alias\":\"repository\",\"hostPath\":\"/secret/operator/repository\"}",
-                System.Text.Encoding.UTF8,
+                Encoding.UTF8,
                 "application/json")
         };
         factory.AddNodeBearerToken(request);
@@ -148,8 +152,8 @@ public sealed class DevelopmentEndpointTests
         AssertEx.False(propertyNames.Contains("RepositoryRoot", StringComparer.Ordinal));
     }
 
-    private static TestingWebAppFactory EnabledFactory(IDevelopmentManagementService service)
-        => new()
+    private static TestingWebAppFactory EnabledFactory(IDevelopmentManagementService service) =>
+        new()
         {
             EnableDevelopmentMode = true,
             ConfigureAdditionalTestServices = services =>
@@ -159,8 +163,8 @@ public sealed class DevelopmentEndpointTests
             }
         };
 
-    private static HttpRequestMessage StaleSelectedFolderRequest(string operation)
-        => operation switch
+    private static HttpRequestMessage StaleSelectedFolderRequest(string operation) =>
+        operation switch
         {
             "create" => new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/development/projects")
             {
@@ -190,14 +194,17 @@ public sealed class DevelopmentEndpointTests
             _ => throw new ArgumentOutOfRangeException(nameof(operation), operation, "Unknown Development operation.")
         };
 
-    private static HttpRequestMessage ActionRequest(string action)
-        => new(HttpMethod.Post, $"/api/local/v1/development/projects/{ProjectId}/tasks/{TaskId}/{action}")
+    private static HttpRequestMessage ActionRequest(string action) =>
+        new(HttpMethod.Post, $"/api/local/v1/development/projects/{ProjectId}/tasks/{TaskId}/{action}")
         {
-            Content = JsonContent.Create(new DevelopmentActionRequest { OperationId = Guid.NewGuid() })
+            Content = JsonContent.Create(new DevelopmentActionRequest
+            {
+                OperationId = Guid.NewGuid()
+            })
         };
 
-    private static DevelopmentProjectAggregate ProjectAggregate(Guid projectId)
-        => new(new DevelopmentProjectSnapshot(projectId,
+    private static DevelopmentProjectAggregate ProjectAggregate(Guid projectId) =>
+        new(new DevelopmentProjectSnapshot(projectId,
                 "objective",
                 Guid.NewGuid(),
                 "repository-hash",
@@ -220,8 +227,8 @@ public sealed class DevelopmentEndpointTests
 
     internal static DevelopmentTaskAggregate TaskAggregate(Guid projectId,
         Guid taskId,
-        IReadOnlyList<DevelopmentAttemptSnapshot> attempts)
-        => new(new DevelopmentTaskSnapshot(taskId,
+        IReadOnlyList<DevelopmentAttemptSnapshot> attempts) =>
+        new(new DevelopmentTaskSnapshot(taskId,
                 projectId,
                 "task",
                 "requirements",

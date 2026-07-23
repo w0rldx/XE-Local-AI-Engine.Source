@@ -71,14 +71,13 @@ public sealed class LlamaCppSourceBuildTransportTests
     [Arguments(LlamaCppSourceBuildStartOutcome.MissingPrerequisites, "prerequisites", 0)]
     [Arguments(LlamaCppSourceBuildStartOutcome.ProcessesRunning, "processes-running", 3)]
     [Arguments(LlamaCppSourceBuildStartOutcome.RuntimeBusy, "runtime-busy", 0)]
-    public async Task StartEndpoint_MapsTypedAdmissionWithoutDuplicatingProbes(
-        LlamaCppSourceBuildStartOutcome outcome,
+    public async Task StartEndpoint_MapsTypedAdmissionWithoutDuplicatingProbes(LlamaCppSourceBuildStartOutcome outcome,
         string expectedReason,
         int runningProcessCount)
     {
         var service = Substitute.For<ILlamaCppSourceBuildService>();
         service.StartAsync(Arg.Any<LlamaCppSourceBuildRequest>(), Arg.Any<CancellationToken>())
-            .Returns(new LlamaCppSourceBuildStartResult(outcome, RunningProcessCount: runningProcessCount));
+               .Returns(new LlamaCppSourceBuildStartResult(outcome, RunningProcessCount: runningProcessCount));
         var prerequisiteProbe = Substitute.For<ILlamaCppSourceBuildPrerequisiteProbe>();
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
         await using var factory = new TestingWebAppFactory
@@ -115,6 +114,7 @@ public sealed class LlamaCppSourceBuildTransportTests
         {
             AssertEx.Equal(runningProcessCount, body.RootElement.GetProperty("runningProcessCount").GetInt32());
         }
+
         await service.Received(1).StartAsync(Arg.Any<LlamaCppSourceBuildRequest>(), Arg.Any<CancellationToken>());
         await prerequisiteProbe.DidNotReceiveWithAnyArgs().ProbeAsync(default, default);
         _ = supervisor.DidNotReceiveWithAnyArgs().CountRunningProcesses();
@@ -135,12 +135,12 @@ public sealed class LlamaCppSourceBuildTransportTests
 
         var service = Substitute.For<ILlamaCppSourceBuildService>();
         service.StartAsync(Arg.Any<LlamaCppSourceBuildRequest>(), Arg.Any<CancellationToken>())
-            .Returns(call =>
-            {
-                // Mirrors what the production service does with whatever the endpoint handed it.
-                _ = LlamaCppSourceBuildRequestValidation.Normalize(call.Arg<LlamaCppSourceBuildRequest>());
-                return new LlamaCppSourceBuildStartResult(LlamaCppSourceBuildStartOutcome.Started);
-            });
+               .Returns(call =>
+               {
+                   // Mirrors what the production service does with whatever the endpoint handed it.
+                   _ = LlamaCppSourceBuildRequestValidation.Normalize(call.Arg<LlamaCppSourceBuildRequest>());
+                   return new LlamaCppSourceBuildStartResult(LlamaCppSourceBuildStartOutcome.Started);
+               });
         service.GetStatus().Returns(new LlamaCppSourceBuildStatus(LlamaCppSourceBuildPhase.Cloning,
             IsRunning: true,
             Terminal: false,
@@ -176,8 +176,7 @@ public sealed class LlamaCppSourceBuildTransportTests
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
         AssertEx.True(body.RootElement.GetProperty("started").GetBoolean());
-        await service.Received(1).StartAsync(
-            Arg.Is<LlamaCppSourceBuildRequest>(sourceRequest =>
+        await service.Received(1).StartAsync(Arg.Is<LlamaCppSourceBuildRequest>(sourceRequest =>
                 sourceRequest.Source == LlamaCppSourceSelection.Official && sourceRequest.Repository == null),
             Arg.Any<CancellationToken>());
     }
@@ -188,8 +187,7 @@ public sealed class LlamaCppSourceBuildTransportTests
     [Arguments(LlamaCppSourceBuildStartOutcome.MissingPrerequisites, "prerequisites", 0)]
     [Arguments(LlamaCppSourceBuildStartOutcome.ProcessesRunning, "processes-running", 4)]
     [Arguments(LlamaCppSourceBuildStartOutcome.RuntimeBusy, "runtime-busy", 0)]
-    public async Task LegacyStartEndpoint_MapsTypedAdmissionWithoutDuplicatingProbes(
-        LlamaCppSourceBuildStartOutcome outcome,
+    public async Task LegacyStartEndpoint_MapsTypedAdmissionWithoutDuplicatingProbes(LlamaCppSourceBuildStartOutcome outcome,
         string expectedReason,
         int runningProcessCount)
     {
@@ -200,7 +198,7 @@ public sealed class LlamaCppSourceBuildTransportTests
 
         var service = Substitute.For<ILlamaCppSourceBuildService>();
         service.StartAsync(Arg.Any<LlamaCppSourceBuildRequest>(), Arg.Any<CancellationToken>())
-            .Returns(new LlamaCppSourceBuildStartResult(outcome, RunningProcessCount: runningProcessCount));
+               .Returns(new LlamaCppSourceBuildStartResult(outcome, RunningProcessCount: runningProcessCount));
         var prerequisiteProbe = Substitute.For<ICudaBuildPrerequisiteProbe>();
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
         await using var factory = new TestingWebAppFactory
@@ -230,8 +228,7 @@ public sealed class LlamaCppSourceBuildTransportTests
             AssertEx.Equal(runningProcessCount, body.RootElement.GetProperty("runningProcessCount").GetInt32());
         }
 
-        await service.Received(1).StartAsync(
-            Arg.Is<LlamaCppSourceBuildRequest>(sourceRequest =>
+        await service.Received(1).StartAsync(Arg.Is<LlamaCppSourceBuildRequest>(sourceRequest =>
                 sourceRequest.Backend == LlamaCppSourceBackend.Cuda
                 && sourceRequest.Source == LlamaCppSourceSelection.Official),
             Arg.Any<CancellationToken>());
@@ -243,13 +240,12 @@ public sealed class LlamaCppSourceBuildTransportTests
     [Test]
     [Arguments(LlamaCppSourceBuildStartOutcome.Started, CudaBuildStartOutcome.Started)]
     [Arguments(LlamaCppSourceBuildStartOutcome.AlreadyRunning, CudaBuildStartOutcome.AlreadyRunning)]
-    public async Task LegacyAdapter_PreservesCompatibleStartOutcomes(
-        LlamaCppSourceBuildStartOutcome sourceOutcome,
+    public async Task LegacyAdapter_PreservesCompatibleStartOutcomes(LlamaCppSourceBuildStartOutcome sourceOutcome,
         CudaBuildStartOutcome expected)
     {
         var service = Substitute.For<ILlamaCppSourceBuildService>();
         service.StartAsync(Arg.Any<LlamaCppSourceBuildRequest>(), Arg.Any<CancellationToken>())
-            .Returns(new LlamaCppSourceBuildStartResult(sourceOutcome));
+               .Returns(new LlamaCppSourceBuildStartResult(sourceOutcome));
         var adapter = new LegacyCudaBuildServiceAdapter(service);
 
         AssertEx.Equal(expected, await adapter.StartAsync(CancellationToken.None));
@@ -260,13 +256,12 @@ public sealed class LlamaCppSourceBuildTransportTests
     [Arguments(LlamaCppSourceBuildStartOutcome.MissingPrerequisites, "prerequisites")]
     [Arguments(LlamaCppSourceBuildStartOutcome.ProcessesRunning, "running llama.cpp models")]
     [Arguments(LlamaCppSourceBuildStartOutcome.RuntimeBusy, "runtime change")]
-    public async Task LegacyAdapter_DoesNotCollapseAdmissionFailuresToAlreadyRunning(
-        LlamaCppSourceBuildStartOutcome sourceOutcome,
+    public async Task LegacyAdapter_DoesNotCollapseAdmissionFailuresToAlreadyRunning(LlamaCppSourceBuildStartOutcome sourceOutcome,
         string expectedMessage)
     {
         var service = Substitute.For<ILlamaCppSourceBuildService>();
         service.StartAsync(Arg.Any<LlamaCppSourceBuildRequest>(), Arg.Any<CancellationToken>())
-            .Returns(new LlamaCppSourceBuildStartResult(sourceOutcome));
+               .Returns(new LlamaCppSourceBuildStartResult(sourceOutcome));
         var adapter = new LegacyCudaBuildServiceAdapter(service);
 
         var exception = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => adapter.StartAsync(CancellationToken.None));
@@ -289,8 +284,7 @@ public sealed class LlamaCppSourceBuildTransportTests
     [Test]
     public void StatusMapper_PreservesLogStartSequence()
     {
-        var status = new LlamaCppSourceBuildStatus(
-            LlamaCppSourceBuildPhase.Building,
+        var status = new LlamaCppSourceBuildStatus(LlamaCppSourceBuildPhase.Building,
             true,
             false,
             ["line"],
@@ -344,7 +338,7 @@ public sealed class LlamaCppSourceBuildTransportTests
     {
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
         supervisor.TryAcquireRuntimeMutationLeaseAsync(Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult<ILlamaServerRuntimeMutationLease?>(null));
+                  .Returns(Task.FromResult<ILlamaServerRuntimeMutationLease?>(null));
         supervisor.CountRunningProcesses().Returns(1);
         var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
         var activity = Substitute.For<ILlamaCppSourceBuildActivity>();
@@ -382,7 +376,7 @@ public sealed class LlamaCppSourceBuildTransportTests
 #pragma warning restore CA2000
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
         supervisor.TryAcquireRuntimeMutationLeaseAsync(Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult<ILlamaServerRuntimeMutationLease?>(lease));
+                  .Returns(Task.FromResult<ILlamaServerRuntimeMutationLease?>(lease));
         var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
         var activity = Substitute.For<ILlamaCppSourceBuildActivity>();
         activity.ActiveBuildId.Returns((Guid?)null, Guid.NewGuid());
@@ -433,7 +427,7 @@ public sealed class LlamaCppSourceBuildTransportTests
     {
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
         supervisor.TryAcquireRuntimeMutationLeaseAsync(Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult<ILlamaServerRuntimeMutationLease?>(null));
+                  .Returns(Task.FromResult<ILlamaServerRuntimeMutationLease?>(null));
         supervisor.CountRunningProcesses().Returns(0);
         var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
         var activity = Substitute.For<ILlamaCppSourceBuildActivity>();
@@ -470,7 +464,7 @@ public sealed class LlamaCppSourceBuildTransportTests
 #pragma warning restore CA2000
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
         supervisor.TryAcquireRuntimeMutationLeaseAsync(Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult<ILlamaServerRuntimeMutationLease?>(lease));
+                  .Returns(Task.FromResult<ILlamaServerRuntimeMutationLease?>(lease));
         var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
         var activity = Substitute.For<ILlamaCppSourceBuildActivity>();
         activity.ActiveBuildId.Returns((Guid?)null, Guid.NewGuid());
@@ -492,11 +486,10 @@ public sealed class LlamaCppSourceBuildTransportTests
 #pragma warning restore CA2000
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
         supervisor.TryAcquireRuntimeMutationLeaseAsync(Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult<ILlamaServerRuntimeMutationLease?>(installedLease), Task.FromResult<ILlamaServerRuntimeMutationLease?>(activeLease));
+                  .Returns(Task.FromResult<ILlamaServerRuntimeMutationLease?>(installedLease), Task.FromResult<ILlamaServerRuntimeMutationLease?>(activeLease));
         supervisor.CountRunningProcesses().Returns(0);
         var store = Substitute.For<IInstalledRuntimeStore>();
-        store.ReadAsync(Arg.Any<CancellationToken>()).Returns(
-            new InstalledRuntimeState("b1", "source", "sha", GpuVariant.Cpu, DateTimeOffset.UtcNow, "/managed/source"),
+        store.ReadAsync(Arg.Any<CancellationToken>()).Returns(new InstalledRuntimeState("b1", "source", "sha", GpuVariant.Cpu, DateTimeOffset.UtcNow, "/managed/source"),
             new InstalledRuntimeState("b1", "prebuilt", "sha", GpuVariant.Cpu, DateTimeOffset.UtcNow));
         var activity = Substitute.For<ILlamaCppSourceBuildActivity>();
         activity.ActiveBuildId.Returns(Guid.NewGuid());
@@ -528,11 +521,11 @@ public sealed class LlamaCppSourceBuildTransportTests
         legacyHub.Clients.Returns(legacyClients);
         var publisher = new LlamaCppSourceBuildEventPublisher(genericHub, legacyHub);
         genericProxy.SendCoreAsync(LlamaCppSourceBuildHubEvents.StatusChanged, Arg.Any<object?[]>(), Arg.Any<CancellationToken>())
-            .Returns(callInfo =>
-            {
-                genericPayload = callInfo.ArgAt<object?[]>(1)[0];
-                return Task.CompletedTask;
-            });
+                    .Returns(callInfo =>
+                    {
+                        genericPayload = callInfo.ArgAt<object?[]>(1)[0];
+                        return Task.CompletedTask;
+                    });
 
         var buildId = Guid.Parse("11111111-1111-4111-8111-111111111111");
         var custom = new LlamaCppSourceBuildDescriptor(GpuVariant.Cpu,

@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Tests.Endpoints.Agents.V1;
 
-using System.Collections.Generic;
 using XE_Local_AI_Engine.Client.Endpoints.Agents.V1.Mappers;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
@@ -27,7 +26,11 @@ public sealed class UsageSummaryMapperTests
         {
             Models = new Dictionary<string, ModelRate>
             {
-                ["gpt-5"] = new() { InputPer1M = inputPer1M, OutputPer1M = outputPer1M }
+                ["gpt-5"] = new()
+                {
+                    InputPer1M = inputPer1M,
+                    OutputPer1M = outputPer1M
+                }
             }
         });
     }
@@ -150,6 +153,6 @@ public sealed class UsageSummaryMapperTests
     [Test]
     public void ToByProvider_EmptyBuckets_YieldsEmptyRollup()
     {
-        AssertEx.Empty(System.Array.Empty<TokenUsageAggregateRecord>().ToByProvider(Resolver(inputPer1M: 1, outputPer1M: 1)));
+        AssertEx.Empty(Array.Empty<TokenUsageAggregateRecord>().ToByProvider(Resolver(inputPer1M: 1, outputPer1M: 1)));
     }
 }

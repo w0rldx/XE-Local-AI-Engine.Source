@@ -66,7 +66,10 @@ internal sealed class MafPlaybookEvalAgentRunner : IPlaybookEvalAgentRunner
         // InvocationAgentFactory uses to carry per-request ChatOptions through to the model.
         var runOptions = new ChatClientAgentRunOptions
         {
-            ChatOptions = new ChatOptions { Temperature = 0f }
+            ChatOptions = new ChatOptions
+            {
+                Temperature = 0f
+            }
         };
         var response = await agent.RunAsync(seed, session: null, runOptions, cancellationToken).ConfigureAwait(false);
 

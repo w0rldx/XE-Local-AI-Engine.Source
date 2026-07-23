@@ -1,20 +1,11 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests.Development;
 
 using System.Text;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Migrations;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Options;
-using XE_Local_AI_Engine.Client.DependencyInjection.Modules;
-using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
-using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
@@ -34,9 +25,9 @@ internal sealed class DevelopmentTestFixture : IDisposable
         services.AddSingleton<NodeEncryptionSaveChangesInterceptor>();
         services.AddSingleton<NodeEncryptionMaterializationInterceptor>();
         services.AddDbContext<NodeChatDbContext>((provider, options) => options.UseSqlite($"Data Source={databasePath}")
-                                                                         .EnableServiceProviderCaching(false)
-                                                                         .AddInterceptors(provider.GetRequiredService<NodeEncryptionSaveChangesInterceptor>(),
-                                                                             provider.GetRequiredService<NodeEncryptionMaterializationInterceptor>()));
+                                                                               .EnableServiceProviderCaching(false)
+                                                                               .AddInterceptors(provider.GetRequiredService<NodeEncryptionSaveChangesInterceptor>(),
+                                                                                   provider.GetRequiredService<NodeEncryptionMaterializationInterceptor>()));
         services.AddScoped<IDevelopmentStore, DevelopmentStore>();
         services.AddScoped<IDevelopmentHostApplyPort>(_ => port ?? new TestApplyPort());
         services.AddScoped<IDevelopmentCoordinator, DevelopmentCoordinator>();
@@ -56,8 +47,8 @@ internal sealed class DevelopmentTestFixture : IDisposable
         return provider;
     }
 
-    public static DevelopmentCreateProjectCommand CreateSeed()
-        => new(Guid.NewGuid(),
+    public static DevelopmentCreateProjectCommand CreateSeed() =>
+        new(Guid.NewGuid(),
             Guid.NewGuid(),
             Guid.NewGuid(),
             "objective",
@@ -87,12 +78,13 @@ internal class TestApplyPort : IDevelopmentHostApplyPort
 {
     public virtual Task<DevelopmentHostApplyState> InspectAsync(DevelopmentApprovedApplySubject subject,
         string repositoryRoot,
-        CancellationToken cancellationToken = default)
-        => Task.FromResult(DevelopmentHostApplyState.UnappliedBaseUnchanged);
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult(DevelopmentHostApplyState.UnappliedBaseUnchanged);
 
     public virtual Task ApplyAsync(DevelopmentApprovedApplySubject subject,
         string repositoryRoot,
-        CancellationToken cancellationToken = default) => Task.CompletedTask;
+        CancellationToken cancellationToken = default) =>
+        Task.CompletedTask;
 }
 
 internal sealed class CrashAfterMutationApplyPort : TestApplyPort
@@ -103,8 +95,8 @@ internal sealed class CrashAfterMutationApplyPort : TestApplyPort
 
     public override Task<DevelopmentHostApplyState> InspectAsync(DevelopmentApprovedApplySubject subject,
         string repositoryRoot,
-        CancellationToken cancellationToken = default)
-        => Task.FromResult(_applied ? DevelopmentHostApplyState.ExactApprovedResultPresent : DevelopmentHostApplyState.UnappliedBaseUnchanged);
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult(_applied ? DevelopmentHostApplyState.ExactApprovedResultPresent : DevelopmentHostApplyState.UnappliedBaseUnchanged);
 
     public override Task ApplyAsync(DevelopmentApprovedApplySubject subject,
         string repositoryRoot,

@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 
-using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>

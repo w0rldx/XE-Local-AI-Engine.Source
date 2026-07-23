@@ -18,6 +18,7 @@ public sealed class StartCudaBuildEndpoint(
     ICudaBuildService buildService) : EndpointWithoutRequest<StartCudaBuildResponse>
 {
     private readonly ICudaBuildService _buildService = buildService ?? throw new ArgumentNullException(nameof(buildService));
+
     private readonly ILlamaCppSourceBuildService _sourceBuildService =
         sourceBuildService ?? throw new ArgumentNullException(nameof(sourceBuildService));
 
@@ -38,8 +39,7 @@ public sealed class StartCudaBuildEndpoint(
 
         try
         {
-            var result = await _sourceBuildService.StartAsync(new LlamaCppSourceBuildRequest(
-                LlamaCppSourceBackend.Cuda,
+            var result = await _sourceBuildService.StartAsync(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cuda,
                 LlamaCppSourceSelection.Official), ct).ConfigureAwait(false);
             switch (result.Outcome)
             {
@@ -51,7 +51,7 @@ public sealed class StartCudaBuildEndpoint(
                     return;
                 case LlamaCppSourceBuildStartOutcome.MissingPrerequisites:
                     await BlockAsync("prerequisites",
-                        "One or more build prerequisites are missing; resolve the checklist before building.")
+                            "One or more build prerequisites are missing; resolve the checklist before building.")
                         .ConfigureAwait(false);
                     return;
                 case LlamaCppSourceBuildStartOutcome.ProcessesRunning:
@@ -64,7 +64,7 @@ public sealed class StartCudaBuildEndpoint(
                     return;
                 case LlamaCppSourceBuildStartOutcome.RuntimeBusy:
                     await BlockAsync("runtime-busy",
-                        "Wait for the active llama.cpp source build or runtime change to finish before starting another build.")
+                            "Wait for the active llama.cpp source build or runtime change to finish before starting another build.")
                         .ConfigureAwait(false);
                     return;
                 case LlamaCppSourceBuildStartOutcome.Started:

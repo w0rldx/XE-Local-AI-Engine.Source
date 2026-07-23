@@ -147,6 +147,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
             {
                 revisionMode = LlamaCppSourceRevisionMode.EnginePinned;
             }
+
             var descriptor = new LlamaCppSourceBuildDescriptor(variant,
                 normalized.Source,
                 normalized.Repository!,
@@ -391,13 +392,16 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
                 _ => null
             };
             if (revExit != 0 || !FullCommitRegex().IsMatch(checkedOut)
-                || expectedCommit is not null && !string.Equals(checkedOut, expectedCommit, StringComparison.OrdinalIgnoreCase))
+                             || expectedCommit is not null && !string.Equals(checkedOut, expectedCommit, StringComparison.OrdinalIgnoreCase))
             {
                 throw new LlamaRuntimeException("The cloned source did not match the pinned commit; the build was aborted before configuring.");
             }
 
             AppendLog($"Verified source commit {checkedOut}.");
-            descriptor = descriptor with { ResolvedCommit = Convert.ToHexStringLower(Convert.FromHexString(checkedOut)) };
+            descriptor = descriptor with
+            {
+                ResolvedCommit = Convert.ToHexStringLower(Convert.FromHexString(checkedOut))
+            };
             lock (_stateLock)
             {
                 _currentBuild = descriptor;
@@ -456,7 +460,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
             // Swap into place last: park any previous runtime in the backup, move the staged tree in, then validate + adopt
             // the FINAL binary. On any failure, roll the previous runtime back so the working runtime is never lost.
             await using var mutationLease = await _supervisor.TryAcquireRuntimeMutationLeaseAsync(ct).ConfigureAwait(false)
-                ?? throw new LlamaRuntimeException("A llama-server process started while the build was running; stop it before adopting the new runtime.");
+                                            ?? throw new LlamaRuntimeException("A llama-server process started while the build was running; stop it before adopting the new runtime.");
             var hadPrevious = Directory.Exists(finalTagDir);
             try
             {
@@ -464,6 +468,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
                 {
                     Directory.Move(finalTagDir, backupTagDir);
                 }
+
                 Directory.Move(stagingTagDir, finalTagDir);
                 var finalBin = Path.Combine(finalTagDir, "build", "bin");
                 await _binaryManager.AdoptSourceBuildAsync(finalBin,
@@ -541,6 +546,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
                     return exit;
                 }
             }
+
             return 0;
         }
 
@@ -569,8 +575,13 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
     {
         var args = new List<string>
         {
-            "-B", buildDir, "-S", cloneDir,
-            "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_BUILD_RPATH_USE_ORIGIN=ON", "-DLLAMA_CURL=OFF",
+            "-B",
+            buildDir,
+            "-S",
+            cloneDir,
+            "-DCMAKE_BUILD_TYPE=Release",
+            "-DCMAKE_BUILD_RPATH_USE_ORIGIN=ON",
+            "-DLLAMA_CURL=OFF",
             $"-DGGML_CUDA={(variant == GpuVariant.Cuda ? "ON" : "OFF")}",
             $"-DGGML_VULKAN={(variant == GpuVariant.Vulkan ? "ON" : "OFF")}"
         };
@@ -606,7 +617,10 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
         var recordTargetsActive = sourceRecord && PathsEqual(installed!.SourceBuildPath!, canonicalActiveBin);
         var activeMatches = recordTargetsActive && await TreeMatchesRecordAsync(active, installed!, ct).ConfigureAwait(false);
         var backupState = recordTargetsActive
-            ? installed! with { SourceBuildPath = Path.Combine(backup, "build", "bin") }
+            ? installed! with
+            {
+                SourceBuildPath = Path.Combine(backup, "build", "bin")
+            }
             : installed!;
         var backupMatches = recordTargetsActive && await TreeMatchesRecordAsync(backup, backupState, ct).ConfigureAwait(false);
 
@@ -697,9 +711,9 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
         }
 
         var expectedSource = state.SourceSelection
-            ?? (string.Equals(state.SourceRepository, LlamaCppSourceBuildRequestValidation.OfficialRepository, StringComparison.Ordinal)
-                ? LlamaCppSourceSelection.Official
-                : LlamaCppSourceSelection.Custom);
+                             ?? (string.Equals(state.SourceRepository, LlamaCppSourceBuildRequestValidation.OfficialRepository, StringComparison.Ordinal)
+                                 ? LlamaCppSourceSelection.Official
+                                 : LlamaCppSourceSelection.Custom);
         if (!LlamaCppSourceBuildRequestValidation.HasValidOfficialProvenance(expectedSource,
                 state.SourceRepository,
                 state.SourceRevisionMode,
@@ -731,23 +745,17 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
         {
             return false;
         }
+
         await using var stream = new FileStream(server, FileMode.Open, FileAccess.Read, FileShare.Read);
         var hash = Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, ct).ConfigureAwait(false));
         return string.Equals(hash, state.Sha256, StringComparison.OrdinalIgnoreCase)
-            && await ValidateBinaryBackendAsync(server, state.Variant, ct).ConfigureAwait(false);
+               && await ValidateBinaryBackendAsync(server, state.Variant, ct).ConfigureAwait(false);
     }
 
     private bool IsPreProvenanceLegacyRecord(InstalledRuntimeState? state)
     {
-        return state is
-            {
-                SourceRepository: null,
-                SourceCommit: null,
-                SourceRevisionMode: null,
-                SourceRequestedCommit: null,
-                SourceSelection: null
-            }
-            && state.IsLegacyPinnedCuda(_cacheRoot);
+        return state is { SourceRepository: null, SourceCommit: null, SourceRevisionMode: null, SourceRequestedCommit: null, SourceSelection: null }
+               && state.IsLegacyPinnedCuda(_cacheRoot);
     }
 
     private static bool PathsEqual(string left, string right)
@@ -779,10 +787,11 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
         {
             return false;
         }
+
         await using var stream = new FileStream(server, FileMode.Open, FileAccess.Read, FileShare.Read);
         var hash = Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, ct).ConfigureAwait(false));
         return string.Equals(hash, state.Sha256, StringComparison.OrdinalIgnoreCase)
-            && await ValidateBinaryBackendAsync(server, GpuVariant.Cuda, ct).ConfigureAwait(false);
+               && await ValidateBinaryBackendAsync(server, GpuVariant.Cuda, ct).ConfigureAwait(false);
     }
 
     private static async Task<bool> ValidateBinaryBackendAsync(string server, GpuVariant variant, CancellationToken ct)
@@ -793,7 +802,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
         }
 
         return variant == GpuVariant.Cpu
-            || await RunValidationCommandAsync(server, "--list-devices", variant == GpuVariant.Cuda ? "CUDA" : "Vulkan", ct).ConfigureAwait(false);
+               || await RunValidationCommandAsync(server, "--list-devices", variant == GpuVariant.Cuda ? "CUDA" : "Vulkan", ct).ConfigureAwait(false);
     }
 
     private static async Task<bool> RunValidationCommandAsync(string server, string argument, string? expectedDevicePrefix, CancellationToken ct)
@@ -807,7 +816,10 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
             WorkingDirectory = Path.GetDirectoryName(server) ?? Environment.CurrentDirectory
         };
         startInfo.ArgumentList.Add(argument);
-        using var process = new Process { StartInfo = startInfo };
+        using var process = new Process
+        {
+            StartInfo = startInfo
+        };
         if (!process.Start())
         {
             return false;
@@ -827,8 +839,8 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
             }
 
             return expectedDevicePrefix is null || output.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
-                .Any(line => RecoveryDeviceLineRegex().IsMatch(line)
-                             && line.TrimStart().StartsWith(expectedDevicePrefix, StringComparison.OrdinalIgnoreCase));
+                                                         .Any(line => RecoveryDeviceLineRegex().IsMatch(line)
+                                                                      && line.TrimStart().StartsWith(expectedDevicePrefix, StringComparison.OrdinalIgnoreCase));
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
@@ -860,7 +872,10 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
 
     private Task WriteReconciledStateAsync(InstalledRuntimeState state, string active, CancellationToken ct)
     {
-        return _installedRuntimeStore.WriteAsync(state with { SourceBuildPath = Path.Combine(active, "build", "bin") }, ct);
+        return _installedRuntimeStore.WriteAsync(state with
+        {
+            SourceBuildPath = Path.Combine(active, "build", "bin")
+        }, ct);
     }
 
     private async Task ClearSourceRecordAsync(bool sourceRecord, CancellationToken ct)
@@ -1106,6 +1121,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
             {
                 _logLines.RemoveRange(0, _logLines.Count - LogRingCapacity);
             }
+
             _logStartSequence = _nextLogSequence - _logLines.Count;
 
             _ = QueuePublish(new LlamaCppSourceBuildStatusHubEvent(_phase.ToString(),
@@ -1236,6 +1252,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
                         {
                             throw new LlamaRuntimeException("The built runtime contains a dangling library link.");
                         }
+
                         break;
                     }
 

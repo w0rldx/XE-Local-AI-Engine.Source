@@ -25,8 +25,17 @@ internal sealed class DevelopmentEventConfiguration : IEntityTypeConfiguration<D
         builder.HasOne<DevelopmentProject>().WithMany().HasForeignKey(entity => entity.ProjectId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne<DevelopmentTask>().WithMany().HasForeignKey(entity => entity.TaskId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<DevelopmentAttempt>().WithMany().HasForeignKey(entity => entity.AttemptId).OnDelete(DeleteBehavior.Restrict);
-        builder.HasIndex(entity => new { entity.ProjectId, entity.Sequence }).IsUnique().HasDatabaseName("ux_development_events_project_sequence");
-        builder.HasIndex(entity => new { entity.ProjectId, entity.OperationId, entity.OperationPhase })
+        builder.HasIndex(entity => new
+        {
+            entity.ProjectId,
+            entity.Sequence
+        }).IsUnique().HasDatabaseName("ux_development_events_project_sequence");
+        builder.HasIndex(entity => new
+               {
+                   entity.ProjectId,
+                   entity.OperationId,
+                   entity.OperationPhase
+               })
                .IsUnique()
                .HasFilter("operation_id IS NOT NULL AND operation_phase IS NOT NULL")
                .HasDatabaseName("ux_development_events_operation_phase");

@@ -3,7 +3,6 @@ using FastEndpoints;
 using FastEndpoints.Swagger;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Hosting.Server;
-using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 using Scalar.AspNetCore;
@@ -116,8 +115,8 @@ try
     if (string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]))
     {
         Log.Information("Telemetry export is OFF (OTEL_EXPORTER_OTLP_ENDPOINT is not set): gen_ai spans/metrics are "
-                         + "recorded in-process only and are lost on exit. Set OTEL_EXPORTER_OTLP_ENDPOINT to export "
-                         + "them to a local OTLP collector; see docs/runbooks/otel-export-operator-runbook.md.");
+                        + "recorded in-process only and are lost on exit. Set OTEL_EXPORTER_OTLP_ENDPOINT to export "
+                        + "them to a local OTLP collector; see docs/runbooks/otel-export-operator-runbook.md.");
     }
 
     // Add services to the container.
@@ -569,6 +568,8 @@ static void RegisterWorkerShutdownDrain(WebApplication app)
 
 namespace XE_Local_AI_Engine.Client
 {
+    using Microsoft.Extensions.Diagnostics.HealthChecks;
+
     /// <summary>
     ///     Application entry point for this executable.
     /// </summary>

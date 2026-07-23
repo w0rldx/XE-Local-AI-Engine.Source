@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Development;
 
+using System.Security.Cryptography;
 using System.Text;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -57,29 +58,36 @@ public interface IDevelopmentManagementService
     Task<DevelopmentRepositoryReference> RegisterRepositoryAsync(string displayAlias,
         string hostPath,
         CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<DevelopmentRepositoryReference>> ListRepositoriesAsync(CancellationToken cancellationToken = default);
     Task<IReadOnlyList<DevelopmentProjectSnapshot>> ListProjectsAsync(CancellationToken cancellationToken = default);
     Task<DevelopmentProjectAggregate> CreateProjectAsync(DevelopmentCreateProjectInput input, CancellationToken cancellationToken = default);
     Task<DevelopmentProjectAggregate> GetProjectAsync(Guid projectId, CancellationToken cancellationToken = default);
     Task<DevelopmentTaskAggregate> GetTaskAsync(Guid projectId, Guid taskId, CancellationToken cancellationToken = default);
+
     Task<DevelopmentNextActionResult> StartNextActionAsync(Guid projectId,
         Guid taskId,
         Guid operationId,
         CancellationToken cancellationToken = default);
+
     Task<bool> CancelAttemptAsync(Guid projectId, Guid taskId, Guid attemptId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<DevelopmentEventSnapshot>> ListEventsAsync(Guid projectId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<DevelopmentArtifactSnapshot>> ListArtifactsAsync(Guid projectId, Guid taskId, CancellationToken cancellationToken = default);
+
     Task<DevelopmentArtifactContent> ReadArtifactAsync(Guid projectId,
         Guid taskId,
         Guid artifactId,
         CancellationToken cancellationToken = default);
+
     Task<DevelopmentPatchPreviewResult> PreviewAsync(Guid projectId,
         Guid taskId,
         CancellationToken cancellationToken = default);
+
     Task<DevelopmentOperationResult> ApplyAsync(Guid projectId,
         Guid taskId,
         Guid operationId,
         CancellationToken cancellationToken = default);
+
     Task<DevelopmentProjectAggregate> ReconnectRepositoryAsync(Guid projectId,
         Guid selectedFolderId,
         long expectedVersion,
@@ -109,14 +117,14 @@ internal sealed class DevelopmentManagementService(
 
     public Task<DevelopmentRepositoryReference> RegisterRepositoryAsync(string displayAlias,
         string hostPath,
-        CancellationToken cancellationToken = default)
-        => _repositoryBindings.RegisterAsync(displayAlias, hostPath, cancellationToken);
+        CancellationToken cancellationToken = default) =>
+        _repositoryBindings.RegisterAsync(displayAlias, hostPath, cancellationToken);
 
-    public Task<IReadOnlyList<DevelopmentRepositoryReference>> ListRepositoriesAsync(CancellationToken cancellationToken = default)
-        => _repositoryBindings.ListAsync(cancellationToken);
+    public Task<IReadOnlyList<DevelopmentRepositoryReference>> ListRepositoriesAsync(CancellationToken cancellationToken = default) =>
+        _repositoryBindings.ListAsync(cancellationToken);
 
-    public Task<IReadOnlyList<DevelopmentProjectSnapshot>> ListProjectsAsync(CancellationToken cancellationToken = default)
-        => _store.ListProjectsAsync(cancellationToken);
+    public Task<IReadOnlyList<DevelopmentProjectSnapshot>> ListProjectsAsync(CancellationToken cancellationToken = default) =>
+        _store.ListProjectsAsync(cancellationToken);
 
     public async Task<DevelopmentProjectAggregate> CreateProjectAsync(DevelopmentCreateProjectInput input,
         CancellationToken cancellationToken = default)
@@ -132,6 +140,7 @@ internal sealed class DevelopmentManagementService(
         {
             throw new ArgumentException("Development project and task fields must not be blank.", nameof(input));
         }
+
         if (!input.TrustedRepositoryAcknowledged)
         {
             throw new DevelopmentWorkspaceSecurityException("Development execution requires explicit trusted-repository acknowledgement.");
@@ -141,25 +150,25 @@ internal sealed class DevelopmentManagementService(
         var projectId = DerivedOperationId(input.OperationId, "project");
         var taskId = DerivedOperationId(input.OperationId, "task");
         _ = await _coordinator.CreateProjectAsync(new DevelopmentCreateProjectCommand(projectId,
-                                                  taskId,
-                                                  input.OperationId,
-                                                  input.Objective,
-                                                  input.SelectedFolderId,
-                                                  repository.RepositoryIdentityHash,
-                                                  input.BaseBranch,
-                                                  input.TaskTitle,
-                                                  input.Requirements,
-                                                  input.AcceptanceCriteriaJson,
-                                                  input.EgressPolicy,
-                                                  input.CoderModelId,
-                                                  input.ReviewerModelId,
-                                                  TrustedRepositoryAcknowledged: true,
-                                                  TrustedRepositoryPolicyVersion: DevelopmentTrustPolicy.CurrentVersion,
-                                                  TrustedRepositoryAcknowledgedAtUtc: _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
-                                                  MaxTokens: input.MaxTokens,
-                                                  MaxDurationSeconds: input.MaxDurationSeconds),
-                                              cancellationToken)
-                             .ConfigureAwait(false);
+                                      taskId,
+                                      input.OperationId,
+                                      input.Objective,
+                                      input.SelectedFolderId,
+                                      repository.RepositoryIdentityHash,
+                                      input.BaseBranch,
+                                      input.TaskTitle,
+                                      input.Requirements,
+                                      input.AcceptanceCriteriaJson,
+                                      input.EgressPolicy,
+                                      input.CoderModelId,
+                                      input.ReviewerModelId,
+                                      TrustedRepositoryAcknowledged: true,
+                                      TrustedRepositoryPolicyVersion: DevelopmentTrustPolicy.CurrentVersion,
+                                      TrustedRepositoryAcknowledgedAtUtc: _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
+                                      MaxTokens: input.MaxTokens,
+                                      MaxDurationSeconds: input.MaxDurationSeconds),
+                                  cancellationToken)
+                              .ConfigureAwait(false);
         return await GetProjectAsync(projectId, cancellationToken).ConfigureAwait(false);
     }
 
@@ -204,7 +213,7 @@ internal sealed class DevelopmentManagementService(
         if (existing?.AttemptId is { } existingAttemptId)
         {
             var existingAttempt = (await _store.ListAttemptsAsync(taskId, cancellationToken).ConfigureAwait(false))
-                                  .Single(attempt => attempt.Id == existingAttemptId);
+                .Single(attempt => attempt.Id == existingAttemptId);
             var existingTask = await RequireTaskAsync(projectId, taskId, cancellationToken).ConfigureAwait(false);
             return new DevelopmentNextActionResult("Attempt",
                 projectId,
@@ -220,15 +229,19 @@ internal sealed class DevelopmentManagementService(
         {
             return new DevelopmentNextActionResult("Blocked", projectId, taskId, null, DevelopmentTaskStatus.Blocked, null);
         }
+
         if (task.Status == DevelopmentTaskStatus.Planned)
         {
             var ready = await _coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(taskId,
-                                                               DerivedOperationId(operationId, "ready"),
-                                                               DevelopmentTaskStatus.Ready,
-                                                               task.Version),
-                                                           cancellationToken)
+                                                  DerivedOperationId(operationId, "ready"),
+                                                  DevelopmentTaskStatus.Ready,
+                                                  task.Version),
+                                              cancellationToken)
                                           .ConfigureAwait(false);
-            task = (await _store.GetTaskAsync(taskId, cancellationToken).ConfigureAwait(false)) with { Version = ready.Version };
+            task = (await _store.GetTaskAsync(taskId, cancellationToken).ConfigureAwait(false)) with
+            {
+                Version = ready.Version
+            };
         }
 
         var attempts = await _store.ListAttemptsAsync(taskId, cancellationToken).ConfigureAwait(false);
@@ -243,11 +256,11 @@ internal sealed class DevelopmentManagementService(
             if (task.CurrentReviewRound >= task.MaxReviewRounds)
             {
                 _ = await _coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(taskId,
-                                                               DerivedOperationId(operationId, "review-round-limit"),
-                                                               DevelopmentTaskStatus.Blocked,
-                                                               task.Version,
-                                                               ReviewRoundLimitReason),
-                                                           cancellationToken)
+                                              DerivedOperationId(operationId, "review-round-limit"),
+                                              DevelopmentTaskStatus.Blocked,
+                                              task.Version,
+                                              ReviewRoundLimitReason),
+                                          cancellationToken)
                                       .ConfigureAwait(false);
                 return new DevelopmentNextActionResult("Blocked", projectId, taskId, null, DevelopmentTaskStatus.Blocked, null);
             }
@@ -271,25 +284,27 @@ internal sealed class DevelopmentManagementService(
         {
             throw new DevelopmentInvalidTransitionException("The Development role has no configured model.");
         }
+
         var cloudProvider = _cloudFactory.ResolveActiveCloudProviderName(modelId);
         if (project.EgressPolicy == DevelopmentEgressPolicy.LocalOnly && !string.IsNullOrWhiteSpace(cloudProvider))
         {
             throw new DevelopmentWorkspaceSecurityException("LocalOnly Development execution cannot start with a cloud-routed model.");
         }
+
         var provider = string.IsNullOrWhiteSpace(cloudProvider) ? "local" : cloudProvider;
 
         var predecessor = attempts.LastOrDefault(attempt => attempt.Role == role && attempt.Status == DevelopmentAttemptStatus.Interrupted)?.Id;
         var attemptId = Guid.NewGuid();
         _ = await _coordinator.StartAttemptAsync(new DevelopmentStartAttemptCommand(taskId,
-                                                  attemptId,
-                                                  operationId,
-                                                  role,
-                                                  modelId,
-                                                  provider,
-                                                  task.Version,
-                                                  predecessor),
-                                              cancellationToken)
-                             .ConfigureAwait(false);
+                                      attemptId,
+                                      operationId,
+                                      role,
+                                      modelId,
+                                      provider,
+                                      task.Version,
+                                      predecessor),
+                                  cancellationToken)
+                              .ConfigureAwait(false);
         if (!_supervisor.StartAttempt(attemptId, role))
         {
             throw new DevelopmentConcurrencyException("The Development attempt is already scheduled.");
@@ -404,7 +419,7 @@ internal sealed class DevelopmentManagementService(
 
     private static Guid DerivedOperationId(Guid operationId, string phase)
     {
-        var bytes = System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(string.Concat(operationId.ToString("N"), ":", phase)));
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(string.Concat(operationId.ToString("N"), ":", phase)));
         return new Guid(bytes.AsSpan(0, 16));
     }
 }

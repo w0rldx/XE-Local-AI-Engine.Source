@@ -3,8 +3,8 @@ namespace XE_Local_AI_Engine.Tests.Endpoints.Development;
 using System.Buffers;
 using System.Net;
 using System.Text;
-using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.AspNetCore.SignalR.Protocol;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -30,11 +30,13 @@ public sealed class DevelopmentAttemptHubTests
         var protocol = new JsonHubProtocol();
         var writer = new ArrayBufferWriter<byte>();
         protocol.WriteMessage(new InvocationMessage("developmentAttemptUpdate",
-                [Update("warning") with
+            [
+                Update("warning") with
                 {
                     Kind = DevelopmentAttemptLiveUpdateKind.Warning,
                     WarningCategory = DevelopmentProgressWarningCategory.RepeatedTool
-                }]),
+                }
+            ]),
             writer);
 
         var payload = Encoding.UTF8.GetString(writer.WrittenSpan);
@@ -47,7 +49,10 @@ public sealed class DevelopmentAttemptHubTests
     [Test]
     public async Task Negotiate_WhenOperatorTokenIsMissing_ReturnsUnauthorized()
     {
-        await using var factory = new TestingWebAppFactory { EnableDevelopmentMode = true };
+        await using var factory = new TestingWebAppFactory
+        {
+            EnableDevelopmentMode = true
+        };
         using var client = factory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Post, LocalApiRoutes.Development.Hub + "/negotiate?negotiateVersion=1")
         {
@@ -70,8 +75,7 @@ public sealed class DevelopmentAttemptHubTests
         await using var connection = CreateConnection(factory);
         await connection.StartAsync().ConfigureAwait(false);
 
-        await AssertEx.ThrowsAsync<HubException>(() => connection.InvokeAsync<DevelopmentAttemptSubscriptionSnapshot>(
-            "SubscribeAsync", ProjectId, TaskId, AttemptId));
+        await AssertEx.ThrowsAsync<HubException>(() => connection.InvokeAsync<DevelopmentAttemptSubscriptionSnapshot>("SubscribeAsync", ProjectId, TaskId, AttemptId));
     }
 
     [Test]
@@ -84,8 +88,7 @@ public sealed class DevelopmentAttemptHubTests
         await using var connection = CreateConnection(factory);
         await connection.StartAsync().ConfigureAwait(false);
 
-        var exception = await AssertEx.ThrowsAsync<HubException>(() => connection.InvokeAsync<DevelopmentAttemptSubscriptionSnapshot>(
-            "SubscribeAsync", ProjectId, TaskId, AttemptId));
+        var exception = await AssertEx.ThrowsAsync<HubException>(() => connection.InvokeAsync<DevelopmentAttemptSubscriptionSnapshot>("SubscribeAsync", ProjectId, TaskId, AttemptId));
 
         AssertEx.Contains(exception.Message, "does not belong");
     }
@@ -98,8 +101,7 @@ public sealed class DevelopmentAttemptHubTests
         await using var connection = CreateConnection(factory);
         await connection.StartAsync().ConfigureAwait(false);
 
-        var exception = await AssertEx.ThrowsAsync<HubException>(() => connection.InvokeAsync<DevelopmentAttemptSubscriptionSnapshot>(
-            "SubscribeAsync", ProjectId, TaskId, AttemptId));
+        var exception = await AssertEx.ThrowsAsync<HubException>(() => connection.InvokeAsync<DevelopmentAttemptSubscriptionSnapshot>("SubscribeAsync", ProjectId, TaskId, AttemptId));
 
         AssertEx.Contains(exception.Message, "active Development attempt");
     }
@@ -112,8 +114,7 @@ public sealed class DevelopmentAttemptHubTests
         await using var connection = CreateConnection(factory);
         await connection.StartAsync().ConfigureAwait(false);
 
-        var exception = await AssertEx.ThrowsAsync<HubException>(() => connection.InvokeAsync<DevelopmentAttemptSubscriptionSnapshot>(
-            "SubscribeAsync", ProjectId, TaskId, AttemptId));
+        var exception = await AssertEx.ThrowsAsync<HubException>(() => connection.InvokeAsync<DevelopmentAttemptSubscriptionSnapshot>("SubscribeAsync", ProjectId, TaskId, AttemptId));
 
         AssertEx.Contains(exception.Message, "no active live stream");
     }
@@ -129,8 +130,7 @@ public sealed class DevelopmentAttemptHubTests
         await using var connection = CreateConnection(factory);
         await connection.StartAsync().ConfigureAwait(false);
 
-        var snapshot = await connection.InvokeAsync<DevelopmentAttemptSubscriptionSnapshot>(
-            "SubscribeAsync", ProjectId, TaskId, AttemptId).ConfigureAwait(false);
+        var snapshot = await connection.InvokeAsync<DevelopmentAttemptSubscriptionSnapshot>("SubscribeAsync", ProjectId, TaskId, AttemptId).ConfigureAwait(false);
 
         AssertEx.Equal(expected: 1L, snapshot.Watermark);
         AssertEx.Equal("snapshot", snapshot.Latest?.OutputDelta);
@@ -147,8 +147,7 @@ public sealed class DevelopmentAttemptHubTests
         var received = new TaskCompletionSource<DevelopmentAttemptLiveUpdate>(TaskCreationOptions.RunContinuationsAsynchronously);
         _ = connection.On<DevelopmentAttemptLiveUpdate>("developmentAttemptUpdate", update => received.TrySetResult(update));
         await connection.StartAsync().ConfigureAwait(false);
-        _ = await connection.InvokeAsync<DevelopmentAttemptSubscriptionSnapshot>(
-            "SubscribeAsync", ProjectId, TaskId, AttemptId).ConfigureAwait(false);
+        _ = await connection.InvokeAsync<DevelopmentAttemptSubscriptionSnapshot>("SubscribeAsync", ProjectId, TaskId, AttemptId).ConfigureAwait(false);
 
         var expected = Update("delivered");
         var publisher = factory.Services.GetRequiredService<IDevelopmentAttemptLiveEventPublisher>();
@@ -166,8 +165,8 @@ public sealed class DevelopmentAttemptHubTests
         return service;
     }
 
-    private static TestingWebAppFactory EnabledFactory(IDevelopmentManagementService service)
-        => new()
+    private static TestingWebAppFactory EnabledFactory(IDevelopmentManagementService service) =>
+        new()
         {
             EnableDevelopmentMode = true,
             ConfigureAdditionalTestServices = services =>
@@ -177,18 +176,18 @@ public sealed class DevelopmentAttemptHubTests
             }
         };
 
-    private static HubConnection CreateConnection(TestingWebAppFactory factory)
-        => new HubConnectionBuilder()
-           .WithUrl("http://localhost" + LocalApiRoutes.Development.Hub, options =>
-           {
-               options.HttpMessageHandlerFactory = _ => factory.Server.CreateHandler();
-               options.AccessTokenProvider = () => Task.FromResult<string?>(factory.CreateNodeAccessToken());
-               options.Headers.Add("Origin", "http://localhost");
-           })
-           .Build();
+    private static HubConnection CreateConnection(TestingWebAppFactory factory) =>
+        new HubConnectionBuilder()
+            .WithUrl("http://localhost" + LocalApiRoutes.Development.Hub, options =>
+            {
+                options.HttpMessageHandlerFactory = _ => factory.Server.CreateHandler();
+                options.AccessTokenProvider = () => Task.FromResult<string?>(factory.CreateNodeAccessToken());
+                options.Headers.Add("Origin", "http://localhost");
+            })
+            .Build();
 
-    private static DevelopmentAttemptSnapshot Attempt(Guid attemptId, DevelopmentAttemptStatus status)
-        => new(attemptId,
+    private static DevelopmentAttemptSnapshot Attempt(Guid attemptId, DevelopmentAttemptStatus status) =>
+        new(attemptId,
             TaskId,
             null,
             DevelopmentAttemptRole.Coder,
@@ -202,8 +201,8 @@ public sealed class DevelopmentAttemptHubTests
             null,
             1);
 
-    private static DevelopmentAttemptLiveUpdate Update(string output)
-        => new()
+    private static DevelopmentAttemptLiveUpdate Update(string output) =>
+        new()
         {
             ProjectId = ProjectId,
             TaskId = TaskId,

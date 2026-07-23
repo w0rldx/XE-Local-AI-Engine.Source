@@ -28,4 +28,3 @@ internal sealed class DevelopmentTaskConfiguration : IEntityTypeConfiguration<De
         builder.HasIndex(entity => entity.ProjectId).IsUnique().HasDatabaseName("ux_development_tasks_project_id");
     }
 }
-

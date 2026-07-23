@@ -5,7 +5,6 @@ using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
-using XE_Local_AI_Engine.Providers.Abstractions;
 
 internal sealed record DevelopmentCoderSubmission(
     string Summary,
@@ -56,6 +55,7 @@ internal sealed class DevelopmentCoderModel(
         {
             throw new DevelopmentWorkspaceSecurityException("A cloud Development coder attempt requires an explicit immutable CloudScoped route.");
         }
+
         if (!isCloud && cloudRoute is not null)
         {
             throw new DevelopmentWorkspaceSecurityException("A CloudScoped route cannot be sent through a local Development model.");
@@ -127,6 +127,7 @@ internal sealed class DevelopmentCoderModel(
                 new ChatMessage(ChatRole.User, prompt)
             ];
         }
+
         var providerCalls = Math.Max(1, maxToolCalls + 1);
         var cumulativeInputTokens = (int)Math.Min(int.MaxValue, Math.Max(1024L, (long)maxOutputTokens * providerCalls));
         using var providerBudget = ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions
@@ -140,12 +141,13 @@ internal sealed class DevelopmentCoderModel(
         });
         var updates = new List<ChatResponseUpdate>();
         await foreach (var update in _chatClient.GetStreamingResponseAsync(messages,
-            options,
-            cancellationToken).ConfigureAwait(false))
+                           options,
+                           cancellationToken).ConfigureAwait(false))
         {
             updates.Add(update);
             liveProgress?.Output(update);
         }
+
         var response = updates.ToChatResponse();
         liveProgress?.CompleteOutput(response.Usage);
 
@@ -167,12 +169,13 @@ internal sealed class DevelopmentCoderModel(
         }
 
         return new DevelopmentCoderModelResult(gateway.Submission
-                                                ?? throw new InvalidOperationException("The coder attempt ended without a typed implementation submission."),
+                                               ?? throw new InvalidOperationException("The coder attempt ended without a typed implementation submission."),
             inputTokens,
             outputTokens);
     }
 
-    private sealed class ToolGateway(IDevelopmentWorkspaceTools tools,
+    private sealed class ToolGateway(
+        IDevelopmentWorkspaceTools tools,
         int maxToolCalls,
         DevelopmentAttemptLiveProgress? liveProgress)
     {
@@ -184,38 +187,35 @@ internal sealed class DevelopmentCoderModel(
         public DevelopmentCoderSubmission? Submission { get; private set; }
         public string? CloudPatch { get; private set; }
 
-        public Task<string> ListFilesAsync(
-            [Description("Workspace-relative directory; empty means repository root.")] string? path,
+        public Task<string> ListFilesAsync([Description("Workspace-relative directory; empty means repository root.")] string? path,
             CancellationToken cancellationToken)
         {
             return InvokeAsync("list_files", path, () => _tools.ListFilesAsync(path, cancellationToken));
         }
 
-        public Task<string> ReadFileAsync(
-            [Description("Workspace-relative file path.")] string path,
+        public Task<string> ReadFileAsync([Description("Workspace-relative file path.")] string path,
             CancellationToken cancellationToken)
         {
             return InvokeAsync("read_file", path, () => _tools.ReadFileAsync(path, cancellationToken));
         }
 
-        public Task<string> SearchTextAsync(
-            [Description("Fixed text to search for.")] string pattern,
-            [Description("Workspace-relative directory; empty means repository root.")] string? path,
+        public Task<string> SearchTextAsync([Description("Fixed text to search for.")] string pattern,
+            [Description("Workspace-relative directory; empty means repository root.")]
+            string? path,
             CancellationToken cancellationToken)
         {
             return InvokeAsync("search_text", $"{path}:{pattern}", () => _tools.SearchTextAsync(pattern, path, cancellationToken));
         }
 
-        public Task<string> WriteFileAsync(
-            [Description("Workspace-relative file path.")] string path,
-            [Description("Complete UTF-8 file content.")] string content,
+        public Task<string> WriteFileAsync([Description("Workspace-relative file path.")] string path,
+            [Description("Complete UTF-8 file content.")]
+            string content,
             CancellationToken cancellationToken)
         {
             return InvokeAsync("write_file", path, () => _tools.WriteFileAsync(path, content, cancellationToken));
         }
 
-        public Task<string> ApplyPatchAsync(
-            [Description("Git unified diff with explicit diff --git path headers.")] string patch,
+        public Task<string> ApplyPatchAsync([Description("Git unified diff with explicit diff --git path headers.")] string patch,
             CancellationToken cancellationToken)
         {
             return InvokeAsync("apply_patch", DevelopmentAttemptLiveSanitizer.StableFingerprint("patch", patch),
@@ -232,8 +232,7 @@ internal sealed class DevelopmentCoderModel(
             return InvokeAsync("get_diff", null, () => _tools.GetDiffAsync(cancellationToken));
         }
 
-        public Task<string> RunCommandAsync(
-            [Description("One of: git_status, git_diff_check, dotnet_restore, dotnet_build_release_no_restore, dotnet_test_release_no_build.")] string commandId,
+        public Task<string> RunCommandAsync([Description("One of: git_status, git_diff_check, dotnet_restore, dotnet_build_release_no_restore, dotnet_test_release_no_build.")] string commandId,
             CancellationToken cancellationToken)
         {
             return InvokeAsync("run_command", commandId, () => _tools.RunCommandAsync(commandId, cancellationToken));
@@ -257,7 +256,8 @@ internal sealed class DevelopmentCoderModel(
         }
 
         public string SubmitCloudImplementation(string summary,
-            [Description("One bounded Git unified diff using repository-relative paths.")] string patch,
+            [Description("One bounded Git unified diff using repository-relative paths.")]
+            string patch,
             string[] changedFiles,
             string? notes = null)
         {
@@ -286,6 +286,7 @@ internal sealed class DevelopmentCoderModel(
             {
                 throw new InvalidOperationException("The Development coder exceeded the configured tool-call limit.");
             }
+
             _liveProgress?.ToolStarted(toolId, arguments);
         }
     }

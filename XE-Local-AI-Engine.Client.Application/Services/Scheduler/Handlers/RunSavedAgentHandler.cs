@@ -173,13 +173,13 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
             //    above (pin ?? effectiveModel). The resolved prompt (scaffold + persona + folded playbook memory), curated
             //    tools, skills, reasoning, and version are threaded verbatim — NOT the raw definition.Instructions (MED-002).
             var resolved = await agentDefinitionResolver.ResolveAsync(definition.Id,
-                                                             effectiveModel,
-                                                             retrievalQuery: parameters.Prompt,
-                                                             supportsTools,
-                                                             honorModelProfile: true,
-                                                             effectiveModelIsCloud,
-                                                             cancellationToken)
-                                                         .ConfigureAwait(false);
+                                                            effectiveModel,
+                                                            retrievalQuery: parameters.Prompt,
+                                                            supportsTools,
+                                                            honorModelProfile: true,
+                                                            effectiveModelIsCloud,
+                                                            cancellationToken)
+                                                        .ConfigureAwait(false);
             if (resolved is null)
             {
                 // The definition existed at step 1 but was deleted before the resolve completed (rare race).
@@ -220,7 +220,8 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
         var strippedTools = resolved.AllowedTools.Where(static tool => tool.RequiresApproval).ToArray();
         if (strippedTools.Length > 0)
         {
-            _logger.LogWarning("Run-agent for definition {AgentDefinitionId} stripped {StrippedCount} approval-required tool(s) ({StrippedTools}) from the unattended offer: a scheduled run has no approval round-trip.",
+            _logger.LogWarning(
+                "Run-agent for definition {AgentDefinitionId} stripped {StrippedCount} approval-required tool(s) ({StrippedTools}) from the unattended offer: a scheduled run has no approval round-trip.",
                 resolved.AgentDefinitionId,
                 strippedTools.Length,
                 string.Join(", ", strippedTools.Select(static tool => tool.Name)));

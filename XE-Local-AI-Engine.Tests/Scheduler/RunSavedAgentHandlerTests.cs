@@ -187,8 +187,20 @@ public sealed class RunSavedAgentHandlerTests
     public async Task ExecuteAsync_StripsApprovalRequiredToolsFromTheUnattendedOffer()
     {
         using var harness = new Harness();
-        var autoTool = new AllowedToolDto { Id = Guid.NewGuid(), Name = "get_current_time", Location = ToolLocation.ApiSide, RequiresApproval = false };
-        var approvalTool = new AllowedToolDto { Id = Guid.NewGuid(), Name = "mcp_dangerous", Location = ToolLocation.ClientLocal, RequiresApproval = true };
+        var autoTool = new AllowedToolDto
+        {
+            Id = Guid.NewGuid(),
+            Name = "get_current_time",
+            Location = ToolLocation.ApiSide,
+            RequiresApproval = false
+        };
+        var approvalTool = new AllowedToolDto
+        {
+            Id = Guid.NewGuid(),
+            Name = "mcp_dangerous",
+            Location = ToolLocation.ClientLocal,
+            RequiresApproval = true
+        };
         harness.Resolver
                .ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
                .Returns(new ResolvedAgentRuntime("SCAFFOLD+PERSONA", [autoTool, approvalTool], null, null, 7, AgentId, "Toolful Agent", []));

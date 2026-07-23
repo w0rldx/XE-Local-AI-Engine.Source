@@ -108,7 +108,7 @@ public sealed class OpenApiDocumentTests
 
         var requestSchema = FindSchema(schemas, "StartLlamaCppSourceBuildRequest");
         AssertEx.True(requestSchema.GetProperty("required").EnumerateArray()
-            .Any(static property => property.GetString() == "acknowledgeCustomSourceRisk"),
+                                   .Any(static property => property.GetString() == "acknowledgeCustomSourceRisk"),
             "The custom-source risk acknowledgement must be required on the wire.");
         AssertSchemaProperties(schemas, "LlamaCppSourceBuildDescriptorResponse",
             ["buildId", "backend", "source", "repository", "revisionMode", "requestedCommit", "resolvedCommit"]);

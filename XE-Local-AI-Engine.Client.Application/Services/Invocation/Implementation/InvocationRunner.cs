@@ -1327,8 +1327,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
     // EMPTY-STRING CallId, which the two paths previously handled differently — letting the browser attach the
     // Approve/Deny controls to the matching card (UX-01 follow-up). Internal (not private) purely as a test seam via
     // InternalsVisibleTo; not part of the public contract.
-    internal static string ResolveToolCallCardId(string? callId, string? toolName)
-        => callId ?? toolName ?? string.Empty;
+    internal static string ResolveToolCallCardId(string? callId, string? toolName) =>
+        callId ?? toolName ?? string.Empty;
 
     // Mirrors the normal Completed lifecycle emission for the timeout/cancel rethrow paths, emitting Completed with
     // IsError=true so a tool card the UI parked on Requested gets cleared instead of spinning forever. Skips when no

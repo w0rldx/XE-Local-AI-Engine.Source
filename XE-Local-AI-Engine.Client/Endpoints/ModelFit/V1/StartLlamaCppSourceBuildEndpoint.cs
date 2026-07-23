@@ -7,17 +7,16 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
-public sealed class StartLlamaCppSourceBuildEndpoint(
-    ILlamaCppSourceBuildService buildService) : Endpoint<StartLlamaCppSourceBuildRequest, StartLlamaCppSourceBuildResponse>
+public sealed class StartLlamaCppSourceBuildEndpoint(ILlamaCppSourceBuildService buildService) : Endpoint<StartLlamaCppSourceBuildRequest, StartLlamaCppSourceBuildResponse>
 {
     public override void Configure()
     {
         Post(LocalApiRoutes.ModelFit.SourceBuild);
         Policies(NodeAuthorizationPolicies.Operator);
         Description(builder => builder
-            .Produces<StartLlamaCppSourceBuildResponse>(StatusCodes.Status200OK)
-            .ProducesProblemFE(StatusCodes.Status400BadRequest)
-            .Produces<LlamaCppSourceBuildBlockedResponse>(StatusCodes.Status409Conflict));
+                               .Produces<StartLlamaCppSourceBuildResponse>(StatusCodes.Status200OK)
+                               .ProducesProblemFE(StatusCodes.Status400BadRequest)
+                               .Produces<LlamaCppSourceBuildBlockedResponse>(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(StartLlamaCppSourceBuildRequest request, CancellationToken ct)
@@ -43,7 +42,7 @@ public sealed class StartLlamaCppSourceBuildEndpoint(
                     return;
                 case LlamaCppSourceBuildStartOutcome.MissingPrerequisites:
                     await BlockAsync("prerequisites",
-                        "One or more build prerequisites are missing; resolve the checklist before building.")
+                            "One or more build prerequisites are missing; resolve the checklist before building.")
                         .ConfigureAwait(false);
                     return;
                 case LlamaCppSourceBuildStartOutcome.ProcessesRunning:
@@ -56,7 +55,7 @@ public sealed class StartLlamaCppSourceBuildEndpoint(
                     return;
                 case LlamaCppSourceBuildStartOutcome.RuntimeBusy:
                     await BlockAsync("runtime-busy",
-                        "Wait for the active llama.cpp source build or runtime change to finish before starting another build.")
+                            "Wait for the active llama.cpp source build or runtime change to finish before starting another build.")
                         .ConfigureAwait(false);
                     return;
                 case LlamaCppSourceBuildStartOutcome.Started:
@@ -79,6 +78,10 @@ public sealed class StartLlamaCppSourceBuildEndpoint(
 
     private Task BlockAsync(string reason, string message)
     {
-        return Send.ResultAsync(Results.Conflict(new LlamaCppSourceBuildBlockedResponse { Reason = reason, Message = message }));
+        return Send.ResultAsync(Results.Conflict(new LlamaCppSourceBuildBlockedResponse
+        {
+            Reason = reason,
+            Message = message
+        }));
     }
 }

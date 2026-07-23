@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Development;
 
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -160,17 +161,17 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
                 ? DevelopmentTaskStatus.AwaitingApply
                 : DevelopmentTaskStatus.ChangesRequested;
             _ = await _store.FinalizeReviewAsync(new DevelopmentFinalizeReviewCommand(prepared.Attachment,
-                                                    Guid.NewGuid(),
-                                                    snapshot.TaskVersion,
-                                                    snapshot.AttemptVersion,
-                                                    target,
-                                                    target == DevelopmentTaskStatus.AwaitingApply ? evidence.Current.SubjectHash : null,
-                                                    submission.Disposition == DevelopmentReviewDisposition.ChangesRequested
-                                                        ? "The independent reviewer requested changes."
-                                                        : null,
-                                                    model.InputTokens,
-                                                    model.OutputTokens),
-                                                CancellationToken.None)
+                                    Guid.NewGuid(),
+                                    snapshot.TaskVersion,
+                                    snapshot.AttemptVersion,
+                                    target,
+                                    target == DevelopmentTaskStatus.AwaitingApply ? evidence.Current.SubjectHash : null,
+                                    submission.Disposition == DevelopmentReviewDisposition.ChangesRequested
+                                        ? "The independent reviewer requested changes."
+                                        : null,
+                                    model.InputTokens,
+                                    model.OutputTokens),
+                                CancellationToken.None)
                             .ConfigureAwait(false);
             return new DevelopmentReviewerAttemptResult(snapshot.AttemptId,
                 prepared.ArtifactId,
@@ -183,13 +184,13 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
             try
             {
                 _ = await _store.TerminalizeAttemptAsync(new DevelopmentTerminalizeAttemptCommand(snapshot.AttemptId,
-                                                            Guid.NewGuid(),
-                                                            exception is OperationCanceledException
-                                                                ? DevelopmentAttemptStatus.Cancelled
-                                                                : DevelopmentAttemptStatus.Failed,
-                                                            snapshot.AttemptVersion,
-                                                            SanitizedReason(exception)),
-                                                        CancellationToken.None)
+                                        Guid.NewGuid(),
+                                        exception is OperationCanceledException
+                                            ? DevelopmentAttemptStatus.Cancelled
+                                            : DevelopmentAttemptStatus.Failed,
+                                        snapshot.AttemptVersion,
+                                        SanitizedReason(exception)),
+                                    CancellationToken.None)
                                 .ConfigureAwait(false);
             }
             catch (DevelopmentInvalidTransitionException)
@@ -214,8 +215,8 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
             ? JsonSerializer.Deserialize<Guid[]>(json.Span, JsonOptions) ?? []
             : [];
         var latestCoder = (await _store.ListAttemptsAsync(taskId, cancellationToken).ConfigureAwait(false))
-                          .LastOrDefault(attempt => attempt.Role == DevelopmentAttemptRole.Coder
-                                                    && attempt.Status == DevelopmentAttemptStatus.Succeeded);
+            .LastOrDefault(attempt => attempt.Role == DevelopmentAttemptRole.Coder
+                                      && attempt.Status == DevelopmentAttemptStatus.Succeeded);
         if (!report.Passed
             || !string.Equals(report.CommandProfileVersion, DevelopmentValidationRunner.ProfileVersion, StringComparison.Ordinal)
             || !string.Equals(validationArtifact.CommandProfileVersion, DevelopmentValidationRunner.ProfileVersion, StringComparison.Ordinal)
@@ -239,8 +240,7 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
         return (validationArtifact, report);
     }
 
-    private async Task<DevelopmentCloudAttemptContext?> CreateCloudContextAsync(
-        DevelopmentExecutionSnapshot snapshot,
+    private async Task<DevelopmentCloudAttemptContext?> CreateCloudContextAsync(DevelopmentExecutionSnapshot snapshot,
         DevelopmentEvidenceSet evidence,
         DevelopmentArtifactSnapshot validationArtifact,
         DevelopmentValidationReport validationReport,
@@ -253,8 +253,8 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
 
         return await _cloudContext.CreateAsync(snapshot,
             [
-                new DevelopmentCloudContextExcerpt("workspace.patch", System.Text.Encoding.UTF8.GetString(evidence.Patch.Span)),
-                new DevelopmentCloudContextExcerpt("changed-files.json", System.Text.Encoding.UTF8.GetString(evidence.Manifest.Span)),
+                new DevelopmentCloudContextExcerpt("workspace.patch", Encoding.UTF8.GetString(evidence.Patch.Span)),
+                new DevelopmentCloudContextExcerpt("changed-files.json", Encoding.UTF8.GetString(evidence.Manifest.Span)),
                 new DevelopmentCloudContextExcerpt("validation-report.json", JsonSerializer.Serialize(validationReport, JsonOptions))
             ],
             [evidence.PatchArtifact.Id, evidence.ManifestArtifact.Id, validationArtifact.Id],
@@ -278,8 +278,8 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
 
     private static string BuildPrompt(DevelopmentExecutionSnapshot snapshot,
         DevelopmentTaskSnapshot task,
-        DevelopmentValidationReport validation)
-        => string.Concat("Task: ", snapshot.Title,
+        DevelopmentValidationReport validation) =>
+        string.Concat("Task: ", snapshot.Title,
             "\nRequirements:\n", snapshot.Requirements,
             "\nAcceptance criteria:\n", snapshot.AcceptanceCriteriaJson,
             "\nReview round: ", task.CurrentReviewRound, " of ", task.MaxReviewRounds,
@@ -288,8 +288,8 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
             "\nValidation passed: ", validation.Passed,
             "\nUse only the read-only tools. Never modify the worktree or claim task completion.");
 
-    private static string SanitizedReason(Exception exception)
-        => exception switch
+    private static string SanitizedReason(Exception exception) =>
+        exception switch
         {
             OperationCanceledException => "The bounded Development reviewer attempt was cancelled or timed out.",
             DevelopmentWorkspaceSecurityException => "The Development reviewer attempt violated a workspace security policy.",

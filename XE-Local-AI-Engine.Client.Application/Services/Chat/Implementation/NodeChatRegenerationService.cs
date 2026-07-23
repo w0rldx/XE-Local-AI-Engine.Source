@@ -513,7 +513,14 @@ public sealed class NodeChatRegenerationService(
 
         return knowledgeContext is null
             ? messages
-            : [knowledgeContext with { SortOrder = 0 }, .. messages];
+            :
+            [
+                knowledgeContext with
+                {
+                    SortOrder = 0
+                },
+                .. messages
+            ];
     }
 
     /// <summary>

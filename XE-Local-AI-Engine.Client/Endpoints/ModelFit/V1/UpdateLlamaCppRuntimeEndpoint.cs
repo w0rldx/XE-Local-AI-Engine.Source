@@ -54,9 +54,9 @@ public sealed class UpdateLlamaCppRuntimeEndpoint(
         Post(LocalApiRoutes.ModelFit.LlamaCppUpdate);
         Policies(NodeAuthorizationPolicies.Operator);
         Description(builder => builder
-            .Produces<LlamaCppVersionResponse>(StatusCodes.Status200OK)
-            .ProducesProblemFE(StatusCodes.Status400BadRequest)
-            .Produces<LlamaCppUpdateBlockedResponse>(StatusCodes.Status409Conflict));
+                               .Produces<LlamaCppVersionResponse>(StatusCodes.Status200OK)
+                               .ProducesProblemFE(StatusCodes.Status400BadRequest)
+                               .Produces<LlamaCppUpdateBlockedResponse>(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(UpdateLlamaCppRuntimeRequest req, CancellationToken ct)
@@ -117,8 +117,8 @@ public sealed class UpdateLlamaCppRuntimeEndpoint(
             }
 
             var (mutationLease, runningProcessCount, blockedMessage) = await LlamaCppPrebuiltRuntimeMutationGuard
-                .TryAcquireAsync(_installedRuntimeStore, _sourceBuildActivity, _processSupervisor, ct)
-                .ConfigureAwait(false);
+                                                                             .TryAcquireAsync(_installedRuntimeStore, _sourceBuildActivity, _processSupervisor, ct)
+                                                                             .ConfigureAwait(false);
             await using var ownedMutationLease = mutationLease;
             if (mutationLease is null || blockedMessage is not null)
             {

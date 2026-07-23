@@ -12,8 +12,7 @@ internal sealed record DevelopmentCloudAttemptContext(
 
 internal interface IDevelopmentCloudAttemptContextService
 {
-    Task<DevelopmentCloudAttemptContext> CreateAsync(
-        DevelopmentExecutionSnapshot snapshot,
+    Task<DevelopmentCloudAttemptContext> CreateAsync(DevelopmentExecutionSnapshot snapshot,
         IReadOnlyList<DevelopmentCloudContextExcerpt> excerpts,
         IReadOnlyList<Guid>? inputArtifactIds = null,
         CancellationToken cancellationToken = default);
@@ -39,8 +38,7 @@ internal sealed class DevelopmentCloudAttemptContextService(
     private readonly IDevelopmentStore _store = store ?? throw new ArgumentNullException(nameof(store));
     private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
-    public async Task<DevelopmentCloudAttemptContext> CreateAsync(
-        DevelopmentExecutionSnapshot snapshot,
+    public async Task<DevelopmentCloudAttemptContext> CreateAsync(DevelopmentExecutionSnapshot snapshot,
         IReadOnlyList<DevelopmentCloudContextExcerpt> excerpts,
         IReadOnlyList<Guid>? inputArtifactIds = null,
         CancellationToken cancellationToken = default)
@@ -56,8 +54,7 @@ internal sealed class DevelopmentCloudAttemptContextService(
 
         var durationSeconds = Math.Min(snapshot.MaxDurationSeconds ?? _options.MaxAttemptDurationSeconds,
             _options.MaxAttemptDurationSeconds);
-        var bundle = _contextBuilder.Build(new DevelopmentCloudContextBuildRequest(
-            $"development-{snapshot.AttemptId:N}-{Guid.NewGuid():N}",
+        var bundle = _contextBuilder.Build(new DevelopmentCloudContextBuildRequest($"development-{snapshot.AttemptId:N}-{Guid.NewGuid():N}",
             snapshot.ProjectId.ToString("D"),
             snapshot.TaskId.ToString("D"),
             snapshot.AttemptId.ToString("D"),
@@ -91,21 +88,20 @@ internal sealed class DevelopmentCloudAttemptContextService(
         }, JsonOptions);
         var artifactId = Guid.NewGuid();
         var written = await _blobStore.WriteAsync(snapshot.ProjectId, artifactId, content, cancellationToken).ConfigureAwait(false);
-        _ = await _store.AttachArtifactAsync(new DevelopmentAttachArtifactCommand(
-                                                artifactId,
-                                                snapshot.ProjectId,
-                                                snapshot.TaskId,
-                                                snapshot.AttemptId,
-                                                Guid.NewGuid(),
-                                                DevelopmentArtifactKind.CloudContextBundle,
-                                                SchemaVersion: 1,
-                                                written.ContentHash,
-                                                written.ByteCount,
-                                                ManagedReference: written.OpaqueReference,
-                                                InputArtifactIdsJson: inputArtifactIds is null
-                                                    ? null
-                                                    : JsonSerializer.SerializeToUtf8Bytes(inputArtifactIds, JsonOptions)),
-                                            cancellationToken)
+        _ = await _store.AttachArtifactAsync(new DevelopmentAttachArtifactCommand(artifactId,
+                                snapshot.ProjectId,
+                                snapshot.TaskId,
+                                snapshot.AttemptId,
+                                Guid.NewGuid(),
+                                DevelopmentArtifactKind.CloudContextBundle,
+                                SchemaVersion: 1,
+                                written.ContentHash,
+                                written.ByteCount,
+                                ManagedReference: written.OpaqueReference,
+                                InputArtifactIdsJson: inputArtifactIds is null
+                                    ? null
+                                    : JsonSerializer.SerializeToUtf8Bytes(inputArtifactIds, JsonOptions)),
+                            cancellationToken)
                         .ConfigureAwait(false);
 
         return new DevelopmentCloudAttemptContext(_routeFactory.Create(bundle), artifactId);

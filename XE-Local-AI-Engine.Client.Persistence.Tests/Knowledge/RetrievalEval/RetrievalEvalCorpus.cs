@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests.Knowledge.RetrievalEval;
 
+using System.Globalization;
+
 /// <summary>
 ///     The labeled synthetic corpus for the retrieval-eval harness. Each document is a short markdown body with a
 ///     distinctive, mostly non-overlapping vocabulary; each query is labeled with the single document that answers it and
@@ -152,9 +154,8 @@ internal static class RetrievalEvalCorpus
         // Filler documents carry the common term only (never bb), so bb stays rare (3 of 15) and keeps a positive IDF.
         for (var index = 0; index < 12; index++)
         {
-            documents.Add(new FixtureDocument(
-                string.Create(System.Globalization.CultureInfo.InvariantCulture, $"f{index}"),
-                string.Create(System.Globalization.CultureInfo.InvariantCulture, $"aa c{index}x c{index}y")));
+            documents.Add(new FixtureDocument(string.Create(CultureInfo.InvariantCulture, $"f{index}"),
+                string.Create(CultureInfo.InvariantCulture, $"aa c{index}x c{index}y")));
         }
 
         return documents;

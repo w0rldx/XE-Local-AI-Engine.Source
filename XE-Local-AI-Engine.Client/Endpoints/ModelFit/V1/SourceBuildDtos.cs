@@ -6,8 +6,10 @@ public enum LlamaCppSourceBackendDto
 {
     [JsonStringEnumMemberName("cpu")]
     Cpu = 0,
+
     [JsonStringEnumMemberName("vulkan")]
     Vulkan = 1,
+
     [JsonStringEnumMemberName("cuda")]
     Cuda = 2
 }
@@ -16,6 +18,7 @@ public enum LlamaCppSourceSelectionDto
 {
     [JsonStringEnumMemberName("official")]
     Official = 0,
+
     [JsonStringEnumMemberName("custom")]
     Custom = 1
 }
@@ -24,8 +27,10 @@ public enum LlamaCppSourceRevisionModeDto
 {
     [JsonStringEnumMemberName("enginePinned")]
     EnginePinned = 0,
+
     [JsonStringEnumMemberName("defaultBranch")]
     DefaultBranch = 1,
+
     [JsonStringEnumMemberName("explicitCommit")]
     ExplicitCommit = 2
 }

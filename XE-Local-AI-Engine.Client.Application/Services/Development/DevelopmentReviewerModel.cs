@@ -5,7 +5,6 @@ using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
-using XE_Local_AI_Engine.Providers.Abstractions;
 
 internal enum DevelopmentReviewDisposition
 {
@@ -63,6 +62,7 @@ internal sealed class DevelopmentReviewerModel(
         {
             throw new DevelopmentWorkspaceSecurityException("A cloud Development reviewer attempt requires an explicit immutable CloudScoped route.");
         }
+
         if (!isCloud && cloudRoute is not null)
         {
             throw new DevelopmentWorkspaceSecurityException("A CloudScoped route cannot be sent through a local Development model.");
@@ -129,6 +129,7 @@ internal sealed class DevelopmentReviewerModel(
                 new ChatMessage(ChatRole.User, prompt)
             ];
         }
+
         var providerCalls = Math.Max(1, maxToolCalls + 1);
         using var providerBudget = ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions
         {
@@ -141,12 +142,13 @@ internal sealed class DevelopmentReviewerModel(
         });
         var updates = new List<ChatResponseUpdate>();
         await foreach (var update in _chatClient.GetStreamingResponseAsync(messages,
-            options,
-            cancellationToken).ConfigureAwait(false))
+                           options,
+                           cancellationToken).ConfigureAwait(false))
         {
             updates.Add(update);
             liveProgress?.Output(update);
         }
+
         var response = updates.ToChatResponse();
         liveProgress?.CompleteOutput(response.Usage);
 
@@ -161,12 +163,13 @@ internal sealed class DevelopmentReviewerModel(
         }
 
         return new DevelopmentReviewerModelResult(gateway.Submission
-                                                   ?? throw new InvalidOperationException("The reviewer attempt ended without a typed review submission."),
+                                                  ?? throw new InvalidOperationException("The reviewer attempt ended without a typed review submission."),
             inputTokens,
             outputTokens);
     }
 
-    private sealed class ToolGateway(IDevelopmentWorkspaceTools tools,
+    private sealed class ToolGateway(
+        IDevelopmentWorkspaceTools tools,
         int maxToolCalls,
         DevelopmentAttemptLiveProgress? liveProgress)
     {
@@ -190,7 +193,8 @@ internal sealed class DevelopmentReviewerModel(
         }
 
         public Task<string> SearchTextAsync([Description("Fixed text to search for.")] string pattern,
-            [Description("Workspace-relative directory; empty means repository root.")] string? path,
+            [Description("Workspace-relative directory; empty means repository root.")]
+            string? path,
             CancellationToken cancellationToken)
         {
             return InvokeAsync("search_text", $"{path}:{pattern}", () => _tools.SearchTextAsync(pattern, path, cancellationToken));
@@ -257,6 +261,7 @@ internal sealed class DevelopmentReviewerModel(
             {
                 throw new InvalidOperationException("The Development reviewer exceeded the configured tool-call limit.");
             }
+
             _liveProgress?.ToolStarted(toolId, arguments);
         }
     }

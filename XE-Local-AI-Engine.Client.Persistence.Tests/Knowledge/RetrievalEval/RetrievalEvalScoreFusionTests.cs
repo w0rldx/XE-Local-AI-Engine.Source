@@ -44,8 +44,7 @@ public sealed class RetrievalEvalScoreFusionTests : IDisposable
     public async Task ScoreAwareFusion_RecoversRelevantChunk_ThatPureRrfMisorders()
     {
         Directory.CreateDirectory(_rootPath);
-        using var fixture = await RetrievalEvalFixture.BuildAsync(
-            Path.Combine(_rootPath, "scorefusion-hard.sqlite"),
+        using var fixture = await RetrievalEvalFixture.BuildAsync(Path.Combine(_rootPath, "scorefusion-hard.sqlite"),
             _keyHolder,
             RetrievalEvalCorpus.ScoreFusionDocuments,
             RetrievalEvalCorpus.ScoreFusionSynonyms,
@@ -53,8 +52,8 @@ public sealed class RetrievalEvalScoreFusionTests : IDisposable
 
         var queries = RetrievalEvalCorpus.ScoreFusionQueries;
 
-        var rrf = await RetrievalEvalHarness.EvaluateAsync(
-            fixture.CreateHybridSearchService(RankFusionStrategy.Rrf, ScoreWeight), queries, fixture.DocumentIdsByKey, K, CancellationToken.None).ConfigureAwait(false);
+        var rrf = await RetrievalEvalHarness.EvaluateAsync(fixture.CreateHybridSearchService(RankFusionStrategy.Rrf, ScoreWeight), queries, fixture.DocumentIdsByKey, K, CancellationToken.None)
+                                            .ConfigureAwait(false);
         var aware = await RetrievalEvalHarness.EvaluateAsync(
             fixture.CreateHybridSearchService(RankFusionStrategy.ScoreAware, ScoreWeight), queries, fixture.DocumentIdsByKey, K, CancellationToken.None).ConfigureAwait(false);
 
@@ -82,8 +81,8 @@ public sealed class RetrievalEvalScoreFusionTests : IDisposable
 
         var queries = RetrievalEvalFixture.Queries;
 
-        var rrf = await RetrievalEvalHarness.EvaluateAsync(
-            fixture.CreateHybridSearchService(RankFusionStrategy.Rrf, ScoreWeight), queries, fixture.DocumentIdsByKey, K, CancellationToken.None).ConfigureAwait(false);
+        var rrf = await RetrievalEvalHarness.EvaluateAsync(fixture.CreateHybridSearchService(RankFusionStrategy.Rrf, ScoreWeight), queries, fixture.DocumentIdsByKey, K, CancellationToken.None)
+                                            .ConfigureAwait(false);
         var aware = await RetrievalEvalHarness.EvaluateAsync(
             fixture.CreateHybridSearchService(RankFusionStrategy.ScoreAware, ScoreWeight), queries, fixture.DocumentIdsByKey, K, CancellationToken.None).ConfigureAwait(false);
 

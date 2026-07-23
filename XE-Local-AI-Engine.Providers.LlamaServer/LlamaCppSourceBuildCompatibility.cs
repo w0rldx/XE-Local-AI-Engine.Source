@@ -7,15 +7,9 @@ public static class LlamaCppSourceBuildCompatibility
 {
     public static bool IsLegacyPinnedCuda(this LlamaCppSourceBuildDescriptor? descriptor)
     {
-        return descriptor is
-        {
-            Variant: GpuVariant.Cuda,
-            Source: LlamaCppSourceSelection.Official,
-            RevisionMode: LlamaCppSourceRevisionMode.EnginePinned,
-            RequestedCommit: null
-        }
-        && string.Equals(descriptor.Repository, LlamaCppSourceBuildRequestValidation.OfficialRepository, StringComparison.Ordinal)
-        && string.Equals(descriptor.ResolvedCommit, LlamaCppReleasePins.PinnedSourceCommitSha, StringComparison.OrdinalIgnoreCase);
+        return descriptor is { Variant: GpuVariant.Cuda, Source: LlamaCppSourceSelection.Official, RevisionMode: LlamaCppSourceRevisionMode.EnginePinned, RequestedCommit: null }
+               && string.Equals(descriptor.Repository, LlamaCppSourceBuildRequestValidation.OfficialRepository, StringComparison.Ordinal)
+               && string.Equals(descriptor.ResolvedCommit, LlamaCppReleasePins.PinnedSourceCommitSha, StringComparison.OrdinalIgnoreCase);
     }
 
     public static bool IsLegacyPinnedCuda(this InstalledRuntimeState? state, string cacheRoot)
@@ -43,7 +37,7 @@ public static class LlamaCppSourceBuildCompatibility
                 var recorded = Path.GetFullPath(state.SourceBuildPath);
                 var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
                 return string.Equals(state.Tag, LlamaCppReleasePins.PinnedTag, StringComparison.Ordinal)
-                    && string.Equals(recorded, expected, comparison);
+                       && string.Equals(recorded, expected, comparison);
             }
             catch (Exception exception) when (exception is ArgumentException or NotSupportedException or PathTooLongException)
             {
@@ -52,9 +46,9 @@ public static class LlamaCppSourceBuildCompatibility
         }
 
         return state.SourceRevisionMode == LlamaCppSourceRevisionMode.EnginePinned
-            && state.SourceRequestedCommit is null
-            && state.SourceSelection is not LlamaCppSourceSelection.Custom
-            && string.Equals(state.SourceRepository, LlamaCppSourceBuildRequestValidation.OfficialRepository, StringComparison.Ordinal)
-            && string.Equals(state.SourceCommit, LlamaCppReleasePins.PinnedSourceCommitSha, StringComparison.OrdinalIgnoreCase);
+               && state.SourceRequestedCommit is null
+               && state.SourceSelection is not LlamaCppSourceSelection.Custom
+               && string.Equals(state.SourceRepository, LlamaCppSourceBuildRequestValidation.OfficialRepository, StringComparison.Ordinal)
+               && string.Equals(state.SourceCommit, LlamaCppReleasePins.PinnedSourceCommitSha, StringComparison.OrdinalIgnoreCase);
     }
 }

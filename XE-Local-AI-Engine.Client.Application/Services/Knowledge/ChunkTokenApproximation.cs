@@ -74,9 +74,9 @@ internal static class ChunkTokenApproximation
     private static bool IsCjkOrEmoji(char character)
     {
         return (character >= 0x2E80 && character <= 0x9FFF)
-            || (character >= 0xAC00 && character <= 0xD7A3)
-            || (character >= 0xF900 && character <= 0xFAFF)
-            || (character >= 0xFF00 && character <= 0xFFEF)
-            || (character >= 0xD800 && character <= 0xDFFF);
+               || (character >= 0xAC00 && character <= 0xD7A3)
+               || (character >= 0xF900 && character <= 0xFAFF)
+               || (character >= 0xFF00 && character <= 0xFFEF)
+               || (character >= 0xD800 && character <= 0xDFFF);
     }
 }

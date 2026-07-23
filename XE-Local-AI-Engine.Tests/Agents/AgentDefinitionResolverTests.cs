@@ -109,8 +109,10 @@ public sealed class AgentDefinitionResolverTests
     {
         // The mode-off Default Assistant takes the whole offer, and the node policy tightens it too — a node-wide policy
         // is not bypassable by plain mode-off chat. Node policy: require approval for the ReadLocal category.
-        var nodePolicy = new NodeToolApprovalPolicy(
-            new Dictionary<ToolCategory, bool> { [ToolCategory.ReadLocal] = true },
+        var nodePolicy = new NodeToolApprovalPolicy(new Dictionary<ToolCategory, bool>
+            {
+                [ToolCategory.ReadLocal] = true
+            },
             new Dictionary<string, bool>(StringComparer.Ordinal));
         var resolver = CreateResolverWithPolicy(out var store,
             nodePolicy,
@@ -410,8 +412,10 @@ public sealed class AgentDefinitionResolverTests
         // End-to-end seam D (OPP-03): the node policy tightens a whole category, then the per-agent override can only ADD
         // approval on top of it. Node policy: require approval for the Network category. Definition: names three tools and
         // tightens GetCurrentTime while trying (and failing) to auto-execute the Network tool.
-        var nodePolicy = new NodeToolApprovalPolicy(
-            new Dictionary<ToolCategory, bool> { [ToolCategory.Network] = true },
+        var nodePolicy = new NodeToolApprovalPolicy(new Dictionary<ToolCategory, bool>
+            {
+                [ToolCategory.Network] = true
+            },
             new Dictionary<string, bool>(StringComparer.Ordinal));
         var resolver = CreateResolverWithPolicy(out var store,
             nodePolicy,
@@ -423,7 +427,7 @@ public sealed class AgentDefinitionResolverTests
             toolApprovals: new Dictionary<string, bool>
             {
                 ["GetCurrentTime"] = true, // per-agent tighten a node-auto-execute tool
-                ["mcp__x__y"] = false       // per-agent false must NOT loosen the node-tightened tool
+                ["mcp__x__y"] = false // per-agent false must NOT loosen the node-tightened tool
             });
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
 

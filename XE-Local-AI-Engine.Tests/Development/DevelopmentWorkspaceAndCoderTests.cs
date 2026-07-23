@@ -62,8 +62,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         var data = Path.Combine(_root, "protected-rename-data");
         Directory.CreateDirectory(data);
         var options = Options.Create(OptionsValue());
-        var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(
-            DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
+        var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
 
         using var sandbox = CreateSandbox();
         var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System);
@@ -88,8 +87,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         var data = Path.Combine(_root, "protected-headers-data");
         Directory.CreateDirectory(data);
         var options = Options.Create(OptionsValue());
-        var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(
-            DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
+        var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
 
         using var sandbox = CreateSandbox();
         var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System);
@@ -118,8 +116,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         var data = Path.Combine(_root, "patch-write-bound-data");
         Directory.CreateDirectory(data);
         var options = Options.Create(OptionsValue(maxFileWriteBytes: 16));
-        var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(
-            DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
+        var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
 
         using var sandbox = CreateSandbox();
         var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System);
@@ -146,8 +143,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         var data = Path.Combine(_root, "read-bound-data");
         Directory.CreateDirectory(data);
         var options = Options.Create(OptionsValue(maxCommandOutputBytes: 16, maxFileWriteBytes: 64));
-        var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(
-            DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
+        var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
 
         using var sandbox = CreateSandbox();
         var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System);
@@ -330,8 +326,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         var data = Path.Combine(_root, "tampered-data");
         Directory.CreateDirectory(data);
         var options = Options.Create(OptionsValue());
-        var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(
-            DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
+        var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
         DevelopmentWorkspaceSession session;
 
         using (var sandbox = CreateSandbox())
@@ -354,8 +349,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         var data = Path.Combine(_root, "bounded-data");
         Directory.CreateDirectory(data);
         var options = Options.Create(OptionsValue(maxPatchBytes: 128));
-        var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(
-            DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
+        var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
 
         using var sandbox = CreateSandbox();
         var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System);
@@ -407,28 +401,29 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         AssertEx.NotNullOrEmpty(result.SubjectHash);
         AssertEx.Contains(result.ChangedFiles, "feature.txt");
         _ = store.Received(5).AttachArtifactAsync(Arg.Any<DevelopmentAttachArtifactCommand>(), Arg.Any<CancellationToken>());
-        _ = store.Received(1).AttachArtifactAsync(Arg.Is<DevelopmentAttachArtifactCommand>(command => command.Kind == XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentArtifactKind.CoderSubmission),
+        _ = store.Received(1).AttachArtifactAsync(Arg.Is<DevelopmentAttachArtifactCommand>(command => command.Kind == Client.Persistence.Entities.DevelopmentArtifactKind.CoderSubmission),
             Arg.Any<CancellationToken>());
         _ = store.Received(1).TerminalizeAttemptAsync(Arg.Is<DevelopmentTerminalizeAttemptCommand>(command => command.Status == PersistenceDevelopmentAttemptStatus.Succeeded
-                                                                                                           && command.InputTokens == 10
-                                                                                                           && command.OutputTokens == 20),
+                                                                                                              && command.InputTokens == 10
+                                                                                                              && command.OutputTokens == 20),
             Arg.Any<CancellationToken>());
     }
 
     private static DevelopmentOptions OptionsValue(int maxPatchBytes = 1024 * 1024,
         int maxFileWriteBytes = 1024 * 1024,
-        int maxCommandOutputBytes = 256 * 1024) => new()
-    {
-        Enabled = true,
-        MaxArtifactBytes = 2 * 1024 * 1024,
-        MaxPatchBytes = maxPatchBytes,
-        MaxFileWriteBytes = maxFileWriteBytes,
-        MaxCommandOutputBytes = maxCommandOutputBytes,
-        MaxChangedFiles = 32,
-        MaxToolCalls = 16,
-        MaxAttemptDurationSeconds = 60,
-        MaxOutputTokens = 2048
-    };
+        int maxCommandOutputBytes = 256 * 1024) =>
+        new()
+        {
+            Enabled = true,
+            MaxArtifactBytes = 2 * 1024 * 1024,
+            MaxPatchBytes = maxPatchBytes,
+            MaxFileWriteBytes = maxFileWriteBytes,
+            MaxCommandOutputBytes = maxCommandOutputBytes,
+            MaxChangedFiles = 32,
+            MaxToolCalls = 16,
+            MaxAttemptDurationSeconds = 60,
+            MaxOutputTokens = 2048
+        };
 
     private static DevelopmentExecutionSnapshot Snapshot(string identity,
         bool acknowledged = true,
@@ -460,8 +455,8 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
             AttemptVersion: 1);
     }
 
-    private static DevelopmentRepositoryBinding Binding(DevelopmentExecutionSnapshot snapshot, string repository)
-        => new(snapshot.ProjectId,
+    private static DevelopmentRepositoryBinding Binding(DevelopmentExecutionSnapshot snapshot, string repository) =>
+        new(snapshot.ProjectId,
             snapshot.SelectedFolderId ?? throw new InvalidOperationException("The test snapshot must have a selected folder."),
             "repository",
             repository,
@@ -500,7 +495,10 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
             startInfo.ArgumentList.Add(argument);
         }
 
-        using var process = new Process { StartInfo = startInfo };
+        using var process = new Process
+        {
+            StartInfo = startInfo
+        };
         process.Start();
         var stdout = process.StandardOutput.ReadToEndAsync();
         var stderr = process.StandardError.ReadToEndAsync();
@@ -565,8 +563,8 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         public Task<DevelopmentCloudAttemptContext> CreateAsync(DevelopmentExecutionSnapshot snapshot,
             IReadOnlyList<DevelopmentCloudContextExcerpt> excerpts,
             IReadOnlyList<Guid>? inputArtifactIds = null,
-            CancellationToken cancellationToken = default)
-            => throw new InvalidOperationException("The local-only coder fixture must not build a cloud context.");
+            CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("The local-only coder fixture must not build a cloud context.");
     }
 
     private sealed class ThrowingChatClient : IChatClient
@@ -583,34 +581,55 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 
         public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
             ChatOptions? options = null,
-            [EnumeratorCancellation] CancellationToken cancellationToken = default)
+            [EnumeratorCancellation]
+            CancellationToken cancellationToken = default)
         {
             _ = await GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
             yield return new ChatResponseUpdate(ChatRole.Assistant, "done");
             yield return new ChatResponseUpdate(ChatRole.Assistant,
-                [new UsageContent(new UsageDetails
+            [
+                new UsageContent(new UsageDetails
                 {
                     InputTokenCount = 10,
                     OutputTokenCount = 20,
                     TotalTokenCount = 30
-                })]);
+                })
+            ]);
         }
 
-        public object? GetService(Type serviceType, object? serviceKey = null) => null;
+        public object? GetService(Type serviceType, object? serviceKey = null) =>
+            null;
+
         public void Dispose() { }
     }
 
     private sealed class NullWorkspaceTools : IDevelopmentWorkspaceTools
     {
         public IReadOnlyList<DevelopmentCommandEvidence> CommandEvidence => [];
-        public Task<string> ListFilesAsync(string? path, CancellationToken cancellationToken = default) => Task.FromResult(string.Empty);
-        public Task<string> ReadFileAsync(string path, CancellationToken cancellationToken = default) => Task.FromResult(string.Empty);
-        public Task<string> SearchTextAsync(string pattern, string? path, CancellationToken cancellationToken = default) => Task.FromResult(string.Empty);
-        public Task<string> WriteFileAsync(string path, string content, CancellationToken cancellationToken = default) => Task.FromResult(string.Empty);
-        public Task<string> ApplyPatchAsync(string patch, CancellationToken cancellationToken = default) => Task.FromResult(string.Empty);
-        public Task<string> GetStatusAsync(CancellationToken cancellationToken = default) => Task.FromResult(string.Empty);
-        public Task<string> GetDiffAsync(CancellationToken cancellationToken = default) => Task.FromResult(string.Empty);
-        public Task<string> RunCommandAsync(string commandId, CancellationToken cancellationToken = default) => Task.FromResult(string.Empty);
+
+        public Task<string> ListFilesAsync(string? path, CancellationToken cancellationToken = default) =>
+            Task.FromResult(string.Empty);
+
+        public Task<string> ReadFileAsync(string path, CancellationToken cancellationToken = default) =>
+            Task.FromResult(string.Empty);
+
+        public Task<string> SearchTextAsync(string pattern, string? path, CancellationToken cancellationToken = default) =>
+            Task.FromResult(string.Empty);
+
+        public Task<string> WriteFileAsync(string path, string content, CancellationToken cancellationToken = default) =>
+            Task.FromResult(string.Empty);
+
+        public Task<string> ApplyPatchAsync(string patch, CancellationToken cancellationToken = default) =>
+            Task.FromResult(string.Empty);
+
+        public Task<string> GetStatusAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(string.Empty);
+
+        public Task<string> GetDiffAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(string.Empty);
+
+        public Task<string> RunCommandAsync(string commandId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(string.Empty);
     }
 
     private sealed class SubmittingChatClient(long inputTokens, long outputTokens) : IChatClient
@@ -620,7 +639,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
             CancellationToken cancellationToken = default)
         {
             var submit = AssertEx.NotNull(options?.Tools?.OfType<AIFunction>()
-                .SingleOrDefault(static tool => tool.Name == "submit_implementation"));
+                                                 .SingleOrDefault(static tool => tool.Name == "submit_implementation"));
             _ = await submit.InvokeAsync(new AIFunctionArguments
             {
                 ["summary"] = "done",
@@ -640,7 +659,8 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 
         public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
             ChatOptions? options = null,
-            [EnumeratorCancellation] CancellationToken cancellationToken = default)
+            [EnumeratorCancellation]
+            CancellationToken cancellationToken = default)
         {
             var response = await GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
             foreach (var update in response.ToChatResponseUpdates())
@@ -649,7 +669,9 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
             }
         }
 
-        public object? GetService(Type serviceType, object? serviceKey = null) => null;
+        public object? GetService(Type serviceType, object? serviceKey = null) =>
+            null;
+
         public void Dispose() { }
     }
 }

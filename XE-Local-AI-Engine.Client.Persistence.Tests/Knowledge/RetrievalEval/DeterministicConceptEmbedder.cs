@@ -59,7 +59,8 @@ internal sealed class DeterministicConceptEmbedder : IEmbeddingGenerator<string,
         return new Embedding<float>(vector);
     }
 
-    public object? GetService(Type serviceType, object? serviceKey = null) => null;
+    public object? GetService(Type serviceType, object? serviceKey = null) =>
+        null;
 
     public void Dispose()
     {
@@ -103,17 +104,23 @@ internal sealed class DeterministicEmbeddingProvider : ILocalModelProvider
             }
         ]);
 
-    public IChatClient CreateChatClient(LocalModelSelection selection) => throw new NotSupportedException();
+    public IChatClient CreateChatClient(LocalModelSelection selection) =>
+        throw new NotSupportedException();
 
-    public Task<ModelProviderHealth> CheckHealthAsync(CancellationToken ct) => throw new NotSupportedException();
+    public Task<ModelProviderHealth> CheckHealthAsync(CancellationToken ct) =>
+        throw new NotSupportedException();
 
-    public Task PullModelAsync(string modelName, IProgress<PullProgress>? progress, CancellationToken ct) => throw new NotSupportedException();
+    public Task PullModelAsync(string modelName, IProgress<PullProgress>? progress, CancellationToken ct) =>
+        throw new NotSupportedException();
 
-    public Task DeleteModelAsync(string modelName, CancellationToken ct) => throw new NotSupportedException();
+    public Task DeleteModelAsync(string modelName, CancellationToken ct) =>
+        throw new NotSupportedException();
 
-    public Task WarmModelAsync(string modelName, CancellationToken ct) => throw new NotSupportedException();
+    public Task WarmModelAsync(string modelName, CancellationToken ct) =>
+        throw new NotSupportedException();
 
-    public Task UnloadModelAsync(string modelName, CancellationToken ct) => throw new NotSupportedException();
+    public Task UnloadModelAsync(string modelName, CancellationToken ct) =>
+        throw new NotSupportedException();
 }
 
 /// <summary>
@@ -134,7 +141,8 @@ internal sealed class SingleProviderResolver : ILocalModelProviderResolver
 
     public ILocalModelProvider DefaultProvider => _provider;
 
-    public ILocalModelProvider ResolveProvider(string providerName) => _provider;
+    public ILocalModelProvider ResolveProvider(string providerName) =>
+        _provider;
 
     public Task<string> ResolveProviderNameForModelAsync(string modelName, CancellationToken cancellationToken = default) =>
         Task.FromResult(_provider.ProviderName);

@@ -65,14 +65,14 @@ public sealed class ChatInvocationStatePumpFaultTests : IDisposable
 
         // The original flush fault propagates so the caller learns of it and cancels the run.
         await AssertEx.ThrowsAsync<InvalidOperationException>(async () => await pump.PumpAsync(stateChannel.Reader,
-                eventChannel.Writer,
-                correlation,
-                "model-x",
-                new NodeChatStreamSequence(),
-                new NodeChatPartAccumulator(),
-                onTerminal: null,
-                CancellationToken.None))
-            .ConfigureAwait(false);
+                          eventChannel.Writer,
+                          correlation,
+                          "model-x",
+                          new NodeChatStreamSequence(),
+                          new NodeChatPartAccumulator(),
+                          onTerminal: null,
+                          CancellationToken.None))
+                      .ConfigureAwait(false);
 
         await collector.ConfigureAwait(false);
 
@@ -96,11 +96,11 @@ public sealed class ChatInvocationStatePumpFaultTests : IDisposable
 
         // The row already reached a genuine Completed terminal before the fault handler runs.
         await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
-                NodeChatMessageStatusValues.Completed,
-                NowMs(),
-                "the real answer",
-                Model: "model-x"))
-            .ConfigureAwait(false);
+                             NodeChatMessageStatusValues.Completed,
+                             NowMs(),
+                             "the real answer",
+                             Model: "model-x"))
+                         .ConfigureAwait(false);
 
         var faultingPump = new FlushFailingPump(ChatPumpTestFactory.Create(persistence));
         var pump = new ChatInvocationStatePump(faultingPump, TimeProvider.System);
@@ -127,14 +127,14 @@ public sealed class ChatInvocationStatePumpFaultTests : IDisposable
         });
 
         await AssertEx.ThrowsAsync<InvalidOperationException>(async () => await pump.PumpAsync(stateChannel.Reader,
-                eventChannel.Writer,
-                correlation,
-                "model-x",
-                new NodeChatStreamSequence(),
-                new NodeChatPartAccumulator(),
-                onTerminal: null,
-                CancellationToken.None))
-            .ConfigureAwait(false);
+                          eventChannel.Writer,
+                          correlation,
+                          "model-x",
+                          new NodeChatStreamSequence(),
+                          new NodeChatPartAccumulator(),
+                          onTerminal: null,
+                          CancellationToken.None))
+                      .ConfigureAwait(false);
 
         await collector.ConfigureAwait(false);
 
@@ -157,7 +157,8 @@ public sealed class ChatInvocationStatePumpFaultTests : IDisposable
         var assistantMessageId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
         var correlation = new NodeChatMessageCorrelation(conversationId, assistantMessageId, requestId);
-        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversationId, assistantMessageId, requestId, CreatedAtUtc: 12, "model-x")).ConfigureAwait(false);
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversationId, assistantMessageId, requestId, CreatedAtUtc: 12, "model-x"))
+                         .ConfigureAwait(false);
         await persistence.MarkAssistantQueuedAsync(correlation, NowMs()).ConfigureAwait(false);
         await persistence.MarkAssistantStreamingAsync(correlation, NowMs()).ConfigureAwait(false);
         return (correlation, assistantMessageId);

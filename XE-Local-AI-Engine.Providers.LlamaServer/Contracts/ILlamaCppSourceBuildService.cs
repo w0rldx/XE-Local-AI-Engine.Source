@@ -94,7 +94,9 @@ public interface ILlamaCppSourceBuildService
     bool Cancel();
     bool CancelLegacyPinnedCuda();
     Task RecoverAsync(CancellationToken ct);
-    Task ShutdownAsync(CancellationToken ct) => Task.CompletedTask;
+
+    Task ShutdownAsync(CancellationToken ct) =>
+        Task.CompletedTask;
 }
 
 /// <summary>

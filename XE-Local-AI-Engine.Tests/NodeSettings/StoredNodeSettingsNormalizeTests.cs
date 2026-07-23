@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Tests.NodeSettings;
 
-using System.Collections.Generic;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
@@ -267,9 +266,21 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
             {
                 Models = new Dictionary<string, ModelRate>
                 {
-                    ["  gpt-5  "] = new() { InputPer1M = 1.25, OutputPer1M = 10 },
-                    ["bad-negative"] = new() { InputPer1M = -1, OutputPer1M = 5 },
-                    ["   "] = new() { InputPer1M = 1, OutputPer1M = 1 }
+                    ["  gpt-5  "] = new()
+                    {
+                        InputPer1M = 1.25,
+                        OutputPer1M = 10
+                    },
+                    ["bad-negative"] = new()
+                    {
+                        InputPer1M = -1,
+                        OutputPer1M = 5
+                    },
+                    ["   "] = new()
+                    {
+                        InputPer1M = 1,
+                        OutputPer1M = 1
+                    }
                 }
             }
         });
@@ -291,7 +302,11 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
             {
                 Models = new Dictionary<string, ModelRate>
                 {
-                    ["bad"] = new() { InputPer1M = -1, OutputPer1M = -1 }
+                    ["bad"] = new()
+                    {
+                        InputPer1M = -1,
+                        OutputPer1M = -1
+                    }
                 }
             }
         });

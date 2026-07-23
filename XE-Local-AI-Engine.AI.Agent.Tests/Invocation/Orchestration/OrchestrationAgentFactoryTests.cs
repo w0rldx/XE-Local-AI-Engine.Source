@@ -697,7 +697,8 @@ public sealed class OrchestrationAgentFactoryTests
     }
 
     /// <summary>One participant's captured outbound request: the system text it saw plus its resolved model + reasoning + window.</summary>
-    private sealed record RecordedRequest(string? SystemText,
+    private sealed record RecordedRequest(
+        string? SystemText,
         string? ModelId,
         bool HasThinkKey,
         object? Think,

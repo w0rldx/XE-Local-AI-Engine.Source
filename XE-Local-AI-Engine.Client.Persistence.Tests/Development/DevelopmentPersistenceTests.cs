@@ -1,27 +1,17 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests.Development;
 
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Migrations;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Options;
-using XE_Local_AI_Engine.Client.DependencyInjection.Modules;
-using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
-using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
-using XE_Local_AI_Engine.Client.Services.Development;
-using XE_Local_AI_Engine.Providers.Abstractions;
 
 public sealed class DevelopmentPersistenceTests : IDisposable
 {
     private readonly DevelopmentTestFixture _fixture = new();
 
-    public void Dispose() => _fixture.Dispose();
+    public void Dispose() =>
+        _fixture.Dispose();
 
     [Test]
     public async Task Model_ContainsExactlyFiveDevelopmentTablesAndRequiredUniqueIndexes()
@@ -77,31 +67,31 @@ public sealed class DevelopmentPersistenceTests : IDisposable
 
         var readyOperation = Guid.NewGuid();
         var ready = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
-                                                   readyOperation,
-                                                   DevelopmentTaskStatus.Ready,
-                                                   ExpectedTaskVersion: 1))
+                                   readyOperation,
+                                   DevelopmentTaskStatus.Ready,
+                                   ExpectedTaskVersion: 1))
                                .ConfigureAwait(false);
         var readyReplay = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
-                                                         readyOperation,
-                                                         DevelopmentTaskStatus.Ready,
-                                                         ExpectedTaskVersion: 1))
+                                         readyOperation,
+                                         DevelopmentTaskStatus.Ready,
+                                         ExpectedTaskVersion: 1))
                                      .ConfigureAwait(false);
         AssertEx.Equal(ready, readyReplay);
 
         await AssertEx.ThrowsAsync<DevelopmentConcurrencyException>(() => store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
-                                                                                                            Guid.NewGuid(),
-                                                                                                            DevelopmentTaskStatus.InProgress,
-                                                                                                            ExpectedTaskVersion: 1)))
+                          Guid.NewGuid(),
+                          DevelopmentTaskStatus.InProgress,
+                          ExpectedTaskVersion: 1)))
                       .ConfigureAwait(false);
 
         var attemptId = Guid.NewGuid();
         var firstAttempt = await store.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
-                                                        attemptId,
-                                                        Guid.NewGuid(),
-                                                        DevelopmentAttemptRole.Coder,
-                                                        "local-model",
-                                                        "local",
-                                                        ExpectedTaskVersion: 2))
+                                          attemptId,
+                                          Guid.NewGuid(),
+                                          DevelopmentAttemptRole.Coder,
+                                          "local-model",
+                                          "local",
+                                          ExpectedTaskVersion: 2))
                                       .ConfigureAwait(false);
         AssertEx.Equal(DevelopmentAttemptStatus.Running.ToString(), firstAttempt.Status);
         var snapshot = await store.GetExecutionSnapshotAsync(attemptId).ConfigureAwait(false);
@@ -115,12 +105,12 @@ public sealed class DevelopmentPersistenceTests : IDisposable
         AssertEx.Equal("local-model", snapshot.ModelId);
 
         await AssertEx.ThrowsAsync<DevelopmentConcurrencyException>(() => store.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
-                                                                                                      Guid.NewGuid(),
-                                                                                                      Guid.NewGuid(),
-                                                                                                      DevelopmentAttemptRole.Coder,
-                                                                                                      "local-model",
-                                                                                                      "local",
-                                                                                                      ExpectedTaskVersion: 3)))
+                          Guid.NewGuid(),
+                          Guid.NewGuid(),
+                          DevelopmentAttemptRole.Coder,
+                          "local-model",
+                          "local",
+                          ExpectedTaskVersion: 3)))
                       .ConfigureAwait(false);
 
         var events = await store.ListEventsAsync(seed.ProjectId).ConfigureAwait(false);

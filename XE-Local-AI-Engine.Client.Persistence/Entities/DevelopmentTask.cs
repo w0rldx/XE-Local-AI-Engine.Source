@@ -17,4 +17,3 @@ internal sealed class DevelopmentTask
     public long UpdatedAtUtc { get; set; }
     public long Version { get; set; }
 }
-

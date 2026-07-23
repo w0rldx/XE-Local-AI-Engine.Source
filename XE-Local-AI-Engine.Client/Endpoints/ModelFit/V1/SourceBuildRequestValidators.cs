@@ -4,7 +4,6 @@ using FastEndpoints;
 using FluentValidation;
 using XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.Mappers;
 using XE_Local_AI_Engine.Providers.LlamaServer;
-using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 public sealed class StartLlamaCppSourceBuildRequestValidator : Validator<StartLlamaCppSourceBuildRequest>
 {
@@ -12,7 +11,8 @@ public sealed class StartLlamaCppSourceBuildRequestValidator : Validator<StartLl
     {
         RuleFor(static request => request)
             .Must(BeValid)
-            .WithMessage("The source-build request is invalid. Custom builds require a canonical public GitHub HTTPS repository and explicit risk acknowledgement; commits must be full 40-character SHAs.");
+            .WithMessage(
+                "The source-build request is invalid. Custom builds require a canonical public GitHub HTTPS repository and explicit risk acknowledgement; commits must be full 40-character SHAs.");
     }
 
     private static bool BeValid(StartLlamaCppSourceBuildRequest request)

@@ -277,8 +277,7 @@ public sealed class ImageServerSupervisorTests
         // to the shutdown token makes dispose cancel the readiness wait, and the spawn's catch tree-kills the handle.
         var launcher = new FakeImageProcessLauncher();
         var probe = new GatedImageReadinessProbe();
-        var supervisor = new ImageServerProcessSupervisor(
-            new FakeImageModelStore(),
+        var supervisor = new ImageServerProcessSupervisor(new FakeImageModelStore(),
             new FakeSdBackendSelector(),
             new FakeSdBinaryManager(),
             launcher,

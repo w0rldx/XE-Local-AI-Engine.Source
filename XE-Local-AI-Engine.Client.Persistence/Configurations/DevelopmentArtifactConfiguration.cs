@@ -30,8 +30,12 @@ internal sealed class DevelopmentArtifactConfiguration : IEntityTypeConfiguratio
         builder.HasOne<DevelopmentProject>().WithMany().HasForeignKey(entity => entity.ProjectId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne<DevelopmentTask>().WithMany().HasForeignKey(entity => entity.TaskId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<DevelopmentAttempt>().WithMany().HasForeignKey(entity => entity.AttemptId).OnDelete(DeleteBehavior.Restrict);
-        builder.HasIndex(entity => new { entity.TaskId, entity.Kind, entity.IsValid }).HasDatabaseName("ix_development_artifacts_task_kind_valid");
+        builder.HasIndex(entity => new
+        {
+            entity.TaskId,
+            entity.Kind,
+            entity.IsValid
+        }).HasDatabaseName("ix_development_artifacts_task_kind_valid");
         builder.HasIndex(entity => entity.AttemptId).HasDatabaseName("ix_development_artifacts_attempt_id");
     }
 }
-

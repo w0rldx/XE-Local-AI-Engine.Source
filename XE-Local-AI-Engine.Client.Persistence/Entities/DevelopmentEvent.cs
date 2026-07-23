@@ -15,4 +15,3 @@ internal sealed class DevelopmentEvent
     public string? Outcome { get; set; }
     public byte[]? ResultMetadataJson { get; set; }
 }
-

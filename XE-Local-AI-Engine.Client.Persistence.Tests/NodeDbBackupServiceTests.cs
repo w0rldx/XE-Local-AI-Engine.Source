@@ -73,7 +73,13 @@ public sealed class NodeDbBackupServiceTests : IDisposable
         Directory.CreateDirectory(backupDirectory);
 
         // Four pre-existing snapshots, all older than the fake clock so the fresh one sorts newest.
-        var older = new[] { "20250101T000000000Z", "20250102T000000000Z", "20250103T000000000Z", "20250104T000000000Z" };
+        var older = new[]
+        {
+            "20250101T000000000Z",
+            "20250102T000000000Z",
+            "20250103T000000000Z",
+            "20250104T000000000Z"
+        };
         foreach (var stamp in older)
         {
             await File.WriteAllTextAsync(Path.Combine(backupDirectory, $"{BackupFilePrefix}{stamp}{BackupFileExtension}"), "stale").ConfigureAwait(false);

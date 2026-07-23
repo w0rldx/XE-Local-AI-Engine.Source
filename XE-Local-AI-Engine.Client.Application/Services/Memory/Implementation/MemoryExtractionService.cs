@@ -154,8 +154,7 @@ internal sealed class MemoryExtractionService(
             created.Add(record);
         }
 
-        _logger.LogInformation(
-            "Memory extraction for agent {AgentId}: proposed {Proposed}, kept {Kept}, duplicates {Duplicates} (semantic {SemanticDuplicates}), secret-rejected {Rejected}.",
+        _logger.LogInformation("Memory extraction for agent {AgentId}: proposed {Proposed}, kept {Kept}, duplicates {Duplicates} (semantic {SemanticDuplicates}), secret-rejected {Rejected}.",
             run.AgentDefinitionId, proposals.Count, created.Count, duplicates, semanticDuplicates, rejected);
 
         return new MemoryExtractionOutcome(MemoryExcluded: false, ModelConfigured: true, created, proposals.Count, duplicates);

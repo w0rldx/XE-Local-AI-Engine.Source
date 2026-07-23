@@ -39,8 +39,7 @@ public sealed class LlamaCppSourceBuildCoreTests
     [Test]
     public void Normalize_CustomAppliedTwice_IsIdempotent()
     {
-        var once = LlamaCppSourceBuildRequestValidation.Normalize(new LlamaCppSourceBuildRequest(
-            LlamaCppSourceBackend.Cuda,
+        var once = LlamaCppSourceBuildRequestValidation.Normalize(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cuda,
             LlamaCppSourceSelection.Custom,
             "https://github.com/example/fork.git",
             "ABCDEFABCDEFABCDEFABCDEFABCDEFABCDEFABCD",
@@ -57,8 +56,7 @@ public sealed class LlamaCppSourceBuildCoreTests
     public void Normalize_OfficialWithForeignRepository_StillRejects()
     {
         // Idempotency only admits the canonical repository — a client-chosen one is still an override attempt.
-        Assert.Throws<LlamaRuntimeException>(() => LlamaCppSourceBuildRequestValidation.Normalize(new LlamaCppSourceBuildRequest(
-            LlamaCppSourceBackend.Cpu,
+        Assert.Throws<LlamaRuntimeException>(() => LlamaCppSourceBuildRequestValidation.Normalize(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cpu,
             LlamaCppSourceSelection.Official,
             "https://github.com/example/fork")));
     }
@@ -66,8 +64,7 @@ public sealed class LlamaCppSourceBuildCoreTests
     [Test]
     public void Normalize_OfficialWithWellFormedCommit_Rejects()
     {
-        Assert.Throws<LlamaRuntimeException>(() => LlamaCppSourceBuildRequestValidation.Normalize(new LlamaCppSourceBuildRequest(
-            LlamaCppSourceBackend.Cpu,
+        Assert.Throws<LlamaRuntimeException>(() => LlamaCppSourceBuildRequestValidation.Normalize(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cpu,
             LlamaCppSourceSelection.Official,
             Commit: new string('a', 40))));
     }
@@ -75,8 +72,7 @@ public sealed class LlamaCppSourceBuildCoreTests
     [Test]
     public void Normalize_CustomOfficialRepositoryWithCommitAndAcknowledgement_Accepts()
     {
-        var normalized = LlamaCppSourceBuildRequestValidation.Normalize(new LlamaCppSourceBuildRequest(
-            LlamaCppSourceBackend.Cpu,
+        var normalized = LlamaCppSourceBuildRequestValidation.Normalize(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cpu,
             LlamaCppSourceSelection.Custom,
             LlamaCppSourceBuildRequestValidation.OfficialRepository,
             new string('a', 40),
@@ -89,8 +85,7 @@ public sealed class LlamaCppSourceBuildCoreTests
     [Test]
     public void Normalize_CustomRepositoryAndUppercaseCommit_CanonicalizesBoth()
     {
-        var normalized = LlamaCppSourceBuildRequestValidation.Normalize(new LlamaCppSourceBuildRequest(
-            LlamaCppSourceBackend.Cpu,
+        var normalized = LlamaCppSourceBuildRequestValidation.Normalize(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cpu,
             LlamaCppSourceSelection.Custom,
             "https://github.com/example/fork.git",
             "ABCDEFABCDEFABCDEFABCDEFABCDEFABCDEFABCD",
@@ -110,8 +105,7 @@ public sealed class LlamaCppSourceBuildCoreTests
     [Arguments("git@github.com:example/fork.git")]
     public void Normalize_CustomUnsafeRepository_Rejects(string repository)
     {
-        Assert.Throws<LlamaRuntimeException>(() => LlamaCppSourceBuildRequestValidation.Normalize(new LlamaCppSourceBuildRequest(
-            LlamaCppSourceBackend.Cpu,
+        Assert.Throws<LlamaRuntimeException>(() => LlamaCppSourceBuildRequestValidation.Normalize(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cpu,
             LlamaCppSourceSelection.Custom,
             repository,
             AcknowledgeCustomSourceRisk: true)));
@@ -120,8 +114,7 @@ public sealed class LlamaCppSourceBuildCoreTests
     [Test]
     public void Normalize_CustomWithoutAcknowledgement_Rejects()
     {
-        Assert.Throws<LlamaRuntimeException>(() => LlamaCppSourceBuildRequestValidation.Normalize(new LlamaCppSourceBuildRequest(
-            LlamaCppSourceBackend.Cpu,
+        Assert.Throws<LlamaRuntimeException>(() => LlamaCppSourceBuildRequestValidation.Normalize(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cpu,
             LlamaCppSourceSelection.Custom,
             "https://github.com/example/fork")));
     }
@@ -131,8 +124,7 @@ public sealed class LlamaCppSourceBuildCoreTests
     [Arguments("gggggggggggggggggggggggggggggggggggggggg")]
     public void Normalize_InvalidCommit_Rejects(string commit)
     {
-        Assert.Throws<LlamaRuntimeException>(() => LlamaCppSourceBuildRequestValidation.Normalize(new LlamaCppSourceBuildRequest(
-            LlamaCppSourceBackend.Cpu,
+        Assert.Throws<LlamaRuntimeException>(() => LlamaCppSourceBuildRequestValidation.Normalize(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cpu,
             LlamaCppSourceSelection.Official,
             Commit: commit)));
     }
@@ -292,6 +284,7 @@ public sealed class LlamaCppSourceBuildCoreTests
 
     private sealed class FixedVendorProbe(DetectedGpuVendor vendor) : IGpuVendorProbe
     {
-        public Task<DetectedGpuVendor> DetectVendorAsync(CancellationToken ct) => Task.FromResult(vendor);
+        public Task<DetectedGpuVendor> DetectVendorAsync(CancellationToken ct) =>
+            Task.FromResult(vendor);
     }
 }

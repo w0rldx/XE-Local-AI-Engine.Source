@@ -91,6 +91,7 @@ public sealed class ManagedSourceBuildSafetyTests
         {
             return;
         }
+
         using var temp = new SecureTempDirectory();
         var bin = SeedActiveBin(temp.Path, "#!/bin/sh\ncase \"$1\" in --version) exit 0;; --list-devices) echo 'GPU0: generic'; exit 0;; esac\n");
         using var store = new InstalledRuntimeStore(temp.Path);
@@ -108,6 +109,7 @@ public sealed class ManagedSourceBuildSafetyTests
         {
             return;
         }
+
         using var temp = new SecureTempDirectory();
         var bin = SeedActiveBin(temp.Path, "#!/bin/sh\ncase \"$1\" in --version) exit 0;; --list-devices) echo '  Vulkan0: test'; exit 0;; esac\n");
         using var store = new InstalledRuntimeStore(temp.Path);
@@ -127,6 +129,7 @@ public sealed class ManagedSourceBuildSafetyTests
         {
             return;
         }
+
         using var temp = new SecureTempDirectory();
         var bin = SeedActiveBin(temp.Path, "#!/bin/sh\ncase \"$1\" in --version) exit 0;; --list-devices) [ -f \"$PWD/runtime.sentinel\" ] || exit 42; echo 'Vulkan0: test'; exit 0;; esac\n");
         await File.WriteAllTextAsync(Path.Combine(bin, "runtime.sentinel"), "present");
@@ -146,6 +149,7 @@ public sealed class ManagedSourceBuildSafetyTests
         {
             return;
         }
+
         using var temp = new SecureTempDirectory();
         var bin = SeedActiveBin(temp.Path, "#!/bin/sh\nexit 0\n");
         await File.WriteAllTextAsync(Path.Combine(bin, "libreal.so"), "library");
@@ -166,6 +170,7 @@ public sealed class ManagedSourceBuildSafetyTests
         {
             return;
         }
+
         using var temp = new SecureTempDirectory();
         var bin = SeedActiveBin(temp.Path, "#!/bin/sh\nexit 0\n");
         await File.WriteAllTextAsync(Path.Combine(temp.Path, "outside.so"), "outside");
@@ -193,14 +198,18 @@ public sealed class ManagedSourceBuildSafetyTests
         var work = Path.Combine(sourceRoot, ".work");
         var staging = Path.Combine(sourceRoot, ".staging");
         var backup = Path.Combine(sourceRoot, ".backup");
-        Directory.CreateDirectory(work); Directory.CreateDirectory(staging); Directory.CreateDirectory(backup);
+        Directory.CreateDirectory(work);
+        Directory.CreateDirectory(staging);
+        Directory.CreateDirectory(backup);
         using var store = new InstalledRuntimeStore(temp.Path);
         await store.WriteAsync(State(bin, GpuVariant.Cpu, LlamaCppSourceBuildRequestValidation.OfficialRepository), CancellationToken.None);
 
         await CreateManager(temp.Path, store).RemoveSourceBuildAsync(CancellationToken.None);
 
         AssertEx.False(Directory.Exists(Path.Combine(sourceRoot, "active")));
-        AssertEx.True(Directory.Exists(work)); AssertEx.True(Directory.Exists(staging)); AssertEx.True(Directory.Exists(backup));
+        AssertEx.True(Directory.Exists(work));
+        AssertEx.True(Directory.Exists(staging));
+        AssertEx.True(Directory.Exists(backup));
         AssertEx.Null(await store.ReadAsync(CancellationToken.None));
     }
 
@@ -294,17 +303,27 @@ public sealed class ManagedSourceBuildSafetyTests
         if (!OperatingSystem.IsWindows())
         {
             File.SetUnixFileMode(server, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-            foreach (var directory in new[] { root, Path.Combine(root, "llama.cpp"), Path.Combine(root, "llama.cpp", "source-build"), Path.Combine(root, "llama.cpp", "source-build", "active"), Path.Combine(root, "llama.cpp", "source-build", "active", "build"), bin })
+            foreach (var directory in new[]
+                     {
+                         root,
+                         Path.Combine(root, "llama.cpp"),
+                         Path.Combine(root, "llama.cpp", "source-build"),
+                         Path.Combine(root, "llama.cpp", "source-build", "active"),
+                         Path.Combine(root, "llama.cpp", "source-build", "active", "build"),
+                         bin
+                     })
             {
                 File.SetUnixFileMode(directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
             }
         }
+
         return bin;
     }
 
     private sealed class ThrowingHandler : HttpMessageHandler
     {
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) => throw new InvalidOperationException();
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException();
     }
 
     private sealed class SecureTempDirectory : IDisposable
@@ -318,7 +337,16 @@ public sealed class ManagedSourceBuildSafetyTests
                 File.SetUnixFileMode(Path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
             }
         }
+
         public string Path { get; }
-        public void Dispose() { try { Directory.Delete(Path, true); } catch (Exception) { /* Best effort. */ } }
+
+        public void Dispose()
+        {
+            try { Directory.Delete(Path, true); }
+            catch (Exception)
+            {
+                /* Best effort. */
+            }
+        }
     }
 }

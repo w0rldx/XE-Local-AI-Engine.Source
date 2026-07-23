@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Development;
 
-using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -107,12 +106,12 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
                 timeout.Token).ConfigureAwait(false);
 
             _ = await _store.TerminalizeAttemptAsync(new DevelopmentTerminalizeAttemptCommand(snapshot.AttemptId,
-                                                        Guid.NewGuid(),
-                                                        DevelopmentAttemptStatus.Succeeded,
-                                                        snapshot.AttemptVersion,
-                                                        InputTokens: model.InputTokens,
-                                                        OutputTokens: model.OutputTokens),
-                                                    CancellationToken.None)
+                                    Guid.NewGuid(),
+                                    DevelopmentAttemptStatus.Succeeded,
+                                    snapshot.AttemptVersion,
+                                    InputTokens: model.InputTokens,
+                                    OutputTokens: model.OutputTokens),
+                                CancellationToken.None)
                             .ConfigureAwait(false);
             return new DevelopmentCoderAttemptResult(snapshot.AttemptId,
                 evidence.BaseCommit,
@@ -127,11 +126,11 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
             try
             {
                 _ = await _store.TerminalizeAttemptAsync(new DevelopmentTerminalizeAttemptCommand(snapshot.AttemptId,
-                                                            Guid.NewGuid(),
-                                                            status,
-                                                            snapshot.AttemptVersion,
-                                                            SanitizedReason(exception)),
-                                                        CancellationToken.None)
+                                        Guid.NewGuid(),
+                                        status,
+                                        snapshot.AttemptVersion,
+                                        SanitizedReason(exception)),
+                                    CancellationToken.None)
                                 .ConfigureAwait(false);
             }
             catch (DevelopmentInvalidTransitionException)
@@ -205,27 +204,26 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
         var artifactId = Guid.NewGuid();
         var written = await _blobStore.WriteAsync(snapshot.ProjectId, artifactId, content, cancellationToken).ConfigureAwait(false);
         _ = await _store.AttachArtifactAsync(new DevelopmentAttachArtifactCommand(artifactId,
-                                                snapshot.ProjectId,
-                                                snapshot.TaskId,
-                                                snapshot.AttemptId,
-                                                Guid.NewGuid(),
-                                                kind,
-                                                SchemaVersion: 1,
-                                                written.ContentHash,
-                                                written.ByteCount,
-                                                ManagedReference: written.OpaqueReference,
-                                                BaseCommit: evidence.BaseCommit,
-                                                SubjectHash: evidence.SubjectHash,
-                                                ChangedFilesManifestHash: evidence.ManifestHash,
-                                                InputArtifactIdsJson: inputIds is null ? null : JsonSerializer.SerializeToUtf8Bytes(inputIds, JsonOptions),
-                                                CommandProfileVersion: DevelopmentWorkspaceTools.ProfileVersion),
-                                            cancellationToken)
+                                snapshot.ProjectId,
+                                snapshot.TaskId,
+                                snapshot.AttemptId,
+                                Guid.NewGuid(),
+                                kind,
+                                SchemaVersion: 1,
+                                written.ContentHash,
+                                written.ByteCount,
+                                ManagedReference: written.OpaqueReference,
+                                BaseCommit: evidence.BaseCommit,
+                                SubjectHash: evidence.SubjectHash,
+                                ChangedFilesManifestHash: evidence.ManifestHash,
+                                InputArtifactIdsJson: inputIds is null ? null : JsonSerializer.SerializeToUtf8Bytes(inputIds, JsonOptions),
+                                CommandProfileVersion: DevelopmentWorkspaceTools.ProfileVersion),
+                            cancellationToken)
                         .ConfigureAwait(false);
         return artifactId;
     }
 
-    private async Task<DevelopmentCloudAttemptContext?> CreateCloudContextAsync(
-        DevelopmentExecutionSnapshot snapshot,
+    private async Task<DevelopmentCloudAttemptContext?> CreateCloudContextAsync(DevelopmentExecutionSnapshot snapshot,
         IDevelopmentWorkspaceTools tools,
         CancellationToken cancellationToken)
     {
@@ -266,6 +264,7 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
         {
             throw new ArgumentException("The typed coder submission requires a summary.", nameof(submission));
         }
+
         var actualFiles = evidence.ChangedFiles.Select(static item => item.Path).ToHashSet(StringComparer.Ordinal);
         var submittedFiles = submission.ChangedFiles.Select(path => DevelopmentWorkspaceSecurity.Confine(path, allowRoot: false))
                                        .Where(static path => path.IsAccepted)

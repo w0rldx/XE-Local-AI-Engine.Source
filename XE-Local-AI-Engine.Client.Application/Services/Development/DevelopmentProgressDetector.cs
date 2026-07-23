@@ -248,7 +248,8 @@ public sealed class DevelopmentProgressDetector
     private DevelopmentProgressWarning Warning(DevelopmentProgressWarningCategory category,
         string fingerprint,
         int count,
-        string message) => new(category, fingerprint, count, Now, message);
+        string message) =>
+        new(category, fingerprint, count, Now, message);
 
     private long Now => _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
 

@@ -62,10 +62,9 @@ public sealed class NodeDataProtectionKeyRingFailClosedKeyResolver : IDefaultKey
 
             if (TryDetectKeyRingDecryptionFailure(key, out var failure))
             {
-                throw new InvalidOperationException(
-                    $"Data Protection key '{key.KeyId}' is encrypted at rest (BE-02) but could not be decrypted with the current node operator secret. "
-                    + "Refusing to regenerate the key-ring, which would silently orphan every stored credential and OAuth token. "
-                    + "Restore the correct operator secret (the same one that unlocks node.sqlite) and restart.",
+                throw new InvalidOperationException($"Data Protection key '{key.KeyId}' is encrypted at rest (BE-02) but could not be decrypted with the current node operator secret. "
+                                                    + "Refusing to regenerate the key-ring, which would silently orphan every stored credential and OAuth token. "
+                                                    + "Restore the correct operator secret (the same one that unlocks node.sqlite) and restart.",
                     failure);
             }
         }

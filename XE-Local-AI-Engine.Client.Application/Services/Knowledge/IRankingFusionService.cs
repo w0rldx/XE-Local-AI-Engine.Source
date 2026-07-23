@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Knowledge;
 
+using System.Runtime.InteropServices;
+
 /// <summary>
 ///     Merges several independently ranked chunk lists (for example the lexical FTS arm and the semantic vector arm) into a
 ///     single ranking via Reciprocal Rank Fusion. Pure and deterministic — no database access — so it is unit-testable in
@@ -59,7 +61,7 @@ public enum RankFusionStrategy
 /// <summary>One scored input to fusion: a chunk id and its per-arm relevance score (higher means more relevant).</summary>
 /// <param name="ChunkId">The chunk identifier.</param>
 /// <param name="Score">The arm-local relevance score, oriented so higher ranks higher (the caller normalizes orientation).</param>
-[System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Auto)]
+[StructLayout(LayoutKind.Auto)]
 public readonly record struct RankFusionInput(Guid ChunkId, double Score);
 
 /// <summary>One fused entry: a chunk id and its accumulated Reciprocal Rank Fusion score (higher ranks higher).</summary>

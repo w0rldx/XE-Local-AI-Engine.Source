@@ -73,7 +73,7 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
             cancellationToken).ConfigureAwait(false);
         EnsureCompleted(result, "list_files");
         return string.Join('\n', result.StandardOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries)
-                                                       .Take(_options.MaxChangedFiles));
+                                       .Take(_options.MaxChangedFiles));
     }
 
     public async Task<string> ReadFileAsync(string path, CancellationToken cancellationToken = default)
@@ -120,7 +120,11 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
         {
             await File.WriteAllBytesAsync(tempPath, bytes, cancellationToken).ConfigureAwait(false);
             await _sandbox.CopyIntoAsync(_session.SandboxHandle,
-                new SandboxCopyRequest { SourcePath = tempPath, DestinationPath = confined.SandboxPath },
+                new SandboxCopyRequest
+                {
+                    SourcePath = tempPath,
+                    DestinationPath = confined.SandboxPath
+                },
                 cancellationToken).ConfigureAwait(false);
         }
         finally
@@ -140,6 +144,7 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
         {
             throw new InvalidOperationException("The requested patch exceeds the configured Development patch limit.");
         }
+
         if (patchBytes > _options.MaxFileWriteBytes)
         {
             throw new InvalidOperationException("The requested patch exceeds the configured Development file-write limit.");
@@ -182,6 +187,7 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
         {
             _liveProgress?.FileChanged(path, patchBytes);
         }
+
         return $"applied patch for {paths.Count} path(s)";
     }
 
@@ -314,7 +320,13 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
 
     private void EnsureRuntimeDirectories()
     {
-        foreach (var name in new[] { "home", "tmp", "nuget", "dotnet" })
+        foreach (var name in new[]
+                 {
+                     "home",
+                     "tmp",
+                     "nuget",
+                     "dotnet"
+                 })
         {
             Directory.CreateDirectory(Path.Combine(_session.RuntimePath, name));
         }

@@ -116,10 +116,10 @@ internal sealed class DevelopmentEvidenceService(
         try
         {
             _ = await _store.InvalidateEvidenceAsync(new DevelopmentInvalidateEvidenceCommand(taskId,
-                                                        Guid.NewGuid(),
-                                                        task.Version,
-                                                        sanitizedReason),
-                                                    cancellationToken)
+                                    Guid.NewGuid(),
+                                    task.Version,
+                                    sanitizedReason),
+                                cancellationToken)
                             .ConfigureAwait(false);
         }
         catch (DevelopmentConcurrencyException)
@@ -198,7 +198,7 @@ internal sealed class DevelopmentEvidenceService(
     }
 
     private static DevelopmentArtifactSnapshot LatestValid(IReadOnlyList<DevelopmentArtifactSnapshot> artifacts,
-        DevelopmentArtifactKind kind)
-        => artifacts.LastOrDefault(artifact => artifact.Kind == kind && artifact.IsValid)
-           ?? throw new DevelopmentInvalidTransitionException($"No valid {kind} artifact exists for the Development task.");
+        DevelopmentArtifactKind kind) =>
+        artifacts.LastOrDefault(artifact => artifact.Kind == kind && artifact.IsValid)
+        ?? throw new DevelopmentInvalidTransitionException($"No valid {kind} artifact exists for the Development task.");
 }

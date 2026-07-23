@@ -85,8 +85,7 @@ public sealed class ReciprocalRankFusionTests
         var c = new Guid("00000000-0000-0000-0000-0000000000c3");
 
         // Wildly different score magnitudes must not matter under Rrf: only the id order counts.
-        var scored = _fusion.FuseScored(
-        [
+        var scored = _fusion.FuseScored([
             [new RankFusionInput(a, 1000d), new RankFusionInput(b, -5d)],
             [new RankFusionInput(b, 0.001d), new RankFusionInput(c, 999d)]
         ], RankFusionStrategy.Rrf, scoreWeight: 5d);
@@ -108,8 +107,7 @@ public sealed class ReciprocalRankFusionTests
         var a = new Guid("00000000-0000-0000-0000-0000000000a1");
         var b = new Guid("00000000-0000-0000-0000-0000000000b2");
 
-        var scored = _fusion.FuseScored(
-        [
+        var scored = _fusion.FuseScored([
             [new RankFusionInput(a, 100d), new RankFusionInput(b, 1d)]
         ], RankFusionStrategy.ScoreAware, scoreWeight: 0d);
 
@@ -157,8 +155,7 @@ public sealed class ReciprocalRankFusionTests
         var b = new Guid("00000000-0000-0000-0000-0000000000b2");
 
         // Every score identical → no usable spread → the arm normalizes to neutral → pure RRF.
-        var aware = _fusion.FuseScored(
-        [
+        var aware = _fusion.FuseScored([
             [new RankFusionInput(a, 7d), new RankFusionInput(b, 7d)]
         ], RankFusionStrategy.ScoreAware, scoreWeight: 3d);
 
@@ -171,8 +168,7 @@ public sealed class ReciprocalRankFusionTests
     {
         var only = new Guid("00000000-0000-0000-0000-0000000000a1");
 
-        var aware = _fusion.FuseScored(
-        [
+        var aware = _fusion.FuseScored([
             [new RankFusionInput(only, 12345d)]
         ], RankFusionStrategy.ScoreAware, scoreWeight: 4d);
 
@@ -187,8 +183,7 @@ public sealed class ReciprocalRankFusionTests
         var b = new Guid("00000000-0000-0000-0000-0000000000b2");
 
         // A NaN score would poison min/max; the arm must fall back to neutral rather than produce NaN fused scores.
-        var aware = _fusion.FuseScored(
-        [
+        var aware = _fusion.FuseScored([
             [new RankFusionInput(a, double.NaN), new RankFusionInput(b, 1d)]
         ], RankFusionStrategy.ScoreAware, scoreWeight: 2d);
 
@@ -202,8 +197,7 @@ public sealed class ReciprocalRankFusionTests
         var a = new Guid("00000000-0000-0000-0000-0000000000a1");
         var b = new Guid("00000000-0000-0000-0000-0000000000b2");
 
-        var aware = _fusion.FuseScored(
-        [
+        var aware = _fusion.FuseScored([
             null,
             [],
             [new RankFusionInput(a, 1d), new RankFusionInput(b, 0d)]

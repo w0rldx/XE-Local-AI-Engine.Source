@@ -142,6 +142,7 @@ public sealed class LlamaCppSourceBuildServiceTests
         {
             service.AppendLog($"line-{index}");
         }
+
         await service.FlushPublisherAsync();
 
         var status = service.GetStatus();
@@ -149,7 +150,7 @@ public sealed class LlamaCppSourceBuildServiceTests
         AssertEx.Equal(expected: 50L, status.LogStartSequence);
         AssertEx.Equal("line-50", status.LogLines[0]);
         AssertEx.True(publisher.Events.Select(static statusEvent => statusEvent.AppendedLogStartSequence)
-            .SequenceEqual(Enumerable.Range(0, 450).Select(static value => (long)value)));
+                               .SequenceEqual(Enumerable.Range(0, 450).Select(static value => (long)value)));
     }
 
     [Test]
@@ -168,8 +169,7 @@ public sealed class LlamaCppSourceBuildServiceTests
             new BusySupervisor(), new LlamaCppSourceBuildActivity(), new NullLlamaCppSourceBuildEventPublisher(),
             NullLogger<LlamaCppSourceBuildService>.Instance, temp.Path);
 
-        var outcome = await service.StartAsync(
-            new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cpu, LlamaCppSourceSelection.Official),
+        var outcome = await service.StartAsync(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cpu, LlamaCppSourceSelection.Official),
             CancellationToken.None);
 
         AssertEx.Equal(LlamaCppSourceBuildStartOutcome.ProcessesRunning, outcome.Outcome);
@@ -201,8 +201,7 @@ public sealed class LlamaCppSourceBuildServiceTests
             NullLogger<LlamaCppSourceBuildService>.Instance,
             temp.Path);
 
-        var result = await service.StartAsync(
-            new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cpu, LlamaCppSourceSelection.Official),
+        var result = await service.StartAsync(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cpu, LlamaCppSourceSelection.Official),
             CancellationToken.None);
 
         AssertEx.Equal(LlamaCppSourceBuildStartOutcome.InsufficientDisk, result.Outcome);
@@ -233,8 +232,7 @@ public sealed class LlamaCppSourceBuildServiceTests
             NullLogger<LlamaCppSourceBuildService>.Instance,
             temp.Path);
 
-        var result = await service.StartAsync(
-            new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cpu, LlamaCppSourceSelection.Official),
+        var result = await service.StartAsync(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cpu, LlamaCppSourceSelection.Official),
             CancellationToken.None);
 
         AssertEx.Equal(LlamaCppSourceBuildStartOutcome.MissingPrerequisites, result.Outcome);
@@ -260,8 +258,7 @@ public sealed class LlamaCppSourceBuildServiceTests
             new LeaseOnlySupervisor(), activity, new NullLlamaCppSourceBuildEventPublisher(),
             NullLogger<LlamaCppSourceBuildService>.Instance, temp.Path);
 
-        var outcome = await service.StartAsync(
-            new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cpu, LlamaCppSourceSelection.Official),
+        var outcome = await service.StartAsync(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cpu, LlamaCppSourceSelection.Official),
             CancellationToken.None);
 
         AssertEx.Equal(LlamaCppSourceBuildStartOutcome.RuntimeBusy, outcome.Outcome);
@@ -323,7 +320,8 @@ public sealed class LlamaCppSourceBuildServiceTests
         var stubs = Path.Combine(temp.Path, "stubs");
         Directory.CreateDirectory(stubs);
         var cmakeMarker = Path.Combine(temp.Path, "cmake-ran");
-        WriteScript(Path.Combine(stubs, "git"), "#!/bin/sh\nif [ \"$1\" = \"clone\" ]; then for last; do :; done; mkdir -p \"$last\"; exit 0; fi\nif [ \"$1\" = \"-C\" ]; then echo '0000000000000000000000000000000000000000'; exit 0; fi\n");
+        WriteScript(Path.Combine(stubs, "git"),
+            "#!/bin/sh\nif [ \"$1\" = \"clone\" ]; then for last; do :; done; mkdir -p \"$last\"; exit 0; fi\nif [ \"$1\" = \"-C\" ]; then echo '0000000000000000000000000000000000000000'; exit 0; fi\n");
         WriteScript(Path.Combine(stubs, "cmake"), $"#!/bin/sh\ntouch '{cmakeMarker}'\n");
         using var path = new PathScope(stubs);
         using var store = new InstalledRuntimeStore(temp.Path);
@@ -351,8 +349,10 @@ public sealed class LlamaCppSourceBuildServiceTests
         using var temp = new TempDirectory();
         var stubs = Path.Combine(temp.Path, "stubs");
         Directory.CreateDirectory(stubs);
-        WriteScript(Path.Combine(stubs, "git"), $"#!/bin/sh\nif [ \"$1\" = \"clone\" ]; then for last; do :; done; mkdir -p \"$last\"; exit 0; fi\nif [ \"$1\" = \"-C\" ]; then echo '{LlamaCppReleasePins.PinnedSourceCommitSha}'; exit 0; fi\n");
-        WriteScript(Path.Combine(stubs, "cmake"), "#!/bin/sh\nif [ \"$1\" = \"-B\" ]; then mkdir -p \"$2\"; exit 0; fi\nif [ \"$1\" = \"--build\" ]; then mkdir -p \"$2/bin\"; printf '#!/bin/sh\\nexit 0\\n' > \"$2/bin/llama-server\"; chmod 755 \"$2/bin/llama-server\"; exit 0; fi\n");
+        WriteScript(Path.Combine(stubs, "git"),
+            $"#!/bin/sh\nif [ \"$1\" = \"clone\" ]; then for last; do :; done; mkdir -p \"$last\"; exit 0; fi\nif [ \"$1\" = \"-C\" ]; then echo '{LlamaCppReleasePins.PinnedSourceCommitSha}'; exit 0; fi\n");
+        WriteScript(Path.Combine(stubs, "cmake"),
+            "#!/bin/sh\nif [ \"$1\" = \"-B\" ]; then mkdir -p \"$2\"; exit 0; fi\nif [ \"$1\" = \"--build\" ]; then mkdir -p \"$2/bin\"; printf '#!/bin/sh\\nexit 0\\n' > \"$2/bin/llama-server\"; chmod 755 \"$2/bin/llama-server\"; exit 0; fi\n");
         using var path = new PathScope(stubs);
         using var store = new InstalledRuntimeStore(temp.Path);
         var signal = new CudaManagedBuildSignal();
@@ -392,8 +392,10 @@ public sealed class LlamaCppSourceBuildServiceTests
         Directory.CreateDirectory(stubs);
         var envDump = Path.Combine(temp.Path, "env.txt");
         var cmakeArgs = Path.Combine(temp.Path, "cmake.txt");
-        WriteScript(Path.Combine(stubs, "git"), $"#!/bin/sh\nif [ \"$1\" = \"clone\" ]; then env > '{envDump}'; for last; do :; done; mkdir -p \"$last\"; exit 0; fi\nif [ \"$1\" = \"-C\" ]; then echo '{LlamaCppReleasePins.PinnedSourceCommitSha}'; exit 0; fi\nexit 0\n");
-        WriteScript(Path.Combine(stubs, "cmake"), $"#!/bin/sh\necho \"$@\" >> '{cmakeArgs}'\nif [ \"$1\" = \"-B\" ]; then mkdir -p \"$2\"; exit 0; fi\nif [ \"$1\" = \"--build\" ]; then mkdir -p \"$2/bin\"; printf '#!/bin/sh\\nexit 0\\n' > \"$2/bin/llama-server\"; chmod 755 \"$2/bin/llama-server\"; exit 0; fi\nexit 0\n");
+        WriteScript(Path.Combine(stubs, "git"),
+            $"#!/bin/sh\nif [ \"$1\" = \"clone\" ]; then env > '{envDump}'; for last; do :; done; mkdir -p \"$last\"; exit 0; fi\nif [ \"$1\" = \"-C\" ]; then echo '{LlamaCppReleasePins.PinnedSourceCommitSha}'; exit 0; fi\nexit 0\n");
+        WriteScript(Path.Combine(stubs, "cmake"),
+            $"#!/bin/sh\necho \"$@\" >> '{cmakeArgs}'\nif [ \"$1\" = \"-B\" ]; then mkdir -p \"$2\"; exit 0; fi\nif [ \"$1\" = \"--build\" ]; then mkdir -p \"$2/bin\"; printf '#!/bin/sh\\nexit 0\\n' > \"$2/bin/llama-server\"; chmod 755 \"$2/bin/llama-server\"; exit 0; fi\nexit 0\n");
         using var path = new PathScope(stubs);
         Environment.SetEnvironmentVariable("XE_NODE_SQLITE_KEY", "must-not-leak");
         try
@@ -452,6 +454,7 @@ public sealed class LlamaCppSourceBuildServiceTests
     {
         private int _callCount;
         public int CallCount => Volatile.Read(ref _callCount);
+
         public Task<LlamaCppSourceBuildPrerequisiteReport> ProbeAsync(LlamaCppSourceBackend backend, CancellationToken ct)
         {
             Interlocked.Increment(ref _callCount);
@@ -485,6 +488,7 @@ public sealed class LlamaCppSourceBuildServiceTests
     {
         private readonly Lock _lock = new();
         private readonly List<LlamaCppSourceBuildStatusHubEvent> _events = [];
+
         public IReadOnlyList<LlamaCppSourceBuildStatusHubEvent> Events
         {
             get
@@ -510,10 +514,18 @@ public sealed class LlamaCppSourceBuildServiceTests
     private sealed class CapturingBinaryManager(IInstalledRuntimeStore store, IActiveSourceBuildSignal signal, bool failAdoption = false) : ILlamaCppBinaryManager
     {
         public GpuVariant? AdoptedVariant { get; private set; }
-        public Task<LlamaBinary> EnsureBinaryAsync(GpuVariant variant, CancellationToken ct) => throw new NotSupportedException();
-        public Task<LlamaBinary> InstallTagAsync(string tag, string assetName, string digestSha256, long expectedSize, GpuVariant variant, CancellationToken ct) => throw new NotSupportedException();
-        public Task<InstalledRuntimeState> AdoptCudaSourceBuildAsync(string buildBinDir, string tag, CancellationToken ct) => throw new NotSupportedException();
-        public Task RemoveCudaSourceBuildAsync(CancellationToken ct) => Task.CompletedTask;
+
+        public Task<LlamaBinary> EnsureBinaryAsync(GpuVariant variant, CancellationToken ct) =>
+            throw new NotSupportedException();
+
+        public Task<LlamaBinary> InstallTagAsync(string tag, string assetName, string digestSha256, long expectedSize, GpuVariant variant, CancellationToken ct) =>
+            throw new NotSupportedException();
+
+        public Task<InstalledRuntimeState> AdoptCudaSourceBuildAsync(string buildBinDir, string tag, CancellationToken ct) =>
+            throw new NotSupportedException();
+
+        public Task RemoveCudaSourceBuildAsync(CancellationToken ct) =>
+            Task.CompletedTask;
 
         public async Task<InstalledRuntimeState> AdoptSourceBuildAsync(string buildBinDir, string tag, GpuVariant variant, string sourceRepository,
             string sourceCommit, LlamaCppSourceRevisionMode revisionMode, string? requestedCommit, CancellationToken ct)
@@ -534,31 +546,70 @@ public sealed class LlamaCppSourceBuildServiceTests
 
     private sealed class LeaseOnlySupervisor : ILlamaServerProcessSupervisor
     {
-        public Task<ILlamaServerRuntimeMutationLease?> TryAcquireRuntimeMutationLeaseAsync(CancellationToken ct) => Task.FromResult<ILlamaServerRuntimeMutationLease?>(new Lease());
-        public Task<LlamaServerEndpoint> EnsureRunningAsync(string modelName, ModelRole role, CancellationToken ct) => throw new NotSupportedException();
-        public Task EvictAsync(string modelName, ModelRole role, CancellationToken ct) => throw new NotSupportedException();
-        public Task<LlamaServerEjectOutcome> EjectAsync(string modelName, ModelRole role, bool force, CancellationToken ct) => throw new NotSupportedException();
-        public LlamaServerLeaseAcquisition TryAcquireInferenceLease(string modelName, ModelRole role) => throw new NotSupportedException();
-        public Task<T> RunExclusiveProfilingAsync<T>(string modelName, ModelRole role, ResolvedLaunchArguments launchArgs, bool enableMetrics, Func<LlamaServerProfilingContext, CancellationToken, Task<T>> body, CancellationToken ct) => throw new NotSupportedException();
-        public Task<IReadOnlyList<LlamaServerProcessHealth>> CheckHealthAsync(CancellationToken ct) => throw new NotSupportedException();
-        public int CountRunningProcesses() => 0;
-        public LlamaServerRuntimeInfo? GetRuntimeInfo(string modelName, ModelRole role) => null;
-        private sealed class Lease : ILlamaServerRuntimeMutationLease { public ValueTask DisposeAsync() => ValueTask.CompletedTask; }
+        public Task<ILlamaServerRuntimeMutationLease?> TryAcquireRuntimeMutationLeaseAsync(CancellationToken ct) =>
+            Task.FromResult<ILlamaServerRuntimeMutationLease?>(new Lease());
+
+        public Task<LlamaServerEndpoint> EnsureRunningAsync(string modelName, ModelRole role, CancellationToken ct) =>
+            throw new NotSupportedException();
+
+        public Task EvictAsync(string modelName, ModelRole role, CancellationToken ct) =>
+            throw new NotSupportedException();
+
+        public Task<LlamaServerEjectOutcome> EjectAsync(string modelName, ModelRole role, bool force, CancellationToken ct) =>
+            throw new NotSupportedException();
+
+        public LlamaServerLeaseAcquisition TryAcquireInferenceLease(string modelName, ModelRole role) =>
+            throw new NotSupportedException();
+
+        public Task<T> RunExclusiveProfilingAsync<T>(string modelName, ModelRole role, ResolvedLaunchArguments launchArgs, bool enableMetrics,
+            Func<LlamaServerProfilingContext, CancellationToken, Task<T>> body, CancellationToken ct) =>
+            throw new NotSupportedException();
+
+        public Task<IReadOnlyList<LlamaServerProcessHealth>> CheckHealthAsync(CancellationToken ct) =>
+            throw new NotSupportedException();
+
+        public int CountRunningProcesses() =>
+            0;
+
+        public LlamaServerRuntimeInfo? GetRuntimeInfo(string modelName, ModelRole role) =>
+            null;
+
+        private sealed class Lease : ILlamaServerRuntimeMutationLease
+        {
+            public ValueTask DisposeAsync() =>
+                ValueTask.CompletedTask;
+        }
     }
 
     private sealed class BusySupervisor : ILlamaServerProcessSupervisor
     {
         public Task<ILlamaServerRuntimeMutationLease?> TryAcquireRuntimeMutationLeaseAsync(CancellationToken ct) =>
             Task.FromResult<ILlamaServerRuntimeMutationLease?>(null);
-        public Task<LlamaServerEndpoint> EnsureRunningAsync(string modelName, ModelRole role, CancellationToken ct) => throw new NotSupportedException();
-        public Task EvictAsync(string modelName, ModelRole role, CancellationToken ct) => throw new NotSupportedException();
-        public Task<LlamaServerEjectOutcome> EjectAsync(string modelName, ModelRole role, bool force, CancellationToken ct) => throw new NotSupportedException();
-        public LlamaServerLeaseAcquisition TryAcquireInferenceLease(string modelName, ModelRole role) => throw new NotSupportedException();
+
+        public Task<LlamaServerEndpoint> EnsureRunningAsync(string modelName, ModelRole role, CancellationToken ct) =>
+            throw new NotSupportedException();
+
+        public Task EvictAsync(string modelName, ModelRole role, CancellationToken ct) =>
+            throw new NotSupportedException();
+
+        public Task<LlamaServerEjectOutcome> EjectAsync(string modelName, ModelRole role, bool force, CancellationToken ct) =>
+            throw new NotSupportedException();
+
+        public LlamaServerLeaseAcquisition TryAcquireInferenceLease(string modelName, ModelRole role) =>
+            throw new NotSupportedException();
+
         public Task<T> RunExclusiveProfilingAsync<T>(string modelName, ModelRole role, ResolvedLaunchArguments launchArgs, bool enableMetrics,
-            Func<LlamaServerProfilingContext, CancellationToken, Task<T>> body, CancellationToken ct) => throw new NotSupportedException();
-        public Task<IReadOnlyList<LlamaServerProcessHealth>> CheckHealthAsync(CancellationToken ct) => throw new NotSupportedException();
-        public int CountRunningProcesses() => 1;
-        public LlamaServerRuntimeInfo? GetRuntimeInfo(string modelName, ModelRole role) => null;
+            Func<LlamaServerProfilingContext, CancellationToken, Task<T>> body, CancellationToken ct) =>
+            throw new NotSupportedException();
+
+        public Task<IReadOnlyList<LlamaServerProcessHealth>> CheckHealthAsync(CancellationToken ct) =>
+            throw new NotSupportedException();
+
+        public int CountRunningProcesses() =>
+            1;
+
+        public LlamaServerRuntimeInfo? GetRuntimeInfo(string modelName, ModelRole role) =>
+            null;
     }
 
     private sealed class OrderedFailingPublisher : ILlamaCppSourceBuildEventPublisher
@@ -584,6 +635,7 @@ public sealed class LlamaCppSourceBuildServiceTests
 
                 observed = prior;
             }
+
             try
             {
                 await Task.Delay(5, cancellationToken);
@@ -604,14 +656,24 @@ public sealed class LlamaCppSourceBuildServiceTests
     private sealed class PathScope : IDisposable
     {
         private readonly string _original = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
-        public PathScope(string path) => Environment.SetEnvironmentVariable("PATH", path + Path.PathSeparator + _original);
-        public void Dispose() => Environment.SetEnvironmentVariable("PATH", _original);
+
+        public PathScope(string path) =>
+            Environment.SetEnvironmentVariable("PATH", path + Path.PathSeparator + _original);
+
+        public void Dispose() =>
+            Environment.SetEnvironmentVariable("PATH", _original);
     }
 
     private sealed class TempDirectory : IDisposable
     {
-        public TempDirectory() { Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "xe-source-build-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(Path); }
+        public TempDirectory()
+        {
+            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "xe-source-build-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(Path);
+        }
+
         public string Path { get; }
+
         public void Dispose()
         {
             try

@@ -70,6 +70,7 @@ public sealed class DevelopmentCloudContextBuilder : IDevelopmentCloudContextBui
         {
             throw new InvalidOperationException($"The Development cloud context exceeds the configured {_maximumBytes}-byte limit.");
         }
+
         if (estimatedTokens > _maximumEstimatedTokens)
         {
             throw new InvalidOperationException($"The Development cloud context exceeds the configured {_maximumEstimatedTokens}-token estimate.");
@@ -112,6 +113,7 @@ public sealed class DevelopmentCloudContextBuilder : IDevelopmentCloudContextBui
         {
             throw new ArgumentException("Development cloud context identity, routing, content, and nonce values must not be blank.", nameof(request));
         }
+
         if (request.Excerpts is null)
         {
             throw new ArgumentException("Development cloud context excerpts must be supplied.", nameof(request));
@@ -165,6 +167,7 @@ public sealed class DevelopmentCloudContextBuilder : IDevelopmentCloudContextBui
                 writer.WriteString("content", excerpt.Content);
                 writer.WriteEndObject();
             }
+
             writer.WriteEndArray();
             writer.WriteEndObject();
         }

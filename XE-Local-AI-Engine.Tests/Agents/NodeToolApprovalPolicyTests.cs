@@ -30,8 +30,7 @@ public sealed class NodeToolApprovalPolicyTests
     public void RequiresApproval_WhenCatalogDefaultTrue_StaysTrue()
     {
         // Tighten-only: an empty node policy can never loosen a default-on tool.
-        var policy = new NodeToolApprovalPolicy(
-            new Dictionary<ToolCategory, bool>(),
+        var policy = new NodeToolApprovalPolicy(new Dictionary<ToolCategory, bool>(),
             new Dictionary<string, bool>(StringComparer.Ordinal));
 
         AssertEx.True(policy.RequiresApproval("mcp__x__y", ToolCategory.Network, catalogDefault: true));
@@ -40,8 +39,10 @@ public sealed class NodeToolApprovalPolicyTests
     [Test]
     public void RequiresApproval_WhenNodeCategoryTightens_FlipsFalseToTrue()
     {
-        var policy = new NodeToolApprovalPolicy(
-            new Dictionary<ToolCategory, bool> { [ToolCategory.Network] = true },
+        var policy = new NodeToolApprovalPolicy(new Dictionary<ToolCategory, bool>
+            {
+                [ToolCategory.Network] = true
+            },
             new Dictionary<string, bool>(StringComparer.Ordinal));
 
         AssertEx.True(policy.RequiresApproval("mcp__x__y", ToolCategory.Network, catalogDefault: false),
@@ -53,9 +54,11 @@ public sealed class NodeToolApprovalPolicyTests
     [Test]
     public void RequiresApproval_WhenPerToolOverrideTightens_FlipsFalseToTrue()
     {
-        var policy = new NodeToolApprovalPolicy(
-            new Dictionary<ToolCategory, bool>(),
-            new Dictionary<string, bool>(StringComparer.Ordinal) { ["list_files"] = true });
+        var policy = new NodeToolApprovalPolicy(new Dictionary<ToolCategory, bool>(),
+            new Dictionary<string, bool>(StringComparer.Ordinal)
+            {
+                ["list_files"] = true
+            });
 
         AssertEx.True(policy.RequiresApproval("list_files", ToolCategory.ReadLocal, catalogDefault: false),
             "A per-tool-name rule must tighten just that tool.");
@@ -67,8 +70,10 @@ public sealed class NodeToolApprovalPolicyTests
     public void RequiresApproval_WhenCategoryEntryIsFalse_CannotLoosen()
     {
         // A stored false can never loosen: even if a category maps to false, a default-on tool stays on.
-        var policy = new NodeToolApprovalPolicy(
-            new Dictionary<ToolCategory, bool> { [ToolCategory.ReadLocal] = false },
+        var policy = new NodeToolApprovalPolicy(new Dictionary<ToolCategory, bool>
+            {
+                [ToolCategory.ReadLocal] = false
+            },
             new Dictionary<string, bool>(StringComparer.Ordinal));
 
         AssertEx.True(policy.RequiresApproval("read_file", ToolCategory.ReadLocal, catalogDefault: true),
@@ -81,8 +86,7 @@ public sealed class NodeToolApprovalPolicyTests
         // Fail-closed contract (IToolApprovalPolicy / ToolCategory.Unknown): an uncategorized tool ALWAYS requires
         // approval — even with no node rule and a default-off catalog flag — so a new tool that forgot to declare a
         // category never silently auto-executes.
-        var policy = new NodeToolApprovalPolicy(
-            new Dictionary<ToolCategory, bool>(),
+        var policy = new NodeToolApprovalPolicy(new Dictionary<ToolCategory, bool>(),
             new Dictionary<string, bool>(StringComparer.Ordinal));
 
         AssertEx.True(policy.RequiresApproval("mystery", ToolCategory.Unknown, catalogDefault: false),
@@ -105,7 +109,7 @@ public sealed class NodeToolApprovalPolicyTests
         {
             Categories = new Dictionary<string, bool>
             {
-                ["network"] = true,     // lower-case name must still bind to ToolCategory.Network
+                ["network"] = true, // lower-case name must still bind to ToolCategory.Network
                 ["writeexecute"] = false, // false entry is a no-op
                 ["not-a-category"] = true // unknown name is ignored
             }
@@ -128,7 +132,7 @@ public sealed class NodeToolApprovalPolicyTests
             {
                 ["list_files"] = true,
                 ["read_file"] = false, // no-op
-                ["   "] = true          // blank name ignored
+                ["   "] = true // blank name ignored
             }
         };
 
