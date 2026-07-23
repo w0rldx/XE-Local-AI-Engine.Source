@@ -14,13 +14,12 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///     background build and returns the initial status; live progress streams over the CUDA build hub.
 /// </summary>
 public sealed class StartCudaBuildEndpoint(
-    ICudaBuildPrerequisiteProbe prerequisiteProbe,
-    ICudaBuildService buildService,
-    ILlamaServerProcessSupervisor processSupervisor) : EndpointWithoutRequest<StartCudaBuildResponse>
+    ILlamaCppSourceBuildService sourceBuildService,
+    ICudaBuildService buildService) : EndpointWithoutRequest<StartCudaBuildResponse>
 {
     private readonly ICudaBuildService _buildService = buildService ?? throw new ArgumentNullException(nameof(buildService));
-    private readonly ICudaBuildPrerequisiteProbe _prerequisiteProbe = prerequisiteProbe ?? throw new ArgumentNullException(nameof(prerequisiteProbe));
-    private readonly ILlamaServerProcessSupervisor _processSupervisor = processSupervisor ?? throw new ArgumentNullException(nameof(processSupervisor));
+    private readonly ILlamaCppSourceBuildService _sourceBuildService =
+        sourceBuildService ?? throw new ArgumentNullException(nameof(sourceBuildService));
 
     public override void Configure()
     {
@@ -37,41 +36,41 @@ public sealed class StartCudaBuildEndpoint(
             return;
         }
 
-        // Prerequisite + disk re-check. [secMED-5] The free-disk item is reported distinctly so the UI can explain it.
-        var report = await _prerequisiteProbe.ProbeAsync(ct).ConfigureAwait(false);
-        if (!report.CanBuild)
-        {
-            var diskShort = report.Items.Any(static item => item is { Key: "free-disk", Satisfied: false });
-            if (diskShort)
-            {
-                await BlockAsync("disk", "There is not enough free disk space to build the CUDA runtime.").ConfigureAwait(false);
-                return;
-            }
-
-            await BlockAsync("prerequisites", "One or more build prerequisites are missing; resolve the checklist before building.").ConfigureAwait(false);
-            return;
-        }
-
-        // Eject-first: the runtime must not be built/replaced while a llama-server process holds a binary.
-        var runningProcessCount = _processSupervisor.CountRunningProcesses();
-        if (runningProcessCount > 0)
-        {
-            await Send.ResultAsync(Results.Conflict(new CudaBuildBlockedResponse
-            {
-                Reason = "processes-running",
-                Message = "Stop or eject all running llama.cpp models before building the runtime.",
-                RunningProcessCount = runningProcessCount
-            })).ConfigureAwait(false);
-            return;
-        }
-
         try
         {
-            var outcome = await _buildService.StartAsync(ct).ConfigureAwait(false);
-            if (outcome == CudaBuildStartOutcome.AlreadyRunning)
+            var result = await _sourceBuildService.StartAsync(new LlamaCppSourceBuildRequest(
+                LlamaCppSourceBackend.Cuda,
+                LlamaCppSourceSelection.Official), ct).ConfigureAwait(false);
+            switch (result.Outcome)
             {
-                await BlockAsync("already-building", "A CUDA build is already in progress.").ConfigureAwait(false);
-                return;
+                case LlamaCppSourceBuildStartOutcome.AlreadyRunning:
+                    await BlockAsync("already-building", "A CUDA build is already in progress.").ConfigureAwait(false);
+                    return;
+                case LlamaCppSourceBuildStartOutcome.InsufficientDisk:
+                    await BlockAsync("disk", "There is not enough free disk space to build the CUDA runtime.").ConfigureAwait(false);
+                    return;
+                case LlamaCppSourceBuildStartOutcome.MissingPrerequisites:
+                    await BlockAsync("prerequisites",
+                        "One or more build prerequisites are missing; resolve the checklist before building.")
+                        .ConfigureAwait(false);
+                    return;
+                case LlamaCppSourceBuildStartOutcome.ProcessesRunning:
+                    await Send.ResultAsync(Results.Conflict(new CudaBuildBlockedResponse
+                    {
+                        Reason = "processes-running",
+                        Message = "Stop or eject all running llama.cpp models before building the runtime.",
+                        RunningProcessCount = result.RunningProcessCount
+                    })).ConfigureAwait(false);
+                    return;
+                case LlamaCppSourceBuildStartOutcome.RuntimeBusy:
+                    await BlockAsync("runtime-busy",
+                        "Wait for the active llama.cpp source build or runtime change to finish before starting another build.")
+                        .ConfigureAwait(false);
+                    return;
+                case LlamaCppSourceBuildStartOutcome.Started:
+                    break;
+                default:
+                    throw new InvalidOperationException($"Unknown source-build start outcome: {result.Outcome}.");
             }
 
             await Send.OkAsync(new StartCudaBuildResponse

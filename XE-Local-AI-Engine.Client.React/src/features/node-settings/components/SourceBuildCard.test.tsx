@@ -17,6 +17,7 @@ const { state, devMode } = vi.hoisted(() => ({
 			phase: "Idle",
 			isRunning: false,
 			terminal: false,
+			logStartSequence: 0,
 			logLines: [],
 			sanitizedError: null,
 			currentBuild: null,
@@ -93,7 +94,7 @@ vi.mock("@/features/node-settings/queries/useLocalRuntime", () => ({
 }));
 
 vi.mock("@/features/node-settings/hooks/useSourceBuildHub", () => ({
-	useSourceBuildHub: () => ({ phase: null, logLines: [], error: null, buildIdentity: null, reset: vi.fn() }),
+	useSourceBuildHub: () => ({ phase: null, logEntries: [], error: null, buildIdentity: null, reset: vi.fn() }),
 }));
 
 import { SourceBuildCard } from "@/features/node-settings/components/SourceBuildCard";
@@ -135,7 +136,15 @@ describe("SourceBuildCard", () => {
 			isOffline: false,
 			runningProcessCount: 0,
 		};
-		state.status = { phase: "Idle", isRunning: false, terminal: false, logLines: [], sanitizedError: null, currentBuild: null };
+		state.status = {
+			phase: "Idle",
+			isRunning: false,
+			terminal: false,
+			logStartSequence: 0,
+			logLines: [],
+			sanitizedError: null,
+			currentBuild: null,
+		};
 		vi.clearAllMocks();
 	});
 
@@ -189,6 +198,12 @@ describe("SourceBuildCard", () => {
 			expect.any(Object),
 		);
 		expect(acknowledgement.checked).toBe(false);
+	});
+
+	it("does not expose an explicit commit input for official upstream", () => {
+		renderCard();
+
+		expect(screen.queryByLabelText("Commit SHA (optional)")).toBeNull();
 	});
 
 	it("renders active provenance exclusively from the installed runtime", () => {

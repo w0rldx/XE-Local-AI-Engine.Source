@@ -36,6 +36,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
     private static readonly TimeSpan BuildTimeout = TimeSpan.FromMinutes(120);
 
     private readonly ILlamaCppBinaryManager _binaryManager;
+    private readonly ILlamaCppSourceBuildActivity _buildActivity;
     private readonly IInstalledRuntimeStore _installedRuntimeStore;
     private readonly IActiveSourceBuildSignal _activeSignal;
     private readonly string _cacheRoot;
@@ -53,30 +54,34 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
     private DateTimeOffset? _completedAtUtc;
     private LlamaCppSourceBuildDescriptor? _currentBuild;
     private bool _isRunning;
+    private long _logStartSequence;
     private List<string> _logLines = [];
+    private long _nextLogSequence;
     private LlamaCppSourceBuildPhase _phase = LlamaCppSourceBuildPhase.Idle;
     private Task _publishTail = Task.CompletedTask;
     private string? _sanitizedError;
     private DateTimeOffset? _startedAtUtc;
 
-    /// <summary>Creates the build service over the prerequisite probe, the binary manager, and the build-event publisher.</summary>
+    /// <summary>Creates the build service with the process-wide source-build activity reservation.</summary>
     public LlamaCppSourceBuildService(ILlamaCppSourceBuildPrerequisiteProbe prerequisiteProbe,
         ILlamaCppBinaryManager binaryManager,
         IInstalledRuntimeStore installedRuntimeStore,
         IActiveSourceBuildSignal activeSignal,
         ILlamaServerProcessSupervisor supervisor,
+        ILlamaCppSourceBuildActivity buildActivity,
         ILlamaCppSourceBuildEventPublisher publisher,
         ILogger<LlamaCppSourceBuildService> logger)
-        : this(prerequisiteProbe, binaryManager, installedRuntimeStore, activeSignal, supervisor, publisher, logger, DefaultCacheRoot())
+        : this(prerequisiteProbe, binaryManager, installedRuntimeStore, activeSignal, supervisor, buildActivity, publisher, logger, DefaultCacheRoot())
     {
     }
 
-    /// <summary>Test seam: pins the cache root the build tree lives under.</summary>
+    /// <summary>Test seam: pins the cache root and shares a source-build activity reservation with the supervisor.</summary>
     internal LlamaCppSourceBuildService(ILlamaCppSourceBuildPrerequisiteProbe prerequisiteProbe,
         ILlamaCppBinaryManager binaryManager,
         IInstalledRuntimeStore installedRuntimeStore,
         IActiveSourceBuildSignal activeSignal,
         ILlamaServerProcessSupervisor supervisor,
+        ILlamaCppSourceBuildActivity buildActivity,
         ILlamaCppSourceBuildEventPublisher publisher,
         ILogger<LlamaCppSourceBuildService> logger,
         string cacheRoot)
@@ -86,6 +91,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
         _installedRuntimeStore = installedRuntimeStore ?? throw new ArgumentNullException(nameof(installedRuntimeStore));
         _activeSignal = activeSignal ?? throw new ArgumentNullException(nameof(activeSignal));
         _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
+        _buildActivity = buildActivity ?? throw new ArgumentNullException(nameof(buildActivity));
         _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         ArgumentException.ThrowIfNullOrWhiteSpace(cacheRoot);
@@ -121,8 +127,13 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
     }
 
     /// <inheritdoc />
-    public async Task<LlamaCppSourceBuildStartOutcome> StartAsync(LlamaCppSourceBuildRequest request, CancellationToken ct)
+    public async Task<LlamaCppSourceBuildStartResult> StartAsync(LlamaCppSourceBuildRequest request, CancellationToken ct)
     {
+        if (!OperatingSystem.IsLinux())
+        {
+            throw new LlamaRuntimeException("In-app source builds are available on Linux only.");
+        }
+
         await _startGate.WaitAsync(ct).ConfigureAwait(false);
         TaskCompletionSource? startSignal = null;
         try
@@ -149,46 +160,74 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
             {
                 if (_isRunning)
                 {
-                    return LlamaCppSourceBuildStartOutcome.AlreadyRunning;
+                    return new LlamaCppSourceBuildStartResult(LlamaCppSourceBuildStartOutcome.AlreadyRunning);
                 }
             }
 
             // Recovery, prerequisite validation, and slot claim are one serialized start transaction. A losing caller must
             // not delete the winning build's .work tree or repeat expensive prerequisite probes.
             await RecoverAsync(ct).ConfigureAwait(false);
-            if (!OperatingSystem.IsLinux())
-            {
-                throw new LlamaRuntimeException("In-app source builds are available on Linux only.");
-            }
-
             var report = await _prerequisiteProbe.ProbeAsync(normalized.Backend, ct).ConfigureAwait(false);
             if (!report.CanBuild)
             {
-                throw new LlamaRuntimeException("One or more build prerequisites are missing; resolve the checklist before building.");
+                var outcome = report.Items.Any(static item =>
+                    string.Equals(item.Key, "free-disk", StringComparison.Ordinal) && !item.Satisfied)
+                    ? LlamaCppSourceBuildStartOutcome.InsufficientDisk
+                    : LlamaCppSourceBuildStartOutcome.MissingPrerequisites;
+                return new LlamaCppSourceBuildStartResult(outcome, report);
             }
 
-            var buildCts = CancellationTokenSource.CreateLinkedTokenSource(CancellationToken.None);
-            startSignal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            var buildTask = Task.Run(async () =>
+            var mutationLease = await _supervisor.TryAcquireRuntimeMutationLeaseAsync(ct).ConfigureAwait(false);
+            if (mutationLease is null)
             {
-                await startSignal.Task.ConfigureAwait(false);
-                if (OperatingSystem.IsLinux())
+                var processCount = _supervisor.CountRunningProcesses();
+                return processCount > 0
+                    ? new LlamaCppSourceBuildStartResult(LlamaCppSourceBuildStartOutcome.ProcessesRunning, RunningProcessCount: processCount)
+                    : new LlamaCppSourceBuildStartResult(LlamaCppSourceBuildStartOutcome.RuntimeBusy);
+            }
+
+            await using (mutationLease.ConfigureAwait(false))
+            {
+                if (!_buildActivity.TryReserve(descriptor.BuildId))
                 {
-                    await RunBuildAsync(descriptor, buildCts.Token).ConfigureAwait(false);
+                    return new LlamaCppSourceBuildStartResult(LlamaCppSourceBuildStartOutcome.RuntimeBusy);
                 }
-            }, CancellationToken.None);
-            lock (_stateLock)
-            {
-                _isRunning = true;
-                _phase = LlamaCppSourceBuildPhase.Cloning;
-                _logLines = [];
-                _sanitizedError = null;
-                _currentBuild = descriptor;
-                _startedAtUtc = DateTimeOffset.UtcNow;
-                _completedAtUtc = null;
-                _buildCts?.Dispose();
-                _buildCts = buildCts;
-                _activeBuildTask = buildTask;
+
+                try
+                {
+                    var buildCts = CancellationTokenSource.CreateLinkedTokenSource(CancellationToken.None);
+                    startSignal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                    var buildTask = Task.Run(async () =>
+                    {
+                        await startSignal.Task.ConfigureAwait(false);
+                        // StartAsync rejects non-Linux callers before probing or reserving activity. This local guard also
+                        // carries that invariant into the detached lambda for the platform analyzer.
+                        if (OperatingSystem.IsLinux())
+                        {
+                            await RunBuildAsync(descriptor, buildCts.Token).ConfigureAwait(false);
+                        }
+                    }, CancellationToken.None);
+                    lock (_stateLock)
+                    {
+                        _isRunning = true;
+                        _phase = LlamaCppSourceBuildPhase.Cloning;
+                        _logLines = [];
+                        _logStartSequence = 0;
+                        _nextLogSequence = 0;
+                        _sanitizedError = null;
+                        _currentBuild = descriptor;
+                        _startedAtUtc = DateTimeOffset.UtcNow;
+                        _completedAtUtc = null;
+                        _buildCts?.Dispose();
+                        _buildCts = buildCts;
+                        _activeBuildTask = buildTask;
+                    }
+                }
+                catch
+                {
+                    _buildActivity.TryRelease(descriptor.BuildId);
+                    throw;
+                }
             }
         }
         finally
@@ -198,7 +237,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
 
         // Release the start transaction before allowing the detached build to touch its work tree.
         startSignal.SetResult();
-        return LlamaCppSourceBuildStartOutcome.Started;
+        return new LlamaCppSourceBuildStartResult(LlamaCppSourceBuildStartOutcome.Started);
     }
 
     /// <inheritdoc />
@@ -249,6 +288,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
                 _isRunning,
                 Terminal: _phase is LlamaCppSourceBuildPhase.Completed or LlamaCppSourceBuildPhase.Cancelled or LlamaCppSourceBuildPhase.Failed,
                 LogLines: [.. _logLines],
+                _logStartSequence,
                 _sanitizedError,
                 _currentBuild,
                 _startedAtUtc,
@@ -475,6 +515,10 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
             TryDeleteDirectory(stagingTagDir);
             await SetTerminalAsync(LlamaCppSourceBuildPhase.Failed, "The source build failed unexpectedly.").ConfigureAwait(false);
         }
+        finally
+        {
+            _buildActivity.TryRelease(descriptor.BuildId);
+        }
     }
 
     [SupportedOSPlatform("linux")]
@@ -656,7 +700,17 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
             ?? (string.Equals(state.SourceRepository, LlamaCppSourceBuildRequestValidation.OfficialRepository, StringComparison.Ordinal)
                 ? LlamaCppSourceSelection.Official
                 : LlamaCppSourceSelection.Custom);
-        if (manifest is null
+        if (!LlamaCppSourceBuildRequestValidation.HasValidOfficialProvenance(expectedSource,
+                state.SourceRepository,
+                state.SourceRevisionMode,
+                state.SourceRequestedCommit,
+                state.SourceCommit)
+            || manifest is null
+            || !LlamaCppSourceBuildRequestValidation.HasValidOfficialProvenance(manifest.Source,
+                manifest.Repository,
+                manifest.RevisionMode,
+                manifest.RequestedCommit,
+                manifest.ResolvedCommit)
             || manifest.Variant != state.Variant
             || manifest.Source != expectedSource
             || manifest.RevisionMode != state.SourceRevisionMode
@@ -1010,7 +1064,12 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
         lock (_stateLock)
         {
             _phase = phase;
-            _ = QueuePublish(new LlamaCppSourceBuildStatusHubEvent(phase.ToString(), [], Terminal: false, SanitizedError: null, _currentBuild));
+            _ = QueuePublish(new LlamaCppSourceBuildStatusHubEvent(phase.ToString(),
+                [],
+                _nextLogSequence,
+                Terminal: false,
+                SanitizedError: null,
+                _currentBuild));
         }
     }
 
@@ -1023,7 +1082,12 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
             _isRunning = false;
             _sanitizedError = sanitizedError;
             _completedAtUtc = DateTimeOffset.UtcNow;
-            publish = QueuePublish(new LlamaCppSourceBuildStatusHubEvent(phase.ToString(), [], Terminal: true, sanitizedError, _currentBuild));
+            publish = QueuePublish(new LlamaCppSourceBuildStatusHubEvent(phase.ToString(),
+                [],
+                _nextLogSequence,
+                Terminal: true,
+                sanitizedError,
+                _currentBuild));
         }
 
         await publish.ConfigureAwait(false);
@@ -1036,13 +1100,20 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
         var redacted = Redact(line);
         lock (_stateLock)
         {
+            var appendedSequence = _nextLogSequence++;
             _logLines.Add(redacted);
             if (_logLines.Count > LogRingCapacity)
             {
                 _logLines.RemoveRange(0, _logLines.Count - LogRingCapacity);
             }
+            _logStartSequence = _nextLogSequence - _logLines.Count;
 
-            _ = QueuePublish(new LlamaCppSourceBuildStatusHubEvent(_phase.ToString(), [redacted], Terminal: false, SanitizedError: null, _currentBuild));
+            _ = QueuePublish(new LlamaCppSourceBuildStatusHubEvent(_phase.ToString(),
+                [redacted],
+                appendedSequence,
+                Terminal: false,
+                SanitizedError: null,
+                _currentBuild));
         }
     }
 

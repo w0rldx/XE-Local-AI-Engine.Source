@@ -6,10 +6,23 @@ internal sealed class LegacyCudaBuildServiceAdapter(ILlamaCppSourceBuildService 
 {
     public async Task<CudaBuildStartOutcome> StartAsync(CancellationToken ct)
     {
-        var outcome = await sourceBuildService.StartAsync(new LlamaCppSourceBuildRequest(
+        var result = await sourceBuildService.StartAsync(new LlamaCppSourceBuildRequest(
             LlamaCppSourceBackend.Cuda,
             LlamaCppSourceSelection.Official), ct).ConfigureAwait(false);
-        return outcome == LlamaCppSourceBuildStartOutcome.Started ? CudaBuildStartOutcome.Started : CudaBuildStartOutcome.AlreadyRunning;
+        return result.Outcome switch
+        {
+            LlamaCppSourceBuildStartOutcome.Started => CudaBuildStartOutcome.Started,
+            LlamaCppSourceBuildStartOutcome.AlreadyRunning => CudaBuildStartOutcome.AlreadyRunning,
+            LlamaCppSourceBuildStartOutcome.InsufficientDisk => throw new LlamaRuntimeException(
+                "There is not enough free disk space to build the CUDA runtime."),
+            LlamaCppSourceBuildStartOutcome.MissingPrerequisites => throw new LlamaRuntimeException(
+                "One or more build prerequisites are missing; resolve the checklist before building."),
+            LlamaCppSourceBuildStartOutcome.ProcessesRunning => throw new LlamaRuntimeException(
+                "Stop or eject all running llama.cpp models before building the runtime."),
+            LlamaCppSourceBuildStartOutcome.RuntimeBusy => throw new LlamaRuntimeException(
+                "Wait for the active llama.cpp source build or runtime change to finish before starting another build."),
+            _ => throw new InvalidOperationException($"Unknown source-build start outcome: {result.Outcome}.")
+        };
     }
 
     public CudaBuildStatus GetStatus()

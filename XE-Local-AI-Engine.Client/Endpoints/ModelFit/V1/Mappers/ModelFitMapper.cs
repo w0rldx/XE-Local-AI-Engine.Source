@@ -326,6 +326,7 @@ internal static class ModelFitMapper
             Phase = status.Phase.ToString(),
             IsRunning = status.IsRunning,
             Terminal = status.Terminal,
+            LogStartSequence = status.LogStartSequence,
             LogLines = status.LogLines,
             SanitizedError = status.SanitizedError,
             CurrentBuild = status.CurrentBuild?.ToResponse(),

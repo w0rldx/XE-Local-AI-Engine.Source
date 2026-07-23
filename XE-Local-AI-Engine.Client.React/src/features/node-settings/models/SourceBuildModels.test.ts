@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
 	mergeSourceBuildLogs,
 	sourceBuildIdentity,
+	sourceBuildLogEntries,
 	sourceBuildPrerequisiteDiagnostic,
 	sourceBuildRequest,
 	sourceBuildValidationError,
@@ -39,13 +40,75 @@ describe("source build models", () => {
 		});
 	});
 
-	it("merges persisted and live reconnect logs without duplicating their overlap", () => {
-		expect(mergeSourceBuildLogs(["clone", "configure", "build"], ["configure", "build", "link"])).toEqual([
-			"clone",
-			"configure",
-			"build",
-			"link",
+	it("never submits a stale commit for the official source", () => {
+		expect(
+			sourceBuildRequest({
+				backend: "cpu",
+				source: "official",
+				repository: "",
+				commit: "a".repeat(40),
+				acknowledgeCustomSourceRisk: false,
+			}),
+		).toEqual({
+			backend: "cpu",
+			source: "official",
+			repository: null,
+			commit: null,
+			acknowledgeCustomSourceRisk: false,
+		});
+	});
+
+	it("reconciles a 400-line server ring with a 2000-line live buffer by sequence", () => {
+		const live = sourceBuildLogEntries(
+			0,
+			Array.from({ length: 2000 }, (_, sequence) => `line-${sequence}`),
+		);
+		const persisted = sourceBuildLogEntries(
+			1600,
+			Array.from({ length: 400 }, (_, index) => `line-${1600 + index}`),
+		);
+
+		const merged = mergeSourceBuildLogs(persisted, live);
+
+		expect(merged).toHaveLength(2000);
+		expect(merged[0]).toEqual({ sequence: 0, message: "line-0" });
+		expect(merged.at(-1)).toEqual({ sequence: 1999, message: "line-1999" });
+	});
+
+	it("preserves repeated messages at different sequences while deduplicating replayed sequences", () => {
+		expect(
+			mergeSourceBuildLogs(sourceBuildLogEntries(10, ["same", "same"]), sourceBuildLogEntries(10, ["same", "same"])),
+		).toEqual([
+			{ sequence: 10, message: "same" },
+			{ sequence: 11, message: "same" },
 		]);
+	});
+
+	it("orders out-of-order and disjoint ranges numerically", () => {
+		expect(
+			mergeSourceBuildLogs(
+				sourceBuildLogEntries(20, ["twenty"]),
+				sourceBuildLogEntries(2, ["two"]),
+				sourceBuildLogEntries(10, ["ten"]),
+			),
+		).toEqual([
+			{ sequence: 2, message: "two" },
+			{ sequence: 10, message: "ten" },
+			{ sequence: 20, message: "twenty" },
+		]);
+	});
+
+	it("retains only the newest 2000 sequenced entries", () => {
+		const merged = mergeSourceBuildLogs(
+			sourceBuildLogEntries(
+				0,
+				Array.from({ length: 2001 }, (_, sequence) => `line-${sequence}`),
+			),
+		);
+
+		expect(merged).toHaveLength(2000);
+		expect(merged[0]?.sequence).toBe(1);
+		expect(merged.at(-1)?.sequence).toBe(2000);
 	});
 
 	it("identifies a concrete run by build id", () => {

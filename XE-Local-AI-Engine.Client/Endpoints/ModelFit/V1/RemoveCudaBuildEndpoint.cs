@@ -17,6 +17,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 public sealed class RemoveCudaBuildEndpoint(
     ILlamaCppBinaryManager binaryManager,
     ILlamaServerProcessSupervisor processSupervisor,
+    ILlamaCppSourceBuildActivity sourceBuildActivity,
     ILlamaCppUpdateState updateState,
     IInstalledRuntimeStore installedRuntimeStore,
     INodeRuntimeSettings nodeRuntimeSettings,
@@ -37,13 +38,16 @@ public sealed class RemoveCudaBuildEndpoint(
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var (removed, runningProcessCount) = await TryRemoveAsync(_binaryManager, _processSupervisor, ct).ConfigureAwait(false);
+        var (removed, runningProcessCount, buildActive) =
+            await TryRemoveAsync(_binaryManager, _processSupervisor, sourceBuildActivity, ct).ConfigureAwait(false);
         if (!removed)
         {
             await Send.ResultAsync(Results.Conflict(new CudaBuildBlockedResponse
             {
-                Reason = "processes-running",
-                Message = "Stop or eject all running llama.cpp models before removing the runtime.",
+                Reason = buildActive ? "already-building" : "processes-running",
+                Message = buildActive
+                    ? "Wait for the active llama.cpp source build to finish or cancel it before removing the runtime."
+                    : "Stop or eject all running llama.cpp models before removing the runtime.",
                 RunningProcessCount = runningProcessCount
             })).ConfigureAwait(false);
             return;
@@ -57,19 +61,30 @@ public sealed class RemoveCudaBuildEndpoint(
         await Send.OkAsync(_updateState.Current.ToRuntimeStatusResponse(installed, recommendedTag, runningProcessCount), ct).ConfigureAwait(false);
     }
 
-    internal static async Task<(bool Removed, int RunningProcessCount)> TryRemoveAsync(
+    internal static async Task<(bool Removed, int RunningProcessCount, bool BuildActive)> TryRemoveAsync(
         ILlamaCppBinaryManager binaryManager,
         ILlamaServerProcessSupervisor processSupervisor,
+        ILlamaCppSourceBuildActivity sourceBuildActivity,
         CancellationToken ct)
     {
+        if (LlamaCppPrebuiltRuntimeMutationGuard.IsSourceBuildActive(sourceBuildActivity))
+        {
+            return (false, 0, true);
+        }
+
         await using var mutationLease = await processSupervisor.TryAcquireRuntimeMutationLeaseAsync(ct).ConfigureAwait(false);
+        if (LlamaCppPrebuiltRuntimeMutationGuard.IsSourceBuildActive(sourceBuildActivity))
+        {
+            return (false, 0, true);
+        }
+
         var runningProcessCount = processSupervisor.CountRunningProcesses();
         if (mutationLease is null || runningProcessCount > 0)
         {
-            return (false, runningProcessCount);
+            return (false, runningProcessCount, false);
         }
 
         await binaryManager.RemoveCudaSourceBuildAsync(ct).ConfigureAwait(false);
-        return (true, runningProcessCount);
+        return (true, runningProcessCount, false);
     }
 }

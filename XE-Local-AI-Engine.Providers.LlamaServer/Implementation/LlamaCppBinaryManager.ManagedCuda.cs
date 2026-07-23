@@ -133,6 +133,15 @@ public sealed partial class LlamaCppBinaryManager
         ArgumentException.ThrowIfNullOrWhiteSpace(buildBinDir);
         ArgumentException.ThrowIfNullOrWhiteSpace(tag);
 
+        if (!LlamaCppSourceBuildRequestValidation.HasValidOfficialProvenance(sourceSelection,
+                sourceRepository,
+                revisionMode,
+                requestedCommit,
+                sourceCommit))
+        {
+            throw new LlamaRuntimeException("Official source builds must use the canonical repository and engine-pinned revision.");
+        }
+
         if (!IsValidTag(tag))
         {
             throw new LlamaRuntimeException("The source build tag is not in a recognized format.");

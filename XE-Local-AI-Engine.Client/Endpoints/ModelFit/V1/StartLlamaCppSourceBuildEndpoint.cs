@@ -8,9 +8,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 public sealed class StartLlamaCppSourceBuildEndpoint(
-    ILlamaCppSourceBuildPrerequisiteProbe prerequisiteProbe,
-    ILlamaCppSourceBuildService buildService,
-    ILlamaServerProcessSupervisor processSupervisor) : Endpoint<StartLlamaCppSourceBuildRequest, StartLlamaCppSourceBuildResponse>
+    ILlamaCppSourceBuildService buildService) : Endpoint<StartLlamaCppSourceBuildRequest, StartLlamaCppSourceBuildResponse>
 {
     public override void Configure()
     {
@@ -31,36 +29,40 @@ public sealed class StartLlamaCppSourceBuildEndpoint(
         }
 
         var contract = LlamaCppSourceBuildRequestValidation.Normalize(request.ToContract());
-        var report = await prerequisiteProbe.ProbeAsync(contract.Backend, ct).ConfigureAwait(false);
-        if (!report.CanBuild)
-        {
-            var diskShort = report.Items.Any(static item => item is { Key: "free-disk", Satisfied: false });
-            await BlockAsync(diskShort ? "disk" : "prerequisites",
-                diskShort
-                    ? "There is not enough free disk space to build the source runtime."
-                    : "One or more build prerequisites are missing; resolve the checklist before building.").ConfigureAwait(false);
-            return;
-        }
-
-        var runningProcessCount = processSupervisor.CountRunningProcesses();
-        if (runningProcessCount > 0)
-        {
-            await Send.ResultAsync(Results.Conflict(new LlamaCppSourceBuildBlockedResponse
-            {
-                Reason = "processes-running",
-                Message = "Stop or eject all running llama.cpp models before building the runtime.",
-                RunningProcessCount = runningProcessCount
-            })).ConfigureAwait(false);
-            return;
-        }
 
         try
         {
-            var outcome = await buildService.StartAsync(contract, ct).ConfigureAwait(false);
-            if (outcome == LlamaCppSourceBuildStartOutcome.AlreadyRunning)
+            var result = await buildService.StartAsync(contract, ct).ConfigureAwait(false);
+            switch (result.Outcome)
             {
-                await BlockAsync("already-building", "A source build is already in progress.").ConfigureAwait(false);
-                return;
+                case LlamaCppSourceBuildStartOutcome.AlreadyRunning:
+                    await BlockAsync("already-building", "A source build is already in progress.").ConfigureAwait(false);
+                    return;
+                case LlamaCppSourceBuildStartOutcome.InsufficientDisk:
+                    await BlockAsync("disk", "There is not enough free disk space to build the source runtime.").ConfigureAwait(false);
+                    return;
+                case LlamaCppSourceBuildStartOutcome.MissingPrerequisites:
+                    await BlockAsync("prerequisites",
+                        "One or more build prerequisites are missing; resolve the checklist before building.")
+                        .ConfigureAwait(false);
+                    return;
+                case LlamaCppSourceBuildStartOutcome.ProcessesRunning:
+                    await Send.ResultAsync(Results.Conflict(new LlamaCppSourceBuildBlockedResponse
+                    {
+                        Reason = "processes-running",
+                        Message = "Stop or eject all running llama.cpp models before building the runtime.",
+                        RunningProcessCount = result.RunningProcessCount
+                    })).ConfigureAwait(false);
+                    return;
+                case LlamaCppSourceBuildStartOutcome.RuntimeBusy:
+                    await BlockAsync("runtime-busy",
+                        "Wait for the active llama.cpp source build or runtime change to finish before starting another build.")
+                        .ConfigureAwait(false);
+                    return;
+                case LlamaCppSourceBuildStartOutcome.Started:
+                    break;
+                default:
+                    throw new InvalidOperationException($"Unknown source-build start outcome: {result.Outcome}.");
             }
 
             await Send.OkAsync(new StartLlamaCppSourceBuildResponse

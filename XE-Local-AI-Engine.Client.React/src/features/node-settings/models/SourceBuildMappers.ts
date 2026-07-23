@@ -29,6 +29,7 @@ export function toSourceBuildStatus(
 		phase: dto.phase ?? "Idle",
 		isRunning: dto.isRunning ?? false,
 		terminal: dto.terminal ?? false,
+		logStartSequence: dto.logStartSequence,
 		logLines: dto.logLines ?? [],
 		sanitizedError: dto.sanitizedError ?? null,
 		currentBuild:
