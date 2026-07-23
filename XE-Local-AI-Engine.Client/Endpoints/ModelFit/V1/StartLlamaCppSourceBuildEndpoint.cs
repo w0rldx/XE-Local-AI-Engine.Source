@@ -28,11 +28,11 @@ public sealed class StartLlamaCppSourceBuildEndpoint(
             return;
         }
 
-        var contract = LlamaCppSourceBuildRequestValidation.Normalize(request.ToContract());
-
+        // The service normalizes the request itself; normalizing here as well would hand StartAsync a request whose
+        // server-selected fields are already populated, and the strict official-source rules would reject it.
         try
         {
-            var result = await buildService.StartAsync(contract, ct).ConfigureAwait(false);
+            var result = await buildService.StartAsync(request.ToContract(), ct).ConfigureAwait(false);
             switch (result.Outcome)
             {
                 case LlamaCppSourceBuildStartOutcome.AlreadyRunning:

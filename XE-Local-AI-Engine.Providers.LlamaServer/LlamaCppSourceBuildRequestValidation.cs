@@ -4,6 +4,11 @@ using System.Text.RegularExpressions;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>Strict validation and canonicalization for trusted public GitHub source-build requests.</summary>
+/// <remarks>
+///     <see cref="Normalize" /> is IDEMPOTENT by contract: it runs at the transport edge (the FluentValidation request
+///     validator) and again inside <see cref="Contracts.ILlamaCppSourceBuildService.StartAsync" />, and callers may hand
+///     an already-normalized request to either. A pass that rejected its own output would fail every official build.
+/// </remarks>
 public static partial class LlamaCppSourceBuildRequestValidation
 {
     public const string OfficialRepository = "https://github.com/ggml-org/llama.cpp";
@@ -18,7 +23,11 @@ public static partial class LlamaCppSourceBuildRequestValidation
 
         if (request.Source == LlamaCppSourceSelection.Official)
         {
-            if (!string.IsNullOrWhiteSpace(request.Repository))
+            // Only the server-selected canonical repository may accompany the official source — anything else is a
+            // client attempt to override it and is rejected. Echoing the canonical value back is what keeps this
+            // method idempotent (see the type remarks), because the first pass writes exactly that value.
+            if (!string.IsNullOrWhiteSpace(request.Repository)
+                && !string.Equals(request.Repository, OfficialRepository, StringComparison.Ordinal))
             {
                 throw new LlamaRuntimeException("The official source repository is selected by the server.");
             }
