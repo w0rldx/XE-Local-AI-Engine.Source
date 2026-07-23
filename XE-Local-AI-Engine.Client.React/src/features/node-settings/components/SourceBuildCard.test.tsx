@@ -97,6 +97,8 @@ vi.mock("@/features/node-settings/hooks/useSourceBuildHub", () => ({
 	useSourceBuildHub: () => ({ phase: null, logEntries: [], error: null, buildIdentity: null, reset: vi.fn() }),
 }));
 
+import { ApiError } from "@/core/api/errors/ApiError";
+import { toast } from "@/core/ui/notifications/Toast";
 import { SourceBuildCard } from "@/features/node-settings/components/SourceBuildCard";
 
 function renderCard(): void {
@@ -149,6 +151,29 @@ describe("SourceBuildCard", () => {
 	});
 
 	afterEach(() => cleanup());
+
+	it("surfaces the blocked-build reason from a 409 instead of an empty notification", async () => {
+		// Regression: the 409 body is `{ reason, message }` (not ProblemDetails), so the interceptor's ApiError used to
+		// carry an undefined message and `toast.error(undefined)` rendered a blank notification.
+		state.prerequisites = { backend: "cpu", canBuild: true, items: [] };
+		state.start.mockImplementation((_draft: unknown, options?: { onError?: (error: unknown) => void }) => {
+			options?.onError?.(
+				new ApiError(409, {
+					reason: "processes-running",
+					message: "Stop or eject all running llama.cpp models before building the runtime.",
+				} as never),
+			);
+		});
+		renderCard();
+
+		fireEvent.click(screen.getByRole("button", { name: "Build" }));
+
+		await waitFor(() =>
+			expect(toast.error).toHaveBeenCalledWith(
+				"Stop or eject all running llama.cpp models before building the runtime.",
+			),
+		);
+	});
 
 	it("hides and disables queries when Developer mode is off", () => {
 		devMode.enabled = false;

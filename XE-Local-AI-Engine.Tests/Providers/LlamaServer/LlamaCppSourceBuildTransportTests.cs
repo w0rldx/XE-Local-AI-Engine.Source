@@ -122,6 +122,67 @@ public sealed class LlamaCppSourceBuildTransportTests
     }
 
     [Test]
+    public async Task StartEndpoint_OfficialSource_HandsTheServiceAnUnnormalizedRequestAndStarts()
+    {
+        // Regression: the endpoint used to normalize the request before calling the service, which normalizes again.
+        // The second pass saw the repository the FIRST pass had selected and rejected it as a client override, so every
+        // official-source build answered 409 {"reason":"prerequisites","message":"The official source repository is
+        // selected by the server."}. Assert the endpoint forwards the raw request and that real normalization succeeds.
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        var service = Substitute.For<ILlamaCppSourceBuildService>();
+        service.StartAsync(Arg.Any<LlamaCppSourceBuildRequest>(), Arg.Any<CancellationToken>())
+            .Returns(call =>
+            {
+                // Mirrors what the production service does with whatever the endpoint handed it.
+                _ = LlamaCppSourceBuildRequestValidation.Normalize(call.Arg<LlamaCppSourceBuildRequest>());
+                return new LlamaCppSourceBuildStartResult(LlamaCppSourceBuildStartOutcome.Started);
+            });
+        service.GetStatus().Returns(new LlamaCppSourceBuildStatus(LlamaCppSourceBuildPhase.Cloning,
+            IsRunning: true,
+            Terminal: false,
+            LogLines: [],
+            LogStartSequence: 0,
+            SanitizedError: null,
+            CurrentBuild: null,
+            StartedAtUtc: null,
+            CompletedAtUtc: null));
+        await using var factory = new TestingWebAppFactory
+        {
+            EnableDevelopmentMode = true,
+            ConfigureAdditionalTestServices = services =>
+            {
+                services.RemoveAll<ILlamaCppSourceBuildService>();
+                services.AddSingleton(service);
+            }
+        };
+        using var client = factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/model-fit/llamacpp/source-build")
+        {
+            Content = JsonContent.Create(new StartLlamaCppSourceBuildRequest
+            {
+                Backend = LlamaCppSourceBackendDto.Cpu,
+                Source = LlamaCppSourceSelectionDto.Official,
+                AcknowledgeCustomSourceRisk = false
+            })
+        };
+        factory.AddNodeBearerToken(request);
+
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        AssertEx.True(body.RootElement.GetProperty("started").GetBoolean());
+        await service.Received(1).StartAsync(
+            Arg.Is<LlamaCppSourceBuildRequest>(sourceRequest =>
+                sourceRequest.Source == LlamaCppSourceSelection.Official && sourceRequest.Repository == null),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     [Arguments(LlamaCppSourceBuildStartOutcome.AlreadyRunning, "already-building", 0)]
     [Arguments(LlamaCppSourceBuildStartOutcome.InsufficientDisk, "disk", 0)]
     [Arguments(LlamaCppSourceBuildStartOutcome.MissingPrerequisites, "prerequisites", 0)]

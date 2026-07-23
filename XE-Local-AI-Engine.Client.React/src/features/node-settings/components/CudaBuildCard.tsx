@@ -13,6 +13,7 @@ import { Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 
 import { nodeRoutePaths } from "@/capabilities/NodeCapabilities";
+import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
 import { toast } from "@/core/ui/notifications/Toast";
 import { CudaBuildLogView } from "@/features/node-settings/components/CudaBuildLogView";
@@ -26,25 +27,6 @@ import {
 	useRemoveCudaBuild,
 	useStartCudaBuild,
 } from "@/features/node-settings/queries/useLocalRuntime";
-
-// Reads a backend "blocked" reason (409 CudaBuildBlockedResponse) off a thrown AxiosError generically (without coupling
-// to the axios type): the response body's `message` is the operator-facing eject-first / already-building / disk reason.
-// Falls back to the error's own message, then the supplied default — so a non-409 failure still surfaces something.
-function buildErrorMessage(error: unknown, fallback: string): string {
-	if (error !== null && typeof error === "object" && "response" in error) {
-		const response = (error as { response?: unknown }).response;
-		if (response !== null && typeof response === "object" && "data" in response) {
-			const data = (response as { data?: unknown }).data;
-			if (data !== null && typeof data === "object" && "message" in data) {
-				const message = (data as { message?: unknown }).message;
-				if (typeof message === "string" && message.length > 0) {
-					return message;
-				}
-			}
-		}
-	}
-	return error instanceof Error ? error.message : fallback;
-}
 
 // The in-app "CUDA (build from source)" card. Double-gated (Locked #9): rendered only under developer mode, and the
 // build action is enabled only on a Linux host whose prerequisites are all satisfied (`canBuild`). It owns four states:
@@ -101,7 +83,7 @@ export function CudaBuildCard() {
 		startMutation.mutate(undefined, {
 			onError: (error) =>
 				toast.error(
-					buildErrorMessage(error, t("pages.nodeSettings.llamaCpp.cudaBuild.startError", "Could not start the CUDA build.")),
+					apiErrorMessage(error, t("pages.nodeSettings.llamaCpp.cudaBuild.startError", "Could not start the CUDA build.")),
 				),
 		});
 	};
@@ -110,7 +92,7 @@ export function CudaBuildCard() {
 		cancelMutation.mutate(undefined, {
 			onError: (error) =>
 				toast.error(
-					buildErrorMessage(error, t("pages.nodeSettings.llamaCpp.cudaBuild.cancelError", "Could not cancel the CUDA build.")),
+					apiErrorMessage(error, t("pages.nodeSettings.llamaCpp.cudaBuild.cancelError", "Could not cancel the CUDA build.")),
 				),
 		});
 	};
@@ -121,7 +103,7 @@ export function CudaBuildCard() {
 				toast.success(t("pages.nodeSettings.llamaCpp.cudaBuild.removed", "Managed CUDA build removed.")),
 			onError: (error) =>
 				toast.error(
-					buildErrorMessage(error, t("pages.nodeSettings.llamaCpp.cudaBuild.removeError", "Could not remove the CUDA build.")),
+					apiErrorMessage(error, t("pages.nodeSettings.llamaCpp.cudaBuild.removeError", "Could not remove the CUDA build.")),
 				),
 		});
 	};
@@ -157,7 +139,7 @@ export function CudaBuildCard() {
 
 				{prereqQuery.error ? (
 					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="cuda-build-prereq-error">
-						{buildErrorMessage(
+						{apiErrorMessage(
 							prereqQuery.error,
 							t("pages.nodeSettings.llamaCpp.cudaBuild.prereqError", "Could not check the CUDA build prerequisites."),
 						)}
