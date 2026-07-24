@@ -103,6 +103,13 @@ BeforeAll {
 
     . ([scriptblock]::Create((Get-ScriptFunctionText -Name 'Get-ProjectVersion')))
     . ([scriptblock]::Create((Get-ScriptFunctionText -Name 'Assert-LastExitCode')))
+    . ([scriptblock]::Create((Get-ScriptFunctionText -Name 'Get-RemoteTagCommit')))
+    . ([scriptblock]::Create((Get-ScriptFunctionText -Name 'Assert-RemoteSourceTagAtHead')))
+    . ([scriptblock]::Create((Get-ScriptFunctionText -Name 'Get-ViteReleaseEnvironmentConflict')))
+    . ([scriptblock]::Create((Get-ScriptFunctionText -Name 'Get-ExpectedVelopackAsset')))
+    . ([scriptblock]::Create((Get-ScriptFunctionText -Name 'Assert-VelopackAssetHash')))
+    . ([scriptblock]::Create((Get-ScriptFunctionText -Name 'Assert-VelopackManifestSource')))
+    . ([scriptblock]::Create((Get-ScriptFunctionText -Name 'Assert-VelopackPreviousReleaseSeed')))
 
     # Runs the REAL audit pipeline over a supplied `dotnet package list --vulnerable` payload.
     function Invoke-VulnerabilityAudit {
@@ -462,5 +469,330 @@ Describe 'Assert-LastExitCode' {
     It 'is silent on success' {
         $global:LASTEXITCODE = 0
         { Assert-LastExitCode -Operation 'Backend restore' } | Should -Not -Throw
+    }
+}
+
+Describe 'Remote source tag publication gate' {
+
+    It 'prefers the peeled commit when the canonical remote tag is annotated' {
+        function git {
+            $global:LASTEXITCODE = 0
+            return @(
+                "1111111111111111111111111111111111111111`trefs/tags/v1.2.3",
+                "2222222222222222222222222222222222222222`trefs/tags/v1.2.3^{}"
+            )
+        }
+
+        Get-RemoteTagCommit -Tag 'v1.2.3' -RepositoryUrl 'https://example.invalid/source.git' |
+            Should -Be '2222222222222222222222222222222222222222'
+    }
+
+    It 'returns null when the canonical remote has no matching tag' {
+        function git {
+            $global:LASTEXITCODE = 2
+            return $null
+        }
+
+        Get-RemoteTagCommit -Tag 'v1.2.3' -RepositoryUrl 'https://example.invalid/source.git' |
+            Should -BeNullOrEmpty
+    }
+
+    It 'rejects a missing canonical remote tag' {
+        function Get-RemoteTagCommit { return $null }
+
+        { Assert-RemoteSourceTagAtHead -Tag 'v1.2.3' -HeadCommit 'abc123' -RepositoryUrl 'https://example.invalid/source.git' } |
+            Should -Throw '*does not exist in the canonical source repository*'
+    }
+
+    It 'rejects a canonical remote tag that does not resolve to HEAD' {
+        function Get-RemoteTagCommit { return 'def456' }
+
+        { Assert-RemoteSourceTagAtHead -Tag 'v1.2.3' -HeadCommit 'abc123' -RepositoryUrl 'https://example.invalid/source.git' } |
+            Should -Throw '*def456*HEAD abc123*'
+    }
+
+    It 'accepts the canonical remote tag when it resolves to HEAD' {
+        function Get-RemoteTagCommit { return 'abc123' }
+
+        { Assert-RemoteSourceTagAtHead -Tag 'v1.2.3' -HeadCommit 'abc123' -RepositoryUrl 'https://example.invalid/source.git' } |
+            Should -Not -Throw
+    }
+
+    It 'runs the remote-tag assertion only inside the PublishDraft branch' {
+        $calls = @($script:ScriptAst.FindAll({
+                    param($node)
+                    $node -is [System.Management.Automation.Language.CommandAst] -and
+                    $node.GetCommandName() -eq 'Assert-RemoteSourceTagAtHead'
+                }, $true))
+
+        $calls.Count | Should -Be 1
+        $ancestor = $calls[0].Parent
+        while ($null -ne $ancestor -and $ancestor -isnot [System.Management.Automation.Language.IfStatementAst]) {
+            $ancestor = $ancestor.Parent
+        }
+        $ancestor | Should -Not -BeNullOrEmpty
+        $ancestor.Clauses[0].Item1.Extent.Text | Should -Match '\$PublishDraft'
+    }
+}
+
+Describe 'Vite release environment isolation' {
+
+    BeforeEach {
+        $script:FrontendDir = Join-Path ([IO.Path]::GetTempPath()) "xe-vite-env-$([guid]::NewGuid().ToString('N'))"
+        New-Item -ItemType Directory -Path $script:FrontendDir | Out-Null
+        $script:SavedViteVariables = @(
+            Get-ChildItem Env: | Where-Object Name -Like 'VITE_*' | ForEach-Object {
+                [pscustomobject]@{ Name = $_.Name; Value = $_.Value }
+            }
+        )
+        Get-ChildItem Env: | Where-Object Name -Like 'VITE_*' | Remove-Item
+    }
+
+    AfterEach {
+        Get-ChildItem Env: | Where-Object Name -Like 'VITE_*' | Remove-Item
+        foreach ($saved in $script:SavedViteVariables) {
+            Set-Item -Path "Env:$($saved.Name)" -Value $saved.Value
+        }
+        Remove-Item $script:FrontendDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    It 'reports every local env file that Vite production mode would load' {
+        foreach ($name in @('.env', '.env.local', '.env.production', '.env.production.local')) {
+            Set-Content -Path (Join-Path $script:FrontendDir $name) -Value 'VITE_VALUE=unsafe'
+        }
+
+        $conflicts = Get-ViteReleaseEnvironmentConflict -FrontendDirectory $script:FrontendDir
+
+        $conflicts.Count | Should -Be 4
+        $conflicts -join ',' | Should -Match '\.env'
+        $conflicts -join ',' | Should -Match '\.env\.production\.local'
+    }
+
+    It 'ignores env files that Vite production mode does not load' {
+        Set-Content -Path (Join-Path $script:FrontendDir '.env.tests') -Value 'FRONTEND_BASE_URL=https://localhost'
+        Set-Content -Path (Join-Path $script:FrontendDir '.env.development.local') -Value 'VITE_VALUE=development-only'
+
+        @(Get-ViteReleaseEnvironmentConflict -FrontendDirectory $script:FrontendDir).Count | Should -Be 0
+    }
+
+    It 'reports inherited VITE variables because they override committed env files' {
+        $env:VITE_API_URL = 'https://override.invalid'
+
+        $conflicts = Get-ViteReleaseEnvironmentConflict -FrontendDirectory $script:FrontendDir
+
+        $conflicts | Should -Contain 'environment variable VITE_API_URL'
+    }
+}
+
+Describe 'Velopack draft asset set and digest verification' {
+
+    BeforeEach {
+        $script:AssetDir = Join-Path ([IO.Path]::GetTempPath()) "xe-velopack-assets-$([guid]::NewGuid().ToString('N'))"
+        New-Item -ItemType Directory -Path $script:AssetDir | Out-Null
+        $script:AssetNames = @(
+            'XE-Local-AI-Engine-win-Portable.zip',
+            'XE-Local-AI-Engine-win-1.2.3-full.nupkg',
+            'XE-Local-AI-Engine-win-1.2.3-delta.nupkg',
+            'releases.win.json',
+            'RELEASES'
+        )
+        foreach ($name in $script:AssetNames) {
+            Set-Content -Path (Join-Path $script:AssetDir $name) -Value "content for $name" -NoNewline
+        }
+    }
+
+    AfterEach {
+        Remove-Item $script:AssetDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    It 'requires the complete five-file Velopack asset set' {
+        $assets = Get-ChildItem -Path $script:AssetDir -File
+
+        @(Get-ExpectedVelopackAsset -Assets $assets).Count | Should -Be 5
+    }
+
+    It 'rejects a missing full package instead of validating only Portable.zip' {
+        Remove-Item (Join-Path $script:AssetDir 'XE-Local-AI-Engine-win-1.2.3-full.nupkg')
+
+        { Get-ExpectedVelopackAsset -Assets (Get-ChildItem -Path $script:AssetDir -File) } |
+            Should -Throw '*full.nupkg*'
+    }
+
+    It 'rejects duplicate or unexpected assets' {
+        $assets = @(
+            Get-ChildItem -Path $script:AssetDir -File
+            [pscustomobject]@{ Name = 'unexpected.zip' }
+        )
+
+        { Get-ExpectedVelopackAsset -Assets $assets } | Should -Throw '*unexpected*'
+    }
+
+    It 'verifies SHA-256 for every expected asset' {
+        $files = Get-ChildItem -Path $script:AssetDir -File
+        $manifestAssets = @(
+            $files | ForEach-Object {
+                [pscustomobject]@{
+                    Name = $_.Name
+                    Sha256 = (Get-FileHash $_.FullName -Algorithm SHA256).Hash
+                }
+            }
+        )
+
+        { Assert-VelopackAssetHash -Files $files -ExpectedAssets $manifestAssets } |
+            Should -Not -Throw
+    }
+
+    It 'rejects a digest mismatch in a non-portable asset' {
+        $files = Get-ChildItem -Path $script:AssetDir -File
+        $manifestAssets = @(
+            $files | ForEach-Object {
+                [pscustomobject]@{
+                    Name = $_.Name
+                    Sha256 = (Get-FileHash $_.FullName -Algorithm SHA256).Hash
+                }
+            }
+        )
+        ($manifestAssets | Where-Object Name -Like '*-delta.nupkg').Sha256 = '0' * 64
+
+        { Assert-VelopackAssetHash -Files $files -ExpectedAssets $manifestAssets } |
+            Should -Throw '*delta.nupkg*SHA-256*'
+    }
+}
+
+Describe 'Velopack manifest source binding' {
+
+    It 'accepts a manifest bound to the exact source commit and tag' {
+        $manifest = [pscustomobject]@{
+            SourceCommit = 'abc123'
+            SourceTag = 'v1.2.3'
+        }
+
+        { Assert-VelopackManifestSource -Manifest $manifest -HeadCommit 'abc123' -Tag 'v1.2.3' } |
+            Should -Not -Throw
+    }
+
+    It 'rejects a stale same-version manifest from another commit' {
+        $manifest = [pscustomobject]@{
+            SourceCommit = 'def456'
+            SourceTag = 'v1.2.3'
+        }
+
+        { Assert-VelopackManifestSource -Manifest $manifest -HeadCommit 'abc123' -Tag 'v1.2.3' } |
+            Should -Throw '*source commit*def456*HEAD abc123*'
+    }
+
+    It 'rejects a manifest created for another source tag' {
+        $manifest = [pscustomobject]@{
+            SourceCommit = 'abc123'
+            SourceTag = 'v1.2.2'
+        }
+
+        { Assert-VelopackManifestSource -Manifest $manifest -HeadCommit 'abc123' -Tag 'v1.2.3' } |
+            Should -Throw '*source tag*v1.2.2*v1.2.3*'
+    }
+
+    It 'writes SourceCommit and SourceTag into the pack-time manifest' {
+        $manifestAssignments = @($script:ScriptAst.FindAll({
+                    param($node)
+                    $node -is [System.Management.Automation.Language.AssignmentStatementAst] -and
+                    $node.Left.Extent.Text -eq '$assetManifest' -and
+                    $node.Extent.Text -match 'SourceCommit'
+                }, $true))
+
+        $manifestAssignments.Count | Should -Be 1
+        $manifestText = $manifestAssignments[0].Extent.Text
+        $manifestText | Should -Match 'SourceCommit\s*=\s*\$headCommit'
+        $manifestText | Should -Match 'SourceTag\s*=\s*\$tag'
+    }
+}
+
+Describe 'Velopack previous-release seeding' {
+
+    BeforeEach {
+        $script:SeedDir = Join-Path ([IO.Path]::GetTempPath()) "xe-velopack-seed-$([guid]::NewGuid().ToString('N'))"
+        New-Item -ItemType Directory -Path $script:SeedDir | Out-Null
+    }
+
+    AfterEach {
+        Remove-Item $script:SeedDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    It 'rejects an empty download because this repository is already past its first release' {
+        { Assert-VelopackPreviousReleaseSeed -OutputDirectory $script:SeedDir } |
+            Should -Throw '*already has published tester releases*'
+    }
+
+    It 'accepts a downloaded prior full package as the delta base' {
+        Set-Content -Path (Join-Path $script:SeedDir 'XE-Local-AI-Engine-win-1.2.2-full.nupkg') -Value 'prior'
+
+        { Assert-VelopackPreviousReleaseSeed -OutputDirectory $script:SeedDir } |
+            Should -Not -Throw
+    }
+
+    It 'rejects ambiguous multiple prior full packages in the clean output directory' {
+        Set-Content -Path (Join-Path $script:SeedDir 'XE-Local-AI-Engine-win-1.2.1-full.nupkg') -Value 'older'
+        Set-Content -Path (Join-Path $script:SeedDir 'XE-Local-AI-Engine-win-1.2.2-full.nupkg') -Value 'prior'
+
+        { Assert-VelopackPreviousReleaseSeed -OutputDirectory $script:SeedDir } |
+            Should -Throw '*exactly one previous full.nupkg*'
+    }
+
+    It 'uses the documented GitHub download flags for the prerelease win channel' {
+        $downloadFunction = Get-ScriptFunctionText -Name 'Invoke-VelopackPreviousReleaseDownload'
+
+        $downloadFunction | Should -Match 'vpk@1\.2\.0'
+        $downloadFunction | Should -Match 'download\s+github'
+        $downloadFunction | Should -Match '--repoUrl'
+        $downloadFunction | Should -Match '--outputDir'
+        $downloadFunction | Should -Match '--channel'
+        $downloadFunction | Should -Match '--pre'
+        $downloadFunction | Should -Match '--token\s+\$Token'
+        $downloadFunction | Should -Not -Match 'IsNullOrWhiteSpace\(\$Token\)'
+        @($downloadFunction | Select-String -Pattern 'download\s+github' -AllMatches).Matches.Count | Should -Be 1
+    }
+
+    It 'requires VPK_TOKEN for SkipUpload packs after the PublishDraft early exit' {
+        $tokenGates = @($script:ScriptAst.FindAll({
+                    param($node)
+                    $node -is [System.Management.Automation.Language.IfStatementAst] -and
+                    $node.Extent.Text -match 'VPK_TOKEN is not set'
+                }, $true))
+        $publishDraftBranches = @($script:ScriptAst.FindAll({
+                    param($node)
+                    $node -is [System.Management.Automation.Language.IfStatementAst] -and
+                    $node.Clauses[0].Item1.Extent.Text -eq '$PublishDraft'
+                }, $true))
+
+        $tokenGates.Count | Should -Be 1
+        $publishDraftBranches.Count | Should -Be 1
+        $tokenGates[0].Clauses[0].Item1.Extent.Text | Should -Match '\$env:VPK_TOKEN'
+        $tokenGates[0].Clauses[0].Item1.Extent.Text | Should -Not -Match '\$SkipUpload'
+        $tokenGates[0].Extent.StartOffset | Should -BeGreaterThan $publishDraftBranches[0].Extent.EndOffset
+    }
+
+    It 'seeds before pack even for SkipUpload rehearsals' {
+        $seedCalls = @($script:ScriptAst.FindAll({
+                    param($node)
+                    $node -is [System.Management.Automation.Language.CommandAst] -and
+                    $node.GetCommandName() -eq 'Invoke-VelopackPreviousReleaseDownload'
+                }, $true))
+        $packCalls = @($script:ScriptAst.FindAll({
+                    param($node)
+                    $node -is [System.Management.Automation.Language.CommandAst] -and
+                    $node.GetCommandName() -eq 'dnx' -and
+                    $node.Extent.Text -match 'vpk@1\.2\.0 pack'
+                }, $true))
+
+        $seedCalls.Count | Should -Be 1
+        $packCalls.Count | Should -Be 1
+        $seedCalls[0].Extent.StartOffset | Should -BeLessThan $packCalls[0].Extent.StartOffset
+
+        $ancestor = $seedCalls[0].Parent
+        while ($null -ne $ancestor) {
+            if ($ancestor -is [System.Management.Automation.Language.IfStatementAst]) {
+                $ancestor.Clauses.Item1.Extent.Text | Should -Not -Match '\$SkipUpload'
+            }
+            $ancestor = $ancestor.Parent
+        }
     }
 }

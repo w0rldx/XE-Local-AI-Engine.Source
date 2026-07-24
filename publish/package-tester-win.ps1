@@ -134,6 +134,168 @@ function Find-GitHubRelease {
     return $null
 }
 
+function Get-RemoteTagCommit {
+    param(
+        [Parameter(Mandatory)][string]$Tag,
+        [Parameter(Mandatory)][string]$RepositoryUrl
+    )
+
+    $tagRefs = @(git ls-remote --exit-code --tags $RepositoryUrl "refs/tags/$Tag" "refs/tags/$Tag^{}" 2>&1)
+    if ($LASTEXITCODE -eq 2) {
+        return $null
+    }
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not resolve tag '$Tag' in the canonical source repository '$RepositoryUrl':`n$($tagRefs -join "`n")"
+    }
+
+    $parsedRefs = @(
+        foreach ($line in $tagRefs) {
+            if ($line -match '^([0-9a-fA-F]{40,64})\s+(.+)$') {
+                [pscustomobject]@{ Commit = $Matches[1]; Ref = $Matches[2] }
+            }
+        }
+    )
+    $peeledTag = $parsedRefs | Where-Object Ref -EQ "refs/tags/$Tag^{}" | Select-Object -First 1
+    $directTag = $parsedRefs | Where-Object Ref -EQ "refs/tags/$Tag" | Select-Object -First 1
+    $resolvedTag = if ($null -ne $peeledTag) { $peeledTag } else { $directTag }
+    if ($null -eq $resolvedTag) {
+        throw "Canonical source tag lookup for '$Tag' returned no parseable tag ref."
+    }
+
+    return $resolvedTag.Commit
+}
+
+function Assert-RemoteSourceTagAtHead {
+    param(
+        [Parameter(Mandatory)][string]$Tag,
+        [Parameter(Mandatory)][string]$HeadCommit,
+        [Parameter(Mandatory)][string]$RepositoryUrl
+    )
+
+    $remoteTagCommit = Get-RemoteTagCommit -Tag $Tag -RepositoryUrl $RepositoryUrl
+    if ([string]::IsNullOrWhiteSpace($remoteTagCommit)) {
+        throw "Tag '$Tag' does not exist in the canonical source repository '$RepositoryUrl'. Push the source tag before publishing the tester draft."
+    }
+    if ($remoteTagCommit -ne $HeadCommit) {
+        throw "Canonical source tag '$Tag' resolves to $remoteTagCommit, not HEAD $HeadCommit. Refusing to publish a draft whose source tag does not identify this commit."
+    }
+}
+
+function Get-ViteReleaseEnvironmentConflict {
+    param([Parameter(Mandatory)][string]$FrontendDirectory)
+
+    $conflicts = [System.Collections.Generic.List[string]]::new()
+    foreach ($fileName in @('.env', '.env.local', '.env.production', '.env.production.local')) {
+        if (Test-Path (Join-Path $FrontendDirectory $fileName) -PathType Leaf) {
+            $conflicts.Add($fileName)
+        }
+    }
+    foreach ($variable in @(Get-ChildItem Env: | Where-Object Name -Like 'VITE_*')) {
+        $conflicts.Add("environment variable $($variable.Name)")
+    }
+
+    return @($conflicts)
+}
+
+function Get-ExpectedVelopackAsset {
+    param([Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Assets)
+
+    $assetList = @($Assets | Where-Object { $_ })
+    $definitions = @(
+        [pscustomobject]@{ Label = 'Portable.zip'; Matches = { param($name) $name -like '*Portable*.zip' } },
+        [pscustomobject]@{ Label = 'full.nupkg'; Matches = { param($name) $name -like '*-full.nupkg' } },
+        [pscustomobject]@{ Label = 'delta.nupkg'; Matches = { param($name) $name -like '*-delta.nupkg' } },
+        [pscustomobject]@{ Label = 'releases.win.json'; Matches = { param($name) $name -ceq 'releases.win.json' } },
+        [pscustomobject]@{ Label = 'RELEASES'; Matches = { param($name) $name -ceq 'RELEASES' } }
+    )
+
+    $resolved = [System.Collections.Generic.List[object]]::new()
+    foreach ($definition in $definitions) {
+        $assetMatches = @($assetList | Where-Object { & $definition.Matches ([string]$_.Name) })
+        if ($assetMatches.Count -ne 1) {
+            throw "Expected exactly one Velopack $($definition.Label) asset; found $($assetMatches.Count)."
+        }
+        $resolved.Add($assetMatches[0])
+    }
+
+    $resolvedNames = @($resolved | ForEach-Object { [string]$_.Name })
+    $unexpected = @($assetList | Where-Object { $resolvedNames -cnotcontains ([string]$_.Name) })
+    if ($unexpected.Count -gt 0 -or $assetList.Count -ne $definitions.Count) {
+        $unexpectedNames = @($unexpected | ForEach-Object { [string]$_.Name })
+        throw "Velopack release contains unexpected or duplicate assets: $($unexpectedNames -join ', '). Expected only the five channel assets."
+    }
+
+    return @($resolved)
+}
+
+function Assert-VelopackAssetHash {
+    param(
+        [Parameter(Mandatory)][object[]]$Files,
+        [Parameter(Mandatory)][object[]]$ExpectedAssets
+    )
+
+    $actualFiles = @(Get-ExpectedVelopackAsset -Assets $Files)
+    $expected = @(Get-ExpectedVelopackAsset -Assets $ExpectedAssets)
+    foreach ($file in $actualFiles) {
+        $expectedAsset = $expected | Where-Object Name -CEQ $file.Name | Select-Object -First 1
+        $expectedHash = [string]$expectedAsset.Sha256
+        if ($expectedHash -notmatch '^[0-9A-Fa-f]{64}$') {
+            throw "Expected SHA-256 for Velopack asset '$($file.Name)' is missing or malformed."
+        }
+        $actualHash = (Get-FileHash $file.FullName -Algorithm SHA256).Hash
+        if ($actualHash -ne $expectedHash) {
+            throw "Velopack asset '$($file.Name)' SHA-256 mismatch (expected $expectedHash, got $actualHash)."
+        }
+    }
+}
+
+function Assert-VelopackManifestSource {
+    param(
+        [Parameter(Mandatory)][object]$Manifest,
+        [Parameter(Mandatory)][string]$HeadCommit,
+        [Parameter(Mandatory)][string]$Tag
+    )
+
+    if ([string]$Manifest.SourceCommit -cne $HeadCommit) {
+        throw "Velopack manifest source commit '$($Manifest.SourceCommit)' does not match HEAD $HeadCommit. Refusing a stale same-version manifest."
+    }
+    if ([string]$Manifest.SourceTag -cne $Tag) {
+        throw "Velopack manifest source tag '$($Manifest.SourceTag)' does not match required tag '$Tag'."
+    }
+}
+
+function Invoke-VelopackPreviousReleaseDownload {
+    param(
+        [Parameter(Mandatory)][string]$RepositoryUrl,
+        [Parameter(Mandatory)][string]$OutputDirectory,
+        [Parameter(Mandatory)][string]$Token
+    )
+
+    dnx vpk@1.2.0 download github `
+        --repoUrl $RepositoryUrl `
+        --outputDir $OutputDirectory `
+        --channel win `
+        --pre `
+        --token $Token
+    if ($LASTEXITCODE -ne 0) {
+        throw "Previous tester release download failed (exit code $LASTEXITCODE). This repository already has published tester releases, so packing without a delta base is not allowed."
+    }
+}
+
+function Assert-VelopackPreviousReleaseSeed {
+    param([Parameter(Mandatory)][string]$OutputDirectory)
+
+    $previousFullPackages = @(Get-ChildItem -Path $OutputDirectory -Recurse -File -Filter '*-full.nupkg')
+    if ($previousFullPackages.Count -eq 0) {
+        throw "Velopack download produced no previous full.nupkg. This repository already has published tester releases, so this is not a first-release pack and must have a delta base."
+    }
+    if ($previousFullPackages.Count -ne 1) {
+        throw "Expected exactly one previous full.nupkg in the clean Velopack output directory; found $($previousFullPackages.Count)."
+    }
+
+    Write-Host ">> Previous Velopack release seeded for delta generation: $($previousFullPackages[0].Name)"
+}
+
 git rev-parse --is-inside-work-tree 2>$null | Out-Null
 Assert-LastExitCode "Git repository check"
 
@@ -144,6 +306,7 @@ if ($dirtyPaths.Count -gt 0) {
 }
 
 $canonicalTesterRepo = "https://github.com/w0rldx/XE-Local-AI-Engine.Tester-App"
+$canonicalSourceRepo = "https://github.com/w0rldx/XE-Local-AI-Engine.git"
 if ($TesterRepo.TrimEnd('/') -ne $canonicalTesterRepo) {
     throw "TesterRepo must be the canonical tester repository: $canonicalTesterRepo"
 }
@@ -164,11 +327,11 @@ if ($Version -notmatch '^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z]+(?:\.[0-9A-Za-z]+
 }
 
 $tag = "v$Version"
+$headCommit = git rev-parse HEAD
+Assert-LastExitCode "HEAD resolution"
 
 $targetTagCommit = git rev-list -n 1 $tag 2>$null
 if ($LASTEXITCODE -eq 0) {
-    $headCommit = git rev-parse HEAD
-    Assert-LastExitCode "HEAD resolution"
     if ($targetTagCommit -ne $headCommit) {
         throw "Tag '$tag' already exists at $targetTagCommit, not at HEAD $headCommit."
     }
@@ -195,6 +358,23 @@ if ($PublishDraft) {
         throw "RELEASE_NOTES.md is required to publish the draft."
     }
 
+    Assert-RemoteSourceTagAtHead -Tag $tag -HeadCommit $headCommit -RepositoryUrl $canonicalSourceRepo
+
+    $assetManifestPath = Join-Path "publish\dist" "XE-Local-AI-Engine-$Version-win.sha256.json"
+    if (-not (Test-Path $assetManifestPath -PathType Leaf)) {
+        throw "Velopack SHA-256 manifest is missing: $assetManifestPath. Publish the draft from the same verified pack output that created it."
+    }
+    $assetManifest = Get-Content $assetManifestPath -Raw | ConvertFrom-Json
+    if ($assetManifest.Version -ne $Version) {
+        throw "Velopack SHA-256 manifest version '$($assetManifest.Version)' does not match '$Version'."
+    }
+    Assert-VelopackManifestSource -Manifest $assetManifest -HeadCommit $headCommit -Tag $tag
+    $expectedVelopackAssets = @(Get-ExpectedVelopackAsset -Assets @($assetManifest.Assets))
+    $expectedPortableAsset = $expectedVelopackAssets | Where-Object Name -Like '*Portable*.zip' | Select-Object -First 1
+    if ($expectedPortableAsset.Sha256 -ne $ExpectedPortableSha256) {
+        throw "The smoke-tested Portable.zip SHA-256 does not match the verified pack manifest for version '$Version'."
+    }
+
     $draft = Find-GitHubRelease -ReleaseVersion $Version -RepositorySlug $repoSlug
     if ($null -eq $draft -or -not $draft.isDraft) {
         throw "Release for version '$Version' must exist as a draft before publication (looked for tags 'v$Version' and '$Version')."
@@ -202,26 +382,20 @@ if ($PublishDraft) {
     # The remote tag may be bare or v-prefixed; every gh call below must use the tag that actually exists.
     $remoteTag = $draft.tagName
 
-    $remotePortableAssets = @($draft.assets | Where-Object { $_.name -like "*Portable*.zip" })
-    if ($remotePortableAssets.Count -ne 1) {
-        throw "Expected exactly one Portable.zip asset on draft '$remoteTag'; found $($remotePortableAssets.Count)."
-    }
-    $remotePortableAssetName = $remotePortableAssets[0].name
+    $null = Get-ExpectedVelopackAsset -Assets @($draft.assets)
 
     $remoteArtifactDir = Join-Path ([IO.Path]::GetTempPath()) "xe-local-ai-engine-remote-artifact-$([Guid]::NewGuid().ToString('N'))"
     try {
         New-Item -ItemType Directory -Path $remoteArtifactDir | Out-Null
         gh release download $remoteTag `
             --repo $repoSlug `
-            --pattern $remotePortableAssetName `
             --dir $remoteArtifactDir
-        Assert-LastExitCode "Remote Portable.zip download"
+        Assert-LastExitCode "Remote Velopack asset download"
 
-        $downloadedPortable = @(Get-ChildItem -Path $remoteArtifactDir -File)
-        if ($downloadedPortable.Count -ne 1) {
-            throw "Expected exactly one downloaded Portable.zip for '$remoteTag'; found $($downloadedPortable.Count)."
-        }
-        $remotePortableHash = (Get-FileHash $downloadedPortable[0].FullName -Algorithm SHA256).Hash
+        $downloadedVelopackAssets = @(Get-ExpectedVelopackAsset -Assets @(Get-ChildItem -Path $remoteArtifactDir -File))
+        Assert-VelopackAssetHash -Files $downloadedVelopackAssets -ExpectedAssets $expectedVelopackAssets
+        $downloadedPortable = $downloadedVelopackAssets | Where-Object Name -Like '*Portable*.zip' | Select-Object -First 1
+        $remotePortableHash = (Get-FileHash $downloadedPortable.FullName -Algorithm SHA256).Hash
         if ($remotePortableHash -ne $ExpectedPortableSha256) {
             throw "The Portable.zip attached to draft '$remoteTag' does not match the smoke-tested SHA-256."
         }
@@ -234,20 +408,18 @@ if ($PublishDraft) {
 
     gh release edit $remoteTag --repo $repoSlug --draft=false --notes-file RELEASE_NOTES.md
     Assert-LastExitCode "GitHub draft publication"
-    Write-Host ">> Published smoke-tested draft $remoteTag (remote Portable SHA-256 $remotePortableHash)."
+    Write-Host ">> Published smoke-tested draft $remoteTag after verifying all five Velopack asset SHA-256 digests (Portable $remotePortableHash)."
     exit 0
 }
 
-if (-not $SkipUpload -and -not $env:VPK_TOKEN) {
-    throw "VPK_TOKEN is not set. `$env:VPK_TOKEN = '<github token>' (or pass -SkipUpload)."
+if (-not $env:VPK_TOKEN) {
+    throw "VPK_TOKEN is not set. `$env:VPK_TOKEN = '<github token>'. It is required to download the previous release from the private tester repository, including for -SkipUpload packs."
 }
 
-# Client-ID policy, scoped like the VPK_TOKEN gate above. publish/README.md calls -SkipUpload a pre-tag
-# packaging rehearsal, so a rehearsal must not demand the one production credential the docs insist is never
-# committed. A SUPPLIED id is always validated (a placeholder is an error, not an absence); an ABSENT id is
-# tolerated only for a rehearsal, which then bakes no client ID at all — AppUpdateChannelOptions.IsConfigured
-# stays false, the updater ships inert rather than placeholder-configured, and the artifact is stamped
-# non-shippable below.
+# Client-ID policy remains the sole -SkipUpload credential relaxation. A SUPPLIED id is always validated
+# (a placeholder is an error, not an absence); an ABSENT id is tolerated only for a rehearsal, which then
+# bakes no client ID at all — AppUpdateChannelOptions.IsConfigured stays false, the updater ships inert
+# rather than placeholder-configured, and the artifact is stamped non-shippable below.
 $hasGitHubAppClientId = -not [string]::IsNullOrWhiteSpace($GitHubAppClientId)
 if ($hasGitHubAppClientId) {
     if ($GitHubAppClientId -match '^(REPLACE_|CHANGE_ME|TODO)' -or
@@ -269,11 +441,19 @@ if ($isRehearsalPackage) {
 
 # --- 1. Release validation + SPA build -----------------------------------------------
 Push-Location XE-Local-AI-Engine.Client.React
+$createdReleaseEnv = $false
 try {
-    if (-not (Test-Path .env)) {
-        Copy-Item .env.template .env
-        Write-Host ">> Seeded .env from .env.template"
+    $viteEnvironmentConflicts = @(Get-ViteReleaseEnvironmentConflict -FrontendDirectory (Get-Location).Path)
+    if ($viteEnvironmentConflicts.Count -gt 0) {
+        throw "Refusing to build with local Vite environment overrides that can influence production output:`n$($viteEnvironmentConflicts -join "`n")"
     }
+
+    git ls-files --error-unmatch -- .env.template | Out-Null
+    Assert-LastExitCode "Committed Vite release environment contract check"
+    Copy-Item .env.template .env
+    $createdReleaseEnv = $true
+    Write-Host ">> Materialized the committed .env.template as the isolated production Vite environment."
+
     pnpm install --frozen-lockfile
     Assert-LastExitCode "pnpm install"
     pnpm run lint
@@ -290,6 +470,9 @@ try {
     Assert-LastExitCode "Frontend build"
 }
 finally {
+    if ($createdReleaseEnv -and (Test-Path .env -PathType Leaf)) {
+        Remove-Item .env -Force
+    }
     Pop-Location
 }
 
@@ -470,13 +653,30 @@ Write-Host ">> Release notes:"
 Get-Content RELEASE_NOTES.md
 
 # --- 4. Pack -------------------------------------------------------------------------
-# Releases\ is never cleaned (and is gitignored, so the clean-tree gate never sees it). Timestamping the pack
-# is what makes "the artifact THIS run produced" unambiguous: a name-based match cannot tell an unversioned
-# filename apart from a stale zip left by an earlier version, and picking that stale file would hash and ship
-# the wrong package. The 2s margin absorbs coarse filesystem timestamp resolution.
-$packStartedAtUtc = [DateTime]::UtcNow.AddSeconds(-2)
+# Velopack's documented delta flow is download -> pack -> upload. Download into an isolated seed directory,
+# validate exactly one prior full package, then copy only that delta base into a clean pack directory. This
+# keeps downloaded feed metadata or stale local files from being mistaken for assets produced by this run.
+# -SkipUpload still performs the authenticated private-repository download and builds the complete five-asset
+# set; it may omit only the client ID and skips only the final upload.
+$velopackSeedDir = Join-Path "Releases" "package-tester-seed-$Version"
+$velopackOutputDir = Join-Path "Releases" "package-tester-win-$Version"
+foreach ($directory in @($velopackSeedDir, $velopackOutputDir)) {
+    if (Test-Path $directory) {
+        Remove-Item -Path $directory -Recurse -Force
+    }
+    New-Item -ItemType Directory -Path $directory -Force | Out-Null
+}
+Invoke-VelopackPreviousReleaseDownload `
+    -RepositoryUrl $TesterRepo `
+    -OutputDirectory $velopackSeedDir `
+    -Token $env:VPK_TOKEN
+Assert-VelopackPreviousReleaseSeed -OutputDirectory $velopackSeedDir
+$previousFullPackage = Get-ChildItem -Path $velopackSeedDir -Recurse -File -Filter '*-full.nupkg' | Select-Object -First 1
+Copy-Item -Path $previousFullPackage.FullName -Destination $velopackOutputDir
+$previousFullPackageName = $previousFullPackage.Name
 
 dnx vpk@1.2.0 pack `
+    --outputDir $velopackOutputDir `
     --packId XE-Local-AI-Engine `
     --packVersion $Version `
     --packDir $publishDir `
@@ -486,15 +686,33 @@ dnx vpk@1.2.0 pack `
     --noInst
 Assert-LastExitCode "vpk pack"
 
-$allPortables = @(Get-ChildItem -Path Releases -Recurse -File -Filter "*Portable*.zip")
-$portableCandidates = @($allPortables | Where-Object { $_.LastWriteTimeUtc -ge $packStartedAtUtc })
-if ($portableCandidates.Count -ne 1) {
-    throw "Expected exactly one Portable.zip written by this pack under Releases; found $($portableCandidates.Count) (of $($allPortables.Count) portable archive(s) present).`n$(($allPortables | ForEach-Object { "$($_.FullName)  [written $($_.LastWriteTimeUtc.ToString('u'))]" }) -join "`n")"
-}
-$portableArtifact = $portableCandidates[0]
+$currentPackFiles = @(
+    Get-ChildItem -Path $velopackOutputDir -Recurse -File |
+        Where-Object Name -CNE $previousFullPackageName
+)
+$packedVelopackAssets = @(Get-ExpectedVelopackAsset -Assets $currentPackFiles)
+$portableArtifact = $packedVelopackAssets | Where-Object Name -Like '*Portable*.zip' | Select-Object -First 1
 $portableHash = (Get-FileHash $portableArtifact.FullName -Algorithm SHA256).Hash
+$assetManifestPath = Join-Path "publish\dist" "XE-Local-AI-Engine-$Version-win.sha256.json"
+$assetManifestDirectory = Split-Path -Parent $assetManifestPath
+New-Item -ItemType Directory -Path $assetManifestDirectory -Force | Out-Null
+$assetManifest = [ordered]@{
+    Version = $Version
+    SourceCommit = $headCommit
+    SourceTag = $tag
+    Assets = @(
+        $packedVelopackAssets | ForEach-Object {
+            [ordered]@{
+                Name = $_.Name
+                Sha256 = (Get-FileHash $_.FullName -Algorithm SHA256).Hash
+            }
+        }
+    )
+}
+$assetManifest | ConvertTo-Json -Depth 4 | Set-Content $assetManifestPath -Encoding utf8
 Write-Host ">> Portable artifact: $($portableArtifact.FullName)"
 Write-Host ">> Portable SHA-256: $portableHash"
+Write-Host ">> Velopack SHA-256 manifest: $assetManifestPath"
 
 if ($SkipUpload) {
     if ($isRehearsalPackage) {
@@ -513,6 +731,7 @@ if ($null -ne $existingRelease -and -not $existingRelease.isDraft) {
 $uploadTag = if ($null -ne $existingRelease) { $existingRelease.tagName } else { $tag }
 
 dnx vpk@1.2.0 upload github `
+    --outputDir $velopackOutputDir `
     --repoUrl $TesterRepo `
     --token $env:VPK_TOKEN `
     --channel win `
