@@ -1,12 +1,11 @@
 name: release
 
-# Triggered by a semver tag push (e.g. v0.1.0-rc.1.0) or manually via workflow_dispatch.
+# Triggered manually via workflow_dispatch only. The tag-push trigger was removed
+# deliberately: releases are cut locally with publish/package-tester-win.ps1
+# (draft -> smoke -> publish), and a tag push must never bypass that gate.
 # Produces Velopack installer + portable + delta packages for each RID and uploads
 # them to the target GitHub release repo for the chosen build flavor.
 on:
-  push:
-    tags:
-      - "v*.*.*"
   workflow_dispatch:
     inputs:
       update-channel:
