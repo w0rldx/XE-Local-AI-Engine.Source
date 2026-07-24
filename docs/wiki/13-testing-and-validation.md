@@ -14,7 +14,7 @@ Test stack at a glance: **TUnit 1.58.0** on **Microsoft.Testing.Platform (MTP)**
 |---|---|---|---|---|
 | `XE-Local-AI-Engine.Tests` | Backend integration (in-process host via `WebApplicationFactory<Program>`) | TUnit + NSubstitute | The whole node host: endpoints, hubs, auth, chat, agents, scheduler, model-fit, capacity, MCP, providers, memory, shutdown, and development mode | [Architecture](01-architecture-overview.md), [API & Hubs](09-api-and-hubs.md) |
 | `XE-Local-AI-Engine.AI.Agent.Tests` | Unit/component for the agent runtime | TUnit + NSubstitute | MAF/MEAI wiring: `Chat/`, `Eval/`, `Invocation/`, `Tools/`, `PreviewWorkflows/`, plus project smoke tests | [Agent Mode](04-agent-mode.md), [Chat](05-chat.md) |
-| `XE-Local-AI-Engine.Client.Persistence.Tests` | Persistence + EF migration tests | TUnit | Encrypted SQLite stores, AEAD cipher, schema-focused migration tests (22 `*MigrationTests.cs` files vs 40 migrations on disk, not strictly 1:1), and the `NegativeFence/` compile-fence | [Data & Persistence](08-data-and-persistence.md) |
+| `XE-Local-AI-Engine.Client.Persistence.Tests` | Persistence + EF migration tests | TUnit | Encrypted SQLite stores, AEAD cipher, schema-focused migration tests (23 `*MigrationTests.cs` files vs 40 migrations on disk, not strictly 1:1), and the `NegativeFence/` compile-fence | [Data & Persistence](08-data-and-persistence.md) |
 | `XE-Local-AI-Engine.Tests.E2ETests` | Browser E2E | Playwright + TUnit.Playwright | Real Chromium against the in-process host serving the real built React SPA (19 `*E2ETests.cs`: Chat, Agents, Scheduler, Models, NodeSettings, Dashboard, smoke, viewport, …) | [React Client](10-react-client.md), [Hosting](11-hosting-and-deployment.md) |
 | `XE-Local-AI-Engine.Testing.FakeOllama` | Support library (not a test suite) | — | In-memory fake Ollama HTTP server + deterministic embeddings, so backend tests never need a real model runtime | [Local Runtime & Providers](03-local-runtime-and-providers.md) |
 | `XE-Local-AI-Engine.Client.Testing` | Support library | — | Outbound-event recorders + `RecordingHubMessageSender` to assert what the node *would* send over WorkerHub without a real platform | [API & Hubs](09-api-and-hubs.md), [Security & Privacy](12-security-and-privacy.md) |
@@ -46,7 +46,7 @@ This is the heaviest suite and the heart of validation. `TestingWebAppFactory.cs
 
 ### `XE-Local-AI-Engine.Client.Persistence.Tests` — migrations & the negative fence
 
-Schema-focused EF migrations have dedicated `*MigrationTests.cs` files that apply the migration to a fresh encrypted SQLite DB and assert the resulting shape — 22 such files for 40 migrations on disk, so coverage is intentionally not 1:1. The file follows the migration name rather than always taking an `Add*` prefix (for example, `NodeChatOriginMigrationTests.cs` and `NodeMessageLifecycleMigrationTests.cs`). `NodeAeadCipher` and persistence encryption are tested directly. The `NegativeFence/` folder is a separate **compile-only** project (`XE-Local-AI-Engine.Client.Persistence.NegativeFence`) whose `Program.cs` constructs a `NodeMessage`; it guards a compile-time visibility/constructibility contract rather than runtime behavior. See [Data & Persistence](08-data-and-persistence.md).
+Schema-focused EF migrations have dedicated `*MigrationTests.cs` files that apply the migration to a fresh encrypted SQLite DB and assert the resulting shape — 23 such files for 40 migrations on disk, so coverage is intentionally not 1:1. The file follows the migration name rather than always taking an `Add*` prefix (for example, `NodeChatOriginMigrationTests.cs` and `NodeMessageLifecycleMigrationTests.cs`). `NodeAeadCipher` and persistence encryption are tested directly. The `NegativeFence/` folder is a separate **compile-only** project (`XE-Local-AI-Engine.Client.Persistence.NegativeFence`) whose `Program.cs` constructs a `NodeMessage`; it guards a compile-time visibility/constructibility contract rather than runtime behavior. See [Data & Persistence](08-data-and-persistence.md).
 
 ### `XE-Local-AI-Engine.Tests.E2ETests` — Playwright
 
@@ -183,7 +183,7 @@ Two things that **cannot** be proven in WSL2 or on a headless runner and must be
 ## Maintainer checklist
 
 - Use `--treenode-filter`, never `--filter`, when targeting individual MTP tests.
-- New EF migration → add a `<Name>MigrationTests.cs` in `Client.Persistence.Tests`. Coverage is not strictly 1:1 today (22 test files for 40 migrations), but any migration that changes table/column/index shape should ship its test.
+- New EF migration → add a `<Name>MigrationTests.cs` in `Client.Persistence.Tests`. Coverage is not strictly 1:1 today (23 test files for 40 migrations), but any migration that changes table/column/index shape should ship its test.
 - New persistence entity surface change → re-check the `NegativeFence` compile fence still builds.
 - New WorkerHub outbound call → assert it through `RecordingHubMessageSender` and confirm no secret crosses the boundary ([Security & Privacy](12-security-and-privacy.md)).
 - New backend behavior that touches a model → drive it through `FakeOllama` (script the response) rather than a live runtime; only flip `RUN_LOCAL_INTEGRATION=true` for fidelity runs.
