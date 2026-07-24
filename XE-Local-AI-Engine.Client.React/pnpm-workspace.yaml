@@ -1,6 +1,11 @@
 minimumReleaseAge: 10080
 trustPolicy: no-downgrade
 
+overrides:
+  # Transformers 3.8.1 still allows only sharp 0.34.x, but every sharp <0.35.0 is affected by
+  # GHSA-f88m-g3jw-g9cj. Keep the runtime dependency stable and pin the patched transitive version.
+  '@huggingface/transformers@3.8.1>sharp': 0.35.3
+
 allowBuilds:
   msgpackr-extract: true
   # Node-only / native build scripts pulled transitively by kokoro-js → @huggingface/transformers. The browser TTS
