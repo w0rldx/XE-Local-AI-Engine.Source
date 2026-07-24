@@ -27,9 +27,12 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 [Category("Layout")]
 public sealed class ViewportLayoutE2ETests : XEE2ETestBase
 {
-    // Representative pages: one Container-fluid page (Dashboard) and the Box-flex Chat page.
-    // Dashboard is the safest choice — renders a heading unconditionally with no auth guard.
-    private const string DashboardRoute = "/dashboard";
+    // Representative Container-fluid pages. Models replaced the former Dashboard target: the Dashboard is
+    // a Central-Platform surface shipped gated OFF (NodeCapabilities.dashboard === false), so /dashboard
+    // now redirects home and renders no page of its own to measure. Models is the equivalent always-on
+    // Container fluid={true} page and, like the old target, renders its heading unconditionally.
+    private const string ModelsRoute = "/models";
+    private const string ModelsHeading = "Model management";
     private const string CloudSettingsRoute = "/cloud-settings";
     private const string NodeSettingsRoute = "/node-settings";
 
@@ -47,17 +50,17 @@ public sealed class ViewportLayoutE2ETests : XEE2ETestBase
     // -----------------------------------------------------------------------------------------
 
     /// <summary>
-    ///     At a wide desktop viewport, the Dashboard page body must not overflow horizontally.
+    ///     At a wide desktop viewport, the Models page body must not overflow horizontally.
     ///     A non-fluid (capped) Container would produce scrollWidth &gt; innerWidth because the
     ///     centered column leaves document-level whitespace to the right.
     /// </summary>
     [Test]
     [Category("Layout")]
-    public async Task WideViewport_Dashboard_Has_No_Horizontal_Overflow()
+    public async Task WideViewport_Models_Has_No_Horizontal_Overflow()
     {
         await Page.SetViewportSizeAsync(WideViewportWidth, WideViewportHeight);
 
-        await Page.GotoAsync($"{NodeAppUrl}{DashboardRoute}", new PageGotoOptions
+        await Page.GotoAsync($"{NodeAppUrl}{ModelsRoute}", new PageGotoOptions
         {
             WaitUntil = WaitUntilState.NetworkIdle
         });
@@ -65,7 +68,7 @@ public sealed class ViewportLayoutE2ETests : XEE2ETestBase
         // Wait for the heading — confirms the React tree has mounted and Container is in the DOM.
         await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions
             {
-                Name = "Dashboard"
+                Name = ModelsHeading
             }))
             .ToBeVisibleAsync();
 
@@ -77,24 +80,24 @@ public sealed class ViewportLayoutE2ETests : XEE2ETestBase
     }
 
     /// <summary>
-    ///     At a wide desktop viewport, the Dashboard heading must span more than half the content
+    ///     At a wide desktop viewport, the Models heading must span more than half the content
     ///     area width. A fixed max-width Container (e.g. 960px on a 1280px viewport) would render
     ///     a heading width well under half the viewport, exposing the regression.
     /// </summary>
     [Test]
     [Category("Layout")]
-    public async Task WideViewport_Dashboard_Heading_Fills_ContentArea_Width()
+    public async Task WideViewport_Models_Heading_Fills_ContentArea_Width()
     {
         await Page.SetViewportSizeAsync(WideViewportWidth, WideViewportHeight);
 
-        await Page.GotoAsync($"{NodeAppUrl}{DashboardRoute}", new PageGotoOptions
+        await Page.GotoAsync($"{NodeAppUrl}{ModelsRoute}", new PageGotoOptions
         {
             WaitUntil = WaitUntilState.NetworkIdle
         });
 
         var heading = Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions
         {
-            Name = "Dashboard"
+            Name = ModelsHeading
         });
         await Expect(heading).ToBeVisibleAsync();
 
@@ -144,25 +147,25 @@ public sealed class ViewportLayoutE2ETests : XEE2ETestBase
     // -----------------------------------------------------------------------------------------
 
     /// <summary>
-    ///     At a mobile viewport (375×667) the Dashboard page must render its heading and must not
+    ///     At a mobile viewport (375×667) the Models page must render its heading and must not
     ///     overflow horizontally. Layout.tsx sets contentWidth=100% below 768px, so the content
     ///     pane fills the full narrow screen — overflow would indicate a min-width or flex-shrink bug.
     /// </summary>
     [Test]
     [Category("Layout")]
-    public async Task MobileViewport_Dashboard_Renders_Heading_Without_Horizontal_Overflow()
+    public async Task MobileViewport_Models_Renders_Heading_Without_Horizontal_Overflow()
     {
         // Set viewport before navigation so the JS breakpoint in Layout.tsx fires on first paint.
         await Page.SetViewportSizeAsync(MobileViewportWidth, MobileViewportHeight);
 
-        await Page.GotoAsync($"{NodeAppUrl}{DashboardRoute}", new PageGotoOptions
+        await Page.GotoAsync($"{NodeAppUrl}{ModelsRoute}", new PageGotoOptions
         {
             WaitUntil = WaitUntilState.NetworkIdle
         });
 
         await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions
             {
-                Name = "Dashboard"
+                Name = ModelsHeading
             }))
             .ToBeVisibleAsync();
 

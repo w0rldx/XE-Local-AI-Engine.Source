@@ -43,11 +43,12 @@ public sealed class ModelRecommendationsPageE2ETests : XEE2ETestBase
             WaitUntil = WaitUntilState.NetworkIdle
         });
 
-        // Heading "Model recommendations" (pages.modelFit.recommendations.title) renders unconditionally
-        // (the route is capability-gated on modelFit, which is on by default in the bundle).
+        // Heading pages.modelFit.recommendations.title renders unconditionally (the route is
+        // capability-gated on modelFit, which is on by default in the bundle). The copy was renamed
+        // "Model recommendations" -> "Local model advisor" in a3f85eb9 (model-advisor React surface).
         await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions
             {
-                Name = "Model recommendations"
+                Name = "Local model advisor"
             }))
             .ToBeVisibleAsync();
     }

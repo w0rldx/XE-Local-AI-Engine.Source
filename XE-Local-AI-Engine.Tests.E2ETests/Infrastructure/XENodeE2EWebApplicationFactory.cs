@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.E2ETests.Infrastructure;
 
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
@@ -46,7 +47,32 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
     /// </summary>
     public const string AdminPassword = "E2eAdminPassw0rd!";
 
+    /// <summary>
+    ///     The single onboarding tour key the React client persists. Mirrors <c>MAIN_APP_TOUR_KEY</c> in
+    ///     <c>XE-Local-AI-Engine.Client.React/src/features/onboarding/hooks/useTourState.ts</c>; the two must
+    ///     stay in step or the seeded state below stops suppressing the welcome prompt.
+    ///     <para>
+    ///         Enforced, not merely documented: <c>XE-Local-AI-Engine.Tests/Onboarding/OnboardingTourKeyDriftTests</c>
+    ///         reads the TypeScript source and fails if either side moves. That guard lives in the UNIT suite so
+    ///         drift is caught by the normal test run rather than only under <c>-p:RunE2ETests=true</c>.
+    ///     </para>
+    /// </summary>
+    public const string MainAppTourKey = "main-app-v1";
+
+    /// <summary>
+    ///     The browser localStorage key holding the in-progress tour step index. Mirrors the DERIVED
+    ///     <c>TOUR_PROGRESS_STORAGE_KEY</c> in <c>useTourState.ts</c> (<c>xe-onboarding-${MAIN_APP_TOUR_KEY}-step</c>).
+    ///     Derived here from <see cref="MainAppTourKey" /> for the same reason it is derived there — so the tour key
+    ///     exists in exactly one place per language, and the drift guard has one prefix left to check rather than a
+    ///     second flattened copy of the key.
+    /// </summary>
+    public const string TourProgressStorageKey = $"xe-onboarding-{MainAppTourKey}-step";
+
     private static readonly SemaphoreSlim HostStartupLock = new(initialCount: 1, maxCount: 1);
+
+    // Same options NodeTutorialStateService uses to (de)serialize NodeUser.TutorialState, so the seeded payload is
+    // byte-compatible with what the production service writes and reads (camelCase property names).
+    private static readonly JsonSerializerOptions TutorialStateSerializerOptions = new(JsonSerializerDefaults.Web);
 
     private readonly FakeOllamaServer _fakeOllamaServer;
     private readonly string _fixtureDataRoot = Path.Combine(Path.GetTempPath(), "xe-local-ai-engine-e2e-" + Guid.NewGuid().ToString("N"));
@@ -163,6 +189,73 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
         await SeedAdminUserAsync().ConfigureAwait(false);
     }
 
+    /// <summary>
+    ///     Overwrites the seeded admin's persisted onboarding state, exactly as the production
+    ///     <c>NodeTutorialStateService</c> would. Pass <see langword="null" /> to make the admin a genuine
+    ///     first-run user again (the welcome prompt then fires), or
+    ///     <see cref="CompletedMainAppTourState" /> to restore the default returning-user fixture.
+    ///     <para>
+    ///         Safe to call mid-suite because browser E2E runs strictly sequentially
+    ///         (<c>BrowserParallelLimit.Limit == 1</c>); no other test can observe the intermediate state.
+    ///     </para>
+    /// </summary>
+    public async Task SetAdminTutorialStateAsync(string? tutorialStateJson)
+    {
+        using var scope = Services.CreateScope();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<NodeUser>>();
+
+        var admin = await userManager.FindByEmailAsync(AdminEmail).ConfigureAwait(false)
+                    ?? throw new InvalidOperationException($"E2E admin '{AdminEmail}' was not seeded; cannot set tutorial state.");
+
+        admin.TutorialState = tutorialStateJson;
+
+        var updateResult = await userManager.UpdateAsync(admin).ConfigureAwait(false);
+        if (!updateResult.Succeeded)
+        {
+            throw new InvalidOperationException("Failed to set E2E admin tutorial state: " +
+                                                string.Join(", ", updateResult.Errors.Select(static error => error.Description)));
+        }
+    }
+
+    /// <summary>
+    ///     Reads back the seeded admin's raw persisted onboarding state so a test can assert what the app
+    ///     actually wrote to the identity row (rather than trusting client-side state).
+    /// </summary>
+    public async Task<string?> GetAdminTutorialStateAsync()
+    {
+        using var scope = Services.CreateScope();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<NodeUser>>();
+
+        var admin = await userManager.FindByEmailAsync(AdminEmail).ConfigureAwait(false)
+                    ?? throw new InvalidOperationException($"E2E admin '{AdminEmail}' was not seeded; cannot read tutorial state.");
+
+        return admin.TutorialState;
+    }
+
+    /// <summary>
+    ///     The persisted onboarding state that marks the main app tour as already completed — the DEFAULT
+    ///     fixture state (see <see cref="SeedAdminUserAsync" />).
+    ///     <para>
+    ///         Every E2E run gets a fresh database and therefore a brand-new admin, for whom the first-run
+    ///         welcome modal legitimately opens over the whole app and swallows every click. Seeding a
+    ///         terminal tour outcome makes the standard fixture a RETURNING user: the app takes exactly the
+    ///         code path a real returning user takes, with no test-only branch in shipping code and no
+    ///         per-test UI dismissal. Coverage for the first-run path itself lives in
+    ///         <c>OnboardingTourE2ETests</c>, which clears this state for the duration of one test.
+    ///     </para>
+    /// </summary>
+    public static string CompletedMainAppTourState { get; } = JsonSerializer.Serialize(
+        new[]
+        {
+            new StoredTutorialEntry
+            {
+                Key = MainAppTourKey,
+                Status = "completed",
+                AtUtc = new DateTime(year: 2026, month: 1, day: 1, hour: 0, minute: 0, second: 0, DateTimeKind.Utc)
+            }
+        },
+        TutorialStateSerializerOptions);
+
     private async Task SeedAdminUserAsync()
     {
         using var scope = Services.CreateScope();
@@ -178,6 +271,9 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
             Email = AdminEmail,
             UserName = AdminEmail,
             SetupCompleted = true,
+            // Deterministic default: a returning user who has already answered the onboarding tour.
+            // See CompletedMainAppTourState for why the first-run prompt must not be the E2E baseline.
+            TutorialState = CompletedMainAppTourState,
             CreatedAtUtc = DateTime.UtcNow
         };
 
@@ -352,5 +448,19 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
         {
             return $"(error: {ex.Message})";
         }
+    }
+
+    /// <summary>
+    ///     Wire shape of one persisted tutorial entry. Mirrors the private <c>StoredEntry</c> record inside
+    ///     <c>NodeTutorialStateService</c> — same property names, same <c>JsonSerializerDefaults.Web</c>
+    ///     casing — so the seeded column value round-trips through the real service unchanged.
+    /// </summary>
+    private sealed record StoredTutorialEntry
+    {
+        public string? Key { get; init; }
+
+        public string? Status { get; init; }
+
+        public DateTime AtUtc { get; init; }
     }
 }

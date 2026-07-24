@@ -11,17 +11,21 @@ public sealed class NodeUiSmokeE2ETests : XEE2ETestBase
 {
     [Test]
     [Category("Smoke")]
-    public async Task Dashboard_Renders_For_Unpaired_Node()
+    public async Task Models_Page_Renders_For_Unpaired_Node()
     {
-        await Page.GotoAsync($"{NodeAppUrl}/dashboard", new PageGotoOptions
+        // Replaces the former /dashboard smoke test: the Dashboard is a Central-Platform surface and the
+        // default build ships it gated OFF (NodeCapabilities.dashboard === false), so /dashboard redirects
+        // home and has no heading to smoke. Models is the equivalent always-on page — no route guard, and
+        // it renders unconditionally for an unpaired node. The gate itself is covered by
+        // CapabilityGatedSurfacesE2ETests.
+        await Page.GotoAsync($"{NodeAppUrl}/models", new PageGotoOptions
         {
             WaitUntil = WaitUntilState.NetworkIdle
         });
 
-        // The header renders unconditionally (no route guard redirects an unpaired node).
         await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions
             {
-                Name = "Dashboard"
+                Name = "Model management"
             }))
             .ToBeVisibleAsync();
         await Expect(Page.GetByText("Worker Node").First).ToBeVisibleAsync();
