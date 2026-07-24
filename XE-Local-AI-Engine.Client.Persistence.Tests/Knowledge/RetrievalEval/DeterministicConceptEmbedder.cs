@@ -6,7 +6,7 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 /// <summary>
-///     Deterministic, model-free embedding generator for the hermetic retrieval-eval harness (RAG-01). It builds a
+///     Deterministic, model-free embedding generator for the hermetic retrieval-eval harness. It builds a
 ///     fixed-width "bag of concepts" vector: every input string is tokenized, each token is mapped through an explicit
 ///     fixture-supplied synonym→concept dictionary (default: the token maps to itself), and each concept accumulates into
 ///     the dimension its stable FNV-1a hash selects. Two texts therefore score a high cosine similarity exactly when they

@@ -12,7 +12,7 @@ using Microsoft.Extensions.AI;
 ///         It also carries the resolved per-agent <see cref="RequiresApproval" /> policy so the resolver can enforce a
 ///         TIGHTEN-ONLY approval override: when the offer requires approval the resolver wraps the resolved executable in
 ///         <c>ApprovalRequiredAIFunction</c> unless it already is one. A name-only placeholder dropped this flag, which
-///         silently discarded a per-agent tightening of a ClientLocal tool (MED-006).
+///         silently discarded a per-agent tightening of a ClientLocal tool.
 ///     </para>
 /// </summary>
 internal sealed class OfferPlaceholderAIFunction : AIFunction

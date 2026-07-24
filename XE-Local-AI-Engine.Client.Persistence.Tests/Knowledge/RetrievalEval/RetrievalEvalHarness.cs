@@ -102,7 +102,7 @@ public sealed record QueryEvaluation(
 
 /// <summary>
 ///     Structured retrieval-quality metrics over a labeled query set at a fixed cut-off <c>k</c>. Macro-averaged across
-///     queries. Reusable across implementations: RAG-04 (a fusion/reranker change) invokes the same harness before and
+///     queries. Reusable across implementations: a fusion/reranker change invokes the same harness before and
 ///     after to prove a measured gain.
 /// </summary>
 /// <param name="K">The top-k cut-off the metrics were computed at.</param>
@@ -129,7 +129,7 @@ public sealed record RetrievalMetrics(
 ///     Runs a labeled query set through a REAL <see cref="IKnowledgeSearchService" /> and computes
 ///     <see cref="RetrievalMetrics" /> (recall@k, MRR, lexical citation coverage). It is deliberately agnostic to how the
 ///     search service is wired — hybrid, lexical-only, or reranked — so the same call measures any variant. This is the
-///     reusable entry point Phase 2 (RAG-04) invokes to obtain before/after numbers.
+///     reusable entry point a fusion/reranker change invokes to obtain before/after numbers.
 /// </summary>
 public static class RetrievalEvalHarness
 {

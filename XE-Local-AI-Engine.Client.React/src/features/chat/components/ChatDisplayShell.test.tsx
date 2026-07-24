@@ -10,7 +10,7 @@ import { ChatDisplayShell } from "@/features/chat/components/ChatDisplayShell";
 import { defaultChatUiCapabilities } from "@/features/chat/models/ChatCapabilityGates";
 import type { ChatConversationModel, ChatDisplayShellProps, ChatMessagePart } from "@/features/chat/models/ChatModels";
 
-// A streaming tool-call card can fire the resolve-approval TanStack mutation (UX-01), so the tree needs a
+// A streaming tool-call card can fire the resolve-approval TanStack mutation, so the tree needs a
 // QueryClientProvider even for turns that never surface an approval.
 function renderWithProviders(ui: ReactElement) {
 	const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });

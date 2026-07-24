@@ -40,7 +40,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
     // In-process marker (duplicated from InvocationAgentFactory.LlamaDisableThinkingMarkerKey — AI.Agent does not
     // reference this assembly). When present+true, reasoning is OFF on a thinking-capable model and the outbound
     // llama-server request must carry chat_template_kwargs.enable_thinking=false so a Qwen3-class chat template stops
-    // emitting a reasoning block (GPTAUD-17b). The Ollama `think:false` set alongside it never reaches llama.cpp — the
+    // emitting a reasoning block. The Ollama `think:false` set alongside it never reaches llama.cpp — the
     // OpenAI adapter drops unmapped AdditionalProperties — so the switch is injected here instead.
     internal const string DisableThinkingMarkerKey = "xe.llama.disable_thinking";
 
@@ -220,13 +220,13 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
     ///     When the turn carries the <see cref="DisableThinkingMarkerKey" /> marker (reasoning OFF on a thinking-capable
     ///     model), returns a clone of <paramref name="options" /> whose <see cref="ChatOptions.RawRepresentationFactory" />
     ///     yields a <see cref="ChatCompletionOptions" /> with <c>chat_template_kwargs.enable_thinking=false</c> patched in,
-    ///     so the switch reaches llama-server on the wire (GPTAUD-17b). Without the marker the options are returned
+    ///     so the switch reaches llama-server on the wire. Without the marker the options are returned
     ///     unchanged, so every other request is byte-identical. A pre-existing <see cref="ChatOptions.RawRepresentationFactory" />
     ///     (none is set on the llama.cpp path today) is composed rather than dropped.
     /// </summary>
     internal static ChatOptions? ApplyThinkingSwitch(ChatOptions? options)
     {
-        // Gating note (GPTAUD-17b): the marker is set upstream (InvocationAgentFactory) whenever reasoning is OFF on a
+        // Gating note: the marker is set upstream (InvocationAgentFactory) whenever reasoning is OFF on a
         // thinking-capable model — i.e. gated on the model's thinking capability, NOT on the finer "template advertises
         // the enable_thinking switch" signal. That is a deliberate, safe SUPERSET: injecting
         // chat_template_kwargs.enable_thinking=false is a no-op for any chat template that does not read that variable

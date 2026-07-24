@@ -608,7 +608,7 @@ public sealed class PlaybookActionServiceTests
         var agentId = Guid.NewGuid();
         var service = CreateService(out var store, out _, agentExists: true);
         var actionId = Guid.NewGuid();
-        // MED-005 defense in depth: a recorded eval that is current, complete and fingerprint-matching, with Passed ==
+        // Defense in depth: a recorded eval that is current, complete and fingerprint-matching, with Passed ==
         // true but ZERO candidate passes (a run where every case failed proves nothing). The gate must block it
         // independently of the recorded Passed flag.
         store.GetByIdAsync(actionId, Arg.Any<CancellationToken>())

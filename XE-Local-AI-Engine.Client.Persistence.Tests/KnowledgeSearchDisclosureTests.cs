@@ -12,7 +12,7 @@ using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 /// <summary>
-///     Drives the real <see cref="KnowledgeSearchService" /> over a seeded SQLite corpus to prove the MED-007
+///     Drives the real <see cref="KnowledgeSearchService" /> over a seeded SQLite corpus to prove the
 ///     serve-and-disclose behavior: a document whose catalog status is NOT <c>Indexed</c> (a pending re-index or a
 ///     failed re-ingest) still has its last-known-good chunks returned, but every hit carries the disclosure fields
 ///     (<see cref="KnowledgeSearchHit.DocumentStatus" /> + <see cref="KnowledgeSearchHit.ServingLastKnownGood" />)

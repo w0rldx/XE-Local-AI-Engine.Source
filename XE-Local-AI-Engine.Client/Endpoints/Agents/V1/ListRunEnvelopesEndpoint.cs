@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 
 /// <summary>
-///     Read-only, versioned durable run-envelope lifecycle records (MED-007 / R4). Returns a page of metadata-only rows
+///     Read-only, versioned durable run-envelope lifecycle records (R4). Returns a page of metadata-only rows
 ///     (terminal status, usage/timing counters, correlation ids, trace id, schema version) newest-first, optionally
 ///     scoped to one conversation — there is NO message content in this store, so nothing to redact; <c>FailureCategory</c>
 ///     is a category enum name only by the store contract. Operator-gated.

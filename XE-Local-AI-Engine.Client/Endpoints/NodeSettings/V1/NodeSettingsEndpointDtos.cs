@@ -118,7 +118,7 @@ public sealed record NodeSettingsResponse
     /// <summary>The default Kokoro voice profile id. <see langword="null" /> reads as <c>af_heart</c>.</summary>
     public string? DefaultVoiceProfile { get; init; }
 
-    // ── Usage cost rates (Wave 13) ──
+    // ── Usage cost rates ──
 
     /// <summary>
     ///     Operator override of usage cost rates, keyed by model NAME → its USD-per-1M input/output rate. Flattened from
@@ -195,7 +195,7 @@ public sealed record SaveNodeSettingsRequest
 
     public string? DefaultVoiceProfile { get; init; }
 
-    // ── Usage cost rates (Wave 13) ──
+    // ── Usage cost rates ──
 
     /// <summary>
     ///     Operator override of usage cost rates, keyed by model NAME → its USD-per-1M input/output rate. <see langword="null" />

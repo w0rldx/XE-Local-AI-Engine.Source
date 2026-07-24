@@ -6,7 +6,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 
 /// <summary>
-///     RAG-04 evidence: score-aware hybrid fusion vs classic (score-agnostic) Reciprocal Rank Fusion on the SAME ingested
+///     Evidence for score-aware hybrid fusion vs classic (score-agnostic) Reciprocal Rank Fusion on the SAME ingested
 ///     indexes. Two claims are proven with the real <see cref="RetrievalEvalHarness" /> over the real
 ///     <see cref="KnowledgeSearchService" />:
 ///     <list type="number">
@@ -16,7 +16,7 @@ using XE_Local_AI_Engine.Client.Services.Knowledge;
 ///             (MRR 0.333 → 1.000), so the measured retrieval quality strictly improves.
 ///         </item>
 ///         <item>
-///             <b>No regression on the saturated baseline.</b> The RAG-01 baseline corpus is already at recall@5 = MRR =
+///             <b>No regression on the saturated baseline.</b> The baseline corpus is already at recall@5 = MRR =
 ///             1.0, so score-aware fusion — the shipped default — must hold every metric at or above its bar and never
 ///             below the pure-RRF number. This is what justifies defaulting the feature ON.
 ///         </item>
@@ -89,7 +89,7 @@ public sealed class RetrievalEvalScoreFusionTests : IDisposable
         Report("baseline-rrf", rrf);
         Report("baseline-aware", aware);
 
-        // The default (score-aware) must clear the same bars the RAG-01 baseline asserts.
+        // The default (score-aware) must clear the same bars the baseline asserts.
         AssertEx.True(aware.RecallAtK >= 1.0, $"score-aware recall@{K} regressed below the baseline. {aware.Summarize()}");
         AssertEx.True(aware.MeanReciprocalRank >= 0.90, $"score-aware MRR regressed below the baseline. {aware.Summarize()}");
         AssertEx.True(aware.CitationCoverage >= 0.90, $"score-aware citation coverage regressed below the baseline. {aware.Summarize()}");
@@ -99,7 +99,7 @@ public sealed class RetrievalEvalScoreFusionTests : IDisposable
         AssertEx.True(aware.MeanReciprocalRank >= rrf.MeanReciprocalRank - 1e-12, $"score-aware MRR must not drop below RRF. rrf={rrf.Summarize()} aware={aware.Summarize()}");
     }
 
-    // Best-effort evidence capture for the RAG-04 report: append the measured metrics to a temp file. Never fails a test.
+    // Best-effort evidence capture for the report: append the measured metrics to a temp file. Never fails a test.
     private static void Report(string scenario, RetrievalMetrics metrics)
     {
         try

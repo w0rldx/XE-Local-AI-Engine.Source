@@ -14,7 +14,7 @@ import type { NodeChatStreamEventDto } from "@/features/chat/models/NodeChatStre
 import { Chat } from "@/features/chat/pages/Chat";
 import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
 
-// UX-09's no-installed-model guidance renders a TanStack-router Link to /models whenever the fixture's model list
+// The no-installed-model guidance renders a TanStack-router Link to /models whenever the fixture's model list
 // is empty (the default below). Stub the router module so Chat mounts without a RouterProvider (mirrors
 // ChatMessage.test.tsx's ModelNotInstalled Link stub).
 vi.mock("@tanstack/react-router", async (importOriginal) => {

@@ -20,8 +20,8 @@ public interface ICudaManagedBuildSignal : IActiveSourceBuildSignal
     /// <summary>
     ///     A monotonically increasing stamp bumped on every <see cref="MarkAvailable" />/<see cref="Clear" /> call. A cache
     ///     that composed the selected variant (which reads <see cref="IsAvailable" />) records the stamp it saw and
-    ///     recomputes when it differs, so a CUDA adopt/remove that flips the selection never leaves a stale memo
-    ///     (GPTAUD-09a). Lock-free to read; the value only ever grows.
+    ///     recomputes when it differs, so a CUDA adopt/remove that flips the selection never leaves a stale memo.
+    ///     Lock-free to read; the value only ever grows.
     /// </summary>
     /// <summary>Marks a managed CUDA source build as available (called on adopt and at startup seeding).</summary>
     void MarkAvailable();

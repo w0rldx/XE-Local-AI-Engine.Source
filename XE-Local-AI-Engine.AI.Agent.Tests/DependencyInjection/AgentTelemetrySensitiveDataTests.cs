@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.AI.Agent.DependencyInjection;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     MED-010: the gen_ai OpenTelemetry pipeline must set <c>EnableSensitiveData</c> from the code-owned
+///     The gen_ai OpenTelemetry pipeline must set <c>EnableSensitiveData</c> from the code-owned
 ///     <see cref="AgentTelemetryOptions" /> rather than defer to the ambient
 ///     <c>OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT</c> environment variable (which Aspire injects as true).
 /// </summary>

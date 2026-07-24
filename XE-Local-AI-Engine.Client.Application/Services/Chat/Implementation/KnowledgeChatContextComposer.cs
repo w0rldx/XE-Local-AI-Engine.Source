@@ -5,9 +5,9 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 
 /// <summary>
-///     Assembles the synthetic plain-chat context block from a knowledge-base hybrid-search result (OPP-05) and captures
-///     the provenance of the hits that were actually inlined so the caller can persist them as the turn's sources
-///     (UX-04). Hits arrive ordered by descending fused/rerank score; they are labeled and concatenated in order and the
+///     Assembles the synthetic plain-chat context block from a knowledge-base hybrid-search result and captures
+///     the provenance of the hits that were actually inlined so the caller can persist them as the turn's sources.
+///     Hits arrive ordered by descending fused/rerank score; they are labeled and concatenated in order and the
 ///     combined text is capped to a character budget, so the lowest-scored (least relevant) hits are dropped first and
 ///     one wide retrieval cannot flood the context. Pure and deterministic (given the hits) so the capping/labeling and
 ///     the sources projection are unit-testable in isolation.
@@ -116,6 +116,6 @@ internal static class KnowledgeChatContextComposer
 
 /// <summary>
 ///     The composed knowledge-base context for one plain-chat turn: the fenced prompt block and the ordered provenance
-///     of the hits inlined into it (the render source for the UX-04 "Sources" strip).
+///     of the hits inlined into it (the render source for the "Sources" strip).
 /// </summary>
 internal sealed record KnowledgeChatContext(string Context, IReadOnlyList<NodeChatMessageSource> Sources);

@@ -247,7 +247,7 @@ public sealed class NodeChatRegenerationService(
                                                })
                   ];
 
-            // Knowledge-base grounding parity with the send path (OPP-05 / UX-04): a regenerated plain-chat turn honors
+            // Knowledge-base grounding parity with the send path: a regenerated plain-chat turn honors
             // the same opt-in knowledge grounding + cloud-egress gate the send path applies, so a rerun does not silently
             // lose grounding + its sources strip. Agent mode reaches the KB through the gated search_knowledge_base tool
             // (offerTools), so inline grounding is plain-chat only — mirroring NodeChatStreamService. The retrieval query
@@ -324,7 +324,7 @@ public sealed class NodeChatRegenerationService(
                 parts,
                 onTerminal,
                 runCancellation.Token,
-                // Knowledge-base sources that grounded this regenerated turn (OPP-05 and UX-04) are stamped onto the
+                // Knowledge-base sources that grounded this regenerated turn are stamped onto the
                 // variant metadata by the pump. A rerun that used no knowledge base passes none here.
                 knowledgeSources);
             runTask = RunInvocationAsync(package,
@@ -357,7 +357,7 @@ public sealed class NodeChatRegenerationService(
             // already tripped runCancellation via the registry.
             if (pumpTask is not null && runTask is not null)
             {
-                // Observe the pump first: on a GPTAUD-07 persistence fault it faults here; cancel the run so the
+                // Observe the pump first: on a persistence fault it faults here; cancel the run so the
                 // still-generating runner stops promptly rather than producing output that can no longer be persisted. A
                 // user cancel or normal completion leaves the pump task completed (not faulted).
                 try
@@ -685,7 +685,7 @@ public sealed class NodeChatRegenerationService(
     }
 
     // Retrieves the top-k fused knowledge-base hits for the regenerate's question and composes them into ONE fenced
-    // untrusted context message (OPP-05), returning it alongside the provenance of the inlined hits (UX-04). Runs the
+    // untrusted context message, returning it alongside the provenance of the inlined hits. Runs the
     // hybrid search in a FRESH DI scope (IKnowledgeSearchService is scoped, driving a request-scoped connection) —
     // byte-for-byte the send path (NodeChatStreamService.BuildKnowledgeContextMessageAsync). Returns null when grounding
     // produces nothing: a blank/oversized query, no matching chunks, an empty compose, or ANY retrieval failure

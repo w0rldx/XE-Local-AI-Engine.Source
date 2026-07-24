@@ -102,7 +102,7 @@ public sealed class SubAgentSpawnServiceTests
     [Test]
     public async Task Spawn_WhenProfileBound_ChildConsumesResolvedSystemPrompt_NotRawInstructions()
     {
-        // MED-002: a profile-bound child must run on the RESOLVED system prompt (scaffold + persona + injected playbook
+        // A profile-bound child must run on the RESOLVED system prompt (scaffold + persona + injected playbook
         // memory), NOT the raw definition.Instructions. Raw and resolved DIVERGE here so reading the wrong one is visible.
         using var harness = new Harness();
         harness.AllowLocal();
@@ -124,7 +124,7 @@ public sealed class SubAgentSpawnServiceTests
         AssertEx.Equal("sub-agent-result", result);
         AssertEx.Equal("SCAFFOLD + persona + injected playbook memory.", harness.ChatClient.LastInstructions);
         AssertEx.False(harness.ChatClient.LastInstructions!.Contains("RAW persona only", StringComparison.Ordinal),
-            "the child must never run on the raw definition.Instructions — that is the MED-002 bypass.");
+            "the child must never run on the raw definition.Instructions — that is the sanitizer bypass.");
     }
 
     [Test]
@@ -222,7 +222,7 @@ public sealed class SubAgentSpawnServiceTests
     {
         // Parity, shaped as one assertion: a resolved runtime with a divergent prompt, a graded reasoning effort, and a
         // skill must ALL reach the child — the same ResolvedAgentRuntime fields the direct chat path threads into its
-        // runtime package (resolved.ResolvedSystemPrompt / resolved.ReasoningEffort / resolved.Skills). Before MED-002
+        // runtime package (resolved.ResolvedSystemPrompt / resolved.ReasoningEffort / resolved.Skills). Previously
         // the spawn path consumed only resolved.AllowedTools, so a saved sub-agent diverged from a direct send.
         using var harness = new Harness();
         harness.AllowLocal();
@@ -261,7 +261,7 @@ public sealed class SubAgentSpawnServiceTests
     [Test]
     public async Task Spawn_WhenProfileBound_DropsApprovalRequiredTools_KeepsNonGated()
     {
-        // GPTAUD-01: a spawned child runs as an agent-as-tool (AsAIFunction, no per-run options, no HITL round-trip), so
+        // A spawned child runs as an agent-as-tool (AsAIFunction, no per-run options, no HITL round-trip), so
         // an approval-gated tool would surface a ToolApprovalRequestContent the child can never answer — failing every
         // call silently. CurateChildTools must DROP the approval-required tool (never unwrap it to auto-execute) while
         // the non-gated tool survives, and warn naming the dropped tool.
@@ -554,7 +554,7 @@ public sealed class SubAgentSpawnServiceTests
 
         public bool ReservationDisposed => _reservationDisposed;
 
-        // All log text captured from the SUT, so a test can assert the dropped-approval-tool Warning (GPTAUD-01).
+        // All log text captured from the SUT, so a test can assert the dropped-approval-tool Warning.
         public string LogText => _logger.AllText;
 
         // Registers a bound sub-agent profile pinned to a SPECIFIC model (e.g. a cloud deployment) so an R1 test can
@@ -651,7 +651,7 @@ public sealed class SubAgentSpawnServiceTests
 
         // Registers a profile whose resolved AllowedTools carry MIXED approval flags: the gated tool's offer requires
         // approval (so InvocationToolResolver wraps it in ApprovalRequiredAIFunction), the ungated one does not. The
-        // child-tool curation must drop the wrapped one and keep the plain one (GPTAUD-01). Both names must exist in the
+        // child-tool curation must drop the wrapped one and keep the plain one. Both names must exist in the
         // fake catalog so they resolve to executables.
         public Guid RegisterProfileWithMixedApprovalTools(string name, string gatedTool, string ungatedTool)
         {

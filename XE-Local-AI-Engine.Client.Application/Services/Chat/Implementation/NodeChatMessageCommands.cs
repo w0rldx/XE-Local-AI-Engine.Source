@@ -260,12 +260,12 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
             request.Parts,
             request.GenerationDurationMs,
             requiredCurrentStatuses: NodeChatMessageTransitions.TerminalizeSources(request.Status),
-            // Durable run envelope written atomically with the terminal row (MED-007 / R4): both commit or roll back together.
+            // Durable run envelope written atomically with the terminal row (R4): both commit or roll back together.
             // Upsert: the pump's authoritative terminalize is the winning outcome, so it enriches/overwrites any thin
             // envelope a prior cancel wrote for this message (see RunEnvelopeWriteMode), keeping envelope status == row status.
             envelope: request.Envelope,
             envelopeWriteMode: RunEnvelopeWriteMode.Upsert,
-            // KB sources that grounded this turn (OPP-05 / UX-04); null on paths that retrieved nothing preserves any
+            // KB sources that grounded this turn; null on paths that retrieved nothing preserves any
             // existing persisted sources, just like Parts.
             sources: request.Sources);
     }
@@ -454,7 +454,7 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
                 // The generation duration is reported once at terminalize; a null arg (partial flush) preserves any
                 // existing value, mirroring the token-count preservation above.
                 var nextGenerationDurationMs = generationDurationMs ?? current.GenerationDurationMs;
-                // KB sources are reported once at terminalize (OPP-05 / UX-04); a null arg (partial flush) preserves any
+                // KB sources are reported once at terminalize; a null arg (partial flush) preserves any
                 // existing value, mirroring the parts/duration preservation above.
                 var nextSources = sources ?? current.Sources;
                 // Agent attribution and the reasoning effort are stamped once at placeholder/variant mint and never
@@ -465,7 +465,7 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
 
                 // When a run envelope must be written, the message UPDATE, the envelope insert, and the conversation touch
                 // run in ONE transaction so the terminal row and its content-free envelope commit or roll back together
-                // (MED-007 / R4: no swallowed best-effort write — an envelope failure fails/retries the terminalize like
+                // (R4: no swallowed best-effort write — an envelope failure fails/retries the terminalize like
                 // any persistence failure). Non-terminal updates (flush / queued / streaming) keep the prior
                 // single-statement autocommit path unchanged, so the hot streaming path is untouched.
                 var writeEnvelope = envelope is not null && IsTerminalStatus(nextStatus);

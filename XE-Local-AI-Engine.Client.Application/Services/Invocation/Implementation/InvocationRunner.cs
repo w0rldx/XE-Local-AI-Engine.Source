@@ -64,7 +64,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
     // message can name hosts/paths and is unbounded, so a fixed, path-free constant is surfaced in its place.
     private const string TimedOutMessage = "The operation timed out.";
 
-    // A new local turn admitted after shutdown drain has begun (GPTAUD-21). Surfaced as a clean Cancelled-category
+    // A new local turn admitted after shutdown drain has begun. Surfaced as a clean Cancelled-category
     // failure — the node is going away — rather than being run into a drain that has already stopped waiting for it.
     private const string NodeDrainingMessage = "The node is shutting down and is not accepting new requests.";
 
@@ -112,7 +112,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
     private Guid? _currentInvocationId;
 
     // Set once (never reset) when shutdown drain begins, guarded by _syncRoot. A local invocation that reaches
-    // admission after this is set is rejected (GPTAUD-21): it registers AFTER the drain snapshot and would otherwise
+    // admission after this is set is rejected: it registers AFTER the drain snapshot and would otherwise
     // become an untracked active run the drain never waits for.
     private bool _draining;
 
@@ -225,7 +225,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         var activeInvocationCompletion = RegisterActiveInvocationCompletion(package.InvocationId, !shouldSendHubMessages);
         if (activeInvocationCompletion is null)
         {
-            // Shutdown drain has started and this is a local turn admitted after the drain snapshot (GPTAUD-21). Undo the
+            // Shutdown drain has started and this is a local turn admitted after the drain snapshot. Undo the
             // registration above and surface a clean, classified failure instead of running it into a drain that has
             // stopped waiting. A local turn sends no hub messages, so reporting to the dispatcher is the whole surface.
             ClearActiveInvocation(package.InvocationId);
@@ -423,7 +423,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         // Fence local admission and snapshot the active set ATOMICALLY under _syncRoot: a new local turn either
         // registered its completion before this lock (so it is in the snapshot and awaited) or hits admission after and
         // is rejected (RegisterActiveInvocationCompletion returns null). No local turn can slip into the gap between the
-        // fence and the snapshot and become an untracked active run (GPTAUD-21).
+        // fence and the snapshot and become an untracked active run.
         Task[] activeInvocationTasks;
         lock (_syncRoot)
         {
@@ -780,7 +780,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         // A single model turn can surface MORE than one approval request (a parallel-tool-call turn wrapping two
         // approval-gated tools). Collect EVERY request in the segment, deduped so a provider re-emitting the same request
         // across streamed chunks enqueues it once — none is lost (the scalar this replaced kept only the last, dangling
-        // the earlier requests forever, GPTAUD-02). The dedup key is namespaced so a CallId and an approval Id can never
+        // the earlier requests forever). The dedup key is namespaced so a CallId and an approval Id can never
         // collide across two different requests.
         var pendingApprovals = new List<ToolApprovalRequestContent>();
         var pendingApprovalKeys = new HashSet<string>(StringComparer.Ordinal);
@@ -1136,7 +1136,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 await sender.SendApprovalRequestAsync(approvalPayload, cancellationToken).ConfigureAwait(false);
                 await dispatcher.ReportApprovalRequestedAsync(approvalPayload).ConfigureAwait(false);
 
-                // Surface the pending approval on the LOCAL chat stream (UX-01). This API-tool path emits its
+                // Surface the pending approval on the LOCAL chat stream. This API-tool path emits its
                 // tool-call-requested lifecycle only AFTER approval, so the browser has no card yet — the CallId is the
                 // request id, and the reducer creates the waiting card from this event.
                 await dispatcher.ReportApprovalLifecycleAsync(new ApprovalLifecyclePayload
@@ -1258,7 +1258,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             await sender.SendApprovalRequestAsync(approvalPayload, cancellationToken).ConfigureAwait(false);
             await dispatcher.ReportApprovalRequestedAsync(approvalPayload).ConfigureAwait(false);
 
-            // Surface the pending approval on the LOCAL chat stream (UX-01). The CallId is derived through the SAME
+            // Surface the pending approval on the LOCAL chat stream. The CallId is derived through the SAME
             // helper the streaming tool-call-requested lifecycle uses (CallId, falling back to the tool name) so both
             // events resolve the identical id — including for a non-null EMPTY-STRING CallId — and the browser can
             // attach the Approve/Deny controls to the matching tool-call card. In desktop/local mode there is no worker
@@ -1342,7 +1342,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
     // name (so an absent CallId still maps to a stable, human-meaningful key). Shared by the streaming tool-call
     // lifecycle and the approval lifecycle so both events resolve the SAME id for the same call — including a non-null
     // EMPTY-STRING CallId, which the two paths previously handled differently — letting the browser attach the
-    // Approve/Deny controls to the matching card (UX-01 follow-up). Internal (not private) purely as a test seam via
+    // Approve/Deny controls to the matching card. Internal (not private) purely as a test seam via
     // InternalsVisibleTo; not part of the public contract.
     internal static string ResolveToolCallCardId(string? callId, string? toolName) =>
         callId ?? toolName ?? string.Empty;
@@ -1393,7 +1393,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
     }
 
     // Registers the invocation's active-completion source. Returns null when the node is draining and this is a local
-    // turn (GPTAUD-21) — the completion add and the draining check happen under _syncRoot so they are serialized with
+    // turn — the completion add and the draining check happen under _syncRoot so they are serialized with
     // the drain snapshot, closing the admission-after-snapshot race. A non-local (remote) turn is not fenced here; the
     // dispatcher already stops accepting remote assignments at drain.
     private TaskCompletionSource? RegisterActiveInvocationCompletion(Guid invocationId, bool isLocalLoopback)

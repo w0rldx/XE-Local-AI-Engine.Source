@@ -205,7 +205,7 @@ public sealed class RuntimeDeviceAuditServiceTests
     [Test]
     public async Task GetAudit_ManagedCudaSignalFlips_InvalidatesMemo_AndReprobes()
     {
-        // GPTAUD-09a: the cached audit is keyed to the managed-CUDA signal stamp. A CUDA adopt/remove bumps the stamp and
+        // The cached audit is keyed to the managed-CUDA signal stamp. A CUDA adopt/remove bumps the stamp and
         // can flip the selected variant (Vulkan↔Cuda on a Linux NVIDIA box), so a plain (non-force) call after the flip
         // must recompute rather than return the stale placement truth. Without the invalidation the second call would
         // answer from the first memo and never re-probe.

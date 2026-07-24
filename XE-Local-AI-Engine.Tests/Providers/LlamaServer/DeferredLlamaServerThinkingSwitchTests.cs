@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     GPTAUD-17b: reasoning-off must actually reach llama.cpp. The Ollama <c>think:false</c> the factory writes is
+///     Reasoning-off must actually reach llama.cpp. The Ollama <c>think:false</c> the factory writes is
 ///     dropped by the MEAI OpenAI adapter, so <see cref="DeferredLlamaServerChatClient.ApplyThinkingSwitch" /> injects
 ///     <c>chat_template_kwargs.enable_thinking=false</c> via <c>ChatCompletionOptions.Patch</c> (through
 ///     <see cref="ChatOptions.RawRepresentationFactory" />) so it rides the wire. These tests assemble the REAL MEAI

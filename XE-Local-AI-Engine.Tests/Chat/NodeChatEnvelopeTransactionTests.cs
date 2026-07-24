@@ -13,7 +13,7 @@ using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Real-SQLite transaction/rollback and purge-race coverage for the atomic run-envelope write (MED-007 / R4). The
+///     Real-SQLite transaction/rollback and purge-race coverage for the atomic run-envelope write (R4). The
 ///     terminalize message UPDATE and its content-free envelope INSERT commit or roll back together, and a conversation
 ///     purge racing a terminalize can never strand an orphaned envelope carrying the conversation's plaintext ids —
 ///     whichever operation the per-conversation lock hierarchy lets win.
@@ -185,7 +185,7 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
     [Test]
     public async Task Terminalize_WritesResolvedProviderOntoEnvelopeRow()
     {
-        // Row-level round-trip of the fine-grained provider dimension (Wave 8): a terminalize carrying a resolved provider
+        // Row-level round-trip of the fine-grained provider dimension: a terminalize carrying a resolved provider
         // must persist it onto the run-envelope row via WriteRunEnvelopeRowAsync — not fall back to the 'unknown' column
         // default. The pump resolves this label; here it rides in directly so the write path is proven end to end.
         await using var provider = await BuildProviderAsync("envelope-provider-roundtrip.sqlite").ConfigureAwait(false);

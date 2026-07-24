@@ -68,7 +68,7 @@ public static class Extensions
                               // Literal must match the Meter name used by the ProviderCallBudgetChatClient in the
                               // AI.Agent project, which is XE.LocalAiEngine.AI.Agent; ServiceDefaults cannot reference
                               // that project. Mirrors the identically named tracing AddSource below so the agent's
-                              // provider-round and budget counters are exported, not just recorded in-process. MED-007.
+                              // provider-round and budget counters are exported, not just recorded in-process.
                               .AddMeter("XE.LocalAiEngine.AI.Agent")
                               // Flows the OpenTelemetryChatClient's gen_ai token/duration metrics (MEAI meter
                               // "Microsoft.Extensions.AI"); wildcard mirrors the tracing AddSource below.
@@ -89,7 +89,7 @@ public static class Extensions
                                       !context.Request.Path.StartsWithSegments("/health/live", StringComparison.CurrentCulture))
                               .AddHttpClientInstrumentation()
                               // Downgrade a gen_ai span that failed only because a user pressed Stop (Error→Unset) so a
-                              // cancelled turn doesn't read as a service fault on dashboards/alerts (GPTAUD-19a).
+                              // cancelled turn doesn't read as a service fault on dashboards/alerts.
                               .AddProcessor(new GenAiCancellationStatusProcessor());
                    });
 

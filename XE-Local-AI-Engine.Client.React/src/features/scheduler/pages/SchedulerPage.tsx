@@ -71,7 +71,7 @@ export function SchedulerPage() {
 	useUnsavedChangesGuard({ isDirty: isFormDirty });
 
 	// Ref to the form's imperative handle — used by the footer Save button to drive
-	// validation without coupling the footer to internal form state (MED-3).
+	// validation without coupling the footer to internal form state.
 	const formRef = useRef<ScheduledJobFormHandle>(null);
 
 	const templatesQuery = useScheduledJobTemplates();

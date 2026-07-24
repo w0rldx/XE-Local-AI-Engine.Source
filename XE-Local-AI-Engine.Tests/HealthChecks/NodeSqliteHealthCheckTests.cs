@@ -64,7 +64,7 @@ public sealed class NodeSqliteHealthCheckTests
 
             AssertEx.Equal(HealthStatus.Unhealthy, result.Status);
             AssertEx.Equal("unwritable", (string)result.Data["reason"]);
-            // GPTAUD-19c follow-up: the description is a static string with NO interpolated provider message, so the
+            // The description is a static string with NO interpolated provider message, so the
             // anonymous /health/ready payload can never leak internal error text. The structured reason still classifies it.
             AssertEx.Equal("Node SQLite database is not writable.", result.Description);
         }
@@ -120,7 +120,7 @@ public sealed class NodeSqliteHealthCheckTests
 
         AssertEx.Equal(HealthStatus.Unhealthy, result.Status);
         AssertEx.Equal("unavailable", (string)result.Data["reason"]);
-        // GPTAUD-19c follow-up: the description is a fixed string that never interpolates the provider message, so the
+        // The description is a fixed string that never interpolates the provider message, so the
         // file path present in the underlying exception can never reach the anonymous /health/ready payload.
         AssertEx.Equal("Node SQLite database is unavailable.", result.Description);
         AssertEx.False(result.Description!.Contains(missingSegment, StringComparison.Ordinal),

@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     End-to-end resolution tests for the per-agent approval override (MED-006). The policy is TIGHTEN-ONLY: a per-agent
+///     End-to-end resolution tests for the per-agent approval override. The policy is TIGHTEN-ONLY: a per-agent
 ///     offer can ADD an approval wrapper to a resolved executable but can never strip a handler- or MCP-enforced one, and
 ///     an offer with no policy metadata fails closed to requiring approval.
 /// </summary>

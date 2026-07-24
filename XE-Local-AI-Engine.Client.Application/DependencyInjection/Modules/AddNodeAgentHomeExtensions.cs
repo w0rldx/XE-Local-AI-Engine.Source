@@ -38,8 +38,8 @@ internal static class AddNodeAgentHomeExtensions
         builder.Services.AddSingleton<IClientLocalToolHandler, RunInAgentHomeToolHandler>();
         // Sandbox provider selection. The provider is configuration-bound and resolved once; known providers are the
         // deterministic fake and the jailed process provider. There is no execution-capable code default — an unset
-        // provider resolves to fake in non-Production, while SandboxOptionsValidator fails startup in Production (sec
-        // MED-2: a stripped config must never silently grant the command-executing provider).
+        // provider resolves to fake in non-Production, while SandboxOptionsValidator fails startup in Production (a
+        // stripped config must never silently grant the command-executing provider).
         builder.Services.AddOptions<SandboxOptions>()
                .Bind(configuration.GetSection(SandboxOptions.SectionName))
                .ValidateOnStart();

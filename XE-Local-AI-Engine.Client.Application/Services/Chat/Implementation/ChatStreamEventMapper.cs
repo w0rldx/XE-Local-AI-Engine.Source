@@ -153,8 +153,8 @@ internal static class ChatStreamEventMapper
     }
 
     /// <summary>
-    ///     Maps a pending tool-approval request to an <see cref="ChatStreamEventTypes.ApprovalRequested" /> stream event
-    ///     (UX-01). The tool-call id rides <see cref="ChatStreamEvent.ToolCallId" /> so the client attaches the
+    ///     Maps a pending tool-approval request to an <see cref="ChatStreamEventTypes.ApprovalRequested" /> stream event.
+    ///     The tool-call id rides <see cref="ChatStreamEvent.ToolCallId" /> so the client attaches the
     ///     Approve/Deny controls to the matching tool-call card; the approval request id rides
     ///     <see cref="ChatStreamEvent.ApprovalRequestId" /> for the resolve round-trip. Deliberately NOT accumulated into
     ///     the persisted <c>parts[]</c>: the pending approval is transient live state, and a reloaded terminal turn shows

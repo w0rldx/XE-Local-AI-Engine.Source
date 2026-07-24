@@ -40,7 +40,7 @@ internal sealed class PreOwnershipTerminalizationGuard(
         try
         {
             // Carry a thin run envelope so this terminal row gets its durable envelope in the SAME transaction as the
-            // message row (MED-007 / R4), like the pump's interrupted path — otherwise this pre-ownership teardown is
+            // message row (R4), like the pump's interrupted path — otherwise this pre-ownership teardown is
             // the one live path that writes a terminal without an atomic envelope, self-healing only at the next
             // restart's reconcile. There is no InvocationState here, so invocation id / tokens / duration / model are
             // unknown and omitted; the terminal status (derived from the winning row) carries the interrupted outcome.

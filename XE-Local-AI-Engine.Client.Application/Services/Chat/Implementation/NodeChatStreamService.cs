@@ -214,7 +214,7 @@ public sealed class NodeChatStreamService(
             }
         }
 
-        // A pending tool-approval (UX-01). Unlike tool-call/notice events this is NOT accumulated into the ordered
+        // A pending tool-approval. Unlike tool-call/notice events this is NOT accumulated into the ordered
         // parts[]: the approval prompt is transient live state that the loopback resolve endpoint clears, and a reloaded
         // terminal turn shows the executed/rejected tool result rather than a lingering prompt. It only rides the live
         // event channel so the browser can render Approve/Deny on the matching tool-call card.
@@ -282,7 +282,7 @@ public sealed class NodeChatStreamService(
                 : resolution.Orchestration?.FirstCloudParticipantModel ?? resolution.EffectiveModel;
             await ReportAttachmentsWithheldIfPresentAsync(request, cloudModelForNotice, requestId, cancellationToken).ConfigureAwait(false);
 
-            // KB grounding rides the SAME cloud-egress gate as attachments (OPP-05): when the user opted into knowledge
+            // KB grounding rides the SAME cloud-egress gate as attachments: when the user opted into knowledge
             // grounding for a plain-chat turn but the turn reaches a cloud model without the operator's data-access
             // opt-in, no retrieval runs and a visible notice names the model. Plain chat only — agent mode uses the
             // gated search_knowledge_base tool (withheld by the offer provider), so this notice is not duplicated there.
@@ -308,8 +308,8 @@ public sealed class NodeChatStreamService(
         // attachments are withheld from a cloud effective model, neither path composes anything (staged paths are empty
         // and the plain-chat inline is skipped).
         ConversationMessageDto? attachmentContext;
-        // Knowledge-base grounding (OPP-05): a second synthetic context message inlined into plain chat when the user
-        // opted in, plus the provenance of the inlined hits so the terminal row records them as sources (UX-04). Null on
+        // Knowledge-base grounding: a second synthetic context message inlined into plain chat when the user
+        // opted in, plus the provenance of the inlined hits so the terminal row records them as sources. Null on
         // every path that does not ground on the knowledge base (agent mode, opt-out, cloud-withheld, empty retrieval).
         ConversationMessageDto? knowledgeContext = null;
         IReadOnlyList<NodeChatMessageSource>? knowledgeSources = null;
@@ -381,7 +381,7 @@ public sealed class NodeChatStreamService(
             parts,
             onTerminal,
             runCancellation.Token,
-            // KB sources that grounded this turn (OPP-05 / UX-04) land on the terminal row's metadata_json; null when
+            // KB sources that grounded this turn land on the terminal row's metadata_json; null when
             // the turn used no knowledge base.
             knowledgeSources);
         var runTask = RunInvocationAsync(package,
@@ -427,7 +427,7 @@ public sealed class NodeChatStreamService(
             // is falsely persisted as interrupted.
             try
             {
-                // Observe the pump first: on a GPTAUD-07 persistence fault it faults here; cancel the run so the
+                // Observe the pump first: on a persistence fault it faults here; cancel the run so the
                 // still-generating runner stops promptly rather than producing output that can no longer be persisted. A
                 // user cancel or normal completion leaves the pump task completed (not faulted).
                 try
@@ -666,7 +666,7 @@ public sealed class NodeChatStreamService(
     }
 
     // Retrieves the top-k fused knowledge-base hits for the user's latest message and composes them into ONE fenced
-    // untrusted context message (OPP-05), returning it alongside the provenance of the inlined hits (UX-04). Runs the
+    // untrusted context message, returning it alongside the provenance of the inlined hits. Runs the
     // hybrid search in a FRESH DI scope (IKnowledgeSearchService is scoped, driving a request-scoped connection —
     // mirrors SearchKnowledgeBaseToolHandler). Returns null when grounding produces nothing: a blank/oversized query,
     // no matching chunks, an empty compose, or ANY retrieval failure (degrades gracefully — the turn proceeds without

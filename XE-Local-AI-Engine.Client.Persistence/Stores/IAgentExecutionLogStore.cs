@@ -143,7 +143,7 @@ public enum AgentExecutionLogRecordKind
     /// <summary>Adaptive-memory diagnostics row: one per memory-enabled run, written by the memory extraction worker.</summary>
     AdaptiveMemoryDiagnostics = 0,
 
-    /// <summary>Durable per-invocation run envelope: one content-free row per ordinary chat invocation at terminalization (MED-007).</summary>
+    /// <summary>Durable per-invocation run envelope: one content-free row per ordinary chat invocation at terminalization.</summary>
     ChatRunEnvelope = 1,
 
     /// <summary>

@@ -218,7 +218,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
 
     /// <summary>
     ///     Composes a participant's final system prompt exactly as <c>AgentDefinitionResolver.ComposePromptAsync</c>
-    ///     does for a single-agent send (GPTAUD-03a): the versioned base scaffold (identity/grounding/tool/output
+    ///     does for a single-agent send: the versioned base scaffold (identity/grounding/tool/output
     ///     discipline), a blank line, then the persona prompt (its <see cref="AgentDefinitionRecord.Instructions" />
     ///     with playbook memories folded in). A participant with <see cref="AgentDefinitionRecord.DisableBaseScaffold" />
     ///     set — or the defensive blank-scaffold case — skips the prepend, keeping the prompt byte-identical to the

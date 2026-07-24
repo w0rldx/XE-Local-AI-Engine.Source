@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 /// <summary>
 ///     A lease held for the lifetime of one in-flight image generation (submit → poll → complete). While at least one
 ///     lease is held against a daemon, the supervisor's idle reaper and cap-admission LRU evictor never tear it down —
-///     even past the idle TTL. This closes GPTAUD-10a: a daemon's <c>LastUsedUtc</c> is stamped per ensure/reuse, not per
+///     even past the idle TTL. A daemon's <c>LastUsedUtc</c> is stamped per ensure/reuse, not per
 ///     generation step, so a single long generation legitimately outruns the idle window and would otherwise look idle to
 ///     the reaper, which would tree-kill it mid-image. Mirrors the llama-server inference-lease pattern.
 /// </summary>

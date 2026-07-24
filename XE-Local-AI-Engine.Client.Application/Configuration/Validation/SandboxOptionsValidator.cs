@@ -4,7 +4,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 
 /// <summary>
-///     Fail-loud startup guard for the AgentHome sandbox provider (security MED-2). There is no execution-capable code
+///     Fail-loud startup guard for the AgentHome sandbox provider. There is no execution-capable code
 ///     default, so an unset provider in Production must STOP startup rather than silently fall back — a stripped config
 ///     must never grant the host-command-executing <c>process</c> provider. Non-Production tolerates an unset provider
 ///     (the selector resolves the deterministic fake). Wired with <c>ValidateOnStart</c>, so this throws at host start.

@@ -250,7 +250,7 @@ public sealed class InvocationResumeRegistryTests
     [Test]
     public async Task ResumeAsync_WhenTerminalRacesBeforeFirstEnumeration_YieldsTerminalAndCompletes()
     {
-        // GPTAUD-05: the invocation can reach its terminal in the window between ResumeAsync's non-terminal validation
+        // The invocation can reach its terminal in the window between ResumeAsync's non-terminal validation
         // and the lazy Subscribe at the first enumeration. When it does, OnInvocationStateChanged runs TryRemove +
         // Publish(terminal) + Complete() before any subscriber channel is registered, so the freshly-registered channel
         // would never be completed and the consumer's ReadAllAsync would block forever. The consumer must instead emit

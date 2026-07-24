@@ -34,7 +34,7 @@ export const nodeChatStreamEventTypes = {
 	// Tool lifecycle events (Phase D6) reuse the dedicated tool-event constant so the wire names stay DRY.
 	toolCallRequested: nodeChatToolStreamEventTypes.toolCallRequested,
 	toolCallCompleted: nodeChatToolStreamEventTypes.toolCallCompleted,
-	// A pending tool-approval request (UX-01): flips the matching tool card into a waiting-for-approval state without
+	// A pending tool-approval request: flips the matching tool card into a waiting-for-approval state without
 	// mutating content/status — the turn stays live while the operator decides.
 	approvalRequested: nodeChatToolStreamEventTypes.approvalRequested,
 	// A non-fatal "turn notice" (model substitution, tool disabled, history truncated). Never mutates
@@ -253,7 +253,7 @@ function mergeToolEntry(toolEntries: readonly ToolEntryInput[], toolCall: ChatTo
 }
 
 /**
- * Folds a pending tool-approval (UX-01) into the ordered tool entries: the matching tool card (by tool-call id) flips
+ * Folds a pending tool-approval into the ordered tool entries: the matching tool card (by tool-call id) flips
  * to `waiting` and carries the approval request id the Approve/Deny controls post back. When the approval-gated tool
  * has not yet surfaced its own tool-call-requested card, a fresh waiting entry is created so the prompt still renders.
  */
@@ -336,7 +336,7 @@ function nextReasoningParts(
 }
 
 /**
- * Terminalizes any lingering pending-approval waiting tool card on a terminal turn (UX-01). An API-tool DENY never
+ * Terminalizes any lingering pending-approval waiting tool card on a terminal turn. An API-tool DENY never
  * emits a tool-call-completed event — the deny short-circuits before the tool ever runs — so its requestId-keyed
  * waiting card would otherwise linger with live Approve/Deny controls until the post-stream refetch scrubs it. Once
  * the turn is terminal the approval can no longer be answered, so a still-`waiting` tool card that still carries a
@@ -487,7 +487,7 @@ export function applyNodeChatStreamEvent(
 		};
 	}
 
-	// A pending tool-approval request (UX-01): flip the matching tool card into a waiting-for-approval state carrying
+	// A pending tool-approval request: flip the matching tool card into a waiting-for-approval state carrying
 	// the approval request id the Approve/Deny controls post back. Like tool-lifecycle events it never mutates
 	// assistant content/status — the turn stays live while the operator decides. No timeline entry is returned.
 	if (event.type === nodeChatStreamEventTypes.approvalRequested) {

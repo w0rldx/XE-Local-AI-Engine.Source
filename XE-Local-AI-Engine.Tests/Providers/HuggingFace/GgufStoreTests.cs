@@ -399,7 +399,7 @@ public sealed class GgufStoreTests
         var options = Infra.Options(dir.Path);
         var correctSha = Infra.Sha256Upper(ModelBytes);
         // Neither the resolve probe nor the byte GET expose an X-Linked-Etag; the discovery digest is the sole integrity
-        // source and MUST be used to verify the stream (GPTAUD-20).
+        // source and MUST be used to verify the stream.
         using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => FullDownload(ModelBytes));
         using var http = new HttpClient(handler);
         using var registry = Infra.Registry(options);
@@ -423,7 +423,7 @@ public sealed class GgufStoreTests
         using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
         var options = Infra.Options(dir.Path);
         // The discovery digest does NOT match the streamed bytes, and no OID is on the wire → the fallback verification
-        // must reject the download (GPTAUD-20).
+        // must reject the download.
         var wrongSha = Infra.Sha256Upper(Encoding.UTF8.GetBytes("different-content"));
         using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => FullDownload(ModelBytes));
         using var http = new HttpClient(handler);
@@ -448,7 +448,7 @@ public sealed class GgufStoreTests
         using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
         var options = Infra.Options(dir.Path);
         // No OID on the resolve probe, no X-Linked-Etag on the GET, and no discovery digest → nothing to verify, so the
-        // persisted sha256 MUST be null rather than an unverified echo (GPTAUD-20).
+        // persisted sha256 MUST be null rather than an unverified echo.
         using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => FullDownload(ModelBytes));
         using var http = new HttpClient(handler);
         using var registry = Infra.Registry(options);

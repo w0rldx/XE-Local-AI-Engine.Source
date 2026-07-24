@@ -15,7 +15,7 @@ interface KnowledgeDocumentDrawerProps {
 	readonly opened: boolean;
 	readonly detail: KnowledgeDocumentDetail | undefined;
 	readonly isLoading: boolean;
-	// Optional heading section (from a chat "Sources" card, UX-06) to visually highlight + scroll to. Matched against
+	// Optional heading section (from a chat "Sources" card) to visually highlight + scroll to. Matched against
 	// each chunk's headingPath. Exact chunk-id scroll is intentionally NOT supported — the chunk view exposes
 	// chunkIndex, not chunkId, so id matching would require a backend DTO change.
 	readonly highlightSection?: string | null;

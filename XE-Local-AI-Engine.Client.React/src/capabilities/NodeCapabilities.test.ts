@@ -27,12 +27,12 @@ describe("nodeCapabilities", () => {
 		expect(nodeCapabilities.preview).toBe(true);
 	});
 
-	it("keeps node chat local-first and surfaces tool-approval controls (UX-01)", () => {
+	it("keeps node chat local-first and surfaces tool-approval controls", () => {
 		expect(nodeCapabilities.chat).toEqual({
 			localRuntime: true,
 			localModelManagement: true,
 			localTools: true,
-			// UX-01: the local tool-approval responder ships, so the chat surface exposes Approve/Deny controls.
+			// The local tool-approval responder ships, so the chat surface exposes Approve/Deny controls.
 			toolApprovals: true,
 			conversationFeedback: true,
 			offlineFirst: false,
@@ -42,7 +42,7 @@ describe("nodeCapabilities", () => {
 			imageAttachments: false,
 			agentManagement: true,
 			voice: true,
-			// OPP-05: plain-chat knowledge-base grounding surface ships, so the composer exposes the "Use Knowledge Base" toggle.
+			// Plain-chat knowledge-base grounding surface ships, so the composer exposes the "Use Knowledge Base" toggle.
 			knowledgeBase: true,
 		});
 	});

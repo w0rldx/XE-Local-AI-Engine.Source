@@ -1,4 +1,4 @@
-// GPTAUD-03b: the streaming-update mapping must surface BOTH a reasoning delta and a visible-text delta when one source
+// The streaming-update mapping must surface BOTH a reasoning delta and a visible-text delta when one source
 // update carries both, in order (reasoning first) — previously an update with any reasoning returned early and dropped
 // its visible text. The concrete MAF StreamingRun cannot be faked, so the pure mapping is exercised through the internal
 // static ComposeStreamingUpdates seam that carries the logic (mirrors IdleStreamGuardTests' approach for this class).

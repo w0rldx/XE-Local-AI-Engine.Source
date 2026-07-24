@@ -14,7 +14,7 @@ using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 ///     <see cref="IMcpToolRegistry" /> (MCP — node-local MCP tools). Names matched by none are skipped so a
 ///     stale or unhandled offer can never reach the agent.
 ///     <para>
-///         Approval policy is TIGHTEN-ONLY, most-restrictive-wins, fail closed (MED-006). The effective policy for a
+///         Approval policy is TIGHTEN-ONLY, most-restrictive-wins, fail closed. The effective policy for a
 ///         resolved tool is <c>handler/registry policy OR per-agent offer policy</c>: when the offer
 ///         (<see cref="OfferPlaceholderAIFunction" />) requires approval, the resolved executable is wrapped in
 ///         <c>ApprovalRequiredAIFunction</c> unless it already is one — so a per-agent tightening of a ClientLocal,

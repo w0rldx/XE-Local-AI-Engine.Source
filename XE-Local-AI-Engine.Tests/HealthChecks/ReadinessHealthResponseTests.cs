@@ -6,7 +6,7 @@ using XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     GPTAUD-19c: the /health/ready payload must distinguish a Degraded worker (which still returns HTTP 200 because it
+///     The /health/ready payload must distinguish a Degraded worker (which still returns HTTP 200 because it
 ///     is serving local inference) with its per-check status, description, and structured reason data — so "degraded" is
 ///     never an indistinguishable 200. A Healthy check with no data carries no reason block.
 /// </summary>

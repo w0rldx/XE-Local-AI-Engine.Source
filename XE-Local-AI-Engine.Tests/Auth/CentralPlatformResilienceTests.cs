@@ -7,7 +7,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 using XE_Local_AI_Engine.Tests.Testing;
 
-// MED-001: the CentralPlatformApi resilience pipeline (AddCentralPlatformResilience) must
+// The CentralPlatformApi resilience pipeline (AddCentralPlatformResilience) must
 //  - NOT retry state-changing POSTs (device-binding, pairing, worker-token refresh carry no idempotency key), and
 //  - retry safe methods (GET), while
 //  - keeping the attempt/total timeout and circuit breaker for all methods, and

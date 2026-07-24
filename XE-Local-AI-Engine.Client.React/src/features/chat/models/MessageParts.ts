@@ -29,7 +29,7 @@ export interface ToolEntryInput {
 	args?: string;
 	result?: string;
 	requiresApproval?: boolean;
-	// Set while the tool waits on the operator's approval decision (UX-01); the approval request id the resolve
+	// Set while the tool waits on the operator's approval decision; the approval request id the resolve
 	// endpoint keys on. Cleared once the tool completes/rejects.
 	pendingApprovalRequestId?: string;
 }

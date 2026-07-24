@@ -141,7 +141,7 @@ function titleOrFallback(title: string | null | undefined): string {
 }
 
 /**
- * Maps the wire knowledge-base `sources[]` to `ChatMessageSource[]` (OPP-05 / UX-04). Drops entries with no id/title
+ * Maps the wire knowledge-base `sources[]` to `ChatMessageSource[]`. Drops entries with no id/title
  * so a malformed record never renders a blank source card. Returns undefined when nothing usable remains, so the
  * "Sources" strip stays hidden for legacy turns, non-knowledge turns, and user messages.
  */

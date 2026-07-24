@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     The knowledge-chat composer assembles the synthetic plain-chat context block from a knowledge-base search result
-///     (OPP-05) and projects the provenance of the inlined hits into the turn's sources (UX-04). It fences each hit as
+///     and projects the provenance of the inlined hits into the turn's sources. It fences each hit as
 ///     untrusted DATA, caps the combined text to a character budget dropping the lowest-scored hits first, and never
 ///     leaks chunk body text into the sources projection.
 /// </summary>

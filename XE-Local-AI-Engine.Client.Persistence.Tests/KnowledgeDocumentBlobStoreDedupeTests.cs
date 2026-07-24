@@ -110,7 +110,7 @@ public sealed class KnowledgeDocumentBlobStoreDedupeTests : IDisposable
     [Test]
     public async Task AddAsync_WhenRepairingMissingBlob_ResetsFailedRowToPendingForReindex()
     {
-        // GPTAUD-12 follow-up: a prior crash left the row marked Failed once ingestion could not read its bytes. The
+        // A prior crash left the row marked Failed once ingestion could not read its bytes. The
         // repair path restores the blob AND must reset the row to Pending, or UploadKnowledgeDocumentEndpoint (which only
         // enqueues fresh or Pending rows) would never re-index the recovered bytes and every re-upload would keep
         // returning the stuck Failed document.

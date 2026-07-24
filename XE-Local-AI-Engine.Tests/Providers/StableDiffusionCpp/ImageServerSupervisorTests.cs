@@ -178,7 +178,7 @@ public sealed class ImageServerSupervisorTests
     [Test]
     public async Task LeasedDaemon_PastTtl_IsNotEvicted_UntilLeaseReleased()
     {
-        // GPTAUD-10a: a daemon with an active job lease (an in-flight generation) is never evicted, even past the idle
+        // A daemon with an active job lease (an in-flight generation) is never evicted, even past the idle
         // TTL — LastUsedUtc is stamped per ensure/reuse, not per generation step, so a long job looks idle. At cap, a new
         // model is rejected rather than killing the leased daemon; once the lease is released the LRU evictor reclaims it.
         var launcher = new FakeImageProcessLauncher();
@@ -214,7 +214,7 @@ public sealed class ImageServerSupervisorTests
     [Test]
     public async Task TryAcquireJobLease_AfterDaemonEvicted_ReturnsNullLeaseless()
     {
-        // GPTAUD-10a P1: once a daemon has been evicted (torn down), a lease attempt must refuse leaselessly rather than
+        // Once a daemon has been evicted (torn down), a lease attempt must refuse leaselessly rather than
         // hand back a lease over a dead/removed daemon. Lease acquisition and eviction share an atomic latch, so a lease
         // can never be granted over a daemon that eviction has claimed or removed.
         var launcher = new FakeImageProcessLauncher();
@@ -272,7 +272,7 @@ public sealed class ImageServerSupervisorTests
     [Test]
     public async Task Dispose_DuringBlockedReadiness_TreeKillsSpawnedDaemon_NoOrphan()
     {
-        // GPTAUD-10b: a spawn registers into _processes only after readiness, so a DisposeAsync that races the spawn tears
+        // A spawn registers into _processes only after readiness, so a DisposeAsync that races the spawn tears
         // down only the daemons in its snapshot — a process launched-but-not-yet-registered would leak. Linking readiness
         // to the shutdown token makes dispose cancel the readiness wait, and the spawn's catch tree-kills the handle.
         var launcher = new FakeImageProcessLauncher();

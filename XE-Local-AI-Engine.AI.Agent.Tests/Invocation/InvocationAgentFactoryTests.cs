@@ -248,7 +248,7 @@ public sealed class InvocationAgentFactoryTests
     [Test]
     public async Task CreateAsync_ThinkingCapableReasoningNone_SetsLlamaDisableThinkingMarker()
     {
-        // GPTAUD-17b: reasoning OFF on a thinking-capable model. think:false suppresses reasoning on the Ollama wire, but
+        // Reasoning OFF on a thinking-capable model. think:false suppresses reasoning on the Ollama wire, but
         // the llama.cpp OpenAI adapter drops think, so the factory also flags the turn for the llama.cpp chat client to
         // inject chat_template_kwargs.enable_thinking=false — otherwise a Qwen3-class template keeps emitting reasoning.
         var definition = new InvocationAgentDefinition("qwen3:8b",

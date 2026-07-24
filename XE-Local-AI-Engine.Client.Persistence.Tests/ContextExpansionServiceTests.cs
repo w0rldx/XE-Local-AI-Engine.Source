@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 
 /// <summary>
-///     Proves that <see cref="ContextExpansionService.ExpandBatchAsync" /> (MED-006: one query per document instead of one
+///     Proves that <see cref="ContextExpansionService.ExpandBatchAsync" /> (one query per document instead of one
 ///     per hit) returns byte-for-byte the same rows and order as calling <see cref="ContextExpansionService.ExpandAsync" />
 ///     for each anchor individually — including same-document anchors with overlapping windows, an anchor at the lower
 ///     boundary, an anchor whose window runs past the last chunk, and anchors spanning multiple documents.

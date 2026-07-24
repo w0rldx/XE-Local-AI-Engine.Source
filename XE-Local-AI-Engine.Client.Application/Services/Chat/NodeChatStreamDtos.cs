@@ -34,7 +34,7 @@ public static class ChatStreamEventTypes
     public const string AssistantNotice = "assistant-notice";
 
     /// <summary>
-    ///     A tool-approval request the in-flight turn is paused on (UX-01). Carries the tool-call id (correlating it to
+    ///     A tool-approval request the in-flight turn is paused on. Carries the tool-call id (correlating it to
     ///     the waiting tool-call card), the tool name, and the <see cref="ChatStreamEvent.ApprovalRequestId" /> the
     ///     browser echoes back to the loopback resolve endpoint. Status stays <c>streaming</c>; no content rides it.
     /// </summary>
@@ -63,7 +63,7 @@ public sealed record NodeChatStreamRequest(
     // ignored. The client re-sends the conversation's current attachment ids each turn. Trailing optional so the
     // SignalR hub forwards the record unchanged.
     IReadOnlyList<Guid>? AttachmentFileIds = null,
-    // Opt-in knowledge-base grounding for a PLAIN-chat turn (OPP-05, default OFF). When true and the effective model is
+    // Opt-in knowledge-base grounding for a PLAIN-chat turn (default OFF). When true and the effective model is
     // node-local (or the operator opted cloud data-access in), the send path retrieves the top-k fused knowledge-base
     // hits for the user's latest message and inlines them as ONE fenced untrusted context region, and records their
     // provenance as the turn's sources. Ignored in agent mode (the agent uses the search_knowledge_base tool instead).
@@ -103,7 +103,7 @@ public sealed record ChatStreamEvent(
     // "loading_model", or "generating" — so the client can show a distinct model-loading indicator before the first
     // token. Trailing optional so every existing event type's wire shape is unchanged.
     string? RuntimePhase = null,
-    // Approval request id (ApprovalRequested events only, UX-01): the durable key the browser echoes back to the
+    // Approval request id (ApprovalRequested events only): the durable key the browser echoes back to the
     // loopback resolve endpoint to release the waiting run. Distinct from the top-level RequestId (the turn
     // correlation guid). The tool-call id rides ToolCallId and the tool name rides ToolName. Trailing optional so
     // every existing event type's wire shape is unchanged.

@@ -207,7 +207,7 @@ public sealed class PlaybookEvalServiceTests
         var actionId = Guid.NewGuid();
         var goldenCase = JudgeCase(agentId);
 
-        // MED-005: baseline AND candidate fail every case → zero regressions (regression needs a prior baseline pass) but
+        // Baseline AND candidate fail every case → zero regressions (regression needs a prior baseline pass) but
         // zero candidate passes. The absolute quality floor must block this; on no-regression alone it used to "pass".
         var judge = new FakePlaybookEvalJudge((_, _) => false);
         var service = CreateService(agentId, actionId, [goldenCase], judge, out _, out _);

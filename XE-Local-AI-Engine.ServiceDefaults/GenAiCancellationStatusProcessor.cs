@@ -6,7 +6,7 @@ using OpenTelemetry;
 /// <summary>
 ///     Downgrades a gen_ai span's status from <see cref="ActivityStatusCode.Error" /> to
 ///     <see cref="ActivityStatusCode.Unset" /> when the span failed only because the operation was cancelled — a user
-///     pressing Stop, not a service fault (GPTAUD-19a). MEAI's <c>OpenTelemetryChatClient</c> (source
+///     pressing Stop, not a service fault. MEAI's <c>OpenTelemetryChatClient</c> (source
 ///     <c>Microsoft.Extensions.AI</c>) records an <see cref="OperationCanceledException" /> /
 ///     <c>TaskCanceledException</c> as an Error-status span with the full cancellation stack; left as-is, every user
 ///     Stop pollutes error dashboards and alerting. This runs on <see cref="OnEnd" /> (before export, where the

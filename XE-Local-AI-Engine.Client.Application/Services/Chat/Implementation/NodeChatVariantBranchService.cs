@@ -45,7 +45,7 @@ internal sealed class NodeChatVariantBranchService(NodeChatPersistenceWriter wri
         // comes from the caller-supplied map (the path the user was viewing); a group with no valid selection falls back
         // to its newest member. The branch-point turn always contributes exactly the cutoff message, overriding any
         // caller entry for its group. Without this collapse the copied siblings would render as duplicate stacked
-        // assistant turns (variant_group_id is dropped on copy below). (RC fix + MED-008 + late-sibling anchoring.)
+        // assistant turns (variant_group_id is dropped on copy below). (RC fix + late-sibling anchoring.)
         var anchorByGroup = source.Messages.Where(message => message.VariantGroupId is not null)
                                   .GroupBy(message => message.VariantGroupId!.Value)
                                   .ToDictionary(group => group.Key, group => group.Min(member => member.Sequence));

@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Mapper tests for the usage-summary projection (Wave 8 Lane A + Wave 13 cost): a bucket carries its fine-grained
+///     Mapper tests for the usage-summary projection: a bucket carries its fine-grained
 ///     provider through to the response, the per-provider rollup folds the (model, provider, day) buckets down to one row
 ///     per provider (biggest consumer first), and each level attaches a server-computed USD cost estimate — reasoning
 ///     billed as output, rates per 1M tokens, local runtimes free, rounded to 4 decimals.

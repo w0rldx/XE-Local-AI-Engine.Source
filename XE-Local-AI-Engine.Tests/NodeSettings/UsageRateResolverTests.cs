@@ -6,7 +6,7 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The usage-cost rate resolver precedence (Wave 13): local runtimes (llama.cpp / Ollama) are always free; otherwise
+///     The usage-cost rate resolver precedence: local runtimes (llama.cpp / Ollama) are always free; otherwise
 ///     an operator override for the model name wins, then the built-in default table, then zero (unknown / unpriced).
 ///     Model names match case-insensitively; the constructor defensively drops blank keys and negative / non-finite rates.
 /// </summary>

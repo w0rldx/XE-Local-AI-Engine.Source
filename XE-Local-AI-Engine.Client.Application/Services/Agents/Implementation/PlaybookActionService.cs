@@ -213,7 +213,7 @@ internal sealed class PlaybookActionService(
             return new PlaybookPromotionResult(PlaybookPromotionStatus.EvalRegressed, Record: null);
         }
 
-        // Absolute quality floor (defense in depth for MED-005). The eval writer already folds this into Passed, but a
+        // Absolute quality floor (defense in depth). The eval writer already folds this into Passed, but a
         // legacy/hand-crafted result could carry Passed == true with zero candidate passes (a run where every case
         // failed proves nothing). Independently require at least one candidate pass so a zero-quality result can never
         // authorize a promotion even if Passed was recorded true.

@@ -119,7 +119,7 @@ public sealed class ModelFootprintProviderTests
     [Test]
     public async Task Footprint_SizesKvAgainstLaunchPolicyChatDefault_NotAStaleLowerConstant()
     {
-        // GPTAUD-08b: a big-context model is capped at the ONE launch-policy chat default (16384), the same window a
+        // A big-context model is capped at the ONE launch-policy chat default (16384), the same window a
         // chat spawn actually launches with — not a separate lower constant. Sizing KV against a smaller window than the
         // runtime launches under-admits when the q8_0→f16 KV fallback fires (resident KV is 16384×f16), risking OOM.
         var profile = GpuProfile(64 * Gb);

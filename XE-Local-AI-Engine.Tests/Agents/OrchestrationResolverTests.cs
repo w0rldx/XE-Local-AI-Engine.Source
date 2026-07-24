@@ -461,7 +461,7 @@ public sealed class OrchestrationResolverTests
     [Test]
     public async Task ResolveAsync_ComposesBaseScaffoldAheadOfParticipantInstructions()
     {
-        // GPTAUD-03a: a participant prompt must be composed with the base scaffold exactly like a direct agent send
+        // A participant prompt must be composed with the base scaffold exactly like a direct agent send
         // (AgentDefinitionResolver.ComposePromptAsync), not returned raw. Before this a participant ran with NO scaffold.
         const string scaffold = "You are a locally-run agent. Ground every claim; use tools when they help.";
         var triage = CreateDefinition("Triage", modelProfile: ToolCapableModel, allowedTools: ["GetCurrentTime"]);

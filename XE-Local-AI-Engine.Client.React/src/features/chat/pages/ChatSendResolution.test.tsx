@@ -13,7 +13,7 @@ import type { ChatConversationModel } from "@/features/chat/models/ChatModels";
 import type { NodeChatStreamEventDto } from "@/features/chat/models/NodeChatStreamTypes";
 import { Chat } from "@/features/chat/pages/Chat";
 
-// UX-09's no-installed-model guidance renders a TanStack-router Link to /models whenever the fixture's model list
+// The no-installed-model guidance renders a TanStack-router Link to /models whenever the fixture's model list
 // is empty (the default below). Stub the router module so Chat mounts without a RouterProvider (mirrors
 // ChatMessage.test.tsx's ModelNotInstalled Link stub).
 vi.mock("@tanstack/react-router", async (importOriginal) => {
@@ -164,7 +164,7 @@ function renderChat(): { queryClient: QueryClient } {
 	return { queryClient };
 }
 
-describe("Chat send-conversation resolution (GPTAUD-16 / GPTAUD-17a)", () => {
+describe("Chat send-conversation resolution", () => {
 	beforeEach(() => {
 		installJsdomEnvironmentMocks();
 		vi.clearAllMocks();
@@ -228,7 +228,7 @@ describe("Chat send-conversation resolution (GPTAUD-16 / GPTAUD-17a)", () => {
 		}
 	});
 
-	it("invalidates the local-model-details query after a completed turn so the context meter re-reads the effective window (GPTAUD-17a)", async () => {
+	it("invalidates the local-model-details query after a completed turn so the context meter re-reads the effective window", async () => {
 		const conversation = makeConversation("conversation-1", "Thread");
 		adapter.listConversations.mockResolvedValue([conversation]);
 		adapter.getConversation.mockResolvedValue(conversation);

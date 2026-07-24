@@ -24,7 +24,7 @@ import { ChatMessage } from "@/features/chat/components/ChatMessage";
 import type { ChatMessageModel } from "@/features/chat/models/ChatModels";
 import { useNodeChatPreferencesStore } from "@/features/chat/stores/NodeChatPreferencesStore";
 
-// A tool-call card in the ordered parts can now fire the resolve-approval TanStack mutation (UX-01), so the render
+// A tool-call card in the ordered parts can now fire the resolve-approval TanStack mutation, so the render
 // tree needs a QueryClientProvider even for turns that never surface an approval. Kept as an element helper (not a
 // named component) so the test module stays fast-refresh-clean under biome's useComponentExportOnlyModules rule.
 function withProviders(ui: ReactNode): ReactElement {

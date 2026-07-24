@@ -5,7 +5,7 @@ using Microsoft.Agents.AI.Workflows;
 /// <summary>
 ///     Side-channel event a Debug-print node emits via <c>IWorkflowContext.AddEventAsync</c>. It carries the upstream
 ///     payload the Debug node tapped WITHOUT routing it down the edge (the node also forwards the payload unchanged as
-///     its return value, so the edge does NOT fork — phase-0 finding item 4). The drain maps this to a
+///     its return value, so the edge does NOT fork). The drain maps this to a
 ///     <see cref="PreviewWorkflowUpdateKind.NodeDebug" /> update.
 /// </summary>
 internal sealed class PreviewDebugEvent : WorkflowEvent

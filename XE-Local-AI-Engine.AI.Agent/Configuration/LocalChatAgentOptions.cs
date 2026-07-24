@@ -35,7 +35,7 @@ public sealed class LocalChatAgentOptions
 
     /// <summary>
     ///     Maximum number of retrieved knowledge-base characters inlined into a plain-chat turn when the user has opted
-    ///     into knowledge-base grounding (OPP-05). The fused hybrid-search hits are fenced and concatenated up to this
+    ///     into knowledge-base grounding. The fused hybrid-search hits are fenced and concatenated up to this
     ///     budget; hits beyond it are dropped (lowest-scored first). Smaller than the attachment budget because KB
     ///     grounding is a supplement to, not a replacement for, the conversation. Agent-mode turns ignore this (the
     ///     agent reads the knowledge base through its <c>search_knowledge_base</c> tool instead).
@@ -44,7 +44,7 @@ public sealed class LocalChatAgentOptions
     public int MaxInlinedKnowledgeChars { get; set; } = 16_000;
 
     /// <summary>
-    ///     Number of top fused knowledge-base hits retrieved to ground a plain-chat turn (OPP-05). Bounded so a single
+    ///     Number of top fused knowledge-base hits retrieved to ground a plain-chat turn. Bounded so a single
     ///     turn cannot pull an unbounded number of chunks into context; the character budget
     ///     (<see cref="MaxInlinedKnowledgeChars" />) is the hard cap on top of this count. Mirrors the
     ///     <c>search_knowledge_base</c> tool's default limit.

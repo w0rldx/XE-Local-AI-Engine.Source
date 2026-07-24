@@ -8,7 +8,7 @@ using OpenTelemetry;
 using OpenTelemetry.Metrics;
 using XE_Local_AI_Engine.Tests.Testing;
 
-// Composition contract for AddServiceDefaults (ServiceDefaults/Extensions.cs), MED-005:
+// Composition contract for AddServiceDefaults (ServiceDefaults/Extensions.cs):
 //  - OpenTelemetry instrumentation is registered in EVERY hosting mode (not only under Aspire).
 //  - The OTLP exporter is registered whenever OTEL_EXPORTER_OTLP_ENDPOINT is configured, regardless of ASPIRE_ENABLED
 //    — so a desktop/RC build with the standard variable set now exports.
@@ -29,8 +29,8 @@ public sealed class ServiceDefaultsTelemetryTests
     // ASPIRE_ENABLED-gated block (service discovery + the global ConfigureHttpClientDefaults resilience/discovery).
     private const string ServiceDiscoveryAssembly = "Microsoft.Extensions.ServiceDiscovery";
 
-    // Must match the Meter name in XE_Local_AI_Engine.AI.Agent.Chat.ProviderCallBudgetChatClient. The MED-007 fix adds
-    // this name to the WithMetrics AddMeter list so the agent's provider-round / budget counters are actually exported.
+    // Must match the Meter name in XE_Local_AI_Engine.AI.Agent.Chat.ProviderCallBudgetChatClient. This name is added to
+    // the WithMetrics AddMeter list so the agent's provider-round / budget counters are actually exported.
     private const string AgentBudgetMeterName = "XE.LocalAiEngine.AI.Agent";
 
     [Test]
@@ -56,7 +56,7 @@ public sealed class ServiceDefaultsTelemetryTests
         var meterProvider = host.Services.GetRequiredService<MeterProvider>();
 
         // A counter on a Meter whose NAME matches the agent budget meter. OpenTelemetry collects an instrument only when
-        // its meter name was registered via AddMeter, so this measurement is exported iff the MED-007 registration is present.
+        // its meter name was registered via AddMeter, so this measurement is exported iff that registration is present.
         using var meter = new Meter(AgentBudgetMeterName);
         meter.CreateCounter<long>("xe.agent.provider_rounds.export_probe").Add(1);
 
@@ -82,7 +82,7 @@ public sealed class ServiceDefaultsTelemetryTests
     [Test]
     public void DesktopMode_WithOtlpEndpoint_RegistersInstrumentationAndExporterWithoutServiceDiscovery()
     {
-        // The MED-005 fix: desktop hosting with the standard OTLP variable set now actually exports.
+        // Desktop hosting with the standard OTLP variable set now actually exports.
         var services = BuildServiceDefaults(aspireEnabled: false, otlpEndpointConfigured: true);
 
         AssertEx.True(HasServiceFromAssembly(services, OpenTelemetryHostingAssembly),

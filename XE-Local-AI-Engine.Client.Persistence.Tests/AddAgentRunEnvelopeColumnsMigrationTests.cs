@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     Verifies the <c>AddAgentRunEnvelopeColumns</c> migration (MED-007): it adds the durable run-envelope columns to
+///     Verifies the <c>AddAgentRunEnvelopeColumns</c> migration: it adds the durable run-envelope columns to
 ///     the existing <c>agent_execution_logs</c> table on both an upgrade from the preceding migration and a fresh
 ///     migrate-to-head, drops them on rollback, and leaves no model/snapshot drift. The two discriminator columns are
 ///     NOT NULL with a default of 0 so pre-existing (adaptive-memory) rows backfill to record kind 0.

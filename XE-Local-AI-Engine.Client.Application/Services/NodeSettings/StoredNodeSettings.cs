@@ -270,7 +270,7 @@ public sealed partial record StoredNodeSettings
     public NodeToolApprovalPolicySettings? ToolApprovalPolicy { get; init; }
 
     /// <summary>
-    ///     Operator override of usage cost rates (Wave 13). <see langword="null" /> (absent, the default) means no
+    ///     Operator override of usage cost rates. <see langword="null" /> (absent, the default) means no
     ///     override — the usage-summary cost estimate uses the built-in default rate table, and any model with neither an
     ///     override nor a default is unpriced (zero). A value supplies per-model-name USD rates that win over the defaults;
     ///     local runtimes stay free regardless. Negative / non-finite entries are dropped by

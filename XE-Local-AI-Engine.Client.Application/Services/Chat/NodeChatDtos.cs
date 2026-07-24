@@ -162,13 +162,13 @@ public sealed record NodeChatTerminalizeMessageRequest(
     // Whole-turn wall-clock generation duration in milliseconds (drives the optional tokens-per-second attribution).
     // Trailing optional so legacy callers and the platform path leave it null. Null preserves any existing value.
     long? GenerationDurationMs = null,
-    // Durable run-envelope payload (MED-007 / R4). When supplied, the terminalize persistence command writes the
+    // Durable run-envelope payload (R4). When supplied, the terminalize persistence command writes the
     // content-free envelope row in the SAME transaction as the terminal message row, so the two commit or roll back
     // together (no swallowed best-effort write). Null on paths that write no envelope. The terminal status/success and
     // the bound agent id are derived from the winning persisted message row inside the transaction, so they are NOT
     // carried here.
     AgentRunEnvelopeMetadata? Envelope = null,
-    // Knowledge-base sources that grounded this turn (OPP-05 / UX-04). Null leaves any existing persisted sources
+    // Knowledge-base sources that grounded this turn. Null leaves any existing persisted sources
     // untouched (mirrors the Parts null-preserves semantics); the plain-chat send path passes the retrieved sources
     // here so they land on the terminal row's metadata_json. Trailing optional so all other callers stay unchanged.
     IReadOnlyList<NodeChatMessageSource>? Sources = null);
@@ -278,7 +278,7 @@ public sealed record NodeChatMessagePart(
     bool? RequiresApproval = null);
 
 /// <summary>
-///     One knowledge-base chunk that grounded a plain-chat assistant turn (OPP-05 / UX-04). Captured at retrieval time
+///     One knowledge-base chunk that grounded a plain-chat assistant turn. Captured at retrieval time
 ///     from the fused hybrid-search hits that were fenced into the turn's context, and persisted on the assistant
 ///     message's <c>metadata_json</c> blob (additive — no DB migration) so the client can render a "Sources" strip on
 ///     both the live post-stream refetch and a later reload. Carries only the NON-SENSITIVE provenance the knowledge
@@ -335,7 +335,7 @@ public sealed record NodeChatPersistedMessageDto(
     // Null for legacy turns persisted before this field existed, the platform path, and user messages. Drives the
     // optional tokens-per-second attribution alongside OutputCount.
     long? GenerationDurationMs = null,
-    // Knowledge-base sources that grounded this plain-chat assistant turn (OPP-05 / UX-04), surfaced from the metadata
+    // Knowledge-base sources that grounded this plain-chat assistant turn, surfaced from the metadata
     // blob (no DB column). Null/empty for legacy turns, turns that did not use the knowledge base, and user messages.
     IReadOnlyList<NodeChatMessageSource>? Sources = null) : ISelectedPathMessage;
 

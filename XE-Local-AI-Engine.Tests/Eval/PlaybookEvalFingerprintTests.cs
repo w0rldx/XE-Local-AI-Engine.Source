@@ -5,7 +5,7 @@ using XE_Local_AI_Engine.Client.Services.Eval;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Fingerprint composition tests for the model-IDENTITY term (RAG-03). The fingerprint keys on the eval model's
+///     Fingerprint composition tests for the model-IDENTITY term. The fingerprint keys on the eval model's
 ///     resolved weight identity in addition to its name, so a model updated under the SAME name (an Ollama / llama.cpp
 ///     weight swap) moves the fingerprint and can no longer authorize a promotion recorded against the old weights.
 /// </summary>

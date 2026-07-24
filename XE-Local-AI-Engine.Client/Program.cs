@@ -269,7 +269,7 @@ try
     app.MapHealthChecks("/health/ready", new HealthCheckOptions
     {
         Predicate = r => r.Tags.Contains("ready"),
-        // Make the status→HTTP mapping explicit and intentional (GPTAUD-19c). Healthy and Degraded both return 200 —
+        // Make the status→HTTP mapping explicit and intentional. Healthy and Degraded both return 200 —
         // a Degraded worker (e.g. an expired platform-pairing token) is still serving local inference, so readiness
         // consumers (Aspire's WithHttpHealthCheck poll) must keep it in rotation — but the payload now distinguishes it
         // with per-check status + description + reason data, so "degraded" is never a silent 200. Only Unhealthy (a dead
@@ -581,7 +581,7 @@ namespace XE_Local_AI_Engine.Client
     }
 
     /// <summary>
-    ///     Projects a readiness <see cref="HealthReport" /> into the <c>/health/ready</c> JSON payload (GPTAUD-19c). Each
+    ///     Projects a readiness <see cref="HealthReport" /> into the <c>/health/ready</c> JSON payload. Each
     ///     check reports its own status, description, and structured reason data, so a Degraded worker that still returns
     ///     HTTP 200 (it is serving local inference) is nonetheless distinguishable by an inspecting operator or dashboard.
     /// </summary>

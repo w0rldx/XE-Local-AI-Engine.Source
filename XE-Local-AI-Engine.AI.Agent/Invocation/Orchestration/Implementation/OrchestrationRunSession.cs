@@ -76,7 +76,7 @@ internal sealed class OrchestrationRunSession : IOrchestrationRunSession
             await foreach (var evt in guarded.ConfigureAwait(false))
             {
                 // One source event can normalize to MORE than one update — a single streaming update carrying both
-                // reasoning and visible text yields a reasoning fragment AND a text fragment (GPTAUD-03b). Each is
+                // reasoning and visible text yields a reasoning fragment AND a text fragment. Each is
                 // surfaced in order (reasoning first) so no visible text is dropped.
                 foreach (var update in MapEvent(evt))
                 {
@@ -195,7 +195,7 @@ internal sealed class OrchestrationRunSession : IOrchestrationRunSession
     /// <summary>
     ///     Normalizes one streaming update's contents into ordered <see cref="OrchestrationUpdate" />s. A single update
     ///     can carry reasoning AND visible text (both co-occur on the wire), so this emits BOTH — a reasoning delta first,
-    ///     then a text delta (GPTAUD-03b) — rather than returning early on reasoning and dropping the visible text (the
+    ///     then a text delta — rather than returning early on reasoning and dropping the visible text (the
     ///     bug this fixes). A MAF handoff <c>FunctionCallContent</c> carries neither, so it maps to an empty list.
     ///     Pure and static so the mapping is unit-testable without the concrete MAF <c>StreamingRun</c> (which cannot be
     ///     faked).
