@@ -1953,7 +1953,8 @@ public sealed class InvocationRunnerTests
     // from a callback the test registers after the runner's, and no registration of this stream's own can run earlier.
     private static async IAsyncEnumerable<AgentResponseUpdate> WaitForRelease(Task release,
         TaskCompletionSource started,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        [EnumeratorCancellation]
+        CancellationToken cancellationToken = default)
     {
         started.TrySetResult();
         await release;

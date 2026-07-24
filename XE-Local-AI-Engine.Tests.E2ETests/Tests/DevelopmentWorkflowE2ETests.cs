@@ -35,10 +35,10 @@ public sealed class DevelopmentWorkflowE2ETests : XEE2ETestBase
 
         // The dialog closes and the picker shows the newly registered alias only once the POST succeeded.
         await Expect(Page.GetByTestId("development-repository-select"))
-            .ToHaveValueAsync(alias, new LocatorAssertionsToHaveValueOptions
-            {
-                Timeout = 10_000
-            }).ConfigureAwait(false);
+              .ToHaveValueAsync(alias, new LocatorAssertionsToHaveValueOptions
+              {
+                  Timeout = 10_000
+              }).ConfigureAwait(false);
     }
 
     [Test]
