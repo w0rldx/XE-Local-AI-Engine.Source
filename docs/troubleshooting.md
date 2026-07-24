@@ -59,7 +59,7 @@ This wipes chats, agents, scheduler jobs, and settings, but **keeps** your downl
 
 Use the uninstaller shipped in the zip (it stops the app + model engine, then deletes your data dir after you confirm):
 
-- **Windows:** right-click `Uninstall-XE-Local-AI-Engine.ps1` → **Run with PowerShell**.
+- **Windows:** right-click `uninstall-xe-local-ai-engine.ps1` → **Run with PowerShell**.
 - **Linux:** from a terminal in the unzipped folder, run `./uninstall-xe-local-ai-engine.sh`.
 
 Then delete the unzipped app folder. To preview without deleting, pass `--dry-run` (Linux) / `-DryRun` (Windows). To keep your data, pass `--keep-data` / `-KeepData`.
