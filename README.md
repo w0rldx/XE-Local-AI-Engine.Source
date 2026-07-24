@@ -90,10 +90,9 @@ The repository validation wrapper mirrors these commands:
 bash .opencode/scripts/project-validate.sh --scope changed --base develop --serial
 ```
 
-> **Pass `--base develop`.** `--scope changed` defaults to `--base main` (`project-validate.sh:340`), but this repository
-> has **no `main` branch** — the default branch is `develop`. With the default the script silently falls back to
-> `git diff HEAD~1` (`project-validate.sh:344-348`), so it validates a *single commit* instead of your whole branch and
-> reports green while never touching most of your changes.
+> **`--scope changed` diffs against `develop`.** It used to default to `main`, which this repository does not have, so
+> the script fell back to `git diff HEAD~1` and validated a *single commit* instead of your whole branch — reporting
+> green while never touching most of your changes. The default is now `develop`; pass `--base <branch>` to override it.
 
 E2E validation is ask-gated because it may require browser/runtime setup:
 
