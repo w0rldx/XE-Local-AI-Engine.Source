@@ -95,11 +95,23 @@ The wrapper mirrors the raw commands and parallelises independent trees. Invoke 
 | `e2e` | **ask-gated**: pre-gate backend+frontend, then build + `dotnet test` the E2E project **with `-p:RunE2ETests=true`** (required — without it the csproj is a plain library and zero tests are discovered; the runner also fails the lane if zero tests run). Refuses to run without `--confirm-e2e` |
 | `smoke` | fast backend+frontend subset; adds E2E smoke only with `--confirm-e2e` |
 | `coverage` | backend `--collect:"XPlat Code Coverage"` + frontend `test:coverage:check` (threshold gate) |
-| `changed` | auto-detects backend/frontend from `git diff` vs `--base` (default `main`); `*.cs/*.csproj/*.slnx/Directory.*/global.json` → backend, frontend dir → frontend |
+| `scripts` | shellcheck + PSScriptAnalyzer over the packaging scripts, plus a build-only compile check of the `#if P0_SPIKE` code. Runs in `full`; takes seconds. See below |
+| `changed` | auto-detects backend/frontend from `git diff` vs `--base` (default `develop`); `*.cs/*.csproj/*.slnx/Directory.*/global.json` → backend, frontend dir → frontend |
 | `full` | backend + frontend in parallel, + E2E if `--confirm-e2e` |
 | `setup` | OpenCode meta-validation (`validate-no-legacy.sh`, `validate-opencode.ts`, JSON config sanity) — project-agnostic |
 
 The everyday loop is `--scope changed --serial`; E2E is deliberately behind `--confirm-e2e` because it builds the React client and launches browsers and so may need browser/runtime setup not present in every environment.
+
+### The two standalone runners
+
+Both exist because GitHub Actions is disabled, so anything not reachable from a local command is not reachable at all.
+
+- **[`scripts/run-e2e-local.sh`](../../scripts/run-e2e-local.sh)** — opt-in local runner for the Playwright suite. Nothing invokes it automatically; run it by hand before cutting a tester RC. Over `--scope e2e` it adds Playwright **browser installation** (via `playwright.ps1`, so it needs `pwsh`), which was the actual reason the lane could not be run cold. `--list` enumerates without running, `--filter` scopes to a class. Exit codes: `0` pass, `1` tests failed or the run was vacuous, `2` a prerequisite is missing. No external services needed — FakeOllama plus the in-process host, so no `llama-server` and no `scripts/dev-stop.sh`.
+- **[`scripts/lint-release-scripts.sh`](../../scripts/lint-release-scripts.sh)** — shellcheck + PSScriptAnalyzer over the packaging scripts, wired in as `--scope scripts`. With Actions disabled, `publish/package-tester-win.ps1` is the entire release path, so it gets static analysis of its own. A **missing linter exits 2** rather than passing silently. `--pester` additionally runs [`publish/tests/package-tester-win.Tests.ps1`](../../publish/tests/package-tester-win.Tests.ps1) (opt-in, needs the Pester module), which covers the script's parsing and gate logic — including the vulnerability-JSON handling that no linter has a rule for.
+
+> **A zero-test run is a failure, not a pass.** Both runners enforce this, as does `--scope e2e`. The E2E project sets `IsTestProject=false`/`OutputType=Library` unless `-p:RunE2ETests=true` is passed, so without it `dotnet test` discovers nothing and exits **0**. Never read a green E2E run without checking that a non-zero number of tests actually ran.
+
+> **A mass E2E failure is usually one broken frontend.** The fixture runs `pnpm run build`, which starts with `tsc --noEmit`, so a single type error fails ~62 of 64 tests at fixture init. Check the build before reading traces.
 
 > Note: `scope_smoke` / `scope_backend_smoke` currently invoke the *full* `dotnet test` (not a reduced subset) — the "smoke" backend body is identical to the full backend body in `project-validate.sh`. Treat backend smoke as a full backend run today.
 
