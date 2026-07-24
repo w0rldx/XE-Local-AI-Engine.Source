@@ -1,12 +1,13 @@
 # XE Node React Client
 
-This is the standalone React management UI served by `XE-Local-AI-Engine.Client` at the web root. It talks only to the node-local FastEndpoints API under `/api/local/v1` and uses the per-launch local-operator token injected by the host shell.
+This is the standalone React management UI served by `XE-Local-AI-Engine.Client` at the web root. It talks only to the node-local FastEndpoints API under `/api/local/v1`. The setup/login flow obtains a short-lived bearer access token; the shared Axios client keeps that token in memory and uses the refresh flow when required.
 
 ## Build
 
-Build the client with `pnpm run build` (the same command the Node Web Server README references when it copies the `dist/` output into `wwwroot`):
+Run from the repository root:
 
 ```sh
+cd XE-Local-AI-Engine.Client.React
 pnpm install --frozen-lockfile
 pnpm run build
 ```
@@ -17,7 +18,7 @@ The frontend uses `@hey-api/openapi-ts` to generate a typed Axios client from th
 
 ### Regenerate the client
 
-Run from `Apps/XE-Local-AI-Engine/XE-Local-AI-Engine.Client.React`:
+Run from `XE-Local-AI-Engine.Client.React`:
 
 ```sh
 pnpm run openapi
@@ -44,7 +45,7 @@ pnpm run openapi:check
 
 ### Axios and auth behavior
 
-Generated SDK calls use the shared node-local `axiosInstance`, so the local-operator token header, rate-limit toast, and ProblemDetails interceptors remain active. The browser never receives cloud-provider credentials or platform worker credentials.
+Generated SDK calls use the shared node-local `axiosInstance`, so the in-memory bearer token, refresh handling, rate-limit toast, and ProblemDetails interceptors remain active. The browser never receives cloud-provider credentials or platform worker credentials.
 
 ### Migration cookbook
 
