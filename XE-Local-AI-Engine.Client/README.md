@@ -13,16 +13,16 @@
 ## Main responsibilities
 
 - Serve the built React app from `wwwroot/index.html` and static assets from `wwwroot/assets/**`.
-- Expose node JWT-authenticated APIs for chat, binding, settings, models, runtime manager, logs, and invocations.
+- Expose node JWT-authenticated APIs for chat, agents, settings, models, knowledge, logs, scheduling, and invocations.
 - Stream local chat and runtime-log events over local SignalR endpoints.
 - Apply SQLite migrations and recover interrupted chat messages at startup.
-- Coordinate HostAgent status/actions while keeping HostAgent and Tray local-substrate only.
+- Supervise the node-local llama.cpp and Stable Diffusion runtime processes. There is no HostAgent, Tray, or container-runtime project in the current architecture.
 - Connect or disconnect from the platform through `WorkerHub` based on the node's configured remote opt-in state.
 
 ## Development notes
 
-1. Build the React client from `../XE-Local-AI-Engine.Client.React` with `pnpm run build`.
-2. Build this host through the XE subtree solution; the project copies the React `dist/` output into `wwwroot` during build.
+1. From the repository root, build the React client with `cd XE-Local-AI-Engine.Client.React && pnpm run build`.
+2. Build this host through `XE-Local-AI-Engine.slnx`; the project copies the React `dist/` output into `wwwroot` during build.
 3. Keep generated OpenAPI/React client files regenerated through their scripts instead of hand-editing generated output.
 4. Preserve the local endpoint security posture: loopback/local origin, JWT authentication, strict host/origin checks, and no secret-bearing responses.
 
