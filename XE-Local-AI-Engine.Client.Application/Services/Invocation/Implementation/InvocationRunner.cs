@@ -116,9 +116,18 @@ public sealed partial class InvocationRunner : IInvocationRunner
     // become an untracked active run the drain never waits for.
     private bool _draining;
 
+    // The caller/host token the active invocation's source is linked to (see RegisterActiveInvocation), captured so a
+    // cancellation can be attributed to the caller rather than to the invocation watchdog WITHOUT relying on a token
+    // callback: callbacks run in reverse registration order, so anything registered by the streaming agent after the
+    // runner's own registration is released FIRST and can reach the failure mapping before an earlier callback ran.
+    private CancellationToken _hostCancellationToken;
+
     private CancellationTokenSource? _invocationCancellationTokenSource;
-    private bool _timeoutTriggered;
-    private bool _userCancelRequested;
+
+    // Why the active invocation was DELIBERATELY cancelled, recorded synchronously under _syncRoot by the requester
+    // itself (Cancel / CancelAll). Unknown means nobody asked: the cancellation then came from the invocation's own
+    // CancelAfter watchdog or from the linked caller token, and both are read off observable state at mapping time.
+    private CancellationOrigin _requestedCancellationOrigin;
 
     public InvocationRunner(Lazy<IHubMessageSender> hubSender,
         Lazy<IWorkerEventDispatcher> eventDispatcher,
@@ -370,11 +379,12 @@ public sealed partial class InvocationRunner : IInvocationRunner
         catch (OperationCanceledException) when (IsCurrentInvocation(package.InvocationId))
         {
             CancelPendingToolCalls(package.InvocationId);
-            var failureCategory = ClassifyCancellation();
+            var cancellationOrigin = ResolveCancellationOrigin();
+            var failureCategory = ClassifyCancellation(cancellationOrigin);
             // AUD4-19: count the cancellation by its cause (user | watchdog | shutdown). Distinct from InvocationFailedTotal:
             // a cancel is an outcome, not a failure. An invocation-level timeout ("watchdog") is additionally surfaced as a
             // Timeout failure below via ReportInvocationFailedAsync — the two metrics answer different questions.
-            NodeMetrics.InvocationCancelledTotal.Add(1, new KeyValuePair<string, object?>("category", ClassifyCancellationMetricCategory()));
+            NodeMetrics.InvocationCancelledTotal.Add(1, new KeyValuePair<string, object?>("category", ClassifyCancellationMetricCategory(cancellationOrigin)));
             await dispatcher.ReportInvocationFailedAsync(package.InvocationId, "Invocation timed out or was cancelled", failureCategory).ConfigureAwait(false);
             if (shouldSendHubMessages)
             {
@@ -446,7 +456,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             if (_currentInvocationId == invocationId)
             {
                 invocationCancellationTokenSource = _invocationCancellationTokenSource;
-                _userCancelRequested = true;
+                _requestedCancellationOrigin = CancellationOrigin.User;
             }
         }
 
@@ -461,6 +471,13 @@ public sealed partial class InvocationRunner : IInvocationRunner
         lock (_syncRoot)
         {
             invocationCancellationTokenSource = _invocationCancellationTokenSource;
+
+            // An external stop of everything in flight (the hub's disconnect request), NOT the invocation watchdog:
+            // record it here so the turn is classified as a shutdown-style cancellation rather than a timeout.
+            if (invocationCancellationTokenSource is not null && _requestedCancellationOrigin == CancellationOrigin.Unknown)
+            {
+                _requestedCancellationOrigin = CancellationOrigin.Shutdown;
+            }
         }
 
         invocationCancellationTokenSource?.Cancel();
@@ -1454,33 +1471,52 @@ public sealed partial class InvocationRunner : IInvocationRunner
             : _maxPendingToolCallAge;
     }
 
-    private FailureCategory ClassifyCancellation()
+    // Attributes the cancellation that ended the turn, from state that is already observable when the failure is
+    // mapped: a deliberate cancel recorded by its own requester, the linked caller token, or — by elimination — the
+    // invocation source's CancelAfter watchdog. Deliberately does NOT consult a flag set from a token callback:
+    // callbacks run in reverse registration order, so a callback the runner registers at invocation registration is
+    // invoked AFTER every later registration (the streaming agent's own), and the released agent can reach this
+    // mapping before it ever ran — which reported a genuine watchdog timeout as a plain cancellation.
+    // Resolved ONCE per cancelled turn so the failure category and the metric category cannot disagree.
+    private CancellationOrigin ResolveCancellationOrigin()
     {
         lock (_syncRoot)
         {
-            if (_userCancelRequested)
+            if (_requestedCancellationOrigin != CancellationOrigin.Unknown)
             {
-                return FailureCategory.Cancelled;
+                return _requestedCancellationOrigin;
             }
 
-            return _timeoutTriggered ? FailureCategory.Timeout : FailureCategory.Cancelled;
+            if (_hostCancellationToken.IsCancellationRequested)
+            {
+                return CancellationOrigin.Shutdown;
+            }
+
+            // Nobody asked and the caller's token is still live, so a cancelled invocation source can only be its own
+            // CancelAfter watchdog. An OperationCanceledException arriving with nothing cancelled is not attributable
+            // to this node's timeout and stays a plain cancellation.
+            return _invocationCancellationTokenSource?.IsCancellationRequested == true
+                ? CancellationOrigin.Watchdog
+                : CancellationOrigin.Shutdown;
         }
     }
 
-    // The cancellation cause for the invocation_cancelled_total metric (AUD4-19): an explicit user cancel, the
-    // invocation-level timeout firing ("watchdog"), or neither — an external token cancellation, i.e. host shutdown.
-    // Reads the same flags ClassifyCancellation does, under the same lock.
-    private string ClassifyCancellationMetricCategory()
+    private static FailureCategory ClassifyCancellation(CancellationOrigin origin)
     {
-        lock (_syncRoot)
-        {
-            if (_userCancelRequested)
-            {
-                return "user";
-            }
+        return origin == CancellationOrigin.Watchdog ? FailureCategory.Timeout : FailureCategory.Cancelled;
+    }
 
-            return _timeoutTriggered ? "watchdog" : "shutdown";
-        }
+    // The cancellation cause for the invocation_cancelled_total metric (AUD4-19): an explicit user cancel, the
+    // invocation-level timeout firing ("watchdog"), or an external cancellation — the caller/host token or a
+    // disconnect-driven CancelAll — reported as "shutdown".
+    private static string ClassifyCancellationMetricCategory(CancellationOrigin origin)
+    {
+        return origin switch
+        {
+            CancellationOrigin.User => "user",
+            CancellationOrigin.Watchdog => "watchdog",
+            _ => "shutdown"
+        };
     }
 
     private void CancelPendingToolCalls(Guid invocationId)
@@ -1507,16 +1543,6 @@ public sealed partial class InvocationRunner : IInvocationRunner
         try
         {
             invocationCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            invocationCancellationTokenSource.Token.Register(() =>
-            {
-                lock (_syncRoot)
-                {
-                    if (!_userCancelRequested)
-                    {
-                        _timeoutTriggered = true;
-                    }
-                }
-            });
             invocationCancellationTokenSource.CancelAfter(invocationTimeout);
 
             lock (_syncRoot)
@@ -1527,8 +1553,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 }
 
                 _currentInvocationId = invocationId;
-                _userCancelRequested = false;
-                _timeoutTriggered = false;
+                _requestedCancellationOrigin = CancellationOrigin.Unknown;
+                _hostCancellationToken = cancellationToken;
                 _invocationCancellationTokenSource = invocationCancellationTokenSource;
                 invocationCancellationTokenSource = null;
             }
@@ -1574,11 +1600,24 @@ public sealed partial class InvocationRunner : IInvocationRunner
             invocationCancellationTokenSource = _invocationCancellationTokenSource;
             _invocationCancellationTokenSource = null;
             _currentInvocationId = null;
-            _userCancelRequested = false;
-            _timeoutTriggered = false;
+            _requestedCancellationOrigin = CancellationOrigin.Unknown;
+            _hostCancellationToken = CancellationToken.None;
         }
 
         invocationCancellationTokenSource?.Dispose();
+    }
+
+    /// <summary>
+    ///     What ended a cancelled invocation. <see cref="Unknown" /> is the resting value: no deliberate cancel was
+    ///     requested, so the origin is derived from the caller token and the invocation source in
+    ///     <see cref="ResolveCancellationOrigin" />.
+    /// </summary>
+    private enum CancellationOrigin
+    {
+        Unknown = 0,
+        User = 1,
+        Watchdog = 2,
+        Shutdown = 3
     }
 
     /// <summary>
