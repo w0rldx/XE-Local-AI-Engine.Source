@@ -1,6 +1,6 @@
 # Agent Mode & the AI Agent Runtime
 
-> Last reviewed: 2026-06-27 · Code-grounded.
+> Last reviewed: 2026-07-24 · Code-grounded.
 
 Agent Mode is XE Local AI Engine's governed agentic layer. It is split across two assemblies:
 `XE-Local-AI-Engine.AI.Agent` owns the Microsoft Agent Framework (MAF) / `Microsoft.Extensions.AI`
@@ -65,13 +65,37 @@ treat them uniformly.
 
 | Registry | Interface / impl | Source of tools | Notes |
 |---|---|---|---|
-| Built-in catalog | `IAgentToolRegistry` / `Tools/Implementation/LocalAgentToolRegistry.cs` | `AIFunctionFactory.Create` over in-process methods (`GetCurrentTime`, `Calculate`) | Descriptors are derived **from** the generated `AIFunction.JsonSchema` so the offered contract can't drift from what executes. All catalog tools auto-execute this RC (`CatalogRequiresApproval = false`). |
+| Built-in catalog | `IAgentToolRegistry` / `Tools/Implementation/LocalAgentToolRegistry.cs` | `AIFunctionFactory.Create` over in-process methods (`GetCurrentTime`, `Calculate`) | Descriptors are derived **from** the generated `AIFunction.JsonSchema` so the offered contract can't drift from what executes. Their catalog approval default is false, but the effective node policy can tighten it. |
 | ClientLocal (server-driven) | `IClientLocalToolRegistry` / `Tools/Implementation/ClientLocalToolRegistry.cs` | `IClientLocalToolHandler` implementations registered by the application layer (e.g. `run_in_agent_home`, `spawn_subagent`) | In-process handlers, **not** SignalR. The registry holds the handler-backed tools; the worker app layer registers the handlers. |
 | MCP | `IMcpToolRegistry` / `Tools/Implementation/McpToolRegistry.cs` | An immutable `AITool` snapshot pushed in by the MCP connection manager as servers connect | The registry is MCP-agnostic (only holds `AITool`); the application layer owns the MCP client lifecycle. See [Chat](05-chat.md) and [API & Hubs](09-api-and-hubs.md). |
 
 `InvocationToolResolver` (`Tools/InvocationToolResolver.cs`) merges the three registries into the
 concrete tool list passed to each agent; `InvocationToolBridge` adapts metadata tool functions
 (`Tools/Implementation/MetadataToolFunction.cs`).
+
+#### Effective approval policy
+
+`IToolApprovalPolicy` applies a **node-level, tighten-only** approval layer after the tool offer is
+resolved. For each tool, the effective flag is:
+
+```
+catalog default
+OR uncategorized tool
+OR node category rule
+OR node per-tool-name override
+```
+
+The policy can turn a default-off tool into an approval-required tool, but it can never waive a
+catalog default. `ToolCategory.Unknown` fails closed, so a newly introduced uncategorized tool never
+auto-executes. The structural floor remains independent: MCP tools and `run_in_agent_home` are already
+approval-wrapped at their registries. Persisted category/name rules are loaded when the node composes
+the runtime, so operator changes take effect after the next node restart.
+
+The same policy is applied to the seeded Default Assistant, bound agents, orchestration participants,
+and regeneration. Approval decisions are recorded through `IToolApprovalAuditRecorder` as
+content-free operational metadata; arguments and tool results do not enter that audit record.
+Unattended `run-agent` scheduler jobs have no human approval round trip and therefore remove every
+approval-required tool from their offer before execution. See [Scheduler](06-scheduler.md).
 
 ### 1.4 Single-agent invocation — `InvocationAgentFactory`
 
@@ -146,6 +170,8 @@ AI.Agent interfaces, provider seams (`ILocalModelProvider`, `IChatClient`, `IEmb
 | **Insights** | `FeedbackInsightsService` / `IFeedbackInsightsService` | Read-only per-agent feedback aggregation (n≥3 threshold). |
 | **Monitoring** | `PlaybookMonitorService` / `IPlaybookMonitorService` | Cohort monitoring of enabled playbook actions. |
 | **Memory** | `MemoryExtractionService`, `MemoryExtractionDispatcher`, `OllamaMemoryExtractionAgent` | Adaptive agent memory: post-run node-local extraction → Suggested/Extracted, token-budgeted. |
+| **Approval/audit** | `NodeToolApprovalPolicy`, `IToolApprovalAuditRecorder`, `ToolApprovalAuditRecorder` | Tighten-only category/name approval policy plus content-free approval-decision telemetry. |
+| **Usage** | `IAgentExecutionLogStore`, `IUsageRateResolver`, `GetAgentUsageSummaryEndpoint` | Retained token-usage aggregation and operator-configured USD cost estimates; no message content. |
 | **Capacity** | `CapacityService`, `ModelFootprintProvider`, `PendingFootprintLedger`, `SpawnSerializer`, `SpawnContext` | Capacity gate for spawning a model process (Allow / QueueSameModel / reject). |
 | **Capacity/Sub-agent** | `SubAgentSpawnService` + `Tools/SpawnSubAgentToolHandler` | The `spawn_subagent` tool: capacity-gated, depth- and fan-out-capped child agents. |
 | **Coder** | `CoderWorkspaceReader`, `Tools/{ListFiles,ReadFile,SearchText}ToolHandler`, `WorkspacePathGuard` | Read-only "coder mode": list/read/search files behind a path guard. |
@@ -215,6 +241,19 @@ The child is built like an orchestration participant (`ChatClientAgent`) with th
 binding-resolved tool set (spawn already filtered out) and run as an `AIFunction` inside a `Depth+1`
 `SpawnContext` scope. Spawn is restricted to explicit profiles, never the mode-off chat path.
 
+### 2.4 Usage and estimated cost
+
+Completed agent run envelopes retain metadata-only usage: model, provider, UTC timestamp, and
+prompt/completion/reasoning/total token counts. `GET /api/local/v1/agents/usage-summary` is
+operator-gated and aggregates retained rows by `(model, provider, UTC day)`, with grand totals and a
+per-provider rollup. Optional `fromEpochMs` / `toEpochMs` query values form a lower-inclusive,
+upper-exclusive range.
+
+`IUsageRateResolver` attaches a server-computed USD estimate using operator overrides or the built-in
+rate table. Reasoning tokens are priced as output tokens; local and unpriced models report zero.
+These values are estimates, not provider invoices. The response states the execution-log retention
+horizon, and neither the ledger nor the summary contains message content.
+
 ---
 
 ## 3. The governed Playbook lifecycle (P1–P5)
@@ -269,6 +308,10 @@ enabled, `PlaybookRetrievalSelector.SelectAsync` chooses what to inject:
   invocation must wrap every send. Re-apply it after swapping the base client in tests.
 - **Offer is never widened.** Only the seeded Default Assistant gets the full offer; all other agents
   are intersected to `AllowedToolNames`; `spawn_subagent` is opt-in via profile only.
+- **Approval is tighten-only and uncategorized tools fail closed.** Apply the node policy after offer
+  projection on every path; never let a node override clear a catalog-required approval.
+- **Usage summaries are metadata-only estimates.** Preserve the retained token ledger and provider/model
+  attribution without adding prompts, responses, tool arguments, or tool results.
 - **Knowledge tools are node-local by default.** The read-only knowledge-base tools
   (`search_knowledge_base`, `read_document`, `read_surrounding_chunks`) are offered only to node-local
   models; a cloud model (Codex / Azure Foundry) is withheld them unless the operator sets
