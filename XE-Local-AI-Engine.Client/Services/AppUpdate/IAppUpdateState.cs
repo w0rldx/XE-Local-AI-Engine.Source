@@ -13,7 +13,17 @@ public enum AppUpdateAuthState
     ReauthRequired,
 
     /// <summary>The signed-in user lacks read access to the release repo (403) — they must be added as a collaborator.</summary>
-    NoAccess
+    NoAccess,
+
+    /// <summary>
+    ///     This artifact was never baked with a usable repo URL + GitHub App client ID
+    ///     (<c>AppUpdateChannelOptions.IsConfigured</c> is false), so self-update cannot work at all on this build. It is
+    ///     the expected resting state for the <c>main</c> channel, which ships <c>REPLACE_*</c> placeholders on purpose,
+    ///     and for a tester build before packaging injects the real client ID. Distinct from <see cref="SignedOut" />: a
+    ///     signed-out build invites the user to sign in, whereas here signing in is impossible — <c>StartAsync</c> would
+    ///     reject it on the same predicate — so the UI must say so instead of offering a button that cannot work.
+    /// </summary>
+    NotConfigured
 }
 
 /// <summary>

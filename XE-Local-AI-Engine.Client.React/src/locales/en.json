@@ -231,6 +231,7 @@
 				"upToDate": "You are up to date.",
 				"availableVersion": "Available:",
 				"offline": "Update check is unavailable while offline.",
+				"notConfigured": "Automatic updates aren't available in this build. To move to a newer version, install it manually.",
 				"copyCode": "Copy code",
 				"copied": "Copied"
 			}

@@ -16,6 +16,7 @@ vi.mock("@/features/app-update/queries/useAppUpdate", () => ({
 	useSignOutGitHubAuth: vi.fn(),
 }));
 
+import { ApiError } from "@/core/api/errors/ApiError";
 import {
 	usePollGitHubAuth,
 	useSignOutGitHubAuth,
@@ -99,6 +100,67 @@ describe("GitHubSignInCard", () => {
 
 	it("shows sign-in button in idle state", () => {
 		renderWithProviders(<GitHubSignInCard />);
+		expect(screen.getByRole("button", { name: /sign in with github/i })).toBeTruthy();
+	});
+
+	it("surfaces the server's own explanation when start fails with one", async () => {
+		// The backend sanitizes these messages and FastEndpoints carries them in ProblemDetails `detail`, which is the
+		// first field ApiError reads — so the operator sees why it failed instead of a generic "an error occurred".
+		mockStartMutateAsync.mockRejectedValue(
+			new ApiError(400, {
+				type: "https://www.rfc-editor.org/rfc/rfc7231#section-6.5.1",
+				title: "Bad Request",
+				status: 400,
+				detail: "App self-update is not configured for this build.",
+			}),
+		);
+
+		renderWithProviders(<GitHubSignInCard />);
+		await act(async () => {
+			fireEvent.click(screen.getByRole("button", { name: /sign in with github/i }));
+		});
+
+		expect(screen.getByText("App self-update is not configured for this build.")).toBeTruthy();
+		expect(screen.queryByText(/an error occurred during authorization/i)).toBeNull();
+	});
+
+	it("falls back to the localized generic message when the server authored none", async () => {
+		// A failure whose ProblemDetails carries no usable text — ApiError resolves an empty message, so the localized
+		// generic string must win rather than an empty alert.
+		mockStartMutateAsync.mockRejectedValue(
+			new ApiError(500, { type: "", title: "", status: 500, detail: "" }),
+		);
+
+		renderWithProviders(<GitHubSignInCard />);
+		await act(async () => {
+			fireEvent.click(screen.getByRole("button", { name: /sign in with github/i }));
+		});
+
+		expect(screen.getByText(/an error occurred during authorization/i)).toBeTruthy();
+	});
+
+	it("clears the server message when the user retries", async () => {
+		mockStartMutateAsync.mockRejectedValue(
+			new ApiError(400, {
+				type: "about:blank",
+				title: "Bad Request",
+				status: 400,
+				detail: "App self-update is not configured for this build.",
+			}),
+		);
+
+		renderWithProviders(<GitHubSignInCard />);
+		await act(async () => {
+			fireEvent.click(screen.getByRole("button", { name: /sign in with github/i }));
+		});
+		expect(screen.getByText("App self-update is not configured for this build.")).toBeTruthy();
+
+		await act(async () => {
+			fireEvent.click(screen.getByRole("button", { name: /try again/i }));
+		});
+
+		// Back to idle: the stale server message must not survive into the next attempt.
+		expect(screen.queryByText("App self-update is not configured for this build.")).toBeNull();
 		expect(screen.getByRole("button", { name: /sign in with github/i })).toBeTruthy();
 	});
 

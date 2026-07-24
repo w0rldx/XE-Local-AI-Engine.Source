@@ -29,6 +29,10 @@ export function AppUpdateSection() {
 	}
 
 	const authState = status.authState;
+	// This build was never baked with a usable release repo + GitHub App client ID, so nothing in this section can do
+	// any work: the check is inert server-side and sign-in would be rejected on the same predicate. Drop the controls
+	// and explain instead — see the `notConfigured` case in AppUpdateAuthStateWire.
+	const isConfigured = authState !== "notConfigured";
 
 	function handleRefresh() {
 		// Force a live GitHub check (?refresh=true); the default query would only re-serve the cached snapshot.
@@ -44,15 +48,17 @@ export function AppUpdateSection() {
 			<Divider />
 			<Group justify="space-between" align="center">
 				<Text fw={500}>{t("pages.about.appUpdate.title")}</Text>
-				<Button
-					variant="subtle"
-					size="xs"
-					leftSection={<IconRefresh size={14} />}
-					loading={refreshMutation.isPending}
-					onClick={handleRefresh}
-				>
-					{t("pages.about.appUpdate.checkForUpdates")}
-				</Button>
+				{isConfigured ? (
+					<Button
+						variant="subtle"
+						size="xs"
+						leftSection={<IconRefresh size={14} />}
+						loading={refreshMutation.isPending}
+						onClick={handleRefresh}
+					>
+						{t("pages.about.appUpdate.checkForUpdates")}
+					</Button>
+				) : null}
 			</Group>
 
 			{/* Version info */}
@@ -65,15 +71,23 @@ export function AppUpdateSection() {
 				</Group>
 			) : null}
 
+			{/* Unconfigured build — the expected resting state for the inert `main` channel, and for a tester build
+			    before packaging injects the client ID. Stated plainly and without alarm; nothing here is broken. */}
+			{!isConfigured ? (
+				<Alert icon={<IconInfoCircle size={16} />} color="gray">
+					{t("pages.about.appUpdate.notConfigured")}
+				</Alert>
+			) : null}
+
 			{/* Offline notice */}
-			{status.isOffline ? (
+			{isConfigured && status.isOffline ? (
 				<Alert icon={<IconInfoCircle size={16} />} color="yellow">
 					{t("pages.about.appUpdate.offline")}
 				</Alert>
 			) : null}
 
-			{/* Auth-gated content — only when online */}
-			{!status.isOffline ? (
+			{/* Auth-gated content — only on a configured build, and only when online */}
+			{isConfigured && !status.isOffline ? (
 				<>
 					{/* No repo access — operator must add this user to the release repo. */}
 					{authState === "noAccess" ? (

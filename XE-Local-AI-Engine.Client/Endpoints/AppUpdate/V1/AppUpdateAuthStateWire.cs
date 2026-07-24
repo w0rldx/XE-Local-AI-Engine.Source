@@ -11,6 +11,9 @@ internal static class AppUpdateAuthStateWire
             AppUpdateAuthState.SignedIn => "signedIn",
             AppUpdateAuthState.ReauthRequired => "reauthRequired",
             AppUpdateAuthState.NoAccess => "noAccess",
+            // Wire-only addition: `authState` is a plain string in the DTO (no OpenAPI enum), so a new value here is
+            // NOT a schema change and needs no client regeneration — only the React union has to learn about it.
+            AppUpdateAuthState.NotConfigured => "notConfigured",
             _ => "signedOut"
         };
 }

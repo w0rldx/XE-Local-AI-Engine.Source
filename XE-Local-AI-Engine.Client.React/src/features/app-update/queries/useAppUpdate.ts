@@ -19,8 +19,11 @@ import {
 import type { Options } from "@/core/api/generated/sdk.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
 
-// Auth state literals as returned by the backend.
-export type AuthState = "signedIn" | "signedOut" | "reauthRequired" | "noAccess";
+// Auth state literals as returned by the backend (AppUpdateAuthStateWire.Of). `authState` is a plain string on the
+// wire rather than an OpenAPI enum, so this union — not the generated client — is what pins the accepted values.
+// "notConfigured" means the build was never baked with a usable repo URL + GitHub App client ID, so self-update
+// cannot work here at all and sign-in must not be offered.
+export type AuthState = "signedIn" | "signedOut" | "reauthRequired" | "noAccess" | "notConfigured";
 
 // Query IDs used for cache invalidation.
 const queryIds = {
