@@ -13,13 +13,13 @@ import { type ImageGenerationFormValues, isTerminalStatus } from "@/features/ima
 import { useCancelImageJob, useCreateImageJob, useImageJobs, useImageModels } from "@/features/images/queries/useImageQueries";
 
 // Local image-generation page (text-to-image). Server-state is TanStack Query; live coarse status arrives over the
-// image SignalR hub, which invalidates the jobs cache on each transition (job state is never mirrored into a store,
-// plan §9). Left column: generation form + minimal model manager. Right column: the job queue/history.
+// image SignalR hub, which invalidates the jobs cache on each transition (job state is never mirrored into a store).
+// Left column: generation form + minimal model manager. Right column: the job queue/history.
 export function ImagesPage() {
 	const { t } = useTranslation();
 
 	// While a detached model download is in flight (the manager owns that state), poll listImageModels so the freshly
-	// downloaded model surfaces on completion — the backend exposes no download-progress hub yet (plan §8).
+	// downloaded model surfaces on completion — the backend exposes no download-progress hub yet.
 	const [modelDownloadPending, setModelDownloadPending] = useState(false);
 	const modelsQuery = useImageModels(modelDownloadPending);
 	const jobsQuery = useImageJobs();

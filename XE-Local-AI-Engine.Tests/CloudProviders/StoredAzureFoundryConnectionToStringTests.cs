@@ -4,7 +4,7 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Covers the redacting <c>PrintMembers</c> on both records (Locked #11, HIGH-2): a secret header value and the API
+///     Covers the redacting <c>PrintMembers</c> on both records (Locked #11): a secret header value and the API
 ///     key never appear in <c>ToString</c>, while a non-secret header value still round-trips.
 /// </summary>
 public sealed class StoredAzureFoundryConnectionToStringTests

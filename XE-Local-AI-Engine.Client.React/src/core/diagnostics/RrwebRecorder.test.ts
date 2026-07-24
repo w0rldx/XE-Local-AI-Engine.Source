@@ -77,7 +77,7 @@ describe("rrweb_onlyWhenDevMode", () => {
 });
 
 describe("RrwebRecorder.masksRenderedText", () => {
-	it("pins the privacy-masking record config (HIGH-3)", async () => {
+	it("pins the privacy-masking record config", async () => {
 		useDeveloperModeStore.setState({ developerMode: true });
 
 		await startRrwebRecording();

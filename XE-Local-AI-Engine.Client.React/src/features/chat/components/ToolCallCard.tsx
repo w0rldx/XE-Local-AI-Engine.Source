@@ -20,7 +20,7 @@ interface ToolCallCardProps {
 	part: ChatToolPart;
 }
 
-// Chat capability flags are a static client-side constant (see agent-knowledge §5), so the tool-approval-controls gate
+// Chat capability flags are a static client-side constant (see docs/agent-knowledge.md §5), so the tool-approval-controls gate
 // is resolvable once at module scope rather than threaded down through the render tree.
 const approvalControlsEnabled = buildChatUiCapabilities(nodeCapabilities.chat).showToolApprovalControls;
 

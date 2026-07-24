@@ -67,7 +67,7 @@ public static class AgentServiceCollectionExtensions
                     .Bind(configuration.GetSection(AgentTelemetryOptions.Section))
                     .ValidateOnStart();
 
-        // Provider-boundary budgeting (HIGH-005): per-round input budgeting + cumulative provider-call ceilings applied
+        // Provider-boundary budgeting: per-round input budgeting + cumulative provider-call ceilings applied
         // by the innermost pipeline hop so the inner tool loop and MAF participant rounds are bounded, not just the two
         // outer history-growth points.
         _ = services.AddOptions<ProviderCallBudgetOptions>()

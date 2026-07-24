@@ -1,4 +1,4 @@
-// Central dedup gate (plan §3, §7.1): "one error → one breadcrumb".
+// Central dedup gate: "one error → one breadcrumb".
 //
 // The same logical error is seen by several collectors (ErrorBoundary `onError`, React-root
 // `onCaughtError`, `window.onerror`, the `console.error` patch). `shouldRecord` keyed on

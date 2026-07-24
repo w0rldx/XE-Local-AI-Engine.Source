@@ -10,7 +10,7 @@ import { IMAGE_JOB_STATUS_CHANGED, imageJobStatusPushSchema } from "@/features/i
 // Subscribe(jobId) method (the backend delivers a job's events ONLY to its group). On each push it dedupes on the
 // per-job monotonic `Seq` (events arrive both via late-subscriber replay AND live, so the same seq can repeat) and
 // invalidates the TanStack jobs cache so the list refetches the authoritative coarse status. Job state lives in
-// TanStack Query, never a store (plan §9) — this hook is a thin transport that turns a push into a cache invalidation.
+// TanStack Query, never a store — this hook is a thin transport that turns a push into a cache invalidation.
 //
 // Connection + subscribe lifecycle copies usePreviewWorkflowHub: invokes are guarded on Connected, re-applied on
 // reconnect (a transient drop loses group membership), and cleanup defers stop() until the start promise settles so a

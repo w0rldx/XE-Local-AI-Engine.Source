@@ -119,7 +119,7 @@ export default defineConfig(({ command, mode }) => {
 		// cross-origin headers are configured here.
 		assetsInclude: ["**/*.onnx"],
 		// Emit hidden source maps so production stacks captured by the diagnostics snapshot subsystem
-		// symbolicate, without exposing a `//# sourceMappingURL` to end users (plan §13 MEDIUM-2).
+		// symbolicate, without exposing a `//# sourceMappingURL` to end users.
 		build: { sourcemap: "hidden" },
 		// Dedicated ES-module Web Worker (TtsWorker.ts) runs Kokoro synthesis off the main thread; the WebGPU ORT
 		// execution provider forbids ORT's `wasm.proxy`, so an own worker is mandatory and must be emitted as ESM.

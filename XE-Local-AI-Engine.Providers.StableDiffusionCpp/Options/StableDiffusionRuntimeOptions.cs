@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp.Options;
 /// <summary>
 ///     Runtime-supervision options for the stable-diffusion.cpp <c>sd-server</c> daemon. The image runtime sits side by
 ///     side with the llama.cpp text runtime but owns a <b>separate</b> loopback port range so the two supervisors never
-///     collide (architecture invariant §3). Lane A owns the option shape; Lane B wires the supervisor over it.
+///     collide. This type owns the option shape; the sd-server runtime adapter wires the supervisor over it.
 /// </summary>
 public sealed class StableDiffusionRuntimeOptions
 {
@@ -55,7 +55,7 @@ public sealed class StableDiffusionRuntimeOptions
 
     /// <summary>
     ///     Readiness budget: the maximum time the supervisor waits for a freshly-spawned daemon's socket to open (the
-    ///     daemon binds only after synchronous model load completes; §4A). Exceeding it is a load failure.
+    ///     daemon binds only after synchronous model load completes). Exceeding it is a load failure.
     /// </summary>
     public TimeSpan ReadinessTimeout { get; set; } = TimeSpan.FromMinutes(2);
 }

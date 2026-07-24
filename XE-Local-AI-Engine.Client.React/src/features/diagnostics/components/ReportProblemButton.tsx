@@ -1,6 +1,6 @@
-// Lane C: "Report a problem" entry point (plan §7.6).
+// "Report a problem" entry point.
 //
-// Captures a manual snapshot (no error present) via Lane B's `captureSnapshot('manual')`, toasts the
+// Captures a manual snapshot (no error present) via the snapshot bundler's `captureSnapshot('manual')`, toasts the
 // outcome, and notifies the caller so it can open the Diagnostics panel. Renders as a header
 // ActionIcon by default or a full Button when `variant="button"`. The capture flow itself lives in
 // the shared useReportProblem hook so the mobile navigation drawer can offer the same action.

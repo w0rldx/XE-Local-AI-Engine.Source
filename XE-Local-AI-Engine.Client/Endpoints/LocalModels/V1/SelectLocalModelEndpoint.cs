@@ -40,8 +40,8 @@ public sealed class SelectLocalModelEndpoint(
             DefaultModelName = selectedModelName
         }, ct).ConfigureAwait(false);
 
-        // Azure routing is selected-model-driven and the active-cloud selection is snapshot-cached for a few seconds
-        // (MEDIUM-2). When either the previous OR the new selection is a cloud model (a Codex id or a stored Azure
+        // Azure routing is selected-model-driven and the active-cloud selection is snapshot-cached for a few seconds.
+        // When either the previous OR the new selection is a cloud model (a Codex id or a stored Azure
         // deployment), invalidate that snapshot so an Azure↔local / Azure-A↔Azure-B / Codex switch takes effect on the
         // next send instead of after the TTL. A local→local switch leaves the cloud snapshot untouched (no cloud client
         // is involved either way).

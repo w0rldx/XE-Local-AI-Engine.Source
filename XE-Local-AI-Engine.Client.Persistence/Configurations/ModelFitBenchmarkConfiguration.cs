@@ -8,7 +8,8 @@ internal sealed class ModelFitBenchmarkConfiguration : IEntityTypeConfiguration<
 {
     public void Configure(EntityTypeBuilder<ModelFitBenchmark> builder)
     {
-        // Deferred: the ModelFit Benchmark feature is scaffolding and not wired (see release-stability plan 2026-06-29).
+        // Deferred: the ModelFit Benchmark feature is scaffolding and not wired (see
+        // Plans/release-stability-cleanup-2026-06-29.md).
         // The table mapping is kept so the deferred feature's schema survives, but nothing writes these rows today.
         builder.ToTable("model_fit_benchmarks");
         builder.HasKey(entity => entity.Id);

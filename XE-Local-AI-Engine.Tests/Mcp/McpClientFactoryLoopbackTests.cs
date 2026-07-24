@@ -45,7 +45,7 @@ public sealed class McpClientFactoryLoopbackTests
     [Test]
     public async Task CreateAsync_WhenHttpUrlIsBracketedIpv6Loopback_PassesTheLoopbackGuard()
     {
-        // LOW-3: Uri.Host returns "[::1]" WITH brackets but the allowlist stores "::1"; the factory trims the brackets,
+        // Uri.Host returns "[::1]" WITH brackets but the allowlist stores "::1"; the factory trims the brackets,
         // so a valid IPv6 loopback the front-end accepts is NOT rejected here. We cannot assert a successful connection
         // (nothing is listening), but we CAN assert the loopback guard did not fire: any failure must be a transport
         // error, never the "must target a loopback host" rejection.

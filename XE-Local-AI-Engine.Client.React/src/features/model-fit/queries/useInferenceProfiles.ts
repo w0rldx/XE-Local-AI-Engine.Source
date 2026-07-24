@@ -12,7 +12,7 @@ import { toBenchmarkResult, toInferenceProfileViews } from "@/features/model-fit
 import type { InferenceBenchmarkResult } from "@/features/model-fit/models/InferenceProfileModels";
 import { modelFitInvalidationKey } from "@/features/model-fit/queries/useModelFit";
 
-// Server state for the Inference Optimizer operator surface (Lane C3). The list read uses the generated hey-api
+// Server state for the Inference Optimizer operator surface. The list read uses the generated hey-api
 // `*Options()` (which wires the shared axios instance + TanStack Query AbortSignal automatically) wrapped in
 // withResponseValidation, with a `select` that maps the optional-field generated response to the domain
 // view-models. The four mutations dispatch the domain variables to the generated mutationFn's `{ body }` envelope

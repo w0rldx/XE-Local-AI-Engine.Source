@@ -44,7 +44,7 @@ public sealed class OverrideBinaryManagerTests
     [Test]
     public async Task EnsureBinary_WhenOverrideReturnsOptionsVariant_NotCallerVariant()
     {
-        // [arch MEDIUM-3] The caller passes Cpu, but the override is configured as Cuda → the returned variant is Cuda.
+        // The caller passes Cpu, but the override is configured as Cuda → the returned variant is Cuda.
         // The GPU stub enumerates a device so the Cuda backend check passes.
         if (OperatingSystem.IsWindows())
         {
@@ -105,7 +105,7 @@ public sealed class OverrideBinaryManagerTests
     [Test]
     public async Task EnsureBinary_WhenOverrideWorldWritableOrForeignOwned_Throws()
     {
-        // [sec MEDIUM-1] A world-writable binary is rejected (TOCTOU swap hardening). (Foreign-uid ownership cannot be
+        // A world-writable binary is rejected (TOCTOU swap hardening). (Foreign-uid ownership cannot be
         // arranged in CI without root, so the world-writable arm is the testable compensating control.)
         if (OperatingSystem.IsWindows())
         {
@@ -152,7 +152,7 @@ public sealed class OverrideBinaryManagerTests
     [Test]
     public async Task EnsureBinary_WhenOverrideVariantCudaButNoGpuDevice_Throws()
     {
-        // [sec HIGH-1] A binary that passes --version but enumerates no GPU device cannot be served as Cuda.
+        // A binary that passes --version but enumerates no GPU device cannot be served as Cuda.
         if (OperatingSystem.IsWindows())
         {
             return;

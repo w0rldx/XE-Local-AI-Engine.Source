@@ -164,7 +164,7 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
             return NoWorkspaceMessage;
         }
 
-        // MEDIUM-3: NUL byte → binary refusal.
+        // A NUL byte in the content means this is a binary file; refuse it.
         if (content.Contains('\0', StringComparison.Ordinal))
         {
             return $"read_file: '{confined.RelativePath}' looks like a binary file and was not read.";
@@ -205,7 +205,7 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
             arguments.Add("-F");
         }
 
-        // MEDIUM-4: exclude every secret dir/file at the grep invocation so a secret's content never enters output.
+        // Exclude every secret dir/file at the grep invocation so a secret's content never enters output.
         AppendGrepExclusions(arguments);
 
         // The pattern is bound via `-e` (so a value beginning with '-' is data, not a flag); `--` then ends option
@@ -358,7 +358,7 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
 
     private string RenderFileContent(string relativePath, string content, int? startLine, int? endLine)
     {
-        // Apply a default line cap when the caller gives no range (MEDIUM-3), so an unbounded read does not flood the
+        // Apply a default line cap when the caller gives no range, so an unbounded read does not flood the
         // model context. A NUL byte was already refused above.
         var lines = content.Split('\n');
         var totalLines = lines.Length;

@@ -281,8 +281,9 @@ internal static class CloudSettingsEndpointDtoMapper
             : AzureFoundryApiSurface.AzureDeployments;
     }
 
-    // A configured client secret selects app-only client-credentials by default (Locked build contract §8: "derive
-    // default: secret present -> ClientSecret"), carved out for AuthorizationCode — the one sign-in method that
+    // A configured client secret selects app-only client-credentials by default (frozen build contract,
+    // Plans/azure-ai-gateway-entra-provider-findings.md §8: "derive default: secret present -> ClientSecret"),
+    // carved out for AuthorizationCode — the one sign-in method that
     // legitimately wants both a secret (to authenticate code redemption) and a delegated scope. Any other requested
     // value with a secret present still coerces to ClientSecret, regardless of what the UI last had selected.
     private static EntraSignInMethod ParseEntraSignInMethod(string? signInMethod, bool hasSecret)

@@ -64,7 +64,7 @@ public sealed class CloudCredentialStore : ICloudCredentialStore, IDisposable
                 return null;
             }
 
-            // Shape-detect before any destructive catch so a liftable legacy payload is never deleted (HIGH-2).
+            // Shape-detect before any destructive catch so a liftable legacy payload is never deleted.
             try
             {
                 return ParseConfigPayload(payload);
@@ -307,8 +307,9 @@ public sealed class CloudCredentialStore : ICloudCredentialStore, IDisposable
         ValidateHeaders(connection, nameof(config));
     }
 
-    // Entra ID requires a tenant, client id, and token scope regardless of sign-in shape (Locked build contract §8) —
-    // the client secret is optional, and its absence selects interactive user sign-in. Defense-in-depth against an
+    // Entra ID requires a tenant, client id, and token scope regardless of sign-in shape (frozen build contract, see
+    // Plans/azure-ai-gateway-entra-provider-findings.md §8) — the client secret is optional, and its absence selects
+    // interactive user sign-in. Defense-in-depth against an
     // out-of-range sign-in-method value slipping in via a partial or hand-edited JSON blob.
     private static void ValidateEntraId(StoredAzureFoundryConnection connection, string paramName)
     {

@@ -1,8 +1,8 @@
-// Lane B: snapshot export/import (plan §7.6, AC#4).
+// Snapshot export/import.
 //
 // Export serializes a snapshot to JSON, zips it with fflate, and triggers a local file download.
 // Import reverses that and validates the shape before handing a Snapshot back to the panel. Both
-// directions are local-only — no network effect (plan §3 invariant).
+// directions are local-only — no network effect.
 
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 

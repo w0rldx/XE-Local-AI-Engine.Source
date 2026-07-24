@@ -10,7 +10,7 @@ using OpenTelemetry.Trace;
 using XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Tests.Testing;
 
-// W3C trace-correlation backend behavior (plan frontend-error-snapshot.md, Lane E / section 7.7): the node must emit
+// W3C trace-correlation backend behavior (see Plans/frontend-error-snapshot.md): the node must emit
 // the W3C trace id carried on an inbound `traceparent` even when Aspire/OpenTelemetry is OFF (the desktop/RC default,
 // where there is no OTel ActivityListener). Program.cs forces the W3C Activity id format and registers an
 // ActivityListener scoped to the "Microsoft.AspNetCore" source (not every source in the process) so ASP.NET creates a

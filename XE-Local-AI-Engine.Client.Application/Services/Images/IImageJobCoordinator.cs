@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     <see cref="System.Threading.CancellationTokenSource" /> registry keyed by job id, coarse throttled progress push,
 ///     and detached run tasks. Generation is <b>serialized to at most one running job</b> (extra jobs stay
 ///     <see cref="ImageJobStatus.Queued" /> in this coordinator and are NOT handed to the runtime until the slot frees),
-///     so a cancel that must tree-kill the daemon has a blast radius of exactly one job (§4A/§7.5). Singleton — the
+///     so a cancel that must tree-kill the daemon has a blast radius of exactly one job. Singleton — the
 ///     registry must outlive the request that started a job. Job status is persisted to <c>image_jobs</c>; the produced
 ///     image is persisted encrypted-at-rest before the coordinator marks the job succeeded.
 /// </summary>
@@ -41,7 +41,7 @@ public interface IImageJobCoordinator
 }
 
 /// <summary>
-///     The parameters for a new image job as handed to the coordinator by the create endpoint (Lane D). Provider-neutral;
+///     The parameters for a new image job as handed to the coordinator by the create endpoint. Provider-neutral;
 ///     the coordinator maps it to the runtime request and the persisted job row.
 /// </summary>
 public sealed record CreateImageJobInput

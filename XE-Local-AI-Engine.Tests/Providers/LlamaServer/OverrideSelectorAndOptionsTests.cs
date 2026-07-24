@@ -49,7 +49,7 @@ public sealed class OverrideSelectorAndOptionsTests
     [NotInParallel("XE_LLAMACPP_OVERRIDE_ENV")]
     public void OverrideOptions_NotResolvableFromNodeSettingsStore()
     {
-        // [sec HIGH-2] The override is bound ONLY from process env vars via FromEnvironment — there is no IConfiguration,
+        // The override is bound ONLY from process env vars via FromEnvironment — there is no IConfiguration,
         // node-settings, or request-DTO source. Round-trip the env channel to prove that is the single activation path:
         // set the env var → active; clear it → inactive. (The type exposes no node-settings/IConfiguration constructor,
         // so a lower-trust store structurally cannot supply the override path.)

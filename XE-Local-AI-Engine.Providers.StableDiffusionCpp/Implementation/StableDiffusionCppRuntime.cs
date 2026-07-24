@@ -8,15 +8,15 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 ///     The stable-diffusion.cpp <see cref="IImageRuntime" /> — the orchestration boundary for local image generation.
 ///     Ensures a resident <c>sd-server</c> daemon via <see cref="IImageServerSupervisor" />, submits the job and polls
 ///     it via <see cref="SdServerJobClient" />, maps coarse status transitions to <see cref="ImageGenProgress" />, and on
-///     completion decodes the base64 image inline (before the 600s result TTL, §4A). No sd-server flag, route, or HTTP
-///     shape escapes this project (architecture invariant §3).
+///     completion decodes the base64 image inline (before the 600s result TTL). No sd-server flag, route, or HTTP
+///     shape escapes this project.
 /// </summary>
 /// <remarks>
 ///     <para>
-///         <strong>Cancellation (two-mode, §4A).</strong> When <c>ct</c> is signalled the runtime asks sd-server to
+///         <strong>Cancellation (two-mode).</strong> When <c>ct</c> is signalled the runtime asks sd-server to
 ///         cancel the job: a still-<em>queued</em> job cancels cleanly (HTTP 200); a job already <em>generating</em>
 ///         cannot be interrupted (HTTP 409), so the runtime asks the supervisor to tree-kill + restart the daemon,
-///         dropping the one active job. Lane C invokes both paths simply by cancelling the token it passes to
+///         dropping the one active job. The job coordinator invokes both paths simply by cancelling the token it passes to
 ///         <see cref="GenerateAsync" />.
 ///     </para>
 /// </remarks>

@@ -9,7 +9,7 @@ using NSubstitute;
 using XE_Local_AI_Engine.Client.ExceptionHandling;
 using XE_Local_AI_Engine.Tests.Testing;
 
-// LOW-001: the trace id logged for an unhandled exception must be the same W3C id the client receives in
+// The trace id logged for an unhandled exception must be the same W3C id the client receives in
 // ProblemDetails.traceId, so an operator can join a client-reported trace id straight to the server log line. The
 // Kestrel connection id (HttpContext.TraceIdentifier) is a distinct value and is kept only under RequestId.
 public sealed class DefaultExceptionHandlerTests

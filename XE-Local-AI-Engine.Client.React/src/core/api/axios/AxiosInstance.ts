@@ -32,7 +32,7 @@ addRateLimitingInterceptor(axiosInstance);
 addApiProblemDetailsInterceptor(axiosInstance);
 
 // Diagnostics trace/network collector — registered LAST so its request interceptor injects the
-// `traceparent` after auth and its response interceptor records the final outcome (plan §7.2).
+// `traceparent` after auth and its response interceptor records the final outcome.
 addDiagnosticsNetworkInterceptor(axiosInstance);
 
 export { axiosInstance };

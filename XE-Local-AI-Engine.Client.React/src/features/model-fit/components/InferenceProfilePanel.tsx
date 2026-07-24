@@ -31,7 +31,7 @@ function errorMessage(error: unknown, fallback: string): string {
 	return error instanceof Error ? error.message : fallback;
 }
 
-// The Inference Optimizer operator surface (Lane C3). Lists the tuned llama.cpp launch profiles this node explored,
+// The Inference Optimizer operator surface. Lists the tuned llama.cpp launch profiles this node explored,
 // benchmarked, and froze, plus an explore control to create a new one. It surfaces OUTCOMES ONLY — a status chip and
 // the tok/s + VRAM summary — and never the raw launch flags the optimizer tuned (the view-model has no slot for
 // them, and there is no machine key on the wire). Server state lives in TanStack Query; the only local state is the

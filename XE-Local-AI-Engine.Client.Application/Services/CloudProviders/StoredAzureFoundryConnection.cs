@@ -6,7 +6,7 @@ using System.Text;
 ///     A single Azure Foundry / Azure OpenAI connection holding N manually-added deployments.
 /// </summary>
 /// <remarks>
-///     No <c>required</c> members so a partial / legacy JSON parse never throws (HIGH-2). The API key is
+///     No <c>required</c> members so a partial / legacy JSON parse never throws. The API key is
 ///     null when <see cref="AuthMode" /> is <see cref="AzureFoundryAuthMode.ManagedIdentity" />.
 /// </remarks>
 public sealed record StoredAzureFoundryConnection
@@ -81,7 +81,7 @@ public sealed record StoredAzureFoundryConnection
 
     // Sealed-record PrintMembers signature is private (Locked #11). Redacts the API key and Entra client secret and
     // delegates per-header secret redaction (each header's own ToString redacts) so no secret value or key ever
-    // leaks via ToString (HIGH-2).
+    // leaks via ToString.
     private bool PrintMembers(StringBuilder builder)
     {
         ArgumentNullException.ThrowIfNull(builder);

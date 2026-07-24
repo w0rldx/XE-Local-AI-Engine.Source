@@ -7,9 +7,9 @@ using System.Text;
 ///     connection (chat, streaming), for both auth modes.
 /// </summary>
 /// <remarks>
-///     No <c>required</c> members so a partial / legacy JSON parse never throws (HIGH-2). A header value may be marked
+///     No <c>required</c> members so a partial / legacy JSON parse never throws. A header value may be marked
 ///     <see cref="IsSecret" />: secret values are write-only (never returned to the UI) and redacted in
-///     <see cref="object.ToString" /> via <see cref="PrintMembers" /> (HIGH-2, Locked #11).
+///     <see cref="object.ToString" /> via <see cref="PrintMembers" /> (Locked #11).
 /// </remarks>
 public sealed record StoredAzureFoundryHeader
 {

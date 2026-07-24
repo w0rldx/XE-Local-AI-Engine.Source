@@ -1,7 +1,7 @@
-// Lane C: snapshot detail view (plan §7.6).
+// Snapshot detail view.
 //
 // Shows a single snapshot's error, breadcrumb timeline, network log, environment and redacted state.
-// The raw-JSON inspector and the rrweb DOM-replay viewer are gated behind Developer Mode (plan §1):
+// The raw-JSON inspector and the rrweb DOM-replay viewer are gated behind Developer Mode:
 // the redacted state JSON is shown to everyone, but the full raw dump + DOM replay are dev-only.
 
 import { Badge, Button, Card, Code, Group, ScrollArea, Stack, Text, Title } from "@mantine/core";

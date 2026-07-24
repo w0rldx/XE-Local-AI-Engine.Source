@@ -1,4 +1,4 @@
-// SignalR network collector (plan §7.2). Helper wired into NodeChatConnection's `.withUrl(...)`.
+// SignalR network collector. Helper wired into NodeChatConnection's `.withUrl(...)`.
 //
 // SignalR bypasses axios entirely, so it carries its own FE-generated `traceparent` (as a hub
 // header) and records its own `{transport:'signalr'}` breadcrumb. The header merges with the

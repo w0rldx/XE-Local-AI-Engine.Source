@@ -95,7 +95,10 @@ internal sealed class CatalogRecommendationService : ICatalogRecommendationServi
         return new CatalogRecommendationResult(recommended, canRun, snapshot);
     }
 
-    /// <summary>Recommended = fits at/above Q4_K_M quality with real headroom (resident or offload-labeled) — plan §7.</summary>
+    /// <summary>
+    ///     Recommended = fits at/above Q4_K_M quality with real headroom (resident or offload-labeled) — see
+    ///     Plans/2026-07-10-model-rec-catalog-and-harness-h1-plan.md §7.
+    /// </summary>
     private static bool IsRecommended(CatalogRecommendationCandidate candidate)
     {
         return QuantLadder.QualityRank(candidate.File.Quant) <= QuantLadder.QualityRank(MemoryFitEstimator.DefaultQuant)

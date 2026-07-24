@@ -31,7 +31,7 @@ interface ImageModelManagerProps {
 	onPendingDownloadChange?: (pending: boolean) => void;
 }
 
-// Minimal image-model management (plan §8: keep minimal — full download-progress UI is a follow-up). Lists installed
+// Minimal image-model management (kept intentionally minimal — full download-progress UI is a follow-up). Lists installed
 // image models and offers a detached "download model" action (202 accepted) that starts a single-file (Diffusion-part)
 // weight download. The backend exposes no progress or cancel yet, so the UI sets expectations instead: once a download
 // starts we track the target model name, disable the trigger, and show an indeterminate progress bar with copy telling

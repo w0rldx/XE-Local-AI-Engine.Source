@@ -1,4 +1,4 @@
-// Lane B: TanStack Query access to the IndexedDB snapshot store (plan §7.4).
+// TanStack Query access to the IndexedDB snapshot store.
 //
 // Snapshots are read like server state. The store emits a change event on every mutation (including
 // out-of-React captures from `captureSnapshot`), so the read hook subscribes and invalidates — no

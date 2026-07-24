@@ -23,7 +23,7 @@ public sealed class McpToolRegistryTests
     [Test]
     public void ReplaceSnapshot_OnDuplicateName_KeepsFirstAndDropsDescriptorInLockstep()
     {
-        // LOW-1: a duplicate qualified name must not leave the descriptor list (offer) advertising a tool whose
+        // A duplicate qualified name must not leave the descriptor list (offer) advertising a tool whose
         // executable was overwritten. First write wins for BOTH the executable and the descriptor, so descriptor count
         // equals executable count.
         var registry = new McpToolRegistry(NullLogger<McpToolRegistry>.Instance);

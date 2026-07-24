@@ -11,10 +11,10 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Options;
 
 /// <summary>
-///     DI wiring for the Lane B <c>sd-server</c> runtime adapter: the process launcher, the readiness probe, the resident
+///     DI wiring for the <c>sd-server</c> runtime adapter: the process launcher, the readiness probe, the resident
 ///     process supervisor, the typed HTTP job client, and the <see cref="IImageRuntime" /> facade. Companion to
-///     <see cref="StableDiffusionCppServiceCollectionExtensions.AddStableDiffusionCppImageProvider" /> (Lane A) — it
-///     consumes Lane A's seams (<see cref="Contracts.ISdGpuBackendSelector" />,
+///     <see cref="StableDiffusionCppServiceCollectionExtensions.AddStableDiffusionCppImageProvider" /> — it
+///     consumes that provider's seams (<see cref="Contracts.ISdGpuBackendSelector" />,
 ///     <see cref="Contracts.IStableDiffusionBinaryManager" />) plus the image model store
 ///     (<see cref="IImageModelStore" />), so both must be registered first.
 /// </summary>
@@ -24,8 +24,8 @@ public static class StableDiffusionCppRuntimeServiceCollectionExtensions
     public const string RuntimeHttpClientName = "sdcpp-runtime";
 
     /// <summary>
-    ///     Registers the sd-server runtime adapter (Lane B). All registrations are <c>TryAdd</c> so a host may override any
-    ///     seam. Requires the Lane A provider (<c>AddStableDiffusionCppImageProvider</c>) and an
+    ///     Registers the sd-server runtime adapter. All registrations are <c>TryAdd</c> so a host may override any
+    ///     seam. Requires <c>AddStableDiffusionCppImageProvider</c> to be registered first, plus an
     ///     <see cref="IImageModelStore" /> to be registered.
     /// </summary>
     public static IServiceCollection AddStableDiffusionCppImageRuntime(this IServiceCollection services)

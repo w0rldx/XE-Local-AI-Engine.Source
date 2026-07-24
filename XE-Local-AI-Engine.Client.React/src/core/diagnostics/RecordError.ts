@@ -1,5 +1,5 @@
 // Shared dedup'd error-crumb path used by every error collector (window, react, reporting).
-// Routing all error sources through here guarantees the plan §3 "one error → one breadcrumb" rule.
+// Routing all error sources through here guarantees the "one error → one breadcrumb" rule.
 
 import { push } from "@/core/diagnostics/BreadcrumbBuffer";
 import { buildErrorKey, shouldRecord } from "@/core/diagnostics/Dedup";
@@ -13,7 +13,7 @@ export interface RecordErrorInput {
 }
 
 /**
- * Notified once per recorded (non-deduped) error breadcrumb. Lane B subscribes here to auto-capture
+ * Notified once per recorded (non-deduped) error breadcrumb. The snapshot bundler subscribes here to auto-capture
  * an error snapshot; because the listener fires only AFTER the dedup gate passes, a single logical
  * error triggers exactly one capture even when several collectors observe it.
  */

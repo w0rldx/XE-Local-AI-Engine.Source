@@ -7,7 +7,7 @@ using System.Text.Json.Serialization;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
 
 /// <summary>
-///     The status of an sd-server async job, mapped from the <c>GET /sdcpp/v1/jobs/{id}</c> response (frozen spike §4A).
+///     The status of an sd-server async job, mapped from the <c>GET /sdcpp/v1/jobs/{id}</c> response.
 /// </summary>
 internal enum SdJobStatus
 {
@@ -63,9 +63,8 @@ internal sealed record SdJobState
 
 /// <summary>
 ///     Typed HTTP client for the sd-server native async job API (<c>/sdcpp/v1/*</c>). The ONLY place sd-server route
-///     strings, request-body shape, and response JSON live (architecture invariant §3). Prompts pass through the request
-///     body but are NEVER logged here (§10). Frozen field-level against stable-diffusion.cpp @ <c>master-742-1a13107</c>
-///     (§4A).
+///     strings, request-body shape, and response JSON live. Prompts pass through the request
+///     body but are NEVER logged here. Frozen field-level against stable-diffusion.cpp @ <c>master-742-1a13107</c>.
 /// </summary>
 internal sealed class SdServerJobClient
 {
@@ -254,7 +253,7 @@ internal sealed class SdServerJobClient
         };
     }
 
-    // ── sd-server /sdcpp/v1 wire DTOs (snake_case, frozen §4A) ────────────────────────────────────────────────────
+    // ── sd-server /sdcpp/v1 wire DTOs (snake_case, frozen field-level) ────────────────────────────────────────────
 
     private sealed record ImgGenRequestBody
     {

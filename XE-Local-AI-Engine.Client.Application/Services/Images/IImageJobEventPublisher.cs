@@ -6,7 +6,7 @@ namespace XE_Local_AI_Engine.Client.Services.Images;
 ///     replay the buffer and dedupe events delivered both via replay and live). The default implementation is a no-op
 ///     (<see cref="Implementation.NullImageJobEventPublisher" />); the Client host swaps in a hub-backed publisher
 ///     (<c>ImageJobEventPublisher</c> over the <c>ImageJobHub</c>). Payloads are coarse status only — never a prompt,
-///     path, or step/percent detail (§4A/§10).
+///     path, or step/percent detail.
 /// </summary>
 public interface IImageJobEventPublisher
 {
@@ -28,7 +28,7 @@ public static class ImageJobHubEvents
 ///     <c>ImageJobStatus</c> value: <c>Queued</c>/<c>Generating</c>/<c>Succeeded</c>/<c>Failed</c>/<c>Cancelled</c>), an
 ///     optional queue position and elapsed time while generating, the produced image id on success, and a sanitized
 ///     error on failure. <see cref="Seq" /> is the per-job monotonic sequence for replay/dedupe. NO step or percent field
-///     (the runtime exposes none over HTTP, §4A). NEVER carries the prompt.
+///     (the runtime exposes none over HTTP). NEVER carries the prompt.
 /// </summary>
 public sealed record ImageJobStatusHubEvent(
     Guid JobId,

@@ -291,8 +291,9 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
     }
 
     /// <summary>
-    ///     Runs the catalog ranking lane and maps its "Recommended" / "Can run" sections (each already ordered per plan
-    ///     §7) to <see cref="AdvisorRecommendation" /> rows, each capped at the request limit. Any failure (catalog
+    ///     Runs the catalog ranking lane and maps its "Recommended" / "Can run" sections (each already ordered per
+    ///     Plans/2026-07-10-model-rec-catalog-and-harness-h1-plan.md §7) to <see cref="AdvisorRecommendation" /> rows,
+    ///     each capped at the request limit. Any failure (catalog
     ///     provider / discovery / estimator) is caught and logged — the catalog lane degrading to empty must never fail
     ///     the run, since the explore lane alone is still a useful recommendation set.
     /// </summary>

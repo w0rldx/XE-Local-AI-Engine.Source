@@ -1,7 +1,7 @@
-// Lane C: presentational breadcrumb timeline (plan §7.6).
+// Presentational breadcrumb timeline.
 //
 // Renders the ordered, already-redacted breadcrumb ring from a snapshot. Each breadcrumb category
-// has its own one-line summary; no raw bodies are shown (they never reach the contract — plan §3).
+// has its own one-line summary; no raw bodies are shown (they never reach the contract).
 
 import { Badge, Group, Stack, Text } from "@mantine/core";
 import { useTranslation } from "react-i18next";

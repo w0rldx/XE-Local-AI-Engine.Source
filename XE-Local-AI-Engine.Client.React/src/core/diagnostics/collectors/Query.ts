@@ -1,4 +1,4 @@
-// TanStack Query collector (plan §7.2). Provides `QueryCache`/`MutationCache` with `onError`
+// TanStack Query collector. Provides `QueryCache`/`MutationCache` with `onError`
 // handlers for the QueryClient in Context.ts. The existing `defaultOptions.queries.retry` fn
 // (RC2 401-exclude, max 3) is PRESERVED — these caches are added alongside it, not in place of it.
 

@@ -4,7 +4,7 @@ namespace XE_Local_AI_Engine.Client.Services.Knowledge;
 ///     Node-local knowledge-base ingestion and embedding options, bound from the <c>KnowledgeBase</c> configuration
 ///     section. Defaults target the shipped node-local embedding model (<c>nomic-embed-text</c> via the llama.cpp
 ///     provider) and a conservative single-document-at-a-time ingestion budget so a batch upload cannot exhaust
-///     CPU/RAM/VRAM. The search lane (Lane C) reuses <see cref="EmbeddingModelName" />/<see cref="EmbeddingProviderName" />
+///     CPU/RAM/VRAM. The search path reuses <see cref="EmbeddingModelName" />/<see cref="EmbeddingProviderName" />
 ///     to build the query vector and to filter same-model chunk vectors.
 /// </summary>
 public sealed class KnowledgeBaseOptions

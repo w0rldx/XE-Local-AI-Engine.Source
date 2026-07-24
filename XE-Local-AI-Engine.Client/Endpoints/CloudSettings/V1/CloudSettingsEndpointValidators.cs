@@ -35,8 +35,9 @@ public sealed class SaveCloudSettingsRequestValidator : Validator<SaveCloudSetti
             .WithMessage($"ApiKey is required when AuthMode is '{nameof(AzureFoundryAuthMode.ApiKey)}'.")
             .When(static request => IsApiKeyMode(request.AuthMode));
 
-        // Entra ID requires a tenant, client id, and token scope regardless of sign-in shape (Locked build contract
-        // §8) — the client secret is optional, and its absence selects interactive user sign-in.
+        // Entra ID requires a tenant, client id, and token scope regardless of sign-in shape (frozen build contract,
+        // Plans/azure-ai-gateway-entra-provider-findings.md §8) — the client secret is optional, and its absence
+        // selects interactive user sign-in.
         RuleFor(static request => request.EntraTenantId)
             .NotEmpty()
             .WithMessage($"EntraTenantId is required when AuthMode is '{nameof(AzureFoundryAuthMode.EntraId)}'.")

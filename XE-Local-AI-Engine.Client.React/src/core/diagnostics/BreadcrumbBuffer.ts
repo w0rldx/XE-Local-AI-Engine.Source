@@ -1,13 +1,13 @@
-// Fixed-size redacted ring buffer — the single source every collector appends to (plan §7.1).
+// Fixed-size redacted ring buffer — the single source every collector appends to.
 //
-// Always-on collectors do O(1) appends here; the Lane B bundler reads the buffer on capture.
+// Always-on collectors do O(1) appends here; the snapshot bundler reads the buffer on capture.
 // Redaction runs on every `push` (defensive, idempotent) so secrets never enter the ring.
 
 import { generateId } from "@/core/diagnostics/Ids";
 import { redactBreadcrumb } from "@/core/diagnostics/Redact";
 import type { Breadcrumb, BreadcrumbInput } from "@/core/diagnostics/Types";
 
-/** Max breadcrumbs retained (plan §6: "Breadcrumb buffer cap (e.g. 200)"). */
+/** Max breadcrumbs retained. */
 export const BREADCRUMB_BUFFER_CAPACITY = 200;
 
 const buffer: Breadcrumb[] = [];

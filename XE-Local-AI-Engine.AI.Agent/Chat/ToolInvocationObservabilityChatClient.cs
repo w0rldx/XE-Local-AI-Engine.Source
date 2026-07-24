@@ -115,7 +115,7 @@ internal sealed class ToolInvocationObservabilityChatClient : DelegatingChatClie
 
         // The completion span sits at the same hop but fires when the FunctionResultContent flows back, so it records
         // the actual execution outcome + duration. Only the result length + hash are captured — never the raw result
-        // value (docs §4: tool telemetry must never log raw arguments or results).
+        // value (docs/agent-knowledge.md §4: tool telemetry must never log raw arguments or results).
         using var activity = AgentActivitySource.Instance.StartActivity("AgentRun.ToolCallCompleted");
         activity?.SetTag("tool.call_id", functionResult.CallId);
         activity?.SetTag("tool.name", requested.Name);

@@ -42,8 +42,8 @@ export interface NodeCapabilityConfig {
 	readonly preview: boolean;
 	readonly knowledgeBase: boolean;
 	// Local image-generation surface (stable-diffusion.cpp text-to-image). Enabled by default: the runtime has been
-	// live-GPU verified end-to-end on target hardware, so the nav entry + /images route ship on (plan §9 —
-	// shipped as a flagship feature).
+	// live-GPU verified end-to-end on target hardware, so the nav entry + /images route ship on by default as a
+	// flagship feature.
 	readonly images: boolean;
 	// Dedicated durable software-development workflow. The surface ships in every build; the authenticated
 	// runtime capability controls whether its actions are available on this node.
@@ -159,7 +159,7 @@ export const nodeRoutePaths = {
 	images: "/images",
 	// Dedicated Development Mode project/task workflow — gated on nodeCapabilities.development.
 	development: "/development",
-	// Local-only diagnostics panel (frontend error snapshots) — always available (plan §1)
+	// Local-only diagnostics panel (frontend error snapshots) — always available.
 	diagnostics: "/diagnostics",
 } as const;
 

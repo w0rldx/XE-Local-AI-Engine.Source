@@ -6,7 +6,7 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Options;
 
 /// <summary>
 ///     Builds the exact, ordered <c>sd-server</c> startup argument vector for one model's file-set on a loopback port.
-///     The ONLY place sd-server startup flag names live (architecture invariant §3). Per-generation parameters (prompt,
+///     The ONLY place sd-server startup flag names live. Per-generation parameters (prompt,
 ///     steps, seed, cfg) are NOT here — they ride the per-job HTTP body (<see cref="SdServerJobClient" />); startup args
 ///     carry only the resident concerns: bind address, model file-set, acceleration backend, and threads.
 /// </summary>
@@ -14,7 +14,7 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Options;
 ///     Model selection follows the resolved file-set shape: a single <see cref="ImageModelPartRole.Diffusion" /> part
 ///     (SD1.5, the step-1 target) uses the single-file <c>-m</c> flag; a multi-part set (FLUX/SD3) uses
 ///     <c>--diffusion-model</c> + <c>--vae</c> + <c>--clip_l</c> [+ <c>--clip_g</c>] + <c>--t5xxl</c>. Verified against
-///     stable-diffusion.cpp @ <c>master-742-1a13107</c> (§4A / §4.3).
+///     stable-diffusion.cpp @ <c>master-742-1a13107</c>.
 /// </remarks>
 internal static class ImageServerArgumentBuilder
 {

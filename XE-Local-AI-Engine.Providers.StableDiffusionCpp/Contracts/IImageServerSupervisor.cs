@@ -18,7 +18,7 @@ internal interface IImageServerSupervisor
     /// <summary>
     ///     Tree-kills the daemon serving <paramref name="modelName" /> and spawns a fresh one, returning its endpoint.
     ///     This is the abort path for a job that is already generating (sd-server cannot interrupt an in-flight
-    ///     generation over HTTP, §4A) — killing the daemon drops the one active job and the restart readies the slot.
+    ///     generation over HTTP) — killing the daemon drops the one active job and the restart readies the slot.
     /// </summary>
     Task<ImageServerEndpoint> RestartAsync(string modelName, CancellationToken ct);
 

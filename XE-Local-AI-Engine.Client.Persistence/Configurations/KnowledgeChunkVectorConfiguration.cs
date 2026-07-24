@@ -29,7 +29,7 @@ internal sealed class KnowledgeChunkVectorConfiguration : IEntityTypeConfigurati
 
         // Cascade from the owning chunk. The principal key is the chunk's UNIQUE alternate key (chunk_id), not its rowid
         // primary key. Documented FK intent only — the node-sqlite runtime connection does NOT enable PRAGMA foreign_keys,
-        // so deletes are issued explicitly by the raw-SQL purge path (Lane D).
+        // so deletes are issued explicitly by the raw-SQL purge path.
         builder.HasOne<KnowledgeDocumentChunk>()
                .WithOne()
                .HasForeignKey<KnowledgeChunkVector>(entity => entity.ChunkId)

@@ -7,7 +7,7 @@ import {
 } from "@/core/diagnostics/collectors/Query";
 
 const queryClient = new QueryClient({
-	// Diagnostics caches record a redacted error breadcrumb after retries exhaust (plan §7.2).
+	// Diagnostics caches record a redacted error breadcrumb after retries exhaust.
 	queryCache: createDiagnosticsQueryCache(),
 	mutationCache: createDiagnosticsMutationCache(),
 	defaultOptions: {

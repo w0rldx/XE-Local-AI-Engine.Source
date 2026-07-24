@@ -1,4 +1,4 @@
-// Capture-time environment facts for a snapshot (plan §6 `env`). Lane B calls `collectEnv()`.
+// Capture-time environment facts for a snapshot. The snapshot bundler calls `collectEnv()`.
 
 import type { SnapshotEnv } from "@/core/diagnostics/Types";
 import { environment } from "@/Environment";

@@ -7,7 +7,7 @@ public interface ICloudCredentialStore
 {
     /// <summary>
     ///     Loads the canonical schema-v2 cloud provider config, lifting a legacy v1 payload in place without
-    ///     data loss or file deletion (HIGH-2).
+    ///     data loss or file deletion.
     /// </summary>
     Task<StoredCloudProviderConfig?> LoadConfigAsync(CancellationToken cancellationToken = default);
 

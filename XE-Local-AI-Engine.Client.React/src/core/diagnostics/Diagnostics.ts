@@ -1,11 +1,11 @@
-// Public surface of the local-only diagnostics core (Lane A).
+// Public surface of the local-only diagnostics core.
 //
-// Lane B will consume: the `types.ts` contract (Snapshot/SnapshotInput/Breadcrumb/NetworkEntry),
+// The snapshot bundler will consume: the `types.ts` contract (Snapshot/SnapshotInput/Breadcrumb/NetworkEntry),
 // `getBreadcrumbs()` (read the ring on capture), `clearBreadcrumbs()`, `buildSnapshotInput()`
 // (buffer + env → SnapshotInput; the bundler adds state + rrweb), and `SCHEMA_VERSION`.
-// Lane C consumes the same contract + types for the panel. Lane D fills `Snapshot.rrweb`.
+// The diagnostics panel consumes the same contract + types. The rrweb replay module fills `Snapshot.rrweb`.
 
-// Buffer accessors (Lane B reads these on capture).
+// Buffer accessors (read by the snapshot bundler on capture).
 export { clear as clearBreadcrumbs, getAll as getBreadcrumbs, push as pushBreadcrumb } from "@/core/diagnostics/BreadcrumbBuffer";
 export { onAppError, rootErrorHandlers } from "@/core/diagnostics/collectors/ReactErrors";
 export { withDiagnostics } from "@/core/diagnostics/collectors/Zustand";
@@ -16,7 +16,7 @@ export { installCollectors } from "@/core/diagnostics/InstallCollectors";
 export type { ErrorRecordedListener } from "@/core/diagnostics/RecordError";
 // Manual-capture / cross-cutting helpers.
 export { onErrorRecorded, recordError } from "@/core/diagnostics/RecordError";
-// rrweb DOM-replay segment (Lane D) — Lane B's bundler calls getRrwebSegment() to attach it.
+// rrweb DOM-replay segment (rrweb replay module) — the snapshot bundler calls getRrwebSegment() to attach it.
 export { getRrwebSegment, startRrwebRecording, stopRrwebRecording } from "@/core/diagnostics/RrwebRecorder";
 // Snapshot assembly seam.
 export { buildSnapshotInput } from "@/core/diagnostics/SnapshotInput";

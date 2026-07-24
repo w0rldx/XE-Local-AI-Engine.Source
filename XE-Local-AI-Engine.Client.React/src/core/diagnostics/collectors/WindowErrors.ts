@@ -1,5 +1,5 @@
 // Global error collectors: capture-phase `error`, `unhandledrejection`, and `ReportingObserver`.
-// All thrown-error paths route through the dedup gate via `recordError` (plan §7.2).
+// All thrown-error paths route through the dedup gate via `recordError`.
 
 import { push } from "@/core/diagnostics/BreadcrumbBuffer";
 import { describeError, recordError } from "@/core/diagnostics/RecordError";

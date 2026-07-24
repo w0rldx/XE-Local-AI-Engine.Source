@@ -17,7 +17,7 @@ import { toImageJobView, toImageModelView } from "@/features/images/models/Image
 // Server-state for the image feature. Reads use the generated hey-api `*Options()` (shared axios + TanStack
 // AbortSignal wired automatically) with a `select` mapping the optional-field generated response into the strict
 // domain view-model. Every options object is wrapped in withResponseValidation so a zod response-shape failure
-// surfaces as an ApiError. Job state lives ONLY in TanStack Query (never mirrored into a store, plan §9); the
+// surfaces as an ApiError. Job state lives ONLY in TanStack Query (never mirrored into a store); the
 // SignalR hub (useImageJobHub) drives cache invalidation on each coarse status push.
 
 // The generated query keys are single-element arrays `[{ _id: "<operationId>", ... }]`. Invalidating with just the
@@ -40,7 +40,7 @@ function invalidate(queryClient: ReturnType<typeof useQueryClient>, operationId:
 
 // Installed image models backing the generation form's model picker + the minimal model manager. staleTime keeps a
 // remount within the session from refetching; the download mutation invalidates this key so a freshly downloaded
-// model appears without a manual refresh. The detached weight download exposes no progress/cancel yet (plan §8), so
+// model appears without a manual refresh. The detached weight download exposes no progress/cancel yet, so
 // while one is in flight the caller passes `pollWhilePending` to enable a modest interval refetch — that is how the
 // freshly-downloaded model surfaces on completion without a manual refresh.
 export function useImageModels(pollWhilePending = false) {
@@ -89,8 +89,8 @@ export function useCancelImageJob() {
 	});
 }
 
-// Starts a detached image-model weight download (202 accepted). The full download-progress hub is a follow-up
-// (plan §8) — for now the model manager polls listImageModels for the model appearing, so invalidate that key.
+// Starts a detached image-model weight download (202 accepted). The full download-progress hub is a follow-up —
+// for now the model manager polls listImageModels for the model appearing, so invalidate that key.
 export function useStartImageModelDownload() {
 	const queryClient = useQueryClient();
 

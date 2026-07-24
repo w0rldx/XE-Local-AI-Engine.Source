@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import de from "@/locales/de.json";
 import en from "@/locales/en.json";
 
-// Lane C: the Diagnostics panel surfaces only keyed strings (plan §9). This guards that every
+// The Diagnostics panel surfaces only keyed strings. This guards that every
 // `diagnostics.*` key exists in BOTH locales with an identical key set (the global I18n.test.ts asserts
 // whole-file parity; this is the focused diagnostics-section regression).
 function collectKeyPaths(node: unknown, prefix = ""): string[] {

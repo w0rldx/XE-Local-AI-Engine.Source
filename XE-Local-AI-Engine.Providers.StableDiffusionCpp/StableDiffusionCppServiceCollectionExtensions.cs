@@ -9,14 +9,14 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Options;
 
 /// <summary>
-///     DI wiring for the stable-diffusion.cpp image runtime infrastructure Lane A owns: the pinned binary manager, the
+///     DI wiring for the stable-diffusion.cpp image-runtime infrastructure: the pinned binary manager, the
 ///     GPU-backend selector (over the shared <see cref="IHardwareProfiler" />), the bring-your-own override, and the
 ///     runtime options. Mirrors the ordered registration of <c>AddLlamaServerLocalModelProvider</c>.
 /// </summary>
 /// <remarks>
-///     <strong>Scope:</strong> this registers only what Lane A owns. The <c>sd-server</c> supervisor/runtime adapter
-///     (Lane B) and the job coordinator / encrypted image store / hub (Lane C) are wired separately and consume these
-///     seams — chiefly <see cref="IStableDiffusionBinaryManager" /> (call
+///     <strong>Scope:</strong> this registers only the binary-manager and backend-selector infrastructure. The
+///     <c>sd-server</c> supervisor/runtime adapter and the job coordinator / encrypted image store / hub are wired
+///     separately and consume these seams — chiefly <see cref="IStableDiffusionBinaryManager" /> (call
 ///     <see cref="IStableDiffusionBinaryManager.EnsureBinaryAsync" />) and <see cref="ISdGpuBackendSelector" />.
 ///     <para>
 ///         <strong>Caller contract:</strong> the consuming application must register an <see cref="IHardwareProfiler" />
@@ -29,7 +29,7 @@ public static class StableDiffusionCppServiceCollectionExtensions
     public const string BinaryHttpClientName = "sdcpp-binary";
 
     /// <summary>
-    ///     Registers the stable-diffusion.cpp image-runtime infrastructure Lane A owns (binary manager, backend selector,
+    ///     Registers the stable-diffusion.cpp image-runtime infrastructure (binary manager, backend selector,
     ///     bring-your-own override, runtime options). All registrations are <c>TryAdd</c> so a host may override any seam.
     /// </summary>
     public static IServiceCollection AddStableDiffusionCppImageProvider(this IServiceCollection services)

@@ -12,7 +12,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     <see cref="CatalogRecommendationService" />: use-case + arch-tag filtering, the Recommended/CanRun split, the
-///     tier → fit-class → quant → recency → id ranking order (plan §7), and the MoE expert-offload path.
+///     tier → fit-class → quant → recency → id ranking order
+///     (Plans/2026-07-10-model-rec-catalog-and-harness-h1-plan.md §7), and the MoE expert-offload path.
 /// </summary>
 public sealed class CatalogRecommendationServiceTests
 {

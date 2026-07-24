@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// <summary>
 ///     <see cref="ModelFootprintProvider" /> tests: the provider sources the quant label + on-disk size from the GGUF
 ///     registry seam and the weight/KV inputs from the header read (both via <see cref="IGgufModelStore" />), then scores
-///     them with the pure <see cref="MemoryFitEstimator" />. Asserts the registry quant drives the density (HIGH-3, never
+///     them with the pure <see cref="MemoryFitEstimator" />. Asserts the registry quant drives the density (never
 ///     the header file_type), the header-facts weights+KV path, the file-size fallback, and the Unknown→not-installed
 ///     branch. No I/O — the store seam is mocked.
 /// </summary>

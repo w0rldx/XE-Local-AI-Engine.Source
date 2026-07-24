@@ -14,7 +14,7 @@ import { installCollectors, rootErrorHandlers } from "@/core/diagnostics/Diagnos
 import { installAutoCapture } from "@/features/diagnostics/BuildSnapshot";
 
 // Install always-on diagnostics collectors before the first render so early errors are captured,
-// then subscribe auto-capture so a recorded error assembles + persists a snapshot (plan §7.2, §7.4).
+// then subscribe auto-capture so a recorded error assembles + persists a snapshot.
 installCollectors();
 installAutoCapture();
 

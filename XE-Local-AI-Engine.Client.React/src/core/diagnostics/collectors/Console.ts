@@ -1,4 +1,4 @@
-// console.warn/error patch → breadcrumb (plan §7.2, §10).
+// console.warn/error patch → breadcrumb.
 //
 // Recursion-guarded (a redaction error must not re-enter the patched console). Redaction runs on the
 // interpolated args BEFORE `push`, since console messages frequently contain message bodies.

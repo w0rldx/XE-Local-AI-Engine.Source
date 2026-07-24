@@ -16,7 +16,7 @@ const statusColor: Record<ImageJobStatus, string> = {
 
 // Live elapsed seconds since a generating job started, ticking once per second. Returns 0 when inactive so a
 // terminal/queued card renders no timer. A single interval per active card is fine — the coordinator serializes to
-// one generating job at a time (plan §4A).
+// one generating job at a time.
 function useElapsedSeconds(startedAtUtc: number | null, active: boolean): number {
 	const [seconds, setSeconds] = useState(0);
 
@@ -40,7 +40,7 @@ interface ImageJobCardProps {
 	onCancel: (jobId: string) => void;
 }
 
-// One image job row. Renders COARSE status only (plan §9): queued → generating (elapsed timer) → succeeded/failed/
+// One image job row. Renders COARSE status only: queued → generating (elapsed timer) → succeeded/failed/
 // cancelled — never a step-progress bar (the runtime exposes no step progress over HTTP). A cancellable job (queued
 // or generating) shows a Cancel button; a succeeded job shows its decrypted PNG.
 export function ImageJobCard({ job, isCancelling, onCancel }: ImageJobCardProps) {

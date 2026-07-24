@@ -16,7 +16,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// <summary>
 ///     Behavior coverage for <see cref="CoderWorkspaceReader" /> against the REAL
 ///     <see cref="ProcessSandboxRuntimeProvider" /> jail (Linux). Reads go through the jail-guarded read; list/search
-///     run real find/grep with arg-confinement and grep-level secret exclusion. The MEDIUM-1 gate proves an
+///     run real find/grep with arg-confinement and grep-level secret exclusion. The mandatory gate proves an
 ///     absolute/<c>..</c> path arg can never read a host file outside the jail. The no-sandbox, disabled, binary,
 ///     traversal, and concurrency cases are pinned here too.
 /// </summary>
@@ -409,13 +409,13 @@ public sealed class CoderWorkspaceReaderTests : IDisposable
             return;
         }
 
-        // MEDIUM-1 MANDATORY GATE: a list/search whose path arg is absolute (/etc) or '..' is rejected by the guard
+        // MANDATORY GATE: a list/search whose path arg is absolute (/etc) or '..' is rejected by the guard
         // before the process launches, so a host file outside the jail is never read.
         using var provider = CreateProvider();
         var handle = await CreateOrAttachAsync(provider);
         using var escapeTarget = new TempDir(_tempPaths);
         var outsideFile = Path.Combine(escapeTarget.Path, "outside-secret.txt");
-        await File.WriteAllTextAsync(outsideFile, "OUTSIDE-THE-JAIL-MEDIUM-1");
+        await File.WriteAllTextAsync(outsideFile, "OUTSIDE-THE-JAIL");
         await RunShellInJailAsync(provider, handle, "mkdir -p agent-home/workspace/selected/src && echo inside > agent-home/workspace/selected/src/a.txt");
         var reader = CreateReader(provider);
 
@@ -473,7 +473,7 @@ public sealed class CoderWorkspaceReaderTests : IDisposable
     [Test]
     public async Task CoderRead_DuringAgentHomeRun_DoesNotThrowBusy()
     {
-        // MEDIUM-2: a coder read attaches via ConnectAsync, which never takes the AgentHome run guard, so two concurrent
+        // A coder read attaches via ConnectAsync, which never takes the AgentHome run guard, so two concurrent
         // coder reads both succeed and neither throws AgentHomeBusyException. (The fake provider's ConnectAsync mirrors
         // the real provider's lock-only attach.)
         var provider = new FakeSandboxRuntimeProvider(TimeProvider.System);

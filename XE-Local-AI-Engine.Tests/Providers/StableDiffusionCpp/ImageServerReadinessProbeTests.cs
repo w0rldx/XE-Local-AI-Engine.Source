@@ -5,8 +5,8 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Verifies the sd-server readiness probe polls <c>GET /sdcpp/v1/capabilities</c> (sd-server has NO <c>/health</c>,
-///     §4A): the first success means ready, and connection-refused while the daemon is still loading is retried.
+///     Verifies the sd-server readiness probe polls <c>GET /sdcpp/v1/capabilities</c> (sd-server has NO <c>/health</c>):
+///     the first success means ready, and connection-refused while the daemon is still loading is retried.
 /// </summary>
 public sealed class ImageServerReadinessProbeTests
 {

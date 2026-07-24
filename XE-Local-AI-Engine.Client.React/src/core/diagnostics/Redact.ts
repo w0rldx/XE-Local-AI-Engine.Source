@@ -1,4 +1,4 @@
-// Pure, unit-testable redaction helpers (plan §3, §10).
+// Pure, unit-testable redaction helpers.
 //
 // "Redact at capture, not at export": these run BEFORE anything enters the breadcrumb buffer, so
 // secrets/PII (Bearer tokens in headers AND URLs, password fields, chat/message/agent bodies,
@@ -152,8 +152,8 @@ export interface RawNetworkObservation {
 
 /**
  * Reduce a raw observation to a clean {@link NetworkEntry}: bodies are always dropped (the contract
- * has no body field) and the URL's token query params are stripped. This satisfies plan §10's
- * "keep method/url/status/traceId only" for sensitive endpoints — and is stricter for all others.
+ * has no body field) and the URL's token query params are stripped. This keeps method/url/status/traceId
+ * only for sensitive endpoints — and is stricter for all others.
  */
 export function toNetworkEntry(raw: RawNetworkObservation): NetworkEntry {
 	return {

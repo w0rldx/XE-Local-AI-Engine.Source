@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Knowledge;
 
 /// <summary>
-///     Read + light-admin surface over the <c>knowledge_documents</c> catalog for the management endpoints (Lane D):
+///     Read + light-admin surface over the <c>knowledge_documents</c> catalog for the management endpoints:
 ///     lists documents, reads one document's detail with its chunks, and resets a document (or every stale-model document)
 ///     to <see cref="KnowledgeDocumentStatus.Pending" /> for a reindex. Scoped: it reads/writes through the request-scoped
 ///     <c>NodeChatDbContext</c> connection. Display names are decrypted server-side for the owning operator — that is the

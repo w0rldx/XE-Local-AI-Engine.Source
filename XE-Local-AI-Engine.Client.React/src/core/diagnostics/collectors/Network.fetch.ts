@@ -1,7 +1,7 @@
-// fetch collector (plan §7.2). Wraps `globalThis.fetch` ONCE; covers SSE streams + bare fetch.
+// fetch collector. Wraps `globalThis.fetch` ONCE; covers SSE streams + bare fetch.
 //
 // Same-origin requests get a `traceparent` header injected; cross-origin requests are left untouched
-// (a `traceparent` is NOT CORS-safelisted and would force a preflight — plan §10). Every call is
+// (a `traceparent` is NOT CORS-safelisted and would force a preflight). Every call is
 // recorded as a redacted `{transport:'fetch'}` breadcrumb.
 
 import { push } from "@/core/diagnostics/BreadcrumbBuffer";

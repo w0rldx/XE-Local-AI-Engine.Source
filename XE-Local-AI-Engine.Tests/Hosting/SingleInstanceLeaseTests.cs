@@ -4,7 +4,7 @@ using XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Coverage for the per-data-root single-instance lease (HIGH-001). The lease serializes process instances that share
+///     Coverage for the per-data-root single-instance lease. The lease serializes process instances that share
 ///     one per-user data directory so two concurrent first launches cannot split the DB-encryption key. Concurrency is
 ///     exercised with multiple handles in-process (the exclusive open is enforced by the OS across handles, same as it is
 ///     across processes), so no second process is needed.

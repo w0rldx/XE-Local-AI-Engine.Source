@@ -4,7 +4,7 @@ namespace XE_Local_AI_Engine.Client.Services.CloudProviders;
 ///     A single manually-added Azure Foundry deployment that surfaces in the chat model picker.
 /// </summary>
 /// <remarks>
-///     No <c>required</c> members so a partial / legacy JSON parse never throws (HIGH-2). Non-blank
+///     No <c>required</c> members so a partial / legacy JSON parse never throws. Non-blank
 ///     <see cref="DeploymentName" /> is enforced by store validation, not by deserialization.
 /// </remarks>
 public sealed record StoredAzureFoundryModel
