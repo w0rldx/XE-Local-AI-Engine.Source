@@ -1,8 +1,8 @@
 # Scheduler
 
-> Last reviewed: 2026-06-27 · Code-grounded.
+> Last reviewed: 2026-07-24 · Code-grounded.
 
-The node runs a **Quartz.NET-backed job scheduler** entirely in-process inside the Node Web Server (`XE-Local-AI-Engine.Client`). It lets an operator define recurring/one-shot/manual jobs from a registered set of *templates*, fires them through a thin dispatch job, records every fire as a run-history row, supports best-effort cancellation (operator interrupt + auto-interrupt timeout), and pushes live lifecycle events to the React management UI over a SignalR hub. The data layer is encrypted node-local SQLite; the canonical model-fit "Model recommendation check" job is the only template shipped today (see [Model Fit](07-model-fit.md)).
+The node runs a **Quartz.NET-backed job scheduler** entirely in-process inside the Node Web Server (`XE-Local-AI-Engine.Client`). It lets an operator define recurring/one-shot/manual jobs from a registered set of *templates*, fires them through a thin dispatch job, records every fire as a run-history row, supports best-effort cancellation (operator interrupt + auto-interrupt timeout), and pushes live lifecycle events to the React management UI over a SignalR hub. The data layer is encrypted node-local SQLite. Two templates ship today: the model-fit recommendation refresh and unattended execution of a saved node-local agent.
 
 This page covers the C# scheduler subsystem (`XE-Local-AI-Engine.Client.Application/Services/Scheduler/*` + the Client host wiring), the SignalR hub (`XE-Local-AI-Engine.Client/Hubs/*`), and the React scheduler feature (`XE-Local-AI-Engine.Client.React/src/features/scheduler/*`).
 
@@ -59,13 +59,33 @@ A **template** is a server-defined job type. Each is an `IScheduledJobHandler` e
 
 `ScheduledJobTemplateRegistry` (`Implementation/ScheduledJobTemplateRegistry.cs:19`) is a **singleton built at startup** from every DI-registered `IScheduledJobHandler`. It snapshots handlers into a `FrozenDictionary` keyed case-sensitively by `TemplateId` and **throws `InvalidOperationException` at construction on a duplicate `TemplateId`** — a programming error deliberately caught at startup, not suppressed at runtime.
 
-### Shipped template
+### Shipped templates
 
 `ModelRecommendationCheckHandler` (`Handlers/ModelRecommendationCheckHandler.cs:29`), template id `model-recommendation-check`, runs the box-aware GGUF Model Advisor and refreshes the cached recommendation snapshot. See [Model Fit](07-model-fit.md) for what it computes. Maintainer-relevant details:
 
 - **It is a singleton** (the registry captures handlers in a `FrozenDictionary`), so it **cannot inject scoped services**. It injects `IServiceScopeFactory` and resolves the scoped `IModelFitRefreshService` inside a per-fire scope (lines 70-103).
 - It owns **no scheduler state**: it never touches run rows or SignalR — the dispatcher does. It forwards `context.ReportProgressAsync`, lets `OperationCanceledException` propagate (→ dispatcher records *Cancelled*), and throws a `ScheduledJobExecutionException` carrying the refresh result's contractually-sanitized `SanitizedError` on failure (→ dispatcher records *Failed* with that exact reason).
 - Parameters are validated against a draft-07 JSON-Schema (`operation`/`useCase`/`limit`/`quantOverride`/`ctxTarget`) and re-validated through the shared `ModelFitRequestValidator`; raw parameter values are never echoed into error text.
+
+`RunSavedAgentHandler` (`Handlers/RunSavedAgentHandler.cs:48`), template id `run-agent`, executes a
+saved agent headlessly with a fixed prompt. It supports Cron, one-shot, simple-interval, and manual
+schedules; defaults to Cron; permits manual triggering and agent-created definitions; and defaults to
+a 600-second runtime limit. Its parameters are `agentDefinitionId`, `prompt`, and an optional
+`reasoningEffort` override.
+
+Security and runtime invariants:
+
+- **Node-local only.** The handler resolves the effective model after the agent's model pin and rejects
+  a cloud model before capacity admission or invocation.
+- **Same runtime, no chat transcript.** It resolves the complete saved-agent runtime and uses the same
+  `IInvocationRunner` as chat, but without a conversation or chat-persistence pump.
+- **No unattended approval wait.** Approval-required tools are removed before execution because no
+  human approval round trip exists. The remaining offer keeps the resolved agent's normal tool policy.
+- **Content-safe history.** Progress/history records status, model, token counts, and duration—not the
+  fixed prompt, model output, tool arguments, or tool results. Missing agents and failures surface
+  operator-safe reasons.
+- **Shared admission and cancellation.** The run uses the capacity gate and node-wide invocation slot,
+  observes Quartz cancellation/timeout, and releases any footprint reservation on every terminal path.
 
 ---
 
@@ -136,7 +156,7 @@ Either way, the handler must actually *observe* the token. The dispatcher record
 
 ## DI registration & two key gotchas
 
-`AddNodeScheduler` (`NodeSchedulerServiceCollectionExtensions.cs:18`) wires the whole subsystem behind `SchedulerOptions.Enabled`. When disabled, the Quartz hosted service never starts (no jobs fire) but persistence tables and DI registrations remain. It configures `AddQuartz` with `UseProperties = true`, `PerformSchemaValidation = true` (the `QRTZ_` tables are created by the scheduler EF migration), `UseMicrosoftSQLite`, `UseTimeZoneConverter`, `UseJobAutoInterrupt`, and `AddQuartzHostedService(WaitForJobsToComplete = true)`. The dispatch jobs are `Transient`, the executor + management service are `Scoped`, the registry + model-fit handler are `Singleton`.
+`AddNodeScheduler` (`NodeSchedulerServiceCollectionExtensions.cs:18`) wires the whole subsystem behind `SchedulerOptions.Enabled`. When disabled, the Quartz hosted service never starts (no jobs fire) but persistence tables and DI registrations remain. It configures `AddQuartz` with `UseProperties = true`, `PerformSchemaValidation = true` (the `QRTZ_` tables are created by the scheduler EF migration), `UseMicrosoftSQLite`, `UseTimeZoneConverter`, `UseJobAutoInterrupt`, and `AddQuartzHostedService(WaitForJobsToComplete = true)`. The dispatch jobs are `Transient`, the executor + management service are `Scoped`, and the registry plus both shipped handlers are `Singleton`. Each handler creates a scope per fire before resolving scoped collaborators.
 
 ### Gotcha 1 — Quartz `ConnectionStringName` is resolved lazily, by name
 
@@ -237,6 +257,7 @@ It connects to `buildLocalApiUrl("scheduler/hub")` with an `accessTokenFactory` 
 
 - Adding a template = register one more `IScheduledJobHandler` in `AddNodeScheduler`; **`TemplateId` must be globally unique** or the registry throws at startup.
 - Never widen the UI-visible error surface except via `ScheduledJobExecutionException` with proven-safe text.
+- Keep `run-agent` node-local, strip approval-required tools, and keep prompts/output/tool payloads out of scheduler history.
 - Keep dispatch jobs thin — logic belongs in `ISchedulerDispatchExecutor`.
 - Reference `node-sqlite` by *name* in Quartz config; never inline the connection string.
 - Run `ReconcileDurableJobsAsync` once at startup after any change to a dispatch job's type/namespace.
@@ -248,7 +269,8 @@ It connects to `buildLocalApiUrl("scheduler/hub")` with an `accessTokenFactory` 
 
 - [Architecture Overview](01-architecture-overview.md)
 - [Project Layout](02-project-layout.md)
-- [Model Fit](07-model-fit.md) — the shipped `model-recommendation-check` template + manual "Refresh now"
+- [Model Fit](07-model-fit.md) — the `model-recommendation-check` template + manual "Refresh now"
+- [Agent Mode](04-agent-mode.md) — saved-agent resolution, tool approval, usage, and capacity
 - [Data & Persistence](08-data-and-persistence.md) — encrypted run history, QRTZ migration
 - [API & Hubs](09-api-and-hubs.md) — local REST/hub conventions, operator auth
 - [React Client](10-react-client.md) — hey-api query layer, feature structure

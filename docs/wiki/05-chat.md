@@ -1,8 +1,8 @@
 # Chat Subsystem
 
-> Last reviewed: 2026-06-27 · Code-grounded.
+> Last reviewed: 2026-07-24 · Code-grounded.
 
-The chat subsystem is the node's interactive conversation surface: a React feature (`src/features/chat`) that streams turns over a local SignalR hub into a backend pipeline (`Client.Application/Services/Chat`) which resolves a model + agent per turn, runs the Microsoft Agent Framework loop through a single re-selecting `IChatClient`, and persists every turn to encrypted SQLite. This page traces a turn end-to-end: model resolution (including the "local default → installed GGUF chat model" rule), the streaming/persistence pump, ordered reasoning↔tool↔answer parts, per-send sampling, per-message agent attribution, reasoning-effort clamping for cloud models, file attachments (encrypted upload → pure-.NET extraction → plain-chat inlining or agent-mode sandbox staging), browser-side voice / text-to-speech output, the client stream watchdog + provider self-heal, and the at-rest encryption of titles and content. Provider plumbing lives in [Local runtime & providers](03-local-runtime-and-providers.md); agent resolution in [Agent Mode](04-agent-mode.md); persistence/migrations in [Data & persistence](08-data-and-persistence.md); hubs/endpoints in [API & hubs](09-api-and-hubs.md).
+The chat subsystem is the node's interactive conversation surface: a React feature (`src/features/chat`) that streams turns over a local SignalR hub into a backend pipeline (`Client.Application/Services/Chat`) which resolves a model + agent per turn, runs the Microsoft Agent Framework loop through a single re-selecting `IChatClient`, and persists every turn to encrypted SQLite. This page traces a turn end-to-end: model resolution (including the "local default → installed GGUF chat model" rule), the streaming/persistence pump, ordered reasoning↔tool↔answer parts, opt-in knowledge-base grounding and source attribution, per-send sampling, per-message agent attribution, reasoning-effort clamping for cloud models, file attachments (encrypted upload → pure-.NET extraction → plain-chat inlining or agent-mode sandbox staging), browser-side voice / text-to-speech output, the client stream watchdog + provider self-heal, and the at-rest encryption of titles and content. Provider plumbing lives in [Local runtime & providers](03-local-runtime-and-providers.md); agent resolution in [Agent Mode](04-agent-mode.md); persistence/migrations in [Data & persistence](08-data-and-persistence.md); hubs/endpoints in [API & hubs](09-api-and-hubs.md).
 
 ## Scope at a glance
 
@@ -15,6 +15,7 @@ The chat subsystem is the node's interactive conversation surface: a React featu
 | Local-default model pick | `LocalDefaultChatModelResolver` |
 | Ordered parts interleave | `NodeChatPartAccumulator` |
 | Tool offer per turn | `LocalToolOfferProvider` |
+| Plain-chat knowledge grounding | `KnowledgeChatContextComposer` + `IKnowledgeSearchService` |
 | Reasoning-effort vocabulary | `ReasoningEffortNormalizer` (backend) / `clampReasoningEffort` (React) |
 | File attachments (store + extraction) | `ConversationUploadedFileStore` + `DocumentTextExtractor` (`Client.Application/Services/DocumentIngestion`) |
 | Plain-chat attachment inlining | `ConversationAttachmentContextComposer` (`Services/Chat/Implementation`) |
@@ -43,13 +44,13 @@ React Chat.tsx
               8. terminal ─▶ AssistantCompleted | Failed | Cancelled | Interrupted
 ```
 
-`SendMessageAsync` (`NodeChatStreamService.cs:45`) validates non-empty content then delegates to the `IAsyncEnumerable` core. Each step `yield return`s a `ChatStreamEvent` tagged with a monotonic `sequence` (`NodeChatStreamSequence`) so the browser can order concurrently-produced events. The user-visible SSE order is fixed: `UserMessagePersisted → AssistantPending → AssistantQueued → AssistantStreaming → (AssistantDelta | ToolCall*)* → terminal`.
+`SendMessageAsync` (`NodeChatStreamService.cs:45`) validates non-empty content then delegates to the `IAsyncEnumerable` core. Each step `yield return`s a `ChatStreamEvent` tagged with a monotonic `sequence` (`NodeChatStreamSequence`) so the browser can order concurrently-produced events. The user-visible SignalR stream order is fixed: `UserMessagePersisted → AssistantPending → AssistantQueued → AssistantStreaming → (AssistantDelta | ToolCall*)* → terminal`.
 
 ### The collision lease and connection-independent lifecycle
 
 A turn is **Queued** until `RunInvocationAsync` acquires the shared invocation slot via `eventDispatcher.ReportInvocationAssignedAsync` (`NodeChatStreamService.cs:288`); only then does it transition to **Streaming**. This keeps a turn waiting behind another in-flight invocation honestly "queued" rather than prematurely "streaming".
 
-A critical invariant (documented at `NodeChatStreamService.cs:113-126`, `:239-254`): the **client `cancellationToken` is deliberately NOT linked to the run.** When the browser disconnects, only the SSE-forwarding loop stops; the run and the persistence pump keep going on a separate `runCancellation` token so the runner reaches its true terminal (Completed/Failed) and the pump persists it. A genuine user "stop" is the *only* thing that trips `runCancellation` — routed through `INodeChatStreamCancellationRegistry` from the cancel endpoint, which also cancels the runner so the pump records the real `Cancelled` terminal. The handlers must be unsubscribed *after* awaiting both tasks, or the terminal event can arrive after teardown and the message is falsely persisted as interrupted.
+A critical invariant (documented at `NodeChatStreamService.cs:113-126`, `:239-254`): the **client `cancellationToken` is deliberately NOT linked to the run.** When the browser disconnects, only the SignalR forwarding loop stops; the run and the persistence pump keep going on a separate `runCancellation` token so the runner reaches its true terminal (Completed/Failed) and the pump persists it. A genuine user "stop" is the *only* thing that trips `runCancellation` — routed through `INodeChatStreamCancellationRegistry` from the cancel endpoint, which also cancels the runner so the pump records the real `Cancelled` terminal. The handlers must be unsubscribed *after* awaiting both tasks, or the terminal event can arrive after teardown and the message is falsely persisted as interrupted.
 
 ## Model resolution (the per-turn `RuntimeChatClient` seam)
 
@@ -102,7 +103,7 @@ Ordering model ("Option A"):
 - Tool calls collapse `Requested → Completed` by tool-call id (the completed phase fills the result), guarding the duplicate-tool-part bug class.
 - Each part is stamped with the **shared monotonic stream sequence** when opened; `Snapshot()` reconciles global order via `OrderBy(Sequence)`, so the guarantee holds even though the two producers run concurrently under one lock.
 
-In the pump (`NodeChatStreamService.cs:358-366`) a reasoning delta is fed into the accumulator under the *same* sequence as its `AssistantDelta` SSE event, keeping reasoning segments correctly ordered against the concurrently-stamped tool parts. On a terminal, an empty interleave (a plain-text answer) is passed as `null` so persisted parts are left untouched rather than overwritten (`:379-382`). The accumulated `parts[]` is serialized into the message's `metadata_json` (see persistence below) and re-rendered by the React `MessageParts` / `ThoughtsSection` / `ToolCallCard` components.
+In the pump (`NodeChatStreamService.cs:358-366`) a reasoning delta is fed into the accumulator under the *same* sequence as its `AssistantDelta` SignalR event, keeping reasoning segments correctly ordered against the concurrently-stamped tool parts. On a terminal, an empty interleave (a plain-text answer) is passed as `null` so persisted parts are left untouched rather than overwritten (`:379-382`). The accumulated `parts[]` is serialized into the message's `metadata_json` (see persistence below) and re-rendered by the React `MessageParts` / `ThoughtsSection` / `ToolCallCard` components.
 
 ## MCP & local tools offered during a chat run
 
@@ -115,6 +116,25 @@ Tools are offered to the turn only when **all three** hold (`NodeChatStreamServi
 - `spawn_subagent` is **profile-opt-in only** — never offered on the default/mode-off chat path; it is held out of the whole offer and added back only by `GetOfferedToolsForProfile`.
 
 A bound agent definition narrows this offer to its allowed set (`resolved?.AllowedTools`); an unbound conversation uses the full capability-gated offer. The chosen offer travels in the runtime package as the tool list; the invocation factory resolves matching executables from the registry by name. MCP registration and the tool registry live in [Agent Mode](04-agent-mode.md).
+
+## Plain-chat knowledge-base grounding
+
+Plain chat exposes an opt-in **Use knowledge base** toggle when the node capability is enabled. It is
+disabled while no indexed documents exist and hidden in Agent Mode, where the agent reaches the same
+data through the gated `search_knowledge_base` / read tools instead of duplicate inline grounding.
+The preference is forwarded on sends and regenerations.
+
+For an opted-in plain-chat turn, `NodeChatStreamService` runs hybrid retrieval using the user message,
+then `KnowledgeChatContextComposer` prepends the highest-ranked excerpts within a character budget.
+Each excerpt is fenced as untrusted data; lower-ranked excerpts are dropped first when the budget is
+exhausted. Retrieval failure or an empty result degrades to an ordinary turn rather than failing it.
+
+Grounding follows the same cloud-egress gate as attachments. If the effective model or any
+orchestration participant is cloud-hosted and `KnowledgeBase:AllowCloudModelAccess` is false, retrieval
+does not run and the user receives a visible withheld-data notice. When grounding succeeds, only the
+excerpts actually placed in context are persisted as metadata-only sources. React renders them in a
+collapsed **Sources** strip under the assistant answer; selecting a source opens its knowledge-document
+drawer. Legacy, ungrounded, and empty-result turns render no strip.
 
 ## File attachments
 
@@ -184,7 +204,7 @@ Organized by concern:
 | Folder | Highlights |
 |---|---|
 | `api/` | `NodeChatAdapter` (REST via hey-api generated clients + the SignalR streaming bridge), `NodeChatConnection` (the persistent local hub connection), `NodeChatMapper` (DTO → view model), `NodeChatStreamGuard` / `NodeChatStreamState` (stream state machine), `useNodeChatConnectionReadiness` |
-| `components/` | `ChatInputArea`, `ChatMessage` / `ChatMessageList`, `MessageParts` + `ThoughtsSection` + `ToolCallCard` (ordered-parts rendering), `AgentSelectorCard`, `ModelSelectorCard`, `ChatSamplingOptionsDialog`, `StreamingIndicator` / `StreamCaret`, `ContextUsageBadge`, `MessageFeedbackControl`, `LocalToolsOverview` |
+| `components/` | `ChatInputArea`, `ChatMessage` / `ChatMessageList`, `MessageParts` + `ThoughtsSection` + `ToolCallCard` (ordered-parts rendering), `ChatSourcesStrip`, `AgentSelectorCard`, `ModelSelectorCard`, `ChatSamplingOptionsDialog`, `StreamingIndicator` / `StreamCaret`, `ContextUsageBadge`, `MessageFeedbackControl`, `LocalToolsOverview` |
 | `models/` | `ChatModels`, `ChatSamplingOptions`, `MessageParts`, `MessageRevisionGrouping`, `ChatCapabilityGates`, `ContextUsageDerivation` |
 | `pages/` | `Chat.tsx` (top-level orchestration), model-picker filters/options |
 | `queries/` | `NodeChatQueryKeys`, `useCodexModelOptions` |
@@ -207,6 +227,7 @@ On the backend, a transient drop is recovered without an app restart: `DeferredL
 - **Run lifecycle is independent of the client connection** — only a real user cancel trips `runCancellation`; unsubscribe handlers *after* awaiting run + pump.
 - **Ordered parts are the reload source of truth** — every part must be stamped with the shared stream sequence; never overwrite persisted parts with an empty snapshot.
 - **The tool offer must be byte-identical for the same catalog state** (stable config hash) — preserve sorting and capability gating; keep `spawn_subagent` profile-opt-in only.
+- **Plain-chat knowledge grounding is opt-in and source-exact** — apply the cloud-egress gate before retrieval and persist/render only excerpts actually placed in the model context.
 - **Effort vocabulary lives in one place** (`ReasoningEffortNormalizer`); Codex-only levels must never reach the Ollama `think` wire as literals.
 - **Titles, content, and `metadata_json` are ciphertext at rest** with per-record AAD; content/metadata use the versioned read-both envelope (`NodeChatContentProtection`) so a legacy plaintext row stays readable until the startup migration re-encrypts it. The node key never leaves the node.
 - **Attachment bytes and extracted Markdown are encrypted at rest too** (`UploadedFileBlobProtector`, per-blob AAD); plain chat inlines only `Extracted` text capped to `MaxInlinedAttachmentChars`, agent mode never inlines content — it stages files into the sandbox and points at staged paths.
