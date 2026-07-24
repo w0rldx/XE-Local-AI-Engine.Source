@@ -1,6 +1,6 @@
 # Hosting, AppHost & Deployment
 
-> Last reviewed: 2026-06-27 · Code-grounded.
+> Last reviewed: 2026-07-24 · Code-grounded.
 
 This page covers how the XE Local AI Engine node process is **hosted and shipped**: the Aspire AppHost used for local dev/integration, the shared `ServiceDefaults`, the configuration layers (`appsettings` + the user-editable `node-settings.json` + the encrypted `hf-token.enc`), the background hosted services that run inside the node, the self-contained single-file **desktop launcher** (`XE_LAUNCH_MODE=desktop`), the publish profiles + launchers used to produce a double-click distribution, and the RC-shipped cross-platform uninstaller scripts.
 
@@ -8,7 +8,7 @@ There are **two distinct ways the node runs**:
 
 | Mode | Entry point | Used for | HTTP/HTTPS | DB + secrets source |
 |------|-------------|----------|------------|---------------------|
-| **Aspire dev / integration** | `XE-Local-AI-Engine.AppHost/AppHost.cs` orchestrates the `app` project | Local development, `aspire start`, CI | HTTPS (Kestrel default URLs) | Aspire parameters + env (`XE_NODE_SQLITE_KEY`, SQLite resource) |
+| **Aspire dev / integration** | `XE-Local-AI-Engine.AppHost/AppHost.cs` orchestrates the `app` project | Local development and integration checks via `aspire run` | HTTPS (Kestrel default URLs) | Aspire parameters + env (`XE_NODE_SQLITE_KEY`, SQLite resource) |
 | **Self-contained desktop** | `XE-Local-AI-Engine.Client` binary launched with `XE_LAUNCH_MODE=desktop` | Shipped single-file app a tester double-clicks | Plain HTTP on loopback `127.0.0.1:<auto-port>` | Per-user data dir; connection string + operator key synthesized at startup |
 
 The two paths are deliberately kept **byte-behaviour-identical when the desktop flag is off** — every desktop branch in `Program.cs` is gated and skipped in Aspire/CI/headless runs.
@@ -17,7 +17,13 @@ The two paths are deliberately kept **byte-behaviour-identical when the desktop 
 
 ## 1. Aspire AppHost (dev/integration)
 
-`XE-Local-AI-Engine.AppHost/AppHost.cs` is a thin Aspire orchestration host (`IsAspireHost=true`). It references only the `Client` project and four Aspire hosting packages: `Aspire.Hosting.AppHost`, `Aspire.Hosting.Browsers`, `Aspire.Hosting.JavaScript`, `CommunityToolkit.Aspire.Hosting.Sqlite`.
+`XE-Local-AI-Engine.AppHost/AppHost.cs` is a thin Aspire orchestration host (`IsAspireHost=true`). The AppHost SDK is 13.4.6. It references only the `Client` project and four hosting packages: `Aspire.Hosting.AppHost` 13.4.6, `Aspire.Hosting.JavaScript` 13.4.6, `Aspire.Hosting.Browsers` 13.4.6-preview.1.26319.6, and `CommunityToolkit.Aspire.Hosting.Sqlite` 13.4.0.
+
+From the repository root, launch it with:
+
+```bash
+aspire run --apphost XE-Local-AI-Engine.AppHost/XE-Local-AI-Engine.AppHost.csproj
+```
 
 What it wires (`AppHost.cs`):
 
@@ -162,9 +168,9 @@ Both scripts carry an explicit **single-instance caveat**: only one instance per
 
 ### RC bundle packaging
 
-`publish/package-rc.sh` builds the distributable per-RID zip a tester downloads: the single-file binary + `wwwroot` SPA assets + a prominently named launcher (that sets `XE_LAUNCH_MODE=desktop`) + the matching **uninstaller script** (§7) + a `READ-ME-FIRST.txt`, plus a `.sha256` sidecar. It cross-compiles both RIDs from Linux, with `--rid` and `--skip-web` flags. The Windows bundle is built on Linux but **must be smoke-tested on real Windows 11** before tagging (`publish/TESTER-QUICKSTART.md`). The React SPA is built and copied into `wwwroot`, served by ASP.NET Core via `UseStaticFiles` + `MapFallbackToFile("index.html")` (the "C0re static-files" pattern) — see [React Client](10-react-client.md).
+`publish/package-tester-win.ps1` is the canonical Windows tester RC path. On a clean Windows checkout it validates the release version/tag; runs frontend lint, OpenAPI drift, license, coverage, production-audit, and build gates; runs backend restore, transitive NuGet vulnerability audit, Release build, and serial solution tests; verifies the staged SPA, tester channel/repository, and caller-supplied GitHub App client ID; then generates release notes, packs the Velopack portable build, uploads it, and updates the release body. The script rejects empty, placeholder, or malformed client IDs; no client ID is committed in this repository. `-SkipUpload` rehearses packaging without weakening validation.
 
-> **Packaging fails if the SPA build is missing.** `package-rc.sh` hard-errors (`exit 1`) when `<react>/dist/index.html` is absent — both when `--skip-web` is passed without an existing dist and when a fresh build produced none (`package-rc.sh:55,61`) — so an RC zip can never ship without its frontend (a blank-page regression). The script also scans the staged bundle for leaked runtime/state files (`node-settings.json`, any `*.enc` credential, any `*.pin`) and aborts if one is found, so per-user secrets never ride along in a distributable.
+`publish/package-rc.sh` remains the manual Linux portable-zip path. It stages the single-file binary, SPA, desktop launcher, uninstaller, and `READ-ME-FIRST.txt`, then emits a zip plus `.sha256` sidecar. It fails if the SPA is missing and scans the stage for leaked runtime/state files.
 
 ### Changelog automation & release notes
 
@@ -176,7 +182,7 @@ Release notes are generated from conventional-commit history rather than hand-wr
 
 ### In-app self-update (Velopack)
 
-The desktop app can update itself: `AddAppUpdateExtensions.cs` wires a Velopack updater fed by a GitHub **device-flow** authorization (the operator copies the device code before the browser opens). The update path is **desktop-only** (gated like every other desktop branch; see the endpoint desktop-gate tests under `XE-Local-AI-Engine.Tests/AppUpdate/`). Update-feed/channel config lives in `appsettings.AppUpdate.{main,tester}.json`. See `docs/velopack-release-install-guide.md`.
+The desktop app can update itself: `AddAppUpdateExtensions.cs` wires a Velopack updater fed by a GitHub **device-flow** authorization (the operator copies the device code before the browser opens). The update path is **desktop-only** (gated like every other desktop branch; see the endpoint desktop-gate tests under `XE-Local-AI-Engine.Tests/AppUpdate/`). Update-feed/channel config lives in `appsettings.AppUpdate.{main,tester}.json`. The tracked client-ID fields are deliberately empty/placeholders; release packaging must supply the real public client ID for that channel. See `docs/velopack-release-install-guide.md`.
 
 ---
 
@@ -205,7 +211,7 @@ Both refuse to run elevated/as-root (a per-user data dir would resolve to the wr
 ## Related pages
 
 - [Architecture Overview](01-architecture-overview.md) — where hosting sits in the whole node
-- [Project Layout](02-project-layout.md) — the 19 projects, incl. AppHost & ServiceDefaults
+- [Project Layout](02-project-layout.md) — the 20 solution projects, including AppHost and ServiceDefaults
 - [Local Runtime & Providers](03-local-runtime-and-providers.md) — llama.cpp supervisor, process reaping, the Job Object's counterpart
 - [Data & Persistence](08-data-and-persistence.md) — node data directory, encrypted SQLite, EF migrations
 - [API & Hubs](09-api-and-hubs.md) — endpoints, SignalR hubs, OpenAPI/Scalar

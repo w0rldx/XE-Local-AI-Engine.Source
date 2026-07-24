@@ -72,7 +72,7 @@ A critical invariant (documented at `NodeChatStreamService.cs:113-126`, `:239-25
 `LocalDefaultChatModelResolver` (`Services/Chat/Implementation/LocalDefaultChatModelResolver.cs:19`) resolves the local default from **installed GGUF (llama.cpp) models only — never Ollama**. Rules:
 
 - Enumerates installed models via `IGgufModelStore.ListInstalledModelsAsync`.
-- Excludes only entries whose **persisted effective kind** (`OverrideKind ?? DetectedKind`) is `ModelKind.Embedding`. A model with no classification row (Unknown) or kind Chat stays eligible — matching the chat picker's rule.
+- Excludes entries whose **persisted effective kind** (`OverrideKind ?? DetectedKind`) is `ModelKind.Embedding` or `ModelKind.Reranker`. It also excludes embedding/reranker names as a defensive fallback when no classification row exists. Unknown and Chat models otherwise remain eligible.
 - Pick order: the operator's persisted default **iff** it is an installed GGUF chat model, else the most-recently-modified chat model (tie-break by name, case-insensitive).
 - Returns `null` when nothing qualifies. The stream service flags `RequiresInstalledChatModel`, and `RunInvocationAsync` throws `NoChatModelInstalledException` *before* any provider call (`:298`), surfacing a `FailureCategory.ModelNotInstalled` terminal with an actionable "pull a model" message instead of routing a stale id to a dead provider.
 

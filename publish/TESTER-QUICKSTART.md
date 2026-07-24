@@ -1,31 +1,47 @@
 # XE Local AI Engine — tester quickstart
 
 A self-contained desktop build for external testers. No install, no Docker, no Ollama, no
-prerequisites — one folder, one launcher. The app runs entirely on your machine.
+prerequisites — extract one portable folder and run it locally.
 
-## Get a build
+## Get a Windows tester build
 
-A maintainer produces the bundle with:
+A maintainer runs the canonical Windows RC packager from a clean, tagged checkout on Windows:
 
-```bash
-publish/package-rc.sh                 # both win-x64 and linux-x64
-publish/package-rc.sh --rid win-x64   # one platform
+```powershell
+$env:VPK_TOKEN = "<fine-grained tester-repo token>"
+$env:XE_TESTER_GITHUB_APP_CLIENT_ID = "<real GitHub App client ID (Iv..., not the numeric App ID)>"
+.\publish\package-tester-win.ps1
 ```
 
-Output (git-ignored): `publish/dist/xe-local-ai-engine-<version>-<rid>.zip` plus a
-`.sha256` sidecar. Send the matching zip to the tester.
+The script reads the release version from `Directory.Build.props`, runs all frontend and backend release
+gates (including OpenAPI/license/coverage/dependency audits), publishes `win-x64`, validates the staged
+tester update config, builds the Velopack portable package, and uploads it to the tester release repo.
+The upload remains a draft. Smoke-test the exact generated `Portable.zip`, then publish
+that unchanged draft using the printed hash:
 
-> The win-x64 bundle is cross-built on Linux. **It must be smoke-tested on a real Windows
-> machine before tagging an RC** (native-library self-extract, console-close no-orphan, and
-> browser auto-open cannot be verified off-Windows).
+```powershell
+.\publish\package-tester-win.ps1 -PublishDraft -ExpectedPortableSha256 <printed-sha256>
+```
+
+Publication downloads and hashes the Portable ZIP attached to the draft; it does not
+trust a local copy. The upload step also refuses to merge into an already-published
+release.
+
+Use `-SkipUpload` for a pre-tag packaging rehearsal; validation remains mandatory. The
+client ID is public configuration supplied at packaging time; do not commit a guessed
+value or placeholder.
+
+For a Linux portable zip, use `publish/package-rc.sh --rid linux-x64`.
+
+> **Smoke-test every Windows RC on real Windows before publishing it.** Native-library
+> self-extraction, console-close child cleanup, and browser auto-open cannot be verified off-Windows.
 
 ## Run it (tester)
 
 **Windows**
-1. Unzip anywhere.
-2. Double-click **`Start-XE-Local-AI-Engine.cmd`**.
-   Do **not** double-click `XE-Local-AI-Engine.Client.exe` directly — without the launcher
-   it does not enter desktop mode (no loopback/browser-open).
+1. Download the Velopack `Portable.zip` asset from the tester release and unzip it.
+2. Start the packaged XE Local AI Engine executable. Velopack-managed portable builds enter
+   desktop mode automatically.
 
 **Linux**
 1. Unzip anywhere.

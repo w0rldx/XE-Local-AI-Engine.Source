@@ -5,8 +5,6 @@ XE Local AI Engine is the node-side runtime for running local AI workloads while
 
 The repository is being prepared for an RC release. Release documentation and validation evidence live in this repo and must stay current with runtime behavior.
 
-> **RC branch:** `feature/agent-mode-foundation` is the RC1 branch (decision D4, locked 2026-06-10). Merge into `develop` is post-RC. The `develop` branch is 208 commits behind and is not the active development line until after RC1 ships.
-
 ## What ships from this repo
 
 - **Node Web Server** (`XE-Local-AI-Engine.Client`) — serves the React UI, local APIs under `/api/local/v1`, local SignalR hubs, SQLite-backed chat state, and the existing platform `WorkerHub`
@@ -73,7 +71,7 @@ From the repository root:
 ```bash
 dotnet restore XE-Local-AI-Engine.slnx
 dotnet build XE-Local-AI-Engine.slnx --configuration Release --no-restore
-dotnet test XE-Local-AI-Engine.slnx --configuration Release --no-build
+dotnet test XE-Local-AI-Engine.slnx --configuration Release --no-build --max-parallel-test-modules 1
 ```
 
 For the React client:
@@ -103,7 +101,7 @@ bash .opencode/scripts/project-validate.sh --scope e2e --confirm-e2e --serial
 Use Aspire for local development and integration checks.
 
 ```bash
-dotnet run --project XE-Local-AI-Engine.AppHost --launch-profile https
+aspire run --apphost XE-Local-AI-Engine.AppHost/XE-Local-AI-Engine.AppHost.csproj
 ```
 
 ## Self-contained desktop run
@@ -142,6 +140,10 @@ Copy the matching launcher from [`publish/`](publish/) next to the published bin
 See [`publish/README.md`](publish/README.md) for the expected layout. **Run one instance at a time** against the same
 user-data directory — a second instance races on the SQLite database.
 
+For a Windows tester RC, use [`publish/package-tester-win.ps1`](publish/package-tester-win.ps1). It is the canonical
+build, validation, packaging, and tester-upload path; the cross-platform `package-rc.sh` remains the manual portable-zip
+path for Linux.
+
 > The no-orphan guarantee (terminal/console close reaps `llama-server`) and the Windows Job Object path are verified on
 > real desktops with a model loaded; they cannot be exercised in WSL2/CI.
 
@@ -153,7 +155,7 @@ Required evidence includes:
 
 - restore/build/test transcripts
 - generated schema/sample manifest validation
-- digest-pinned runtime images and package checksums
+- pinned runtime binary and package checksums
 - runtime smoke-test transcript
 
 Standalone OS-package distribution (MSI/deb/rpm) is deferred: under the runtime re-architecture the app self-provisions its llama.cpp runtime and GGUF models at first run, so there is no installer bundle to validate. A future packaging effort would be its own plan.
