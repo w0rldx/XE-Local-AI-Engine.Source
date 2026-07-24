@@ -62,7 +62,8 @@ E2E is ask-gated unless the task specifically targets E2E behavior; it runs in i
 
 Release-critical scripts:
 
-- `scripts/lint-release-scripts.sh` (also `.opencode/scripts/project-validate.sh --scope scripts`) — shellcheck + PSScriptAnalyzer over `publish/package-tester-win.ps1`, `publish/package-rc.sh`, and the other packaging scripts. GitHub Actions is disabled, so `package-tester-win.ps1` is the only release path; it gets static analysis of its own. A missing linter exits 2 rather than passing silently.
+- `scripts/lint-release-scripts.sh` (also `.opencode/scripts/project-validate.sh --scope scripts`) — shellcheck + PSScriptAnalyzer over `publish/package-tester-win.ps1`, `publish/package-rc.sh`, and the other packaging scripts. GitHub Actions is disabled, so `package-tester-win.ps1` is the only release path; it gets static analysis of its own. A missing linter exits 2 rather than passing silently. It also build-only compile-checks the `#if P0_SPIKE` code in `XE-Local-AI-Engine.AI.Agent.Tests` (never runs it) and restores an ungated build afterwards — see `docs/agent-knowledge.md` for the gate rationale and the `DefineConstants` replacement trap.
+- `publish/tests/package-tester-win.Tests.ps1` — Pester coverage (38 tests) for the packaging script's pure logic: the NuGet vulnerability-JSON parsing, `Get-ProjectVersion`, the SemVer gate, the GitHub-App client-ID predicate, and `Find-GitHubRelease`'s both-tag-form resolution. Run with `scripts/lint-release-scripts.sh --pester` (opt-in; needs the Pester module). The tests extract their subjects from the real `.ps1` via the PowerShell AST rather than copying its logic, so a rename or restructure fails them loudly instead of leaving them grading a stale copy.
 
 OpenCode setup changes must run the OpenCode setup validator and the legacy-path validator.
 

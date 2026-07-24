@@ -96,7 +96,17 @@ default (Release)                  -> TRACE;RELEASE
 -p:DefineConstants=P0_SPIKE        -> P0_SPIKE
 ```
 
-`TRACE` and `RELEASE` are silently dropped. Nothing currently depends on them so it builds clean either way, but that is luck — pass `-p:DefineConstants='$(DefineConstants);P0_SPIKE'` if anything downstream ever does.
+`TRACE` and `RELEASE` are silently dropped. Nothing currently depends on them so it builds clean either way, but that is luck.
+
+Appending is fiddlier than it looks. **`-p:DefineConstants='$(DefineConstants);P0_SPIKE'` does not work** — it fails with `MSBUILD : error MSB1006: Property is not valid. / Switch: P0_SPIKE`. Two reasons: MSBuild does not recursively expand a command-line property, so `$(DefineConstants)` would never resolve against the project's own value, and the bare `;` breaks switch parsing. A shell-quoted literal `"…=TRACE;RELEASE;P0_SPIKE"` fails the same way. The working form reads the project's value first and passes it back with semicolons escaped as `%3B`:
+
+```
+-p:DefineConstants='TRACE%3BRELEASE%3BP0_SPIKE'   ->  TRACE;RELEASE;P0_SPIKE
+```
+
+Verify the *effective* value with `-getProperty:DefineConstants` rather than trusting that your quoting survived the shell.
+
+Two further traps if you automate this. `-p:BaseIntermediateOutputPath` is **global and propagates to every `ProjectReference`**, so redirecting output to keep a spike-built binary out of `bin/` makes both obj trees emit `AssemblyInfo.cs` and the build dies with ~16 `CS0579` duplicate-attribute errors — build with the constant and then rebuild without it instead. And `strings "$dll" | grep -q MARKER` under `set -o pipefail` returns **141** (SIGPIPE: `grep -q` exits on first match and kills `strings`), so it fails precisely *when the marker is present* — count matches instead of using `grep -q`.
 
 ### The full Tests module balloons to ~3.5 GB — it is a framework leak, not a fixture bug
 
