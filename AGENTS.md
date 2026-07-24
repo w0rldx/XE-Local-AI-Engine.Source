@@ -45,7 +45,7 @@ Backend:
 - `dotnet build XE-Local-AI-Engine.slnx --configuration Release --no-restore`
 - `dotnet test XE-Local-AI-Engine.slnx --configuration Release --no-build --max-parallel-test-modules 1`
 
-Backend tests are TUnit on Microsoft.Testing.Platform. To scope a run, use `--treenode-filter` (not `--filter`), one class or method at a time — filter alternation `(A|B)` silently matches zero tests.
+Backend tests are TUnit on Microsoft.Testing.Platform. To scope a run, use `--treenode-filter` (not `--filter`). Alternation works: on TUnit 1.58, `/*/*/(QuantLadderTests|DesktopPortStoreTests)/*` discovers 15 tests — the exact union of the two classes' 9 and 6.
 
 Frontend (from `XE-Local-AI-Engine.Client.React/`):
 

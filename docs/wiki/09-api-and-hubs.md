@@ -1,8 +1,8 @@
 # API Surface & Realtime Hubs
 
-> Last reviewed: 2026-06-27 · Code-grounded.
+> Last reviewed: 2026-07-24 · Code-grounded.
 
-This page documents the **Node Web Server transport layer**: the HTTP API exposed under `/api/local/v1` (FastEndpoints), the four SignalR push/stream hubs in `Client/Hubs`, the single outbound **WorkerHub** connection to the C0re platform, the cross-cutting transport concerns (security middleware, exception handling, health checks, auth), and how the backend's OpenAPI document becomes the single source of truth for every React REST client via hey-api.
+This page documents the **Node Web Server transport layer**: the HTTP API exposed under `/api/local/v1` (FastEndpoints), the nine SignalR push/stream hubs in `Client/Hubs`, the single outbound **WorkerHub** connection to the C0re platform, the cross-cutting transport concerns (security middleware, exception handling, health checks, auth), and how the backend's OpenAPI document becomes the single source of truth for every React REST client via hey-api.
 
 If you are adding or changing an endpoint or hub, this is the page that tells you *where the route lives, how it is secured, and what regen step you must run for the React client to see it*.
 
@@ -13,16 +13,19 @@ If you are adding or changing an endpoint or hub, this is the page that tells yo
 ```
  Browser (React SPA, same origin)                C0re Platform
         │  HTTP /api/local/v1/*  (FastEndpoints)         ▲
-        │  SignalR hubs (chat/sched/preview/gguf)        │  ONE outbound
+        │  SignalR hubs (nine — see §2)                  │  ONE outbound
         ▼                                                │  WorkerHub conn
  ┌──────────────────────────────────────────────────────┴───────────────┐
  │ Node Web Server  (XE-Local-AI-Engine.Client)                          │
  │  • UseExceptionHandler  → IExceptionHandler chain → RFC7807           │
+ │  • UseAntiforgery / UseStaticFiles                                    │
  │  • MapHealthChecks /health/live  /health/ready                        │
  │  • LocalApiSecurityMiddleware (loopback peer + Host/Origin guard)     │
+ │  • UseRouting / UseRateLimiter                                        │
  │  • UseAuthentication / UseAuthorization (JWT bearer, Operator policy) │
  │  • UseFastEndpoints (RoutePrefix = api/local/v1)                      │
- │  • MapHub<LocalChat|Scheduler|Preview|GgufDownload>                  │
+ │  • MapHub × 9  (the 9th only when Development mode is enabled)        │
+ │  • (non-Production) OpenAPI JSON + /scalar + (Development) /devui     │
  │  • MapFallbackToFile("index.html")  (serves the React build)         │
  └───────────────────────────────────────────────────────────────────────┘
 ```
@@ -32,7 +35,7 @@ Two transport directions to keep straight:
 - **Inbound, browser → node** — the local management API and local hubs. Loopback/local-only, authenticated as the node *operator*, secret-redacted. This is everything under `/api/local/v1`.
 - **Outbound, node → platform** — exactly **one** SignalR connection, `WorkerHubConnection`. Worker creds and platform tokens live only here and are never returned to the browser. See [Security & Privacy](12-security-and-privacy.md) for the full invariant.
 
-The middleware/mapping order above is authoritative — see `XE-Local-AI-Engine.Client/Program.cs:92-196`.
+The middleware/mapping order above is authoritative — see `XE-Local-AI-Engine.Client/Program.cs:223-392` (`UseExceptionHandler` at `:223`, `MapFallbackToFile` at `:392`).
 
 ---
 
@@ -41,35 +44,41 @@ The middleware/mapping order above is authoritative — see `XE-Local-AI-Engine.
 ### Conventions
 
 - **Framework:** FastEndpoints. One endpoint = one `*Endpoint.cs` class; request/response shapes live in `*EndpointDtos.cs`, FluentValidation rules in `*EndpointValidators.cs`, and entity↔DTO mapping in `Mappers/`.
-- **Route prefix:** every endpoint is mounted under `api/local/v1` via `config.Endpoints.RoutePrefix = LocalApiRoutes.Prefix` (`Program.cs:142`, `LocalApiRoutes.cs:8`).
-- **Routes are centralized**, not string-literal'd per endpoint. All route templates are constants on nested static classes in `XE-Local-AI-Engine.Client/Endpoints/Common/LocalApiRoutes.cs` (e.g. `LocalApiRoutes.Scheduler.JobById`). Change a path here and both the endpoint and any `Send.CreatedAtAsync<TEndpoint>()` location resolution follow.
-- **operationId = camelCased class name.** A single global `NameGenerator` strips the `Endpoint` suffix and lowercases the first char (`Program.cs:149-158`): `CreateScheduledJobEndpoint` → `createScheduledJob`. These operationIds are what the hey-api React SDK function names are derived from, so **the C# class name is the public contract name** — rename with care.
-- **Errors → ProblemDetails.** `config.Errors.UseProblemDetails()` (`Program.cs:160`) turns validation failures into RFC7807. Domain exceptions are handled by the `IExceptionHandler` chain (see §4).
+- **Route prefix:** every endpoint is mounted under `api/local/v1` via `config.Endpoints.RoutePrefix = LocalApiRoutes.Prefix` (`Program.cs:314`, `LocalApiRoutes.cs:8`).
+- **Routes are centralized**, not string-literal'd per endpoint. All route templates are constants on **23 nested static classes** in `XE-Local-AI-Engine.Client/Endpoints/Common/LocalApiRoutes.cs` (e.g. `LocalApiRoutes.Scheduler.JobById`) — 166 route constants plus the `Prefix`, nine of them hub paths. Change a path here and both the endpoint and any `Send.CreatedAtAsync<TEndpoint>()` location resolution follow.
+- **operationId = camelCased class name.** A single global `NameGenerator` strips the `Endpoint` suffix and lowercases the first char (`Program.cs:327-336`): `CreateScheduledJobEndpoint` → `createScheduledJob`. These operationIds are what the hey-api React SDK function names are derived from, so **the C# class name is the public contract name** — rename with care.
+- **Errors → ProblemDetails.** `config.Errors.UseProblemDetails()` (`Program.cs:338`) turns validation failures into RFC7807. Domain exceptions are handled by the `IExceptionHandler` chain (see §4). Note that not every non-2xx is ProblemDetails: several families answer a **typed domain object** instead (the source-build `409` is the notable one — see §1 design notes).
+- **Desktop-only endpoints.** `config.Endpoints.Filter` (`Program.cs:320`) drops any endpoint implementing `IDesktopOnlyEndpoint` unless the host launched in desktop mode. Only the `app-update/*` and `github-auth/*` families use it, so they are absent from a headless OpenAPI regen.
 
 ### Endpoint inventory (by feature)
 
-Grouped from `Client/Endpoints/**/V1/` and `LocalApiRoutes.cs`. The "Owner page" column points to the subsystem wiki page that explains the behavior behind the routes.
+One row per nested class in `LocalApiRoutes.cs`, in file order. The "Owner page" column points to the subsystem wiki page that explains the behavior behind the routes.
 
-| Group (route base) | Representative routes | Owner page |
+| Group (route base) | Routes | Owner page |
 |---|---|---|
-| **ApiFoundation** | `diagnostics/validation-probe` | (transport diagnostics) |
+| **ApiFoundation** | `diagnostics/validation-probe`, `diagnostics/exception-probe` | (transport diagnostics) |
 | **Auth** (`auth/*`) | `auth/status`, `auth/setup`, `auth/login`, `auth/refresh`, `auth/logout`, `auth/change-password`, `auth/me` | [Security & Privacy](12-security-and-privacy.md) |
+| **LocalChat** (`chat/*`) | `chat/conversations` (+ `{id}` rename/pin/archive/branch/memory-excluded/selected-path), `chat/.../messages/{id}/revisions\|feedback`, `chat/conversations/{id}/uploads(/{fileId})` (file attachments — POST multipart upload / GET list / DELETE), `chat/cancel`, `chat/approvals/resolve` | [Chat](05-chat.md) |
 | **NodeBinding** (`binding/*`) | `binding/start`, `binding/poll`, `binding/cancel` | [Hosting & Deployment](11-hosting-and-deployment.md) |
 | **Connection** (`connection/*`) | `connection`, `connection/connect`, `connection/disconnect`, `connection/auto-connect/enable\|disable` | [Architecture Overview](01-architecture-overview.md) |
 | **NodeSettings** (`node-settings`) | get/save node settings | [Hosting & Deployment](11-hosting-and-deployment.md) |
-| **CloudSettings** (`cloud-settings`) | get/save/clear cloud-provider settings | [Security & Privacy](12-security-and-privacy.md) |
-| **Cloud / Codex** (`cloud/codex/*`) | `cloud/codex/login`, `cloud/codex/status`, `cloud/codex/logout` (ChatGPT OAuth) | [Chat](05-chat.md) |
-| **LocalChat** (`chat/*`) | `chat/conversations` (+ `{id}` rename/pin/archive/branch/memory-excluded/selected-path), `chat/.../messages/{id}/revisions\|feedback`, `chat/conversations/{id}/uploads(/{fileId})` (file attachments — POST multipart upload / GET list / DELETE), `chat/cancel` | [Chat](05-chat.md) |
-| **LocalModels** (`models/*`) | `models`, `models/{name}`, `models/{name}/details\|kind\|unload`, `models/select`, `models/pull`, `models/pull/stream`, `models/running` | [Local Runtime & Providers](03-local-runtime-and-providers.md) |
-| **ModelFit** (`model-fit/*`) | `model-fit/recommendations/latest\|refresh`, `model-fit/hardware-profile`, `model-fit/gguf/browse\|inspect`, `model-fit/download(/cancel)`, `model-fit/gguf/downloads(/{modelName})`, `model-fit/running(/eject)`, `model-fit/llamacpp/version\|runtime\|update`, `model-fit/hf-token`, `model-fit/profiles(/explore\|benchmark\|freeze\|invalidate)` (inference optimizer) | [Model Fit](07-model-fit.md) |
+| **CloudSettings** (`cloud-settings*`) | `cloud-settings`, `cloud-settings/entra/device-code/start\|status`, `cloud-settings/entra/auth-code/start\|status` | [Security & Privacy](12-security-and-privacy.md) |
 | **Voice** (`voice/*`) | `voice/manifest` (GET — config-only TTS manifest: allowed models, voice profiles, feature flag, integrity hashes, download URLs; the backend serves no audio) | [React Client](10-react-client.md) |
 | **Tutorial** (`tutorial-state`) | `tutorial-state` (GET reads the current user's recorded tour entries; PUT upserts one) | [React Client](10-react-client.md) |
+| **Cloud / Codex** (`cloud/codex/*`) | `cloud/codex/login`, `cloud/codex/status`, `cloud/codex/logout` (ChatGPT OAuth) | [Chat](05-chat.md) |
+| **LocalModels** (`models/*`) | `models`, `models/{name}`, `models/{name}/details\|kind\|unload`, `models/select`, `models/running` | [Local Runtime & Providers](03-local-runtime-and-providers.md) |
 | **Invocations** (`invocations`) | invocation monitor | [Architecture Overview](01-architecture-overview.md) |
-| **Agents** (`agents/*`) | `agents`, `agents/{id}`, `agents/tool-capable-models`, `agents/templates(/import)`, `agents/{id}/playbook(/...)`, `.../golden-conversations(/...)`, `.../feedback-insights`, `.../playbook/monitor`, `.../execution-logs`, `agents/run-envelopes` (operator-gated run-envelope lifecycle list) | [Agent Mode](04-agent-mode.md) |
+| **Agents** (`agents/*`) | `agents`, `agents/{id}`, `agents/tool-capable-models`, `agents/templates(/import)`, `agents/{id}/playbook(/...)`, `.../golden-conversations(/...)`, `.../feedback-insights`, `.../playbook/monitor`, `.../execution-logs`, `agents/run-envelopes` (operator-gated run-envelope lifecycle list), `agents/usage-summary` (token-usage rollup by model + UTC day, metadata only) | [Agent Mode](04-agent-mode.md) |
 | **Skills** (`skills/*`) | `skills`, `skills/{skillId}` | [Agent Mode](04-agent-mode.md) |
-| **Mcp** (`mcp/*`) | `mcp/servers`, `mcp/servers/{id}(/enabled\|/tools)`, `tool-catalog` | [Agent Mode](04-agent-mode.md) |
 | **Scheduler** (`scheduler/*`) | `scheduler/templates`, `scheduler/jobs`, `scheduler/jobs/{id}(/enable\|disable\|trigger)`, `scheduler/runs`, `scheduler/runs/{id}(/cancel)` | [Scheduler](06-scheduler.md) |
+| **Development** (`development/*`) | `development`, `development/capability`, `development/repositories`, `development/projects(/{projectId})`, `.../repository-connection`, `.../tasks/{taskId}`, `.../tasks/{taskId}/next-action`, `.../attempts/{attemptId}/cancel`, `.../events`, `.../tasks/{taskId}/artifacts(/{artifactId})`, `.../tasks/{taskId}/preview`, `.../tasks/{taskId}/apply` — 15 endpoints in one file, `Endpoints/Development/V1/DevelopmentEndpoints.cs` | [Architecture Overview](01-architecture-overview.md#development-mode-registered-source-managed-worktree) |
+| **ModelFit** (`model-fit/*`) | `model-fit/recommendations/latest\|refresh`, `model-fit/hardware-profile`, `model-fit/gguf/browse\|inspect`, `model-fit/download(/cancel)`, `model-fit/gguf/downloads(/{modelName})`, `model-fit/running(/eject)`, `model-fit/catalog(/refresh)`, `model-fit/llamacpp/version\|runtime\|update`, `model-fit/llamacpp/cuda-build(/prerequisites\|status\|cancel\|remove)`, `model-fit/llamacpp/source-build(/prerequisites\|status\|cancel\|remove)`, `model-fit/hf-token`, `model-fit/profiles(/explore\|benchmark\|freeze\|invalidate)` (inference optimizer) | [Model Fit](07-model-fit.md), [Local Runtime & Providers](03-local-runtime-and-providers.md) |
 | **Preview / Open Canvas** (`preview/*`) | `preview/workflows`, `preview/workflows/{id}(/execute)`, `preview/runs/execute`, `preview/runs/{id}/continue\|cancel` | [React Client](10-react-client.md) |
+| **Images** (`images/*`) | `images/jobs` (POST create / GET list), `images/jobs/{jobId}(/cancel)`, `images/{imageId}` (decrypted PNG retrieve), `images/models`, `images/models/downloads` | [Image Generation](14-image-generation.md) |
+| **GitHubAuth** (`github-auth/*`) | `github-auth/start\|poll\|status\|sign-out` — device-flow sign-in for app self-update. **Desktop-mode only** (`IDesktopOnlyEndpoint`); the device code and access token never appear in any contract | [Hosting & Deployment](11-hosting-and-deployment.md) |
+| **AppUpdate** (`app-update/*`) | `app-update/status` (cached snapshot; `?refresh=true` forces a check with a 60 s floor), `app-update/apply`. **Desktop-mode only** | [Hosting & Deployment](11-hosting-and-deployment.md) |
+| **KnowledgeBase** (`knowledge-base/*`) | `knowledge-base/documents` (POST multipart upload / GET list), `knowledge-base/documents/{documentId}(/reindex)`, `knowledge-base/reindex`, `knowledge-base/search`, `knowledge-base/reranker/download-recommended` | [Knowledge Base](15-knowledge-base.md) |
+| **Mcp** (`mcp/*`) | `mcp/servers`, `mcp/servers/{id}(/enabled\|/tools)`, `tool-catalog` | [Agent Mode](04-agent-mode.md) |
 
 > **Endpoints are orchestration-only.** They validate input, call a service in `XE-Local-AI-Engine.Client.Application/Services/*`, and map to a DTO. Business logic does not live in the endpoint. When tracing a route, jump straight to the matching service area.
 
@@ -79,28 +88,42 @@ Grouped from `Client/Endpoints/**/V1/` and `LocalApiRoutes.cs`. The "Owner page"
 - **Chat file uploads (`chat/conversations/{id}/uploads`).** The upload endpoint is the one multipart surface: it calls `AllowFileUploads()` (`UploadConversationFileEndpoint.cs:32`) and binds an `IFormFile`, enforcing the size cap + extension allowlist and sanitizing the client name to a leaf. List is a plain GET; delete is `DELETE .../uploads/{fileId}` keyed on the server-generated file id. See [Chat](05-chat.md).
 - **Body-less POST (415) override.** Route-only POST actions whose id binds from the route (e.g. scheduler `trigger`/`enable`/`disable`, run `cancel`) send no body and therefore no `Content-Type`; FastEndpoints' default `Accepts` metadata answers that with **415**. Those endpoints override it with `Description(x => x.Accepts<T>())` so the body-less request is accepted (`TriggerScheduledJobEndpoint.cs:20`). See [Scheduler](06-scheduler.md).
 - **Run-envelope lifecycle records (`GET agents/run-envelopes`).** Read-only, **operator-gated**, metadata-only projection of the durable per-invocation run envelopes (`ListRunEnvelopesEndpoint`). Newest-first, paged (`limit` default 50 / max 200, `offset`), optionally scoped by `conversationId`. The store holds no message content — only terminal status, usage/timing counters, correlation + trace ids — so there is nothing to redact, and `FailureCategory` is a category enum name only. See the shared `agent_execution_logs` schema in [Data & Persistence](08-data-and-persistence.md). This endpoint (plus `GET agents/{agentDefinitionId}/execution-logs`) is also the durable, no-live-collector-needed path for incident diagnosis — see the [OTel export operator runbook](../runbooks/otel-export-operator-runbook.md) for how it complements (and doesn't depend on) OpenTelemetry export.
+- **Source-build start → typed `409`, not ProblemDetails (`model-fit/llamacpp/source-build`).** `StartLlamaCppSourceBuildEndpoint` answers a blocked start with `Results.Conflict(new LlamaCppSourceBuildBlockedResponse { Reason, Message, RunningProcessCount })` — a **domain object**, so `ProblemDetails.detail`/`title` are absent. The machine-readable `reason` is one of `not-linux`, `already-building`, `disk`, `prerequisites`, `processes-running`, `runtime-busy`. Two consequences a maintainer must respect: (1) the endpoint must **not** re-normalize the request — the service is the single normalization point, and a second pass over an already-normalized official-source request used to be rejected by the strict "the official repository is selected by the server" rule, 409-ing every official build (`2cab52ec`); (2) the React `ApiError` resolves `detail → message → title` so this body's `message` surfaces in a toast instead of rendering an empty notification. The `cuda-build` family behaves the same way. Runtime side: [Local Runtime & Providers](03-local-runtime-and-providers.md#26-in-app-source-builds-linux).
+- **Development Mode (`development/*`).** Fifteen endpoints in one file (`Endpoints/Development/V1/DevelopmentEndpoints.cs`), all Operator-gated, backed by migrations `AddDevelopmentModeFoundation` + `BindDevelopmentProjectsToSelectedFolders`. `development/capability` is the deliberate exception to the disabled-mode 404 sweep: it stays reachable so the SPA can resolve whether the capability exists rather than guessing from a 404. The write path is two-phase — `.../tasks/{taskId}/preview` produces a patch bound to the expected base commit and evidence hashes, `.../tasks/{taskId}/apply` revalidates those values before mutating the registered source repository. Live attempt output does not stream over HTTP; it goes over `DevelopmentAttemptHub` (§2). Two ADRs record the decisions behind the restart-recovery and cloud-egress behavior: [ADR 0001 — restart recovery uses replacement attempts](../adr/0001-development-mode-restart-recovery.md) and [ADR 0002 — cloud authorization uses `ChatOptions.AdditionalProperties`](../adr/0002-development-cloud-egress-carrier.md).
 - **Busy admission → 503 + `Retry-After` (document ingestion).** The knowledge-document upload/reindex endpoints and the chat file upload each guard a bounded capacity with **non-blocking** admission: a full knowledge ingestion queue (`KnowledgeIngestionDispatcher`, bounded capacity 256) returns `QueueFull`, and the synchronous extraction gate (`DocumentExtractionAdmissionGate`, a `SemaphoreSlim`) rejects when every slot is taken — both surface as **503 Service Unavailable with `Retry-After: 5`** rather than holding the request or growing the backlog. Admission is idempotent (a document already queued/in-flight is a no-op), and a knowledge upload whose ingestion a full queue previously rejected (leaving its blob persisted-but-unindexed) is re-enqueued on a later re-upload — so a 503 is a retryable busy signal, not data loss. See [Knowledge Base](15-knowledge-base.md).
 
-### Notable non-typed routes (SSE streams)
+### Notable non-typed routes
 
-A few routes are intentionally **hand-wired on the React client and not consumed through the generated typed SDK**, because they are streaming responses, not request/response JSON:
+There is **no SSE route left on this surface**. The former `models/pull` / `models/pull/stream` pair (`PullStreamLocalModelEndpoint`) is gone — model acquisition is now GGUF download under `model-fit/*` with progress pushed over `GgufDownloadHub`, and chat streaming is a SignalR streaming hub method (§2). A grep for `text/event-stream` under `XE-Local-AI-Engine.Client/` returns nothing.
 
-- `models/pull/stream` — `PullStreamLocalModelEndpoint`, streams pull progress (mirrors the chat SSE pattern). Documented inline at `LocalApiRoutes.cs:114-117`.
+A small set of routes is still **hand-wired on the React client rather than consumed through the generated typed SDK**, because the response is not request/response JSON or the call must run outside the SDK's auth path:
 
-Chat *message streaming itself does not go through HTTP at all* — it is a SignalR streaming hub method (see §2).
+- `images/{imageId}` — fetched as a `Blob` to build an object URL (`features/images/hooks/useImageObjectUrl.ts`).
+- `knowledge-base/documents` (POST) — multipart upload with progress (`features/knowledge/queries/useKnowledgeUpload.ts`).
+- `preview/*` — the Open Canvas workflow/run calls (`features/preview/api/PreviewWorkflowApi.ts`).
+- `auth/status|setup|login|refresh|logout` — the **one documented second axios instance** (`authClient`, `core/auth/api/NodeAuthApi.ts:12`). It exists precisely so the shared instance's 401-refresh interceptor cannot recurse through the refresh call itself.
+
+Everything except `authClient` goes through the shared axios instance via `buildLocalApiUrl()`. See [React Client](10-react-client.md).
 
 ---
 
 ## 2. SignalR hubs (inbound, browser ↔ node)
 
-Only **four** hubs exist (`Client/Hubs/`). All are `[Authorize(... Policy = NodeAuthorizationPolicies.Operator)]` and mapped with `.RequireAuthorization(Operator)` (`Program.cs:198-205`). Their full paths are constants (`...Hub` in `LocalApiRoutes.cs`), mapped via `MapHub` *outside* the FastEndpoints prefix.
+**Nine** hubs exist (`Client/Hubs/`). All are `[Authorize(AuthenticationSchemes = JwtBearer, Policy = NodeAuthorizationPolicies.Operator)]` and mapped with `.RequireAuthorization(Operator)` (`Program.cs:341-359`). Their full paths are constants (`...Hub` in `LocalApiRoutes.cs`), mapped via `MapHub` *outside* the FastEndpoints prefix.
+
+Eight are mapped unconditionally. The ninth, `DevelopmentAttemptHub`, is mapped **only when Development Mode is enabled** — `isDevelopmentModeEnabled` reads `Development:Enabled` from configuration and **defaults to `true`** (`Program.cs:123`, `DevelopmentOptions.cs:9`). When it is `false` the hub is not mapped, its services are not registered, and a middleware answers **404** for every `/api/local/v1/development/*` path except `development/capability` — deliberately *before* local-API security or authentication can challenge the caller, so a disabled capability stays opaque (`Program.cs:286-300`).
 
 | Hub | Path | Direction | Purpose | Owner page |
 |---|---|---|---|---|
 | `LocalChatHub` | `/api/local/v1/chat/hub` | client→server **streaming** methods | `SendMessage`, `RegenerateMessage`, `ResumeMessage` — each returns `IAsyncEnumerable<ChatStreamEvent>` (server-streaming) | [Chat](05-chat.md) |
 | `SchedulerHub` | `/api/local/v1/scheduler/hub` | server→client push only | No client-callable methods; the class body is empty. Events are broadcast via `SchedulerEventPublisher` + `IHubContext<SchedulerHub>` | [Scheduler](06-scheduler.md) |
 | `PreviewWorkflowHub` | `/api/local/v1/preview/hub` | mixed | `Subscribe`/`Unsubscribe` opt a connection into a per-run group; `OnDisconnectedAsync` cancels runs owned by a vanished tab; events pushed via `PreviewWorkflowEventPublisher` | [React Client](10-react-client.md) |
-| `GgufDownloadHub` | `/api/local/v1/model-fit/gguf/downloads/hub` | server→client push only | No client-callable methods; the class body is empty (`GgufDownloadHub.cs:15`). Sanitized GGUF download-progress events broadcast via `GgufDownloadEventPublisher` + `IHubContext<GgufDownloadHub>`. Replaces the per-second `GET model-fit/gguf/downloads` poll; the list endpoint stays for the one-shot hydrate on mount | [Model Fit](07-model-fit.md) |
+| `GgufDownloadHub` | `/api/local/v1/model-fit/gguf/downloads/hub` | server→client push only | Empty class body. Sanitized GGUF download-progress events broadcast via `GgufDownloadEventPublisher` + `IHubContext<GgufDownloadHub>`. Replaces the per-second `GET model-fit/gguf/downloads` poll; the list endpoint stays for the one-shot hydrate on mount | [Model Fit](07-model-fit.md) |
+| `CudaBuildHub` | `/api/local/v1/model-fit/llamacpp/cuda-build/hub` | server→client push only | Empty class body. In-app CUDA build phase + appended log lines via `CudaBuildEventPublisher`; the status GET stays for the one-shot hydrate on mount | [Local Runtime & Providers](03-local-runtime-and-providers.md#26-in-app-source-builds-linux) |
+| `LlamaCppSourceBuildHub` | `/api/local/v1/model-fit/llamacpp/source-build/hub` | server→client push only | Empty class body. The generalized source-build equivalent, via `LlamaCppSourceBuildEventPublisher` | [Local Runtime & Providers](03-local-runtime-and-providers.md#26-in-app-source-builds-linux) |
+| `KnowledgeBaseHub` | `/api/local/v1/knowledge-base/hub` | server→client push only | Empty class body. Sanitized document indexing-status events via `KnowledgeIndexingNotifier`. Operator-gated because the stream reveals which documents exist and are being processed | [Knowledge Base](15-knowledge-base.md) |
+| `ImageJobHub` | `/api/local/v1/images/hub` | mixed | `Subscribe(jobId)` joins a per-job group **then replays** that job's buffered events to the caller — join-then-replay closes the subscribe-after-publish race, and the client dedupes on the payload `seq`. Unlike Preview, a **disconnect does not cancel the job** (image generation is durable and outlives the tab) | [Image Generation](14-image-generation.md) |
+| `DevelopmentAttemptHub` | `/api/local/v1/development/hub` | mixed, **conditionally mapped** | `SubscribeAsync(projectId, taskId, attemptId)` validates that the attempt belongs to the project/task, that it is `Pending`/`Running`, and that a live stream exists — each failure is a `HubException` — then joins the group and returns a `DevelopmentAttemptSubscriptionSnapshot` (watermark, dropped/coalesced count, latest update). If the attempt completes while the subscription is being established the connection is removed from the group again | [Architecture Overview](01-architecture-overview.md#development-mode-registered-source-managed-worktree) |
 
 ### Hub event-name contracts
 
@@ -109,6 +132,11 @@ Push hubs use **stable string constants as the SignalR client-method names**, do
 - **Scheduler** (`SchedulerHubEvents`, `ISchedulerEventPublisher.cs:28`): `scheduler.jobDefinitionChanged`, `scheduler.runStarted`, `scheduler.runProgress`, `scheduler.runCompleted`, `scheduler.runFailed`, `scheduler.runCancelled`.
 - **Preview** (`PreviewWorkflowHubEvents`, `IPreviewWorkflowEventPublisher.cs:26`): `preview.node.{started|output|debug|completed|failed}` and `preview.run.{started|paused|completed|failed|cancelled}`.
 - **GGUF download** (`GgufDownloadHubEvents`, `IGgufDownloadEventPublisher.cs:26`): a single `ggufDownload.statusChanged` event; each push carries the sanitized `GgufDownloadStatusHubEvent` for one tracked download.
+- **CUDA build** (`CudaBuildHubEvents`, `ICudaBuildEventPublisher.cs:25`): `cudaBuild.statusChanged`.
+- **Source build** (`LlamaCppSourceBuildHubEvents`, `ILlamaCppSourceBuildEventPublisher.cs:10`): `llamaCppSourceBuild.statusChanged`. Each push carries the phase plus the appended log lines and their **sequence numbers**, so a client reconciles across ring-buffer rollover and reconnects rather than assuming a contiguous log.
+- **Knowledge base** (`KnowledgeBaseHubEvents`, `IKnowledgeIndexingNotifier.cs:24`): `knowledge.documentChanged`. Payload is document id + coarse status + timestamp only — deliberately no file name, chunk text, or failure detail.
+- **Image jobs** (`ImageJobHubEvents`, `IImageJobEventPublisher.cs:21`): `imageJob.statusChanged`, carrying the coarse phase and a per-job monotonic `Seq` for replay/dedupe. **Never** carries the prompt, and there is no step/percent field (the runtime exposes none over HTTP).
+- **Development attempts**: the one hub that does **not** use a `*HubEvents` constant class — `DevelopmentAttemptLiveEventPublisher.cs:13` sends the literal method name `developmentAttemptUpdate` to the group `development-project:{projectId:N}:attempt:{attemptId:N}`.
 
 ### Publisher pattern (default no-op + host swap)
 
@@ -122,7 +150,7 @@ Scheduler and Preview broadcasts go through a publisher interface whose default 
 
 ### Hub authentication: token-in-query
 
-Browsers cannot set an `Authorization` header on a WebSocket handshake, so JWT bearer is configured with an `OnMessageReceived` handler that pulls the token from the `access_token` query-string parameter **only for requests under `/api/local/v1`** (`ConfigureServices.cs:148-157`). React clients append `?access_token=…` when opening a hub. See `NodeChatConnection.ts` for the client side ([React Client](10-react-client.md)).
+Browsers cannot set an `Authorization` header on a WebSocket handshake, so JWT bearer is configured with an `OnMessageReceived` handler that pulls the token from the `access_token` query-string parameter — but **only when the path is under `/api/local/v1` *and* ends with `/hub`** (`ConfigureServices.cs:251-257`). Both conditions matter: a query-string token is never honoured on an ordinary REST route, only on a hub handshake. React clients append `?access_token=…` when opening a hub. See `NodeChatConnection.ts` for the client side ([React Client](10-react-client.md)).
 
 ---
 
@@ -144,7 +172,7 @@ This is the architectural choke point of the platform's "only the Node Web Serve
 
 ### Exception handling → RFC7807
 
-Registered **before** `UseFastEndpoints` so it wraps endpoints (`Program.cs:91-92`). Two `IExceptionHandler` implementations are chained in order (`ConfigureServices.cs:70-72`) plus `AddProblemDetails()`:
+Registered **before** `UseFastEndpoints` so it wraps endpoints (`Program.cs:222-223`). Two `IExceptionHandler` implementations are chained in order (`ConfigureServices.cs:173-175`) plus `AddProblemDetails()`:
 
 1. `ConflictExceptionHandler` — maps domain conflict exceptions to 409.
 2. `DefaultExceptionHandler` — catch-all 500; redacts internal detail outside development (takes `IHostEnvironment`).
@@ -153,7 +181,7 @@ This mirrors the central platform's handler-chain pattern: specific handlers fir
 
 ### Health checks
 
-Two endpoints, mapped **before** auth so an orchestrator/probe can reach them unauthenticated (`Program.cs:109-132`):
+Two endpoints, mapped **before** auth so an orchestrator/probe can reach them unauthenticated (`Program.cs:264-284`):
 
 | Endpoint | Behavior |
 |---|---|
@@ -164,14 +192,14 @@ Two endpoints, mapped **before** auth so an orchestrator/probe can reach them un
 
 - `LocalApiSecurityMiddleware` (`Endpoints/Common/LocalApiSecurityMiddleware.cs`) runs before routing/auth. For any path under `/api/local/v1` it returns **403** unless the transport **peer** is loopback (`context.Connection.RemoteIpAddress` — the socket peer, so a routable caller is rejected even if it forges a loopback `Host`/`Origin`; a null peer, e.g. the in-process test host or an in-process health probe, is treated as loopback-equivalent) *and* the `Host` is in `{localhost, 127.0.0.1, ::1}` *and* the `Origin` (when present) is same-scheme/same-host/same-port and loopback. This enforces loopback-only access at the edge. See [Security & Privacy](12-security-and-privacy.md) §3.1.
 - **Startup bind guard.** `LoopbackBindGuard` (`Hosting/LoopbackBindGuard.cs`, wired via `LoopbackBindGuard.Guard(app)`) is defense-in-depth behind the request-time middleware: after `ApplicationStarted` — so an OS-assigned port and wildcard expansion are already resolved — it inspects the addresses Kestrel *actually* bound and, if any is non-loopback (wildcards `*`/`+`/`0.0.0.0`/`::` count), logs a **critical** line naming the offending address and shuts the app down with exit code 1. The opt-out `Security:AllowNonLoopbackBind=true` defaults to `false` and no supported launch sets it. See [Security & Privacy](12-security-and-privacy.md) §3.4.
-- Then `UseRouting → UseRateLimiter → UseAuthentication → UseAuthorization` (`Program.cs:135-138`). Authn is JWT bearer; the `Operator` authorization policy gates both endpoints and hubs. Tests in `XE-Local-AI-Engine.Tests/ApiFoundation/LocalApiSecurityTests.cs` assert: missing/invalid token → 401, unsafe host → 400, unsafe origin → 403, valid token + same-origin → allowed.
-- Request logging redacts the access-token query param via `AccessTokenQueryRedactor` before anything is written (`Program.cs:81-86`).
+- Then `UseRouting → UseRateLimiter → UseAuthentication → UseAuthorization` (`Program.cs:306-310`). Authn is JWT bearer; the `Operator` authorization policy gates both endpoints and hubs. Tests in `XE-Local-AI-Engine.Tests/ApiFoundation/LocalApiSecurityTests.cs` assert: missing/invalid token → 401, unsafe host → 400, unsafe origin → 403, valid token + same-origin → allowed.
+- Request logging redacts the access-token query param via `AccessTokenQueryRedactor` before anything is written (`Program.cs:206-210`).
 
 Full rationale: [Security & Privacy](12-security-and-privacy.md).
 
 ### Dev-only surfaces
 
-Not mapped in Production (`Program.cs:170-194`): OpenAPI JSON at `/openapi/local/v1/{documentName}.json`, the Scalar API reference at `/scalar`, and (Development only) the Agent Framework DevUI at `/devui` with OpenAI-compatible Responses/Conversations endpoints.
+Not mapped in Production (`Program.cs:363-389`): OpenAPI JSON at `/openapi/local/v1/{documentName}.json`, the Scalar API reference at `/scalar`, and (Development only) the Agent Framework DevUI at `/devui` with OpenAI-compatible Responses/Conversations endpoints.
 
 ### Static SPA fallback
 
@@ -193,7 +221,7 @@ FastEndpoints (NSwag doc)                       React build
  openapi:fetch ──► openapi/v1.json ──► openapi:generate (hey-api/openapi-ts)
 ```
 
-- **Doc source:** NSwag-generated document served at `/openapi/local/v1/{documentName}.json` (`Program.cs:172-175`, dev-only). `XE-Local-AI-Engine.Tests/ApiFoundation/OpenApiDocumentTests.cs` guards the document.
+- **Doc source:** NSwag-generated document served at `/openapi/local/v1/{documentName}.json` (`Program.cs:365-368`, dev-only). `XE-Local-AI-Engine.Tests/ApiFoundation/OpenApiDocumentTests.cs` guards the document.
 - **Fetch:** `pnpm run openapi:fetch` → `scripts/FetchOpenapi.mjs` pulls `OPENAPI_SPEC_URL` (default `https://localhost:50722/openapi/local/v1/v1.json`) into `openapi/v1.json`. Set `OPENAPI_INSECURE=1` to accept the dev self-signed cert.
 - **Generate:** `pnpm run openapi:generate` → `openapi-ts --file OpenapiTs.config.ts` writes `src/core/api/generated/`.
 - **Combined:** `pnpm run openapi` runs both; `openapi:check` / `openapi:check:live` fail CI if the generated output drifts from committed code (`git diff --exit-code`).
@@ -211,7 +239,7 @@ FastEndpoints (NSwag doc)                       React build
 1. Add/modify the `*Endpoint.cs` + DTOs (the **class name becomes the operationId/SDK function name** — see §1).
 2. Run a Client host so the OpenAPI doc is reachable, then `pnpm run openapi` to regen `openapi/v1.json` + `src/core/api/generated/`.
 3. Commit the regenerated artifacts (they are tracked; `openapi:check` enforces this).
-4. For a **streaming** route or a **hub**, do *not* expect a typed SDK fn — wire it by hand on the client (see `models/pull/stream` and the chat hub).
+4. For a **hub**, or a route whose response is not request/response JSON, do *not* expect a typed SDK fn — wire it by hand on the shared axios instance / through `SharedHubConnection` (see the hand-wired list above and the chat hub).
 
 > The exact regen recipe for a throwaway Client host: pass the connection string as a CLI arg, set `XE_NODE_SQLITE_KEY`, `ASPNETCORE_URLS=:50722`, and `OPENAPI_INSECURE=1`.
 
@@ -226,9 +254,12 @@ This pipeline is unchanged, but the generated SDK has been regenerated several t
 - [Chat](05-chat.md) — `LocalChatHub` streaming methods + Codex/cloud chat routes.
 - [Scheduler](06-scheduler.md) — `scheduler/*` endpoints + `SchedulerHub` push events.
 - [Model Fit](07-model-fit.md) — `model-fit/*` endpoints (GGUF discovery, advisor, llama.cpp runtime).
-- [Local Runtime & Providers](03-local-runtime-and-providers.md) — `models/*` endpoints behind the runtime.
+- [Local Runtime & Providers](03-local-runtime-and-providers.md) — `models/*` endpoints and the `cuda-build`/`source-build` families behind the runtime.
 - [Agent Mode](04-agent-mode.md) — `agents/*`, `skills/*`, `mcp/*` endpoints.
 - [React Client](10-react-client.md) — generated hey-api SDK consumption + hub client wrappers; Preview hub.
 - [Security & Privacy](12-security-and-privacy.md) — loopback guard, Operator policy, secret redaction, hub privacy exceptions.
-- [Hosting & Deployment](11-hosting-and-deployment.md) — health checks, static SPA fallback, node binding.
+- [Hosting & Deployment](11-hosting-and-deployment.md) — health checks, static SPA fallback, node binding, `app-update`/`github-auth`.
+- [Image Generation](14-image-generation.md) — `images/*` endpoints + `ImageJobHub`.
+- [Knowledge Base / RAG](15-knowledge-base.md) — `knowledge-base/*` endpoints + `KnowledgeBaseHub`.
 - [Testing & Validation](13-testing-and-validation.md) — `LocalApiSecurityTests`, `OpenApiDocumentTests`, `openapi:check`.
+- ADRs behind the `development/*` surface: [ADR 0001](../adr/0001-development-mode-restart-recovery.md), [ADR 0002](../adr/0002-development-cloud-egress-carrier.md).

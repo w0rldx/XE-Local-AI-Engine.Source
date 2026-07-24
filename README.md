@@ -87,8 +87,13 @@ pnpm run build
 The repository validation wrapper mirrors these commands:
 
 ```bash
-bash .opencode/scripts/project-validate.sh --scope changed --serial
+bash .opencode/scripts/project-validate.sh --scope changed --base develop --serial
 ```
+
+> **Pass `--base develop`.** `--scope changed` defaults to `--base main` (`project-validate.sh:340`), but this repository
+> has **no `main` branch** — the default branch is `develop`. With the default the script silently falls back to
+> `git diff HEAD~1` (`project-validate.sh:344-348`), so it validates a *single commit* instead of your whole branch and
+> reports green while never touching most of your changes.
 
 E2E validation is ask-gated because it may require browser/runtime setup:
 
@@ -140,12 +145,18 @@ Copy the matching launcher from [`publish/`](publish/) next to the published bin
 See [`publish/README.md`](publish/README.md) for the expected layout. **Run one instance at a time** against the same
 user-data directory — a second instance races on the SQLite database.
 
-For a Windows tester RC, use [`publish/package-tester-win.ps1`](publish/package-tester-win.ps1). It is the canonical
-build, validation, packaging, and tester-upload path; the cross-platform `package-rc.sh` remains the manual portable-zip
-path for Linux.
+For a Windows tester RC, use [`publish/package-tester-win.ps1`](publish/package-tester-win.ps1) — run on Windows, it is
+the canonical build, validation, packaging, and tester-upload path, and every published tester RC came from it.
+`publish/package-rc.sh` is a separate, much simpler manual portable-zip packager: a bash script you run on Linux/WSL,
+producing a plain self-contained zip with **no Velopack metadata and therefore no self-update**. It builds **both**
+`linux-x64` and `win-x64` by default (`--rid <rid>` for one).
+
+> **A `win-x64` zip from `package-rc.sh` is cross-built on Linux.** Smoke-test it on real Windows before handing it to
+> anyone — native-library self-extraction, console-close child cleanup, and browser auto-open cannot be verified
+> off-Windows. The same applies to the two desktop invariants below.
 
 > The no-orphan guarantee (terminal/console close reaps `llama-server`) and the Windows Job Object path are verified on
-> real desktops with a model loaded; they cannot be exercised in WSL2/CI.
+> real desktops with a model loaded; they cannot be exercised in WSL2 or on a headless runner.
 
 ## RC readiness status
 

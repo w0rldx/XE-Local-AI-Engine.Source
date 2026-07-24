@@ -1,6 +1,6 @@
 # Backend commentary map
 
-Last reviewed: 2026-06-02
+Last reviewed: 2026-07-24
 
 Use this map when updating backend comments, XML docs, or AI-agent retrieval notes. It replaces historical implementation-increment labels with stable source terms that match the current runtime.
 
@@ -35,7 +35,8 @@ Before changing comments that describe library behavior, check the current upstr
 - Microsoft Agent Framework: use agent/workflow/handoff/checkpoint/tool-approval vocabulary for orchestration comments.
 - Quartz.NET: use job/trigger/scheduler/hosted-service/misfire/OpenTelemetry vocabulary for scheduler comments.
 - EF Core SQLite: persistence comments should distinguish provider behavior from application invariants.
-- SignalR, gRPC, OpenTelemetry, Docker, and Ollama: verify official docs when comments explain transport, telemetry, container, or model-runtime behavior.
+- SignalR, OpenTelemetry, and Ollama: verify official docs when comments explain transport, telemetry, or model-runtime behavior.
+- **gRPC and Docker are not on this list, because neither exists in the tree.** Both were deliberately removed (gRPC with HostAgent; Docker with the runtime re-architecture) — there is no `Grpc.*` package, no `.proto` file, and no Dockerfile. Tool sandboxing is a supervised native process (`ProcessSandboxRuntimeProvider`), not a container. A comment describing either as live is a defect, not a doc gap. **Ollama was not removed** — it is a gated, opt-in secondary provider, with llama.cpp as the default local runtime; keep its provider-boundary comments.
 
 ## Verification checklist for commentary edits
 

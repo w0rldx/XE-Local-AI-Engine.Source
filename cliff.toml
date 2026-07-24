@@ -68,9 +68,12 @@ commit_parsers = [
   { message = ".*", group = "Miscellaneous" },
 ]
 
-# Tag matching. We standardise on a `v` prefix going forward (v0.1.0-rc.1.2);
-# the two legacy unprefixed tags (0.1.0-rc.1.0/.1) still parse because the
-# range is driven by --unreleased/--latest, not by this pattern alone.
+# Tag matching. git-cliff only ever sees LOCAL refs, and every tag in this repo
+# is `v`-prefixed, so the optional `v?` is defensive permissiveness — not a rule
+# that any current tag depends on. (The tester release repo does carry bare tags,
+# but its refs are never fetched here; the code that must handle both spellings
+# is Find-GitHubRelease in publish/package-tester-win.ps1.) The commit range is
+# driven by --unreleased/--latest rather than by this pattern alone.
 tag_pattern = "v?[0-9]*"
 
 # Sort newest-first inside each section.

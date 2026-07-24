@@ -1,6 +1,6 @@
 # Architecture Overview
 
-> Last reviewed: 2026-07-22 · Code-grounded.
+> Last reviewed: 2026-07-24 · Code-grounded.
 
 XE Local AI Engine (product name **XE AI-Engine**) is the **node-side runtime** of the C0re platform: a single ASP.NET Core process
 (`XE-Local-AI-Engine.Client`) that hosts the React management UI, owns the one outbound platform
@@ -26,10 +26,13 @@ supervisor — lives inside the `XE-Local-AI-Engine.Client` host.
 | Agent/AI wiring (MAF + MEAI) | `XE-Local-AI-Engine.AI.Agent` | `AI.Agent/DependencyInjection/AgentServiceCollectionExtensions.cs` |
 | Provider seams (no SDK leak) | `XE-Local-AI-Engine.Providers.Abstractions` | `Providers.Abstractions/ILocalModelProvider.cs` |
 | Local inference runtime | `XE-Local-AI-Engine.Providers.LlamaServer` | `LlamaServerLocalModelProvider.cs`, `LlamaServerProcessSupervisor.cs` |
+| Local image runtime (`sd-server`) | `XE-Local-AI-Engine.Providers.StableDiffusionCpp` | `StableDiffusionCppRuntime.cs`, `ImageServerProcessSupervisor.cs` |
 | HF GGUF discovery/download | `XE-Local-AI-Engine.Providers.HuggingFace` | provider project |
 | Optional secondary provider | `XE-Local-AI-Engine.Providers.Ollama` | `OllamaLocalModelProvider.cs` |
+| Cloud chat provider (ChatGPT OAuth) | `XE-Local-AI-Engine.Providers.CodexOAuth` | `CodexOAuthChatClientFactory.cs` |
+| Hardware probing | `XE-Local-AI-Engine.Providers.Capabilities` | `HardwareProfiler.cs` |
 | Encrypted SQLite persistence | `XE-Local-AI-Engine.Client.Persistence` | `Client/Program.cs` migration runners |
-| React management UI (17 features) | `XE-Local-AI-Engine.Client.React` | `Client.React/src/features/` |
+| React management UI (25 features) | `XE-Local-AI-Engine.Client.React` | `Client.React/src/features/` |
 | Dev orchestration only | `XE-Local-AI-Engine.AppHost` | `AppHost/AppHost.cs` |
 
 > Aspire (`AppHost.cs`) is a **development-only** orchestrator (`app` project + Vite `client-react` + a
@@ -68,8 +71,10 @@ Distinct from the platform link, the React SPA talks to the host over a **loopba
 - REST endpoints (FastEndpoints) under the prefix `LocalApiRoutes.Prefix` (`/api/local/v1`), with a
   global operationId name generator feeding the OpenAPI doc that generates the hey-api React SDK
   (`Program.cs`, `config.Endpoints.NameGenerator`).
-- Three local SignalR hubs, each `RequireAuthorization(NodeAuthorizationPolicies.Operator)`:
-  `LocalChatHub`, `SchedulerHub`, `PreviewWorkflowHub` (`Program.cs` `MapHub<…>`).
+- **Nine** local SignalR hubs, each `RequireAuthorization(NodeAuthorizationPolicies.Operator)`
+  (`Program.cs:341-359`): `LocalChatHub`, `SchedulerHub`, `PreviewWorkflowHub`, `GgufDownloadHub`,
+  `CudaBuildHub`, `LlamaCppSourceBuildHub`, `KnowledgeBaseHub`, `ImageJobHub`, and — mapped only when
+  `Development:Enabled` (default `true`) — `DevelopmentAttemptHub`.
 - JWT-bearer auth (operator role), antiforgery, per-IP rate limiting, and a
   `LocalApiSecurityMiddleware` that enforces the loopback/`Host`/`Origin` posture
   (`ConfigureServices.cs`, `Program.cs`).
@@ -103,13 +108,32 @@ the host user and retains the host filesystem and network access available to th
 support are future `ISandboxRuntimeProvider`/workspace-provider work only; the current architecture does not
 present either as an active security boundary. See [Security & Privacy](12-security-and-privacy.md#development-mode-source-and-execution-boundary).
 
+**Where the code and the decisions live.** Backend: 15 endpoints in `Client/Endpoints/Development/V1/DevelopmentEndpoints.cs`
+(routes on `LocalApiRoutes.Development`), services under `Client.Application/Services/Development/`, live attempt output over
+`DevelopmentAttemptHub` — all in [API & Hubs](09-api-and-hubs.md). Schema: migrations `AddDevelopmentModeFoundation` and
+`BindDevelopmentProjectsToSelectedFolders` ([Data & Persistence](08-data-and-persistence.md)). Frontend:
+`Client.React/src/features/development/` at route `/development` ([React Client](10-react-client.md)). Two accepted ADRs record
+the non-obvious decisions:
+
+- [ADR 0001 — restart recovery uses replacement attempts](../adr/0001-development-mode-restart-recovery.md): an attempt found
+  `Running` at restart is marked `Interrupted` exactly once and continued only through a **new** attempt pointing at it; the
+  provider stream is never resumed, the worktree and artifacts are preserved, and validation/review evidence is bound to the
+  base commit + workspace subject hash + changed-files manifest hash.
+- [ADR 0002 — cloud authorization uses `ChatOptions.AdditionalProperties`](../adr/0002-development-cloud-egress-carrier.md): the
+  carrier that authorizes every raw cloud round, including the function-result follow-up round created inside
+  `FunctionInvokingChatClient`. Version-aware against the pinned `Microsoft.Extensions.AI` 10.7.0 — re-verify it when that pin moves.
+
+`DevelopmentOptions` (`Client.Application/Services/Development/DevelopmentOptions.cs`) also carries the per-attempt guardrails:
+`MaxArtifactBytes` (16 MiB), `MaxAttemptDurationSeconds` (30 min), `MaxToolCalls` (64), `MaxChangedFiles` (256),
+`MaxFileWriteBytes` (1 MiB), `MaxPatchBytes` (8 MiB), `MaxCommandOutputBytes` (256 KiB).
+
 ---
 
 ## In-process layering & one-way dependency flow
 
 Inside the single host the code is layered so dependencies flow **one way** (host → application →
 agent/providers → persistence). The host only wires web-framework concerns; all node logic is registered
-through `AddNodeApplication`, which composes ~20 `AddNode*` feature modules
+through `AddNodeApplication`, which composes 23 `AddNode*` feature modules
 (`NodeApplicationServiceCollectionExtensions.cs`).
 
 ```
@@ -121,7 +145,7 @@ through `AddNodeApplication`, which composes ~20 `AddNode*` feature modules
   └────────────┘  node)  │  └───────────────────────┬────────────────────────┘  │
                          │                          │ AddNodeApplication         │
    Browser SPA           │  ┌───────────────────────▼────────────────────────┐  │
-  ┌────────────┐  REST + │  │ Client.Application  (~28 service areas)         │  │
+  ┌────────────┐  REST + │  │ Client.Application  (36 service areas)          │  │
   │  React UI  │◀──hubs──┼─▶│ chat · agents · scheduler · model-fit · capacity│  │
   │ (loopback) │ (local) │  │ connection · mcp · eval · adaptive-memory …     │  │
   └────────────┘         │  └───────┬───────────────────────────┬────────────┘  │
@@ -134,15 +158,19 @@ through `AddNodeApplication`, which composes ~20 `AddNode*` feature modules
                          │                              │  ├ LlamaServer (RT)  │  │
                          │  ┌────────────────┐          │  ├ HuggingFace (GGUF)│  │
                          │  │ Client.        │◀─────────┤  ├ Ollama (optional) │  │
-                         │  │ Persistence    │  EF/state│  └ CodexOAuth (cloud)│  │
-                         │  │ (encrypted     │          └─────────┬───────────┘  │
-                         │  │  SQLite)       │                    │ spawn        │
-                         │  └────────────────┘          ┌─────────▼───────────┐  │
-                         │                              │ host llama-server    │  │
-                         │                              │ child process(es)    │  │
-                         │                              │ (no Docker/WSL/CUDA  │  │
-                         │                              │  toolkit — driver    │  │
-                         │                              │  only)               │  │
+                         │  │ Persistence    │  EF/state│  ├ CodexOAuth (cloud)│  │
+                         │  │ (encrypted     │          │  ├ Capabilities (HW) │  │
+                         │  │  SQLite)       │          │  └ StableDiffusionCpp│  │
+                         │  └────────────────┘          └────┬────────────┬────┘  │
+                         │                                   │ spawn      │ spawn │
+                         │                       ┌───────────▼──────┐ ┌───▼─────┐ │
+                         │                       │ host llama-server│ │sd-server│ │
+                         │                       │ child process(es)│ │ daemon  │ │
+                         │                       │ (no Docker/WSL;  │ └─────────┘ │
+                         │                       │  GPU driver only │             │
+                         │                       │  to RUN — see    │             │
+                         │                       │  invariant 6)    │             │
+                         │                       └──────────────────┘             │
                          └──────────────────────────────────────────────────────┘
 ```
 
@@ -152,7 +180,12 @@ Application and agent code depend only on `ILocalModelProvider` / `IChatClient` 
 `CreateChatClient(LocalModelSelection)`, `CreateEmbeddingGenerator(...)`,
 `Pull/Delete/Warm/UnloadModelAsync`). **Provider-specific SDK types never leak across this seam** —
 they stay inside the provider projects (`LlamaServerLocalModelProvider`, `OllamaLocalModelProvider`).
-Three concrete impls exist (`LlamaServer`, `Ollama`; plus the HF GGUF store and CodexOAuth cloud path).
+Exactly **two** classes implement `ILocalModelProvider` — `LlamaServerLocalModelProvider` (`llamacpp`, the
+default) and `OllamaLocalModelProvider` (`ollama`, the gated secondary). The other five `Providers.*`
+projects sit alongside that seam rather than on it: `Abstractions` (contracts), `HuggingFace` (the
+`IGgufModelStore` the llama-server provider delegates model acquisition to), `CodexOAuth` (a cloud
+`IChatClient` factory, not an `ILocalModelProvider`), `Capabilities` (hardware probing), and
+`StableDiffusionCpp` (`IImageRuntime`, the image daemon — see [Image Generation](14-image-generation.md)).
 See [Local Runtime & Providers](03-local-runtime-and-providers.md).
 
 ### Launch-args seam — the inference profile resolver
@@ -184,7 +217,7 @@ The runtime was deliberately re-architected (status: *decisions locked*). The dr
 |---|---|---|
 | 2 | **Docker removed entirely** | No `Docker.DotNet`, no container sandbox as the inference path. `AppHost.cs` comment confirms the in-Aspire HostAgent/Docker resource was removed. |
 | 5/6 | Hybrid spawn-per-model lifecycle; app-controlled HF download + local store | `LlamaServerProcessSupervisor`, `LlamaServerLocalModelProvider`, `Providers.HuggingFace`. |
-| 7/8 | Prebuilt llama.cpp, recommended-pinned + user-upgradable; GPU variant selection only | `LlamaCppBinaryManager`, `LlamaCppReleasePins.cs`, `IGpuVariantSelector`, `LlamaCppUpdateCheckService` (notify-only update check). |
+| 7/8 | Prebuilt llama.cpp, recommended-pinned + user-upgradable; GPU variant selection only | `LlamaCppBinaryManager`, `LlamaCppReleasePins.cs`, `IGpuVariantSelector`, `LlamaCppUpdateCheckService` (notify-only update check). **Amended since the lock:** prebuilt download is still the default and the only *automatic* path, but two opt-in operator paths now sit ahead of it in `EnsureBinaryAsync` — an environment-variable bring-your-own binary override, and an in-app **source build** (`ILlamaCppSourceBuildService`, `LlamaCppSourceBuildService.cs`) that closes the missing-Linux-CUDA-prebuilt gap. Neither ever runs implicitly. See [Local Runtime & Providers §2.6](03-local-runtime-and-providers.md#26-in-app-source-builds-linux). |
 | 14 | **Ollama kept as optional native secondary** (no Docker) | `Providers.Ollama` still exists; **de-orchestrated** from Aspire dev — `AppHost.cs` orchestrates only `app` + Vite + SQLite, llama.cpp is the dev runtime. |
 | 16 | Embeddings via llama.cpp day one | embedding GGUF on a pooling-enabled llama-server process, lexical ranker as fallback. |
 | 17 | **HostAgent deleted entirely** | The old `XE-Local-AI-Engine.HostAgent.*` projects no longer exist in the solution. The supervisor runs in-app as an unprivileged same-user child (localhost port, Job Object tree-kill on Windows). |
@@ -214,8 +247,12 @@ A maintainer must preserve these. Each is enforced or anchored in code today:
 5. **Provider SDK types do not cross `Providers.Abstractions`.** Depend on `ILocalModelProvider` /
    `IChatClient` / `IEmbeddingGenerator`; keep OllamaSharp / llama-server HTTP types inside provider
    projects.
-6. **No code path requires Docker, WSL, or a CUDA toolkit.** The only external runtime dependency is a
-   GPU driver — and CPU fallback always works (re-architecture invariant §3).
+6. **No code path requires Docker or WSL, and nothing requires a CUDA toolkit to *run*.** The only
+   external dependency for inference is a GPU driver — and CPU fallback always works (re-architecture
+   invariant §3). The one place a toolchain is needed is the **opt-in in-app source build**, which is an
+   explicit operator action guarded by a prerequisite checklist (`cmake`/`gcc`/`g++`/`git`, plus `nvcc` for
+   the CUDA backend) and is unavailable off Linux. A node that never invokes it never needs any of that.
+   See [Local Runtime & Providers §2.6](03-local-runtime-and-providers.md#26-in-app-source-builds-linux).
 7. **Inference = host llama.cpp process(es).** spawn-per-model, supervised in-app; routing is per-send by
    `ChatOptions.ModelId` (`RuntimeChatClient`). Ollama is an optional secondary, not the dev default.
    Launch args follow an **explore → freeze → replay** lifecycle: the supervisor no longer forces
@@ -248,7 +285,7 @@ From `Client/Program.cs`, the host performs a deterministic startup before servi
    static files, health checks, `LocalApiSecurityMiddleware`, auth, FastEndpoints, hubs, (dev) Scalar +
    Agent DevUI, SPA fallback.
 
-Persistence specifics (encrypted SQLite, the 36 EF migrations, recovery services) are covered in
+Persistence specifics (encrypted SQLite, the 40 EF migrations, recovery services) are covered in
 [Data & Persistence](08-data-and-persistence.md).
 
 ---
@@ -279,3 +316,6 @@ Persistence specifics (encrypted SQLite, the 36 EF migrations, recovery services
 - [Hosting & Deployment](11-hosting-and-deployment.md)
 - [Security & Privacy](12-security-and-privacy.md)
 - [Testing & Validation](13-testing-and-validation.md)
+- [Image Generation](14-image-generation.md)
+- [Knowledge Base / RAG](15-knowledge-base.md)
+- ADRs: [0001 — Development Mode restart recovery](../adr/0001-development-mode-restart-recovery.md), [0002 — Development cloud-egress carrier](../adr/0002-development-cloud-egress-carrier.md)
