@@ -3,6 +3,7 @@ import { IconAlertCircle, IconBrandGithub, IconCheck, IconCopy, IconLogout } fro
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import type { XeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthStartResponse } from "@/core/api/generated";
 import {
 	noBodyOptions,
@@ -46,6 +47,11 @@ export function GitHubSignInCard({ onAuthorized }: IGitHubSignInCardProps) {
 	const signOutMutation = useSignOutGitHubAuth();
 
 	const [flowState, setFlowState] = useState<FlowState>("idle");
+	// The server's own explanation for a failed start/poll, when it authored one. The backend sanitizes these before
+	// sending (never a token, device_code, or internal URL) and FastEndpoints carries them in ProblemDetails `detail`,
+	// which is the first field apiErrorMessage reads. Empty string means the server said nothing usable and the
+	// localized generic string is shown instead.
+	const [serverErrorMessage, setServerErrorMessage] = useState("");
 	const [startData, setStartData] = useState<XeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthStartResponse | null>(null);
 	const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	// Ref mirrors flowState so the async poll closure always reads current value.
@@ -90,7 +96,8 @@ export function GitHubSignInCard({ onAuthorized }: IGitHubSignInCardProps) {
 					// "pending" — keep polling at the current interval.
 					schedulePoll(startData?.intervalSeconds ?? 5);
 				}
-			} catch {
+			} catch (error: unknown) {
+				setServerErrorMessage(apiErrorMessage(error, ""));
 				setFlowState("error");
 				flowStateRef.current = "error";
 			}
@@ -99,13 +106,15 @@ export function GitHubSignInCard({ onAuthorized }: IGitHubSignInCardProps) {
 
 	async function handleStartSignIn() {
 		try {
+			setServerErrorMessage("");
 			const data = await startMutation.mutateAsync(noBodyOptions);
 			setStartData(data ?? null);
 			setFlowState("polling");
 			flowStateRef.current = "polling";
 			// Begin polling at the returned interval (default 5 s if absent).
 			schedulePoll(data?.intervalSeconds ?? 5);
-		} catch {
+		} catch (error: unknown) {
+			setServerErrorMessage(apiErrorMessage(error, ""));
 			setFlowState("error");
 			flowStateRef.current = "error";
 		}
@@ -120,6 +129,7 @@ export function GitHubSignInCard({ onAuthorized }: IGitHubSignInCardProps) {
 		setFlowState("idle");
 		flowStateRef.current = "idle";
 		setStartData(null);
+		setServerErrorMessage("");
 	}
 
 	if (flowState === "authorized") {
@@ -216,7 +226,10 @@ export function GitHubSignInCard({ onAuthorized }: IGitHubSignInCardProps) {
 								? t("pages.about.appUpdate.authDenied")
 								: flowState === "expired"
 									? t("pages.about.appUpdate.authExpired")
-									: t("pages.about.appUpdate.authError")}
+									: // Prefer the server's own sanitized explanation (e.g. "App self-update is not
+										// configured for this build.") over the generic string, which says nothing
+										// actionable. Falls back to the localized generic when the server authored none.
+										serverErrorMessage || t("pages.about.appUpdate.authError")}
 						</Text>
 						<Button variant="subtle" size="xs" onClick={handleRetry}>
 							{t("pages.about.appUpdate.retry")}

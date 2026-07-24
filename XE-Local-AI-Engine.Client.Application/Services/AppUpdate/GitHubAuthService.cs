@@ -231,13 +231,18 @@ public sealed class GitHubAuthService : IGitHubAuthService
 
     private string RequireClientId()
     {
-        var clientId = _options.Value.GitHubAppClientId;
-        if (string.IsNullOrWhiteSpace(clientId))
+        // Gate on AppUpdateChannelOptions.IsConfigured — the SAME predicate AppUpdateService uses to go inert — not on a
+        // bare emptiness check. A weaker check here splits the build in two: the update check would report a signed-out,
+        // inert updater while this device flow happily POSTed a structurally invalid client_id (a placeholder, an OAuth
+        // App id, the numeric App ID) to github.com and surfaced the result as a transport failure. Signing in is also
+        // pointless when the repo URL is unbaked, since nothing can be read from it afterwards.
+        var options = _options.Value;
+        if (!options.IsConfigured)
         {
             throw new GitHubAuthException("App self-update is not configured for this build.");
         }
 
-        return clientId;
+        return options.GitHubAppClientId;
     }
 
     private static HttpClient CreateClient(IHttpClientFactory httpClientFactory)

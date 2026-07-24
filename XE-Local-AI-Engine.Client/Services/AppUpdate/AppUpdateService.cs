@@ -35,10 +35,20 @@ public sealed class AppUpdateService : IAppUpdateService
 
     public async Task<AppUpdateSnapshot> CheckForUpdatesAsync(CancellationToken ct)
     {
-        // Inert outside desktop mode or on an unconfigured build — record a signed-out snapshot, make no GitHub call.
-        if (!_hostContext.IsDesktop || !_channelOptions.IsConfigured)
+        // Not the desktop self-update build — React hides the whole update section on isDesktop:false, so the auth
+        // state is immaterial here; report the signed-out resting state and make no GitHub call.
+        if (!_hostContext.IsDesktop)
         {
             return StoreSnapshot(SignedOutSnapshot(currentVersion: "0.0.0", isOffline: false));
+        }
+
+        // Desktop, but this artifact was never baked with a usable repo URL + client ID. Report that as its OWN state
+        // rather than folding it into signed-out: signed-out makes React offer a sign-in button, and on this build that
+        // button cannot work — GitHubAuthService.RequireClientId rejects the flow on this very same predicate. Still no
+        // GitHub call.
+        if (!_channelOptions.IsConfigured)
+        {
+            return StoreSnapshot(NotConfiguredSnapshot(currentVersion: "0.0.0"));
         }
 
         var session = await _tokenStore.GetSessionAsync(ct).ConfigureAwait(false);
@@ -138,6 +148,14 @@ public sealed class AppUpdateService : IAppUpdateService
         _state.Store(snapshot);
         return snapshot;
     }
+
+    private AppUpdateSnapshot NotConfiguredSnapshot(string currentVersion) =>
+        Snapshot(currentVersion,
+            availableVersion: null,
+            updateAvailable: false,
+            AppUpdateAuthState.NotConfigured,
+            isOffline: false,
+            login: null);
 
     private AppUpdateSnapshot SignedOutSnapshot(string currentVersion, bool isOffline) =>
         Snapshot(currentVersion, availableVersion: null, updateAvailable: false, AppUpdateAuthState.SignedOut, isOffline, login: null);

@@ -231,6 +231,7 @@
 				"upToDate": "Du bist auf dem neuesten Stand.",
 				"availableVersion": "Verfügbar:",
 				"offline": "Die Update-Prüfung ist offline nicht verfügbar.",
+				"notConfigured": "Automatische Updates sind in diesem Build nicht verfügbar. Für eine neuere Version installiere sie bitte manuell.",
 				"copyCode": "Code kopieren",
 				"copied": "Kopiert"
 			}
