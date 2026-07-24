@@ -17,9 +17,21 @@
 # Usage:
 #   scripts/lint-release-scripts.sh [options]
 #
+# It also compile-checks the #if P0_SPIKE code in XE-Local-AI-Engine.AI.Agent.Tests. That gate is
+# load-bearing (the class constructs a live OllamaApiClient and must stay out of a default build),
+# but because P0_SPIKE is defined nowhere, the gated code never faces TreatWarningsAsErrors and rots
+# silently — HandoffWorkflowSpikeTests needed real repair for MAF 1.8.0 -> 1.13.0 shape changes that
+# a compiling build would have caught at once. Build only; the tests are never executed.
+# See docs/agent-knowledge.md for the gate rationale and the DefineConstants trap.
+#
 # Options:
-#   --shell-only   Run shellcheck only (skip PowerShell).
-#   --ps-only      Run PSScriptAnalyzer only (skip shell).
+#   --shell-only   Run shellcheck only (skip PowerShell + spike compile check).
+#   --ps-only      Run PSScriptAnalyzer only (skip shell + spike compile check).
+#   --no-spike     Skip the P0_SPIKE compile check (it costs a build).
+#   --spike-only   Run only the P0_SPIKE compile check.
+#   --pester       Also run the Pester suite over package-tester-win.ps1's pure logic
+#                  (publish/tests). Not on by default: it needs the Pester module.
+#   --pester-only  Run only the Pester suite.
 #   --bootstrap    Install PSScriptAnalyzer (CurrentUser scope) if absent, then lint.
 #                  Network access required. Without this flag, an absent module fails the run.
 #   --help         Show this message.
@@ -57,11 +69,25 @@ PS_TARGETS=(
 
 RUN_SHELL="true"
 RUN_PS="true"
+RUN_SPIKE="true"
+RUN_PESTER="false"
+PESTER_DIR="publish/tests"
 BOOTSTRAP="false"
 PSSA_SETTINGS="${PROJECT_ROOT}/scripts/PSScriptAnalyzerSettings.psd1"
+SPIKE_PROJECT="XE-Local-AI-Engine.AI.Agent.Tests/XE-Local-AI-Engine.AI.Agent.Tests.csproj"
+SPIKE_CONSTANT="P0_SPIKE"
+# A type that exists ONLY inside the #if P0_SPIKE block — used to prove the gated code really was
+# compiled in, and afterwards that the restore build really took it back out.
+SPIKE_MARKER_TYPE="WorkflowToolApprovalSpikeTests"
 
 log()         { echo "[lint] $*"; }
 prereq_fail() { echo "[lint] PREREQUISITE MISSING: $*" >&2; exit 2; }
+
+# How many times the P0_SPIKE-only type appears in a built assembly. Returns a count rather than a
+# status so callers never need `grep -q` in a pipeline (see the SIGPIPE note at the call site).
+spike_marker_count() {
+  strings "$1" 2>/dev/null | grep -c "${SPIKE_MARKER_TYPE}" || true
+}
 
 usage() {
   sed -n '2,/^set -uo/p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//; $d'
@@ -69,8 +95,12 @@ usage() {
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --shell-only) RUN_PS="false"; shift ;;
-    --ps-only)    RUN_SHELL="false"; shift ;;
+    --shell-only) RUN_PS="false"; RUN_SPIKE="false"; shift ;;
+    --ps-only)    RUN_SHELL="false"; RUN_SPIKE="false"; shift ;;
+    --no-spike)   RUN_SPIKE="false"; shift ;;
+    --spike-only) RUN_SHELL="false"; RUN_PS="false"; shift ;;
+    --pester)     RUN_PESTER="true"; shift ;;
+    --pester-only) RUN_SHELL="false"; RUN_PS="false"; RUN_SPIKE="false"; RUN_PESTER="true"; shift ;;
     --bootstrap)  BOOTSTRAP="true"; shift ;;
     --help|-h)    usage; exit 0 ;;
     *)            echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
@@ -172,6 +202,137 @@ if [[ "${RUN_PS}" == "true" ]]; then
       FINDINGS=1
     fi
   done
+fi
+
+# ---------------------------------------------------------------------------
+# P0_SPIKE compile check — BUILD ONLY, the tests are never executed.
+# ---------------------------------------------------------------------------
+if [[ "${RUN_SPIKE}" == "true" ]]; then
+  command -v dotnet >/dev/null 2>&1 || prereq_fail \
+    "dotnet not on PATH — the ${SPIKE_CONSTANT} compile check could not run.
+             Install the SDK pinned in ${PROJECT_ROOT}/global.json, or pass --no-spike if you have
+             separately verified the gated code compiles."
+
+  cd "${PROJECT_ROOT}" || prereq_fail "could not cd to ${PROJECT_ROOT}"
+  log "=== ${SPIKE_CONSTANT} compile check: ${SPIKE_PROJECT} ==="
+
+  # THE TRAP: -p:DefineConstants REPLACES the property, it does not append. Passing
+  # -p:DefineConstants=P0_SPIKE silently drops TRACE and RELEASE. And a command-line property is
+  # NOT recursively expanded, so -p:DefineConstants='$(DefineConstants);P0_SPIKE' cannot work
+  # either (MSBuild rejects the bare ';' as switch syntax). The only reliable form is: read the
+  # project's own value first, then pass it back with the semicolons escaped as %3B.
+  spike_base="$(dotnet msbuild "${SPIKE_PROJECT}" -p:Configuration=Release \
+                  -getProperty:DefineConstants 2>/dev/null | tail -1 | tr -d '\r')"
+  if [[ -z "${spike_base}" ]]; then
+    echo "[lint] FAIL: could not read DefineConstants from ${SPIKE_PROJECT}." >&2
+    FINDINGS=1
+  else
+    spike_value="$(printf '%s' "${spike_base}" | sed 's/;/%3B/g')%3B${SPIKE_CONSTANT}"
+    spike_effective="$(dotnet msbuild "${SPIKE_PROJECT}" -p:Configuration=Release \
+                        -p:DefineConstants="${spike_value}" \
+                        -getProperty:DefineConstants 2>/dev/null | tail -1 | tr -d '\r')"
+    log "DefineConstants: default [${spike_base}] -> effective [${spike_effective}]"
+
+    # Verify the quoting actually survived the shell rather than assuming it did: the effective
+    # value must contain the constant AND still contain every constant the default build had.
+    spike_ok="true"
+    [[ "${spike_effective}" == *"${SPIKE_CONSTANT}"* ]] || spike_ok="false"
+    local_ifs="${IFS}"; IFS=';'
+    for c in ${spike_base}; do
+      [[ "${spike_effective}" == *"${c}"* ]] || spike_ok="false"
+    done
+    IFS="${local_ifs}"
+
+    if [[ "${spike_ok}" != "true" ]]; then
+      echo "[lint] FAIL: DefineConstants did not compose correctly." >&2
+      echo "[lint]   expected [${spike_base}] plus ${SPIKE_CONSTANT}, got [${spike_effective}]" >&2
+      FINDINGS=1
+    else
+      spike_out="$(dotnet build "${SPIKE_PROJECT}" -c Release -p:DefineConstants="${spike_value}" 2>&1)"
+      spike_status=$?
+
+      # Prove the gated code was genuinely compiled in. An incremental build that skipped the
+      # recompile would otherwise report a meaningless "0 errors" over the previous, ungated output.
+      spike_dll="$(find "${PROJECT_ROOT}/XE-Local-AI-Engine.AI.Agent.Tests/bin/Release" \
+                     -maxdepth 2 -name '*AI.Agent.Tests.dll' 2>/dev/null | head -n 1)"
+      if [[ "${spike_status}" -ne 0 ]]; then
+        echo "${spike_out}" | grep -E 'error |warning ' | head -30
+        echo "[lint] FAIL: the ${SPIKE_CONSTANT} code does not compile. It has rotted behind its gate." >&2
+        FINDINGS=1
+      elif ! grep -qE '^[[:space:]]*0 Warning\(s\)' <<<"${spike_out}" \
+        || ! grep -qE '^[[:space:]]*0 Error\(s\)'   <<<"${spike_out}"; then
+        echo "${spike_out}" | grep -E 'error |warning |Warning\(s\)|Error\(s\)' | head -30
+        echo "[lint] FAIL: the ${SPIKE_CONSTANT} build was not 0 warnings / 0 errors." >&2
+        FINDINGS=1
+      # NB: count, never `strings ... | grep -q`. Under `set -o pipefail` grep -q exits on the first
+      # match, strings dies of SIGPIPE, and the pipeline reports 141 — so the check would fail
+      # precisely when the marker IS present. Counting reads the whole stream and cannot misfire.
+      elif [[ -n "${spike_dll}" ]] && [[ "$(spike_marker_count "${spike_dll}")" -eq 0 ]]; then
+        echo "[lint] FAIL: ${SPIKE_MARKER_TYPE} is absent from the built assembly — the gated code was" >&2
+        echo "[lint]   NOT compiled in, so '0 errors' proves nothing. Check the DefineConstants plumbing." >&2
+        FINDINGS=1
+      else
+        log "${SPIKE_CONSTANT}: compiles clean (0 warnings, 0 errors) and the gated type is present."
+      fi
+
+      # ALWAYS restore an ungated build. A P0_SPIKE-built test host left in bin/ would silently
+      # change what a later `dotnet test` executes — the spike constructs a live OllamaApiClient.
+      log "Restoring an ungated build (no ${SPIKE_CONSTANT} binary may be left behind)..."
+      if ! dotnet build "${SPIKE_PROJECT}" -c Release >/dev/null 2>&1; then
+        echo "[lint] FAIL: could not rebuild ${SPIKE_PROJECT} without ${SPIKE_CONSTANT}." >&2
+        echo "[lint]   A spike-built test host may remain in bin/. Rebuild it before running any tests." >&2
+        FINDINGS=1
+      elif [[ -n "${spike_dll}" ]] && [[ "$(spike_marker_count "${spike_dll}")" -gt 0 ]]; then
+        echo "[lint] FAIL: ${SPIKE_MARKER_TYPE} is STILL in the assembly after the restore build." >&2
+        echo "[lint]   A ${SPIKE_CONSTANT} test host is live in bin/. Do not run the suite until it is rebuilt." >&2
+        FINDINGS=1
+      else
+        log "Restore build verified: no ${SPIKE_CONSTANT} code remains in bin/."
+      fi
+    fi
+  fi
+fi
+
+# ---------------------------------------------------------------------------
+# Pester — unit tests over package-tester-win.ps1's pure logic.
+# ---------------------------------------------------------------------------
+if [[ "${RUN_PESTER}" == "true" ]]; then
+  command -v pwsh >/dev/null 2>&1 || prereq_fail \
+    "pwsh not on PATH — the Pester suite could not run. dotnet tool install --global PowerShell"
+
+  [[ -d "${PROJECT_ROOT}/${PESTER_DIR}" ]] || prereq_fail \
+    "Pester suite not found at ${PESTER_DIR}."
+
+  if ! pwsh -NoProfile -Command 'if (-not (Get-Module -ListAvailable Pester)) { exit 1 }'; then
+    prereq_fail \
+      "Pester module is not installed, so package-tester-win.ps1's logic was NOT tested.
+             Install it with:
+               pwsh -NoProfile -Command 'Install-Module Pester -Scope CurrentUser -Force -AcceptLicense -SkipPublisherCheck'
+             Intentionally fatal: a skipped test suite must never read as a pass."
+  fi
+
+  cd "${PROJECT_ROOT}" || prereq_fail "could not cd to ${PROJECT_ROOT}"
+  log "=== Pester: ${PESTER_DIR} ==="
+  # An explicit configuration rather than -CI: that switch also writes a testResults.xml into the
+  # repo root, which is not ours to litter. PassThru lets us apply the same vacuous-run guard used
+  # everywhere else here — zero discovered tests is a FAILURE, not a pass.
+  if ! pwsh -NoProfile -Command "
+      \$config = New-PesterConfiguration
+      \$config.Run.Path = '${PESTER_DIR}'
+      \$config.Run.PassThru = \$true
+      \$config.TestResult.Enabled = \$false
+      \$config.Output.Verbosity = 'Detailed'
+      \$result = Invoke-Pester -Configuration \$config
+      if (\$result.TotalCount -eq 0) {
+        Write-Error 'Pester discovered ZERO tests — this is not a pass.'
+        exit 2
+      }
+      if (\$result.FailedCount -gt 0) { exit 1 }
+      exit 0
+    "; then
+    echo "[lint] FAIL: Pester suite failed (see above)." >&2
+    FINDINGS=1
+  fi
 fi
 
 echo
