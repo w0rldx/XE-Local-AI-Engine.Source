@@ -1,6 +1,5 @@
-// Handoff + workflow-approval probe (verified against Microsoft.Agents.AI.Workflows 1.8.0; pinned version is now
-// 1.13.0, not re-verified). Fully deterministic — a scripted IChatClient stands in for the model (NO Ollama, NO
-// network). Proves the exact API shapes the
+// Handoff + workflow-approval probe for Microsoft.Agents.AI.Workflows 1.13.0. Fully deterministic — a scripted
+// IChatClient stands in for the model (NO Ollama, NO network). Proves the exact API shapes the
 // production handoff orchestration + IOrchestrationRunSession.RespondToApprovalAsync will copy:
 //   (A) 2-agent handoff routing via AgentWorkflowBuilder.CreateHandoffBuilderWith + InProcessExecution.
 //   (B) tool-approval pause/resume INSIDE a workflow run (surfacing event + resume mechanism).
@@ -20,17 +19,14 @@ using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Deterministic probe for the MAF handoff workflow + in-workflow tool approval (verified at 1.8.0; pinned version
-///     is now 1.13.0, not re-verified).
+///     Deterministic probe for the MAF 1.13.0 handoff workflow + in-workflow tool approval.
 /// </summary>
 /// <remarks>
-///     Marked <c>[NotInParallel]</c> because the MAF workflow engine uses process-wide static
-///     state and the WatchStreamAsync drain loop is timing-sensitive. Running these tests
-///     concurrently with other suites on the same machine causes intermittent drain timeouts.
-///     Backend test suites must not be invoked in parallel on one machine; run them sequentially
-///     (e.g. <c>dotnet test</c> one project at a time).
+///     Marked with the global, parameterless <c>[NotInParallel]</c> constraint because the streaming workflow probes
+///     are timing-sensitive. A keyed constraint only serializes tests sharing that key; the global constraint drains
+///     unrelated parallel tests before this class runs.
 /// </remarks>
-[NotInParallel(nameof(HandoffWorkflowSpikeTests))]
+[NotInParallel]
 public sealed class HandoffWorkflowSpikeTests
 {
     private const string TriageInstructions =
@@ -47,13 +43,6 @@ public sealed class HandoffWorkflowSpikeTests
     ///     in the workflow output, and that conversation history carried across the hop.
     /// </summary>
     [Test]
-    // QUARANTINED: flaky under full parallel test runs. The MAF workflow engine keeps process-wide static state, so a
-    // test running EARLIER in the same process can leave that state dirty and this probe then fails instantly (~6ms,
-    // not a timeout). [NotInParallel] only controls concurrency, not execution order/state, so it cannot fix this; the
-    // proper fix is to run the MAF-workflow suites in an isolated process, after which this can be re-enabled.
-    // Passes reliably when run alone (`--treenode-filter "/*/*/*/*Handoff_TriageHandsOffToSpecialist*"`). Not caused
-    // by analyzer/cleanup work — reproduces identically pre-cleanup.
-    [Skip("Flaky under full parallel runs due to MAF process-wide static-state pollution; run isolated. See comment.")]
     public async Task Handoff_TriageHandsOffToSpecialist_SpecialistAnswerReachesOutput()
     {
         // Reflect the FunctionPrefix const so the fake can target the handoff tool by name.
@@ -104,36 +93,34 @@ public sealed class HandoffWorkflowSpikeTests
         Console.WriteLine($"[P5][A] TrySendMessageAsync(TurnToken) accepted={accepted}");
 
         var outputText = new StringBuilder();
-        var sawSpecialistAgentEvent = false;
-        var sawOutput = false;
         // WatchStreamAsync only ends on RequestHaltEvent; in non-autonomous mode a handoff run goes IDLE
         // (awaiting the next user turn) after yielding output, so we bound the watch with a timeout and stop
-        // once the terminal WorkflowOutputEvent (the full conversation) has been observed.
+        // once the specialist's answer has actually been observed in the output stream.
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         await foreach (var evt in run.WatchStreamAsync(timeout.Token))
         {
             Console.WriteLine($"[P5][A] event={evt.GetType().Name} :: {Truncate(evt.ToString(), max: 200)}");
             switch (evt)
             {
+                case AgentResponseUpdateEvent updateEvent:
+                    Console.WriteLine(
+                        $"[P5][A]   AgentResponseUpdateEvent.ExecutorId='{updateEvent.ExecutorId}' text='{Truncate(updateEvent.Update.Text)}'");
+                    outputText.Append(updateEvent.Update.Text);
+                    break;
                 case AgentResponseEvent are:
                     Console.WriteLine($"[P5][A]   AgentResponseEvent.ExecutorId='{are.ExecutorId}' text='{Truncate(are.Response.Text)}'");
-                    if (are.ExecutorId == specialist.Id || (are.Response.Text?.Contains("SPECIALIST_ANSWER", StringComparison.Ordinal) ?? false))
-                    {
-                        sawSpecialistAgentEvent = true;
-                    }
-
+                    outputText.Append(are.Response.Text);
                     break;
                 case WorkflowOutputEvent woe:
                     Console.WriteLine($"[P5][A]   WorkflowOutputEvent data type={woe.Data?.GetType().Name}");
                     AppendChatMessages(outputText, woe.Data);
-                    sawOutput = true;
                     break;
                 case ExecutorFailedEvent fail:
                     Console.WriteLine($"[P5][A]   ExecutorFailedEvent: {fail.Data?.GetType().Name}: {fail.Data?.Message}");
                     break;
             }
 
-            if (sawOutput && fake.SpecialistInvocations > 0)
+            if (outputText.ToString().Contains("SPECIALIST_ANSWER", StringComparison.Ordinal))
             {
                 break;
             }
@@ -144,7 +131,7 @@ public sealed class HandoffWorkflowSpikeTests
         Console.WriteLine($"[P5][A] specialistInvokedAtLeastOnce={fake.SpecialistInvocations} sawUserQuestionAtSpecialist={fake.SpecialistSawUserQuestion}");
 
         AssertEx.True(fake.SpecialistInvocations > 0, "specialist agent must be invoked after the handoff");
-        AssertEx.True(allOutput.Contains("SPECIALIST_ANSWER", StringComparison.Ordinal) || sawSpecialistAgentEvent,
+        AssertEx.True(allOutput.Contains("SPECIALIST_ANSWER", StringComparison.Ordinal),
             "specialist's answer must reach the workflow output / agent-response stream");
         AssertEx.True(fake.SpecialistSawUserQuestion, "conversation history (the original user question) must carry across the handoff hop");
     }
