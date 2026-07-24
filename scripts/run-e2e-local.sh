@@ -39,14 +39,34 @@
 # in-process WebApplicationFactory host, not llama-server. It therefore does NOT need
 # scripts/dev-stop.sh afterwards — no port or VRAM is held.
 #
+# Build contamination
+#   This is the most expensive run in the repo to lose, and it has already been lost this way once:
+#   a concurrent `dotnet build` rewrote the assemblies mid-run and the suite died with
+#   `FileNotFoundException: Microsoft.AspNetCore.SignalR.Client.Core, Version=10.0.9.0` — nothing to
+#   do with the tests. So the script re-execs itself under the cross-process build lock
+#   (scripts/with-build-lock.sh) and snapshots the E2E output tree around the run
+#   (scripts/assembly-guard.sh). See docs/agent-knowledge.md §1.
+#
 # Exit codes:
 #   0  — all E2E tests passed (and a non-zero number of them actually ran)
 #   1  — one or more tests failed, or the run was vacuous (zero tests discovered)
 #   2  — a prerequisite is missing / usage error (nothing was run)
+#   75 — CONTAMINATED: the build output changed mid-run; the result is void, re-run it
+#
+# Env knobs:
+#   NO_BUILD_LOCK  when set, do NOT take the cross-process build lock (escape hatch)
+#   NO_GUARD       when set, skip the contamination snapshot/verify
 
 set -uo pipefail
 
 PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || (cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd))"
+
+# Serialize against any other build/test that goes through the wrapper, before anything is built.
+# The wrapper closes the lock fd in this child, so the MSBuild daemons left behind by the build
+# below cannot inherit it (see with-build-lock.sh).
+if [[ -z "${XE_BUILD_LOCK_HELD:-}" && -z "${NO_BUILD_LOCK:-}" ]]; then
+  exec "${PROJECT_ROOT}/scripts/with-build-lock.sh" -- "${BASH_SOURCE[0]}" "$@"
+fi
 E2E_PROJECT="${PROJECT_ROOT}/XE-Local-AI-Engine.Tests.E2ETests/XE-Local-AI-Engine.Tests.E2ETests.csproj"
 FRONTEND_DIR="${PROJECT_ROOT}/XE-Local-AI-Engine.Client.React"
 
@@ -182,12 +202,34 @@ fi
 log "=== Running E2E suite ==="
 log "First run is slow: the fixture does a full 'pnpm install --frozen-lockfile' + 'pnpm run build'."
 OUT_FILE="$(mktemp -t xe-e2e-XXXXXX.log)"
+GUARD_STATE=""
 # The log has to survive every exit path below (the guards and the failure diagnosis all grep it),
 # so cleanup goes on a trap rather than being sprinkled before each exit.
-trap 'rm -f "${OUT_FILE}"' EXIT
+trap 'rm -f "${OUT_FILE}" "${GUARD_STATE}"' EXIT
+
+# Snapshot AFTER our own build and browser install, immediately before the first test process — so
+# this script's own writes are outside the window and cannot read as interference.
+if [[ -z "${NO_GUARD:-}" ]]; then
+  mkdir -p "${PROJECT_ROOT}/.tmp"
+  GUARD_STATE="$(mktemp "${PROJECT_ROOT}/.tmp/assembly-guard-e2e-XXXXXX.state")"
+  "${PROJECT_ROOT}/scripts/assembly-guard.sh" snapshot "${GUARD_STATE}" --root "${TFM_DIR}"
+fi
+
 # TZ matches .github/workflows/e2e.yml so date-formatting assertions behave identically.
 TZ="Europe/Berlin" dotnet test "${TEST_ARGS[@]}" 2>&1 | tee "${OUT_FILE}"
 STATUS="${PIPESTATUS[0]}"
+
+# ---------------------------------------------------------------------------
+# Contamination check runs FIRST. A run whose assemblies were rewritten underneath it can fail in
+# any shape at all — including a vacuous zero-test summary — so it must be diagnosed as
+# contamination rather than routed into the failure explanations below, which would all be wrong.
+# ---------------------------------------------------------------------------
+if [[ -n "${GUARD_STATE}" ]]; then
+  if ! "${PROJECT_ROOT}/scripts/assembly-guard.sh" verify "${GUARD_STATE}"; then
+    log "The suite's own exit status was ${STATUS}; ignore it and re-run."
+    exit 75
+  fi
+fi
 
 # ---------------------------------------------------------------------------
 # Vacuous-run guard — mirrors _assert_tests_ran in .opencode/scripts/project-validate.sh.
