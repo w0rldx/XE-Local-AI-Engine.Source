@@ -94,7 +94,7 @@ export function resolveLocalDefaultModelCapabilities(models: LocalModelDto[]): {
 // True when the composer's local model list has resolved to nothing but the synthetic "Local default" entry —
 // i.e. no installed chat-capable GGUF model exists on the node. Shared by ModelSelectorCard (explains an
 // otherwise-bare picker) and the chat page (pre-empts the first-send ModelNotInstalled failure with inline
-// guidance, UX-09). Takes the already-built `modelOptions` list (not the raw DTOs) so both call sites derive
+// guidance). Takes the already-built `modelOptions` list (not the raw DTOs) so both call sites derive
 // from the same array Chat.tsx already computes.
 export function hasNoLocalChatModels(modelOptions: ModelOption[]): boolean {
 	return modelOptions.every((option) => option.value === localDefaultModelValue);

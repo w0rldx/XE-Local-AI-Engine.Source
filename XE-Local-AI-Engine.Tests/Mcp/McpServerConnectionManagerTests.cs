@@ -127,7 +127,7 @@ public sealed class McpServerConnectionManagerTests
     [Test]
     public async Task RefreshAsync_WhenAColldingServerShiftsAnExistingSlugSuffix_ReKeysQualifiedNames()
     {
-        // MED-3: a server connects as the unsuffixed slug. Later a second server whose Name slugifies to the SAME base
+        // A server connects as the unsuffixed slug. Later a second server whose Name slugifies to the SAME base
         // is added EARLIER in the enabled order, shifting the original to a "-2" suffix. The kept connection must be
         // dropped + reconnected so its cached qualified names re-bake to the new slug (no stale determinism hole).
         await using var first = await InProcMcpServer.StartAsync("first",

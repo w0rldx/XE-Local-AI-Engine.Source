@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 /// <summary>
-///     Baseline retrieval-quality assertions for the CURRENT knowledge-base retrieval stack (RAG-01). The corpus is
+///     Baseline retrieval-quality assertions for the CURRENT knowledge-base retrieval stack. The corpus is
 ///     ingested through the real pipeline and queried through the real <see cref="KnowledgeSearchService" />; the
 ///     thresholds asserted here are the measured baseline on the current tree — a code regression in chunking, FTS,
 ///     vector search, RRF, or reranker integration drops a metric below its bar and fails.
@@ -123,7 +123,7 @@ public sealed class RetrievalEvalBaselineTests : IDisposable
         return RetrievalEvalFixture.BuildAsync(Path.Combine(_rootPath, fileName), _keyHolder, CancellationToken.None);
     }
 
-    // Best-effort baseline capture for the RAG-01 report: append the measured metrics to a temp file. Never fails a test.
+    // Best-effort baseline capture for the report: append the measured metrics to a temp file. Never fails a test.
     private static void Report(string scenario, RetrievalMetrics metrics)
     {
         try

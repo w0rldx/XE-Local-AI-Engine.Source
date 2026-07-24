@@ -29,7 +29,7 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
 
     // The managed-CUDA signal stamp the cached audit was computed against. A CUDA adopt/remove bumps the signal version
     // and can flip the selected variant (Vulkan↔Cuda on a Linux NVIDIA box), so a memo computed against the old stamp is
-    // stale — the fast path only trusts the cache while the current stamp matches (GPTAUD-09a).
+    // stale — the fast path only trusts the cache while the current stamp matches.
     private long _cachedSignalVersion;
     private string? _lastEmittedSignature;
 

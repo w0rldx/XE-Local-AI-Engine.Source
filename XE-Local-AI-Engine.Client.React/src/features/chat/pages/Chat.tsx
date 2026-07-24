@@ -272,7 +272,7 @@ export function Chat() {
 	}, [localModelsData]);
 	// Cloud (Codex) model options — empty array when signed out; non-empty only when Codex session active.
 	const cloudModelOptions = useCodexModelOptions();
-	// UX-09: pre-empt the first-send ModelNotInstalled failure with inline guidance, instead of only surfacing it
+	// Pre-empt the first-send ModelNotInstalled failure with inline guidance, instead of only surfacing it
 	// after a failed send (ChatMessage's error Alert). Gated on BOTH no installed local chat model AND no signed-in
 	// cloud provider — a Codex/Azure session is still a usable send path, so the guidance would be misleading there.
 	// `localModelsData !== undefined` guards the pre-load default-only modelOptions shape (before the query
@@ -636,8 +636,8 @@ export function Chat() {
 	const resolveSendConversation = useCallback(
 		async (content: string): Promise<ChatConversationModel> => {
 			// Only trust the cached selected-conversation payload when it actually belongs to the CURRENT
-			// selection AND is not a keepPreviousData placeholder from the thread we just switched away from
-			// (GPTAUD-16). A fast switch to an uncached conversation followed by Enter would otherwise resolve
+			// selection AND is not a keepPreviousData placeholder from the thread we just switched away from.
+			// A fast switch to an uncached conversation followed by Enter would otherwise resolve
 			// the PREVIOUS conversation's payload here and send the turn to the wrong id. When it's stale/
 			// placeholder, fall through to the load-by-id path, which fetches the currently-selected thread.
 			if (
@@ -705,7 +705,7 @@ export function Chat() {
 			await Promise.all([
 				queryClient.invalidateQueries({ queryKey: nodeChatQueryKeys.conversation(conversationId), exact: true }),
 				queryClient.invalidateQueries({ queryKey: nodeChatQueryKeys.conversationLists() }),
-				// GPTAUD-17a: the local runtime only fills EffectiveContextTokens once the model is WARM, but the
+				// The local runtime only fills EffectiveContextTokens once the model is WARM, but the
 				// model-details query fires pre-warm — so the context-usage meter would stay pinned to the model's
 				// train ceiling (e.g. 262k) even though the server launched with a far smaller `-c` (e.g. 16k). Once
 				// a turn reaches a terminal state the model is warm, so invalidate the details query to re-read the
@@ -817,7 +817,7 @@ export function Chat() {
 						requestId: ids.requestId,
 						model: requestModel,
 						useLocalTools: toolsEnabled,
-						// Opt-in knowledge-base grounding for plain chat (OPP-05). The server ignores it in agent mode.
+						// Opt-in knowledge-base grounding for plain chat. The server ignores it in agent mode.
 						useKnowledgeBase: knowledgeBaseEnabled,
 						reasoningEffort: effort,
 						// Send the active conversation-tree path so the server assembles context from the selected
@@ -1202,7 +1202,7 @@ export function Chat() {
 				await deleteConversationMutation.mutateAsync(conversationId);
 			} catch (error) {
 				// The delete failed, so the conversation still exists and stays visible/selectable. Roll back the
-				// pre-emptive "deleted" marker set above (GPTAUD-16) — otherwise the streaming loop's has(id) guard
+				// pre-emptive "deleted" marker set above — otherwise the streaming loop's has(id) guard
 				// treats the surviving thread as removed and silently refuses to stream to it: a permanently
 				// un-chattable zombie until reload.
 				deletedConversationIds.current.delete(conversationId);
@@ -1341,7 +1341,7 @@ export function Chat() {
 					</Text>
 				</Stack>
 			) : showNoModelGuidance ? (
-				// UX-09: advisory, not blocking — a Codex/Azure sign-in later still routes around this via the picker's
+				// Advisory, not blocking — a Codex/Azure sign-in later still routes around this via the picker's
 				// cloud sections, and a send attempted anyway still falls through to ChatMessage's ModelNotInstalled Alert.
 				<Stack gap={2}>
 					<Text fw={700}>{t("pages.chat.noModelGuidance.title", "No chat model installed yet")}</Text>

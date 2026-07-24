@@ -6,7 +6,7 @@ using XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Coverage for the loopback-only bind classifier (MED-001 startup guard). The wiring stops the app on a routable
+///     Coverage for the loopback-only bind classifier (a startup guard). The wiring stops the app on a routable
 ///     bind; here the pure classifier is exercised directly so the "rejects a routable bind" decision is asserted without
 ///     spinning a real externally-bound listener.
 /// </summary>

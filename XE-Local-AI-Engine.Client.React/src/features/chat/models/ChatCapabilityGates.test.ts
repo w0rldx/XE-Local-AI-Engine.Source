@@ -10,7 +10,7 @@ describe("chat capability gates", () => {
 		expect(capabilities).toMatchObject({
 			showEncryptedConversationControls: false,
 			showClientNodeRoutingControls: false,
-			// UX-01: the local tool-approval responder ships, so the approval controls are surfaced by default.
+			// The local tool-approval responder ships, so the approval controls are surfaced by default.
 			showToolApprovalControls: true,
 			showConversationFeedbackControls: true,
 			showFileAttachmentControls: true,
@@ -22,7 +22,7 @@ describe("chat capability gates", () => {
 	it("explains the hidden capability surfaces for the chat notice", () => {
 		const hiddenSurfaces = hiddenChatSurfaceLabels(buildChatUiCapabilities(nodeCapabilities.chat));
 
-		// Tool-approval controls are no longer hidden (UX-01); only the encrypted/client-node surfaces stay off.
+		// Tool-approval controls are no longer hidden; only the encrypted/client-node surfaces stay off.
 		expect(hiddenSurfaces).toEqual(["encrypted chat controls", "client-node routing controls"]);
 	});
 });

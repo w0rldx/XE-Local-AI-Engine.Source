@@ -16,7 +16,7 @@ public sealed class ModelFootprintProvider : IModelFootprintProvider
     ///     Context window the KV-cache term is sized against. This references the ONE launch-policy chat default
     ///     (<see cref="LlamaServerLaunchPolicyOptions.DefaultChatContextTokens" />) so the footprint pre-flight sizes KV
     ///     against the SAME window a chat spawn actually launches with. Previously a separate 8192 constant under-counted
-    ///     KV by 2× versus the 16384 the runtime launches (GPTAUD-08b): when the one-shot q8_0→f16 KV fallback fires the
+    ///     KV by 2× versus the 16384 the runtime launches: when the one-shot q8_0→f16 KV fallback fires the
     ///     resident KV is 16384×f16, so an 8192-sized estimate under-admitted and risked OOM. The footprint stays a stable
     ///     budget pre-flight (not per-request sizing), but its target now equals the launched chat window.
     /// </summary>

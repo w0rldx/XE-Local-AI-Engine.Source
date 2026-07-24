@@ -6,7 +6,7 @@ using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Admission-control tests for <see cref="KnowledgeIngestionDispatcher" /> (MED-006): the queue is BOUNDED, so a
+///     Admission-control tests for <see cref="KnowledgeIngestionDispatcher" />: the queue is BOUNDED, so a
 ///     burst that exceeds capacity is rejected with a typed <see cref="KnowledgeIngestionEnqueueResult.QueueFull" />
 ///     result (never silently dropped or blocked), and the accept / reject counters plus the live queue-depth gauge are
 ///     published on the <c>XE.Node</c> meter.

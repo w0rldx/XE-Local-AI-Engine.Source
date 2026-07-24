@@ -162,7 +162,7 @@ public static class LlamaCppReleasePins
     /// <summary>
     ///     Resolves the pin for EXACTLY the given (os, arch, variant) with NO CPU-floor fallback — returns
     ///     <see langword="null" /> when no genuine prebuilt asset exists for that precise combination. This is the
-    ///     acquisition path for a GPU variant (GPTAUD-09b): unlike <see cref="Resolve" />, it never substitutes the CPU
+    ///     acquisition path for a GPU variant: unlike <see cref="Resolve" />, it never substitutes the CPU
     ///     archive, so a Linux CUDA request (which has no upstream prebuilt) resolves to null and the binary manager fails
     ///     with the sanitized "no prebuilt" error instead of serving a CPU build stamped as CUDA.
     /// </summary>

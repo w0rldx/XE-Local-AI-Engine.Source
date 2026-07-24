@@ -107,8 +107,8 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
                 // The prior crash left this row marked Failed (ContentMissingReason) once ingestion could not read its
                 // bytes. Now that they are restored, reset it to Pending so UploadKnowledgeDocumentEndpoint re-enqueues it
                 // — it only enqueues freshly-inserted or Pending rows, so without this the repaired bytes would never be
-                // indexed and every identical re-upload would keep returning the stuck Failed document (GPTAUD-12
-                // follow-up). Only the missing-blob branch resets; an intact dedupe hit leaves the status untouched.
+                // indexed and every identical re-upload would keep returning the stuck Failed document. Only the
+                // missing-blob branch resets; an intact dedupe hit leaves the status untouched.
                 await ResetDocumentToPendingAsync(connection, row.DocumentId, now, cancellationToken).ConfigureAwait(false);
             }
 
@@ -223,7 +223,7 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
     }
 
     // Resets a repaired dedupe target back to Pending so the upload endpoint re-enqueues it for indexing, clearing the
-    // stale content-missing failure and any partial chunk count (GPTAUD-12 follow-up). Called only after the missing
+    // stale content-missing failure and any partial chunk count. Called only after the missing
     // blob has been restored from byte-identical content.
     private static async Task ResetDocumentToPendingAsync(DbConnection connection, Guid documentId, long updatedAtUtc, CancellationToken cancellationToken)
     {

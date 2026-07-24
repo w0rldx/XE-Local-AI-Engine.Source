@@ -60,7 +60,7 @@ public static class AgentServiceCollectionExtensions
                     .ValidateDataAnnotations()
                     .ValidateOnStart();
 
-        // Code-owned gen_ai telemetry policy (MED-010): CaptureSensitiveContent defaults false and is set EXPLICITLY on
+        // Code-owned gen_ai telemetry policy: CaptureSensitiveContent defaults false and is set EXPLICITLY on
         // the OpenTelemetry chat client below, so the ambient OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT that
         // Aspire injects cannot silently turn prompt/completion capture on.
         _ = services.AddOptions<AgentTelemetryOptions>()

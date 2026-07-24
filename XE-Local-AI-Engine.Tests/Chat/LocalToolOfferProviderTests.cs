@@ -43,7 +43,7 @@ public sealed class LocalToolOfferProviderTests
     [Test]
     public void GetOfferedTools_WhenActiveModelEqualsToolCapableEntry_OffersAgentHomeTool()
     {
-        // MED-4 regression: the live-evidence model id (qwen3:8b, the default ToolCapableModels entry) MUST satisfy
+        // Regression: the live-evidence model id (qwen3:8b, the default ToolCapableModels entry) MUST satisfy
         // the gate when it is the offer-time active model — the bug was that this model never reached this seam, not
         // that the seam mismatched it. An exact match offers run_in_agent_home.
         var provider = CreateProvider("qwen3:8b");
@@ -200,7 +200,7 @@ public sealed class LocalToolOfferProviderTests
             "with no MCP snapshot the catalog is built-ins only");
     }
 
-    // ---- MED-004: knowledge-tool provider-locality gate ----
+    // ---- Knowledge-tool provider-locality gate ----
 
     private const string KnowledgeSearchToolName = "search_knowledge_base";
     private const string CoderReadFileToolName = "read_file";

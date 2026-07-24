@@ -62,7 +62,7 @@ export interface SendMessageRequest {
 	requestId?: string;
 	model?: string;
 	useLocalTools?: boolean;
-	// Opt-in knowledge-base grounding for a plain-chat turn (OPP-05). Ignored by the server in agent mode.
+	// Opt-in knowledge-base grounding for a plain-chat turn. Ignored by the server in agent mode.
 	useKnowledgeBase?: boolean;
 	reasoningEffort?: string;
 	selectedPath?: Record<string, string>;

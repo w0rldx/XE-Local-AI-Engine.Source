@@ -7,7 +7,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp;
 using XE_Local_AI_Engine.Tests.Testing;
 
-// MED-013: the sd-server runtime HttpClient must
+// The sd-server runtime HttpClient must
 //  - NOT retry the state-changing job-submit POST (SdServerJobClient.SubmitAsync carries no idempotency key), and
 //  - retry safe methods (GET poll/readiness), while
 //  - keeping the attempt/total timeout and circuit breaker for all methods, and

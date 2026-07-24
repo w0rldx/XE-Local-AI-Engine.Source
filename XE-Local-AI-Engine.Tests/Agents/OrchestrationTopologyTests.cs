@@ -59,7 +59,7 @@ public sealed class OrchestrationTopologyTests
     [Test]
     public void TryParse_WhenMaxTurnsPerAgentExceedsCeiling_ReturnsNull()
     {
-        // Fail-closed cap (MED-004): an over-ceiling per-agent turn count fans an agent out into an arbitrarily long
+        // Fail-closed cap: an over-ceiling per-agent turn count fans an agent out into an arbitrarily long
         // autonomous loop per turn, so any API path (including direct CRUD) is rejected server-side.
         var triage = Guid.NewGuid();
         var specialist = Guid.NewGuid();

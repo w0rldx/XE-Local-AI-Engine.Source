@@ -426,7 +426,7 @@ describe("node chat stream state", () => {
 		expect(failed.timelineEntry).toMatchObject({ id: "call-1", state: "failed", toolResult: "boom" });
 	});
 
-	it("flips the matching tool card to waiting-for-approval and attaches the approval request id (UX-01)", () => {
+	it("flips the matching tool card to waiting-for-approval and attaches the approval request id", () => {
 		const optimistic = appendOptimisticNodeChatSend(
 			conversation,
 			{ userMessageId: "user-1", assistantMessageId: "assistant-1", requestId: "request-1" },
@@ -472,7 +472,7 @@ describe("node chat stream state", () => {
 		expect(approval.streamingMessage.isActive).toBe(true);
 	});
 
-	it("creates a waiting tool card from an approval event even when no tool-call-requested card exists yet (UX-01)", () => {
+	it("creates a waiting tool card from an approval event even when no tool-call-requested card exists yet", () => {
 		const approval = applyNodeChatStreamEvent(
 			conversation,
 			streamEvent({
@@ -496,7 +496,7 @@ describe("node chat stream state", () => {
 		});
 	});
 
-	it("clears the pending approval once the approved tool completes (UX-01)", () => {
+	it("clears the pending approval once the approved tool completes", () => {
 		const optimistic = appendOptimisticNodeChatSend(
 			conversation,
 			{ userMessageId: "user-1", assistantMessageId: "assistant-1", requestId: "request-1" },
@@ -546,7 +546,7 @@ describe("node chat stream state", () => {
 		expect(toolPart && "pendingApprovalRequestId" in toolPart ? toolPart.pendingApprovalRequestId : undefined).toBeUndefined();
 	});
 
-	it("clears a lingering pending-approval waiting card when the turn terminalizes via a stream failure (UX-01 deny)", () => {
+	it("clears a lingering pending-approval waiting card when the turn terminalizes via a stream failure", () => {
 		const optimistic = appendOptimisticNodeChatSend(
 			conversation,
 			{ userMessageId: "user-1", assistantMessageId: "assistant-1", requestId: "request-1" },
@@ -594,7 +594,7 @@ describe("node chat stream state", () => {
 		expect(streamingToolPart && "pendingApprovalRequestId" in streamingToolPart ? streamingToolPart.pendingApprovalRequestId : undefined).toBeUndefined();
 	});
 
-	it("clears a lingering pending-approval waiting card on a client-driven terminal (markNodeChatStreamTerminated) (UX-01 deny)", () => {
+	it("clears a lingering pending-approval waiting card on a client-driven terminal (markNodeChatStreamTerminated)", () => {
 		const optimistic = appendOptimisticNodeChatSend(
 			conversation,
 			{ userMessageId: "user-1", assistantMessageId: "assistant-1", requestId: "request-1" },

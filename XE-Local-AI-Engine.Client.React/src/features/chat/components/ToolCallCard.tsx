@@ -87,7 +87,7 @@ export const ToolCallCard = memo(function ToolCallCard({ part }: ToolCallCardPro
 		setExpanded(open);
 	};
 
-	// Local tool-approval responder (UX-01). The pending approval request id rides the part; posting the decision to
+	// Local tool-approval responder. The pending approval request id rides the part; posting the decision to
 	// the loopback resolve endpoint releases the waiting run server-side. `decided` hides the controls the instant the
 	// operator clicks (optimistic) — the card then clears naturally when the tool completes/rejects (tool-call-completed
 	// clears pendingApprovalRequestId). No conversation context is needed: the request id is the global correlation key.

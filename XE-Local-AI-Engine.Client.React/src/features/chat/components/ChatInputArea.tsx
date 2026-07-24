@@ -69,7 +69,7 @@ interface ChatInputAreaProps {
 	// capability to gate the local-tool controls so a non-tool model never offers them.
 	activeModelToolCapable?: boolean;
 	toolsEnabled?: boolean;
-	// Opt-in knowledge-base grounding for plain chat (OPP-05). The toggle renders only when the node ships the
+	// Opt-in knowledge-base grounding for plain chat. The toggle renders only when the node ships the
 	// knowledge-base surface (capabilities.showKnowledgeBaseControls) and is hidden in agent mode (the agent uses the
 	// search_knowledge_base tool instead).
 	knowledgeBaseEnabled?: boolean;
@@ -232,7 +232,7 @@ export function ChatInputArea({
 	};
 
 	const submit = (): void => {
-		// Gate the Enter/submit path on the SAME conditions that disable the Send button (GPTAUD-16). The button
+		// Gate the Enter/submit path on the SAME conditions that disable the Send button. The button
 		// respects `sendDisabled`, but the Textarea's onKeyDown calls submit() directly — so without this guard the
 		// keyboard path bypasses `sendDisabledProp` (selected-conversation still loading, remote view-only thread)
 		// and can fire a send the button would have refused.

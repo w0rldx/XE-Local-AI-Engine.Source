@@ -1032,7 +1032,7 @@ public sealed class InvocationRunnerTests
     [Test]
     public async Task RunAsync_WhenTwoToolApprovalsInOneSegment_AnswersBothOnResume()
     {
-        // GPTAUD-02: a parallel-tool-call turn surfaces TWO approval requests in one segment. The runner must present and
+        // A parallel-tool-call turn surfaces TWO approval requests in one segment. The runner must present and
         // answer BOTH — the scalar this replaced kept only the last, so the first request dangled unanswered forever and
         // its tool call never executed. On resume, the folded history must carry a ToolApprovalResponseContent for EACH.
         var sender = new MockHubMessageSender();
@@ -1067,7 +1067,7 @@ public sealed class InvocationRunnerTests
     [Test]
     public async Task RunAsync_WhenApprovalReEmittedWithoutCallId_PresentedOnce()
     {
-        // GPTAUD-02 hardening: a CallId-less approval re-emitted across streamed chunks must dedup on its Id and be
+        // Hardening: a CallId-less approval re-emitted across streamed chunks must dedup on its Id and be
         // presented exactly ONCE — a blank CallId must never bypass dedup (that would prompt N times for one call and
         // dangle N-1 ambiguous responses).
         var sender = new MockHubMessageSender();
@@ -1095,7 +1095,7 @@ public sealed class InvocationRunnerTests
     [Test]
     public async Task RunAsync_WhenNodeDrainingBegan_RejectsNewLocalInvocation()
     {
-        // GPTAUD-21: a local turn admitted AFTER shutdown drain has snapshotted the active set must be rejected, never
+        // A local turn admitted AFTER shutdown drain has snapshotted the active set must be rejected, never
         // become an untracked active run the drain never waits for. DrainActiveInvocationsAsync fences local admission;
         // a subsequent local (loopback) RunAsync is rejected with a classified failure and never streams.
         var sender = new MockHubMessageSender();
@@ -1839,7 +1839,7 @@ public sealed class InvocationRunnerTests
 
     private static async IAsyncEnumerable<AgentResponseUpdate> TwoApprovalRequestUpdates()
     {
-        // A parallel-tool-call turn surfacing TWO approval requests in ONE segment (GPTAUD-02): the runner must present
+        // A parallel-tool-call turn surfacing TWO approval requests in ONE segment: the runner must present
         // and answer BOTH, not just the last. Distinct tool-call CallIds so the dedup keeps them separate.
         var firstApproval = new ToolApprovalRequestContent("approval-1", new ToolCallContent("call-1"));
         var secondApproval = new ToolApprovalRequestContent("approval-2", new ToolCallContent("call-2"));

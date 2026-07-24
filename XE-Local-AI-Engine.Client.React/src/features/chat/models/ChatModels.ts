@@ -41,7 +41,7 @@ export interface ChatToolPart {
 	args?: string;
 	result?: string;
 	requiresApproval?: boolean;
-	// When set (UX-01), the tool is paused awaiting the operator's decision; this is the approval request id the
+	// When set, the tool is paused awaiting the operator's decision; this is the approval request id the
 	// Approve/Deny controls post to the loopback resolve endpoint. Transient, live-only: cleared once the tool
 	// completes (approved) or is rejected, and never present on a reloaded/persisted turn.
 	pendingApprovalRequestId?: string;
@@ -77,7 +77,7 @@ export interface ChatNoticePart {
 export type ChatMessagePart = ChatReasoningPart | ChatToolPart | ChatTextPart | ChatNoticePart;
 
 /**
- * One knowledge-base excerpt that grounded a plain-chat assistant turn (OPP-05 / UX-04). Rendered in the collapsible
+ * One knowledge-base excerpt that grounded a plain-chat assistant turn. Rendered in the collapsible
  * "Sources" strip under the answer. Carries only non-sensitive provenance (ids, derived title/section, fused score);
  * no chunk body text rides here. Maps from the persisted metadata blob via NodeChatMapper.
  */
@@ -328,7 +328,7 @@ export interface ChatDisplayShellProps {
 	// capability to decide whether the composer offers the local-tool controls. Defaults to false (safe).
 	activeModelToolCapable?: boolean;
 	toolsEnabled?: boolean;
-	// Opt-in knowledge-base grounding for plain chat (OPP-05); forwarded to the composer's "Use Knowledge Base" toggle.
+	// Opt-in knowledge-base grounding for plain chat; forwarded to the composer's "Use Knowledge Base" toggle.
 	knowledgeBaseEnabled?: boolean;
 	// Whether the node has at least one indexed knowledge document; gates whether the composer's KB toggle is enabled
 	// (an empty corpus disables it with a "no documents" tooltip). Defaults to true when absent.

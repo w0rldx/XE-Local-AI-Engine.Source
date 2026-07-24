@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     GPTAUD-07: a persistence-pump fault (a FlushDeltaAsync / TerminalizeAsync exception) must not leave the assistant
+///     A persistence-pump fault (a FlushDeltaAsync / TerminalizeAsync exception) must not leave the assistant
 ///     row streaming forever. <see cref="ChatInvocationStatePump.PumpAsync" /> now catches a non-cancellation fault,
 ///     idempotently terminalizes the row Failed, emits the Failed terminal SSE, and rethrows so the caller cancels the
 ///     run. The Failed terminalize rides the same NodeChatMessageTransitions atomic guard, so it can never overwrite a

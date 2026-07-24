@@ -27,7 +27,7 @@ internal interface IImageServerSupervisor
 
     /// <summary>
     ///     Acquires an active-job lease against the resident daemon serving <paramref name="modelName" /> so the idle
-    ///     reaper and cap-admission LRU evictor keep it alive while a generation is in flight (GPTAUD-10a). Returns
+    ///     reaper and cap-admission LRU evictor keep it alive while a generation is in flight. Returns
     ///     <see langword="null" /> when no live daemon backs the model — the caller then proceeds leaseless and relies on
     ///     the just-completed <see cref="EnsureRunningAsync" /> plus self-heal. Call immediately after
     ///     <see cref="EnsureRunningAsync" /> and dispose the lease when the job ends (completed / failed / cancelled).

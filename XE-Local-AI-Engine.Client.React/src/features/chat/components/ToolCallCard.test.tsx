@@ -142,7 +142,7 @@ describe("ToolCallCard", () => {
 		expect(screen.queryByTestId("chat-tool-call-no-output-get_time")).toBeNull();
 	});
 
-	it("renders Approve/Deny controls while awaiting an approval decision (UX-01)", () => {
+	it("renders Approve/Deny controls while awaiting an approval decision", () => {
 		renderWithProviders(<ToolCallCard part={toolPart({ state: "waiting", requiresApproval: true, pendingApprovalRequestId: "approval-42" })} />);
 
 		expect(screen.getByTestId("chat-tool-call-approve-get_time")).toBeTruthy();
@@ -164,7 +164,7 @@ describe("ToolCallCard", () => {
 		expect(screen.queryByTestId("chat-tool-call-approve-get_time")).toBeNull();
 	});
 
-	it("posts the operator's approve decision to the resolve endpoint and hides the controls (UX-01)", async () => {
+	it("posts the operator's approve decision to the resolve endpoint and hides the controls", async () => {
 		renderWithProviders(<ToolCallCard part={toolPart({ state: "waiting", requiresApproval: true, pendingApprovalRequestId: "approval-42" })} />);
 
 		fireEvent.click(screen.getByTestId("chat-tool-call-approve-get_time"));
@@ -176,7 +176,7 @@ describe("ToolCallCard", () => {
 		await waitFor(() => expect(screen.queryByTestId("chat-tool-call-approve-get_time")).toBeNull());
 	});
 
-	it("posts the operator's deny decision with approved=false (UX-01)", async () => {
+	it("posts the operator's deny decision with approved=false", async () => {
 		renderWithProviders(<ToolCallCard part={toolPart({ state: "waiting", requiresApproval: true, pendingApprovalRequestId: "approval-77" })} />);
 
 		fireEvent.click(screen.getByTestId("chat-tool-call-deny-get_time"));

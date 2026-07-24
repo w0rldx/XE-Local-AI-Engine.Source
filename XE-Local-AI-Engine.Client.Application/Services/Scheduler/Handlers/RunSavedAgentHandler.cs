@@ -17,7 +17,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 /// <summary>
 ///     Quartz template handler for the <c>run-agent</c> template (OPP-02): runs a saved node-local agent on a schedule
 ///     with a fixed prompt. On each fire it loads the bound agent definition, resolves its COMPLETE
-///     runtime (scaffold + persona + folded playbook memory, curated tools, skills, reasoning, version — MED-002, never
+///     runtime (scaffold + persona + folded playbook memory, curated tools, skills, reasoning, version — never
 ///     the raw <c>Instructions</c>), builds a headless loopback <see cref="RuntimePackage" /> with the prompt as the seed
 ///     user turn, and drives it through the SAME <see cref="IInvocationRunner" /> the local chat send path uses — minus
 ///     the chat conversation/persistence pump. No new runtime-package builder is introduced; the assembly reuses
@@ -171,7 +171,7 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
             // 5. Resolve the agent's COMPLETE runtime and build the headless package. Passing the effective model as the
             //    active model with honorModelProfile:true keeps the resolver's effective model identical to the one gated
             //    above (pin ?? effectiveModel). The resolved prompt (scaffold + persona + folded playbook memory), curated
-            //    tools, skills, reasoning, and version are threaded verbatim — NOT the raw definition.Instructions (MED-002).
+            //    tools, skills, reasoning, and version are threaded verbatim — NOT the raw definition.Instructions.
             var resolved = await agentDefinitionResolver.ResolveAsync(definition.Id,
                                                             effectiveModel,
                                                             retrievalQuery: parameters.Prompt,
@@ -206,7 +206,7 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
     ///     human-in-the-loop approval round-trip, so an approval-gated tool (e.g. an MCP tool, which ships
     ///     approval-required by default) would surface a tool-approval request nobody can answer and hang the run until
     ///     its max-runtime interrupt — the same no-HITL rationale by which a spawned sub-agent drops approval-required
-    ///     tools (GPTAUD-01). The effective model is bound as a concrete <c>ModelProfile</c> so the runner never
+    ///     tools. The effective model is bound as a concrete <c>ModelProfile</c> so the runner never
     ///     silently falls back to the node default.
     /// </summary>
     private RuntimePackage BuildPackage(ILocalChatRuntimePackageBuilder packageBuilder,

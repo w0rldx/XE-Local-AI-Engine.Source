@@ -293,7 +293,7 @@ describe("ChatInputArea knowledge base toggle (30b)", () => {
 	});
 });
 
-describe("ChatInputArea Enter-key send gating (GPTAUD-16)", () => {
+describe("ChatInputArea Enter-key send gating", () => {
 	beforeEach(() => {
 		installJsdomEnvironmentMocks();
 	});

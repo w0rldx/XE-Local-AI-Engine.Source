@@ -45,7 +45,7 @@ internal sealed class McpClientFactory : IMcpClientFactory
         return new StdioClientTransport(BuildStdioTransportOptions(record), _loggerFactory);
     }
 
-    // Internal for the transport-hardening test (GPTAUD-22): asserts the built options never inherit the parent env.
+    // Internal for the transport-hardening test: asserts the built options never inherit the parent env.
     internal static StdioClientTransportOptions BuildStdioTransportOptions(McpServerRecord record)
     {
         if (string.IsNullOrWhiteSpace(record.Command))

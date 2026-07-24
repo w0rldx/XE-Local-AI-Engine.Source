@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Unit coverage for the usage-provider attribution (Wave 8, Option B): the pure <see cref="UsageProviderClassifier" />
+///     Unit coverage for the usage-provider attribution: the pure <see cref="UsageProviderClassifier" />
 ///     mapping over all five outcomes, and the <see cref="UsageProviderResolver" /> orchestration — cloud-first precedence,
 ///     local fallback, and the never-throw / null-model / failed-lookup degradations to <c>unknown</c>.
 /// </summary>

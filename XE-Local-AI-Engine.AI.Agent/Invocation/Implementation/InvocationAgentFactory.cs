@@ -41,7 +41,7 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
 
     /// <summary>
     ///     In-process marker on <see cref="ChatOptions.AdditionalProperties" /> that tells the llama.cpp chat client to
-    ///     inject <c>chat_template_kwargs.enable_thinking=false</c> into the outbound request (GPTAUD-17b). Set ONLY when
+    ///     inject <c>chat_template_kwargs.enable_thinking=false</c> into the outbound request. Set ONLY when
     ///     reasoning is explicitly OFF on a thinking-capable model: the Ollama <c>think:false</c> written alongside it
     ///     suppresses reasoning on the Ollama wire, but the llama.cpp OpenAI adapter ignores <c>think</c>, so a
     ///     Qwen3-class chat template would keep emitting a reasoning block. The key never reaches any wire — Ollama's
@@ -114,7 +114,7 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
             // Reasoning explicitly OFF on a thinking-capable model (ResolveThinkOption returned the bool false, which only
             // happens for "none"): flag the turn so the llama.cpp chat client injects chat_template_kwargs.enable_thinking
             // =false. The think:false above only silences reasoning on the Ollama wire; the llama.cpp OpenAI adapter drops
-            // the think key, so without this a Qwen3-class template would still stream a reasoning block (GPTAUD-17b). The
+            // the think key, so without this a Qwen3-class template would still stream a reasoning block. The
             // marker is inert on the Ollama/Codex wires. Non-thinking models take the else branch below and get no marker
             // (there is no default reasoning to disable).
             if (think is false)

@@ -11,7 +11,7 @@ using Microsoft.Extensions.Options;
 ///     into overlapping chunks. Content appearing before the first header falls into a single implicit section. The same
 ///     document always yields the same sections and chunks.
 ///     <para>
-///         Chunk sizing is TOKEN-AWARE (RAG-08): a section body is cut at whichever bound — a per-chunk token budget
+///         Chunk sizing is TOKEN-AWARE: a section body is cut at whichever bound — a per-chunk token budget
 ///         (<see cref="KnowledgeBaseOptions.MaxChunkTokens" />, optionally tightened to the resolved embedding model's
 ///         context window) or the hard character ceiling (<see cref="KnowledgeBaseOptions.MaxChunkChars" />) — is reached
 ///         first, always breaking at a whitespace boundary. The per-window token budget is reduced by the section's
@@ -20,7 +20,7 @@ using Microsoft.Extensions.Options;
 ///         <see cref="ChunkTokenApproximation" />): weighted characters ÷ 4, with CJK/emoji weighted heavier so a
 ///         token-dense script does not silently produce chunks several times the intended token size. The token budget can
 ///         only TIGHTEN the effective size, never enlarge it past the character ceiling, so plain ASCII prose keeps the
-///         character ceiling as its binding bound (identical to the pre-RAG-08 behavior — no reindex needed for existing
+///         character ceiling as its binding bound (identical to the prior character-only-cap behavior — no reindex needed for existing
 ///         ASCII corpora), while CJK/token-dense content and smaller embedder windows yield correspondingly smaller chunks.
 ///     </para>
 /// </summary>

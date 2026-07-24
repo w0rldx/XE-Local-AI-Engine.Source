@@ -241,7 +241,7 @@ describe("node chat mapper", () => {
 		expect(mapSingleMessage({ generationDurationMs: null }).generationDurationMs).toBeUndefined();
 	});
 
-	it("maps the persisted knowledge-base sources onto the message model (OPP-05 / UX-04)", () => {
+	it("maps the persisted knowledge-base sources onto the message model", () => {
 		const message = mapSingleMessage({
 			sources: [
 				{ documentId: "doc-1", chunkId: "chunk-1", title: "Design Doc", section: "Overview", score: 0.82 },

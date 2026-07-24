@@ -19,7 +19,7 @@ public sealed class ChatInvocationStatePump(INodeChatInvocationPump invocationPu
     // window of streamed tokens, which is the same crash-consistency bound the per-chunk flush already accepted.
     private static readonly TimeSpan PartialFlushDebounceInterval = TimeSpan.FromMilliseconds(100);
 
-    // Error text stamped on the row when the persistence pump itself faults (GPTAUD-07) — distinct from a
+    // Error text stamped on the row when the persistence pump itself faults — distinct from a
     // generation-side failure so a persistence fault is traceable on the terminalized row.
     private const string PumpFaultError = "local-chat-persistence-failed";
 
@@ -31,7 +31,7 @@ public sealed class ChatInvocationStatePump(INodeChatInvocationPump invocationPu
         NodeChatPartAccumulator parts,
         Action<InvocationState, NodeChatPumpTerminalResult>? onTerminal,
         CancellationToken cancellationToken,
-        // KB sources that grounded this turn (OPP-05 / UX-04), computed up front by the send path before generation and
+        // KB sources that grounded this turn, computed up front by the send path before generation and
         // captured here so they land on the terminal row's metadata_json. Null/empty for turns that used no knowledge
         // base (e.g. the regenerate path, which passes none) — which preserves any existing persisted sources.
         IReadOnlyList<NodeChatMessageSource>? sources = null)
@@ -181,7 +181,7 @@ public sealed class ChatInvocationStatePump(INodeChatInvocationPump invocationPu
         }
         catch (Exception) when (!terminalPersisted)
         {
-            // GPTAUD-07: a FlushDeltaAsync/TerminalizeAsync exception (a persistence fault, not a user cancel — those
+            // A FlushDeltaAsync/TerminalizeAsync exception (a persistence fault, not a user cancel — those
             // are handled above) would otherwise propagate while the finally only TryComplete()s the writer as a NORMAL
             // end, leaving the row streaming until the next restart's recovery reconcile. Idempotently terminalize the
             // row Failed and emit the Failed terminal SSE, then rethrow so the caller cancels the run and surfaces the
@@ -197,7 +197,7 @@ public sealed class ChatInvocationStatePump(INodeChatInvocationPump invocationPu
         }
     }
 
-    // Terminalizes the row Failed after a persistence-pump fault (GPTAUD-07) from the last-persisted cursor and emits the
+    // Terminalizes the row Failed after a persistence-pump fault from the last-persisted cursor and emits the
     // Failed terminal SSE. Best-effort: if the terminalize itself throws (the persistence layer is likely down, which
     // caused the original fault), it is swallowed here — the caller still rethrows the ORIGINAL fault, and the
     // restart-recovery reconcile is the backstop for the row.

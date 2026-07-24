@@ -115,7 +115,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     [Test]
     public async Task RegenerateAsync_WhenPlainChatWithKnowledgeBase_GroundsAndRecordsSources()
     {
-        // OPP-05 / UX-04 parity with the send path (NodeChatStreamServiceTests): an opt-in regenerate retrieves KB hits,
+        // Parity with the send path (NodeChatStreamServiceTests): an opt-in regenerate retrieves KB hits,
         // inlines them as ONE fenced untrusted context block, and records their provenance as the variant's sources.
         await using var provider = await BuildProviderAsync("regeneration-kb-grounds.sqlite").ConfigureAwait(false);
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
@@ -1134,7 +1134,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     [Test]
     public async Task RegenerateAsync_WhenOnlyClientTokenCancelledMidStream_RunReachesTerminalAndVariantCompletes()
     {
-        // GPTAUD-04: a SignalR disconnect cancels ONLY the client cancellationToken (the SSE forward loop), never the
+        // A SignalR disconnect cancels ONLY the client cancellationToken (the SSE forward loop), never the
         // run/pump. The run must keep going on the unlinked runCancellation and the variant must persist Completed —
         // never Cancelled/Interrupted from the client connection dropping. This is the send-path shape the regenerate
         // path previously lacked (it linked the run CTS to the client token and cancelled it unconditionally).
@@ -1181,7 +1181,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     [Test]
     public async Task RegenerateAsync_WhenTornDownBeforeOwnership_TerminalizesVariantInterrupted()
     {
-        // GPTAUD-04: a disconnect BEFORE run ownership is established (the enumerator is disposed after the Pending
+        // A disconnect BEFORE run ownership is established (the enumerator is disposed after the Pending
         // frame but before the pump/runner exist) must terminalize the variant Interrupted via the shared
         // PreOwnershipTerminalizationGuard — not leave it stranded Pending/Queued until the restart reaper.
         await using var provider = await BuildProviderAsync("regeneration-preownership.sqlite").ConfigureAwait(false);
@@ -1214,7 +1214,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     [Test]
     public async Task RegenerateAsync_WhenUserCancelsThroughRegistry_TerminalizesVariantCancelled()
     {
-        // GPTAUD-04 regression guard: a genuine user Stop (routed through the cancellation registry) must still cancel
+        // Regression guard: a genuine user Stop (routed through the cancellation registry) must still cancel
         // the run — the fix preserves user-cancel while decoupling the run from the client connection.
         await using var provider = await BuildProviderAsync("regeneration-user-cancel.sqlite").ConfigureAwait(false);
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());

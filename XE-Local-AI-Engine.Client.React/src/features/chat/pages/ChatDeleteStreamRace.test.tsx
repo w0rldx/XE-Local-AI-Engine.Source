@@ -14,7 +14,7 @@ import type { NodeChatStreamEventDto } from "@/features/chat/models/NodeChatStre
 import { Chat } from "@/features/chat/pages/Chat";
 import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
 
-// UX-09's no-installed-model guidance renders a TanStack-router Link to /models whenever the fixture's model list
+// The no-installed-model guidance renders a TanStack-router Link to /models whenever the fixture's model list
 // is empty (the default below). Stub the router module so Chat mounts without a RouterProvider (mirrors
 // ChatMessage.test.tsx's ModelNotInstalled Link stub).
 vi.mock("@tanstack/react-router", async (importOriginal) => {
@@ -251,7 +251,7 @@ describe("Chat delete-vs-stream race", () => {
 		expect(adapter.getConversation.mock.calls.filter((call) => call[0] === "conversation-1")).toHaveLength(0);
 	});
 
-	it("rolls back the deleted-conversation marker when the delete fails, so a later send still streams (GPTAUD-16)", async () => {
+	it("rolls back the deleted-conversation marker when the delete fails, so a later send still streams", async () => {
 		// The delete request fails, so the conversation survives on the server and stays visible/selectable.
 		adapter.deleteConversation.mockReset();
 		adapter.deleteConversation.mockRejectedValue(new Error("delete failed"));

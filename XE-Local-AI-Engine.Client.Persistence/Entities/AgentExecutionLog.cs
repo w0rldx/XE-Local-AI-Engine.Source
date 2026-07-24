@@ -5,8 +5,8 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 /// <summary>
 ///     Append-only metadata log of a single agent run. Two producers share this table, distinguished by
 ///     <see cref="RecordKind" />: adaptive-memory diagnostics (kind 0, one row per memory-enabled run) and the durable
-///     per-invocation run envelope (kind 1, one content-free row per ordinary chat invocation at terminalization,
-///     MED-007). Holds NO message content — only latency/token/status telemetry plus ids that link back to the
+///     per-invocation run envelope (kind 1, one content-free row per ordinary chat invocation at terminalization).
+///     Holds NO message content — only latency/token/status telemetry plus ids that link back to the
 ///     already-encrypted chat tables. The whole row is plaintext (structural) and is NEVER encrypted;
 ///     <see cref="ErrorClass" /> is an exception type name (memory rows) or a <c>FailureCategory</c> enum name (envelope
 ///     rows) only, never the exception message or any transcript text.

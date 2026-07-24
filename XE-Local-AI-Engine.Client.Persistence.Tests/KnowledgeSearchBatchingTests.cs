@@ -14,7 +14,7 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 /// <summary>
-///     Drives the real <see cref="KnowledgeSearchService" /> over a seeded SQLite corpus to prove the MED-006 search
+///     Drives the real <see cref="KnowledgeSearchService" /> over a seeded SQLite corpus to prove the batched-search
 ///     changes preserve behavior: the batched hydration returns the fused candidates in fused order and silently skips a
 ///     candidate whose row is gone, and running the FTS and embed arms concurrently still feeds the SAME two ranked lists
 ///     into Reciprocal Rank Fusion (the final order equals the RRF baseline of the two arms).

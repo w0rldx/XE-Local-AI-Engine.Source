@@ -81,7 +81,7 @@ public sealed class NodeChatInvocationPump(
             throw new ArgumentException($"Invocation status '{state.Status}' is not terminal.", nameof(state));
         }
 
-        // Durable run ledger (MED-007 / R4): the envelope payload rides INTO the terminalize command so its content-free
+        // Durable run ledger (R4): the envelope payload rides INTO the terminalize command so its content-free
         // row is written in the SAME transaction as the terminal message row (both commit or roll back together — no
         // swallowed best-effort write). The terminal status/success and the bound agent id are derived from the winning
         // persisted row inside that transaction, so they are not carried here.
@@ -124,7 +124,7 @@ public sealed class NodeChatInvocationPump(
                 // Whole-turn wall-clock duration from the runner; null for legacy/platform turns that did not report it.
                 state.GenerationDurationMs,
                 envelope,
-                // KB sources that grounded this turn (OPP-05 / UX-04); null when the turn used no knowledge base, which
+                // KB sources that grounded this turn; null when the turn used no knowledge base, which
                 // preserves any existing persisted sources on the row.
                 sources),
             CancellationToken.None).ConfigureAwait(false);
@@ -152,7 +152,7 @@ public sealed class NodeChatInvocationPump(
             ? ChatStreamEventTypes.AssistantCancelled
             : ChatStreamEventTypes.AssistantInterrupted;
 
-        // Durable run ledger (MED-007 / R4): a stream that ended without a terminal invocation state still gets one
+        // Durable run ledger (R4): a stream that ended without a terminal invocation state still gets one
         // envelope row, written atomically with the terminal message row. Thinner than the state-driven path — there is no
         // InvocationState here, so invocation id / tokens / duration / chunk counts are unknown and omitted; the terminal
         // status (derived from the winning row) carries the interrupted/cancelled outcome.

@@ -218,7 +218,7 @@ internal static class AddNodeModelRuntimeExtensions
         builder.Services.AddSingleton<IToolApprovalPolicy>(sp =>
             NodeToolApprovalPolicy.FromSettings(sp.GetRequiredService<INodeSettingsStore>().Load()?.ToolApprovalPolicy));
 
-        // Wave 13: the usage-summary cost resolver. Scoped (NOT singleton, unlike the approval policy above) so each
+        // The usage-summary cost resolver. Scoped (NOT singleton, unlike the approval policy above) so each
         // usage-summary read reflects the CURRENT operator rate override — the cached node-settings store makes Load() a
         // sub-millisecond in-memory hit, so per-request construction is cheap and rate edits apply without a node restart.
         builder.Services.AddScoped<IUsageRateResolver>(sp =>

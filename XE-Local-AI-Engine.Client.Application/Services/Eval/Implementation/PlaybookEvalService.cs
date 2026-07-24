@@ -178,7 +178,7 @@ internal sealed class PlaybookEvalService(
         // Passed requires two independent signals, BOTH surfaced honestly via the counts below:
         //   1. No-regression   (RegressedCaseCount == 0)      — no prior-good case broke.
         //   2. Absolute floor  (CandidatePassCount  > 0)      — at least one case actually passed.
-        // The absolute floor closes MED-005: a run where EVERY baseline and candidate case fails has zero regressions but
+        // The absolute floor closes a gap: a run where EVERY baseline and candidate case fails has zero regressions but
         // proves nothing, and must NOT pass on the no-regression signal alone. Also requires at least one evaluated case
         // (no-regression is unprovable with zero cases). Passed is a subset property; completeness
         // (GoldenCaseCount == GoldenCaseTotal) is enforced separately by the promote gate, so a subset "pass" of a

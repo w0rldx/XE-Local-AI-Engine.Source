@@ -117,7 +117,7 @@ public sealed class NodeSqliteHealthCheck : IHealthCheck
                     // connection below rolls it back, so the scratch table is never persisted either way. The raw
                     // provider message is NOT interpolated into the description: /health/ready is anonymous and, on a
                     // non-loopback/proxied deployment, would otherwise leak internal error text (including filesystem
-                    // paths) to remote callers (GPTAUD-19c follow-up). The structured "unwritable" reason and the
+                    // paths) to remote callers. The structured "unwritable" reason and the
                     // exception (for server-side health logging) are preserved.
                     return Unhealthy(stopwatch, reason: "unwritable",
                         "Node SQLite database is not writable.", writeException);
@@ -140,7 +140,7 @@ public sealed class NodeSqliteHealthCheck : IHealthCheck
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             // Static description only — the raw provider message (which can carry the database file path) must never
-            // reach the anonymous /health/ready payload (GPTAUD-19c follow-up). The reason code and exception are kept.
+            // reach the anonymous /health/ready payload. The reason code and exception are kept.
             return Unhealthy(stopwatch, reason: "unavailable", "Node SQLite database is unavailable.", ex);
         }
     }

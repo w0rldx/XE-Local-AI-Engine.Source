@@ -6,7 +6,7 @@ import { useTranslation } from "react-i18next";
 import { type NodeChatConnectionStatus, nodeChatConnection } from "@/features/chat/api/NodeChatConnection";
 
 /**
- * UX-08: a passive, global status chip for the shared chat hub. It sits in a fixed corner of the authed shell and
+ * A passive, global status chip for the shared chat hub. It sits in a fixed corner of the authed shell and
  * appears only when the live connection is mid-session unhealthy:
  *   – "reconnecting" → always shown ("Reconnecting…"), the transient SignalR auto-reconnect window;
  *   – "disconnected" → shown as "Offline" ONLY after the hub has connected at least once, so it reflects a real

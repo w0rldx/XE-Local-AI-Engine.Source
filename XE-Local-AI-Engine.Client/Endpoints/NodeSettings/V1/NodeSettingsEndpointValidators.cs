@@ -109,7 +109,7 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
             .When(static request => request.SamplingDefaults is not null)
             .WithMessage(SeedValue.ValidationMessage);
 
-        // ── Usage cost rates (Wave 13) ──
+        // ── Usage cost rates ──
         // Every override entry must have a non-blank model name and finite, non-negative rates (HasValidRates is the one
         // shared predicate with the store's Normalize). Reject junk with an immediate 400; Normalize remains the
         // defense-in-depth second pass that also drops any entry that slips through.

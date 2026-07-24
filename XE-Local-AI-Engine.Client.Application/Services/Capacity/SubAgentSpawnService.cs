@@ -269,8 +269,8 @@ internal sealed class SubAgentSpawnService : ISubAgentSpawnService
 
         // Resolve the FULL runtime for the bound child in ONE pass — the same ResolvedAgentRuntime a direct agent send
         // consumes — so the child inherits the resolved system prompt (scaffold + persona + injected playbook memory),
-        // reasoning effort, and skills as one unit, not just its curated tool set. Reading only AllowedTools here was the
-        // MED-002 defect: a saved sub-agent silently ran on raw definition.Instructions with no scaffold, reasoning, or
+        // reasoning effort, and skills as one unit, not just its curated tool set. Reading only AllowedTools here used to
+        // let a saved sub-agent silently run on raw definition.Instructions with no scaffold, reasoning, or
         // skills — LESS grounding than the anonymous model-id-only path, which already composes the base scaffold.
         var resolved = await _agentDefinitionResolver
                              .ResolveAsync(definition.Id, definition.ModelProfile, cancellationToken: ct)
@@ -322,7 +322,7 @@ internal sealed class SubAgentSpawnService : ISubAgentSpawnService
 
         // Two unconditional strips, both structural — a curated child tool is never one of these:
         //   (1) DEPTH CAP: spawn_subagent, so a child can never spawn (mirrored by the runtime Depth guard).
-        //   (2) NO HITL ROUTE (GPTAUD-01): any ApprovalRequiredAIFunction. A child runs as an agent-as-tool via
+        //   (2) NO HITL ROUTE: any ApprovalRequiredAIFunction. A child runs as an agent-as-tool via
         //       AsAIFunction, which invokes with no per-run options and no approval round-trip — an approval-gated tool
         //       would surface a ToolApprovalRequestContent the child can never answer, silently failing every call to it.
         //       The tools are DROPPED (and warned, naming them), never unwrapped to auto-execute — unwrapping would

@@ -15,7 +15,7 @@ using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 /// <summary>
-///     Hermetic, model-free retrieval-eval fixture (RAG-01). It ingests a small labeled corpus of synthetic markdown
+///     Hermetic, model-free retrieval-eval fixture. It ingests a small labeled corpus of synthetic markdown
 ///     documents THROUGH THE REAL <see cref="KnowledgeIngestionService" /> — real extraction, real
 ///     <see cref="HeaderBoundaryChunkingService" /> windowing, the real deterministic-concept embedder, and the real
 ///     atomic <see cref="KnowledgeIndexWriter" /> (which fires the FTS5 trigger and writes the vector rows) — so the
@@ -73,8 +73,8 @@ internal sealed class RetrievalEvalFixture : IDisposable
         BuildAsync(databasePath, keyHolder, RetrievalEvalCorpus.Documents, RetrievalEvalCorpus.SynonymToConcept, cancellationToken);
 
     /// <summary>
-    ///     Ingests a caller-supplied labeled corpus and synonym map through the same real pipeline. RAG-04 uses this to
-    ///     ingest a small DISCRIMINATING corpus (engineered so score-agnostic RRF mis-orders the relevant chunk while
+    ///     Ingests a caller-supplied labeled corpus and synonym map through the same real pipeline. A fusion/reranker
+    ///     comparison uses this to ingest a small DISCRIMINATING corpus (engineered so score-agnostic RRF mis-orders the relevant chunk while
     ///     score-aware fusion recovers it) into its own database, without touching the shared baseline corpus.
     /// </summary>
     public static async Task<RetrievalEvalFixture> BuildAsync(string databasePath,
@@ -155,7 +155,7 @@ internal sealed class RetrievalEvalFixture : IDisposable
         CreateSearchService(HybridProviderResolver(), _options, Substitute.For<IRerankerClient>());
 
     /// <summary>
-    ///     The hybrid search pinned to an explicit fusion strategy (RAG-04 before/after comparison). Both variants read
+    ///     The hybrid search pinned to an explicit fusion strategy (for a before/after comparison). Both variants read
     ///     the SAME ingested index, so a metric difference is attributable purely to the fusion.
     /// </summary>
     public IKnowledgeSearchService CreateHybridSearchService(RankFusionStrategy fusionStrategy, double fusionScoreWeight) =>

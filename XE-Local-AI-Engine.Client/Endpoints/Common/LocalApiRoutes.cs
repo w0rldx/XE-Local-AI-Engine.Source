@@ -57,7 +57,7 @@ public static class LocalApiRoutes
         public const string ConversationUploadById = "chat/conversations/{conversationId}/uploads/{fileId}";
         public const string Cancel = "chat/cancel";
 
-        // Loopback tool-approval responder (UX-01). In desktop/local mode there is no worker hub to resolve an MCP
+        // Loopback tool-approval responder. In desktop/local mode there is no worker hub to resolve an MCP
         // tool's approval round-trip, so the browser posts the operator's decision here; the handler feeds it into the
         // in-process invocation runner to release the waiting turn. The literal "approvals/resolve" segments keep it
         // distinct from the other chat action routes; the body carries the approval request id + decision (no route param).

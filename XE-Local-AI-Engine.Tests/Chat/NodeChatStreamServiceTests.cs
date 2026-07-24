@@ -754,7 +754,7 @@ public sealed class NodeChatStreamServiceTests
     [Test]
     public async Task SendMessageAsync_WhenPlainChatWithKnowledgeBase_InjectsFencedContextAndRecordsSources()
     {
-        // OPP-05 / UX-04: an opt-in plain-chat send retrieves KB hits, inlines them as ONE fenced untrusted context
+        // An opt-in plain-chat send retrieves KB hits, inlines them as ONE fenced untrusted context
         // block, and records their provenance as the turn's sources on the terminal row.
         var conversationId = Guid.NewGuid();
         var assistantMessageId = Guid.NewGuid();
@@ -1359,7 +1359,7 @@ public sealed class NodeChatStreamServiceTests
     [Test]
     public async Task SendMessageAsync_WhenClientDisconnectsBeforeRunOwnership_TerminalizesAssistantAsInterrupted()
     {
-        // MED-003: a disconnect AFTER the assistant row is persisted (Pending/Queued) but BEFORE the pump + runner take
+        // A disconnect AFTER the assistant row is persisted (Pending/Queued) but BEFORE the pump + runner take
         // ownership must terminalize the row (Interrupted) rather than leave it dangling until the restart reaper.
         var conversationId = Guid.NewGuid();
         var assistantMessageId = Guid.NewGuid();
@@ -1432,7 +1432,7 @@ public sealed class NodeChatStreamServiceTests
         AssertEx.Equal(assistantMessageId, terminalRequest.Correlation.MessageId);
         AssertEx.Equal(requestId, terminalRequest.Correlation.RequestId);
         // The pre-ownership teardown must carry a run envelope so the terminal row gets its durable envelope in the same
-        // transaction (MED-007 / R4) — otherwise this is the one live path writing a terminal without an atomic envelope.
+        // transaction (R4) — otherwise this is the one live path writing a terminal without an atomic envelope.
         AssertEx.NotNull(terminalRequest.Envelope, "A pre-ownership interrupted terminalize must carry a run envelope.");
     }
 
@@ -1564,7 +1564,7 @@ public sealed class NodeChatStreamServiceTests
     [Test]
     public async Task SendMessageAsync_WhenMemoryExtractionDisabled_SkipsExtractionButStillResolvesMemory()
     {
-        // The MED-2 gate: a retrieval-only agent (PlaybookEnabled=true, MemoryExtractionEnabled=false) still resolves
+        // A retrieval-only agent (PlaybookEnabled=true, MemoryExtractionEnabled=false) still resolves
         // its definition (so its existing enabled memory is injected via the resolved prompt) but its completed run is
         // NOT mined — the dispatcher is never called, so no extraction round-trip happens.
         var conversationId = Guid.NewGuid();
@@ -2726,7 +2726,7 @@ public sealed class NodeChatStreamServiceTests
 
         // Tool calling is enabled for ALL Codex ids, so the requested local tool offer (UseLocalTools: true) is
         // honored for the Codex model — capabilities still come from the Codex matrix, not the Ollama classifier. The
-        // offer is requested with isCloudModel: true so the knowledge-tool provider-locality gate applies (MED-004).
+        // offer is requested with isCloudModel: true so the knowledge-tool provider-locality gate applies.
         offerProvider.Received().GetOfferedTools("gpt-5.5", true);
     }
 

@@ -19,12 +19,12 @@ function formatScore(score: number): string {
 }
 
 /**
- * A collapsible "Sources" strip rendered under a grounded assistant turn (UX-04). Lists the knowledge-base excerpts
+ * A collapsible "Sources" strip rendered under a grounded assistant turn. Lists the knowledge-base excerpts
  * that were inlined into the turn (document title + heading section + relevance score), reusing the knowledge-hit card
  * shape. Collapsed by default so it never crowds the answer; the header shows the count. Renders nothing when there are
  * no sources, so a non-grounded turn stays visually unchanged.
  *
- * UX-06: each source card is a button that opens the shared knowledge document drawer for that source's document,
+ * Each source card is a button that opens the shared knowledge document drawer for that source's document,
  * highlighting the chunk whose heading section matches the source. Exact chunk-id scroll is intentionally deferred —
  * the chunk view exposes chunkIndex, not chunkId, so id matching would need a backend DTO change.
  */

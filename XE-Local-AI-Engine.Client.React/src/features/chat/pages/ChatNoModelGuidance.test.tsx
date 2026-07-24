@@ -11,7 +11,7 @@ import { nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
 import { Chat } from "@/features/chat/pages/Chat";
 import { useNodeChatPreferencesStore } from "@/features/chat/stores/NodeChatPreferencesStore";
 
-// UX-09: on a fresh node with zero installed GGUF chat models, a user could previously type and send and only
+// On a fresh node with zero installed GGUF chat models, a user could previously type and send and only
 // discover the failure AFTER the fact (ChatMessage's ModelNotInstalled Alert). This exercises the pre-emptive
 // inline guidance surfaced above the chat pane instead, gated on BOTH no local chat model AND no signed-in cloud
 // provider (a Codex/Azure session is still a usable send path, so the guidance must not show then).
@@ -126,7 +126,7 @@ function renderChat(): void {
 	);
 }
 
-describe("Chat no-installed-model guidance (UX-09)", () => {
+describe("Chat no-installed-model guidance", () => {
 	beforeEach(() => {
 		installJsdomEnvironmentMocks();
 		vi.clearAllMocks();

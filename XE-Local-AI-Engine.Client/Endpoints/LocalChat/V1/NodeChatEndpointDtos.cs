@@ -81,7 +81,7 @@ public sealed class CancelNodeChatMessageRequest
 }
 
 /// <summary>
-///     The operator's decision on a pending tool-approval request (UX-01). <see cref="RequestId" /> is the approval
+///     The operator's decision on a pending tool-approval request. <see cref="RequestId" /> is the approval
 ///     request id the <c>approval-requested</c> stream event carried (a plain string, not a Guid — the runner mints it
 ///     as an opaque key), which the runner uses to release the exact waiting tool call.
 /// </summary>
@@ -281,7 +281,7 @@ public sealed class NodeChatMessageResponse
     public long? GenerationDurationMs { get; init; }
 
     /// <summary>
-    ///     Knowledge-base excerpts that grounded this plain-chat assistant turn (OPP-05 / UX-04), surfaced from the
+    ///     Knowledge-base excerpts that grounded this plain-chat assistant turn, surfaced from the
     ///     metadata blob so the client can render a "Sources" strip. Null/absent for legacy turns, turns that did not use
     ///     the knowledge base, and user messages. Carries only non-sensitive provenance (document/chunk id, derived
     ///     title/section, score) — never chunk body text or the encrypted original file name.

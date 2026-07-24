@@ -84,7 +84,7 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
 
         try
         {
-            // GPTAUD-05: the invocation can go terminal in the window between ResumeAsync's non-terminal validation and
+            // The invocation can go terminal in the window between ResumeAsync's non-terminal validation and
             // this first Subscribe. When it does, OnInvocationStateChanged runs Publish(terminal) then Complete() before
             // our channel is (or right as it is) registered — so the live loop below would never carry a terminal event
             // (the channel is already completed, or was completed by Complete()). The snapshot taken under Subscribe's
@@ -387,7 +387,7 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
 
         // Latched under _syncRoot when Complete() runs (the terminal state has been published and the then-attached
         // subscribers completed). A Subscribe that races in AFTER Complete would otherwise register a channel that no
-        // future publish/complete will ever finish — GPTAUD-05. Once set it never clears; the entry is removed from the
+        // future publish/complete will ever finish. Once set it never clears; the entry is removed from the
         // registry at the same time, so no non-terminal publish can follow.
         private bool _completed;
 
@@ -461,7 +461,7 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
                 toolHistory = [.. _toolHistory];
                 noticeHistory = [.. _noticeHistory];
 
-                // GPTAUD-05: the invocation already reached its terminal and Complete() ran (which completed and cleared
+                // The invocation already reached its terminal and Complete() ran (which completed and cleared
                 // the then-attached subscribers). Registering a channel now would leave a reader that no future
                 // publish/complete ever finishes, so hand back an already-completed channel. The snapshot above is the
                 // terminal state (Publish precedes Complete under this same lock), which ResumeCoreAsync emits directly.
@@ -498,7 +498,7 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
             lock (_syncRoot)
             {
                 // Latch terminal so a Subscribe that races in after this point gets an already-completed channel
-                // (GPTAUD-05) rather than one nothing will ever finish.
+                // rather than one nothing will ever finish.
                 _completed = true;
 
                 foreach (var subscriber in _subscribers)

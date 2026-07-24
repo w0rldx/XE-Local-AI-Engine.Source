@@ -200,7 +200,7 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
     }
 
     /// <summary>
-    ///     The persistence authority for usage-rate hygiene (Wave 13): drop entries with a blank model name or a negative /
+    ///     The persistence authority for usage-rate hygiene: drop entries with a blank model name or a negative /
     ///     non-finite rate (via <see cref="ModelRate.HasValidRates" /> — one shared predicate with the boundary validator
     ///     and the resolver), trim the model-name keys, and de-duplicate them case-insensitively (matching how the resolver
     ///     and the run-envelope <c>ModelName</c> compare). An empty result collapses to <see langword="null" /> so an
