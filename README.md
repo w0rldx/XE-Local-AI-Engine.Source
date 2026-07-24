@@ -127,7 +127,16 @@ HTTPS-redirect/HSTS pipeline (traffic never leaves the loopback adapter).
 
 ### Publish
 
+Build the React app first; the publish target rejects a missing `dist/index.html`:
+
 ```bash
+# Web assets (once before either RID)
+(
+  cd XE-Local-AI-Engine.Client.React
+  pnpm install --frozen-lockfile
+  pnpm run build
+)
+
 # Linux
 dotnet publish XE-Local-AI-Engine.Client -c Release -r linux-x64 -p:PublishProfile=linux-x64
 # Windows
@@ -151,7 +160,8 @@ See [`publish/README.md`](publish/README.md) for the expected layout. **Run one 
 user-data directory — a second instance races on the SQLite database.
 
 For a Windows tester RC, use [`publish/package-tester-win.ps1`](publish/package-tester-win.ps1) — run on Windows, it is
-the canonical build, validation, packaging, and tester-upload path, and every published tester RC came from it.
+the canonical build, validation, packaging, and tester-upload path. It became canonical in `0.1.0-rc.4.0`;
+earlier tester releases predate the script and must not be treated as evidence that they passed its current gates.
 `publish/package-rc.sh` is a separate, much simpler manual portable-zip packager: a bash script you run on Linux/WSL,
 producing a plain self-contained zip with **no Velopack metadata and therefore no self-update**. It builds **both**
 `linux-x64` and `win-x64` by default (`--rid <rid>` for one).
@@ -169,9 +179,19 @@ Do not mark release or documentation work complete until matching validation evi
 
 Required evidence includes:
 
-- restore/build/test transcripts
-- generated schema/sample manifest validation
-- pinned runtime binary and package checksums
-- runtime smoke-test transcript
+- the canonical packager's frontend, backend, vulnerability, and package-gate transcript,
+- a clean `scripts/lint-release-scripts.sh` result,
+- a non-vacuous Playwright E2E run (`scripts/run-e2e-local.sh`) with no exit-75 contamination,
+- generated schema/sample-manifest validation, including a clean `openapi:check`,
+- pinned runtime binary and package checksums,
+- the matching `v<version>` source tag on the exact packaged commit,
+- a real-Windows smoke-test transcript for the exact generated `Portable.zip`,
+- the generated five-asset SHA-256 manifest, printed Portable hash, pushed source-tag verification,
+  and successful verification of all five remote assets during `-PublishDraft`, and
+- confirmation that the unchanged draft was published in the tester repository.
+
+Run `scripts/lint-release-scripts.sh`; add `--pester` when the packaging machine has the Pester
+module and record that result separately. See [Testing & Validation](docs/wiki/13-testing-and-validation.md)
+and [the release guide](publish/README.md) for the full sequence.
 
 Standalone OS-package distribution (MSI/deb/rpm) is deferred: under the runtime re-architecture the app self-provisions its llama.cpp runtime and GGUF models at first run, so there is no installer bundle to validate. A future packaging effort would be its own plan.

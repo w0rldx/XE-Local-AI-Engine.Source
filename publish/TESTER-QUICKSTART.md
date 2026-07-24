@@ -1,7 +1,8 @@
 # XE Local AI Engine — tester quickstart
 
-A self-contained desktop build for external testers. No install, no Docker, no Ollama, no
-prerequisites — extract one portable folder and run it locally.
+A self-contained desktop build for external testers. No .NET runtime, Docker, Ollama, or installer is
+required—extract one portable folder and run it locally. Testers still need access to the private
+tester release repository and internet access for the initial runtime/model download and update checks.
 
 ## Get a Windows tester build
 
@@ -13,7 +14,8 @@ $env:XE_TESTER_GITHUB_APP_CLIENT_ID = "<real GitHub App client ID (Iv..., not th
 .\publish\package-tester-win.ps1
 ```
 
-The script reads the release version from `Directory.Build.props`, runs all frontend and backend release
+The script reads the release version from `Directory.Build.props`, rejects local Vite `.env*` /
+inherited `VITE_*` overrides, runs all frontend and backend release
 gates (including OpenAPI/license/coverage/dependency audits), publishes `win-x64`, validates the staged
 tester update config, builds the Velopack portable package, and uploads it to the tester release repo —
 **`w0rldx/XE-Local-AI-Engine.Tester-App`**, a repository separate from the source repo
@@ -25,16 +27,24 @@ is created on the *tester* repo. The upload remains a draft. Smoke-test the exac
 .\publish\package-tester-win.ps1 -PublishDraft -ExpectedPortableSha256 <printed-sha256>
 ```
 
-Publication downloads and hashes the Portable ZIP attached to the draft; it does not
-trust a local copy. The upload step also refuses to merge into an already-published
-release.
+Publication verifies the pushed canonical source tag resolves to HEAD, downloads the complete
+five-file Velopack asset set from the draft, and checks every file against the digest manifest from
+the original pack. It also confirms the smoke-tested Portable hash. It does not trust a local copy,
+and the upload step refuses to merge into an already-published release.
+
+Keep the packaging checkout intact between upload and publication:
+`RELEASE_NOTES.md` and `publish/dist/XE-Local-AI-Engine-<version>-win.sha256.json` are generated during
+packaging, are git-ignored, and are required by `-PublishDraft`. If either is removed, regenerate it
+from the exact tagged pack output before publishing.
 
 Run it from **PowerShell 7+ (`pwsh`)** — the script declares `#Requires -Version 7.0` and will not run under
 Windows PowerShell 5.1. The packaging machine also needs a **non-UTC time zone** (the script checks, and points at
 `tzutil /s`).
 
 Use `-SkipUpload` for a pre-tag packaging rehearsal: every build and test gate still runs, and it relaxes only the
-client-ID requirement. An ID-less rehearsal bakes no client ID, ships an inert updater, and is stamped
+client-ID requirement. `VPK_TOKEN` is still required because the private tester repository supplies the previous
+full package used to generate the rehearsal delta. The script downloads that package into an isolated seed directory
+and packs into a clean versioned output directory without uploading. An ID-less rehearsal bakes no client ID, ships an inert updater, and is stamped
 `REHEARSAL-DO-NOT-SHIP.txt` inside the zip — never hand one to a tester. The client ID is public configuration
 supplied at packaging time; do not commit a guessed value or placeholder.
 
@@ -48,7 +58,8 @@ channel. Only the Windows Velopack bundle above has a live update feed.
 ## Run it (tester)
 
 **Windows**
-1. From the latest release at `https://github.com/w0rldx/XE-Local-AI-Engine.Tester-App/releases`,
+1. Sign in to GitHub with an account that can access the private tester repository. From the latest
+   release at `https://github.com/w0rldx/XE-Local-AI-Engine.Tester-App/releases`,
    download `XE-Local-AI-Engine-win-Portable.zip` and unzip it. (There is no `Setup.exe` — the
    packager runs `vpk pack --noInst`, so the portable bundle is the shipped flavor. The `.nupkg`
    files and `releases.win.json` next to it are for the in-app updater, not for you.)
@@ -72,7 +83,7 @@ third-party attributions. `READ-ME-FIRST.txt` says the same and points at `LICEN
 
 - The app self-provisions a **llama.cpp runtime** and downloads a **~400 MB starter model**
   (`Qwen2.5-0.5B-Instruct`, Q4_K_M) from Hugging Face. This takes a few minutes, is mostly
-  silent, and only happens once — watch the console.
+  silent, requires internet access, and only happens once — watch the console.
 - Needs **~2 GB free disk**. A GPU is optional; CPU works (slower).
 - First open: set an **admin password** to create your login.
 - Data location: `%LOCALAPPDATA%\XE-Local-AI-Engine` (Windows) /

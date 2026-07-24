@@ -136,7 +136,7 @@ Six runs, six failures, zero successes, in the repository's whole history. Two f
 
 The workflow files are still tracked and are the design of record — read them for intent, and keep them accurate if you change the validation commands. But treat every gate below as **what would run if the workflows were re-enabled**, not as something protecting the branch you are on.
 
-**Where the gates actually live today:** [`publish/package-tester-win.ps1`](../../publish/package-tester-win.ps1) is the only enforced quality gate in the project. It runs the frontend gate set (frozen install, lint, OpenAPI drift check, third-party license check, coverage-gated tests, production dependency audit, production build) and the backend gate set (restore, transitive NuGet vulnerability audit, Release build, solution-wide serial tests with a hollow-gate guard) itself, on the packaging machine, at release time. Every published tester RC came from it. A gate added to a workflow file enforces nothing; a gate added to that script is real.
+**Where the gates actually live today:** [`publish/package-tester-win.ps1`](../../publish/package-tester-win.ps1) is the canonical enforced release gate. It runs the frontend gate set (frozen install, lint, OpenAPI drift check, third-party license check, coverage-gated tests, production dependency audit, production build) and the backend gate set (restore, transitive NuGet vulnerability audit, Release build, solution-wide serial tests with a hollow-gate guard) itself, on the packaging machine, at release time. It became canonical in `0.1.0-rc.4.0`; earlier tester releases predate it and are not evidence that they passed today's gates. A gate added only to a disabled workflow enforces nothing; release-script lint remains a separate local gate.
 
 Between releases, the enforcement is you: run [`.opencode/scripts/project-validate.sh`](../../.opencode/scripts/project-validate.sh) or the raw commands above before you call a change done.
 
@@ -167,10 +167,16 @@ Two gates ride the packaging path rather than any test suite:
 
 The README's "RC readiness status" section is the contract: **do not mark release or documentation work complete until matching validation evidence is available.** Required evidence:
 
-- restore/build/test transcripts (the green output of the backend + frontend commands above),
-- generated schema / sample-manifest validation (incl. the `openapi:check` drift gate passing),
+- the canonical packager's frontend, backend, vulnerability, and package-gate transcript,
+- a clean `scripts/lint-release-scripts.sh` result (`--pester` is additional, opt-in coverage when Pester is installed),
+- a non-vacuous `scripts/run-e2e-local.sh` result with no exit-75 contamination,
+- generated schema/sample-manifest validation, including a clean `openapi:check`,
 - pinned runtime binary and package checksums (llama.cpp release pins; see [Local Runtime & Providers](03-local-runtime-and-providers.md)),
-- a runtime smoke-test transcript.
+- the matching `v<version>` source tag on the exact packaged commit,
+- a real-Windows smoke transcript for the exact generated `Portable.zip`,
+- the generated five-asset SHA-256 manifest, printed Portable hash, pushed source-tag verification,
+  and successful verification of all five remote assets during `-PublishDraft`, and
+- confirmation that the unchanged draft was published in `w0rldx/XE-Local-AI-Engine.Tester-App`.
 
 Two things that **cannot** be proven in WSL2 or on a headless runner and must be verified on a real desktop (call this out explicitly in any RC sign-off): the no-orphan guarantee (terminal/console close reaps the `llama-server` child) and the Windows Job Object hard-kill path — both require a real desktop with a model loaded (README "Self-contained desktop run"). See [Hosting & Deployment](11-hosting-and-deployment.md).
 
@@ -182,7 +188,7 @@ Two things that **cannot** be proven in WSL2 or on a headless runner and must be
 - New WorkerHub outbound call → assert it through `RecordingHubMessageSender` and confirm no secret crosses the boundary ([Security & Privacy](12-security-and-privacy.md)).
 - New backend behavior that touches a model → drive it through `FakeOllama` (script the response) rather than a live runtime; only flip `RUN_LOCAL_INTEGRATION=true` for fidelity runs.
 - React change → run `pnpm run lint` + `pnpm test`; if you touched API calls, run `pnpm run openapi:check` yourself — nothing else will catch the drift until the release packager runs it.
-- Before claiming done: backend + frontend transcripts green, `openapi:check` clean, and (for RC) the desktop-only smoke evidence captured.
+- Before claiming done: backend + frontend transcripts green and uncontaminated, `openapi:check` clean, and (for RC) the complete draft/hash/desktop smoke evidence captured.
 
 ## Related pages
 
