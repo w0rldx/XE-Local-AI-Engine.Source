@@ -83,6 +83,21 @@ The rule: **derive the classification from state that is already observable at m
 
 To *test* ordering-sensitive cancellation deterministically, park the stream on an **external** gate rather than on the token (so nothing the stream registers can win), then register a callback after the runner's that releases the stream and blocks the cancel-callback loop until the failure has been reported. `CancellationTokenSource.Cancel` runs callbacks sequentially, so anything registered earlier provably runs too late to matter. The regression pin built this way fails **5/5** against the unfixed runner, versus roughly 1-in-2 for the load-dependent version.
 
+### Code behind `#if P0_SPIKE` escapes the analyzer wall, and the constant REPLACES the defaults
+
+`XE-Local-AI-Engine.AI.Agent.Tests/Invocation/WorkflowToolApprovalSpikeTests.cs` is wrapped in `#if P0_SPIKE`, which is defined nowhere. The gate is **load-bearing** — the class constructs a live `OllamaApiClient`, and a default build must not carry an opt-in live probe — so do not "clean it up" by deleting the `#if`. But be aware the gated code is compiled out of every normal build, so `TreatWarningsAsErrors` never sees it and it rots silently: its sibling `HandoffWorkflowSpikeTests` needed real repair for MAF 1.8.0 → 1.13.0 shape changes that a compiling build would have surfaced immediately.
+
+The cheap guard is a build-only compile check (`dotnet build XE-Local-AI-Engine.AI.Agent.Tests -p:DefineConstants=P0_SPIKE`, assert 0/0) — it restores the analyzer wall over the gated code without ever executing the live probe.
+
+**Trap when you do that:** `-p:DefineConstants=P0_SPIKE` **replaces** the property, it does not append. Measured on this repo:
+
+```
+default (Release)                  -> TRACE;RELEASE
+-p:DefineConstants=P0_SPIKE        -> P0_SPIKE
+```
+
+`TRACE` and `RELEASE` are silently dropped. Nothing currently depends on them so it builds clean either way, but that is luck — pass `-p:DefineConstants='$(DefineConstants);P0_SPIKE'` if anything downstream ever does.
+
 ### The full Tests module balloons to ~3.5 GB — it is a framework leak, not a fixture bug
 
 A one-process run of `XE-Local-AI-Engine.Tests` grows **monotonically to ~3.5 GB** RSS (single-threaded, the `*EndpointTests` subset alone reaches ~3.05 GB), which thrashes a memory-tight box. Cause, confirmed by `gcroot` on a live-heap dump: `WebApplicationFactory<Program>` resolves this **top-level-statement** `Program` through `HostFactoryResolver.HostingListener`, which runs the entry point on a **dedicated background thread that blocks in `app.Run()`/`WaitForShutdownAsync`**. That thread's `ExecutionContext` holds an `AsyncLocal → HostingListener → the built IHost`, so **every host a test builds stays GC-rooted for the whole process** even though `TestingWebAppFactory` is disposed (`await using`). ~11 MB accumulates per host-based test × ~272 of them. It is **test-only** — the product builds exactly one host and is unaffected — and **not** fixable from the fixture: disposing the factory, `ExecutionContext.SuppressFlow()` around `CreateHost`, and `IHostApplicationLifetime.StopApplication()` on dispose were all measured to change nothing (`Pooling=False` shaves only ~9%). It is a `.NET 10 / Mvc.Testing 10.0.9` framework characteristic; only ~59 classes (those using `new TestingWebAppFactory`) leak.
