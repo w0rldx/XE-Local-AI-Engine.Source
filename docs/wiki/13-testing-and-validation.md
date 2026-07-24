@@ -6,7 +6,7 @@ This page is the contributor map of how XE Local AI Engine is tested and what co
 
 Test stack at a glance: **TUnit 1.58.0** on **Microsoft.Testing.Platform (MTP)** for all .NET suites, **NSubstitute 5.3.0** for mocks, **Microsoft.Playwright 1.61.0 + TUnit.Playwright** for browser E2E, and **Vitest (v8 coverage)** for the React client. `global.json` sets a `10.0.100` feature-band baseline (`rollForward: latestFeature`, so it rolls forward to the highest installed 10.0 feature band and patch at or above `10.0.100` rather than pinning an exact version) and `"test": { "runner": "Microsoft.Testing.Platform" }`, so the whole repo runs under MTP, not VSTest.
 
-> ⚠️ MTP gotcha (repo-wide): filter by `--treenode-filter`, NOT `--filter`. The legacy VSTest `--filter` silently matches nothing under MTP and gives a false "0 tests, all green" result.
+> ⚠️ MTP gotcha (repo-wide): filter by `--treenode-filter`, NOT the legacy VSTest `--filter`. The repository's TUnit/MTP runners and examples support only the tree-node form.
 
 ## Test topology
 
@@ -68,10 +68,17 @@ The E2E harness is the highest-fidelity path: a real browser drives the real SPA
 
 ```bash
 # Backend — restore, build Release, test (whole solution)
-dotnet restore XE-Local-AI-Engine.slnx
-dotnet build   XE-Local-AI-Engine.slnx --configuration Release --no-restore
-dotnet test    XE-Local-AI-Engine.slnx --configuration Release --no-build --max-parallel-test-modules 1  # serial modules: WSL inotify limit
+scripts/with-build-lock.sh -- dotnet restore XE-Local-AI-Engine.slnx
+scripts/with-build-lock.sh -- dotnet build XE-Local-AI-Engine.slnx --configuration Release --no-restore
+scripts/with-build-lock.sh -- scripts/assembly-guard.sh guard --test-bins -- \
+  dotnet test XE-Local-AI-Engine.slnx --configuration Release --no-build --max-parallel-test-modules 1
 ```
+
+Never run a build concurrently with `dotnet test --no-build`: the build can rewrite assemblies while
+the test host reads them, producing a phantom red or phantom green. `with-build-lock.sh` prevents
+collisions between cooperating processes; `assembly-guard.sh` detects an unwrapped build. Exit `69`
+means the lock timed out and nothing ran. Exit `75` means **CONTAMINATED, result void, rerun required**.
+Do not wrap `project-validate.sh` itself; it locks its own .NET trees.
 
 ```bash
 # React client
@@ -86,7 +93,7 @@ Notable React scripts (from `package.json`): `test:coverage` / `test:coverage:ch
 
 ### `.opencode/scripts/project-validate.sh` — the scope runner
 
-The wrapper mirrors the raw commands and parallelises independent trees. Invoke as `project-validate.sh --scope <scope> [--confirm-e2e] [--base <branch>] [--serial]`. Per-tree output is redirected to timestamped logs under `.tmp/validate-logs/`; on failure it prints the last 80 lines of the failing log. Backend and frontend run in parallel by default (`--serial` to debug); E2E waits for both to pass first.
+The wrapper mirrors the raw commands and parallelises independent trees. Invoke as `project-validate.sh --scope <scope> [--confirm-e2e] [--base <branch>] [--serial]`. Per-tree output is redirected to timestamped logs under `.tmp/validate-logs/`; on failure it prints the last 80 lines of the failing log. Backend and frontend run in parallel by default (`--serial` to debug); .NET work takes the build lock and runs tests under the assembly guard. E2E waits for both pre-gates to pass first.
 
 | Scope | What it runs |
 |---|---|
@@ -97,7 +104,7 @@ The wrapper mirrors the raw commands and parallelises independent trees. Invoke 
 | `coverage` | backend `--collect:"XPlat Code Coverage"` + frontend `test:coverage:check` (threshold gate) |
 | `scripts` | shellcheck + PSScriptAnalyzer over the packaging scripts, plus a build-only compile check of the `#if P0_SPIKE` code. Runs in `full`; takes seconds. See below |
 | `changed` | auto-detects backend/frontend from `git diff` vs `--base` (default `develop`); `*.cs/*.csproj/*.slnx/Directory.*/global.json` → backend, frontend dir → frontend |
-| `full` | backend + frontend in parallel, + E2E if `--confirm-e2e` |
+| `full` | backend + frontend + release-script lint, + E2E if `--confirm-e2e` |
 | `setup` | OpenCode meta-validation (`validate-no-legacy.sh`, `validate-opencode.ts`, JSON config sanity) — project-agnostic |
 
 The everyday loop is `--scope changed --serial`; E2E is deliberately behind `--confirm-e2e` because it builds the React client and launches browsers and so may need browser/runtime setup not present in every environment.
@@ -106,12 +113,12 @@ The everyday loop is `--scope changed --serial`; E2E is deliberately behind `--c
 
 Both exist because GitHub Actions is disabled, so anything not reachable from a local command is not reachable at all.
 
-- **[`scripts/run-e2e-local.sh`](../../scripts/run-e2e-local.sh)** — opt-in local runner for the Playwright suite. Nothing invokes it automatically; run it by hand before cutting a tester RC. Over `--scope e2e` it adds Playwright **browser installation** (via `playwright.ps1`, so it needs `pwsh`), which was the actual reason the lane could not be run cold. `--list` enumerates without running, `--filter` scopes to a class. Exit codes: `0` pass, `1` tests failed or the run was vacuous, `2` a prerequisite is missing. No external services needed — FakeOllama plus the in-process host, so no `llama-server` and no `scripts/dev-stop.sh`.
+- **[`scripts/run-e2e-local.sh`](../../scripts/run-e2e-local.sh)** — opt-in local runner for the Playwright suite. Nothing invokes it automatically; run it by hand before cutting a tester RC. Over `--scope e2e` it adds Playwright **browser installation** (via `playwright.ps1`, so it needs `pwsh`), which was the actual reason the lane could not be run cold. `--list` enumerates without running, `--filter` accepts a TUnit/MTP tree-node expression. Exit codes: `0` pass, `1` tests failed or the run was vacuous, `2` a prerequisite/usage error, `75` build contamination (**void; rerun**). No external services needed — FakeOllama plus the in-process host, so no `llama-server` and no `scripts/dev-stop.sh`.
 - **[`scripts/lint-release-scripts.sh`](../../scripts/lint-release-scripts.sh)** — shellcheck + PSScriptAnalyzer over the packaging scripts, wired in as `--scope scripts`. With Actions disabled, `publish/package-tester-win.ps1` is the entire release path, so it gets static analysis of its own. A **missing linter exits 2** rather than passing silently. `--pester` additionally runs [`publish/tests/package-tester-win.Tests.ps1`](../../publish/tests/package-tester-win.Tests.ps1) (opt-in, needs the Pester module), which covers the script's parsing and gate logic — including the vulnerability-JSON handling that no linter has a rule for.
 
 > **A zero-test run is a failure, not a pass.** Both runners enforce this, as does `--scope e2e`. The E2E project sets `IsTestProject=false`/`OutputType=Library` unless `-p:RunE2ETests=true` is passed, so without it `dotnet test` discovers nothing and exits **0**. Never read a green E2E run without checking that a non-zero number of tests actually ran.
 
-> **A mass E2E failure is usually one broken frontend.** The fixture runs `pnpm run build`, which starts with `tsc --noEmit`, so a single type error fails ~62 of 64 tests at fixture init. Check the build before reading traces.
+> **A mass E2E failure is usually one broken frontend.** The fixture runs `pnpm run build`, which starts with `tsc --noEmit`, so a single type error fails most tests at fixture init. Check the build before reading traces; use `--list` for the current test count.
 
 > Note: `scope_smoke` / `scope_backend_smoke` currently invoke the *full* `dotnet test` (not a reduced subset) — the "smoke" backend body is identical to the full backend body in `project-validate.sh`. Treat backend smoke as a full backend run today.
 
