@@ -24,7 +24,7 @@ public sealed class DevelopmentMigrationTests : IDisposable
     }
 
     [Test]
-    public async Task Migration_AppliesExactlyFiveDevelopmentTablesAndRequiredIndexesThenRollsBack()
+    public async Task Migration_AppliesDevelopmentSchemaAndSelectedFolderBindingThenRollsBack()
     {
         Directory.CreateDirectory(_root);
         var databasePath = Path.Combine(_root, "development.sqlite");
@@ -50,6 +50,19 @@ public sealed class DevelopmentMigrationTests : IDisposable
             AssertEx.True(indexes.Contains("ux_development_events_operation_phase"));
             var attemptIndexes = await NamesAsync(connection, "index", "ix_development_attempts_%").ConfigureAwait(false);
             AssertEx.True(attemptIndexes.Contains("ix_development_attempts_task_started_at"));
+
+            var selectedFolderColumn = AssertEx.NotNull(await ReadSelectedFolderColumnAsync(connection).ConfigureAwait(false));
+            AssertEx.Equal("TEXT", selectedFolderColumn.Type);
+            AssertEx.True(selectedFolderColumn.IsNullable);
+
+            var developmentProjectIndexes = await ReadDevelopmentProjectIndexNamesAsync(connection).ConfigureAwait(false);
+            AssertEx.True(developmentProjectIndexes.Contains("ix_development_projects_selected_folder_id"));
+
+            var selectedFolderForeignKey = AssertEx.NotNull(await ReadSelectedFolderForeignKeyAsync(connection).ConfigureAwait(false));
+            AssertEx.Equal("selected_folders", selectedFolderForeignKey.TargetTable);
+            AssertEx.Equal("selected_folder_id", selectedFolderForeignKey.SourceColumn);
+            AssertEx.Equal("id", selectedFolderForeignKey.TargetColumn);
+            AssertEx.Equal("RESTRICT", selectedFolderForeignKey.OnDelete);
         }
 
         await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
@@ -77,4 +90,58 @@ public sealed class DevelopmentMigrationTests : IDisposable
 
         return names;
     }
+
+    private static async Task<ColumnSchema?> ReadSelectedFolderColumnAsync(SqliteConnection connection)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT type, "notnull"
+            FROM pragma_table_info('development_projects')
+            WHERE name = 'selected_folder_id';
+            """;
+        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+        if (!await reader.ReadAsync().ConfigureAwait(false))
+        {
+            return null;
+        }
+
+        return new ColumnSchema(reader.GetString(0), IsNullable: reader.GetInt64(1) == 0);
+    }
+
+    private static async Task<HashSet<string>> ReadDevelopmentProjectIndexNamesAsync(SqliteConnection connection)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = "PRAGMA index_list('development_projects');";
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+        while (await reader.ReadAsync().ConfigureAwait(false))
+        {
+            names.Add(reader.GetString(1));
+        }
+
+        return names;
+    }
+
+    private static async Task<ForeignKeySchema?> ReadSelectedFolderForeignKeyAsync(SqliteConnection connection)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT "table", "from", "to", on_delete
+            FROM pragma_foreign_key_list('development_projects')
+            WHERE "from" = 'selected_folder_id';
+            """;
+        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+        if (!await reader.ReadAsync().ConfigureAwait(false))
+        {
+            return null;
+        }
+
+        return new ForeignKeySchema(reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3));
+    }
+
+    private sealed record ColumnSchema(string Type, bool IsNullable);
+
+    private sealed record ForeignKeySchema(string TargetTable, string SourceColumn, string TargetColumn, string OnDelete);
 }
