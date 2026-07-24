@@ -1,0 +1,45 @@
+XE Local AI Engine
+Copyright (c) 2026 w0rldx. All rights reserved.
+
+The product itself is proprietary — see LICENSE. This file records the
+third-party material the product depends on and points at where each one's terms
+are kept. It is deliberately a set of pointers rather than a copy: the
+package-level list is generated and drift-gated, so a hand-maintained duplicate
+here would go stale without anything catching it.
+
+1. Bundled NuGet and npm packages
+
+   The packages compiled into or shipped with the product are enumerated in
+   XE-Local-AI-Engine.Client.React/src/features/about/data/third-party-licenses.generated.json
+   with the name, version, license, and homepage of each. That file is the
+   authoritative list. It is produced by `pnpm run licenses:generate`
+   (XE-Local-AI-Engine.Client.React/scripts/GenerateLicenses.mjs), verified
+   against the current dependency set by `pnpm run licenses:check`, and rendered
+   to end users in the application's About dialog under "Licenses".
+
+2. Inference runtimes obtained on the user's machine
+
+   These are not shipped inside the product's artifacts. The application
+   downloads a prebuilt binary, or builds from pinned upstream source, at
+   runtime; each remains under its own upstream license.
+
+   - llama.cpp — MIT — https://github.com/ggml-org/llama.cpp
+     Supervised as `llama-server`; the default local chat runtime.
+   - stable-diffusion.cpp — MIT — https://github.com/leejet/stable-diffusion.cpp
+     Supervised as `sd-server` for local image generation.
+
+3. Vendored agent persona templates
+
+   The seeded agent definitions derive from `msitarzewski/agency-agents`
+   (MIT, Copyright (c) 2025 AgentLand Contributors). The upstream license copy,
+   the raw vendored sources, and the pinned commit are kept under
+   XE-Local-AI-Engine.Client.Application/Services/Agents/Templates/ — see
+   LICENSE-agency-agents and PROVENANCE.md in that folder.
+
+4. Model weights
+
+   Model weights (for example GGUF files fetched from Hugging Face) are not
+   distributed with the product. They are downloaded by the user, from the
+   publisher the user selects, and are governed by whatever license or usage
+   terms that publisher attaches to them. Neither LICENSE nor this NOTICE grants
+   any right in them.

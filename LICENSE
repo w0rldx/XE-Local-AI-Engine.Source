@@ -1,0 +1,64 @@
+XE Local AI Engine — Proprietary Software License
+
+Copyright (c) 2026 w0rldx. All rights reserved.
+
+This software, including its source code, binaries, documentation, and
+accompanying materials (the "Software"), is proprietary. It is not open source.
+No rights are granted in it except those expressly stated below.
+
+1. Permitted use
+
+   Where the copyright holder has made a build of the Software available to you
+   as an authorized tester or licensee, you are granted a personal,
+   non-exclusive, non-transferable, revocable permission to install and run that
+   build for the sole purpose of evaluating and testing it. This permission
+   conveys no ownership and no rights in the source code.
+
+2. Restrictions
+
+   Except with the prior written permission of the copyright holder, you may
+   not:
+
+   a. copy, publish, distribute, sublicense, sell, rent, lease, or otherwise
+      make the Software available to any third party;
+   b. modify, adapt, translate, or create derivative works of the Software;
+   c. reverse engineer, decompile, or disassemble the Software, or otherwise
+      attempt to derive its source code, except to the extent that such
+      activity cannot lawfully be restricted;
+   d. remove or obscure any copyright, trademark, or other proprietary notice.
+
+3. Termination
+
+   This permission ends automatically if you breach any of its terms, and the
+   copyright holder may revoke it at any time. On termination you must stop
+   using the Software and delete all copies in your possession.
+
+4. Third-party components
+
+   The Software bundles, downloads, and/or builds third-party components that
+   are licensed separately by their respective owners under their own terms.
+   Nothing in this license alters those terms, and nothing in those terms grants
+   any right in the Software itself. Those components and where their terms are
+   recorded are listed in the NOTICE file alongside this one; the bundled
+   package list is also rendered in the application's About dialog (Licenses
+   tab) from
+   XE-Local-AI-Engine.Client.React/src/features/about/data/third-party-licenses.generated.json.
+
+5. No warranty
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. Pre-release and tester
+   builds are unfinished by nature and may be unstable or lose data.
+
+6. Limitation of liability
+
+   TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT SHALL THE
+   COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY,
+   WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF,
+   OR IN CONNECTION WITH THE SOFTWARE OR ITS USE, INCLUDING ANY LOSS OF DATA,
+   PROFITS, OR BUSINESS INTERRUPTION.
+
+Requests for permission, including any use beyond evaluation and testing, should
+be directed to the copyright holder via
+https://github.com/w0rldx/XE-Local-AI-Engine.

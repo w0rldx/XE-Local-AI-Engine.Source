@@ -30,7 +30,9 @@ export const applicationInfo: IApplicationInfo = {
 	version: environment.VITE_APP_VERSION,
 	description:
 		"Local AI engine for running, managing, and chatting with on-device AI models.",
-	copyright: `© ${new Date().getFullYear()} XE AI-Engine`,
+	// Must match the holder and year in the repo-root LICENSE. Deliberately not `new Date().getFullYear()`:
+	// that silently rolls over on the viewer's clock, so a build cut in 2026 would claim 2027.
+	copyright: "© 2026 w0rldx. All rights reserved.",
 };
 
 /**
