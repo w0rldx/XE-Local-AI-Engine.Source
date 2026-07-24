@@ -58,8 +58,9 @@ public sealed class WorkflowToolApprovalSpikeTests
     {
         if (Environment.GetEnvironmentVariable("P0_RUN_LIVE") != "1")
         {
-            Console.WriteLine("[P0] skipped (set P0_RUN_LIVE=1).");
-            return;
+            // Reported as a real skip, never as a pass: a bare `return` here made an opt-in live probe that executed
+            // nothing count as a passing test. Matches the SkipUnlessEnabled pattern in the node test suite.
+            Skip.Test("Set P0_RUN_LIVE=1 (and a live tool-capable Ollama model) to execute this approval-gate probe.");
         }
 
         var baseUrl = Environment.GetEnvironmentVariable("P0_OLLAMA_BASE_URL") ?? "http://localhost:11434";

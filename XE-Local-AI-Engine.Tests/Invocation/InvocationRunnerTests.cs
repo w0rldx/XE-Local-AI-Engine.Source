@@ -420,7 +420,8 @@ public sealed class InvocationRunnerTests
         var sender = new MockHubMessageSender();
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var runner = CreateRunner(sender, agentUpdates: BlockingUpdates(gate.Task, started));
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(sender, eventDispatcher: dispatcher, agentUpdates: BlockingUpdates(gate.Task, started));
         var package = RuntimePackageBuilder.Valid().Build();
         using var cancellationTokenSource = new CancellationTokenSource();
 
@@ -430,7 +431,12 @@ public sealed class InvocationRunnerTests
         gate.TrySetCanceled();
         await runTask;
 
-        AssertEx.ContainsSingle(sender.SentEncryptedFailures, failure => failure.ConversationId == package.ConversationId && failure.FailureCategory == nameof(FailureCategory.Timeout));
+        // The CALLER's token cancelled — host shutdown / a disconnecting caller, not the invocation watchdog — so the
+        // turn is Cancelled, matching the category the callers themselves report for the same event (see
+        // NodeChatStreamService's OperationCanceledException handler). Timeout is reserved for the invocation
+        // CancelAfter watchdog; see RunAsync_WhenInvocationTimeoutElapses_MapsTimeoutFailureCategory.
+        AssertEx.ContainsSingle(sender.SentEncryptedFailures, failure => failure.ConversationId == package.ConversationId && failure.FailureCategory == nameof(FailureCategory.Cancelled));
+        await dispatcher.Received(1).ReportInvocationFailedAsync(package.InvocationId, Arg.Any<string>(), FailureCategory.Cancelled);
     }
 
     [Test]
@@ -617,18 +623,86 @@ public sealed class InvocationRunnerTests
         // agent began streaming, so `started` never fired and `await started.Task` hung the whole run.
         var package = RuntimePackageBuilder.Valid().WithTimeout().Build();
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var runner = CreateRunner(sender, CreateFactory(cancellationToken => WaitForCancellation(started, cancellationToken)));
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(sender, CreateFactory(cancellationToken => WaitForCancellation(started, cancellationToken)), eventDispatcher: dispatcher);
 
         var runTask = RunAsync(runner, package);
         await started.Task;
 
-        // Fire the invocation timeout deterministically now that the agent is streaming. Cancelling the
-        // invocation token source without a prior user-cancel sets the runner's timeout flag, so the
-        // failure is mapped to the Timeout category — the same path the real CancelAfter timer triggers.
+        // Fire the invocation timeout deterministically now that the agent is streaming. The invocation source is
+        // cancelled with no user cancel and a live caller token — the exact observable state the real CancelAfter
+        // watchdog leaves behind — so the failure must map to Timeout.
         await AssertEx.NotNull(GetActiveInvocationCancellationTokenSource(runner)).CancelAsync();
         await runTask.WaitAsync(TimeSpan.FromSeconds(2));
 
         AssertEx.ContainsSingle(sender.SentEncryptedFailures, failure => failure.ConversationId == package.ConversationId && failure.FailureCategory == nameof(FailureCategory.Timeout));
+        await dispatcher.Received(1).ReportInvocationFailedAsync(package.InvocationId, Arg.Any<string>(), FailureCategory.Timeout);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenTimeoutCallbacksRunInReverseRegistrationOrder_StillMapsTimeoutFailureCategory()
+    {
+        // Regression pin for the LIFO callback race. CancellationToken callbacks run in REVERSE registration order, so
+        // every registration made after the runner's own (a streaming agent's, or the one this test makes) is invoked
+        // FIRST and can release the run into the failure mapping before anything the runner registered earlier has had
+        // a chance to run. Classification must therefore be derived from observable state, never from a flag set by a
+        // racing callback. This test makes that ordering deterministic instead of load-dependent: the late-registered
+        // callback below releases the parked agent and then BLOCKS the cancel-callback loop until the failure has been
+        // reported, so any earlier registration provably runs too late to influence the category.
+        var sender = new MockHubMessageSender();
+        var package = RuntimePackageBuilder.Valid().WithTimeout().Build();
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var failureReported = new ManualResetEventSlim(initialState: false);
+
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        dispatcher.ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<FailureCategory>())
+                  .Returns(_ =>
+                  {
+                      failureReported.Set();
+                      return Task.CompletedTask;
+                  });
+
+        var runner = CreateRunner(sender, CreateFactory(cancellationToken => WaitForRelease(release.Task, started, cancellationToken)), eventDispatcher: dispatcher);
+
+        var runTask = RunAsync(runner, package);
+        await started.Task;
+
+        var invocationCancellationTokenSource = AssertEx.NotNull(GetActiveInvocationCancellationTokenSource(runner));
+        using (invocationCancellationTokenSource.Token.Register(() =>
+               {
+                   release.TrySetResult();
+                   failureReported.Wait(TimeSpan.FromSeconds(5));
+               }))
+        {
+            await invocationCancellationTokenSource.CancelAsync();
+        }
+
+        await runTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        AssertEx.ContainsSingle(sender.SentEncryptedFailures, failure => failure.ConversationId == package.ConversationId && failure.FailureCategory == nameof(FailureCategory.Timeout));
+        await dispatcher.Received(1).ReportInvocationFailedAsync(package.InvocationId, Arg.Any<string>(), FailureCategory.Timeout);
+    }
+
+    [Test]
+    public async Task CancelAll_WhileRunning_MapsCancelledFailureCategory()
+    {
+        // A disconnect-driven CancelAll is an external stop, not the invocation watchdog: it must classify as
+        // Cancelled, and it must do so without depending on which token callback happens to run first.
+        var sender = new MockHubMessageSender();
+        var package = RuntimePackageBuilder.Valid().WithTimeout().Build();
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(sender, CreateFactory(cancellationToken => WaitForCancellation(started, cancellationToken)), eventDispatcher: dispatcher);
+
+        var runTask = RunAsync(runner, package);
+        await started.Task;
+
+        runner.CancelAll();
+        await runTask.WaitAsync(TimeSpan.FromSeconds(2));
+
+        AssertEx.ContainsSingle(sender.SentEncryptedFailures, failure => failure.ConversationId == package.ConversationId && failure.FailureCategory == nameof(FailureCategory.Cancelled));
+        await dispatcher.Received(1).ReportInvocationFailedAsync(package.InvocationId, Arg.Any<string>(), FailureCategory.Cancelled);
     }
 
     [Test]
@@ -1871,6 +1945,19 @@ public sealed class InvocationRunnerTests
     {
         started.TrySetResult();
         await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        yield break;
+    }
+
+    // Parks the stream on an EXTERNAL gate rather than on the cancellation token, so the test alone decides when the
+    // parked run is released. That is what makes the reverse-registration-order test deterministic: the release comes
+    // from a callback the test registers after the runner's, and no registration of this stream's own can run earlier.
+    private static async IAsyncEnumerable<AgentResponseUpdate> WaitForRelease(Task release,
+        TaskCompletionSource started,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        started.TrySetResult();
+        await release;
+        cancellationToken.ThrowIfCancellationRequested();
         yield break;
     }
 
