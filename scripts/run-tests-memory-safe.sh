@@ -16,18 +16,42 @@
 #
 # It is the low-risk MITIGATION, not a root-cause fix. CI (7-16 GB runners) can still run the module in one process.
 #
+# Build contamination
+#   The batches run the test host against bin/ WITHOUT rebuilding, so a concurrent `dotnet build`
+#   from any other shell rewrites the assemblies mid-run and produces phantom failures. This script
+#   defends on both sides: it re-execs itself under the cross-process build lock
+#   (scripts/with-build-lock.sh), and it snapshots the test output tree before the first batch and
+#   re-checks it after the last, reporting exit 75 CONTAMINATED rather than a fail/pass verdict it
+#   cannot stand behind. See docs/agent-knowledge.md §1.
+#
 # Usage:
 #   scripts/run-tests-memory-safe.sh                # build (Release) + run every namespace batch
 #   NO_BUILD=1 scripts/run-tests-memory-safe.sh     # skip the build (bin must be current)
 #   PAR=4 scripts/run-tests-memory-safe.sh          # allow N parallel tests per batch (faster, may reintroduce flakes)
 #
 # Env knobs:
-#   PAR          max parallel tests per batch (default 1 = deterministic + lowest RSS; >1 is faster but can flake)
-#   AVAIL_FLOOR  abort a batch if available RAM drops below this many MB (default 800)
-#   NO_BUILD     when set, skip the Release build
+#   PAR             max parallel tests per batch (default 1 = deterministic + lowest RSS; >1 is faster but can flake)
+#   AVAIL_FLOOR     abort a batch if available RAM drops below this many MB (default 800)
+#   NO_BUILD        when set, skip the Release build
+#   NO_BUILD_LOCK   when set, do NOT take the cross-process build lock (escape hatch; you are then
+#                   relying on the contamination DETECTION alone)
+#   NO_GUARD        when set, skip the contamination snapshot/verify. Do not use this to make a
+#                   contaminated run look green.
+#
+# Exit codes:
+#   0   — every namespace batch green
+#   1   — one or more batches had failures
+#   75  — CONTAMINATED: the build output changed mid-run; the result is void, re-run it
 set -uo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# Serialize against any other build/test that goes through the wrapper. Re-exec rather than lock
+# inline: the wrapper closes the lock fd in this child, so the MSBuild daemons the build below
+# leaves behind cannot inherit the lock and starve everyone else (see with-build-lock.sh).
+if [[ -z "${XE_BUILD_LOCK_HELD:-}" && -z "${NO_BUILD_LOCK:-}" ]]; then
+  exec "$REPO/scripts/with-build-lock.sh" -- "${BASH_SOURCE[0]}" "$@"
+fi
 PROJ="$REPO/XE-Local-AI-Engine.Tests"
 EXE="$PROJ/bin/Release/net10.0/XE-Local-AI-Engine.Tests"
 PAR="${PAR:-1}"
@@ -77,8 +101,27 @@ run_ns() {
   rm -f "$out"
 }
 
+# Contamination snapshot goes HERE — after our own build, before the first batch — so the build
+# this script just performed is outside the window and cannot be mistaken for interference.
+GUARD_STATE=""
+if [[ -z "${NO_GUARD:-}" ]]; then
+  mkdir -p "$REPO/.tmp"
+  GUARD_STATE="$(mktemp "$REPO/.tmp/assembly-guard-memsafe-XXXXXX.state")"
+  trap 'rm -f "$GUARD_STATE"' EXIT
+  "$REPO/scripts/assembly-guard.sh" snapshot "$GUARD_STATE" --root "$(dirname "$EXE")"
+fi
+
 echo ">> Running namespace batches…"
 for ns in "${NAMESPACES[@]}"; do run_ns "$ns"; done
+
+# Verify BEFORE the verdict: if the assemblies moved, there is no verdict to report.
+if [[ -n "$GUARD_STATE" ]]; then
+  if ! "$REPO/scripts/assembly-guard.sh" verify "$GUARD_STATE"; then
+    echo "======================================================================"
+    echo "RESULT VOID (pass=$TOTAL_PASS fail=$TOTAL_FAIL was measured against assemblies that changed)"
+    exit 75
+  fi
+fi
 
 echo "======================================================================"
 echo "TOTAL: pass=$TOTAL_PASS fail=$TOTAL_FAIL  peakRSS(any batch)=$((PEAK_ALL/1024))MB"

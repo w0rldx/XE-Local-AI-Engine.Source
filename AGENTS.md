@@ -47,6 +47,13 @@ Backend:
 
 Backend tests are TUnit on Microsoft.Testing.Platform. To scope a run, use `--treenode-filter` (not `--filter`). Alternation works: on TUnit 1.58, `/*/*/(QuantLadderTests|DesktopPortStoreTests)/*` discovers 15 tests — the exact union of the two classes' 9 and 6.
 
+Never run a build and a test run concurrently — `dotnet test --no-build` reads `bin/`, and a build in another process rewrites those assemblies mid-run and produces phantom failures (or a phantom green). Two guards exist, and both are already wired into `scripts/run-tests-memory-safe.sh`, `scripts/run-e2e-local.sh`, and `.opencode/scripts/project-validate.sh`:
+
+- `scripts/with-build-lock.sh -- <command>` — cross-process `flock` so cooperating shells serialize. Bounded wait; exit 69 names the holder. Do not wrap `project-validate.sh` in it (that script locks its own trees).
+- `scripts/assembly-guard.sh guard --test-bins -- <test command>` — snapshots the test assemblies around the run and reports **exit 75, CONTAMINATED, re-run required** if they changed, instead of reporting test failures. Wrap any new test runner in it.
+
+**Exit 75 from any test script means the result is void, not red.** Re-run it. See `docs/agent-knowledge.md` §1 for the evidence and the file-descriptor trap that makes the naive `flock <file> <command>` form leak the lock to MSBuild's daemons.
+
 Frontend (from `XE-Local-AI-Engine.Client.React/`):
 
 - `pnpm install`
