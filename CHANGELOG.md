@@ -142,6 +142,22 @@ creating it on HEAD is the operator's release-time step, and the packager refuse
   either the bring-your-own-binary override or the in-app build-from-source runtime.
 - The `main` update channel is intentionally inert (`appsettings.AppUpdate.main.json` keeps its `REPLACE_*`
   placeholders). Distribution is tester-only by decision, not by oversight.
+- The agent process sandbox (`ProcessSandboxRuntimeProvider`) enforces the working-directory jail, a scrubbed child
+  environment, per-command timeouts, and captured-output byte caps, but provides no network isolation and no
+  CPU/memory/PID limits; a sandbox request for either is rejected fail-closed rather than silently ignored, and
+  OS-level isolation is deferred to a future provider.
+- All local chat catalog tools ship auto-execute this RC (`LocalAgentToolRegistry.CatalogRequiresApproval` is
+  `false`); the node-wide per-agent tool-approval policy (OPP-03) still applies on top where configured.
+- ModelFit's Benchmark mode is inert scaffolding: a refresh request for it is rejected with "Benchmark refresh is not
+  yet enabled"; only the Recommend path is live.
+- Voice output ships opt-in and off by default, and the remote-TTS fallback in the voice manifest contract is
+  deferred (unbuilt; always `null` on the manifest).
+- Image-model downloads report no progress and cannot be cancelled once started — the endpoint returns 202 and the
+  transfer runs to completion in the background regardless.
+- Image generation has no Linux CUDA path: stable-diffusion.cpp ships no Linux CUDA prebuilt, so a Linux NVIDIA box
+  generates images via Vulkan (or the CPU floor), unlike chat's CUDA source-build option.
+- Chat retention policy is configured only via `appsettings` (the `ChatRetention` section); there is no UI to view or
+  change it yet.
 
 ## [0.1.0-rc.4.1] — 2026-07-07
 
