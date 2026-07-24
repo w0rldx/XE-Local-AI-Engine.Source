@@ -69,10 +69,16 @@ Component-specific notes:
 From the repository root:
 
 ```bash
-dotnet restore XE-Local-AI-Engine.slnx
-dotnet build XE-Local-AI-Engine.slnx --configuration Release --no-restore
-dotnet test XE-Local-AI-Engine.slnx --configuration Release --no-build --max-parallel-test-modules 1
+scripts/with-build-lock.sh -- dotnet restore XE-Local-AI-Engine.slnx
+scripts/with-build-lock.sh -- dotnet build XE-Local-AI-Engine.slnx --configuration Release --no-restore
+scripts/with-build-lock.sh -- scripts/assembly-guard.sh guard --test-bins -- \
+  dotnet test XE-Local-AI-Engine.slnx --configuration Release --no-build --max-parallel-test-modules 1
 ```
+
+The lock prevents cooperating builds from rewriting test assemblies mid-run; the assembly guard
+detects an unwrapped concurrent build. Exit `69` means the lock was not acquired and nothing ran.
+Exit `75` means the result was **CONTAMINATED and void**—rerun it rather than treating it as red or
+green. Do not wrap `project-validate.sh` itself; it locks its own .NET trees.
 
 For the React client:
 
