@@ -32,12 +32,13 @@ so the already-published guard sees the live release regardless of how its tag w
   `#Requires -Version 7.0`. It pairs `$ErrorActionPreference = "Stop"` with native-stderr
   redirection to detect a `gh` 404, which 5.1 escalates into a terminating error instead.
   Launch it from `pwsh`, not from the blue `powershell.exe` console.
-- On `PATH`: **`pnpm`**, the **.NET SDK** per `global.json`, **`dnx`** (it runs
+- On `PATH`: **`git`**, **`pnpm`**, the **.NET SDK** per `global.json`, **`dnx`** (it runs
   `dnx vpk@1.2.0`), and an **authenticated `gh` CLI** (13 call sites —
   `gh release view`/`list`/`download`/`edit`, driving the already-published guard, the
   draft-publish hash verification, and the release-body update). A missing `gh` login does
   not fail fast: it fails partway through a full release build, after the gate suite has
-  already run.
+  already run. Publication also needs network access to resolve the pushed source tag from
+  `https://github.com/w0rldx/XE-Local-AI-Engine.git`.
 - A **non-UTC machine time zone** — see the note under Path A.
 - Two environment variables: `VPK_TOKEN` and `XE_TESTER_GITHUB_APP_CLIENT_ID`.
 
@@ -103,7 +104,7 @@ them ships anything:
 
 | Path | What it produces | Status |
 | --- | --- | --- |
-| **A — `publish/package-tester-win.ps1`** (Windows, manual) | Velopack portable bundle + delta/full packages + update feed, uploaded to the tester repo | **canonical.** Every published tester RC came from it |
+| **A — `publish/package-tester-win.ps1`** (Windows, manual) | Velopack portable bundle + delta/full packages + update feed, uploaded to the tester repo | **canonical from `0.1.0-rc.4.0` onward.** Earlier RCs predate this script |
 | **B — `publish/package-rc.sh`** (bash, manual) | plain self-contained portable zip, no Velopack metadata, **no self-update** | supported side path |
 | **C — `.github/workflows/release.yml`** (tag-triggered CI) | — | **disabled; has never produced an artifact** |
 
@@ -132,8 +133,13 @@ For a local pre-tag rehearsal:
 .\publish\package-tester-win.ps1 -SkipUpload
 ```
 
+The rehearsal still requires `VPK_TOKEN`: the tester repository is private, and Velopack must
+download its latest published full package before packing so it can generate the new delta. The
+script downloads into an isolated seed directory, copies only that full package into a clean
+versioned output directory, then follows Velopack's `download -> pack` flow without uploading.
+
 The script enforces a clean working tree, validates that `-Version` matches
-`Directory.Build.props`, and requires the exact source tag before upload. Upload creates
+`Directory.Build.props`, and requires the exact local source tag before upload. Upload creates
 or updates a **draft** release; it never publishes immediately. Smoke-test the exact
 generated `Portable.zip`, retain the printed SHA-256, then publish that unchanged draft:
 
@@ -141,9 +147,18 @@ generated `Portable.zip`, retain the printed SHA-256, then publish that unchange
 .\publish\package-tester-win.ps1 -PublishDraft -ExpectedPortableSha256 <printed-sha256>
 ```
 
-The publication command downloads the Portable ZIP attached to the GitHub draft,
-verifies that remote asset still matches the smoke-tested hash, and publishes the
-existing draft without rebuilding or re-uploading.
+The publication command first verifies that the matching source tag is pushed to the canonical
+source repository and resolves to the current HEAD. It then downloads all five Velopack assets
+attached to the GitHub draft, verifies each against the SHA-256 manifest from the original pack,
+checks that `-ExpectedPortableSha256` matches the manifest and downloaded Portable ZIP, and publishes
+the existing draft without rebuilding or re-uploading.
+
+`-PublishDraft` also requires the generated `RELEASE_NOTES.md` and
+`publish/dist/XE-Local-AI-Engine-<version>-win.sha256.json` in the checkout. Both are generated,
+git-ignored evidence from the packaging run, so publish from the same clean checkout and do not
+delete them between draft upload and publication. If the checkout was cleaned or moved, regenerate
+the notes and full five-asset digest manifest from the exact tagged pack output before publishing;
+the command refuses to publish when either artifact is absent or inconsistent.
 
 **The already-published guard resolves a release by all three spellings.**
 `Find-GitHubRelease` probes `v<version>`, then bare `<version>`, then falls back to matching
@@ -168,21 +183,22 @@ blindness that would have let an upload through.
 | `-TesterRepo` | tester repo URL; defaults to `https://github.com/w0rldx/XE-Local-AI-Engine.Tester-App` |
 | `-SkipUpload` | pre-tag packaging rehearsal — build and pack, no upload |
 | `-PublishDraft` | publish an existing draft; cannot be combined with `-SkipUpload` |
-| `-ExpectedPortableSha256` | the smoke-tested hash `-PublishDraft` verifies against the remote asset |
+| `-ExpectedPortableSha256` | the smoke-tested Portable hash; must match the pack manifest and remote asset before all five remote asset hashes are verified |
 | `-AllowUtcTestTimeZone` | accept reduced time-zone coverage on a genuinely UTC packaging machine |
 
 **This script is the project's only enforced quality gate** — GitHub Actions enforces
 nothing (see the table above). Its mandatory gates:
 
-- **Frontend**: frozen install, lint, OpenAPI drift check, third-party license check,
+- **Frontend**: rejects local `.env*` and inherited `VITE_*` overrides, materializes the committed
+  `.env.template` only for the build, then runs frozen install, lint, OpenAPI drift check, third-party license check,
   coverage-gated tests, production dependency audit, and production build.
 - **Backend**: restore, transitive NuGet vulnerability audit, Release build, and
   solution-wide tests with serial test modules — including a **hollow-gate guard** that
   greps the output for an MTP `Passed!`/`Failed!` summary, because `dotnet test` exits 0
   when zero test projects enrol.
 - **Package**: SPA presence, canonical tester channel/repository, caller-supplied
-  non-placeholder GitHub App client ID, pinned git-cliff checksum, release notes, and
-  Velopack pack/upload result.
+  non-placeholder GitHub App client ID, pinned git-cliff checksum, release notes, complete
+  five-asset Velopack set, local digest manifest, and Velopack pack/upload result.
 
 **The packaging machine must be in a non-UTC time zone.** The script does **not** set one —
 it *requires* one, and refuses to run the backend tests otherwise. Before the test leg it
@@ -201,10 +217,13 @@ elevation, so changing the machine's clock is the operator's call, not the packa
 `XE-Local-AI-Engine-win-Portable.zip`, `-full.nupkg`, `-delta.nupkg`, `releases.win.json`
 and `RELEASES` — **there is no `Setup.exe` and no `.AppImage`**. After draft upload the
 script explicitly updates the GitHub release body (`vpk` sets it only when it *creates*
-the release).
+the release). The packaging checkout also receives
+`publish/dist/XE-Local-AI-Engine-<version>-win.sha256.json`, which records the SHA-256 of all five
+assets and is required to publish the draft.
 
-**`-SkipUpload` relaxes exactly one thing: the client ID.** Every build and test gate still
-runs. A *supplied* ID is always validated, rehearsal or not — a placeholder
+**`-SkipUpload` relaxes exactly one thing: the client ID.** `VPK_TOKEN` remains mandatory because
+the private tester repository supplies the previous full package used for delta generation. Every
+build and test gate still runs. A *supplied* ID is always validated, rehearsal or not — a placeholder
 (`REPLACE_`/`CHANGE_ME`/`TODO`) or a non-`Iv…` value (the numeric App ID is the usual
 paste-o) is an error, not an absence. An *absent* ID is tolerated **only** under
 `-SkipUpload`; uploading always requires a real `Iv…` ID.
@@ -302,7 +321,18 @@ The single-file binary bundles native libraries (`e_sqlite3` for SQLite and the 
 ## Appendix — manual `dotnet publish`
 
 Both packagers (Path A and Path B) wrap `dotnet publish` with the right publish profile.
-To publish the single-file binary by hand:
+To publish the single-file binary by hand, build the React app first. The MSBuild publish target
+fails when `XE-Local-AI-Engine.Client.React/dist/index.html` is absent.
+
+From the repository root:
+
+```sh
+(
+  cd XE-Local-AI-Engine.Client.React
+  pnpm install --frozen-lockfile
+  pnpm run build
+)
+```
 
 ### Linux (linux-x64)
 
@@ -316,6 +346,11 @@ The binary is `XE-Local-AI-Engine.Client` (no extension).
 ### Windows (win-x64)
 
 ```powershell
+Push-Location XE-Local-AI-Engine.Client.React
+pnpm install --frozen-lockfile
+pnpm run build
+Pop-Location
+
 dotnet publish XE-Local-AI-Engine.Client -c Release -r win-x64 -p:PublishProfile=win-x64
 ```
 
