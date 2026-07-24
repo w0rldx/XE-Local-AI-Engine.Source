@@ -19,10 +19,9 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Options;
 internal static class ImageServerArgumentBuilder
 {
     /// <summary>
-    ///     Text-encoder placement key in the <c>--backend</c> component=device string. sd-server's source is inconsistent:
-    ///     the deprecation help uses <c>te=</c> while a <c>--backend</c> example uses <c>clip=</c>. Defaulting to
-    ///     <c>te=</c> per the deprecation-help wording.
-    ///     follow-up: confirm the exact key via a live <c>sd-server -h</c> before freezing the arg builder (§4A OPEN, §13).
+    ///     Text-encoder placement key in the <c>--backend</c> component=device string. Verified against the pinned
+    ///     <c>sd-server --help</c> output: the legacy <c>--clip-on-cpu</c> flag maps to <c>te=cpu</c>. The help's
+    ///     generic <c>clip=cpu</c> example is not the text-encoder key accepted by this pinned build.
     /// </summary>
     internal const string TextEncoderBackendKey = "te";
 
