@@ -67,10 +67,10 @@ Velopack owns install, update, and uninstall for the desktop flavor. The in-app 
 endpoint (`POST /app-update/apply`) triggers download + apply + relaunch via the
 Velopack SDK.
 
-**Self-update only works for Velopack-managed installs.** Users who run the raw
-self-contained exe directly (not installed via `Setup.exe`/`.AppImage`) will not receive
-in-app updates. The release notes for the first Velopack release must explain the
-one-time re-install step (§2 above).
+**Self-update works for Velopack-managed installed and portable bundles.** Users who run
+the raw self-contained publish output directly (outside a Velopack installed/portable
+bundle) will not receive in-app updates. The release notes for the first Velopack release
+must explain the one-time move to a Velopack artifact (§2 above).
 
 ---
 
@@ -123,11 +123,11 @@ before any non-tester rollout (see supply-chain hardening note in the workflow f
 
 ## 6. Rolling back a bad update
 
-If an in-app update produces a broken build, you can go back to a known-good version. Your
-data is safe either way: the per-user **data directory** (`%LOCALAPPDATA%\XE-Local-AI-Engine`
-on Windows, `~/.local/share/XE-Local-AI-Engine` on Linux) holds the database, keys, settings,
-and downloaded models, and it lives **outside** the app-binary install tree — rolling the app
-binaries back does not touch it.
+If an in-app update produces a broken build, you can go back to a known-good binary version.
+The per-user **data directory** (`%LOCALAPPDATA%\XE-Local-AI-Engine` on Windows,
+`~/.local/share/XE-Local-AI-Engine` on Linux) is independent from the versioned app binaries,
+but an older binary is not guaranteed to understand a database migrated by a newer version.
+Back up the entire data directory before attempting a rollback.
 
 **Option A — previous version already on disk (Velopack-managed installs).**
 Velopack installs each version into its own versioned folder under the managed install root
@@ -143,12 +143,16 @@ Download the older version's artifact from the release repo (the previous `Setup
 version; because the data dir is separate, your chats and models carry over.
 
 **Option C — portable zip / tester zip.**
-There is no self-update to undo — just run the older unzipped build again (or unzip the
-previous tester zip). Point it at the same data dir to keep your state.
+A Velopack portable tester zip is update-aware, so running an older portable can cause the
+newer RC to be offered again. A legacy `package-rc.sh` tester zip has no self-update. In
+either case, run the older unzipped build against the same data directory only after
+considering the schema caveat below.
 
-**Caveat — database schema is forward-only.** EF Core migrations are **additive** and applied
-on first launch of a newer build; they are **not** auto-reverted when you run an older build.
-Additive columns/tables an older app doesn't know about are harmless, but if a rollback build
-misbehaves against a migrated database, reset it (stop the app, delete `node.sqlite`; you keep
-your downloaded models) — see [troubleshooting.md](troubleshooting.md). Do not hand-edit the
-database.
+**Caveat — database schema is forward-only.** EF Core migrations run on first launch of a
+newer build and are **not** reverted when an older build starts. Some releases may include
+data repairs or destructive schema cleanup, so binary rollback does not imply database
+compatibility. If the older build cannot use the migrated database, stop it and either
+restore the complete pre-update data-directory backup or return to the newer binary. Do not
+delete `node.sqlite` as a rollback step, and do not hand-edit the database. A deliberate
+reset is data loss and belongs only in the explicit reset procedure in
+[troubleshooting.md](troubleshooting.md).

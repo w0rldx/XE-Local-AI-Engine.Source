@@ -3,7 +3,7 @@
 All notable changes to XE-Local-AI-Engine are recorded here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-Tag convention: `vX.Y.Z-rc.N` on the RC branch; `vX.Y.Z` on develop after RC validation.
+Tag convention: `vX.Y.Z-rc.N[.M]` for release candidates and `vX.Y.Z` for validated stable releases.
 
 ## [Unreleased]
 
@@ -13,8 +13,8 @@ Tag convention: `vX.Y.Z-rc.N` on the RC branch; `vX.Y.Z` on develop after RC val
 - Agency-agents starter-pack: 14 MIT-licensed persona templates importable via Operator UI.
 - Codex OAuth cloud chat provider (ChatGPT-subscription sign-in) + tool-calling support.
 - Scheduler foundation (Quartz.NET) with React management UI and realtime SignalR push.
-- Model-fit recommendations (llmfit image, Quartz-driven refresh, React read-only UI).
-- Model type classification (Chat/Embedding/Unknown) with Ollama capability detection.
+- Model-fit recommendations (in-process hardware/GGUF estimator, Quartz-driven refresh, React UI).
+- Model type classification (`Unknown`, `Chat`, `Embedding`, `Reranker`) with persisted detection and operator override.
 - Model capability gating (thinking/tools auto-detected; Ollama 0.30.5 pinned).
 - Unified dialog system (`DialogShell`, `useUnsavedChangesGuard`, `MarkdownEditorField`).
 - hey-api single source of truth migration: backend OpenAPI drives all React REST clients.
@@ -31,7 +31,7 @@ Tag convention: `vX.Y.Z-rc.N` on the RC branch; `vX.Y.Z` on develop after RC val
 - HF model delete 400 (`encodeURIComponent` slash encoding in model-name-path endpoints).
 - OpenAPI client drift gate (`client.gen.ts` 1-line Biome formatting diff resolved).
 
-### Known issues / RC1-accepted behavior
+### Known issues
 - Conversation titles are now encrypted at rest; pre-existing titles (including operator renames) are
   re-derived from the first user message by a one-time startup backfill. Custom renames from before the
   migration are not preserved; conversations without a user message keep a `NULL` title.
@@ -44,8 +44,7 @@ Tag convention: `vX.Y.Z-rc.N` on the RC branch; `vX.Y.Z` on develop after RC val
 - CI enforces a frontend coverage floor only; a backend hard coverage gate is a deferred follow-up
   (no baseline yet, so a real threshold would risk blocking the RC or being hollow).
 
-## [0.1.0-rc.1] — first release candidate (target: 2026-06-10)
+## [0.1.0-rc.1] — initial developer release candidate
 
 This is the first developer RC. It targets Windows 11 external testers via a self-contained ZIP
 with a PowerShell install script. MSI/deb/rpm packaging is deferred to RC2/GA.
-
