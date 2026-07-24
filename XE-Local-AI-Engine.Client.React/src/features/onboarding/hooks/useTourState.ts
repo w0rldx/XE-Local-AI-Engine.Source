@@ -6,6 +6,7 @@ import {
 	getTutorialStateQueryKey,
 	saveTutorialStateMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
+import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 
 // The single tour key shipped today. The persistence shape is an array keyed by tour key so a future second tour can
@@ -77,11 +78,13 @@ export function useTourState(tourKey: string = MAIN_APP_TOUR_KEY): UseTourStateR
 	// with an empty bearer → 401 → the query sticks in `error` and the welcome dialog never surfaces even after login.
 	// Enabling only once an access token exists makes it fire post-login with a valid bearer.
 	const isAuthenticated = useNodeAuthStore((state) => Boolean(state.accessToken));
-	const stateQuery = useQuery({ ...getTutorialStateOptions(), enabled: isAuthenticated });
-	const saveMutation = useMutation(saveTutorialStateMutation());
+	const stateQuery = useQuery(withResponseValidation({ ...getTutorialStateOptions(), enabled: isAuthenticated }));
+	const saveMutation = useMutation(withResponseValidation(saveTutorialStateMutation()));
 
 	const entries = stateQuery.data?.entries ?? [];
-	const hasRecordedEntry = entries.some((entry) => entry.key === tourKey && (entry.status === "completed" || entry.status === "skipped"));
+	const hasRecordedEntry = entries.some(
+		(entry) => entry.key === tourKey && (entry.status === "completed" || entry.status === "skipped"),
+	);
 
 	const isResolved = stateQuery.isSuccess || stateQuery.isError;
 	const shouldPrompt = stateQuery.isSuccess && !hasRecordedEntry;

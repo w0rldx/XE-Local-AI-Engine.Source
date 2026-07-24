@@ -8,10 +8,16 @@ import { ACTIONS, EVENTS, Joyride, STATUS } from "react-joyride";
 import type { EventData } from "react-joyride";
 
 import { listLocalModelsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
+import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { router } from "@/core/integrations/tanstack-router/Router";
 import { OnboardingContext } from "@/features/onboarding/context/OnboardingContext";
-import { buildMainAppTourSteps, FIRST_SHOWCASE_STEP_INDEX, stepRoutes, tourStepIds } from "@/features/onboarding/data/MainAppTourSteps";
+import {
+	buildMainAppTourSteps,
+	FIRST_SHOWCASE_STEP_INDEX,
+	stepRoutes,
+	tourStepIds,
+} from "@/features/onboarding/data/MainAppTourSteps";
 import { clearTourProgress, readTourProgress, useTourState, writeTourProgress } from "@/features/onboarding/hooks/useTourState";
 import { TourShowcasePanel } from "@/features/onboarding/components/TourShowcasePanel";
 import { WelcomeTourDialog } from "@/features/onboarding/components/WelcomeTourDialog";
@@ -244,7 +250,7 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 	// the gate every authenticated hard navigation fires this before the token is restored → a guaranteed 401 →
 	// refresh → retry. Mirrors useTourState / GgufDownloadPoller.
 	const isAuthenticated = useNodeAuthStore((state) => Boolean(state.accessToken));
-	const { data: modelsData } = useQuery({ ...listLocalModelsOptions(), enabled: isAuthenticated });
+	const { data: modelsData } = useQuery(withResponseValidation({ ...listLocalModelsOptions(), enabled: isAuthenticated }));
 	const modelItems = modelsData?.items;
 	const selectedModelName = modelsData?.selectedModelName;
 
@@ -298,8 +304,7 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 		} else if (latestQueryState?.state.status === "success") {
 			const responseData = latestQueryState.state.data as { recommendations?: unknown[] } | undefined;
 			const isEmpty =
-				responseData !== undefined &&
-				(responseData.recommendations === undefined || responseData.recommendations.length === 0);
+				responseData !== undefined && (responseData.recommendations === undefined || responseData.recommendations.length === 0);
 			if (isEmpty) {
 				notifications.show({
 					id: "onboarding-install-empty",
@@ -411,10 +416,7 @@ function useChatReplySignal(queryClient: QueryClient, active: boolean): boolean 
 		[active, queryClient],
 	);
 
-	const getSnapshot = useCallback(
-		() => (active ? hasVisibleAssistantReply(queryClient) : false),
-		[active, queryClient],
-	);
+	const getSnapshot = useCallback(() => (active ? hasVisibleAssistantReply(queryClient) : false), [active, queryClient]);
 
 	return useSyncExternalStore(subscribe, getSnapshot);
 }

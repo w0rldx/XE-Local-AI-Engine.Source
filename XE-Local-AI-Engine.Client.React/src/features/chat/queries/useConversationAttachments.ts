@@ -3,6 +3,7 @@ import { t } from "i18next";
 import { useCallback, useMemo, useState } from "react";
 
 import { deleteConversationFile, listConversationFiles } from "@/core/api/generated";
+import { callWithResponseValidation } from "@/core/api/ResponseValidation";
 import { axiosInstance } from "@/core/api/axios/AxiosInstance";
 import { buildLocalApiUrl } from "@/core/api/utils/LocalApiUrl";
 import { ApiError } from "@/core/api/errors/ApiError";
@@ -82,7 +83,9 @@ export function useConversationAttachments({
 	const { data: attachments = [], isLoading } = useQuery({
 		queryKey: nodeChatQueryKeys.conversationFiles(conversationId),
 		queryFn: async ({ signal }) => {
-			const { data } = await listConversationFiles({ path: { conversationId }, signal, throwOnError: true });
+			const { data } = await callWithResponseValidation(
+				listConversationFiles({ path: { conversationId }, signal, throwOnError: true }),
+			);
 			return (data.items ?? []).map(toChatAttachment);
 		},
 		// No conversation yet → nothing to load (a fresh thread starts empty).
@@ -91,13 +94,15 @@ export function useConversationAttachments({
 
 	const removeMutation = useMutation({
 		mutationFn: async (fileId: string) => {
-			await deleteConversationFile({ path: { conversationId, fileId }, throwOnError: true });
+			await callWithResponseValidation(deleteConversationFile({ path: { conversationId, fileId }, throwOnError: true }));
 		},
 		onSuccess: async () => {
 			await queryClient.invalidateQueries({ queryKey: nodeChatQueryKeys.conversationFiles(conversationId) });
 		},
 		onError: (error: unknown) => {
-			toast.error(uploadErrorMessage(error, t("pages.chat.composer.attachments.removeFailed", "Failed to remove the attachment.")));
+			toast.error(
+				uploadErrorMessage(error, t("pages.chat.composer.attachments.removeFailed", "Failed to remove the attachment.")),
+			);
 		},
 	});
 
