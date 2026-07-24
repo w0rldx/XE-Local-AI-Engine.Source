@@ -2,7 +2,7 @@
 
 > Last reviewed: 2026-07-24 · Code-grounded.
 
-This page is the contributor map of how XE Local AI Engine is tested and what counts as "validated". It covers the test-project topology (backend integration, AI/agent, persistence + migration, Playwright E2E, plus the FakeOllama and Client.Testing support libraries), the validation commands and the `project-validate.sh` scope runner, the GitHub Actions CI pipeline, and the RC evidence bar a maintainer must clear before claiming release/doc work is done. For *what each suite asserts about a subsystem*, follow the per-subsystem links — this page owns the harness, not the features.
+This page is the contributor map of how XE Local AI Engine is tested and what counts as "validated". It covers the test-project topology (backend integration, AI/agent, persistence + migration, Playwright E2E, plus the FakeOllama and Client.Testing support libraries), the validation commands and the `project-validate.sh` scope runner, the state of the (disabled) GitHub Actions workflows and where the gates actually run instead, and the RC evidence bar a maintainer must clear before claiming release/doc work is done. For *what each suite asserts about a subsystem*, follow the per-subsystem links — this page owns the harness, not the features.
 
 Test stack at a glance: **TUnit 1.58.0** on **Microsoft.Testing.Platform (MTP)** for all .NET suites, **NSubstitute 5.3.0** for mocks, **Microsoft.Playwright 1.61.0 + TUnit.Playwright** for browser E2E, and **Vitest (v8 coverage)** for the React client. `global.json` sets a `10.0.100` feature-band baseline (`rollForward: latestFeature`, so it rolls forward to the highest installed 10.0 feature band and patch at or above `10.0.100` rather than pinning an exact version) and `"test": { "runner": "Microsoft.Testing.Platform" }`, so the whole repo runs under MTP, not VSTest.
 
@@ -103,26 +103,41 @@ The everyday loop is `--scope changed --serial`; E2E is deliberately behind `--c
 
 > Note: `scope_smoke` / `scope_backend_smoke` currently invoke the *full* `dotnet test` (not a reduced subset) — the "smoke" backend body is identical to the full backend body in `project-validate.sh`. Treat backend smoke as a full backend run today.
 
-## Continuous integration
+## Continuous integration — dormant
 
-CI lives in `.github/workflows/build-and-test.yml`. It runs automatically on **`pull_request`** and **`push`** to `develop`/`main`, plus **`workflow_dispatch`**, and is also **`workflow_call`**-reusable (the release workflow calls it so the exact tagged commit re-runs these gates before packaging). Two jobs:
+> **GitHub Actions is disabled on this repository and has never produced a successful run.** Nothing in `.github/workflows/` gates a merge or a release today. Verified 2026-07-24 via `gh workflow list --all` and `gh run list`.
 
-**`build-and-test` (ubuntu-latest)** — SDK from `global.json`, then restore + `build -c Release --no-restore`, then a **single auto-enrolled solution-wide test step**: `dotnet test XE-Local-AI-Engine.slnx -c Release --no-build --max-parallel-test-modules 1`. `dotnet test` on the solution runs every MTP test project (name ends `.Tests` / contains `.Tests.`), so a new suite needs no workflow edit; the step pipes output through `tee` and a **hollow-gate guard** greps for a `Passed!`/`Failed!` summary and fails if none is found (catching a silent green where zero suites enrolled).
+| Workflow file | Registered state | Run history |
+|---|---|---|
+| `build-and-test.yml` | `disabled_manually` | 3 runs, **3 failures**, last attempt 2026-04-20 |
+| `release.yml` | `disabled_manually` | 3 runs, **3 failures**, all 2026-06-27, each dead in ~40 s |
+| `e2e.yml` | **not a registered workflow** | never run; its nightly cron has never fired |
 
-Two deliberate CI choices a maintainer must preserve:
-- **Solution-wide `dotnet test` with `--max-parallel-test-modules 1`** — modules run serially (concurrent runs time out / exhaust the WSL `inotify` watch limit on shared runners); do not raise the parallelism or split back into per-project steps.
-- **`TZ=Europe/Berlin`** on the test step — a non-UTC zone deliberately exposes time-zone bugs (the comment cites `CapabilityReporterTests`). Don't "simplify" this to UTC.
+Six runs, six failures, zero successes, in the repository's whole history. Two further reasons `build-and-test.yml` could not have gated the current RC even if it were enabled: it triggers only on `pull_request`/`push` to `develop`/`main`, the RC branch is `feature/agent-mode-foundation`, and **`main` does not exist** in this repo.
 
-The main gate does **not** run E2E — the E2E csproj demotes itself to a library unless `-p:RunE2ETests=true`, so the MTP runner skips it. E2E instead runs in its own **`.github/workflows/e2e.yml`** (nightly cron + manual dispatch + PRs labelled `run-e2e`), which builds the SPA and installs Playwright browsers; it is non-blocking and not a PR merge gate.
+The workflow files are still tracked and are the design of record — read them for intent, and keep them accurate if you change the validation commands. But treat every gate below as **what would run if the workflows were re-enabled**, not as something protecting the branch you are on.
 
-**`client-react` (ubuntu-latest)** — pnpm + Node 22, `install --frozen-lockfile`, then in order: **`openapi:check`** (regenerate the hey-api client from the committed OpenAPI spec and `git diff --exit-code` — fails if generated output drifts from what's committed; deterministic, no running host needed), **`licenses:check`** (production-dependency license allowlist / manifest drift gate), `lint`, **`test:coverage:check`** (Vitest with coverage thresholds enforced), `build`, and `pnpm audit --prod --audit-level=high` (only high/critical block; moderate/low are advisory). The `openapi:check` drift gate is the mechanism that keeps "OpenAPI → hey-api as single source of truth for all React REST" honest (see [API & Hubs](09-api-and-hubs.md), [React Client](10-react-client.md)).
+**Where the gates actually live today:** [`publish/package-tester-win.ps1`](../../publish/package-tester-win.ps1) is the only enforced quality gate in the project. It runs the frontend gate set (frozen install, lint, OpenAPI drift check, third-party license check, coverage-gated tests, production dependency audit, production build) and the backend gate set (restore, transitive NuGet vulnerability audit, Release build, solution-wide serial tests with a hollow-gate guard) itself, on the packaging machine, at release time. Every published tester RC came from it. A gate added to a workflow file enforces nothing; a gate added to that script is real.
 
-### Release pipeline gates (separate workflow)
+Between releases, the enforcement is you: run [`.opencode/scripts/project-validate.sh`](../../.opencode/scripts/project-validate.sh) or the raw commands above before you call a change done.
 
-Distinct from `build-and-test.yml`, the release/packaging path adds two gates a maintainer must keep green:
+### What the dormant workflows describe
 
-- **git-cliff changelog generation** — release runs git-cliff over the standardised `v`-prefixed tags (config `cliff.toml`, output `CHANGELOG.md` / `RELEASE_NOTES.md`) and feeds the notes into `vpk pack --releaseNotes`. See [Hosting & Deployment](11-hosting-and-deployment.md).
-- **SPA-build-required publish gate** — publishing now **fails fast if the React SPA `dist/` build is missing**, so a packaged build can never ship a blank page. Build the SPA (`pnpm run build`) before any publish/`vpk pack`. See [Hosting & Deployment](11-hosting-and-deployment.md).
+**`build-and-test.yml`** — designed to run on `pull_request`/`push` to `develop`/`main` plus `workflow_dispatch`, and to be `workflow_call`-reusable (`release.yml` calls it so the exact tagged commit re-runs these gates before packaging). Two jobs:
+
+- **`build-and-test` (ubuntu-latest)** — SDK from `global.json`, restore + `build -c Release --no-restore`, then a single auto-enrolled solution-wide `dotnet test XE-Local-AI-Engine.slnx -c Release --no-build --max-parallel-test-modules 1`. Solution-level `dotnet test` runs every MTP test project (name ends `.Tests` / contains `.Tests.`), so a new suite needs no workflow edit; output is piped through `tee` and a **hollow-gate guard** greps for a `Passed!`/`Failed!` summary, failing if none is found (catching a silent green where zero suites enrolled). `package-tester-win.ps1` implements the same hollow-gate guard, which is why that one is load-bearing today.
+- **`client-react` (ubuntu-latest)** — pnpm + Node 22, `install --frozen-lockfile`, then in order `openapi:check`, `licenses:check`, `lint`, `test:coverage:check`, `build`, and `pnpm audit --prod --audit-level=high`. The same set now runs in the packaging script's frontend leg.
+
+Two design choices worth preserving in the file: **`--max-parallel-test-modules 1`** (concurrent modules time out / exhaust the WSL `inotify` watch limit on shared runners) and **`TZ=Europe/Berlin`** on the test step (a non-UTC zone deliberately exposes time-zone bugs; the comment cites `CapabilityReporterTests`). Note that `TZ` is a **Unix-only** mechanism in .NET (`TimeZoneInfo.Unix.NonAndroid.cs` reads it; the Windows implementation resolves the zone from `kernel32!GetDynamicTimeZoneInformation` and reads no environment variable). It therefore cannot be reproduced on a Windows packaging machine by setting a variable — `package-tester-win.ps1` instead **requires** the machine's own time zone to be non-UTC, throwing before the test leg if the current offset is `+00:00` and pointing at `tzutil /s`, with `-AllowUtcTestTimeZone` to accept the reduced coverage.
+
+**`e2e.yml`** is written for a nightly cron, manual dispatch, and PRs labelled `run-e2e`, building the SPA and installing Playwright browsers. It has never executed. E2E is a manual lane only: `project-validate.sh --scope e2e --confirm-e2e`, or the raw commands with `-p:RunE2ETests=true`.
+
+### Release-path gates
+
+Two gates ride the packaging path rather than any test suite:
+
+- **Release-notes generation** — git-cliff renders `RELEASE_NOTES.md` from conventional commits between the previous `v`-prefixed tag and HEAD (config `cliff.toml`), and the notes are fed to `vpk pack --releaseNotes`. `package-tester-win.ps1` downloads a **checksum-pinned** git-cliff and invokes it directly; it does **not** call `scripts/generate-release-notes.sh`. See [Hosting & Deployment](11-hosting-and-deployment.md).
+- **SPA-build-required publish gate** — the `GuardNodeReactBuildPresentOnPublish` MSBuild target **fails a publish whose React `dist/` build is missing**, so a packaged build can never ship a blank page. This one is enforced by MSBuild, so it holds on every publish path including a hand-run `dotnet publish`. Build the SPA (`pnpm run build`) first. See [Hosting & Deployment](11-hosting-and-deployment.md).
 
 ## Coverage gates
 
@@ -138,7 +153,7 @@ The README's "RC readiness status" section is the contract: **do not mark releas
 - pinned runtime binary and package checksums (llama.cpp release pins; see [Local Runtime & Providers](03-local-runtime-and-providers.md)),
 - a runtime smoke-test transcript.
 
-Two things that **cannot** be proven in CI/WSL2 and must be verified on a real desktop (call this out explicitly in any RC sign-off): the no-orphan guarantee (terminal/console close reaps the `llama-server` child) and the Windows Job Object hard-kill path — both require a real desktop with a model loaded (README "Self-contained desktop run"). See [Hosting & Deployment](11-hosting-and-deployment.md).
+Two things that **cannot** be proven in WSL2 or on a headless runner and must be verified on a real desktop (call this out explicitly in any RC sign-off): the no-orphan guarantee (terminal/console close reaps the `llama-server` child) and the Windows Job Object hard-kill path — both require a real desktop with a model loaded (README "Self-contained desktop run"). See [Hosting & Deployment](11-hosting-and-deployment.md).
 
 ## Maintainer checklist
 
@@ -147,7 +162,7 @@ Two things that **cannot** be proven in CI/WSL2 and must be verified on a real d
 - New persistence entity surface change → re-check the `NegativeFence` compile fence still builds.
 - New WorkerHub outbound call → assert it through `RecordingHubMessageSender` and confirm no secret crosses the boundary ([Security & Privacy](12-security-and-privacy.md)).
 - New backend behavior that touches a model → drive it through `FakeOllama` (script the response) rather than a live runtime; only flip `RUN_LOCAL_INTEGRATION=true` for fidelity runs.
-- React change → run `pnpm run lint` + `pnpm test`; if you touched API calls, run `pnpm run openapi:check` so the CI drift gate stays green.
+- React change → run `pnpm run lint` + `pnpm test`; if you touched API calls, run `pnpm run openapi:check` yourself — nothing else will catch the drift until the release packager runs it.
 - Before claiming done: backend + frontend transcripts green, `openapi:check` clean, and (for RC) the desktop-only smoke evidence captured.
 
 ## Related pages

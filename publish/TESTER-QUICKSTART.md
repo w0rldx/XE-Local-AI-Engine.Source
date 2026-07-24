@@ -15,9 +15,11 @@ $env:XE_TESTER_GITHUB_APP_CLIENT_ID = "<real GitHub App client ID (Iv..., not th
 
 The script reads the release version from `Directory.Build.props`, runs all frontend and backend release
 gates (including OpenAPI/license/coverage/dependency audits), publishes `win-x64`, validates the staged
-tester update config, builds the Velopack portable package, and uploads it to the tester release repo.
-The upload remains a draft. Smoke-test the exact generated `Portable.zip`, then publish
-that unchanged draft using the printed hash:
+tester update config, builds the Velopack portable package, and uploads it to the tester release repo —
+**`w0rldx/XE-Local-AI-Engine.Tester-App`**, a repository separate from the source repo
+(`w0rldx/XE-Local-AI-Engine`). The `v<version>` git tag goes on HEAD of the *source* repo; the release
+is created on the *tester* repo. The upload remains a draft. Smoke-test the exact generated
+`Portable.zip`, then publish that unchanged draft using the printed hash:
 
 ```powershell
 .\publish\package-tester-win.ps1 -PublishDraft -ExpectedPortableSha256 <printed-sha256>
@@ -27,11 +29,18 @@ Publication downloads and hashes the Portable ZIP attached to the draft; it does
 trust a local copy. The upload step also refuses to merge into an already-published
 release.
 
-Use `-SkipUpload` for a pre-tag packaging rehearsal; validation remains mandatory. The
-client ID is public configuration supplied at packaging time; do not commit a guessed
-value or placeholder.
+Run it from **PowerShell 7+ (`pwsh`)** — the script declares `#Requires -Version 7.0` and will not run under
+Windows PowerShell 5.1. The packaging machine also needs a **non-UTC time zone** (the script checks, and points at
+`tzutil /s`).
 
-For a Linux portable zip, use `publish/package-rc.sh --rid linux-x64`.
+Use `-SkipUpload` for a pre-tag packaging rehearsal: every build and test gate still runs, and it relaxes only the
+client-ID requirement. An ID-less rehearsal bakes no client ID, ships an inert updater, and is stamped
+`REHEARSAL-DO-NOT-SHIP.txt` inside the zip — never hand one to a tester. The client ID is public configuration
+supplied at packaging time; do not commit a guessed value or placeholder.
+
+For a Linux portable zip, use `publish/package-rc.sh --rid linux-x64` (run it on Linux/WSL). That zip is
+**not** published anywhere and does **not** self-update — it ships the intentionally inert `main` update
+channel. Only the Windows Velopack bundle above has a live update feed.
 
 > **Smoke-test every Windows RC on real Windows before publishing it.** Native-library
 > self-extraction, console-close child cleanup, and browser auto-open cannot be verified off-Windows.
@@ -39,9 +48,12 @@ For a Linux portable zip, use `publish/package-rc.sh --rid linux-x64`.
 ## Run it (tester)
 
 **Windows**
-1. Download the Velopack `Portable.zip` asset from the tester release and unzip it.
+1. From the latest release at `https://github.com/w0rldx/XE-Local-AI-Engine.Tester-App/releases`,
+   download `XE-Local-AI-Engine-win-Portable.zip` and unzip it. (There is no `Setup.exe` — the
+   packager runs `vpk pack --noInst`, so the portable bundle is the shipped flavor. The `.nupkg`
+   files and `releases.win.json` next to it are for the in-app updater, not for you.)
 2. Start the packaged XE Local AI Engine executable. Velopack-managed portable builds enter
-   desktop mode automatically.
+   desktop mode automatically — no launcher script needed.
 
 **Linux**
 1. Unzip anywhere.
@@ -51,6 +63,10 @@ For a Linux portable zip, use `publish/package-rc.sh --rid linux-x64`.
 Either way: a console/terminal opens with live logs and your default browser opens the app
 on a local loopback URL (`http://127.0.0.1:<port>/`). If the browser does not open, the URL
 is printed in the console — paste it manually.
+
+The bundle ships `LICENSE` and `NOTICE` alongside the executable. **This software is
+proprietary — all rights reserved**; `LICENSE` states the terms and `NOTICE` carries the
+third-party attributions. `READ-ME-FIRST.txt` says the same and points at `LICENSE`.
 
 ## What to expect on first run
 

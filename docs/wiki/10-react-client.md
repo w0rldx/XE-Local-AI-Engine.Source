@@ -1,6 +1,6 @@
 # React Client (Frontend)
 
-> Last reviewed: 2026-06-27 · Code-grounded.
+> Last reviewed: 2026-07-24 · Code-grounded.
 
 The React management UI lives in `XE-Local-AI-Engine.Client.React` and is the operator console for a single node: chat, agent mode, model management/advisor, scheduler, MCP, skills, settings, and dashboards. It is a Vite + React 19 + Mantine SPA, served same-origin from the Node Web Server's `wwwroot`. All server state flows through TanStack Query over a **generated hey-api SDK** that is the single source of truth for REST; SignalR drives the streaming/live surfaces. This page maps the directory layout, the state strategy, the transport plumbing, the shared UI primitives, i18n, and how the bundle is hosted.
 
@@ -22,7 +22,7 @@ Source: `XE-Local-AI-Engine.Client.React/package.json`.
 | UI/session state | `zustand` 5 | Auth token, theme, sidebar, language, dev mode, pagination prefs. |
 | HTTP | `axios` 1 | One shared instance behind the generated client. |
 | Validation | `zod` 4 | Boundary parsing of API responses + form schemas. |
-| Realtime | `@microsoft/signalr` 10 | Chat, scheduler, preview hubs. |
+| Realtime | `@microsoft/signalr` 10 | Nine hubs (chat, scheduler, preview, GGUF download, CUDA build, source build, knowledge base, image jobs, development attempts) behind one refcounted shared connection per hub path. |
 | Markdown | `react-markdown` + `remark-gfm` + `react-syntax-highlighter` | Chat + editor rendering. |
 | i18n | `i18next` + `react-i18next` + browser language detector | `en` / `de`. |
 | Canvas | `@xyflow/react` | Preview workflow builder (see [Agent Mode](04-agent-mode.md) / Preview). |
@@ -51,14 +51,16 @@ i18n is initialized as a side-effect import (`src/i18n.ts`) and `dayjs` is exten
 
 ## Directory layout
 
-Two top-level trees under `src/`:
+Two trees carry essentially all the code:
 
-- **`src/core/`** — cross-cutting infrastructure: API/transport (`core/api`), auth (`core/auth`), routing/query integrations (`core/integrations`), layout/navigation (`core/layout`), theme (`core/theme`), locales plumbing (`core/locales`), dev tools (`core/dev-tools`), the shared UI library (`core/ui`), and the browser AI runtime (`core/runtime` — the WebGPU/WASM TTS engine: `TtsProvider`/`TtsWorker`, `VoiceRuntime`, `ModelCache`, `CapabilityDetector`, consumed by `features/voice`).
-- **`src/features/`** — one folder per product area, each self-contained with `pages/`, `components/`, `queries/` (TanStack Query hooks), `models/` (DTO ↔ view mappers + Zod), and optionally `stores/`.
+- **`src/core/`** — cross-cutting infrastructure: API/transport (`core/api`, incl. `core/api/signalr`), auth (`core/auth`), routing/query integrations (`core/integrations`), layout/navigation (`core/layout`), theme (`core/theme`), locales plumbing (`core/locales`), dev tools (`core/dev-tools`), frontend diagnostics collection + redaction (`core/diagnostics`), the shared UI library (`core/ui`), and the browser AI runtime (`core/runtime` — the WebGPU/WASM TTS engine: `TtsProvider`/`TtsWorker`, `VoiceRuntime`, `ModelCache`, `CapabilityDetector`, consumed by `features/voice`).
+- **`src/features/`** — one folder per product area, each self-contained with `pages/`, `components/`, `queries/` (TanStack Query hooks), `models/` (DTO ↔ view mappers + Zod), and optionally `stores/` and `hooks/`.
 
-### The 20 feature folders
+Seven smaller siblings exist and are worth knowing before you put something in the wrong place: `src/capabilities/` (the central `nodeRoutePaths` + `nodeCapabilities` declaration), `src/routes/` + the generated `routeTree.gen.ts` (TanStack Router file routes — thin, one `createFileRoute` per page), `src/data/` (static navigation and language menu data), `src/components/` (the logo marks), `src/modules/` (the standalone theme configurator), `src/locales/` (the bundled `en`/`de` JSON), and `src/pages/` (the `Home` landing page).
 
-Source: `ls XE-Local-AI-Engine.Client.React/src/features`.
+### The 25 feature folders
+
+Source: `ls XE-Local-AI-Engine.Client.React/src/features` (25 directories).
 
 | Feature | What it owns | Deep-dive |
 |---|---|---|
@@ -70,20 +72,29 @@ Source: `ls XE-Local-AI-Engine.Client.React/src/features`.
 | `chat` | Streaming chat UI, SignalR adapter, reasoning/tool-call rendering, sampling options, file-upload attachments + pane drag-and-drop (`usePaneFileDrop`, `ChatAttachmentChips`) | [Chat](05-chat.md) |
 | `cloud-settings` | Cloud provider credentials/config (kept node-local) | [Security & Privacy](12-security-and-privacy.md) |
 | `dashboard` | Node overview surface | — |
+| `development` | **Development Mode** operator surface at `/development`: project creation bound to a registered Git repository (`DevelopmentProjectForm`), the task/attempt workflow, and `DevelopmentLivePanel` streaming live attempt output over `DevelopmentAttemptHub` (`hooks/useDevelopmentAttemptHub.ts`). The page resolves the authenticated server capability (`development/capability`) before exposing projects or actions, so a backend kill switch fails closed without a separate frontend build | [Architecture Overview](01-architecture-overview.md#development-mode-registered-source-managed-worktree) |
+| `diagnostics` | **Local-only** frontend error diagnostics at `/diagnostics` — the *only* feature with no backend endpoint at all. `SnapshotStore.ts` is an **IndexedDB** store (`idb`, DB `xe-diagnostics`) holding at most 25 snapshots / 25 MB, with retention enforced *inside* the same readwrite transaction as the write so eviction is atomic. `DiagnosticsPanel` lists/inspects snapshots; `BreadcrumbTimeline`, `NetworkLog` and `RrwebReplay` render one; `ExportSnapshot` writes a bundle to disk and import reads one back. Reached from the header/mobile nav "report a problem" action (`ReportProblemButton`). Collectors and redaction live in `core/diagnostics/`. **Nothing here is ever transmitted** | — |
+| `images` | Local text-to-image at `/images`: generation form, job list/cards, result view, installed-model manager, plus `useImageJobHub` (subscribe-then-replay, dedupe on `seq`) and `useImageObjectUrl` (fetches the encrypted PNG as a `Blob`) | [Image Generation](14-image-generation.md) |
 | `invocations` | Tool/function invocation history | [Agent Mode](04-agent-mode.md) |
+| `knowledge` | Knowledge Base / RAG at `/knowledge-base`: document upload panel + table, status badges, last-known-good badge, document drawer, and the hybrid search panel; live indexing status via `useKnowledgeBaseHub` | [Knowledge Base / RAG](15-knowledge-base.md) |
 | `loaded-models` | Live loaded-model overview + graceful eject | [Local Runtime & Providers](03-local-runtime-and-providers.md) |
 | `mcp` | MCP server registration + tooling | [API & Hubs](09-api-and-hubs.md) |
 | `model-fit` | Box-aware GGUF recommendation + quant pick, plus the per-machine inference-profile panel (`InferenceProfilePanel`, explore/benchmark/freeze) | [Model Fit](07-model-fit.md) |
 | `models` | Model management (HF GGUF discovery/download, classification) | [Local Runtime & Providers](03-local-runtime-and-providers.md) |
-| `node-settings` | User-editable cached node settings, local runtime config | [Hosting & Deployment](11-hosting-and-deployment.md) |
+| `node-settings` | User-editable cached node settings, local runtime config, and the **runtime build cards** — `CudaBuildCard` / `SourceBuildCard` drive the in-app llama.cpp source build and stream phase + sequenced log lines over `useSourceBuildHub` | [Hosting & Deployment](11-hosting-and-deployment.md), [Local Runtime & Providers](03-local-runtime-and-providers.md#26-in-app-source-builds-linux) |
 | `onboarding` | First-response guided tour (React Joyride) + welcome dialog with language picker + showcase panel | — |
 | `preview` | Open Canvas (Preview) workflow builder (React Flow); surfaced under the "Preview" nav group | [Agent Mode](04-agent-mode.md) |
 | `scheduler` | Quartz job management + run history | [Scheduler](06-scheduler.md) |
 | `skills` | Node skill library + per-agent skill picklist | [Agent Mode](04-agent-mode.md) |
 | `tools` | Tool catalog / capability surface | [Agent Mode](04-agent-mode.md) |
+| `usage-dashboard` | Agent token-usage dashboard at `/usage`, backed by the single `agents/usage-summary` endpoint. `models/UsageDashboardModel.ts` does all the aggregation **client-side** — `aggregateByDay` / `aggregateByModel`, `clampDateRange` against the server-reported retention floor (30-day fallback) — feeding `UsageTotalsCards`, `UsageDailyChart`, `UsageProviderBreakdown` and `UsageModelTable`. Like `/invocations` it carries no extra route guard: the authenticated `_layout` *is* the operator gate and the endpoint 401s otherwise | [Agent Mode](04-agent-mode.md) |
 | `voice` | Browser text-to-speech: voice manifest adapter, preferences store, composer controls, per-message play button, and voice-audition preview (Kokoro on WebGPU) | [Chat](05-chat.md) |
 
-Each feature follows the same shape, e.g. `features/agents/` has `pages/AgentsPage.tsx`, `components/*` (forms, panels, gallery), `queries/use*.ts` (TanStack Query hooks), `models/*Models.ts` + `*Mappers.ts` (Zod + DTO mapping), and `stores/AgentManagementStore.ts`.
+Each feature follows the same shape, e.g. `features/agents/` has `pages/AgentsPage.tsx`, `components/*` (forms, panels, gallery), `queries/use*.ts` (TanStack Query hooks), `models/*Models.ts` + `*Mappers.ts` (Zod + DTO mapping), and `stores/AgentManagementStore.ts`. Two features deviate deliberately: `diagnostics` is flat (no `pages/`, no `queries/` — it has no backend to query), and `about` renders as a dialog rather than a route.
+
+### Feature ↔ route ↔ capability
+
+Route paths and their capability flags are declared centrally in `src/capabilities/NodeCapabilities.ts` (`nodeRoutePaths`, `nodeCapabilities`), not scattered across route files. Capability-flagged pages (`agents`, `skills`, `mcp`, `scheduler`, `modelFit`, `loadedModels`, `preview`, `knowledgeBase`, `images`, `development`) are all **on** by default; `usage` and `diagnostics` are ungated. `development` additionally re-checks the *server* capability at runtime — a frontend flag alone is not treated as authoritative.
 
 ---
 
@@ -92,7 +103,7 @@ Each feature follows the same shape, e.g. `features/agents/` has `pages/AgentsPa
 Two stores, strictly separated:
 
 1. **Server state → TanStack Query.** Every REST read/write is a query/mutation hook under a feature's `queries/` folder (e.g. `features/agents/queries/usePlaybookActions.ts`, `features/skills/queries/useSkills.ts`). The `QueryClient` is provided by `core/integrations/tanstack-query/Provider.tsx`. Server data is **not** mirrored into Zustand.
-2. **UI/session state → Zustand.** ~19 stores (`find src -name "*Store.ts*"`), e.g. `core/auth/stores/NodeAuthStore.tsx` (access token + actions), `core/theme/stores/ThemeStore.tsx`, `core/layout/stores/SidebarStore.tsx`, `core/locales/stores/UserLanguageStore.tsx`, `core/dev-tools/stores/DeveloperModeStore.ts`, and `core/ui/components/TablePagination/useTablePaginationStore.ts`.
+2. **UI/session state → Zustand.** `find src -name "*Store.ts*"` returns **22** files, **21** of which are Zustand stores — e.g. `core/auth/stores/NodeAuthStore.tsx` (access token + actions), `core/theme/stores/ThemeStore.tsx`, `core/layout/stores/SidebarStore.tsx` + `DesktopNavigationBarStore.tsx`, `core/locales/stores/UserLanguageStore.tsx`, `core/dev-tools/stores/DeveloperModeStore.ts`, and `core/ui/components/TablePagination/useTablePaginationStore.ts`. The 22nd, `features/diagnostics/SnapshotStore.ts`, is **not** Zustand — it is the IndexedDB snapshot store and imports no state library. Don't include it when reasoning about the Zustand surface.
 
 Stores use the plain `create<T>()` factory with an `actions` sub-object (see `NodeAuthStore.tsx`). Components subscribe with field selectors (`useNodeAuthStore((s) => s.accessToken)`); `useShallow` is not currently in use, so object/array selectors must be hand-shaped to avoid re-render churn — a maintainer adding a multi-field selector should prefer separate selectors or introduce `useShallow` at that point.
 
@@ -122,13 +133,24 @@ withCredentials: true,
 
 Under `core/api/generated/` (regenerated by `pnpm openapi`):
 
-- `types.gen.ts` (~2316 symbols) — request/response DTO types.
-- `sdk.gen.ts` (~132 symbols) — typed operation functions.
-- `@tanstack/react-query.gen.ts` (~178 symbols) — query/mutation option factories.
-- `zod.gen.ts` (~434 symbols) — Zod schemas mirroring the DTOs.
+- `types.gen.ts` (~1097 exported symbols) — request/response DTO types.
+- `sdk.gen.ts` (~191 exports) — typed operation functions.
+- `@tanstack/react-query.gen.ts` (~269 exports) — query/mutation option factories.
+- `zod.gen.ts` (~660 exports) — Zod schemas mirroring the DTOs.
 - `client/`, `core/` — hey-api runtime (axios adapter, serializers, SSE).
 
 `pnpm openapi:check` fails if the generated output drifts from the committed OpenAPI doc — the backend OpenAPI document is the single source of truth.
+
+### SignalR: one shared connection per hub
+
+Hubs are not in OpenAPI, so the client half is hand-written — but not per-component. `core/api/signalr/SharedHubConnection.ts` is a **refcounted module-level manager: one `HubConnection` per hub path**, reused across mounts. The first `acquire` builds and starts it, later acquires reuse it, the last `release` stops it — replacing the older pattern where every feature hook built a fresh connection in its mount effect and each page visit paid a full negotiate + WebSocket upgrade.
+
+Two properties a maintainer must preserve:
+
+- **Handlers stay per-subscriber.** The manager owns only the connection *lifetime*; each hook still calls `connection.on(...)` in its effect and `connection.off(...)` with the **same handler reference** on cleanup. SignalR fans a client method out to every registered handler, so concurrent subscribers to one hub do not steal each other's events.
+- **StrictMode / fast-remount safety.** The stop is deferred until the start promise settles *and* re-checks the refcount, so an acquire → release → acquire flip (React's double-invoke, or a quick navigate-back) never aborts an in-flight negotiation nor tears down a connection a new subscriber has already taken over.
+
+`accessTokenFactory` reads the *current* store token on the initial negotiate and on every automatic reconnect, so a long-lived shared connection re-authenticates across reconnects; on logout the holding pages unmount, the refcount drops to zero and the connection stops. Documented parity gap: unlike `NodeChatConnection`, this factory does **not** proactively refresh a near-expiry token — neither did the per-mount hooks it replaced.
 
 ### Interceptors & 401 handling
 
@@ -191,20 +213,27 @@ Critical config (documented inline): `interpolation: { escapeValue: false }`. Re
 In dev the React app runs under Vite (5173) and proxies to the Node Web Server; in production the built `dist/` is copied into the Node Web Server's `wwwroot/` at packaging time and served by ASP.NET Core. Source: `XE-Local-AI-Engine.Client/Program.cs`.
 
 ```
-app.UseStaticFiles();                 // serve hashed assets from wwwroot
+app.UseStaticFiles();                 // serve hashed assets from wwwroot (Program.cs:263)
 ...
 app.UseFastEndpoints(...);            // /api/local/v1/* (RoutePrefix = LocalApiRoutes.Prefix)
-app.MapHub<LocalChatHub>(...);        // local SignalR hubs (Operator-authorized)
+app.MapHub<LocalChatHub>(...);        // nine local SignalR hubs (Operator-authorized), Program.cs:341-359
 app.MapHub<SchedulerHub>(...);
 app.MapHub<PreviewWorkflowHub>(...);
+app.MapHub<GgufDownloadHub>(...);
+app.MapHub<CudaBuildHub>(...);
+app.MapHub<LlamaCppSourceBuildHub>(...);
+app.MapHub<KnowledgeBaseHub>(...);
+app.MapHub<ImageJobHub>(...);
+if (isDevelopmentModeEnabled)         // Development:Enabled, default true
+    app.MapHub<DevelopmentAttemptHub>(...);
 ...
-app.MapFallbackToFile("index.html");  // SPA fallback → client-side routing
+app.MapFallbackToFile("index.html");  // SPA fallback → client-side routing (Program.cs:392)
 ```
 
 Notes for maintainers:
 
 - This repo uses `UseStaticFiles()` + `MapFallbackToFile("index.html")`. There is **no** `UseDefaultFiles()` call in `Program.cs` — the fallback to `index.html` is what makes deep links resolve to the SPA. (The C0re "static files" convention is the same shape; the `UseDefaultFiles` step is not present here.)
-- Static files and the fallback are mapped **after** the local-API security middleware (`LocalApiSecurityMiddleware`) and auth; the three SignalR hubs each `RequireAuthorization(NodeAuthorizationPolicies.Operator)`.
+- Static files are mapped **before** the local-API security middleware; the API surface, auth and the hubs come after. All nine hubs `RequireAuthorization(NodeAuthorizationPolicies.Operator)`. Full ordering and the per-hub contracts: [API & Hubs](09-api-and-hubs.md).
 - Same-origin is the whole reason the axios `baseURL` is `""`: in production the SPA and the API share one origin, so relative paths just work.
 - HTTPS redirect/HSTS are skipped in desktop mode (`isDesktop`); Swagger/Scalar (`/scalar`) and the Agent Framework DevUI (`/devui`) are dev-only and never shipped to production.
 
@@ -213,7 +242,8 @@ Notes for maintainers:
 ## Cross-cutting concerns a contributor must know
 
 - **Generated code is off-limits to hand-edits.** Anything under `core/api/generated/` is regenerated; change the backend endpoint/DTO and run `pnpm openapi`, then commit the diff (`openapi:check` enforces this).
-- **One axios instance, one baseURL.** Do not create ad-hoc axios instances or change `baseURL` away from `""`; both break the same-origin invariant.
+- **One axios instance, one baseURL.** Do not create ad-hoc axios instances or change `baseURL` away from `""`; both break the same-origin invariant. There is exactly **one** sanctioned exception — `authClient` in `core/auth/api/NodeAuthApi.ts:12` — and it exists so the shared instance's 401-refresh interceptor cannot recurse through the refresh call itself. Anything else belongs on the shared instance via `buildLocalApiUrl()`.
+- **Hub connections are shared, not per-component.** Acquire through `SharedHubConnection`; never `new HubConnectionBuilder()` inside a feature hook.
 - **Secrets never reach the store.** Auth/cloud/HMAC credentials stay node-local; the browser only ever holds a short-lived node access token in `NodeAuthStore`. See [Security & Privacy](12-security-and-privacy.md).
 - **Feature isolation.** New UI goes in a `features/<name>/` folder mirroring the existing shape (`pages` / `components` / `queries` / `models` / optional `stores`); keep cross-feature reuse in `core/`.
 

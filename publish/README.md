@@ -1,9 +1,48 @@
 # XE Local AI Engine — distribution & release guide
 
-This directory holds the desktop launcher scripts, the canonical Windows tester
-RC packager (`package-tester-win.ps1`), and the cross-platform manual zip packager
-(`package-rc.sh`). This document explains **how the version is set** and **how a
-release is created**.
+This directory holds the desktop launcher and uninstaller scripts, the canonical
+Windows tester RC packager (`package-tester-win.ps1`), and the manual portable-zip
+packager (`package-rc.sh`, a bash script). This document explains **how the version
+is set** and **how a release is created**.
+
+## Where releases go
+
+Source and artifacts live in **two different repositories** that share only a version string:
+
+| Role | Repository |
+| --- | --- |
+| **Source** — the code and its `v<version>` tags | `w0rldx/XE-Local-AI-Engine` |
+| **Tester artifacts** — published releases + Velopack update feed | `w0rldx/XE-Local-AI-Engine.Tester-App` |
+
+The `v<version>` git tag is created on **HEAD of the source repo**; `vpk upload github`
+then creates a same-named release on the **tester repo**, whose commits are unrelated.
+A tester release therefore has no tag in the source repo, and vice versa — both are expected.
+
+**Tag form changed mid-flight.** The seven releases published 2026-06-26 → 2026-07-07 carry
+a **bare** tag (`0.1.0-rc.4.1`) with a `v`-prefixed release *name*. `package-tester-win.ps1`
+now uploads with `--tag v<version>`, so releases from `0.1.0-rc.4.2` onward are v-prefixed on
+both. Its `Find-GitHubRelease` probes `v<version>`, then `<version>`, then the release name —
+so the already-published guard sees the live release regardless of how its tag was spelled.
+
+## Prerequisites on the packaging machine
+
+`package-tester-win.ps1` runs on Windows and needs:
+
+- **PowerShell 7+ (`pwsh`) — not Windows PowerShell 5.1.** The script declares
+  `#Requires -Version 7.0`. It pairs `$ErrorActionPreference = "Stop"` with native-stderr
+  redirection to detect a `gh` 404, which 5.1 escalates into a terminating error instead.
+  Launch it from `pwsh`, not from the blue `powershell.exe` console.
+- On `PATH`: **`pnpm`**, the **.NET SDK** per `global.json`, **`dnx`** (it runs
+  `dnx vpk@1.2.0`), and an **authenticated `gh` CLI** (13 call sites —
+  `gh release view`/`list`/`download`/`edit`, driving the already-published guard, the
+  draft-publish hash verification, and the release-body update). A missing `gh` login does
+  not fail fast: it fails partway through a full release build, after the gate suite has
+  already run.
+- A **non-UTC machine time zone** — see the note under Path A.
+- Two environment variables: `VPK_TOKEN` and `XE_TESTER_GITHUB_APP_CLIENT_ID`.
+
+`package-rc.sh` (bash) needs **`pnpm`** and the **.NET SDK**; it uses no Velopack tooling
+and needs no GitHub credentials.
 
 ---
 
@@ -13,7 +52,7 @@ The version lives in **`Directory.Build.props`** as two MSBuild properties:
 
 ```xml
 <VersionPrefix>0.1.0</VersionPrefix>
-<VersionSuffix>rc.4.1</VersionSuffix>
+<VersionSuffix>rc.4.2</VersionSuffix>
 ```
 
 These compose to the SemVer string `"<VersionPrefix>-<VersionSuffix>"`. The values
@@ -28,19 +67,29 @@ This one value propagates everywhere — there is no second place to edit:
 | **About dialog** (in-app) | Vite injects `VITE_APP_VERSION` at build time via `XE-Local-AI-Engine.Client.React/vite.config.ts` → `resolveAppVersion()`, which reads `Directory.Build.props`. |
 | **Windows tester RC**     | `publish/package-tester-win.ps1` reads the two props, validates an optional `-Version` assertion, and passes the composed value to Velopack.                   |
 | **Manual portable zip**   | `publish/package-rc.sh` → `read_version()` reads the two props → `xe-local-ai-engine-<version>-<rid>.zip`.                                                       |
-| **Velopack package**      | `.github/workflows/release.yml` composes `--packVersion` from the same two props (and asserts it is valid SemVer before uploading).                              |
-| **Git tag**               | Convention `vX.Y.Z[-suffix]`, e.g. `v0.1.0-rc.1.0` — must match the composed version.                                                                            |
+| **Velopack package**      | `publish/package-tester-win.ps1` passes the composed value as `--packVersion`. (`.github/workflows/release.yml` does the same, but is disabled — see below.)     |
+| **Source git tag**        | Convention `vX.Y.Z[-suffix]`, e.g. `v0.1.0-rc.4.2` — must match the composed version. Created on HEAD of `w0rldx/XE-Local-AI-Engine`.                            |
+| **Tester release tag**    | Created on `w0rldx/XE-Local-AI-Engine.Tester-App` by `vpk upload github --tag v<version>`. Releases up to `0.1.0-rc.4.1` are **bare**-tagged; see above.        |
 
 > **To cut a release: bump `VersionPrefix`/`VersionSuffix` in `Directory.Build.props`
 > first, commit, then tag.** Everything downstream picks it up automatically.
 
+**A version string is single-use.** `0.1.0-rc.4.1` is burned: it was published to the
+tester repo on 2026-07-07 with **no matching source tag**, so no commit in this repo
+identifies what shipped. The packager's already-published guard will refuse to upload over
+a live release — correctly, since `vpk --merge` into a shipped feed would hand testers
+assets nobody smoke-tested. Bump rather than reuse. The tag-before-upload requirement and
+the both-spellings release lookup exist precisely to stop this recurring; see
+[`docs/velopack-release-install-guide.md`](../docs/velopack-release-install-guide.md#cautionary-tale-how-010-rc41-got-burned).
+
 For every release-specific version change:
 
 1. Update `VersionPrefix` and `VersionSuffix` together in `Directory.Build.props`.
-2. Update release notes/changelog content for that version; do not rewrite command
-   examples merely to claim they are the current release.
+2. Update `CHANGELOG.md` for that version. **Nothing generates it** — `cliff.toml` drives
+   `RELEASE_NOTES.md` only. Do not rewrite command examples merely to claim they are the
+   current release.
 3. Commit the version and notes.
-4. Create the matching `v<version>` source tag.
+4. Create the matching `v<version>` source tag on HEAD.
 5. Run the Windows tester packager with `-Version <version>` when you want an
    additional mismatch assertion. The script still reads the version from
    `Directory.Build.props` and fails if the values differ.
@@ -49,63 +98,27 @@ For every release-specific version change:
 
 ## Creating a release
 
-There are two distribution formats. The **current Windows tester RC path** is the
-manual Velopack packager described below because it produces the self-updating
-portable artifact published to the dedicated tester repository. The tester zip is a
-simpler manual bundle with no self-update. An automated Velopack workflow also
-exists, but it is not the active tester RC procedure.
+There are **three** paths in this directory and the workflows folder, and only one of
+them ships anything:
 
-### Path A1 — Automated Velopack release (available, not the current tester RC path)
+| Path | What it produces | Status |
+| --- | --- | --- |
+| **A — `publish/package-tester-win.ps1`** (Windows, manual) | Velopack portable bundle + delta/full packages + update feed, uploaded to the tester repo | **canonical.** Every published tester RC came from it |
+| **B — `publish/package-rc.sh`** (bash, manual) | plain self-contained portable zip, no Velopack metadata, **no self-update** | supported side path |
+| **C — `.github/workflows/release.yml`** (tag-triggered CI) | — | **disabled; has never produced an artifact** |
 
-Tag-triggered CI in `.github/workflows/release.yml`. It publishes per RID, runs
-`vpk pack`, and `vpk upload github`, producing the installer
-(`Setup.exe` / `.AppImage`), a **portable** build, and **delta** packages — all
-sharing one `releases.{rid}.json` feed per repo. The `version` job also auto-generates
-the changelog (git-cliff, commits since the previous tag), uploads it as an artifact,
-and both RID legs pass it to `vpk pack --releaseNotes` so the GitHub release body is the
-grouped changelog. No manual notes step in CI. Installs made from these artifacts
-self-update via the in-app "update available → Update now" flow (GitHub device-flow
-auth; see `Plans/2026-06-25-app-self-update-velopack-plan.md`).
+> **Pushing a tag builds nothing.** `release.yml` is `disabled_manually` and its only
+> three runs all failed on 2026-06-27. `build-and-test.yml` is likewise disabled and
+> `e2e.yml` was never registered — 6 runs, 6 failures, 0 successes in the repository's
+> whole history (`gh workflow list --all`, `gh run list`, verified 2026-07-24). The tag
+> still matters, because Path A **requires** HEAD to carry it before uploading — but it
+> is an input to the manual script, not a trigger.
 
-**Cut a release:**
+### Path A — Canonical tester RC: manual Velopack build on Windows
 
-```sh
-# 1. Bump the version in Directory.Build.props, commit it.
-# 2. Tag with the matching vX.Y.Z[-suffix] and push the tag:
-git tag v0.1.0-rc.1.0
-git push origin v0.1.0-rc.1.0
-```
-
-The push of a `v*.*.*` tag triggers the workflow. It can also be run manually via
-**workflow_dispatch**, which exposes an `update-channel` input:
-
-- `main` (default) → uploads to the main release repo (`GH_RELEASE_REPO_MAIN`).
-- `tester` → uploads to the separate tester repo (`GH_RELEASE_REPO_TESTER`).
-
-A tester build can never upload to the main repo (a runtime guard step aborts if it
-resolves there).
-
-**One-time operator setup the workflow depends on** (see the plan §11):
-
-- Repo **variables**: `GH_RELEASE_REPO_MAIN`, `GH_RELEASE_REPO_TESTER` (release-repo URLs; non-secret).
-- Repo **secrets**: `GH_RELEASE_TOKEN_MAIN`, `GH_RELEASE_TOKEN_TESTER` (fine-grained PATs, `contents:write` on that one repo only).
-- A protected **`release` environment** with at least one required reviewer (gates the upload).
-- A GitHub App for the in-app device-flow update auth (`contents:read`, repo-scoped).
-- A real public GitHub App client ID supplied for the selected release channel.
-  The tracked app-update files intentionally contain an empty value or
-  `REPLACE_*` placeholder; this repository does not publish a client ID.
-
-> Builds are currently **unsigned** (signing is a deferred hard gate before any
-> non-tester rollout). During the unsigned window the supply-chain controls in
-> `release.yml`'s header comment (tag protection, least-priv tokens, environment
-> reviewers) are required.
-
-### Path A2 — Current tester RC procedure: manual Velopack build on Windows
-
-Use `publish/package-tester-win.ps1` on Windows. It is the canonical tester RC
-path and is the manual equivalent of `workflow_dispatch` with
-`update-channel=tester`: it validates, builds, packs a portable self-updating
-release, and uploads it to the canonical tester repository.
+Use `publish/package-tester-win.ps1` on Windows. It validates, builds, packs a portable
+self-updating release, and uploads it to the tester repo
+(`w0rldx/XE-Local-AI-Engine.Tester-App`).
 
 ```powershell
 $env:VPK_TOKEN = "<fine-grained PAT, contents:write on the tester repo>"
@@ -130,37 +143,116 @@ generated `Portable.zip`, retain the printed SHA-256, then publish that unchange
 
 The publication command downloads the Portable ZIP attached to the GitHub draft,
 verifies that remote asset still matches the smoke-tested hash, and publishes the
-existing draft without rebuilding or re-uploading. Before upload, the script rejects an
-already-published release so `vpk --merge` cannot modify the live update feed. Its
-mandatory release gates are:
+existing draft without rebuilding or re-uploading.
 
-- Frontend: frozen install, lint, OpenAPI drift check, third-party license check,
+**The already-published guard resolves a release by all three spellings.**
+`Find-GitHubRelease` probes `v<version>`, then bare `<version>`, then falls back to matching
+the release *name* via `gh release list`. It is used at all three lookup sites — the
+already-published guard, the `-PublishDraft` lookup, and the post-upload draft assertion —
+and every downstream `gh release download` / `gh release edit` uses the **resolved** tag
+rather than an assumed one. This is what stops `vpk --merge` pushing untested assets into a
+live update feed.
+
+It matters because historical tester releases are **bare**-tagged with `v`-prefixed *names*,
+while new ones are `v`-prefixed on both; both forms must resolve indefinitely. Live-verified:
+`0.1.0-rc.4.1` now resolves and the guard correctly refuses, `0.1.0-rc.4.2` is not found and
+is safe to cut, and the old single-probe lookup of `v0.1.0-rc.4.1` returned null — exactly the
+blindness that would have let an upload through.
+
+**Parameters** (read from the current `param(...)` block; all optional):
+
+| Parameter | Purpose |
+| --- | --- |
+| `-Version` | assertion only, **without** the leading `v`; must match `Directory.Build.props` exactly |
+| `-GitHubAppClientId` | the public `Iv…` client ID; defaults to `$env:XE_TESTER_GITHUB_APP_CLIENT_ID` |
+| `-TesterRepo` | tester repo URL; defaults to `https://github.com/w0rldx/XE-Local-AI-Engine.Tester-App` |
+| `-SkipUpload` | pre-tag packaging rehearsal — build and pack, no upload |
+| `-PublishDraft` | publish an existing draft; cannot be combined with `-SkipUpload` |
+| `-ExpectedPortableSha256` | the smoke-tested hash `-PublishDraft` verifies against the remote asset |
+| `-AllowUtcTestTimeZone` | accept reduced time-zone coverage on a genuinely UTC packaging machine |
+
+**This script is the project's only enforced quality gate** — GitHub Actions enforces
+nothing (see the table above). Its mandatory gates:
+
+- **Frontend**: frozen install, lint, OpenAPI drift check, third-party license check,
   coverage-gated tests, production dependency audit, and production build.
-- Backend: restore, transitive NuGet vulnerability audit, Release build, and
-  solution-wide tests with serial test modules.
-- Package: SPA presence, canonical tester channel/repository, caller-supplied
-  non-placeholder GitHub App client ID, pinned git-cliff checksum, release notes,
-  and Velopack pack/upload result.
+- **Backend**: restore, transitive NuGet vulnerability audit, Release build, and
+  solution-wide tests with serial test modules — including a **hollow-gate guard** that
+  greps the output for an MTP `Passed!`/`Failed!` summary, because `dotnet test` exits 0
+  when zero test projects enrol.
+- **Package**: SPA presence, canonical tester channel/repository, caller-supplied
+  non-placeholder GitHub App client ID, pinned git-cliff checksum, release notes, and
+  Velopack pack/upload result.
 
-After draft upload it explicitly updates the GitHub release body. `-SkipUpload` is only a
-pre-tag packaging rehearsal; it does not skip any validation gate.
+**The packaging machine must be in a non-UTC time zone.** The script does **not** set one —
+it *requires* one, and refuses to run the backend tests otherwise. Before the test leg it
+reads the local zone's current UTC offset and throws if it is `+00:00`, pointing you at
+`tzutil /s "W. Europe Standard Time"`. Pass `-AllowUtcTestTimeZone` to accept the reduced
+coverage instead.
+
+The reason it can't just set one: the dormant workflow's `TZ=Europe/Berlin` is a **Unix-only**
+mechanism in .NET. Windows resolves the local zone from `kernel32!GetDynamicTimeZoneInformation`
+and reads no environment variable, so a `$env:TZ` line here would be a silent no-op —
+non-UTC coverage would look configured while never actually applying. `tzutil /s` is the only
+real forcing mechanism, and the script deliberately does not run it: it is global and needs
+elevation, so changing the machine's clock is the operator's call, not the packager's.
+
+**Artifacts.** `vpk pack` runs with `--noInst` on channel `win`, so a release carries
+`XE-Local-AI-Engine-win-Portable.zip`, `-full.nupkg`, `-delta.nupkg`, `releases.win.json`
+and `RELEASES` — **there is no `Setup.exe` and no `.AppImage`**. After draft upload the
+script explicitly updates the GitHub release body (`vpk` sets it only when it *creates*
+the release).
+
+**`-SkipUpload` relaxes exactly one thing: the client ID.** Every build and test gate still
+runs. A *supplied* ID is always validated, rehearsal or not — a placeholder
+(`REPLACE_`/`CHANGE_ME`/`TODO`) or a non-`Iv…` value (the numeric App ID is the usual
+paste-o) is an error, not an absence. An *absent* ID is tolerated **only** under
+`-SkipUpload`; uploading always requires a real `Iv…` ID.
+
+A rehearsal with no ID bakes **no** client ID at all, so `AppUpdateChannelOptions.IsConfigured`
+stays false and the updater ships inert rather than placeholder-configured. The publish dir is
+stamped with `REHEARSAL-DO-NOT-SHIP.txt` — so the marker rides *inside* the Portable.zip — plus
+warnings at start and finish. `dotnet publish` does not clean the publish dir, so a real run
+deletes a stale marker left by an earlier rehearsal. `-SkipUpload` **with** a real ID produces a
+normal shippable artifact and no marker.
 
 ### Path B — Tester zip (manual, no install, no self-update)
 
-`publish/package-rc.sh` builds a self-contained manual zip an external tester
-unzips and runs. It remains the Linux portable-zip path; use
-`package-tester-win.ps1` for Windows tester RCs. The version is read from
-`Directory.Build.props` and baked into the filename.
+`publish/package-rc.sh` builds a self-contained manual zip an external tester unzips and
+runs. It is a **bash script — you run it on Linux/WSL** — but it produces zips for
+**both** `linux-x64` and `win-x64` by default, cross-building the Windows one. The version
+is read from `Directory.Build.props` and baked into the filename.
 
 ```sh
-publish/package-rc.sh --rid linux-x64
-publish/package-rc.sh --skip-web      # reuse the existing React dist (skip pnpm build)
+publish/package-rc.sh                            # BOTH rids: linux-x64 and win-x64
+publish/package-rc.sh --rid linux-x64            # one rid
+publish/package-rc.sh --rid linux-x64 --skip-web # reuse the existing React dist (skip pnpm build)
 ```
+
+> **The `win-x64` bundle is cross-built on Linux — smoke-test it on real Windows before
+> tagging an RC.** Native-library self-extraction, console-close child cleanup, and
+> browser auto-open cannot be verified off-Windows. This is why `package-tester-win.ps1`
+> exists and why it is the path for anything a tester will actually receive. Note that a
+> bare `--skip-web` still builds **both** RIDs — pass `--rid` too if you only wanted one.
 
 Output (git-ignored): `publish/dist/xe-local-ai-engine-<version>-<rid>.zip` plus a
 `.sha256` sidecar. The script builds the React SPA, publishes the single-file
-self-contained binary, stages it with the launcher + `READ-ME-FIRST.txt`, refuses to
-ship if any per-node runtime/state file leaked in, then zips and checksums it.
+self-contained binary, stages it with the launcher + uninstaller + `READ-ME-FIRST.txt` +
+`LICENSE` and `NOTICE`, refuses to ship if any per-node runtime/state file leaked in, then
+zips and checksums it.
+
+**This zip never self-updates, for two independent reasons.** First, it carries **no
+Velopack metadata** — there is no `vpk` step anywhere in the script, so there is nothing for
+an updater to read. Second, it publishes with an explicit `-p:UpdateChannel=main` — the
+intentionally inert channel — rather than silently inheriting the csproj default, so the
+value is deliberate and enforced rather than incidental.
+
+The script then *proves* the result: `assert_app_config_sane` hard-fails the build if the
+staged config ever reads as **live** (a real repo URL plus a real `Iv…` client ID), with
+"A portable zip is not a Velopack installation and must never self-update." It also rejects
+`REPLACE_`/`CHANGE_ME` placeholders in every other `appsettings*.json`, allowing them only in
+`appsettings.AppUpdate.json` and only because the inertness check has already proven they
+leave `AppUpdateChannelOptions.IsConfigured` false and the updater honestly disabled.
 
 See `publish/TESTER-QUICKSTART.md` for the tester-facing run instructions.
 
@@ -209,8 +301,8 @@ The single-file binary bundles native libraries (`e_sqlite3` for SQLite and the 
 
 ## Appendix — manual `dotnet publish`
 
-`package-rc.sh` (Path B) and the Velopack workflow (Path A) both wrap `dotnet publish`
-with the right publish profile. To publish the single-file binary by hand:
+Both packagers (Path A and Path B) wrap `dotnet publish` with the right publish profile.
+To publish the single-file binary by hand:
 
 ### Linux (linux-x64)
 

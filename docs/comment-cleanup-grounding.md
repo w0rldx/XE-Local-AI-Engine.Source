@@ -1,15 +1,17 @@
 # Comment cleanup grounding
 
-Last reviewed: 2026-06-02
+Last reviewed: 2026-07-24
 
 This note records the official documentation checked before tightening XML comments and implementation comments in the launch-feature cleanup pass. Use it as source grounding for comments only; it does not change runtime behavior.
 
+> **2026-07-24 re-grounding.** Guidance for three deleted subsystems — **HostAgent/tray (Avalonia)**, **WSL managed distro**, and **Docker** (including rootless) — has been retired, along with the **gRPC** transport guidance. None of them exist in the tree, and a comment describing any of them as live is a defect. **Ollama is not in that list**: it was *not* removed and its guidance below still stands. Package pins in this file were re-read from `Directory.Packages.props` on the same date.
+
 ## Review cadence and version anchors
 
-- Re-check these sources before future source-comment edits when a package major version or runtime target changes. Several seams are version-sensitive: `FastEndpoints`/`FastEndpoints.Swagger` 8.x, `Microsoft.Extensions.AI` 10.x, Microsoft Agent Framework 1.8.x, EF Core 10.x, ASP.NET Core/SignalR 10.x, gRPC 2.80.x, Quartz 3.18.x, OpenTelemetry 1.15.x, OllamaSharp 5.x, Avalonia 12.x, and Aspire 13.x are the current repository pins.
+- Re-check these sources before future source-comment edits when a package major version or runtime target changes. Several seams are version-sensitive; the current pins in `Directory.Packages.props` are `FastEndpoints`/`FastEndpoints.Swagger` 8.2, `Microsoft.Extensions.AI` 10.7, Microsoft Agent Framework (`Microsoft.Agents.AI`) 1.13, EF Core 10.x, ASP.NET Core/SignalR 10.x, Quartz 3.18.2, OpenTelemetry 1.16, OllamaSharp 5.4, and Aspire 13.4. **gRPC and Avalonia are no longer pins at all** — both were removed with HostAgent (no `Grpc.*` package, no `.proto` file, no Avalonia package remains in the tree).
 - Prefer versioned official pages where available. If a source comment explains library mechanics, cite the stable concept in Markdown/reporting rather than pasting long upstream excerpts into `.cs` comments.
 - Treat `global.json` as the .NET SDK selection contract for local tools and CI restore/build behavior. It is not the same thing as a project target framework.
-- Worker-2 task-2 refresh on 2026-06-02 rechecked the C# XML documentation-comments specification, Quartz 3.x DI/hosted-service pages, and ASP.NET Core gRPC overview before editing scheduler/AgentHome/sandbox/HostAgent comments.
+- Worker-2 task-2 refresh on 2026-06-02 rechecked the C# XML documentation-comments specification, Quartz 3.x DI/hosted-service pages, and the ASP.NET Core gRPC overview before editing scheduler/AgentHome/sandbox/HostAgent comments. The gRPC and HostAgent parts of that pass are now moot — both were removed from the tree afterwards.
 
 ## XML documentation comments
 
@@ -71,19 +73,16 @@ Sources:
 - https://learn.microsoft.com/en-us/ef/core/logging-events-diagnostics/interceptors
 - https://learn.microsoft.com/en-us/ef/core/modeling/value-conversions
 
-## SignalR and gRPC transport comments
+## SignalR transport comments
+
+> **gRPC is gone.** This section previously also covered gRPC authentication, deadlines, and the HostAgent Unix-domain-socket IPC seam. There is no `Grpc.*` package, no `.proto` file, and no HostAgent in the tree — do not write or restore gRPC comments.
 
 - SignalR hubs expose connection lifecycle hooks such as `OnConnectedAsync`/`OnDisconnectedAsync`; default hub errors suppress sensitive details, and explicit `HubException` messages are sent to clients.
 - SignalR comments should reserve realtime ownership for hub-mediated server/client messages. Do not imply direct client-to-client transport or leak stack traces through user-facing error guidance.
-- ASP.NET Core gRPC authentication can use client certificates at TLS level before ASP.NET Core resolves the request principal.
-- gRPC deadlines are propagated with calls and tracked by client and service; cancellation should stop server-side work for abandoned or expired calls.
-- ASP.NET Core gRPC can also use Unix domain sockets for same-machine IPC; comments about the HostAgent socket should describe file-permission/HMAC boundaries instead of implying browser-accessible transport.
+- SignalR does **not** replay to late joiners. Any comment on a hub that streams run/tool events should name the buffer + replay + sequence/dedupe contract rather than implying delivery is guaranteed on subscribe (see [`agent-knowledge.md`](agent-knowledge.md)).
 
 Sources:
 - https://learn.microsoft.com/en-us/aspnet/core/signalr/hubs
-- https://learn.microsoft.com/en-us/aspnet/core/grpc/authn-and-authz
-- https://learn.microsoft.com/en-us/aspnet/core/grpc/deadlines-cancellation
-- https://learn.microsoft.com/en-us/aspnet/core/grpc/interprocess
 
 ## OpenTelemetry and Ollama comments
 
@@ -97,25 +96,17 @@ Sources:
 - https://docs.ollama.com/api/generate
 - https://docs.ollama.com/api/chat
 
-## HostAgent launch, tray, and installer comments
+## Desktop launch and local admin HTTP comments
 
-- Avalonia desktop apps use a classic desktop lifetime and tray icons can own native menus; Tray comments should stay focused on launch/reattach and menu behavior, not model-management workflows owned by the Web UI.
-- WSL comments should distinguish install, import, distribution command execution, and termination/bootstrap phase boundaries.
-- Linux native runtime comments should use systemd user-manager and user-unit terminology. Do not imply a system service, enabled linger, or boot-time autostart when the launch contract is user-initiated.
-- Rootless Docker comments should preserve the non-root daemon/container boundary, `newuidmap`/`newgidmap` prerequisite, and `$XDG_RUNTIME_DIR` socket behavior.
-- Linux desktop-launcher and no-autostart comments should distinguish freedesktop desktop entries from XDG Autostart entries.
+> **Retired subsystems — do not write comments for these.** This section previously carried active guidance for **HostAgent launch/tray** (Avalonia tray app), **WSL managed-distro**, and **rootless Docker** comments. All three subsystems were **deliberately deleted** in the runtime re-architecture: there is no Avalonia tray app, no managed WSL distro, and no Docker anywhere in the tree. Tool sandboxing is a supervised native process (`ProcessSandboxRuntimeProvider`), and the Windows-elevation need the HostAgent existed for is served by an in-app unprivileged process supervisor. Never reintroduce a comment that describes any of them as live — see the locked runtime decisions in [`agent-knowledge.md`](agent-knowledge.md). **Ollama is the exception: it was *not* removed** — it remains a gated, opt-in secondary provider (llama.cpp is the default runtime), so the Ollama guidance above still applies.
+
+What remains applicable from this seam:
+
+- Desktop-launch comments should describe the `XE_LAUNCH_MODE=desktop` / `--desktop` / Velopack-managed-install signals and the graceful-shutdown chain (`SIGHUP` on Linux, `CTRL_CLOSE_EVENT` on Windows), not a service or autostart contract. The launch contract is user-initiated: do not imply a system service, systemd unit, enabled linger, or boot-time autostart.
+- Linux desktop-launcher comments should distinguish freedesktop desktop entries from XDG Autostart entries.
 - Local admin HTTP comments should distinguish CORS/origin behavior from non-browser loopback calls, and should keep token redaction and loopback-only host checks explicit.
 
 Sources:
-- https://docs.avaloniaui.net/docs/fundamentals/application-lifetimes
-- https://docs.avaloniaui.net/controls/navigation/trayicon
-- https://docs.avaloniaui.net/controls/menus/nativemenu
-- https://learn.microsoft.com/en-us/windows/wsl/install
-- https://learn.microsoft.com/en-us/windows/wsl/basic-commands
-- https://www.freedesktop.org/software/systemd/man/latest/systemd.unit.html
-- https://www.freedesktop.org/software/systemd/man/user%40.service.html
-- https://docs.docker.com/engine/security/rootless/
-- https://docs.docker.com/engine/security/rootless/tips/
 - https://specifications.freedesktop.org/desktop-entry/latest-single/
 - https://www.freedesktop.org/wiki/Specifications/autostart-spec/
 - https://learn.microsoft.com/en-us/aspnet/core/security/cors
