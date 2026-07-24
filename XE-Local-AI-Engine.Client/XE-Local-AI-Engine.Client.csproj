@@ -81,6 +81,14 @@
     <UpdateChannel Condition="'$(UpdateChannel)' == ''">main</UpdateChannel>
   </PropertyGroup>
 
+  <Target Name="ValidateAppUpdateChannel"
+          BeforeTargets="PrepareForBuild;ComputeFilesToPublish">
+    <Error Condition="'$(UpdateChannel)' != 'main' and '$(UpdateChannel)' != 'tester'"
+           Text="Unsupported UpdateChannel '$(UpdateChannel)'. Expected 'main' or 'tester'."/>
+    <Error Condition="!Exists('appsettings.AppUpdate.$(UpdateChannel).json')"
+           Text="App-update configuration not found: appsettings.AppUpdate.$(UpdateChannel).json"/>
+  </Target>
+
   <ItemGroup>
     <!-- Keep both flavor sources out of default content globbing so only the active one ships (renamed) below. -->
     <Content Remove="appsettings.AppUpdate.main.json"/>

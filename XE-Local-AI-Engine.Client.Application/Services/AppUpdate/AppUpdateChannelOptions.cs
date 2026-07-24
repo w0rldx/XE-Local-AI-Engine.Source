@@ -22,6 +22,39 @@ public sealed class AppUpdateChannelOptions
     /// <summary>The GitHub App client_id the device flow uses (public, not a secret); empty when unbaked.</summary>
     public string GitHubAppClientId { get; init; } = string.Empty;
 
-    /// <summary>True only when both the repo URL and client_id were baked, so the updater can actually run.</summary>
-    public bool IsConfigured => !string.IsNullOrWhiteSpace(GitHubRepositoryUrl) && !string.IsNullOrWhiteSpace(GitHubAppClientId);
+    /// <summary>
+    ///     True only when a GitHub repository URL and a structurally valid GitHub App client ID were baked. Placeholder
+    ///     text must leave the updater inert instead of being treated as live configuration.
+    /// </summary>
+    public bool IsConfigured => IsGitHubRepositoryUrl(GitHubRepositoryUrl) && IsGitHubAppClientId(GitHubAppClientId);
+
+    private static bool IsGitHubRepositoryUrl(string value)
+    {
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri)
+            || uri.Scheme != Uri.UriSchemeHttps
+            || !string.Equals(uri.Host, "github.com", StringComparison.OrdinalIgnoreCase)
+            || !string.IsNullOrEmpty(uri.Query)
+            || !string.IsNullOrEmpty(uri.Fragment))
+        {
+            return false;
+        }
+
+        var repositorySegments = uri.Segments
+                                    .Where(static segment => segment != "/")
+                                    .Select(static segment => segment.TrimEnd('/'))
+                                    .ToArray();
+        return repositorySegments.Length == 2
+               && repositorySegments.All(static segment =>
+                   !string.IsNullOrWhiteSpace(segment)
+                   && !segment.StartsWith("REPLACE_", StringComparison.OrdinalIgnoreCase)
+                   && !segment.StartsWith("CHANGE_ME", StringComparison.OrdinalIgnoreCase)
+                   && !segment.StartsWith("TODO", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool IsGitHubAppClientId(string value)
+    {
+        return value.Length >= 16
+               && value.StartsWith("Iv", StringComparison.Ordinal)
+               && value.All(static character => char.IsAsciiLetterOrDigit(character) || character == '.');
+    }
 }
