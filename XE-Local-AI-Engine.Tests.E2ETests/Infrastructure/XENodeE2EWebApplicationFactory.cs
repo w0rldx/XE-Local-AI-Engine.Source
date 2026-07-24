@@ -244,8 +244,7 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
     ///         <c>OnboardingTourE2ETests</c>, which clears this state for the duration of one test.
     ///     </para>
     /// </summary>
-    public static string CompletedMainAppTourState { get; } = JsonSerializer.Serialize(
-        new[]
+    public static string CompletedMainAppTourState { get; } = JsonSerializer.Serialize(new[]
         {
             new StoredTutorialEntry
             {

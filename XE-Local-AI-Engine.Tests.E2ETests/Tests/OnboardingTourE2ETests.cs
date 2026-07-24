@@ -84,8 +84,7 @@ public sealed class OnboardingTourE2ETests : XEE2ETestBase
         // Skip fires a fire-and-forget PUT. Await the response rather than the closed dialog: the dialog closes
         // from local state and the reload below would otherwise be free to abort the in-flight write, turning a
         // real persistence assertion into a race.
-        await Page.RunAndWaitForResponseAsync(
-            async () => await Page.GetByTestId("onboarding-welcome-skip").ClickAsync(),
+        await Page.RunAndWaitForResponseAsync(async () => await Page.GetByTestId("onboarding-welcome-skip").ClickAsync(),
             response => response.Url.Contains("tutorial-state", StringComparison.OrdinalIgnoreCase)
                         && string.Equals(response.Request.Method, "PUT", StringComparison.OrdinalIgnoreCase));
 
@@ -145,8 +144,7 @@ public sealed class OnboardingTourE2ETests : XEE2ETestBase
 
         // The provider persists the live step index on every advance so a mid-tour reload resumes; reading it
         // back confirms the advance was a real state transition, not just a re-rendered tooltip.
-        var persistedStepIndex = await Page.EvaluateAsync<string?>(
-            $"() => globalThis.localStorage.getItem('{TourProgressStorageKey}')");
+        var persistedStepIndex = await Page.EvaluateAsync<string?>($"() => globalThis.localStorage.getItem('{TourProgressStorageKey}')");
         await Assert.That(persistedStepIndex).IsEqualTo("1");
     }
 }

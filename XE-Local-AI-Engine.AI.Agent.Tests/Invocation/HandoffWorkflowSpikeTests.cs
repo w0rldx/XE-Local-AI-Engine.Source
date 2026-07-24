@@ -127,8 +127,7 @@ public sealed class HandoffWorkflowSpikeTests
                 switch (evt)
                 {
                     case AgentResponseUpdateEvent updateEvent:
-                        Console.WriteLine(
-                            $"[P5][A]   AgentResponseUpdateEvent.ExecutorId='{updateEvent.ExecutorId}' text='{Truncate(updateEvent.Update.Text)}'");
+                        Console.WriteLine($"[P5][A]   AgentResponseUpdateEvent.ExecutorId='{updateEvent.ExecutorId}' text='{Truncate(updateEvent.Update.Text)}'");
                         outputText.Append(updateEvent.Update.Text);
                         AppendIfSpecialist(specialistText, updateEvent.ExecutorId, specialist.Id, updateEvent.Update.Text);
                         break;
@@ -169,8 +168,7 @@ public sealed class HandoffWorkflowSpikeTests
         var specialistOutput = specialistText.ToString();
         Console.WriteLine($"[P5][A] aggregated output: {Truncate(allOutput, max: 400)}");
         Console.WriteLine($"[P5][A] specialist-attributed output: {Truncate(specialistOutput, max: 400)}");
-        Console.WriteLine(
-            $"[P5][A] specialistInvokedAtLeastOnce={fake.SpecialistInvocations} sawUserQuestionAtSpecialist={fake.SpecialistSawUserQuestion} watchTimedOut={watchTimedOut}");
+        Console.WriteLine($"[P5][A] specialistInvokedAtLeastOnce={fake.SpecialistInvocations} sawUserQuestionAtSpecialist={fake.SpecialistSawUserQuestion} watchTimedOut={watchTimedOut}");
 
         var diagnostics =
             $" [watchTimedOut={watchTimedOut} specialistInvocations={fake.SpecialistInvocations} allOutput='{Truncate(allOutput, max: 200)}' specialistOutput='{Truncate(specialistOutput, max: 200)}']";

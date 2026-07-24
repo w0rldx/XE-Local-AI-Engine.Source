@@ -193,8 +193,7 @@ public sealed class AppUpdateServiceTests
     [Test]
     [Arguments("https://github.com/REPLACE_OWNER/REPLACE_MAIN_REPO", "REPLACE_MAIN_CLIENT_ID")]
     [Arguments("https://github.com/w0rldx/XE-Local-AI-Engine.Tester-App", "")]
-    public async Task CheckForUpdates_WhenBuildIsNotConfigured_ReportsNotConfigured_AndMakesNoGitHubCall(
-        string repoUrl,
+    public async Task CheckForUpdates_WhenBuildIsNotConfigured_ReportsNotConfigured_AndMakesNoGitHubCall(string repoUrl,
         string clientId)
     {
         var tokenStore = Substitute.For<IGitHubTokenStore>();
