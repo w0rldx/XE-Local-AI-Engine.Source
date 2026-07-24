@@ -90,6 +90,20 @@
   </Target>
 
   <ItemGroup>
+    <!-- The product is proprietary and the artifact must carry its terms. Both packaging paths
+         (the Velopack pack step and publish/package-rc.sh) stage from this publish directory,
+         so shipping them here covers every channel. Output stays clean for dev/test runs. -->
+    <Content Include="$(MSBuildProjectDirectory)/../LICENSE"
+             Link="LICENSE"
+             CopyToPublishDirectory="PreserveNewest"
+             CopyToOutputDirectory="Never"/>
+    <Content Include="$(MSBuildProjectDirectory)/../NOTICE"
+             Link="NOTICE"
+             CopyToPublishDirectory="PreserveNewest"
+             CopyToOutputDirectory="Never"/>
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Keep both flavor sources out of default content globbing so only the active one ships (renamed) below. -->
     <Content Remove="appsettings.AppUpdate.main.json"/>
     <Content Remove="appsettings.AppUpdate.tester.json"/>
