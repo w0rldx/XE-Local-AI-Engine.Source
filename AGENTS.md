@@ -58,6 +58,12 @@ After any backend contract change, run `pnpm openapi:check` — it regenerates t
 
 E2E is ask-gated unless the task specifically targets E2E behavior; it runs in its own lane and is excluded from solution-wide `dotnet test`.
 
+- `scripts/run-e2e-local.sh` — opt-in local runner for the 64-test Playwright suite. Nothing invokes it automatically; run it by hand before cutting a tester RC. It sets the mandatory `-p:RunE2ETests=true` (without it the E2E csproj demotes itself to a library and the run passes vacuously with zero tests), installs Playwright browsers, and refuses to report a zero-test run as a pass. `--filter '/*/*/HostBootSmokeE2ETests/*'` scopes it; `--list` enumerates tests. Note the fixture runs `pnpm run build` (which includes `tsc --noEmit`), so *any* frontend type error fails ~62 of 64 tests at fixture init — that is a broken frontend, not a broken suite.
+
+Release-critical scripts:
+
+- `scripts/lint-release-scripts.sh` (also `.opencode/scripts/project-validate.sh --scope scripts`) — shellcheck + PSScriptAnalyzer over `publish/package-tester-win.ps1`, `publish/package-rc.sh`, and the other packaging scripts. GitHub Actions is disabled, so `package-tester-win.ps1` is the only release path; it gets static analysis of its own. A missing linter exits 2 rather than passing silently.
+
 OpenCode setup changes must run the OpenCode setup validator and the legacy-path validator.
 
 ## Parallel Work
