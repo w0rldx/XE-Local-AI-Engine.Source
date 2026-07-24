@@ -1,8 +1,8 @@
-// Lane B: IndexedDB snapshot store (plan §6, §7.4).
+// IndexedDB snapshot store.
 //
 // Local-only persistence for diagnostics snapshots. Retention (count + total bytes) is enforced
 // INSIDE the same readwrite transaction as the write, so eviction is atomic and free of TOCTOU
-// races on the byte cap. Nothing here ever leaves the browser (plan §3 invariant).
+// races on the byte cap. Nothing here ever leaves the browser.
 
 import { type DBSchema, type IDBPDatabase, type IDBPObjectStore, openDB } from "idb";
 
@@ -13,10 +13,10 @@ const STORE_NAME = "snapshots";
 const DB_VERSION = 1;
 const CREATED_AT_INDEX = "createdAt";
 
-/** Hard cap on retained snapshots (plan §6). */
+/** Hard cap on retained snapshots. */
 export const MAX_SNAPSHOTS = 25;
 
-/** Total-bytes cap across all retained snapshots (plan §6). */
+/** Total-bytes cap across all retained snapshots. */
 export const MAX_TOTAL_BYTES = 25 * 1024 * 1024;
 
 interface DiagnosticsDb extends DBSchema {
@@ -94,7 +94,7 @@ async function enforceRetention(store: SnapshotStoreHandle): Promise<void> {
 		if (count <= 1 || (count <= MAX_SNAPSHOTS && totalBytes <= MAX_TOTAL_BYTES)) {
 			break;
 		}
-		// biome-ignore lint/performance/noAwaitInLoops: sequential deletes inside the one readwrite transaction keep eviction atomic (plan §6 — no TOCTOU on the byte cap).
+		// biome-ignore lint/performance/noAwaitInLoops: sequential deletes inside the one readwrite transaction keep eviction atomic (no TOCTOU on the byte cap).
 		await store.delete(victim.id);
 		count -= 1;
 		totalBytes -= estimateBytes(victim);

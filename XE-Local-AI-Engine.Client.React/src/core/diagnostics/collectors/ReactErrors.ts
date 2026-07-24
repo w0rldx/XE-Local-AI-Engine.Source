@@ -1,4 +1,4 @@
-// React 19 error collectors (plan §7.2).
+// React 19 error collectors.
 //
 // `rootErrorHandlers` is spread into `createRoot(rootElement, { ... })` in Main.tsx.
 // `onAppError` is passed to the App.tsx ErrorBoundary `onError` prop (NO such prop today — we add it).

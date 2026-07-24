@@ -1,14 +1,14 @@
-// rrweb DOM-replay recorder (plan §7.5, Lane D) — Developer-Mode-only, privacy-masked.
+// rrweb DOM-replay recorder — Developer-Mode-only, privacy-masked.
 //
 // rrweb is loaded via a dynamic `import("rrweb")` so the library is code-split OUT of the main
 // bundle and is never fetched unless Developer Mode is on. The recording config is PINNED for
-// privacy (plan §3 / HIGH-3): rendered DOM text is masked (`maskTextSelector: "*"` + `maskTextFn`),
+// privacy: rendered DOM text is masked (`maskTextSelector: "*"` + `maskTextFn`),
 // not just inputs, so on-screen conversation text never reaches a packed segment.
 //
 // Packing: rrweb 2.0.1 no longer exports `pack` (it moved to the separate `@rrweb/packer` package,
 // which is not installed). We re-implement the same wire format here — the `@rrweb/packer` "v1"
 // scheme (fflate zlib of the JSON event, tagged `v: "v1"`) — so a packed segment round-trips with
-// `@rrweb/packer`'s `unpack` (or `unpackRrwebEvent` below) for replay in Lane C.
+// `@rrweb/packer`'s `unpack` (or `unpackRrwebEvent` below) for replay in the diagnostics panel.
 
 import { strFromU8, strToU8, unzlibSync, zlibSync } from "fflate";
 
@@ -27,7 +27,7 @@ interface RrwebEvent {
 
 /**
  * Pack a single rrweb event into the `@rrweb/packer` "v1" string format (zlib + JSON, tagged).
- * Exported for the privacy round-trip test and for Lane C replay decoding.
+ * Exported for the privacy round-trip test and for the diagnostics panel's replay decoding.
  */
 export function packRrwebEvent(event: RrwebEvent): RrwebPackedEvent {
 	const tagged = { ...event, v: PACK_MARK };
@@ -107,7 +107,7 @@ function handleEmit(event: unknown, isCheckout?: boolean): void {
 }
 
 /**
- * Start rrweb recording. No-op unless Developer Mode is on (plan decision §2.2). Idempotent and safe
+ * Start rrweb recording. No-op unless Developer Mode is on. Idempotent and safe
  * to call repeatedly; the rrweb chunk is only fetched here, behind the Developer-Mode gate.
  */
 export async function startRrwebRecording(): Promise<void> {
@@ -149,7 +149,7 @@ export function stopRrwebRecording(): void {
 }
 
 /**
- * The current bounded, packed rrweb segment for Lane B's bundler to attach to a {@link Snapshot}.
+ * The current bounded, packed rrweb segment for the snapshot bundler to attach to a {@link Snapshot}.
  * Returns an empty array when Developer Mode is off / recording is not active.
  */
 export function getRrwebSegment(): RrwebPackedEvent[] {

@@ -89,7 +89,7 @@ export function ModelRecommendationsPage() {
 					<CatalogInfoCard catalog={model.catalog.data} onRefresh={model.catalog.onRefresh} isRefreshing={model.catalog.isRefreshing} />
 				) : null}
 
-				{/* Inference Optimizer (Lane C3): tuned llama.cpp launch profiles for this node. A distinct, unobtrusive
+				{/* Inference Optimizer: tuned llama.cpp launch profiles for this node. A distinct, unobtrusive
 				    section below the recommendations — outcomes only (status + tok/s + VRAM), never raw launch flags. */}
 				<InferenceProfilePanel />
 			</Stack>

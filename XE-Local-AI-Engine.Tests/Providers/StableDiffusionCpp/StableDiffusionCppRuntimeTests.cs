@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// <summary>
 ///     Verifies the sd-server runtime adapter's job orchestration against a FAKE sd-server (no real binary): submit →
 ///     poll → completed decodes the base64 image; a queued-cancel calls the HTTP cancel route; a generating-cancel (409)
-///     tree-kills + restarts the daemon; and failed / 410-Gone surface a sanitized error. Frozen contract §4A.
+///     tree-kills + restarts the daemon; and failed / 410-Gone surface a sanitized error.
 /// </summary>
 public sealed class StableDiffusionCppRuntimeTests
 {

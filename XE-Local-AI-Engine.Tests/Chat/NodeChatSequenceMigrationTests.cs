@@ -12,7 +12,7 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Verifies the RepairAndUniqueMessageSequence migration (HIGH-003): a legacy database carrying duplicate
+///     Verifies the RepairAndUniqueMessageSequence migration: a legacy database carrying duplicate
 ///     (conversation_id, sequence) rows from the pre-lock race is deterministically renumbered before the unique index
 ///     is created, and the index then enforces uniqueness. Also asserts the migration is a no-op on a clean database.
 /// </summary>

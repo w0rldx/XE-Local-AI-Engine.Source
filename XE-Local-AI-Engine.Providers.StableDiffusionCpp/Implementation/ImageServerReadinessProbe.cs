@@ -5,7 +5,7 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 /// <summary>
 ///     Production <see cref="IImageServerReadinessProbe" />: polls <c>GET /sdcpp/v1/capabilities</c>. sd-server has NO
 ///     <c>/health</c> route and binds its socket only AFTER the synchronous model load completes, so the first response
-///     that is not a connection failure means "ready" (frozen spike §4A). Connection-refused while the process is still
+///     that is not a connection failure means "ready". Connection-refused while the process is still
 ///     loading is normal and retried until the readiness deadline. Mirrors <c>LlamaServerHealthProbe</c>.
 /// </summary>
 internal sealed class ImageServerReadinessProbe(HttpClient httpClient) : IImageServerReadinessProbe

@@ -41,7 +41,7 @@ internal static class AddNodeModelFitExtensions
         // scoped, DbContext-backed stores.
         builder.Services.AddScoped<IInferenceProfileStore, InferenceProfileStore>();
 
-        // Inference Optimizer orchestrator (Lane B4): explore → benchmark → freeze over the supervisor's exclusive
+        // Inference Optimizer orchestrator: explore → benchmark → freeze over the supervisor's exclusive
         // profiling entry point. The fit-banner parser and the OpenAI chat-client factory are public seams over the
         // provider-internal parser/adapter so this layer stays Application → Providers. The metadata reader exposes the
         // GGUF MoE/param/quant/context inputs over the internal header reader (AddHuggingFaceGgufStore registered it in

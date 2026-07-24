@@ -5,7 +5,7 @@ namespace XE_Local_AI_Engine.Client.Services.CloudProviders;
 /// </summary>
 /// <remarks>
 ///     No <c>required</c> members so a partial / legacy JSON parse never throws into the destructive
-///     deserialization catch (HIGH-2). The <see cref="SchemaVersion" /> keeps future additions (e.g. a
+///     deserialization catch. The <see cref="SchemaVersion" /> keeps future additions (e.g. a
 ///     per-model catalog <c>Kind</c>) additive.
 /// </remarks>
 public sealed record StoredCloudProviderConfig

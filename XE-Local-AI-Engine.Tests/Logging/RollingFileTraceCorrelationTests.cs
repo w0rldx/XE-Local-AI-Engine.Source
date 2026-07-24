@@ -5,7 +5,7 @@ using Serilog;
 using XE_Local_AI_Engine.Client.Common.Extensions;
 using XE_Local_AI_Engine.Tests.Testing;
 
-// LOW-001: the rolling file log must carry the W3C TraceId/SpanId so a file log line can be correlated with the trace
+// The rolling file log must carry the W3C TraceId/SpanId so a file log line can be correlated with the trace
 // id surfaced to the client in ProblemDetails. Serilog attaches those from the ambient Activity; this asserts the file
 // output template actually renders them.
 public sealed class RollingFileTraceCorrelationTests : IDisposable

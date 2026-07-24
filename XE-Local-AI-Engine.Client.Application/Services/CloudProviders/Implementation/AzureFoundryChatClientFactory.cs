@@ -206,7 +206,7 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
 
     // Validates the endpoint is absolute-HTTPS AND ends with a known Azure host suffix before it is ever handed to the
     // Azure client. The host allowlist matters most for managed identity: a DefaultAzureCredential Entra token must
-    // never be sent to an arbitrary operator-entered host (MEDIUM-4).
+    // never be sent to an arbitrary operator-entered host.
     private static Uri ResolveEndpoint(string? endpoint, IReadOnlyList<string> extraAllowedHostSuffixes)
     {
         if (string.IsNullOrWhiteSpace(endpoint)
@@ -228,7 +228,7 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
 
     // Attaches the custom-header policy at PerCall when the connection carries headers (Locked #4). Reserved names are
     // skipped inside the policy; blank-name rows are dropped here. Diagnostics.IsLoggingContentEnabled is left unset
-    // so secret header values are never logged by the SDK (security LOW-6).
+    // so secret header values are never logged by the SDK.
     private static AzureOpenAIClientOptions BuildClientOptions(IReadOnlyList<StoredAzureFoundryHeader> headers)
     {
         var options = new AzureOpenAIClientOptions();
@@ -268,7 +268,8 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
         return new AzureOpenAIClient(endpoint, new ApiKeyCredential(apiKey), options);
     }
 
-    // Attaches the bearer-token policy for Entra ID auth (Locked build contract §8) and constructs the client with a
+    // Attaches the bearer-token policy for Entra ID auth (frozen build contract, see
+    // Plans/azure-ai-gateway-entra-provider-findings.md §8) and constructs the client with a
     // placeholder ApiKeyCredential — the real Authorization header is set per-call by the policy.
     private AzureOpenAIClient BuildEntraIdClient(Uri endpoint, StoredAzureFoundryConnection connection, AzureOpenAIClientOptions options)
     {
@@ -392,7 +393,8 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
         // Reuse the live, already-authenticated credential the sign-in coordinator cached on success: its MSAL
         // token cache (in-memory always, plus OS-native encrypted disk when available) is what actually holds the
         // refresh token, whereas a credential rebuilt from only the persisted record has nothing to silently
-        // refresh from when encrypted persistence was unavailable on this platform (Locked build contract §9).
+        // refresh from when encrypted persistence was unavailable on this platform (see
+        // Plans/azure-ai-gateway-entra-provider-findings.md §9).
         var cacheKey = EntraDeviceCodeCredentialCacheKey.Create(connection.EntraTenantId, connection.EntraClientId, connection.EntraTokenScope);
         var liveCredential = _entraLiveCredentialCache?.TryGet(cacheKey);
         if (liveCredential is not null)
@@ -422,10 +424,10 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
             _logger);
     }
 
-    // Interactive-browser mode is allowed to prompt live from Create() (Locked decision #2 / §9: the browser opens
-    // on the node machine, which is correct for desktop mode). First use for a connection authenticates eagerly so a
-    // bad tenant/client id fails fast rather than deferring to the first chat send, and persists the resulting
-    // record so a future restart resumes silently.
+    // Interactive-browser mode is allowed to prompt live from Create() (see Plans/azure-ai-gateway-entra-provider-findings.md
+    // §9: the browser opens on the node machine, which is correct for desktop mode). First use for a connection
+    // authenticates eagerly so a bad tenant/client id fails fast rather than deferring to the first chat send, and
+    // persists the resulting record so a future restart resumes silently.
     private TokenCredential BuildInteractiveBrowserCredential(StoredAzureFoundryConnection connection)
     {
         var record = LoadCachedAuthenticationRecord();

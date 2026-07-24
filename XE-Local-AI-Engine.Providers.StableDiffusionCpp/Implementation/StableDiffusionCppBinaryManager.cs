@@ -114,8 +114,8 @@ public sealed class StableDiffusionCppBinaryManager : IStableDiffusionBinaryMana
 
     /// <summary>
     ///     Validates and serves the operator bring-your-own <c>sd-server</c>. Operator-trust channel (env var only): the
-    ///     path is checked to be a present regular file — full smoke/GPU validation happens when the runtime spawns it
-    ///     (Lane B). A missing/invalid path throws a sanitized failure rather than silently degrading to acquisition.
+    ///     path is checked to be a present regular file — full smoke/GPU validation happens when the runtime spawns it.
+    ///     A missing/invalid path throws a sanitized failure rather than silently degrading to acquisition.
     /// </summary>
     private static SdBinary ResolveOverrideBinary(StableDiffusionServerRuntimeOverrideOptions overrideOptions)
     {

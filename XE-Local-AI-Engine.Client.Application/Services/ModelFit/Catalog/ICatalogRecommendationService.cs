@@ -17,7 +17,8 @@ public interface ICatalogRecommendationService
     ///     <see cref="ModelCatalogEntry.MinLlamaCppTag" /> the node's runtime satisfies, inspects each survivor's GGUF
     ///     repo, walks the quant ladder with <see cref="MemoryFitEstimator" /> (MoE-aware), and splits the fitting
     ///     entries into <see cref="CatalogRecommendationResult.Recommended" /> / <see cref="CatalogRecommendationResult.CanRun" />,
-    ///     each ordered tier → fit class → quant quality → recency → id (plan §7).
+    ///     each ordered tier → fit class → quant quality → recency → id
+    ///     (Plans/2026-07-10-model-rec-catalog-and-harness-h1-plan.md §7).
     /// </summary>
     Task<CatalogRecommendationResult> BuildRecommendationsAsync(string? useCase,
         string quantCeiling,
@@ -65,8 +66,9 @@ public sealed record KvQuantAdvisory(
 
 /// <summary>
 ///     The catalog lane's ranked output: <see cref="Recommended" /> (fits at/above Q4_K_M with headroom) and
-///     <see cref="CanRun" /> (fits, but only below Q4_K_M or with negligible headroom) — see plan §7. Both lists are
-///     already ordered; the caller does not re-rank.
+///     <see cref="CanRun" /> (fits, but only below Q4_K_M or with negligible headroom) — see
+///     Plans/2026-07-10-model-rec-catalog-and-harness-h1-plan.md §7. Both lists are already ordered; the caller does
+///     not re-rank.
 /// </summary>
 public sealed record CatalogRecommendationResult(
     IReadOnlyList<CatalogRecommendationCandidate> Recommended,

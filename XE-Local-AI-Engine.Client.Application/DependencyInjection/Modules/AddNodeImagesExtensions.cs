@@ -8,8 +8,8 @@ using XE_Local_AI_Engine.Providers.HuggingFace;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp;
 
 /// <summary>
-///     Wires the local image-generation lane (Lane C jobs/store/hub-publisher) on top of the Lane A model store + Lane B
-///     sd-server runtime adapter. Must run AFTER <c>AddNodeModelRuntime</c> so the shared Hugging Face download client
+///     Wires the local image-generation stack (jobs/store/hub-publisher) on top of the image-model store + the sd-server
+///     runtime adapter. Must run AFTER <c>AddNodeModelRuntime</c> so the shared Hugging Face download client
 ///     (registered by <c>AddHuggingFaceGgufStore</c>) the image model store reuses is present.
 /// </summary>
 internal static class AddNodeImagesExtensions
@@ -19,8 +19,8 @@ internal static class AddNodeImagesExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(configuration);
 
-        // Lane A image-model file-set store + registry (reuses the Hugging Face download client) and the Lane B
-        // sd-server runtime adapter (binary manager, backend selector, supervisor, job client, IImageRuntime facade).
+        // Image-model file-set store + registry (reuses the Hugging Face download client) and the sd-server
+        // runtime adapter (binary manager, backend selector, supervisor, job client, IImageRuntime facade).
         builder.Services.AddHuggingFaceImageModelStore(configuration);
         builder.Services.AddStableDiffusionCppImageProvider();
         builder.Services.AddStableDiffusionCppImageRuntime();

@@ -1,15 +1,15 @@
-// Shared local-only diagnostics contract (Lane A).
+// Shared local-only diagnostics contract.
 //
-// This module is the single source of truth for the snapshot/breadcrumb shapes that the
-// downstream lanes import:
-//   - Lane B (IndexedDB store + snapshot bundler) consumes `Snapshot`, `SnapshotInput`, `Breadcrumb`.
-//   - Lane C (Diagnostics UI panel + export/import) renders `Snapshot` / `NetworkEntry` / `Breadcrumb`.
-//   - Lane D (rrweb replay) fills `Snapshot.rrweb`.
+// This module is the single source of truth for the snapshot/breadcrumb shapes that downstream
+// modules import:
+//   - The IndexedDB store + snapshot bundler (src/features/diagnostics) consume `Snapshot`, `SnapshotInput`, `Breadcrumb`.
+//   - The Diagnostics UI panel + export/import consume `Snapshot` / `NetworkEntry` / `Breadcrumb`.
+//   - The rrweb replay module fills `Snapshot.rrweb`.
 //
-// Invariant (plan §3): everything in here is already REDACTED. Secrets/PII never reach these
+// Invariant: everything in here is already REDACTED. Secrets/PII never reach these
 // structures in cleartext — redaction runs at capture time (see `redact.ts`), not at export.
 
-/** Bump when the persisted snapshot shape changes in a breaking way (Lane B migration trigger). */
+/** Bump when the persisted snapshot shape changes in a breaking way — triggers a store migration. */
 export const SCHEMA_VERSION = 1;
 
 /** Whether a snapshot was produced automatically by an error or manually by the user. */
@@ -18,7 +18,7 @@ export type SnapshotKind = "error" | "manual";
 /** Which collector observed the error. Drives dedup attribution and UI labelling. */
 export type ErrorSource = "boundary" | "uncaught" | "unhandledrejection" | "reporting" | "manual";
 
-/** The three FE transports, each of which carries a W3C `traceparent` (plan §4). */
+/** The three FE transports, each of which carries a W3C `traceparent`. */
 export type NetworkTransport = "axios" | "signalr" | "fetch";
 
 export interface SnapshotError {
@@ -31,7 +31,7 @@ export interface SnapshotError {
 
 /**
  * One observed network call. Bodies are intentionally absent from the contract — they are dropped
- * at capture (plan §10) so chat/message/agent payloads can never be persisted.
+ * at capture so chat/message/agent payloads can never be persisted.
  */
 export interface NetworkEntry {
 	readonly transport: NetworkTransport;
@@ -129,14 +129,14 @@ export interface SnapshotEnv {
 	readonly locale: string;
 }
 
-/** Redacted store state captured at bundle time (Lane B fills the values). */
+/** Redacted store state captured at bundle time (filled by the snapshot bundler). */
 export type SnapshotState = Readonly<Record<string, unknown>>;
 
-/** A single packed rrweb event (rrweb `pack()` returns a string). Lane D owns the contents. */
+/** A single packed rrweb event (rrweb `pack()` returns a string). Owned by the rrweb replay module. */
 export type RrwebPackedEvent = string;
 
 /**
- * Everything a collector/buffer can supply for a snapshot. Lane B's bundler combines this with a
+ * Everything a collector/buffer can supply for a snapshot. The snapshot bundler combines this with a
  * generated `id`/`createdAt`/`schemaVersion` to produce a persisted {@link Snapshot}.
  */
 export interface SnapshotInput {
@@ -149,7 +149,7 @@ export interface SnapshotInput {
 	readonly rrweb?: readonly RrwebPackedEvent[];
 }
 
-/** A persisted diagnostics snapshot (IndexedDB `keyPath: "id"`, plan §6). */
+/** A persisted diagnostics snapshot (IndexedDB `keyPath: "id"`). */
 export interface Snapshot extends SnapshotInput {
 	readonly id: string;
 	readonly createdAt: number;

@@ -317,7 +317,7 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         try
         {
             // The binary's OWN backend drives the launch flags — a bring-your-own override may serve a different backend
-            // than the host probe selected (§ Lane A override contract).
+            // than the host probe selected.
             var spec = ImageServerArgumentBuilder.Build(modelName,
                 binary.ServerExecutablePath,
                 parts,
@@ -371,7 +371,7 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
     /// <summary>
     ///     Waits for the freshly launched daemon to answer <c>/sdcpp/v1/capabilities</c>, racing that against the process
     ///     exiting. sd-server binds its socket only after a successful model load, so an exit-before-ready is a
-    ///     deterministic load failure (§4A): surface it immediately instead of polling a dead endpoint for the full budget.
+    ///     deterministic load failure: surface it immediately instead of polling a dead endpoint for the full budget.
     /// </summary>
     private async Task WaitForReadyOrExitAsync(IImageServerProcessHandle handle, Uri baseAddress, CancellationToken ct)
     {

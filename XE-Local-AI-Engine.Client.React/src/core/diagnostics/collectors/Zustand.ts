@@ -1,8 +1,8 @@
-// Zustand middleware factory for opted-in stores (plan §7.2): record action + redacted shallow diff.
+// Zustand middleware factory for opted-in stores: record action + redacted shallow diff.
 //
 // Usage:  create<T>()(withDiagnostics("storeName", (set, get, api) => ({ ... })))
 //
-// A tiny inline shallow diff is used (no `microdiff` dependency added in this lane). Only top-level
+// A tiny inline shallow diff is used (no `microdiff` dependency added). Only top-level
 // keys whose reference changed are reported; values are redacted by the buffer on push.
 
 import type { StateCreator, StoreMutatorIdentifier } from "zustand";

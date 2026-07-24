@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Client.Services.Coder.Tools;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The HIGH-1 offer-seam gates. <see cref="LocalToolOfferProvider" /> is built on the REAL
+///     The offer-seam gates. <see cref="LocalToolOfferProvider" /> is built on the REAL
 ///     <see cref="LocalAgentToolRegistry" /> (which hardcodes GetCurrentTime + Calculate and does NOT project any
 ///     ClientLocal handler), so these tests fail if the coder→offer merge regresses and the feature goes inert.
 ///     A resolution-seam test alone passes even when the offer seam is broken, so this is the load-bearing gate.

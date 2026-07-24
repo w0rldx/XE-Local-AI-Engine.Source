@@ -1,4 +1,4 @@
-// Axios network collector (plan §7.2). Registered as the LAST interceptor pair in
+// Axios network collector. Registered as the LAST interceptor pair in
 // AxiosInstance.ts (after the existing 4 registrars).
 //
 // Request side: inject `traceparent`, stash the trace id on the config via the trace.ts WeakMap.

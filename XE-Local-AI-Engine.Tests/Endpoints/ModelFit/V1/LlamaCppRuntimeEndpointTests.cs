@@ -189,7 +189,7 @@ public sealed class LlamaCppRuntimeEndpointTests
     [Test]
     public async Task UpdateRuntime_WhenOverrideActive_ShortCircuits()
     {
-        // [arch HIGH-1] With a bring-your-own override active the operator manages the binary out-of-band, so the
+        // With a bring-your-own override active the operator manages the binary out-of-band, so the
         // catalog-driven update is disabled: the endpoint returns an explicit "updates disabled" 409 and never installs.
         var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
         var overrideOptions = new LlamaServerRuntimeOverrideOptions

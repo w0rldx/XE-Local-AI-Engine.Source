@@ -5,7 +5,7 @@ namespace XE_Local_AI_Engine.Client.Services.CloudProviders;
 /// </summary>
 /// <remarks>
 ///     Shared by store validation and the chat-client factory so a managed-identity Entra token can never be
-///     sent to an arbitrary operator-entered host (MEDIUM-4). Operators may widen the allowlist with shape-guarded
+///     sent to an arbitrary operator-entered host. Operators may widen the allowlist with shape-guarded
 ///     extra suffixes (Locked #14) — e.g. an APIM gateway host — but the built-in Azure suffixes are never removable.
 /// </remarks>
 public static class AzureFoundryEndpoints

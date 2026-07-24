@@ -16,7 +16,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
 /// <summary>
-///     The HIGH-1 intersection gate. End-to-end across the REAL <see cref="LocalToolOfferProvider" /> (real
+///     The intersection gate. End-to-end across the REAL <see cref="LocalToolOfferProvider" /> (real
 ///     <see cref="LocalAgentToolRegistry" /> + the coder merge) and the REAL
 ///     <see cref="AgentDefinitionResolver" />: the seeded Coder agent's tool set is the non-empty intersection
 ///     <c>offered ∩ AllowedToolNames</c> for a capable model, and empty for an incapable one. If the merge regresses,

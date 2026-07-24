@@ -91,7 +91,7 @@ public sealed class ActiveCloudChatClientFactoryTests
         harness.CodexTokenStore.LoadAsync(Arg.Any<CancellationToken>()).Returns((CodexTokens?)null);
         harness.CredentialStore.LoadConfigAsync(Arg.Any<CancellationToken>())
                .Returns(CreateAzureConfig());
-        // Selected-model-driven (HIGH-1): the node-default must match a stored deployment for Azure to be selected.
+        // Selected-model-driven: the node-default must match a stored deployment for Azure to be selected.
         harness.NodeSettingsStore.LoadAsync(Arg.Any<CancellationToken>())
                .Returns(new StoredNodeSettings
                {
@@ -108,7 +108,7 @@ public sealed class ActiveCloudChatClientFactoryTests
     [Test]
     public void TryCreate_WhenAzureConnectionSaved_ButLocalModelSelected_RoutesLocal()
     {
-        // HIGH-1 regression guard: a saved Azure connection alone must NOT force cloud when a local model is selected.
+        // Regression guard: a saved Azure connection alone must NOT force cloud when a local model is selected.
         var harness = new Harness();
         harness.CodexTokenStore.LoadAsync(Arg.Any<CancellationToken>()).Returns((CodexTokens?)null);
         harness.CredentialStore.LoadConfigAsync(Arg.Any<CancellationToken>())

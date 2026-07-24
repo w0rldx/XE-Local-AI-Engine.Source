@@ -14,7 +14,7 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 /// <remarks>
 ///     The child's stdout/stderr are drained (so a chatty server never stalls on a full pipe) and forwarded to the app
 ///     logger at <b>Debug</b> level — NOT Information. sd-server can echo the request prompt in its own logs, and prompts
-///     are privacy-sensitive (§10): keeping the forward at Debug ensures a normal Information-level deployment never
+///     are privacy-sensitive: keeping the forward at Debug ensures a normal Information-level deployment never
 ///     persists a prompt, while a developer can still opt into the backend/device banner at Debug.
 /// </remarks>
 internal sealed class ImageServerProcessLauncher : IImageServerProcessLauncher
@@ -139,7 +139,7 @@ internal sealed class ImageServerProcessLauncher : IImageServerProcessLauncher
             return;
         }
 
-        // Debug, not Information: sd-server may echo the prompt; keep it out of the default app log (§10).
+        // Debug, not Information: sd-server may echo the prompt; keep it out of the default app log.
         _logger.LogDebug("sd-server[{Label}] {Line}", label, line);
     }
 }

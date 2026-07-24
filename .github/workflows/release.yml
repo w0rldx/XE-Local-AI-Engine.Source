@@ -18,7 +18,8 @@ on:
           - tester
 
 # ---------------------------------------------------------------------------
-# Supply-chain hardening (plan §11 sec C1 — REQUIRED during unsigned window)
+# Supply-chain hardening (required during the unsigned window — see
+# Plans/2026-06-25-app-self-update-velopack-plan.md §11 "sec C1")
 #
 # Token posture:
 #   GH_RELEASE_TOKEN_MAIN   — fine-grained PAT, contents:write on the main
@@ -43,7 +44,7 @@ on:
 #   repo -> Settings -> Environments -> release -> Required reviewers
 # Add at least one required reviewer before any non-tester rollout.
 #
-# Validation binding (ENFORCED, HIGH-006): the `validate` job below calls the
+# Validation binding (ENFORCED): the `validate` job below calls the
 # build-and-test workflow via `uses: ./.github/workflows/build-and-test.yml`.
 # Because it is a local reusable workflow, its `actions/checkout` runs against
 # the exact commit this release was tagged at, so the full build + backend and
@@ -51,7 +52,7 @@ on:
 # status check from an earlier commit. `version` and `release` both `needs`
 # it, so nothing is packed or uploaded unless the tagged commit passes.
 #
-# Action pinning (ENFORCED, HIGH-006): every action in this workflow (and in
+# Action pinning (ENFORCED): every action in this workflow (and in
 # build-and-test.yml) is pinned to a full commit SHA with the tag in a trailing
 # comment, so a moved tag cannot swap the action out from under a release build.
 #
@@ -74,7 +75,7 @@ env:
 jobs:
   # ---------------------------------------------------------------------------
   # Gate: re-run the full build + test suite on the exact tagged commit before
-  # anything is packed or published (HIGH-006). This is a local reusable
+  # anything is packed or published. This is a local reusable
   # workflow call, so build-and-test.yml runs from — and checks out — this same
   # commit. It defines its own `permissions: contents: read` and needs no
   # secrets, so no `secrets: inherit` is required here. If it fails, `version`

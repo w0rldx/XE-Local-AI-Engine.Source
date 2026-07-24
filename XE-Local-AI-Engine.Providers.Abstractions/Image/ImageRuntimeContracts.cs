@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Providers.Abstractions.Image;
 /// <summary>
 ///     A single text-to-image generation request handed to <see cref="IImageRuntime" />. Provider-neutral: it carries
 ///     only the generation parameters, never any stable-diffusion.cpp flag, route, or HTTP detail (those stay inside the
-///     adapter). The job/coordinator layer (Lane C) builds one of these per job and passes it to
+///     adapter). The job/coordinator layer builds one of these per job and passes it to
 ///     <see cref="IImageRuntime.GenerateAsync" />.
 /// </summary>
 public sealed record ImageGenerationRequest
@@ -41,7 +41,7 @@ public sealed record ImageGenerationRequest
 
 /// <summary>
 ///     The coarse lifecycle phase of an image job. Deliberately step-free: the sd-server HTTP contract exposes NO
-///     step/percent/preview progress (frozen spike §4A), so progress is a coarse status transition, never a step bar.
+///     step/percent/preview progress, so progress is a coarse status transition, never a step bar.
 /// </summary>
 public enum ImageGenPhase
 {
@@ -63,7 +63,7 @@ public enum ImageGenPhase
 
 /// <summary>
 ///     One coarse progress observation pushed to the caller-supplied <see cref="IProgress{T}" /> as an image job moves
-///     through its phases. NO step or percent field — the runtime cannot observe sub-generation progress over HTTP (§4A).
+///     through its phases. NO step or percent field — the runtime cannot observe sub-generation progress over HTTP.
 /// </summary>
 public sealed record ImageGenProgress
 {
@@ -79,7 +79,7 @@ public sealed record ImageGenProgress
 
 /// <summary>
 ///     A completed image generation: the decoded PNG bytes plus the resolved metadata. The bytes are plaintext in
-///     memory only — the caller (Lane C) persists them through the encrypted-at-rest blob store.
+///     memory only — the caller persists them through the encrypted-at-rest blob store.
 /// </summary>
 public sealed record ImageGenerationResult
 {

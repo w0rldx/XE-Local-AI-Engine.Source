@@ -279,7 +279,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // AsyncLocal through the function-invocation pipeline; disposal restores the prior ambient value.
             using var conversationScope = AgentRunConversationContext.BeginScope(package.ConversationId);
 
-            // Seed the per-invocation provider-budget scope (HIGH-005) into the same root tool-loop flow. The innermost
+            // Seed the per-invocation provider-budget scope into the same root tool-loop flow. The innermost
             // pipeline hop reads it as an AsyncLocal to re-budget every inner tool-loop round and MAF participant round
             // and to enforce the cumulative provider-call ceilings; disposal restores the prior ambient value. A turn
             // that never loops pays only one pass-through budget check.

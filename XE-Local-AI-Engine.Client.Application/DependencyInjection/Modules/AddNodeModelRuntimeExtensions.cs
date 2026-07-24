@@ -264,7 +264,7 @@ internal static class AddNodeModelRuntimeExtensions
     }
 
     /// <summary>
-    ///     Rejects a non-loopback Ollama endpoint (security LOW-3 / SSRF). The local Ollama HTTP API is unauthenticated,
+    ///     Rejects a non-loopback Ollama endpoint (SSRF). The local Ollama HTTP API is unauthenticated,
     ///     so a stray non-loopback endpoint value would route prompts to an arbitrary host. An operator can opt in to a
     ///     remote endpoint with <c>XE_OLLAMA_ALLOW_REMOTE_ENDPOINT=true</c>.
     /// </summary>

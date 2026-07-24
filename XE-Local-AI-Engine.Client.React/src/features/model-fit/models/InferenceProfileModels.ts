@@ -1,4 +1,4 @@
-// Domain view-models for the Inference Optimizer operator surface (Lane C3). The optimizer explores tuned
+// Domain view-models for the Inference Optimizer operator surface. The optimizer explores tuned
 // llama.cpp launch profiles, benchmarks them, and freezes the good ones for repeat use. The operator surface
 // shows OUTCOMES only — status, tokens/s, VRAM — and deliberately never carries the raw launch flags
 // (-ngl / -ot / -ts / tensor split / kv types / flash-attn) the backend tuned. Those fields exist on the wire

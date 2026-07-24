@@ -1,9 +1,9 @@
-// Lane B: snapshot bundler (plan §7.4).
+// Snapshot bundler.
 //
-// `captureSnapshot` combines the Lane A buffer-derived `SnapshotInput` with a redacted, opted-in
-// store-state map and (Lane D) an optional rrweb segment, stamps `id`/`createdAt`/`schemaVersion`,
-// persists via the SnapshotStore, and returns the full Snapshot. All redaction reuses Lane A's
-// pure helpers so no secret/PII ever reaches IndexedDB (plan §3, §10).
+// `captureSnapshot` combines the buffer-derived `SnapshotInput` (from src/core/diagnostics) with a
+// redacted, opted-in store-state map and an optional rrweb segment, stamps `id`/`createdAt`/`schemaVersion`,
+// persists via the SnapshotStore, and returns the full Snapshot. All redaction reuses the core diagnostics
+// module's pure helpers so no secret/PII ever reaches IndexedDB.
 
 import {
 	buildSnapshotInput,
@@ -49,13 +49,13 @@ function collectState(): SnapshotState {
 }
 
 /**
- * Lane D hook: supplies the latest packed rrweb segment (Developer Mode only). Left undefined here;
- * Lane D registers a provider so this module stays free of any rrweb import.
+ * Hook for the rrweb replay module: supplies the latest packed rrweb segment (Developer Mode only).
+ * Left undefined here; the rrweb module registers a provider so this stays free of any rrweb import.
  */
 type RrwebProvider = () => readonly RrwebPackedEvent[] | undefined;
 let rrwebProvider: RrwebProvider | undefined;
 
-/** Register the rrweb segment provider (Lane D). Returns an unregister function. */
+/** Register the rrweb segment provider. Returns an unregister function. */
 export function registerRrwebProvider(provider: RrwebProvider): () => void {
 	rrwebProvider = provider;
 	return () => {
@@ -70,7 +70,7 @@ export interface CaptureOptions {
 
 /**
  * Assemble, persist, and return a snapshot. `kind` is `error` for auto-capture and `manual` for the
- * "Report a problem" button. An optional rrweb segment comes from `options` or the Lane D provider.
+ * "Report a problem" button. An optional rrweb segment comes from `options` or the registered rrweb provider.
  */
 export async function captureSnapshot(kind: SnapshotKind, error?: SnapshotError, options?: CaptureOptions): Promise<Snapshot> {
 	const input = buildSnapshotInput(kind, error);
@@ -92,7 +92,7 @@ export async function captureSnapshot(kind: SnapshotKind, error?: SnapshotError,
 let autoCaptureTeardown: (() => void) | undefined;
 
 /**
- * Auto-capture seam: subscribe to Lane A's deduped error recordings and capture one `error`
+ * Auto-capture seam: subscribe to the core diagnostics module's deduped error recordings and capture one `error`
  * snapshot per logical error. Dedup already fired upstream (the listener only runs on a non-deduped
  * push), so there is no double capture. Idempotent; returns a teardown that unsubscribes.
  */

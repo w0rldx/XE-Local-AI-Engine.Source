@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Real-SQLite concurrency coverage for HIGH-003: the per-conversation lock hierarchy plus the unique
+///     Real-SQLite concurrency coverage: the per-conversation lock hierarchy plus the unique
 ///     <c>(conversation_id, sequence)</c> index must keep sequences distinct under concurrent inserts, keep a delete
 ///     from stranding partial rows, and keep the writer's lock map bounded.
 /// </summary>

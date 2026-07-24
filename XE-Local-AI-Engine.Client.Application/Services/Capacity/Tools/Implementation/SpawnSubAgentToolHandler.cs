@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 ///     Server-side <see cref="IClientLocalToolHandler" /> for <c>spawn_subagent</c>. Despite the <c>ClientLocal</c>
 ///     location label (the offer-DTO surface), this executes ENTIRELY on the node inside the agent's
 ///     function-invocation pipeline — JSON-in / JSON-out, no client round-trip — which is why a spawn (capacity gate +
-///     supervisor + inner <see cref="Microsoft.Agents.AI.ChatClientAgent" />) can run here at all (HIGH-1). It resolves
+///     supervisor + inner <see cref="Microsoft.Agents.AI.ChatClientAgent" />) can run here at all. It resolves
 ///     the scoped <see cref="ISubAgentSpawnService" /> from a FRESH DI scope per call (the handler itself is a Singleton,
 ///     captured by <c>ClientLocalToolRegistry</c> at construction, so it cannot hold a scoped dependency directly).
 /// </summary>

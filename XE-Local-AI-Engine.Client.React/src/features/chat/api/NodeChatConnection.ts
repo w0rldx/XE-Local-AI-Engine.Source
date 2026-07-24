@@ -122,7 +122,7 @@ class NodeChatConnectionManager {
 		const connection = new HubConnectionBuilder()
 			.withUrl(hubUrl, {
 				accessTokenFactory: () => resolveAccessToken(),
-				// FE-generated W3C trace header for the SignalR transport (plan §7.2) — merged with the
+				// FE-generated W3C trace header for the SignalR transport — merged with the
 				// existing accessTokenFactory + autoReconnect, never replacing them.
 				headers: diagnosticsSignalrHeaders(hubUrl),
 			})

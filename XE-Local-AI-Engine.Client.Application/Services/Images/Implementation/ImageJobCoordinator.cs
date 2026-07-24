@@ -10,12 +10,12 @@ using XE_Local_AI_Engine.Providers.Abstractions.Image;
 ///     <see cref="CancellationTokenSource" /> registry, throttled coarse status push, and detached run tasks. Generation
 ///     is serialized through a single-slot <see cref="SemaphoreSlim" /> so at most one job is handed to the runtime at a
 ///     time; extra jobs wait in their run task holding <see cref="ImageJobStatus.Queued" /> (never submitted to the
-///     runtime until the slot frees), bounding the blast radius of a kill+restart cancel to one job (§4A/§7.5).
+///     runtime until the slot frees), bounding the blast radius of a kill+restart cancel to one job.
 ///     <para>
 ///         <b>Singleton.</b> The registry outlives the request that started a job (generation runs detached). Job state is
 ///         persisted to <c>image_jobs</c> through a fresh DI scope per operation; on success the image is persisted
 ///         encrypted-at-rest BEFORE the job is marked succeeded. Progress is coarse status only — never the prompt, a
-///         path, or step/percent (§4A/§10).
+///         path, or step/percent.
 ///     </para>
 ///     <para>
 ///         <b>Shutdown/restart.</b> <see cref="DisposeAsync" /> cancels every in-flight job and drains the run tasks for
@@ -310,7 +310,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
     private void OnRuntimeProgress(Guid jobId, ImageGenProgress update)
     {
         // Terminal phases are driven by the run task after persistence; only coarse Queued/Generating transitions flow
-        // through the throttled progress push (elapsed forwarded — no step/percent exists over HTTP, §4A).
+        // through the throttled progress push (elapsed forwarded — no step/percent exists over HTTP).
         if (update.Phase is ImageGenPhase.Completed or ImageGenPhase.Failed or ImageGenPhase.Cancelled)
         {
             return;

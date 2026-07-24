@@ -1,4 +1,4 @@
-// W3C trace-context generation + config→traceId pairing (plan §7.3).
+// W3C trace-context generation + config→traceId pairing.
 //
 // `generateTraceparent()` produces `00-<32hex traceId>-<16hex spanId>-01`, injected by all three
 // network collectors. A module-level WeakMap pairs an axios request config object to its trace id

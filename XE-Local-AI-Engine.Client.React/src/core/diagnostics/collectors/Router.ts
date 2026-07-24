@@ -1,4 +1,4 @@
-// TanStack Router collector (plan §7.2): subscribe to resolved navigations → navigation breadcrumbs.
+// TanStack Router collector: subscribe to resolved navigations → navigation breadcrumbs.
 
 import { push } from "@/core/diagnostics/BreadcrumbBuffer";
 import { router } from "@/core/integrations/tanstack-router/Router";

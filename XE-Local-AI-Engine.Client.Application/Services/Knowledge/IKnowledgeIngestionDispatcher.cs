@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Knowledge;
 
 /// <summary>
-///     The enqueue seam the upload endpoint (Lane D) calls after storing a document's blob. It writes the document id
+///     The enqueue seam the upload endpoint calls after storing a document's blob. It writes the document id
 ///     onto a bounded background queue and returns immediately; the background worker drains the queue and runs the
 ///     ingestion state machine with bounded concurrency. Singleton — it owns the queue and no scoped state. Because the
 ///     queue is bounded, a burst of uploads cannot grow it without limit: an admission that arrives while the queue is

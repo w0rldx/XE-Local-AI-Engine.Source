@@ -9,7 +9,7 @@ import "@/i18n";
 
 import type { Snapshot } from "@/core/diagnostics/Diagnostics";
 
-// Lane C panel consumes Lane B's data hooks and bundler; mock those seams so the panel renders without
+// The Diagnostics panel consumes the snapshot store's data hooks and bundler; mock those seams so the panel renders without
 // IndexedDB or a live capture. `vi.hoisted` keeps the mutable fixtures available inside the hoisted
 // `vi.mock` factories.
 const fixtures = vi.hoisted(() => ({

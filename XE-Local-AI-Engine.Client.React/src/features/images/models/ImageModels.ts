@@ -6,7 +6,7 @@ import type {
 } from "@/core/api/generated";
 
 // Coarse image-job lifecycle, mirroring the backend ImageJobStatus enum (Queued/Generating/Succeeded/Failed/
-// Cancelled). Progress is deliberately coarse — the sd-server runtime exposes no step/percent over HTTP (plan §4A),
+// Cancelled). Progress is deliberately coarse — the sd-server runtime exposes no step/percent over HTTP,
 // so the UI shows queued→generating(elapsed)→terminal, never a step-progress bar.
 export const imageJobStatuses = ["Queued", "Generating", "Succeeded", "Failed", "Cancelled"] as const;
 export type ImageJobStatus = (typeof imageJobStatuses)[number];
@@ -25,7 +25,7 @@ export function toImageJobStatus(raw: string | null | undefined): ImageJobStatus
 	return (imageJobStatuses as readonly string[]).includes(raw ?? "") ? (raw as ImageJobStatus) : "Queued";
 }
 
-// Sampling methods accepted by sd-server's `sample_method` (plan §4.3). Kept as a small curated set — the backend
+// Sampling methods accepted by sd-server's `sample_method`. Kept as a small curated set — the backend
 // re-validates, and an unknown sampler simply falls back to the runtime default. euler_a is the safe default for SD1.5.
 export const imageSamplers = ["euler", "euler_a", "heun", "dpm2", "dpmpp2m", "dpmpp2s_a", "lcm"] as const;
 export type ImageSampler = (typeof imageSamplers)[number];

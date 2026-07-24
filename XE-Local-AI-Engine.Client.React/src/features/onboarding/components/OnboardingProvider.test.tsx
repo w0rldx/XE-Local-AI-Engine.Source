@@ -255,7 +255,7 @@ describe("OnboardingProvider welcome gate", () => {
 	});
 });
 
-describe("OnboardingProvider protected-query auth gate (LOW-003)", () => {
+describe("OnboardingProvider protected-query auth gate", () => {
 	it("disables the installed-models query until auth state is present", () => {
 		// This provider mounts above the RouterProvider (outside route-level session restore). Without the gate the
 		// installed-models query fires before the token is restored on every authenticated hard navigation → 401.

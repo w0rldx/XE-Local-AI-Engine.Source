@@ -329,7 +329,7 @@ function hostMatchesSuffix(host: string, suffix: string): boolean {
 }
 
 // True when managed identity or EntraId is selected and the endpoint host is non-Azure (matched only by an
-// operator-added suffix). Drives the orange Entra-token egress warning (Locked #14 / §10). Both modes send a
+// operator-added suffix). Drives the orange Entra-token egress warning (Locked #14). Both modes send a
 // bearer token obtained from Entra ID to the endpoint host, so the same non-Microsoft-host reminder applies to
 // EntraId connections (commonly an APIM gateway) as well as managed identity.
 export function shouldWarnManagedIdentityEgress(values: CloudSettingsFormValues): boolean {

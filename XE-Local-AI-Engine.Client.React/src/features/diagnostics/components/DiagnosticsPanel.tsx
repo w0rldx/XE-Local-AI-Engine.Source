@@ -1,8 +1,8 @@
-// Lane C: Diagnostics panel (plan §7.6, §9).
+// Diagnostics panel.
 //
 // Lists locally-stored snapshots (newest first) and drills into a detail view. Header actions cover
 // importing a previously exported bundle and clearing all snapshots; each row can be viewed, exported
-// or deleted. Everything is local-only (plan §3) — the data layer never transmits snapshot content.
+// or deleted. Everything is local-only — the data layer never transmits snapshot content.
 
 import { Alert, Badge, Button, Card, Container, FileButton, Group, Loader, Stack, Table, Text, Title } from "@mantine/core";
 import { IconAlertTriangle, IconDownload, IconEye, IconTrash, IconUpload } from "@tabler/icons-react";

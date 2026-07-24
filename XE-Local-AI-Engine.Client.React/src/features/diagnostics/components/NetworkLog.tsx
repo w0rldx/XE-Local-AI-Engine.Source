@@ -1,7 +1,7 @@
-// Lane C: presentational network log (plan §7.6).
+// Presentational network log.
 //
 // Renders a snapshot's network entries (method/url/status/duration/transport/traceId). Bodies are
-// never present in the contract (dropped at capture, plan §10), so this view is redaction-safe.
+// never present in the contract (dropped at capture), so this view is redaction-safe.
 
 import { Badge, Table, Text } from "@mantine/core";
 import { useTranslation } from "react-i18next";

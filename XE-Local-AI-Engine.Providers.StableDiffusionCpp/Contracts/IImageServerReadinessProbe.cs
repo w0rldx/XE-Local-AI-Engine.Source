@@ -4,8 +4,7 @@ namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 ///     Probes a just-spawned (or running) <c>sd-server</c> endpoint for readiness. Separated from the supervisor so
 ///     unit tests can drive readiness deterministically without a real HTTP server. sd-server exposes NO <c>/health</c>
 ///     route and binds its socket ONLY after the synchronous model load completes, so the production implementation
-///     polls <c>GET /sdcpp/v1/capabilities</c> in a connect-refused retry loop — the first successful response is ready
-///     (frozen spike §4A).
+///     polls <c>GET /sdcpp/v1/capabilities</c> in a connect-refused retry loop — the first successful response is ready.
 /// </summary>
 internal interface IImageServerReadinessProbe
 {

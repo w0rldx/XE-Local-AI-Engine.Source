@@ -54,7 +54,7 @@ const { hooksMock, ggufMock, schedulerMock, hubMock, toastMock } = vi.hoisted(()
 }));
 
 vi.mock("@/features/model-fit/queries/useModelFit", () => hooksMock);
-// The page now mounts the InferenceProfilePanel (Lane C3). It owns its own server state via useInferenceProfiles;
+// The page now mounts the InferenceProfilePanel (Inference Optimizer operator surface). It owns its own server state via useInferenceProfiles;
 // stub the whole hook module so this page test stays deterministic and offline (the panel has its own test).
 vi.mock("@/features/model-fit/queries/useInferenceProfiles", () => ({
 	useInferenceProfiles: () => ({ data: [], isLoading: false, error: null }),

@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Knowledge;
 /// <summary>
 ///     Applies the task-instruction prefix that asymmetric embedding models (e.g. <c>nomic-embed-text</c>) require to
 ///     distinguish a stored passage from a search query. The prefix is prepended only to the text handed to the embedding
-///     generator; it is never persisted into a chunk's stored content. Lane C reuses <see cref="ForQuery" /> so the query
+///     generator; it is never persisted into a chunk's stored content. The search path reuses <see cref="ForQuery" /> so the query
 ///     vector is built with the matching intent.
 /// </summary>
 public interface IKnowledgeEmbeddingPrefixer

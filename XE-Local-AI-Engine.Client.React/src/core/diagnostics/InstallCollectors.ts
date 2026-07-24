@@ -1,4 +1,4 @@
-// Bootstrap entry point (plan §7.2): install the always-on global collectors ONCE.
+// Bootstrap entry point: install the always-on global collectors ONCE.
 //
 // Wires the collectors that own a global resource: console patch, window error listeners, the
 // `globalThis.fetch` wrapper, and the router subscription. The other collectors are wired at their
@@ -27,7 +27,7 @@ export function installCollectors(): () => void {
 		installRouterCollector(),
 	];
 
-	// rrweb DOM replay is Developer-Mode-only (plan §7.5). Start now if enabled and react to toggles.
+	// rrweb DOM replay is Developer-Mode-only. Start now if enabled and react to toggles.
 	// The rrweb chunk is dynamically imported inside startRrwebRecording, so it stays out of the main
 	// bundle and is never fetched unless Developer Mode is on.
 	if (useDeveloperModeStore.getState().developerMode) {

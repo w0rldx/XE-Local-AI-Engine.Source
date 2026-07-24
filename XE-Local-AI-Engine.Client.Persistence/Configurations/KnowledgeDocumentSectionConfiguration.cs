@@ -29,7 +29,7 @@ internal sealed class KnowledgeDocumentSectionConfiguration : IEntityTypeConfigu
 
         // Cascade from the owning document. Configured without a navigation on the principal so KnowledgeDocument stays a
         // bare metadata row. The node-sqlite runtime connection does NOT enable PRAGMA foreign_keys, so this cascade
-        // documents intent and serves EF-managed deletes (tests); the raw-SQL purge path (Lane D) removes rows explicitly.
+        // documents intent and serves EF-managed deletes (tests); the raw-SQL purge path removes rows explicitly.
         builder.HasOne<KnowledgeDocument>()
                .WithMany()
                .HasForeignKey(entity => entity.DocumentId)
