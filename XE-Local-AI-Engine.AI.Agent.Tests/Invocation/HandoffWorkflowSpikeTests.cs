@@ -22,11 +22,27 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Deterministic probe for the MAF 1.13.0 handoff workflow + in-workflow tool approval.
 /// </summary>
 /// <remarks>
-///     Marked with the global, parameterless <c>[NotInParallel]</c> constraint because the streaming workflow probes
-///     are timing-sensitive. A keyed constraint only serializes tests sharing that key; the global constraint drains
-///     unrelated parallel tests before this class runs.
+///     <para>
+///         This class was once quarantined as "flaky under parallel load". That diagnosis was wrong, and so was the
+///         global <c>[NotInParallel]</c> that followed it. The real cause was a MAF 1.8.0 → 1.13.0 shape change:
+///         <c>WorkflowOutputEvent.Data</c> stopped being a <c>List&lt;ChatMessage&gt;</c> (1.13.0 yields an
+///         <c>AgentResponseUpdate</c>, or an <c>ExternalResponse</c> when the run resumed from an approval port), so
+///         the old drain loop — which only read the workflow output — accumulated nothing and hit its break condition
+///         before the specialist's streamed text ever arrived. The captured failure showed exactly that:
+///         <c>WorkflowOutputEvent data type=AgentResponseUpdate</c> with an empty aggregated output. Nothing about it
+///         was process-wide static-state pollution, and none of these probes touch shared mutable state — the chat
+///         client is a per-test scripted fake and the workflow runtime is in-process and per-run.
+///     </para>
+///     <para>
+///         Accumulating <c>AgentResponseUpdateEvent</c> / <c>AgentResponseEvent</c> text is therefore the entire fix.
+///         An ablation over 5 runs per variant confirms it: new logic passes 5/5 with EITHER a keyed or a global
+///         constraint, while the old logic fails with either. The constraint below is kept only to stop these
+///         30s-bounded streaming drains from competing with each other for the test host, and it is KEYED
+///         deliberately — TUnit's docs call the parameterless form "the most restrictive option" and recommend
+///         constraint keys, because the keyless form serialises the whole assembly for no benefit here.
+///     </para>
 /// </remarks>
-[NotInParallel]
+[NotInParallel(nameof(HandoffWorkflowSpikeTests))]
 public sealed class HandoffWorkflowSpikeTests
 {
     private const string TriageInstructions =
@@ -92,48 +108,80 @@ public sealed class HandoffWorkflowSpikeTests
         var accepted = await run.TrySendMessageAsync(new TurnToken(true));
         Console.WriteLine($"[P5][A] TrySendMessageAsync(TurnToken) accepted={accepted}");
 
+        // Everything the stream yielded, and — separately — only what the SPECIALIST executor emitted. The second
+        // accumulator is what actually proves the handoff: text can reach `outputText` from the terminal workflow
+        // output without ever having been produced by the specialist, which would let a broken route still pass.
         var outputText = new StringBuilder();
+        var specialistText = new StringBuilder();
+
         // WatchStreamAsync only ends on RequestHaltEvent; in non-autonomous mode a handoff run goes IDLE
         // (awaiting the next user turn) after yielding output, so we bound the watch with a timeout and stop
         // once the specialist's answer has actually been observed in the output stream.
+        var watchTimedOut = false;
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-        await foreach (var evt in run.WatchStreamAsync(timeout.Token))
+        try
         {
-            Console.WriteLine($"[P5][A] event={evt.GetType().Name} :: {Truncate(evt.ToString(), max: 200)}");
-            switch (evt)
+            await foreach (var evt in run.WatchStreamAsync(timeout.Token))
             {
-                case AgentResponseUpdateEvent updateEvent:
-                    Console.WriteLine(
-                        $"[P5][A]   AgentResponseUpdateEvent.ExecutorId='{updateEvent.ExecutorId}' text='{Truncate(updateEvent.Update.Text)}'");
-                    outputText.Append(updateEvent.Update.Text);
-                    break;
-                case AgentResponseEvent are:
-                    Console.WriteLine($"[P5][A]   AgentResponseEvent.ExecutorId='{are.ExecutorId}' text='{Truncate(are.Response.Text)}'");
-                    outputText.Append(are.Response.Text);
-                    break;
-                case WorkflowOutputEvent woe:
-                    Console.WriteLine($"[P5][A]   WorkflowOutputEvent data type={woe.Data?.GetType().Name}");
-                    AppendChatMessages(outputText, woe.Data);
-                    break;
-                case ExecutorFailedEvent fail:
-                    Console.WriteLine($"[P5][A]   ExecutorFailedEvent: {fail.Data?.GetType().Name}: {fail.Data?.Message}");
-                    break;
-            }
+                Console.WriteLine($"[P5][A] event={evt.GetType().Name} :: {Truncate(evt.ToString(), max: 200)}");
+                switch (evt)
+                {
+                    case AgentResponseUpdateEvent updateEvent:
+                        Console.WriteLine(
+                            $"[P5][A]   AgentResponseUpdateEvent.ExecutorId='{updateEvent.ExecutorId}' text='{Truncate(updateEvent.Update.Text)}'");
+                        outputText.Append(updateEvent.Update.Text);
+                        AppendIfSpecialist(specialistText, updateEvent.ExecutorId, specialist.Id, updateEvent.Update.Text);
+                        break;
+                    case AgentResponseEvent are:
+                        Console.WriteLine($"[P5][A]   AgentResponseEvent.ExecutorId='{are.ExecutorId}' text='{Truncate(are.Response.Text)}'");
+                        outputText.Append(are.Response.Text);
+                        AppendIfSpecialist(specialistText, are.ExecutorId, specialist.Id, are.Response.Text);
+                        break;
+                    case WorkflowOutputEvent woe:
+                        // Kept, NOT dead code: the payload shape here is MAF-version dependent. Under 1.13.0 it has
+                        // been observed as AgentResponseUpdate and (after resuming an approval port) ExternalResponse,
+                        // both of which fall through to the default branch; the List<ChatMessage> shape 1.8.0 yielded
+                        // is still the documented terminal payload. It only ever feeds the loose `outputText` — the
+                        // load-bearing assertion reads `specialistText`, which this cannot contribute to.
+                        Console.WriteLine($"[P5][A]   WorkflowOutputEvent data type={woe.Data?.GetType().Name}");
+                        AppendChatMessages(outputText, woe.Data);
+                        break;
+                    case ExecutorFailedEvent fail:
+                        Console.WriteLine($"[P5][A]   ExecutorFailedEvent: {fail.Data?.GetType().Name}: {fail.Data?.Message}");
+                        break;
+                }
 
-            if (outputText.ToString().Contains("SPECIALIST_ANSWER", StringComparison.Ordinal))
-            {
-                break;
+                if (specialistText.ToString().Contains("SPECIALIST_ANSWER", StringComparison.Ordinal))
+                {
+                    break;
+                }
             }
+        }
+        catch (OperationCanceledException) when (timeout.IsCancellationRequested)
+        {
+            // On a regression the answer never arrives, the run idles, and the watch burns its full 30s. Swallowing
+            // the cancellation here lets the assertions below report WHAT was missing instead of surfacing a bare
+            // OperationCanceledException that says nothing about the handoff.
+            watchTimedOut = true;
         }
 
         var allOutput = outputText.ToString();
+        var specialistOutput = specialistText.ToString();
         Console.WriteLine($"[P5][A] aggregated output: {Truncate(allOutput, max: 400)}");
-        Console.WriteLine($"[P5][A] specialistInvokedAtLeastOnce={fake.SpecialistInvocations} sawUserQuestionAtSpecialist={fake.SpecialistSawUserQuestion}");
+        Console.WriteLine($"[P5][A] specialist-attributed output: {Truncate(specialistOutput, max: 400)}");
+        Console.WriteLine(
+            $"[P5][A] specialistInvokedAtLeastOnce={fake.SpecialistInvocations} sawUserQuestionAtSpecialist={fake.SpecialistSawUserQuestion} watchTimedOut={watchTimedOut}");
 
-        AssertEx.True(fake.SpecialistInvocations > 0, "specialist agent must be invoked after the handoff");
+        var diagnostics =
+            $" [watchTimedOut={watchTimedOut} specialistInvocations={fake.SpecialistInvocations} allOutput='{Truncate(allOutput, max: 200)}' specialistOutput='{Truncate(specialistOutput, max: 200)}']";
+
+        AssertEx.True(fake.SpecialistInvocations > 0, "specialist agent must be invoked after the handoff" + diagnostics);
         AssertEx.True(allOutput.Contains("SPECIALIST_ANSWER", StringComparison.Ordinal),
-            "specialist's answer must reach the workflow output / agent-response stream");
-        AssertEx.True(fake.SpecialistSawUserQuestion, "conversation history (the original user question) must carry across the handoff hop");
+            "specialist's answer must reach the workflow output / agent-response stream" + diagnostics);
+        AssertEx.True(specialistOutput.Contains("SPECIALIST_ANSWER", StringComparison.Ordinal),
+            "the answer must be ATTRIBUTED to the specialist executor, not merely present in the stream" + diagnostics);
+        AssertEx.True(fake.SpecialistSawUserQuestion,
+            "conversation history (the original user question) must carry across the handoff hop" + diagnostics);
     }
 
     /// <summary>
@@ -464,6 +512,25 @@ public sealed class HandoffWorkflowSpikeTests
 
         // Fallback: send the bool directly if the port expects a bare approval flag.
         return request.CreateResponse(approve);
+    }
+
+    /// <summary>
+    ///     Accumulates <paramref name="text" /> only when the emitting executor IS the specialist agent.
+    ///     <para>
+    ///         The original probe asserted <c>ExecutorId == specialist.Id</c>. That equality no longer holds under MAF
+    ///         1.13.0, which is part of the same shape change that broke the drain loop: the handoff builder now names
+    ///         its executors after the agent's sanitized INSTRUCTIONS with the agent id appended, e.g.
+    ///         <c>You_are_the_SPECIALIST_agent_Answer_the_user_s_question_directly_923ee58cc43c…</c> for an agent whose
+    ///         <c>Id</c> is <c>923ee58cc43c…</c>. Matching on the id suffix restores the attribution check the equality
+    ///         used to give while staying honest about the executor-id format the framework actually produces.
+    ///     </para>
+    /// </summary>
+    private static void AppendIfSpecialist(StringBuilder sb, string? executorId, string specialistId, string? text)
+    {
+        if (!string.IsNullOrEmpty(text) && (executorId?.EndsWith(specialistId, StringComparison.Ordinal) ?? false))
+        {
+            sb.Append(text);
+        }
     }
 
     private static void AppendChatMessages(StringBuilder sb, object? data)
