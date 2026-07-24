@@ -10,7 +10,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Verifies the sd-server startup argument vector maps a resolved model file-set to the correct flags: a single-file
 ///     SD1.5 model uses <c>-m</c>; a multi-part FLUX/SD3 set uses <c>--diffusion-model</c> + <c>--vae</c> +
 ///     <c>--clip_l</c> + <c>--t5xxl</c>. The bind address, backend, and threads are always present. Verified against
-///     stable-diffusion.cpp @ <c>master-742-1a13107</c> (§4A / §4.3).
+///     stable-diffusion.cpp @ <c>master-742-1a13107</c>, including its live <c>--help</c> mapping from
+///     <c>--clip-on-cpu</c> to <c>te=cpu</c> (§4A / §4.3).
 /// </summary>
 public sealed class ImageServerArgumentBuilderTests
 {
