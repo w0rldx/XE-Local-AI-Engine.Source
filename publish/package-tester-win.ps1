@@ -26,6 +26,20 @@
 #     --latest when HEAD is tagged, else --unreleased --tag.
 #   - vpk sets the GH release body only when it CREATES the release; a re-upload to an
 #     existing release leaves the body stale. `gh release edit` forces the notes.
+#   - `dotnet test` exits 0 when ZERO test projects enrol (a misnamed project, or a lost
+#     IsTestingPlatformApplication / TestingPlatformDotnetTestSupport property). The only signal is
+#     the absence of an MTP "Passed!"/"Failed!" summary, so the test output is grepped for it.
+#     Without that check a silent green ships as a validated release.
+#   - $env:TZ does NOT reproduce CI's TZ=Europe/Berlin here. TZ is a Unix-only mechanism in .NET
+#     (TimeZoneInfo.Unix.NonAndroid.cs reads it; TimeZoneInfo.Windows.cs resolves the local zone from
+#     kernel32!GetDynamicTimeZoneInformation and reads no environment variable at all). The machine's
+#     zone is asserted instead — see -AllowUtcTestTimeZone.
+
+#Requires -Version 7.0
+# PowerShell 7+, not Windows PowerShell 5.1: this script sets $ErrorActionPreference = "Stop" AND redirects
+# native-command stderr (`gh ... 2>&1`) to inspect a 404. Under 5.1 that combination turns the redirected
+# stderr into a terminating error, which would break the "release not found" path in Get-GitHubReleaseByTag.
+# (The sibling publish/windows/uninstall-xe-local-ai-engine.ps1 requires only 5.1 — it does neither.)
 
 [CmdletBinding()]
 param(
@@ -36,7 +50,10 @@ param(
     [string]$TesterRepo = "https://github.com/w0rldx/XE-Local-AI-Engine.Tester-App",
     [switch]$SkipUpload,
     [switch]$PublishDraft,
-    [string]$ExpectedPortableSha256
+    [string]$ExpectedPortableSha256,
+    # Escape hatch for a genuinely UTC packaging machine: accepts the reduced time-zone coverage
+    # instead of failing. Prefer changing the machine zone over passing this.
+    [switch]$AllowUtcTestTimeZone
 )
 
 $ErrorActionPreference = "Stop"
@@ -64,24 +81,57 @@ function Get-ProjectVersion {
     return [string]$prefix
 }
 
-function Get-GitHubRelease {
+function Get-GitHubReleaseByTag {
     param(
         [Parameter(Mandatory)][string]$ReleaseTag,
-        [Parameter(Mandatory)][string]$RepositorySlug,
-        [switch]$AllowMissing
+        [Parameter(Mandatory)][string]$RepositorySlug
     )
 
-    $releaseOutput = @(gh release view $ReleaseTag --repo $RepositorySlug --json isDraft,tagName,assets 2>&1)
+    $releaseOutput = @(gh release view $ReleaseTag --repo $RepositorySlug --json isDraft,tagName,name,assets 2>&1)
     if ($LASTEXITCODE -eq 0) {
         return ($releaseOutput -join "`n") | ConvertFrom-Json
     }
 
     $errorText = $releaseOutput -join "`n"
-    if ($AllowMissing -and $errorText -match '(?i)(release not found|HTTP 404)') {
+    if ($errorText -match '(?i)(release not found|HTTP 404)') {
         return $null
     }
 
     throw "GitHub release lookup failed for '$ReleaseTag':`n$errorText"
+}
+
+# Resolve the tester release for a version REGARDLESS of how its tag was spelled. Historical tester releases
+# carry a BARE tag ("0.1.0-rc.4.1") and only their release NAME has the 'v' — `gh release view v0.1.0-rc.4.1`
+# answers "release not found" for the currently-live release. This script uploads with `--tag v<version>`, so
+# newly created releases are v-prefixed while every pre-existing one is bare; both forms must be handled
+# indefinitely. A lookup that probes only one form makes the already-published guard blind to the live
+# release and lets `vpk upload --merge` push untested assets into a shipped update feed.
+function Find-GitHubRelease {
+    param(
+        [Parameter(Mandatory)][string]$ReleaseVersion,
+        [Parameter(Mandatory)][string]$RepositorySlug
+    )
+
+    $candidateTags = @("v$ReleaseVersion", $ReleaseVersion)
+    foreach ($candidateTag in $candidateTags) {
+        $release = Get-GitHubReleaseByTag -ReleaseTag $candidateTag -RepositorySlug $RepositorySlug
+        if ($null -ne $release) { return $release }
+    }
+
+    # Fallback: a release whose NAME identifies the version but whose tag is spelled some third way.
+    $listOutput = @(gh release list --repo $RepositorySlug --limit 200 --json name,tagName 2>&1)
+    if ($LASTEXITCODE -ne 0) {
+        throw "GitHub release list failed for '$RepositorySlug':`n$($listOutput -join "`n")"
+    }
+    $matchingRelease = @(($listOutput -join "`n") | ConvertFrom-Json | Where-Object {
+        $candidateTags -contains $_.name -or $candidateTags -contains $_.tagName
+    }) | Select-Object -First 1
+    if ($null -ne $matchingRelease) {
+        # Re-fetch by the real tag: `gh release list --json` cannot return the assets array.
+        return Get-GitHubReleaseByTag -ReleaseTag $matchingRelease.tagName -RepositorySlug $RepositorySlug
+    }
+
+    return $null
 }
 
 git rev-parse --is-inside-work-tree 2>$null | Out-Null
@@ -97,6 +147,10 @@ $canonicalTesterRepo = "https://github.com/w0rldx/XE-Local-AI-Engine.Tester-App"
 if ($TesterRepo.TrimEnd('/') -ne $canonicalTesterRepo) {
     throw "TesterRepo must be the canonical tester repository: $canonicalTesterRepo"
 }
+# Normalise ONCE and use the normalised value everywhere below. The gate above compares a .TrimEnd('/')ed
+# value, so "…/Tester-App/" passes it — deriving the slug from the raw parameter then yielded
+# "w0rldx/XE-Local-AI-Engine.Tester-App/", which gh rejects only AFTER the full build/test/publish/pack.
+$TesterRepo = $TesterRepo.TrimEnd('/')
 $repoSlug = ($TesterRepo -replace '^https://github.com/', '')
 
 # --- Version: single source of truth is Directory.Build.props -----------------------
@@ -141,21 +195,23 @@ if ($PublishDraft) {
         throw "RELEASE_NOTES.md is required to publish the draft."
     }
 
-    $draft = Get-GitHubRelease -ReleaseTag $tag -RepositorySlug $repoSlug
-    if ($draft.tagName -ne $tag -or -not $draft.isDraft) {
-        throw "Release '$tag' must exist as a draft before publication."
+    $draft = Find-GitHubRelease -ReleaseVersion $Version -RepositorySlug $repoSlug
+    if ($null -eq $draft -or -not $draft.isDraft) {
+        throw "Release for version '$Version' must exist as a draft before publication (looked for tags 'v$Version' and '$Version')."
     }
+    # The remote tag may be bare or v-prefixed; every gh call below must use the tag that actually exists.
+    $remoteTag = $draft.tagName
 
     $remotePortableAssets = @($draft.assets | Where-Object { $_.name -like "*Portable*.zip" })
     if ($remotePortableAssets.Count -ne 1) {
-        throw "Expected exactly one Portable.zip asset on draft '$tag'; found $($remotePortableAssets.Count)."
+        throw "Expected exactly one Portable.zip asset on draft '$remoteTag'; found $($remotePortableAssets.Count)."
     }
     $remotePortableAssetName = $remotePortableAssets[0].name
 
     $remoteArtifactDir = Join-Path ([IO.Path]::GetTempPath()) "xe-local-ai-engine-remote-artifact-$([Guid]::NewGuid().ToString('N'))"
     try {
         New-Item -ItemType Directory -Path $remoteArtifactDir | Out-Null
-        gh release download $tag `
+        gh release download $remoteTag `
             --repo $repoSlug `
             --pattern $remotePortableAssetName `
             --dir $remoteArtifactDir
@@ -163,11 +219,11 @@ if ($PublishDraft) {
 
         $downloadedPortable = @(Get-ChildItem -Path $remoteArtifactDir -File)
         if ($downloadedPortable.Count -ne 1) {
-            throw "Expected exactly one downloaded Portable.zip for '$tag'; found $($downloadedPortable.Count)."
+            throw "Expected exactly one downloaded Portable.zip for '$remoteTag'; found $($downloadedPortable.Count)."
         }
         $remotePortableHash = (Get-FileHash $downloadedPortable[0].FullName -Algorithm SHA256).Hash
         if ($remotePortableHash -ne $ExpectedPortableSha256) {
-            throw "The Portable.zip attached to draft '$tag' does not match the smoke-tested SHA-256."
+            throw "The Portable.zip attached to draft '$remoteTag' does not match the smoke-tested SHA-256."
         }
     }
     finally {
@@ -176,9 +232,9 @@ if ($PublishDraft) {
         }
     }
 
-    gh release edit $tag --repo $repoSlug --draft=false --notes-file RELEASE_NOTES.md
+    gh release edit $remoteTag --repo $repoSlug --draft=false --notes-file RELEASE_NOTES.md
     Assert-LastExitCode "GitHub draft publication"
-    Write-Host ">> Published smoke-tested draft $tag (remote Portable SHA-256 $remotePortableHash)."
+    Write-Host ">> Published smoke-tested draft $remoteTag (remote Portable SHA-256 $remotePortableHash)."
     exit 0
 }
 
@@ -186,13 +242,30 @@ if (-not $SkipUpload -and -not $env:VPK_TOKEN) {
     throw "VPK_TOKEN is not set. `$env:VPK_TOKEN = '<github token>' (or pass -SkipUpload)."
 }
 
-if ([string]::IsNullOrWhiteSpace($GitHubAppClientId) -or
-    $GitHubAppClientId -match '^(REPLACE_|CHANGE_ME|TODO)' -or
-    $GitHubAppClientId -notmatch '^Iv[0-9A-Za-z.]{14,}$') {
-    throw "A real GitHub App client ID is required. Pass -GitHubAppClientId or set XE_TESTER_GITHUB_APP_CLIENT_ID (expected an Iv... client ID; never an App ID or placeholder)."
+# Client-ID policy, scoped like the VPK_TOKEN gate above. publish/README.md calls -SkipUpload a pre-tag
+# packaging rehearsal, so a rehearsal must not demand the one production credential the docs insist is never
+# committed. A SUPPLIED id is always validated (a placeholder is an error, not an absence); an ABSENT id is
+# tolerated only for a rehearsal, which then bakes no client ID at all — AppUpdateChannelOptions.IsConfigured
+# stays false, the updater ships inert rather than placeholder-configured, and the artifact is stamped
+# non-shippable below.
+$hasGitHubAppClientId = -not [string]::IsNullOrWhiteSpace($GitHubAppClientId)
+if ($hasGitHubAppClientId) {
+    if ($GitHubAppClientId -match '^(REPLACE_|CHANGE_ME|TODO)' -or
+        $GitHubAppClientId -notmatch '^Iv[0-9A-Za-z.]{14,}$') {
+        throw "GitHubAppClientId '$GitHubAppClientId' is not a real GitHub App client ID (expected an Iv... client ID; never an App ID or placeholder)."
+    }
+}
+elseif (-not $SkipUpload) {
+    throw "A real GitHub App client ID is required to upload. Pass -GitHubAppClientId or set XE_TESTER_GITHUB_APP_CLIENT_ID (expected an Iv... client ID; never an App ID or placeholder)."
 }
 
+$isRehearsalPackage = $SkipUpload -and -not $hasGitHubAppClientId
+$rehearsalMarkerName = "REHEARSAL-DO-NOT-SHIP.txt"
+
 Write-Host ">> Packing version $Version (tag $tag)"
+if ($isRehearsalPackage) {
+    Write-Warning "No GitHub App client ID supplied: building a REHEARSAL package. Its in-app updater is inert and it carries a $rehearsalMarkerName marker. Do not distribute it."
+}
 
 # --- 1. Release validation + SPA build -----------------------------------------------
 Push-Location XE-Local-AI-Engine.Client.React
@@ -230,16 +303,23 @@ $nugetAuditOutput = @(dotnet package list `
     --no-restore)
 Assert-LastExitCode "Backend NuGet vulnerability audit"
 $nugetAudit = ($nugetAuditOutput -join "`n") | ConvertFrom-Json
+# Every level filters out $null before counting. `dotnet package list --vulnerable` omits the `frameworks`
+# key entirely from a project with no vulnerabilities, and @($null).Count is 1 in PowerShell — NOT 0. Without
+# the Where-Object guards each clean project yields two phantom entries (one per missing package collection)
+# whose @($package.vulnerabilities).Count is @($null).Count = 1, so a perfectly clean solution "fails" the
+# audit with one null-filled row per project and the release never reaches the SPA build.
 $vulnerablePackages = @(
-    foreach ($project in @($nugetAudit.projects)) {
-        foreach ($framework in @($project.frameworks)) {
-            foreach ($package in @($framework.topLevelPackages) + @($framework.transitivePackages)) {
-                if (@($package.vulnerabilities).Count -gt 0) {
+    foreach ($project in @($nugetAudit.projects | Where-Object { $_ })) {
+        foreach ($framework in @($project.frameworks | Where-Object { $_ })) {
+            $frameworkPackages = @($framework.topLevelPackages) + @($framework.transitivePackages)
+            foreach ($package in @($frameworkPackages | Where-Object { $_ })) {
+                $packageVulnerabilities = @($package.vulnerabilities | Where-Object { $_ })
+                if ($packageVulnerabilities.Count -gt 0) {
                     [pscustomobject]@{
                         Project = $project.path
                         Package = $package.id
                         Version = $package.resolvedVersion
-                        Vulnerabilities = @($package.vulnerabilities)
+                        Vulnerabilities = $packageVulnerabilities
                     }
                 }
             }
@@ -252,8 +332,39 @@ if ($vulnerablePackages.Count -gt 0) {
 }
 dotnet build XE-Local-AI-Engine.slnx --configuration Release --no-restore
 Assert-LastExitCode "Backend Release build"
-dotnet test XE-Local-AI-Engine.slnx --configuration Release --no-build --max-parallel-test-modules 1
-Assert-LastExitCode "Backend tests"
+
+# Non-UTC time-zone exposure — the local equivalent of TZ=Europe/Berlin in
+# .github/workflows/build-and-test.yml. Setting $env:TZ here would do nothing (.NET only honours TZ on
+# Unix), so the machine's zone is asserted instead: on a UTC box the off-by-offset class of bug the CI
+# variable exists to catch (CapabilityReporterTests / RunningModelSnapshotMapper) re-hides silently.
+$testTimeZone = [System.TimeZoneInfo]::Local
+$testUtcOffset = $testTimeZone.GetUtcOffset([DateTimeOffset]::Now)
+if ($testUtcOffset -eq [TimeSpan]::Zero -and -not $AllowUtcTestTimeZone) {
+    throw "Backend tests must run in a non-UTC time zone to expose off-by-offset bugs, but the local zone '$($testTimeZone.Id)' is currently at UTC+00:00. Set the machine zone (e.g. tzutil /s ""W. Europe Standard Time"") or pass -AllowUtcTestTimeZone to accept the reduced coverage."
+}
+Write-Host ">> Backend tests run in time zone '$($testTimeZone.Id)' (current UTC offset $testUtcOffset)."
+
+$testOutputPath = Join-Path ([IO.Path]::GetTempPath()) "xe-local-ai-engine-backend-tests-$([Guid]::NewGuid().ToString('N')).log"
+try {
+    # Tee-Object keeps the run streaming to the console (a human watches this) while capturing it for the
+    # hollow-gate grep below.
+    dotnet test XE-Local-AI-Engine.slnx --configuration Release --no-build --max-parallel-test-modules 1 |
+        Tee-Object -FilePath $testOutputPath
+    Assert-LastExitCode "Backend tests"
+
+    # Hollow-gate guard, ported from .github/workflows/build-and-test.yml (which is disabled, making this
+    # script the only gate). MTP always emits a "Passed!" or "Failed!" summary per suite that ran. If zero
+    # suites enrol, the output carries no summary line and `dotnet test` still exits 0 — this catches that
+    # silent green before it becomes a released package.
+    if (-not (Test-Path $testOutputPath -PathType Leaf) -or
+        -not (Select-String -Path $testOutputPath -Pattern 'Passed!|Failed!' -Quiet)) {
+        throw "Backend tests produced no test-suite summary — zero test projects enrolled. Check project names or the TestingPlatformDotnetTestSupport property in Directory.Build.props."
+    }
+    Write-Host ">> Backend test summary markers found (test projects really enrolled)."
+}
+finally {
+    Remove-Item $testOutputPath -Force -ErrorAction SilentlyContinue
+}
 
 # --- 2. Publish (single-file self-contained win-x64, tester update flavor) ----------
 dotnet publish XE-Local-AI-Engine.Client\XE-Local-AI-Engine.Client.csproj `
@@ -275,18 +386,58 @@ if (-not (Test-Path $publishedUpdateConfigPath -PathType Leaf)) {
     throw "Published app-update config is missing: $publishedUpdateConfigPath"
 }
 $publishedUpdateConfig = Get-Content $publishedUpdateConfigPath -Raw | ConvertFrom-Json
+# [string] coercion first: a missing GitHubRepositoryUrl key makes the property $null, and calling
+# .TrimEnd() on it throws "cannot call a method on a null-valued expression" instead of the real message.
+$publishedRepositoryUrl = ([string]$publishedUpdateConfig.AppUpdate.GitHubRepositoryUrl).TrimEnd('/')
 if ($publishedUpdateConfig.AppUpdate.Channel -ne "tester" -or
-    $publishedUpdateConfig.AppUpdate.GitHubRepositoryUrl.TrimEnd('/') -ne $canonicalTesterRepo) {
-    throw "Published app-update config does not target the canonical tester channel/repository."
+    $publishedRepositoryUrl -ne $canonicalTesterRepo) {
+    throw "Published app-update config does not target the canonical tester channel/repository (channel '$($publishedUpdateConfig.AppUpdate.Channel)', repo '$publishedRepositoryUrl')."
 }
-$publishedUpdateConfig.AppUpdate.GitHubAppClientId = $GitHubAppClientId
-$publishedUpdateConfig | ConvertTo-Json -Depth 10 | Set-Content $publishedUpdateConfigPath -Encoding utf8
-$publishedUpdateConfigText = Get-Content $publishedUpdateConfigPath -Raw
-if ($publishedUpdateConfigText -match 'REPLACE_' -or
-    [string]::IsNullOrWhiteSpace((ConvertFrom-Json $publishedUpdateConfigText).AppUpdate.GitHubAppClientId)) {
-    throw "Published app-update config still contains a placeholder or empty GitHub App client ID."
+if ($hasGitHubAppClientId) {
+    $publishedUpdateConfig.AppUpdate.GitHubAppClientId = $GitHubAppClientId
+    $publishedUpdateConfig | ConvertTo-Json -Depth 10 | Set-Content $publishedUpdateConfigPath -Encoding utf8
+    $publishedUpdateConfigText = Get-Content $publishedUpdateConfigPath -Raw
+    if ($publishedUpdateConfigText -match '(?i)(REPLACE_|CHANGE_ME|TODO)' -or
+        [string]::IsNullOrWhiteSpace((ConvertFrom-Json $publishedUpdateConfigText).AppUpdate.GitHubAppClientId)) {
+        throw "Published app-update config still contains a placeholder or empty GitHub App client ID."
+    }
+    Write-Host ">> Published tester update config verified (canonical repo, supplied client ID, no placeholders)."
 }
-Write-Host ">> Published tester update config verified (canonical repo, supplied client ID, no placeholders)."
+else {
+    # Rehearsal: bake NO client ID. The committed tester config already ships an empty one, so the only thing
+    # to prove is that nothing placeholder-shaped survives — an empty id leaves IsConfigured false (honestly
+    # disabled), whereas a REPLACE_ value would be config-shaped garbage.
+    $publishedUpdateConfigText = Get-Content $publishedUpdateConfigPath -Raw
+    if ($publishedUpdateConfigText -match '(?i)(REPLACE_|CHANGE_ME|TODO)') {
+        throw "Published app-update config contains placeholder text: $publishedUpdateConfigPath"
+    }
+    if (-not [string]::IsNullOrWhiteSpace((ConvertFrom-Json $publishedUpdateConfigText).AppUpdate.GitHubAppClientId)) {
+        throw "Rehearsal package must bake no GitHub App client ID, but the published config already carries one."
+    }
+    Write-Host ">> Rehearsal update config verified (canonical repo, no client ID baked, no placeholders) — updater is inert."
+}
+
+# Stamp/clear the non-shippable marker. `dotnet publish` does not clean stale files out of the publish
+# directory, so a marker left by an earlier rehearsal must be removed on a real run or it would ride along
+# into a shipped Portable.zip.
+$rehearsalMarkerPath = Join-Path $publishDir $rehearsalMarkerName
+if ($isRehearsalPackage) {
+    Set-Content -Path $rehearsalMarkerPath -Encoding utf8 -Value @(
+        "REHEARSAL BUILD — DO NOT DISTRIBUTE",
+        "",
+        "Version:  $Version",
+        "Built:    $([DateTimeOffset]::Now.ToString('u'))",
+        "",
+        "This package was produced by publish/package-tester-win.ps1 -SkipUpload with no GitHub App",
+        "client ID, so no update credential is baked in and the in-app updater is permanently inert.",
+        "It exists to rehearse the packaging steps only. Rebuild with -GitHubAppClientId to ship."
+    )
+    Write-Host ">> Stamped $rehearsalMarkerName into the publish output."
+}
+elseif (Test-Path $rehearsalMarkerPath -PathType Leaf) {
+    Remove-Item $rehearsalMarkerPath -Force
+    Write-Host ">> Removed a stale $rehearsalMarkerName left by an earlier rehearsal."
+}
 
 # --- 3. Release notes (pinned git-cliff) ---------------------------------------------
 $gcVersion = "2.13.1"
@@ -305,7 +456,7 @@ if ($actualGcSha -ne $gcSha) {
 $gcExtractDir = Join-Path $gcCacheDir "git-cliff-$gcVersion"
 Expand-Archive $gcZipPath -DestinationPath $gcExtractDir -Force
 $gcExe = Get-ChildItem -Path $gcExtractDir -Recurse -Filter git-cliff.exe | Select-Object -First 1 -ExpandProperty FullName
-if (-not $gcExe) { throw "git-cliff.exe not found under gc-tmp" }
+if (-not $gcExe) { throw "git-cliff.exe not found under $gcExtractDir" }
 
 if ($releaseTagsAtHead -contains $tag) {
     & $gcExe --latest --strip header -o RELEASE_NOTES.md
@@ -319,6 +470,12 @@ Write-Host ">> Release notes:"
 Get-Content RELEASE_NOTES.md
 
 # --- 4. Pack -------------------------------------------------------------------------
+# Releases\ is never cleaned (and is gitignored, so the clean-tree gate never sees it). Timestamping the pack
+# is what makes "the artifact THIS run produced" unambiguous: a name-based match cannot tell an unversioned
+# filename apart from a stale zip left by an earlier version, and picking that stale file would hash and ship
+# the wrong package. The 2s margin absorbs coarse filesystem timestamp resolution.
+$packStartedAtUtc = [DateTime]::UtcNow.AddSeconds(-2)
+
 dnx vpk@1.2.0 pack `
     --packId XE-Local-AI-Engine `
     --packVersion $Version `
@@ -329,24 +486,31 @@ dnx vpk@1.2.0 pack `
     --noInst
 Assert-LastExitCode "vpk pack"
 
-$portableCandidates = @(Get-ChildItem -Path Releases -Recurse -File -Filter "*Portable*.zip")
+$allPortables = @(Get-ChildItem -Path Releases -Recurse -File -Filter "*Portable*.zip")
+$portableCandidates = @($allPortables | Where-Object { $_.LastWriteTimeUtc -ge $packStartedAtUtc })
 if ($portableCandidates.Count -ne 1) {
-    throw "Expected exactly one Velopack Portable.zip under Releases; found $($portableCandidates.Count)."
+    throw "Expected exactly one Portable.zip written by this pack under Releases; found $($portableCandidates.Count) (of $($allPortables.Count) portable archive(s) present).`n$(($allPortables | ForEach-Object { "$($_.FullName)  [written $($_.LastWriteTimeUtc.ToString('u'))]" }) -join "`n")"
 }
-$portableHash = (Get-FileHash $portableCandidates[0].FullName -Algorithm SHA256).Hash
-Write-Host ">> Portable artifact: $($portableCandidates[0].FullName)"
+$portableArtifact = $portableCandidates[0]
+$portableHash = (Get-FileHash $portableArtifact.FullName -Algorithm SHA256).Hash
+Write-Host ">> Portable artifact: $($portableArtifact.FullName)"
 Write-Host ">> Portable SHA-256: $portableHash"
 
 if ($SkipUpload) {
+    if ($isRehearsalPackage) {
+        Write-Warning "Rehearsal package built (updater inert, $rehearsalMarkerName inside). NOT shippable — rebuild with -GitHubAppClientId for a real tester release."
+    }
     Write-Host ">> -SkipUpload: package built, not uploaded. Done."
     exit 0
 }
 
 # --- 5. Upload as draft + notes safety net -------------------------------------------
-$existingRelease = Get-GitHubRelease -ReleaseTag $tag -RepositorySlug $repoSlug -AllowMissing
+$existingRelease = Find-GitHubRelease -ReleaseVersion $Version -RepositorySlug $repoSlug
 if ($null -ne $existingRelease -and -not $existingRelease.isDraft) {
-    throw "Release '$tag' is already published. Refusing to merge untested assets into the live update feed."
+    throw "Release '$($existingRelease.tagName)' for version '$Version' is already published. Refusing to merge untested assets into the live update feed."
 }
+# Merge into the existing draft's own tag when there is one; otherwise create the v-prefixed tag.
+$uploadTag = if ($null -ne $existingRelease) { $existingRelease.tagName } else { $tag }
 
 dnx vpk@1.2.0 upload github `
     --repoUrl $TesterRepo `
@@ -354,17 +518,17 @@ dnx vpk@1.2.0 upload github `
     --channel win `
     --pre `
     --merge `
-    --tag $tag
+    --tag $uploadTag
 Assert-LastExitCode "vpk upload"
 
-$uploadedRelease = Get-GitHubRelease -ReleaseTag $tag -RepositorySlug $repoSlug
-if ($uploadedRelease.tagName -ne $tag -or -not $uploadedRelease.isDraft) {
-    throw "Velopack upload did not leave release '$tag' in draft state. Refusing to continue."
+$uploadedRelease = Find-GitHubRelease -ReleaseVersion $Version -RepositorySlug $repoSlug
+if ($null -eq $uploadedRelease -or -not $uploadedRelease.isDraft) {
+    throw "Velopack upload did not leave a draft release for version '$Version'. Refusing to continue."
 }
 
-gh release edit $tag --repo $repoSlug --notes-file RELEASE_NOTES.md
+gh release edit $uploadedRelease.tagName --repo $repoSlug --notes-file RELEASE_NOTES.md
 Assert-LastExitCode "gh release edit (notes may be stale on the release)"
 
-Write-Host ">> Tester release $tag uploaded as a DRAFT to $TesterRepo with release notes."
+Write-Host ">> Tester release $($uploadedRelease.tagName) uploaded as a DRAFT to $TesterRepo with release notes."
 Write-Host ">> Smoke-test the exact Portable.zip above, then publish without rebuilding:"
 Write-Host "   .\publish\package-tester-win.ps1 -PublishDraft -ExpectedPortableSha256 $portableHash"

@@ -29,6 +29,21 @@ CLIENT_PROJECT="${REPO_ROOT}/XE-Local-AI-Engine.Client"
 REACT_DIR="${REPO_ROOT}/XE-Local-AI-Engine.Client.React"
 DIST_DIR="${SCRIPT_DIR}/dist"
 
+# The app-update build flavor baked into every bundle this script produces. XE-Local-AI-Engine.Client.csproj
+# copies appsettings.AppUpdate.$(UpdateChannel).json to the output as appsettings.AppUpdate.json; passing the
+# value explicitly (rather than inheriting the csproj default) means a future change to that default cannot
+# silently retarget these zips.
+#
+# `main` is a deliberate choice, not a leftover. This script produces a plain portable zip, NOT a Velopack
+# installation, and the tester feed (w0rldx/XE-Local-AI-Engine.Tester-App) only carries Velopack releases
+# uploaded by publish/package-tester-win.ps1 — a portable zip must never try to self-update into a layout it
+# was never installed as. The tester flavor additionally ships an EMPTY GitHubAppClientId that only that
+# PowerShell script injects, so a `tester` bundle from here would be an inert artifact wearing a live
+# channel's name. The main channel is intentionally unconfigured for now, which leaves
+# AppUpdateChannelOptions.IsConfigured false and the in-app updater honestly disabled — assert_app_config_sane
+# proves that rather than assuming it.
+UPDATE_CHANNEL="main"
+
 RIDS=("win-x64" "linux-x64")
 SKIP_WEB=0
 
@@ -96,6 +111,9 @@ you confirm, deletes your data dir (%LOCALAPPDATA%\XE-Local-AI-Engine). Then
 delete this unzipped folder. To delete the data by hand instead, remove that
 folder yourself.
 
+This software is proprietary — all rights reserved. See the LICENSE file in this
+folder before copying or passing it on; NOTICE lists third-party components.
+
 Found a problem? In the app, use "Report a problem" (Diagnostics) to export a
 snapshot, and send it back along with what you did and any console log lines.
 TXT
@@ -126,6 +144,9 @@ It stops the app + model engine and, after you confirm, deletes your data dir
 ($HOME/.local/share/XE-Local-AI-Engine). Then delete this unzipped folder. To
 delete the data by hand instead, remove that folder yourself.
 
+This software is proprietary — all rights reserved. See the LICENSE file in this
+folder before copying or passing it on; NOTICE lists third-party components.
+
 Found a problem? In the app, use "Report a problem" (Diagnostics) to export a
 snapshot, and send it back along with what you did and any terminal log lines.
 TXT
@@ -137,10 +158,16 @@ TXT
 # a regression (e.g. a re-committed dev node-settings.json, or a *.enc credential file) from ever shipping.
 #
 # Intended publish allowlist (everything else under the stage is one of these, by design):
-#   - appsettings*.json            (app configuration; carries no secrets — validated in the CL-2 audit)
+#   - appsettings*.json            (app configuration; carries no secrets — validated in the CL-2 audit.
+#                                   "No secrets" was never the whole story: nothing checked that a
+#                                   REPLACE_/CHANGE_ME/TODO stub was not shipping as if it were real
+#                                   configuration. assert_app_config_sane below closes that gap.)
 #   - *.runtimeconfig.json         (the .NET runtime host config)
 #   - *.deps.json                  (the .NET dependency manifest)
 #   - manifest.json                (AgentHome layout manifests are runtime-only; the app's own manifest.json is an asset)
+#   - LICENSE, NOTICE              (proprietary license + third-party notices; published via Content items in
+#                                   XE-Local-AI-Engine.Client.csproj, so both the Velopack path and this script
+#                                   pick them up from the publish dir. Neither guard below matches them.)
 #   - wwwroot/**                   (the React SPA build, incl. hashed node-settings-*.js chunks — NOT node-settings.json)
 #   - the single-file binary + launcher + READ-ME-FIRST.txt
 assert_no_runtime_state() {
@@ -152,6 +179,70 @@ assert_no_runtime_state() {
     echo "Error: runtime/state files leaked into the published bundle (must never ship):" >&2
     echo "${leak}" >&2
     echo "These belong under the per-user data dir at runtime (CL-1). Check the csproj Content items / a stray committed file." >&2
+    exit 1
+  fi
+}
+
+# Refuse to ship configuration that reads as live but is really placeholder text — the counterpart of the
+# published-config guard in publish/package-tester-win.ps1 (which proves the TESTER config IS configured).
+# Here the required outcome is the inverse: the bundle is a portable zip, so its in-app updater must be
+# recognisably INERT, and every other appsettings*.json must be free of placeholder stubs.
+#
+# The inertness test mirrors AppUpdateChannelOptions.IsConfigured
+# (XE-Local-AI-Engine.Client.Application/Services/AppUpdate/AppUpdateChannelOptions.cs): configured means an
+# https://github.com/<owner>/<repo> URL whose segments start with no REPLACE_/CHANGE_ME/TODO marker, AND a
+# GitHub App client ID of at least 16 chars starting with "Iv". Anything short of both leaves the updater off.
+assert_app_config_sane() {
+  local stage="$1"
+  # Separate `local`: bash expands every word of a `local` command before any of its assignments take
+  # effect, so a cfg="${stage}/…" on the line above would interpolate the OUTER scope's stage (SC2318).
+  local cfg="${stage}/appsettings.AppUpdate.json"
+  local channel repo_url client_id owner repo reason="" stray
+
+  [[ -f "${cfg}" ]] || { echo "Error: published app-update config missing at ${cfg}." >&2; exit 1; }
+
+  channel="$(grep -oP '"Channel"\s*:\s*"\K[^"]*' "${cfg}" | head -1)"
+  repo_url="$(grep -oP '"GitHubRepositoryUrl"\s*:\s*"\K[^"]*' "${cfg}" | head -1)"
+  client_id="$(grep -oP '"GitHubAppClientId"\s*:\s*"\K[^"]*' "${cfg}" | head -1)"
+
+  if [[ "${channel}" != "${UPDATE_CHANNEL}" ]]; then
+    echo "Error: bundle ships app-update channel '${channel}' but -p:UpdateChannel=${UPDATE_CHANNEL} was requested." >&2
+    echo "Check the Content Include/Link rules in XE-Local-AI-Engine.Client.csproj." >&2
+    exit 1
+  fi
+
+  # Why the updater is off. An empty reason means IsConfigured would be TRUE — a live updater in a bundle
+  # that cannot self-update, which is exactly what must not ship.
+  if [[ "${repo_url}" =~ ^https://github\.com/([^/[:space:]]+)/([^/[:space:]]+)/?$ ]]; then
+    owner="${BASH_REMATCH[1]}"
+    repo="${BASH_REMATCH[2]}"
+    case "${owner^^}/${repo^^}" in
+      REPLACE_*|CHANGE_ME*|TODO*|*/REPLACE_*|*/CHANGE_ME*|*/TODO*) reason="repository URL is a placeholder (${repo_url})" ;;
+    esac
+  else
+    reason="repository URL is not a github.com/<owner>/<repo> URL (${repo_url:-<empty>})"
+  fi
+  if [[ ! "${client_id}" =~ ^Iv[A-Za-z0-9.]{14,}$ ]]; then
+    reason="${reason:+${reason}; }GitHub App client ID is not a real 'Iv…' id (${client_id:-<empty>})"
+  fi
+
+  if [[ -z "${reason}" ]]; then
+    echo "Error: ${cfg} reads as LIVE update configuration (channel '${channel}', repo '${repo_url}')." >&2
+    echo "A portable zip is not a Velopack installation and must never self-update. Ship an inert channel," >&2
+    echo "or move this artifact to publish/package-tester-win.ps1, which owns the real update feed." >&2
+    exit 1
+  fi
+  echo ">> App-update config is inert by design: channel '${channel}' — ${reason}."
+  echo "   AppUpdateChannelOptions.IsConfigured is false, so the in-app updater ships disabled."
+
+  # Every OTHER appsettings*.json must be placeholder-free: appsettings.AppUpdate.json is the only file whose
+  # REPLACE_ markers are legitimate, and only because the check above proved they leave the feature off.
+  stray="$(cd "${stage}" && grep -rlE 'REPLACE_|CHANGE_ME|TODO' --include='appsettings*.json' . 2>/dev/null \
+    | grep -v '^\./appsettings\.AppUpdate\.json$' || true)"
+  if [[ -n "${stray}" ]]; then
+    echo "Error: placeholder configuration would ship in:" >&2
+    echo "${stray}" >&2
+    echo "Replace the REPLACE_/CHANGE_ME/TODO values or remove the file from the publish output." >&2
     exit 1
   fi
 }
@@ -176,7 +267,8 @@ package_rid() {
   esac
 
   echo ">> Publishing ${rid} (single-file self-contained)…"
-  dotnet publish "${CLIENT_PROJECT}" -c Release -r "${rid}" -p:PublishProfile="${rid}" --nologo
+  dotnet publish "${CLIENT_PROJECT}" -c Release -r "${rid}" -p:PublishProfile="${rid}" \
+    -p:UpdateChannel="${UPDATE_CHANNEL}" --nologo
 
   pub="${CLIENT_PROJECT}/bin/Release/net10.0/${rid}/publish"
   [[ -f "${pub}/${exe}" ]] || { echo "Error: expected published binary not found at ${pub}/${exe}." >&2; exit 1; }
@@ -198,6 +290,8 @@ package_rid() {
 
   # Refuse to ship a bundle carrying any per-node runtime/state artifact (node-settings.json / *.enc / *.pin).
   assert_no_runtime_state "${stage}"
+  # Refuse to ship placeholder configuration, or an updater this bundle could never honour.
+  assert_app_config_sane "${stage}"
 
   zip_path="${DIST_DIR}/${base}.zip"
   make_zip "${DIST_DIR}/stage" "${base}" "${zip_path}"
