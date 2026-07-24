@@ -11,8 +11,9 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///     unit/component coverage for.
 ///     <para>
 ///         Same host as <see cref="ChatPageE2ETests" /> — <see cref="XENodeE2EWebApplicationFactory" />
-///         wires FakeOllama as the local provider, so the assistant reply ("Node reply") streams
-///         deterministically in bounded time.  Locators prefer <c>data-testid</c>; per-message and
+///         wires FakeOllama as the local provider, so a reply echoing the sent text streams deterministically
+///         in bounded time once the FakeOllama model is picked explicitly in the composer (see
+///         <see cref="FakeOllamaChatModel" />).  Locators prefer <c>data-testid</c>; per-message and
 ///         per-conversation ids are runtime values so prefix/CSS selectors are used.
 ///     </para>
 /// </summary>
@@ -23,6 +24,15 @@ public sealed class ChatActionsE2ETests : XEE2ETestBase
     private const string SendButtonTestId = "chat-send-button";
     private const string NewConversationButtonName = "New plain chat";
 
+    /// <summary>
+    ///     The FakeOllama chat model this suite sends against. It must be picked EXPLICITLY in the composer:
+    ///     the "Local runtime default" sentinel resolves only to an installed GGUF (llama.cpp) chat model and
+    ///     never to an Ollama one by design (NodeChatStreamService.ResolveTurn), and the E2E host stubs the
+    ///     llama.cpp provider out — so every local-default send terminates as ModelNotInstalled before the
+    ///     model runs, and the assistant turn is persisted with EMPTY content.
+    /// </summary>
+    private const string FakeOllamaChatModel = "qwen3.5:0.8b";
+
     private async Task<ILocator> NavigateAndWaitForChatAsync()
     {
         await Page.GotoAsync($"{NodeAppUrl}/chat", new PageGotoOptions
@@ -32,12 +42,42 @@ public sealed class ChatActionsE2ETests : XEE2ETestBase
 
         var chatInput = Page.GetByPlaceholder(ChatInputPlaceholder);
         await Expect(chatInput).ToBeVisibleAsync();
+        await SelectFakeOllamaModelAsync();
         return chatInput;
     }
 
     /// <summary>
-    ///     Sends <paramref name="text" /> and waits until the assistant stream completes
-    ///     (send button reverts to "Send" and the "Node reply" bubble is visible).
+    ///     Opens the composer's model selector and picks <see cref="FakeOllamaChatModel" />, mirroring
+    ///     <c>ChatLocalToolsE2ETests.SelectToolCapableModelAsync</c>. Without this the turn never reaches a
+    ///     provider (see <see cref="FakeOllamaChatModel" />) and the reply carries no content, which silently
+    ///     removes the content-gated per-message actions (Copy, feedback).
+    /// </summary>
+    private async Task SelectFakeOllamaModelAsync()
+    {
+        var trigger = Page.GetByTestId("chat-model-selector-trigger");
+        await Expect(trigger).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
+        {
+            Timeout = 5000
+        });
+        await trigger.ClickAsync();
+
+        var option = Page.GetByTestId($"chat-model-selector-option-{FakeOllamaChatModel}");
+        await Expect(option).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
+        {
+            Timeout = 5000
+        });
+        await option.ClickAsync();
+
+        await Expect(Page.GetByTestId("chat-model-selector-selected"))
+            .ToContainTextAsync(FakeOllamaChatModel, new LocatorAssertionsToContainTextOptions
+            {
+                Timeout = 5000
+            });
+    }
+
+    /// <summary>
+    ///     Sends <paramref name="text" /> and waits until the assistant stream completes: the send button
+    ///     reverts to "Send" AND the echoed reply content is on screen.
     /// </summary>
     private async Task SendMessageAndAwaitReplyAsync(ILocator chatInput, string text)
     {
@@ -46,15 +86,20 @@ public sealed class ChatActionsE2ETests : XEE2ETestBase
         await Expect(sendButton).ToBeEnabledAsync();
         await sendButton.ClickAsync();
 
-        // Stream completion: button reverts to "Send", assistant bubble present.
+        // Stream completion: button reverts to "Send", then the reply CONTENT is present.
         await Expect(sendButton).ToHaveTextAsync("Send", new LocatorAssertionsToHaveTextOptions
         {
             Timeout = 15000
         });
-        await Expect(Page.GetByText("Node reply").First)
+
+        // Assert the echoed reply text, NOT the "Node reply" bubble label. That label is the assistant
+        // role caption (pages.chat.nodeReply in ChatMessage.tsx) and renders on every assistant bubble
+        // including a failed, empty one — asserting it let a turn that produced no content at all read as
+        // a completed reply. FakeOllama echoes "[fake-ollama] {last user message}".
+        await Expect(Page.GetByText($"[fake-ollama] {text}").First)
             .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
             {
-                Timeout = 3000
+                Timeout = 5000
             });
     }
 

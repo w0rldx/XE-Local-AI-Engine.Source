@@ -7,6 +7,40 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 [Category("Development")]
 public sealed class DevelopmentWorkflowE2ETests : XEE2ETestBase
 {
+    /// <summary>
+    ///     Registers <paramref name="repositoryRoot" /> through the Development page's "Register repository"
+    ///     dialog and leaves it selected in the project form's repository picker.
+    ///     <para>
+    ///         Registration auto-selects the repository it just created (DevelopmentProjectForm.register sets
+    ///         selectedFolderId from the response), so this returns with the form ready to submit. The
+    ///         assertion on the picker's displayed alias is what proves the round-trip actually landed —
+    ///         without it a failed registration would only surface later as a disabled Create button.
+    ///     </para>
+    /// </summary>
+    private async Task RegisterRepositoryAsync(string repositoryRoot)
+    {
+        var alias = "e2e-" + Path.GetFileName(repositoryRoot);
+
+        await Page.GetByTestId("development-open-register-repository").ClickAsync().ConfigureAwait(false);
+
+        var aliasInput = Page.GetByTestId("development-register-alias");
+        await Expect(aliasInput).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
+        {
+            Timeout = 10_000
+        }).ConfigureAwait(false);
+
+        await aliasInput.FillAsync(alias).ConfigureAwait(false);
+        await Page.GetByTestId("development-register-path").FillAsync(repositoryRoot).ConfigureAwait(false);
+        await Page.GetByTestId("development-register-repository").ClickAsync().ConfigureAwait(false);
+
+        // The dialog closes and the picker shows the newly registered alias only once the POST succeeded.
+        await Expect(Page.GetByTestId("development-repository-select"))
+            .ToHaveValueAsync(alias, new LocatorAssertionsToHaveValueOptions
+            {
+                Timeout = 10_000
+            }).ConfigureAwait(false);
+    }
+
     [Test]
     public async Task LocalWorkflow_AppliesPatchOnlyAfterValidationAndIndependentReview()
     {
@@ -24,17 +58,11 @@ public sealed class DevelopmentWorkflowE2ETests : XEE2ETestBase
                 Name = "Development Mode"
             })).ToBeVisibleAsync().ConfigureAwait(false);
 
-            var skipTour = Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
-            {
-                Name = "Skip",
-                Exact = true
-            });
-            if (await skipTour.IsVisibleAsync().ConfigureAwait(false))
-            {
-                await skipTour.ClickAsync().ConfigureAwait(false);
-            }
+            // The project form no longer takes a free-text repository root: d88237b8 ("Enable repository-bound
+            // Development Mode by default") replaced it with a Select over repositories registered up front, so
+            // the repository has to be registered through the dialog before it can be picked.
+            await RegisterRepositoryAsync(repositoryRoot).ConfigureAwait(false);
 
-            await Page.GetByLabel("Repository root").FillAsync(repositoryRoot).ConfigureAwait(false);
             await Page.GetByLabel("Project objective").FillAsync("Exercise the complete local Development workflow").ConfigureAwait(false);
             await Page.GetByLabel("Initial task title").FillAsync("Add the deterministic feature file").ConfigureAwait(false);
             await Page.GetByLabel("Requirements").FillAsync("Create feature.txt with the approved deterministic content.").ConfigureAwait(false);
@@ -42,9 +70,10 @@ public sealed class DevelopmentWorkflowE2ETests : XEE2ETestBase
                       .ConfigureAwait(false);
             await Page.GetByLabel("Coder model ID").FillAsync("qwen3.5:0.8b").ConfigureAwait(false);
             await Page.GetByLabel("Reviewer model ID").FillAsync("qwen3.5:0.8b").ConfigureAwait(false);
-            await Page.GetByLabel("I trust this repository to run the fixed Development command catalog with the configured process sandbox.")
-                      .CheckAsync()
-                      .ConfigureAwait(false);
+            // Target the checkbox by test id: the acknowledgement copy is reworded with the surface (it now reads
+            // "I trust the selected repository to execute Development commands with my host-user permissions."),
+            // and a label-text locator turns every such rewording into a 30 s timeout with no useful message.
+            await Page.GetByTestId("development-trust-acknowledgement").CheckAsync().ConfigureAwait(false);
             await Page.GetByTestId("development-create-project").ClickAsync().ConfigureAwait(false);
 
             var detail = Page.GetByTestId("development-project-detail");

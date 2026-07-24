@@ -77,8 +77,14 @@ public sealed class CloudSettingsPageE2ETests : XEE2ETestBase
         // so "Not configured" renders immediately on mount.
         await Expect(Page.GetByText("Not configured").First).ToBeVisibleAsync();
 
-        // Provider footer.
-        await Expect(Page.GetByText("AzureFoundry").First).ToBeVisibleAsync();
+        // The former "Provider: AzureFoundry. Runtime provider switching is not changed by this page."
+        // footer was removed in 20fac915 when the page grew a second (Codex OAuth) provider card; the
+        // literal now only survives as a request-body value in handleSave. The Azure card is instead
+        // identified by its heading, asserted above.
+
+        // The endpoint field is the card's always-present interactive element — asserting it here keeps
+        // this test covering "the page came up usable", which the removed footer used to stand in for.
+        await Expect(Page.Locator(EndpointInputSelector)).ToBeVisibleAsync();
     }
 
     [Test]
