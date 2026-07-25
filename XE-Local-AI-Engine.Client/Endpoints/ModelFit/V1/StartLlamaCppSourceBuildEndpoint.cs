@@ -4,10 +4,13 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
-public sealed class StartLlamaCppSourceBuildEndpoint(ILlamaCppSourceBuildService buildService) : Endpoint<StartLlamaCppSourceBuildRequest, StartLlamaCppSourceBuildResponse>
+public sealed class StartLlamaCppSourceBuildEndpoint(
+    ILlamaCppSourceBuildService buildService,
+    INodeRuntimeSettings nodeRuntimeSettings) : Endpoint<StartLlamaCppSourceBuildRequest, StartLlamaCppSourceBuildResponse>
 {
     public override void Configure()
     {
@@ -24,6 +27,14 @@ public sealed class StartLlamaCppSourceBuildEndpoint(ILlamaCppSourceBuildService
         if (!OperatingSystem.IsLinux())
         {
             await BlockAsync("not-linux", "In-app source builds are available on Linux only.").ConfigureAwait(false);
+            return;
+        }
+
+        if (await LlamaCppPrebuiltRuntimeMutationGuard
+                  .IsKeepModelWarmEnabledAsync(nodeRuntimeSettings, ct)
+                  .ConfigureAwait(false))
+        {
+            await BlockAsync("keep-model-warm-enabled", LlamaCppPrebuiltRuntimeMutationGuard.KeepModelWarmBlockedMessage).ConfigureAwait(false);
             return;
         }
 

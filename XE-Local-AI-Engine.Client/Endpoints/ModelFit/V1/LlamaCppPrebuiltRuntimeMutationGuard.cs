@@ -1,12 +1,22 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1;
 
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 internal static class LlamaCppPrebuiltRuntimeMutationGuard
 {
+    internal const string KeepModelWarmBlockedMessage =
+        "Disable Keep Model Warm before changing the llama.cpp runtime, then eject any running models and retry.";
+
     internal static bool IsSourceBuildActive(ILlamaCppSourceBuildActivity sourceBuildActivity)
     {
         return sourceBuildActivity.ActiveBuildId is not null;
+    }
+
+    internal static Task<bool> IsKeepModelWarmEnabledAsync(INodeRuntimeSettings nodeRuntimeSettings, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(nodeRuntimeSettings);
+        return nodeRuntimeSettings.GetKeepModelWarmEnabledAsync(ct);
     }
 
     internal static async Task<(ILlamaServerRuntimeMutationLease? Lease, int RunningProcessCount, string? BlockedMessage)> TryAcquireAsync(IInstalledRuntimeStore installedRuntimeStore,

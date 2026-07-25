@@ -284,6 +284,33 @@ describe("buildNodeSettingsRequest", () => {
 		expect(body.keepModelWarmIntervalSeconds).toBeUndefined();
 	});
 
+	it("rejects keep-warm when the configured process cap leaves no non-pinned slot", () => {
+		const form = {
+			...baseline,
+			llamaMaxLoadedProcesses: 1,
+			keepModelWarmEnabled: true,
+			keepModelWarmModelName: "qwen3:8b",
+		};
+
+		const { errors } = buildNodeSettingsRequest(form, baseline, bounds, false);
+
+		expect(errors["llamaMaxLoadedProcesses"]).toBe("keepWarmCapacity");
+	});
+
+	it("rejects a keep-warm interval that is not below the idle TTL", () => {
+		const form = {
+			...baseline,
+			llamaIdleTimeToLiveSeconds: 120,
+			keepModelWarmEnabled: true,
+			keepModelWarmModelName: "qwen3:8b",
+			keepModelWarmIntervalSeconds: 120,
+		};
+
+		const { errors } = buildNodeSettingsRequest(form, baseline, bounds, false);
+
+		expect(errors["keepModelWarmIntervalSeconds"]).toBe("belowIdleTtl");
+	});
+
 	it("rejects a malformed recommended tag", () => {
 		const form = { ...baseline, recommendedLlamaCppTag: "not-a-tag" };
 		const { errors } = buildNodeSettingsRequest(form, baseline, bounds, false);

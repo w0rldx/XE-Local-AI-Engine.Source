@@ -18,6 +18,23 @@ const { toastMock } = vi.hoisted(() => ({
 	toastMock: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn(), warning: vi.fn(), progress: vi.fn() },
 }));
 
+vi.mock("react-i18next", () => ({
+	useTranslation: () => ({
+		t: (key: string, fallbackOrVars?: string | Record<string, unknown>, explicitVars?: Record<string, unknown>) => {
+			const text = typeof fallbackOrVars === "string" ? fallbackOrVars : key;
+			const vars = typeof fallbackOrVars === "string" ? explicitVars : fallbackOrVars;
+			if (vars === undefined) {
+				return text;
+			}
+			return Object.entries(vars).reduce(
+				(acc, [name, value]) => acc.replace(new RegExp(`{{${name}}}`, "g"), String(value)),
+				text,
+			);
+		},
+		i18n: { language: "en" },
+	}),
+}));
+
 const { generatedMock } = vi.hoisted(() => ({
 	generatedMock: {
 		getNodeSettingsOptions: vi.fn(),
@@ -360,6 +377,74 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 		expect(within(listbox).getByRole("option", { name: "llama-chat", hidden: true })).toBeTruthy();
 		expect(within(listbox).queryByRole("option", { name: "ollama-chat", hidden: true })).toBeNull();
 		expect(within(listbox).queryByRole("option", { name: "llama-embedding", hidden: true })).toBeNull();
+	});
+
+	it("preserves and flags a selected keep-warm model that is no longer installed", async () => {
+		generatedMock.getNodeSettingsOptions.mockReturnValue({
+			queryKey: ["getNodeSettings"],
+			queryFn: async () => ({
+				...settingsResponse,
+				keepModelWarmEnabled: true,
+				keepModelWarmModelName: "deleted-model",
+				keepModelWarmIntervalSeconds: 120,
+				llamaMaxLoadedProcesses: 3,
+				llamaIdleTimeToLiveSeconds: 900,
+			}),
+		});
+		generatedMock.listLocalModelsOptions.mockReturnValue({
+			queryKey: fakeQueryKey("listLocalModels"),
+			queryFn: async () => ({ items: [], isAvailable: true }),
+		});
+
+		renderPage();
+
+		await waitFor(() => {
+			const listbox = screen.getByRole("listbox", { name: "Model to keep warm", hidden: true });
+			expect(within(listbox).getByRole("option", { name: "deleted-model (not installed)", hidden: true })).toBeTruthy();
+		});
+		expect(await screen.findByText("The selected model deleted-model is no longer installed.")).toBeTruthy();
+
+		fireEvent.click(screen.getByTestId("node-settings-fields-save-button"));
+		expect(generatedMock.saveFn).not.toHaveBeenCalled();
+	});
+
+	it("flags a keep-warm model whose stored casing does not match the installed model id", async () => {
+		generatedMock.getNodeSettingsOptions.mockReturnValue({
+			queryKey: ["getNodeSettings"],
+			queryFn: async () => ({
+				...settingsResponse,
+				keepModelWarmEnabled: true,
+				keepModelWarmModelName: "MODEL-A",
+				keepModelWarmIntervalSeconds: 120,
+				llamaMaxLoadedProcesses: 3,
+				llamaIdleTimeToLiveSeconds: 900,
+			}),
+		});
+		generatedMock.listLocalModelsOptions.mockReturnValue({
+			queryKey: fakeQueryKey("listLocalModels"),
+			queryFn: async () => ({
+				isAvailable: true,
+				items: [
+					{
+						modelName: "model-a",
+						provider: "llamacpp",
+						isSelected: false,
+						kind: "Chat",
+						detectedKind: "Chat",
+						capabilities: [],
+						isReasoningCapable: false,
+						isToolCapable: false,
+						isOverridden: false,
+					},
+				],
+			}),
+		});
+
+		renderPage();
+
+		expect(await screen.findByText("The selected model MODEL-A is no longer installed.")).toBeTruthy();
+		const listbox = screen.getByRole("listbox", { name: "Model to keep warm", hidden: true });
+		expect(within(listbox).getByRole("option", { name: "MODEL-A (not installed)", hidden: true })).toBeTruthy();
 	});
 
 	// One-click recommended-reranker download: response-state handling.

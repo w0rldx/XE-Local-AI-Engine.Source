@@ -85,6 +85,18 @@ public sealed class UpdateLlamaCppRuntimeEndpoint(
 
         var tag = req.Tag.Trim();
 
+        if (await LlamaCppPrebuiltRuntimeMutationGuard
+                  .IsKeepModelWarmEnabledAsync(_nodeRuntimeSettings, ct)
+                  .ConfigureAwait(false))
+        {
+            await Send.ResultAsync(Results.Conflict(new LlamaCppUpdateBlockedResponse
+            {
+                RunningProcessCount = _processSupervisor.CountRunningProcesses(),
+                Message = LlamaCppPrebuiltRuntimeMutationGuard.KeepModelWarmBlockedMessage
+            })).ConfigureAwait(false);
+            return;
+        }
+
         // A supplied variant override must parse; otherwise auto-select the host variant.
         GpuVariant variant;
         if (req.Variant is null)

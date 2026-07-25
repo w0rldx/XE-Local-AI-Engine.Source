@@ -28,6 +28,19 @@ public sealed class RemoveLlamaCppSourceBuildEndpoint(
 
     public override async Task HandleAsync(CancellationToken ct)
     {
+        if (await LlamaCppPrebuiltRuntimeMutationGuard
+                  .IsKeepModelWarmEnabledAsync(nodeRuntimeSettings, ct)
+                  .ConfigureAwait(false))
+        {
+            await Send.ResultAsync(Results.Conflict(new LlamaCppSourceBuildBlockedResponse
+            {
+                Reason = "keep-model-warm-enabled",
+                Message = LlamaCppPrebuiltRuntimeMutationGuard.KeepModelWarmBlockedMessage,
+                RunningProcessCount = processSupervisor.CountRunningProcesses()
+            })).ConfigureAwait(false);
+            return;
+        }
+
         var (removed, runningProcessCount, buildActive) =
             await TryRemoveAsync(binaryManager, processSupervisor, sourceBuildActivity, ct).ConfigureAwait(false);
         if (!removed)

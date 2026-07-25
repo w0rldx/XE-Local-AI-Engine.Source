@@ -535,6 +535,11 @@ export function buildNodeSettingsRequest(
 	}
 
 	if (form.keepModelWarmEnabled) {
+		const maxLoadedProcesses = toValidBoundedInt(form.llamaMaxLoadedProcesses, bounds.llamaMaxLoadedProcesses);
+		if (maxLoadedProcesses !== undefined && maxLoadedProcesses < 2) {
+			errors["llamaMaxLoadedProcesses"] = "keepWarmCapacity";
+		}
+
 		// A disabled feature must always be saveable, even if the operator entered an invalid interval before turning it
 		// off. The disabled interval control cannot be corrected in that state, and omission preserves the last valid value.
 		collectBoundedInt(
@@ -548,6 +553,12 @@ export function buildNodeSettingsRequest(
 				body.keepModelWarmIntervalSeconds = v;
 			},
 		);
+
+		const warmInterval = toValidBoundedInt(form.keepModelWarmIntervalSeconds, bounds.keepModelWarmIntervalSeconds);
+		const idleTtl = toValidBoundedInt(form.llamaIdleTimeToLiveSeconds, bounds.llamaIdleTimeToLiveSeconds);
+		if (warmInterval !== undefined && idleTtl !== undefined && warmInterval >= idleTtl) {
+			errors["keepModelWarmIntervalSeconds"] = "belowIdleTtl";
+		}
 	}
 	collectBoundedInt(
 		form.maxResponseSizeMb,

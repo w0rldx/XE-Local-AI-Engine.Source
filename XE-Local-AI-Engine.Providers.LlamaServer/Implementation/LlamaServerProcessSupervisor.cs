@@ -82,6 +82,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     // through it (shared with the image supervisor) so two --fit loads never read the same free-VRAM snapshot at once.
     private readonly IGpuModelLoadAdmission _loadAdmission;
     private int _disposed;
+    private int _runtimeMutationActivityCount;
 
     /// <summary>
     ///     Creates a supervisor over the supplied collaborators. The reaper loop starts immediately. Constructed via DI
@@ -214,17 +215,34 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     public async Task<ILlamaServerRuntimeMutationLease?> TryAcquireRuntimeMutationLeaseAsync(CancellationToken ct)
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
-        await _runtimeMutationGate.WaitAsync(ct).ConfigureAwait(false);
+        Interlocked.Increment(ref _runtimeMutationActivityCount);
+        try
+        {
+            await _runtimeMutationGate.WaitAsync(ct).ConfigureAwait(false);
+        }
+        catch
+        {
+            Interlocked.Decrement(ref _runtimeMutationActivityCount);
+            throw;
+        }
+
         if (_processes.Values.Any(static process => !process.Handle.HasExited) || !_inflightSpawns.IsEmpty)
         {
             _runtimeMutationGate.Release();
+            Interlocked.Decrement(ref _runtimeMutationActivityCount);
             return null;
         }
 
-        return new RuntimeMutationLease(_runtimeMutationGate);
+        return new RuntimeMutationLease(_runtimeMutationGate, () => Interlocked.Decrement(ref _runtimeMutationActivityCount));
     }
 
-    private sealed class RuntimeMutationLease(SemaphoreSlim gate) : ILlamaServerRuntimeMutationLease
+    /// <inheritdoc />
+    public bool IsKeepWarmSuppressed()
+    {
+        return Volatile.Read(ref _runtimeMutationActivityCount) > 0;
+    }
+
+    private sealed class RuntimeMutationLease(SemaphoreSlim gate, Action onDisposed) : ILlamaServerRuntimeMutationLease
     {
         private int _disposed;
 
@@ -233,6 +251,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             if (Interlocked.Exchange(ref _disposed, 1) == 0)
             {
                 gate.Release();
+                onDisposed();
             }
 
             return ValueTask.CompletedTask;

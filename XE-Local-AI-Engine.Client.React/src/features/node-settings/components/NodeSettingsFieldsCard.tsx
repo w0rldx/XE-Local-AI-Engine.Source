@@ -223,7 +223,15 @@ export function NodeSettingsFieldsCard({
 						disabled={!form.keepModelWarmEnabled}
 						searchable={true}
 						nothingFoundMessage={t("pages.nodeSettings.fields.keepModelWarm.noModels", "No installed llama.cpp chat models")}
-						error={fieldError(t, errors, "keepModelWarmModelName")}
+						error={
+							errors["keepModelWarmModelName"] === "unavailableKeepWarmModel"
+								? t(
+										"pages.nodeSettings.fields.errors.unavailableKeepWarmModel",
+										"The selected model {{model}} is no longer installed.",
+										{ model: form.keepModelWarmModelName },
+									)
+								: fieldError(t, errors, "keepModelWarmModelName")
+						}
 						data-testid="node-settings-keep-model-warm-model"
 					/>
 					<NumberInput
@@ -242,7 +250,8 @@ export function NodeSettingsFieldsCard({
 					<Text size="xs" c="dimmed" data-testid="node-settings-keep-model-warm-help">
 						{t(
 							"pages.nodeSettings.fields.keepModelWarm.help",
-							"Pinning keeps VRAM occupied and permanently uses one MaxLoadedProcesses slot (default 3). The warm interval must remain below the idle TTL to prevent eviction.",
+							"Pinning keeps VRAM occupied and permanently uses one of the configured {{maxLoadedProcesses}} MaxLoadedProcesses slots. The warm interval must remain below the idle TTL to prevent eviction.",
+							{ maxLoadedProcesses: form.llamaMaxLoadedProcesses },
 						)}
 					</Text>
 					<TextInput

@@ -1297,6 +1297,9 @@
 					"mode": "Unbekannter Modus für spekulatives Decoding.",
 					"required": "Wähle für diesen Modus ein Entwurfsmodell.",
 					"requiredKeepWarmModel": "Wähle ein Modell aus, das warmgehalten werden soll.",
+					"keepWarmCapacity": "Zum Warmhalten eines Modells sind mindestens zwei geladene Prozessplätze erforderlich.",
+					"belowIdleTtl": "Das Warmhalteintervall muss kürzer als die Leerlauf-Lebensdauer sein.",
+					"unavailableKeepWarmModel": "Das ausgewählte Modell {{model}} ist nicht mehr installiert.",
 					"rate": "Jede Rate benötigt einen Modellnamen sowie nicht-negative Eingabe- und Ausgabewerte."
 				},
 				"localChat": {
@@ -1332,7 +1335,8 @@
 					"modelPlaceholder": "Modell auswählen",
 					"noModels": "Keine installierten llama.cpp-Chatmodelle",
 					"intervalLabel": "Warmhalteintervall",
-					"help": "Das Anheften belegt dauerhaft VRAM und einen MaxLoadedProcesses-Platz (Standard: 3). Das Warmhalteintervall muss unter der Leerlauf-Lebensdauer bleiben, um ein Entladen zu verhindern."
+					"help": "Das Anheften belegt dauerhaft VRAM und einen der konfigurierten {{maxLoadedProcesses}} MaxLoadedProcesses-Plätze. Das Warmhalteintervall muss unter der Leerlauf-Lebensdauer bleiben, um ein Entladen zu verhindern.",
+					"unavailableOption": "{{model}} (nicht installiert)"
 				},
 				"ollamaEndpoint": {
 					"label": "Ollama-Endpunkt",

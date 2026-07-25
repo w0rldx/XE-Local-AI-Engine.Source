@@ -8,11 +8,13 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 public sealed class SaveNodeSettingsEndpoint(
     INodeSettingsStore nodeSettingsStore,
+    INodeRuntimeSettings nodeRuntimeSettings,
     ICapabilityReporter capabilityReporter,
     ILogger<SaveNodeSettingsEndpoint> logger) : Endpoint<SaveNodeSettingsRequest, NodeSettingsResponse>
 {
     private readonly ICapabilityReporter _capabilityReporter = capabilityReporter ?? throw new ArgumentNullException(nameof(capabilityReporter));
     private readonly ILogger<SaveNodeSettingsEndpoint> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly INodeRuntimeSettings _nodeRuntimeSettings = nodeRuntimeSettings ?? throw new ArgumentNullException(nameof(nodeRuntimeSettings));
     private readonly INodeSettingsStore _nodeSettingsStore = nodeSettingsStore ?? throw new ArgumentNullException(nameof(nodeSettingsStore));
 
     public override void Configure()
@@ -48,6 +50,41 @@ public sealed class SaveNodeSettingsEndpoint(
             return;
         }
 
+        if (settings.KeepModelWarmEnabled is not true)
+        {
+            await SaveAsync(settings, ct).ConfigureAwait(false);
+            return;
+        }
+
+        var effectiveMaxLoadedProcesses = settings.LlamaMaxLoadedProcesses
+                                          ?? await _nodeRuntimeSettings.GetLlamaMaxLoadedProcessesAsync(ct).ConfigureAwait(false);
+        if (effectiveMaxLoadedProcesses < 2)
+        {
+            AddError(r => r.LlamaMaxLoadedProcesses,
+                "Keep model warm requires at least two loaded-process slots so another local model can still be admitted.");
+            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            return;
+        }
+
+        var effectiveKeepWarmInterval = settings.KeepModelWarmIntervalSeconds is { } intervalSeconds
+            ? TimeSpan.FromSeconds(intervalSeconds)
+            : await _nodeRuntimeSettings.GetKeepModelWarmIntervalAsync(ct).ConfigureAwait(false);
+        var effectiveIdleTimeToLive = settings.LlamaIdleTimeToLiveSeconds is { } idleTimeToLiveSeconds
+            ? TimeSpan.FromSeconds(idleTimeToLiveSeconds)
+            : await _nodeRuntimeSettings.GetLlamaIdleTimeToLiveAsync(ct).ConfigureAwait(false);
+        if (effectiveKeepWarmInterval >= effectiveIdleTimeToLive)
+        {
+            AddError(r => r.KeepModelWarmIntervalSeconds,
+                "The keep-model-warm interval must be shorter than the llama.cpp idle time-to-live.");
+            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            return;
+        }
+
+        await SaveAsync(settings, ct).ConfigureAwait(false);
+    }
+
+    private async Task SaveAsync(StoredNodeSettings settings, CancellationToken ct)
+    {
         await _nodeSettingsStore.SaveAsync(settings, ct).ConfigureAwait(false);
         await TryReportCapabilitiesAsync(ct).ConfigureAwait(false);
         await Send.OkAsync(settings.ToResponse(), ct).ConfigureAwait(false);

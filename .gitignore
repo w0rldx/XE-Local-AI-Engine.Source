@@ -366,6 +366,7 @@ repomix-output.*
 # AI Coding files
 **/*.omc/**
 **/*.omx/**
+.testagent/
 # Redundant per-tool agent skill mirrors — canonical copy lives under .claude/ only.
 **/.agents/**
 **/.junie/**

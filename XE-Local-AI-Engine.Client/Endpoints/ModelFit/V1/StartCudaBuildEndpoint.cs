@@ -4,6 +4,7 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
@@ -15,7 +16,8 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// </summary>
 public sealed class StartCudaBuildEndpoint(
     ILlamaCppSourceBuildService sourceBuildService,
-    ICudaBuildService buildService) : EndpointWithoutRequest<StartCudaBuildResponse>
+    ICudaBuildService buildService,
+    INodeRuntimeSettings nodeRuntimeSettings) : EndpointWithoutRequest<StartCudaBuildResponse>
 {
     private readonly ICudaBuildService _buildService = buildService ?? throw new ArgumentNullException(nameof(buildService));
 
@@ -34,6 +36,14 @@ public sealed class StartCudaBuildEndpoint(
         if (!OperatingSystem.IsLinux())
         {
             await BlockAsync("not-linux", "The in-app CUDA build is available on Linux only.").ConfigureAwait(false);
+            return;
+        }
+
+        if (await LlamaCppPrebuiltRuntimeMutationGuard
+                  .IsKeepModelWarmEnabledAsync(nodeRuntimeSettings, ct)
+                  .ConfigureAwait(false))
+        {
+            await BlockAsync("keep-model-warm-enabled", LlamaCppPrebuiltRuntimeMutationGuard.KeepModelWarmBlockedMessage).ConfigureAwait(false);
             return;
         }
 
