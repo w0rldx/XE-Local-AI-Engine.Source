@@ -4,7 +4,10 @@ import { MantineProvider } from "@mantine/core";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { NodeSettingsFieldsCard, type NodeSettingsFieldsCardProps } from "@/features/node-settings/components/NodeSettingsFieldsCard";
+import {
+	NodeSettingsFieldsCard,
+	type NodeSettingsFieldsCardProps,
+} from "@/features/node-settings/components/NodeSettingsFieldsCard";
 import {
 	type NodeSettingsFieldsForm,
 	toNodeSettingsFieldBounds,
@@ -60,6 +63,7 @@ interface RenderOverrides {
 	form?: NodeSettingsFieldsForm;
 	onChange?: ReturnType<typeof vi.fn>;
 	errors?: Record<string, string>;
+	keepWarmModelOptions?: NodeSettingsFieldsCardProps["keepWarmModelOptions"];
 }
 
 function renderCard(overrides: RenderOverrides = {}): { onDownload: () => void; onChange: ReturnType<typeof vi.fn> } {
@@ -74,6 +78,7 @@ function renderCard(overrides: RenderOverrides = {}): { onDownload: () => void; 
 				onChange={onChange as unknown as NodeSettingsFieldsCardProps["onChange"]}
 				showDeveloperFields={false}
 				draftModelOptions={[]}
+				keepWarmModelOptions={overrides.keepWarmModelOptions ?? []}
 				rerankerModelOptions={[]}
 				onDownloadRecommendedReranker={onDownload}
 				isDownloadRecommendedRerankerPending={overrides.isDownloadRecommendedRerankerPending ?? false}
@@ -83,6 +88,49 @@ function renderCard(overrides: RenderOverrides = {}): { onDownload: () => void; 
 	);
 	return { onDownload, onChange };
 }
+
+describe("NodeSettingsFieldsCard — keep model warm", () => {
+	beforeEach(() => {
+		installJsdomEnvironmentMocks();
+		vi.clearAllMocks();
+	});
+
+	afterEach(() => cleanup());
+
+	it("renders the live toggle and disables the model and interval controls while off", () => {
+		renderCard();
+
+		expect(screen.getByTestId("node-settings-keep-model-warm-enabled")).toBeTruthy();
+		expect((screen.getByTestId("node-settings-keep-model-warm-model") as HTMLInputElement).disabled).toBe(true);
+		expect((screen.getByTestId("node-settings-keep-model-warm-interval") as HTMLInputElement).disabled).toBe(true);
+	});
+
+	it("edits the toggle, llama.cpp model, and interval through the generic onChange", () => {
+		const form = { ...toNodeSettingsFieldsForm(undefined), keepModelWarmEnabled: true };
+		const { onChange } = renderCard({
+			form,
+			keepWarmModelOptions: [{ value: "qwen3:8b", label: "qwen3:8b" }],
+		});
+
+		fireEvent.click(screen.getByTestId("node-settings-keep-model-warm-enabled"));
+		fireEvent.click(screen.getByTestId("node-settings-keep-model-warm-model"));
+		fireEvent.click(screen.getByText("qwen3:8b"));
+		fireEvent.change(screen.getByTestId("node-settings-keep-model-warm-interval"), { target: { value: "120" } });
+
+		expect(onChange).toHaveBeenCalledWith("keepModelWarmEnabled", false);
+		expect(onChange).toHaveBeenCalledWith("keepModelWarmModelName", "qwen3:8b");
+		expect(onChange).toHaveBeenCalledWith("keepModelWarmIntervalSeconds", 120);
+	});
+
+	it("surfaces the VRAM, MaxLoadedProcesses slot, and idle-TTL caveats", () => {
+		renderCard();
+
+		const help = screen.getByTestId("node-settings-keep-model-warm-help").textContent ?? "";
+		expect(help).toContain("VRAM");
+		expect(help).toContain("one MaxLoadedProcesses slot (default 3)");
+		expect(help).toContain("below the idle TTL");
+	});
+});
 
 describe("NodeSettingsFieldsCard — recommended reranker download", () => {
 	beforeEach(() => {

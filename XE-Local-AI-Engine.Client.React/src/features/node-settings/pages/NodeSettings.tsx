@@ -87,6 +87,17 @@ export function NodeSettings() {
 		[localModels],
 	);
 
+	// Keep-warm targets the supervised llama-server runtime, so only installed chat models owned by the llama.cpp
+	// provider are eligible. Provider matching is case-insensitive because provider names cross a persisted/API boundary.
+	const keepWarmModelOptions = useMemo(
+		() =>
+			toChatModelOptions(
+				(localModels?.items ?? []).filter((model) => (model.provider ?? "").toLowerCase() === "llamacpp"),
+				localModels?.isAvailable ?? false,
+			).map((option) => ({ value: option.value, label: option.label })),
+		[localModels],
+	);
+
 	// Installed models offered as the knowledge-base reranker. Reranker GGUFs are not a chat kind, so this list is NOT
 	// filtered to chat-capable models (value = model name, resolved server-side).
 	const rerankerModelOptions = useMemo(
@@ -354,6 +365,7 @@ export function NodeSettings() {
 					onChange={handleFieldChange}
 					showDeveloperFields={developerMode}
 					draftModelOptions={draftModelOptions}
+					keepWarmModelOptions={keepWarmModelOptions}
 					rerankerModelOptions={rerankerModelOptions}
 					onDownloadRecommendedReranker={handleDownloadRecommendedReranker}
 					isDownloadRecommendedRerankerPending={downloadRecommendedReranker.isPending}

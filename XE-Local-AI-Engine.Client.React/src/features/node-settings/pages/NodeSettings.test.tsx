@@ -2,7 +2,7 @@
 
 import { MantineProvider } from "@mantine/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -305,6 +305,61 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 		await waitFor(() =>
 			expect(generatedMock.saveFn.mock.calls[0]?.[0]).toEqual({ body: { maxMessageRequestTimeoutSeconds: 600 } }),
 		);
+	});
+
+	it("offers only installed llama.cpp chat models in the keep-warm picker", async () => {
+		generatedMock.listLocalModelsOptions.mockReturnValue({
+			queryKey: fakeQueryKey("listLocalModels"),
+			queryFn: async () => ({
+				isAvailable: true,
+				items: [
+					{
+						modelName: "llama-chat",
+						provider: "LLaMaCpP",
+						isSelected: false,
+						kind: "Chat",
+						detectedKind: "Chat",
+						capabilities: [],
+						isReasoningCapable: false,
+						isToolCapable: false,
+						isOverridden: false,
+					},
+					{
+						modelName: "ollama-chat",
+						provider: "ollama",
+						isSelected: false,
+						kind: "Chat",
+						detectedKind: "Chat",
+						capabilities: [],
+						isReasoningCapable: false,
+						isToolCapable: false,
+						isOverridden: false,
+					},
+					{
+						modelName: "llama-embedding",
+						provider: "llamacpp",
+						isSelected: false,
+						kind: "Embedding",
+						detectedKind: "Embedding",
+						capabilities: [],
+						isReasoningCapable: false,
+						isToolCapable: false,
+						isOverridden: false,
+					},
+				],
+			}),
+		});
+
+		renderPage();
+		const toggle = await screen.findByTestId("node-settings-keep-model-warm-enabled");
+		fireEvent.click(toggle);
+		const listbox = screen.getByRole("listbox", { name: "Model to keep warm", hidden: true });
+
+		// Mantine keeps Select options mounted in a hidden portal until the dropdown opens; hidden-role queries let this
+		// assert the actual option data without coupling the filter test to Popover positioning behavior in jsdom.
+		expect(within(listbox).getByRole("option", { name: "llama-chat", hidden: true })).toBeTruthy();
+		expect(within(listbox).queryByRole("option", { name: "ollama-chat", hidden: true })).toBeNull();
+		expect(within(listbox).queryByRole("option", { name: "llama-embedding", hidden: true })).toBeNull();
 	});
 
 	// One-click recommended-reranker download: response-state handling.

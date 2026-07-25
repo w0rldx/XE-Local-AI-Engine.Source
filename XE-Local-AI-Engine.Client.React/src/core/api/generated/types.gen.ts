@@ -330,6 +330,11 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse = {
 	llamaIdleTimeToLiveSeconds?: number | null;
 	minLlamaIdleTimeToLiveSeconds?: number;
 	maxAllowedLlamaIdleTimeToLiveSeconds?: number;
+	keepModelWarmEnabled?: boolean | null;
+	keepModelWarmModelName?: string | null;
+	keepModelWarmIntervalSeconds?: number | null;
+	minKeepModelWarmIntervalSeconds?: number;
+	maxAllowedKeepModelWarmIntervalSeconds?: number;
 	maxResponseSizeMb?: number | null;
 	minMaxResponseSizeMb?: number;
 	maxAllowedMaxResponseSizeMb?: number;
@@ -397,6 +402,9 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest 
 	huggingFaceDefaultQuant?: string | null;
 	llamaMaxLoadedProcesses?: number | null;
 	llamaIdleTimeToLiveSeconds?: number | null;
+	keepModelWarmEnabled?: boolean | null;
+	keepModelWarmModelName?: string | null;
+	keepModelWarmIntervalSeconds?: number | null;
 	maxResponseSizeMb?: number | null;
 	recommendedLlamaCppTag?: string | null;
 	chatCacheReuse?: number | null;

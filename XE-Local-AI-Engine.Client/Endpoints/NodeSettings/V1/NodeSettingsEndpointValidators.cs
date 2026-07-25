@@ -43,6 +43,10 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
             .InclusiveBetween(StoredNodeSettings.MinLlamaIdleTimeToLiveSeconds, StoredNodeSettings.MaxLlamaIdleTimeToLiveSeconds)
             .When(static request => request.LlamaIdleTimeToLiveSeconds is not null);
 
+        RuleFor(static request => request.KeepModelWarmIntervalSeconds!.Value)
+            .InclusiveBetween(StoredNodeSettings.MinKeepModelWarmIntervalSeconds, StoredNodeSettings.MaxKeepModelWarmIntervalSeconds)
+            .When(static request => request.KeepModelWarmIntervalSeconds is not null);
+
         RuleFor(static request => request.MaxResponseSizeMb!.Value)
             .InclusiveBetween(StoredNodeSettings.MinMaxResponseSizeMb, StoredNodeSettings.MaxMaxResponseSizeMb)
             .When(static request => request.MaxResponseSizeMb is not null);

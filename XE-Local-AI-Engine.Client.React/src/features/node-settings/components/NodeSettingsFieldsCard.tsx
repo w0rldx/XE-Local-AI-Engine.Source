@@ -1,4 +1,17 @@
-import { ActionIcon, Button, Card, Group, NumberInput, Select, Stack, Switch, TagsInput, Text, TextInput, Title } from "@mantine/core";
+import {
+	ActionIcon,
+	Button,
+	Card,
+	Group,
+	NumberInput,
+	Select,
+	Stack,
+	Switch,
+	TagsInput,
+	Text,
+	TextInput,
+	Title,
+} from "@mantine/core";
 import { IconCloudDownload, IconCoin, IconCpu, IconPlus, IconRobot, IconServer, IconTool, IconTrash } from "@tabler/icons-react";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
@@ -32,6 +45,8 @@ export interface NodeSettingsFieldsCardProps {
 	readonly showDeveloperFields: boolean;
 	// Installed chat-capable models offered as the draft model for draft-* speculative modes.
 	readonly draftModelOptions: readonly DraftModelOption[];
+	// Installed llama.cpp chat models eligible for the supervised keep-warm loop.
+	readonly keepWarmModelOptions: readonly DraftModelOption[];
 	// All installed models offered as the knowledge-base reranker (reranker GGUFs are not a chat kind, so this list is
 	// not filtered to chat-capable models).
 	readonly rerankerModelOptions: readonly DraftModelOption[];
@@ -64,6 +79,7 @@ export function NodeSettingsFieldsCard({
 	onChange,
 	showDeveloperFields,
 	draftModelOptions,
+	keepWarmModelOptions,
 	rerankerModelOptions,
 	onDownloadRecommendedReranker,
 	isDownloadRecommendedRerankerPending,
@@ -135,10 +151,7 @@ export function NodeSettingsFieldsCard({
 					/>
 					<Switch
 						label={t("pages.nodeSettings.fields.enableTools.label", "Enable tools")}
-						description={t(
-							"pages.nodeSettings.fields.enableTools.description",
-							"Allow local chat agents to call tools.",
-						)}
+						description={t("pages.nodeSettings.fields.enableTools.description", "Allow local chat agents to call tools.")}
 						checked={form.enableTools}
 						onChange={(event) => onChange("enableTools", event.currentTarget.checked)}
 						data-testid="node-settings-enable-tools"
@@ -187,6 +200,51 @@ export function NodeSettingsFieldsCard({
 						error={fieldError(t, errors, "llamaIdleTimeToLiveSeconds")}
 						data-testid="node-settings-llama-idle-ttl"
 					/>
+					<Switch
+						label={t("pages.nodeSettings.fields.keepModelWarm.enabledLabel", "Keep a model warm")}
+						description={t(
+							"pages.nodeSettings.fields.keepModelWarm.enabledDescription",
+							"Continuously keeps one selected llama.cpp chat model resident. Changes take effect without restarting the node.",
+						)}
+						checked={form.keepModelWarmEnabled}
+						onChange={(event) => onChange("keepModelWarmEnabled", event.currentTarget.checked)}
+						data-testid="node-settings-keep-model-warm-enabled"
+					/>
+					<Select
+						label={t("pages.nodeSettings.fields.keepModelWarm.modelLabel", "Model to keep warm")}
+						description={t(
+							"pages.nodeSettings.fields.keepModelWarm.modelDescription",
+							"Choose an installed llama.cpp chat model.",
+						)}
+						placeholder={t("pages.nodeSettings.fields.keepModelWarm.modelPlaceholder", "Select a model")}
+						data={[...keepWarmModelOptions]}
+						value={form.keepModelWarmModelName === "" ? null : form.keepModelWarmModelName}
+						onChange={(value) => onChange("keepModelWarmModelName", value ?? "")}
+						disabled={!form.keepModelWarmEnabled}
+						searchable={true}
+						nothingFoundMessage={t("pages.nodeSettings.fields.keepModelWarm.noModels", "No installed llama.cpp chat models")}
+						error={fieldError(t, errors, "keepModelWarmModelName")}
+						data-testid="node-settings-keep-model-warm-model"
+					/>
+					<NumberInput
+						label={t("pages.nodeSettings.fields.keepModelWarm.intervalLabel", "Warm interval")}
+						description={`${t("pages.nodeSettings.fields.allowedRange", "Allowed range")}: ${bounds.keepModelWarmIntervalSeconds.min}–${bounds.keepModelWarmIntervalSeconds.max} ${t("pages.nodeSettings.fields.seconds", "seconds")}.`}
+						suffix={` ${t("pages.nodeSettings.fields.seconds", "seconds")}`}
+						min={bounds.keepModelWarmIntervalSeconds.min}
+						max={bounds.keepModelWarmIntervalSeconds.max}
+						allowDecimal={false}
+						value={form.keepModelWarmIntervalSeconds}
+						onChange={(value) => onChange("keepModelWarmIntervalSeconds", value)}
+						disabled={!form.keepModelWarmEnabled}
+						error={fieldError(t, errors, "keepModelWarmIntervalSeconds")}
+						data-testid="node-settings-keep-model-warm-interval"
+					/>
+					<Text size="xs" c="dimmed" data-testid="node-settings-keep-model-warm-help">
+						{t(
+							"pages.nodeSettings.fields.keepModelWarm.help",
+							"Pinning keeps VRAM occupied and permanently uses one MaxLoadedProcesses slot (default 3). The warm interval must remain below the idle TTL to prevent eviction.",
+						)}
+					</Text>
 					<TextInput
 						label={t("pages.nodeSettings.fields.ollamaEndpoint.label", "Ollama endpoint")}
 						description={t(

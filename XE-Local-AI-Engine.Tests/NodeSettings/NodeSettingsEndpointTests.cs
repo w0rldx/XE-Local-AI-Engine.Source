@@ -105,6 +105,9 @@ public sealed class NodeSettingsEndpointTests
             HuggingFaceDefaultQuant = "Q5_K_M",
             LlamaMaxLoadedProcesses = 5,
             LlamaIdleTimeToLiveSeconds = 1200,
+            KeepModelWarmEnabled = true,
+            KeepModelWarmModelName = "repo/model:Q4_K_M",
+            KeepModelWarmIntervalSeconds = 300,
             MaxResponseSizeMb = 25,
             RecommendedLlamaCppTag = "b9700",
             OrchestrationIdleTimeoutSeconds = 240
@@ -122,6 +125,9 @@ public sealed class NodeSettingsEndpointTests
         AssertEx.Equal("Q5_K_M", settings.HuggingFaceDefaultQuant);
         AssertEx.Equal(expected: 5, settings.LlamaMaxLoadedProcesses);
         AssertEx.Equal(expected: 1200, settings.LlamaIdleTimeToLiveSeconds);
+        AssertEx.Equal(expected: true, settings.KeepModelWarmEnabled);
+        AssertEx.Equal("repo/model:Q4_K_M", settings.KeepModelWarmModelName);
+        AssertEx.Equal(expected: 300, settings.KeepModelWarmIntervalSeconds);
         AssertEx.Equal(expected: 25, settings.MaxResponseSizeMb);
         AssertEx.Equal("b9700", settings.RecommendedLlamaCppTag);
         AssertEx.Equal(expected: 240, settings.OrchestrationIdleTimeoutSeconds);
@@ -129,6 +135,8 @@ public sealed class NodeSettingsEndpointTests
         AssertEx.Contains(settings.ToolCapableModels!, "gemma3:12b");
         // Bounds are surfaced for the React form.
         AssertEx.Equal(StoredNodeSettings.MaxLlamaMaxLoadedProcesses, settings.MaxAllowedLlamaMaxLoadedProcesses);
+        AssertEx.Equal(StoredNodeSettings.MinKeepModelWarmIntervalSeconds, settings.MinKeepModelWarmIntervalSeconds);
+        AssertEx.Equal(StoredNodeSettings.MaxKeepModelWarmIntervalSeconds, settings.MaxAllowedKeepModelWarmIntervalSeconds);
     }
 
     [Test]
@@ -140,7 +148,10 @@ public sealed class NodeSettingsEndpointTests
                          {
                              MaxMessageRequestTimeoutSeconds = 300,
                              RecommendedLlamaCppTag = "b9692",
-                             OllamaEndpoint = "http://127.0.0.1:11434"
+                             OllamaEndpoint = "http://127.0.0.1:11434",
+                             KeepModelWarmEnabled = true,
+                             KeepModelWarmModelName = "keep-me-warm",
+                             KeepModelWarmIntervalSeconds = 180
                          });
         await using var factory = CreateFactory(nodeSettingsStore);
         using var client = factory.CreateClient();
@@ -153,7 +164,10 @@ public sealed class NodeSettingsEndpointTests
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         await nodeSettingsStore.Received(1).SaveAsync(Arg.Is<StoredNodeSettings>(stored => stored.MaxMessageRequestTimeoutSeconds == 300
                                                                                            && stored.RecommendedLlamaCppTag == "b9692"
-                                                                                           && stored.OllamaEndpoint == "http://127.0.0.1:11434"),
+                                                                                           && stored.OllamaEndpoint == "http://127.0.0.1:11434"
+                                                                                           && stored.KeepModelWarmEnabled == true
+                                                                                           && stored.KeepModelWarmModelName == "keep-me-warm"
+                                                                                           && stored.KeepModelWarmIntervalSeconds == 180),
             Arg.Any<CancellationToken>());
     }
 
@@ -261,6 +275,66 @@ public sealed class NodeSettingsEndpointTests
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         await nodeSettingsStore.DidNotReceiveWithAnyArgs().SaveAsync(Arg.Any<StoredNodeSettings>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task SaveNodeSettings_WhenKeepModelWarmIntervalOutOfRange_ReturnsValidationProblem()
+    {
+        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            KeepModelWarmIntervalSeconds = StoredNodeSettings.MaxKeepModelWarmIntervalSeconds + 1
+        });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await nodeSettingsStore.DidNotReceiveWithAnyArgs().SaveAsync(Arg.Any<StoredNodeSettings>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task SaveNodeSettings_WhenKeepModelWarmEnabledWithoutModel_ReturnsValidationProblem()
+    {
+        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
+        nodeSettingsStore.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings());
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            KeepModelWarmEnabled = true
+        });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await nodeSettingsStore.DidNotReceiveWithAnyArgs().SaveAsync(Arg.Any<StoredNodeSettings>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public void NodeSettings_KeepModelWarmFields_RoundTripThroughMapper()
+    {
+        var stored = new SaveNodeSettingsRequest
+        {
+            KeepModelWarmEnabled = false,
+            KeepModelWarmModelName = "  repo/model:Q5_K_M  ",
+            KeepModelWarmIntervalSeconds = 240
+        }.ToStoredSettings(new StoredNodeSettings
+        {
+            KeepModelWarmEnabled = true
+        });
+
+        AssertEx.Equal(expected: false, stored.KeepModelWarmEnabled);
+        AssertEx.Equal("repo/model:Q5_K_M", stored.KeepModelWarmModelName);
+        AssertEx.Equal(expected: 240, stored.KeepModelWarmIntervalSeconds);
+
+        var response = stored.ToResponse();
+        AssertEx.Equal(expected: false, response.KeepModelWarmEnabled);
+        AssertEx.Equal("repo/model:Q5_K_M", response.KeepModelWarmModelName);
+        AssertEx.Equal(expected: 240, response.KeepModelWarmIntervalSeconds);
     }
 
     [Test]
