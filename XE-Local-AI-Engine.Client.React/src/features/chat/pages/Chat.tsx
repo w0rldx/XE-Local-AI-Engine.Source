@@ -60,7 +60,7 @@ import {
 import { useVoicePlayback } from "@/features/voice/useVoicePlayback";
 import { useVoiceRuntime } from "@/features/voice/VoiceRuntimeContext";
 
-/* eslint-disable react-doctor/no-giant-component, react-doctor/prefer-useReducer, react-doctor/js-combine-iterations */
+/* eslint-disable react-doctor/no-giant-component, react-doctor/prefer-useReducer, react-doctor/js-combine-iterations -- This page is the chat orchestration boundary; its state machines and ordered timeline passes are intentionally kept explicit pending a dedicated decomposition. */
 
 // Base identity for the synthetic "Local default" composer option. Capabilities are filled in dynamically inside
 // modelOptions (see below) from the concrete model the runtime will resolve, so picking "Local default" mirrors the

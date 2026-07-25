@@ -2,7 +2,6 @@
 
   <PropertyGroup>
     <RootNamespace>XE_Local_AI_Engine.AI.Contracts</RootNamespace>
-    <NoWarn>$(NoWarn);CA1716</NoWarn>
   </PropertyGroup>
 
 </Project>

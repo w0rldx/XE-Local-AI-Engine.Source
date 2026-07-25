@@ -5,7 +5,7 @@ import { refreshNodeAuthToken } from "@/core/auth/api/NodeAuthApi";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { diagnosticsSignalrHeaders } from "@/core/diagnostics/collectors/Network.signalr";
 
-/* eslint-disable react-doctor/async-await-in-loop */
+/* eslint-disable react-doctor/async-await-in-loop -- SignalR startup retries must back off sequentially; parallel attempts would race one connection. */
 
 const chatHubPath = "chat/hub";
 

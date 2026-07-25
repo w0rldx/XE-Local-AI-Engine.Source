@@ -56,6 +56,9 @@ var app = builder.AddProject<XE_Local_AI_Engine_Client>("app", "https")
                      }
                  });
 
+// Aspire's browser-log integration is still experimental. Keep the diagnostic local to the one development-only
+// resource that deliberately opts into forwarding Chrome logs instead of suppressing it for the whole AppHost.
+#pragma warning disable ASPIREBROWSERLOGS001
 builder.AddViteApp("client-react", "../XE-Local-AI-Engine.Client.React")
        .WithEnvironment("BROWSER", "none")
        .WithEnvironment("VITE_APP_TITLE", "XE Local AI Engine")
@@ -82,5 +85,6 @@ builder.AddViteApp("client-react", "../XE-Local-AI-Engine.Client.React")
        .WithPnpm()
        .WithBrowserLogs("/usr/bin/google-chrome",
            userDataMode: BrowserUserDataMode.Isolated);
+#pragma warning restore ASPIREBROWSERLOGS001
 
 await builder.Build().RunAsync();

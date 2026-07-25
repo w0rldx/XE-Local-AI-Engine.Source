@@ -2,7 +2,7 @@ import type { NodeChatStreamEventDto } from "@/features/chat/models/NodeChatStre
 
 export type StreamWatchdogCategory = "no-first-chunk" | "inter-chunk-stall";
 
-/* eslint-disable react-doctor/async-await-in-loop */
+/* eslint-disable react-doctor/async-await-in-loop -- Each stream event must finish its watchdog race before the next event can be consumed safely. */
 
 /**
  * Raised when the client-side watchdog gives up on a stalled stream. The category distinguishes a stream that

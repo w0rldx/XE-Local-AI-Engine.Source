@@ -89,8 +89,6 @@ export function PreviewPage() {
 			closeCanvas();
 			runActions.reset();
 		};
-		// Stable store action refs.
-		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [closeCanvas, runActions]);
 
 	const workflows = useMemo(() => workflowsQuery.data ?? [], [workflowsQuery.data]);

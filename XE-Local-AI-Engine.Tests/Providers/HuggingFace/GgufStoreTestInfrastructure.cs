@@ -79,7 +79,7 @@ internal static class GgufStoreTestInfrastructure
     // client — so a bare client over a throwing handler is safe and asserts no network read sneaks into the list path.
     public static GgufHeaderReader HeaderReader(HuggingFaceOptions options)
     {
-#pragma warning disable CA2000
+#pragma warning disable CA2000 // The returned reader retains this client; its throwing in-memory handler owns no sockets, and disposing it here would invalidate the reader.
         var http = new HttpClient(new ScriptedHandler(static (_, _) =>
             throw new InvalidOperationException("The installed-model list must read headers from disk, never over HTTP.")));
 #pragma warning restore CA2000

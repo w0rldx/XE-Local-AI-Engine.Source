@@ -215,7 +215,7 @@ public sealed class GgufHeaderReaderLocalFileTests
     private static GgufHeaderReader NewReader()
     {
         var options = new HuggingFaceOptions();
-#pragma warning disable CA2000
+#pragma warning disable CA2000 // The returned reader retains this client; its throwing in-memory handler owns no sockets, and disposing it here would invalidate the reader.
         var http = new HttpClient(new GgufStoreTestInfrastructure.ScriptedHandler(static (_, _) =>
             throw new InvalidOperationException("A local header read must never touch the HTTP client.")));
 #pragma warning restore CA2000

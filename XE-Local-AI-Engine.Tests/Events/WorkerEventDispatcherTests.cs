@@ -64,7 +64,7 @@ public sealed class WorkerEventDispatcherTests
     {
         var runner = Substitute.For<IInvocationRunner>();
         var assembler = Substitute.For<IRuntimePackageEnvelopeAssembler>();
-#pragma warning disable CA2000
+#pragma warning disable CA2000 // The dispatcher retains this test registry; it has no disposal contract, and its isolated NSec key lives only for this test process.
         var nodeKeyRegistry = new FakeNodeKeyRegistry();
 #pragma warning restore CA2000
         var dispatcher = CreateDispatcher(runner, assembler, new MockHubMessageSender(), nodeKeyRegistry);
@@ -567,7 +567,7 @@ public sealed class WorkerEventDispatcherTests
     public async Task DispatchInvocationAssignedAsync_WhenAadMismatch_EmitsInvocationKeyMismatch()
     {
         var runner = Substitute.For<IInvocationRunner>();
-#pragma warning disable CA2000
+#pragma warning disable CA2000 // The dispatcher retains this test registry; it has no disposal contract, and its isolated NSec key lives only for this test process.
         var nodeKeyRegistry = new FakeNodeKeyRegistry();
 #pragma warning restore CA2000
         var sender = new MockHubMessageSender();
@@ -595,7 +595,7 @@ public sealed class WorkerEventDispatcherTests
     public async Task DispatchInvocationAssignedAsync_WhenRetiredKeyExpired_EmitsInvocationKeyMismatch()
     {
         var runner = Substitute.For<IInvocationRunner>();
-#pragma warning disable CA2000
+#pragma warning disable CA2000 // The dispatcher retains this test registry; it has no disposal contract, and its isolated NSec key lives only for this test process.
         var nodeKeyRegistry = new FakeNodeKeyRegistry(new NodeKeyResolution
         {
             RequestedKeyId = "retired-key-1",
@@ -625,7 +625,7 @@ public sealed class WorkerEventDispatcherTests
 
     private static WorkerEventDispatcher CreateDispatcher(IInvocationRunner runner)
     {
-#pragma warning disable CA2000
+#pragma warning disable CA2000 // The returned dispatcher retains this registry; it has no disposal contract, and the isolated NSec key is process-scoped test data.
         var nodeKeyRegistry = new FakeNodeKeyRegistry();
 #pragma warning restore CA2000
         var sender = new MockHubMessageSender();
@@ -680,7 +680,7 @@ public sealed class WorkerEventDispatcherTests
     public async Task DispatchInvocationAssignedAsync_WhenConfigHashMismatch_SendsEncryptedFailure()
     {
         var runner = Substitute.For<IInvocationRunner>();
-#pragma warning disable CA2000
+#pragma warning disable CA2000 // The dispatcher retains this test registry; it has no disposal contract, and its isolated NSec key lives only for this test process.
         var nodeKeyRegistry = new FakeNodeKeyRegistry();
 #pragma warning restore CA2000
         var sender = new MockHubMessageSender();
@@ -707,7 +707,7 @@ public sealed class WorkerEventDispatcherTests
     public async Task DispatchInvocationAssignedAsync_WhenHistoryHashMismatch_SendsEncryptedFailure()
     {
         var runner = Substitute.For<IInvocationRunner>();
-#pragma warning disable CA2000
+#pragma warning disable CA2000 // The dispatcher retains this test registry; it has no disposal contract, and its isolated NSec key lives only for this test process.
         var nodeKeyRegistry = new FakeNodeKeyRegistry();
 #pragma warning restore CA2000
         var sender = new MockHubMessageSender();
@@ -744,7 +744,7 @@ public sealed class WorkerEventDispatcherTests
                   return Task.CompletedTask;
               });
 
-#pragma warning disable CA2000
+#pragma warning disable CA2000 // The dispatcher and real assembler share this registry for the test; neither owns the other's dependency, so process teardown releases the isolated key.
         var nodeKeyRegistry = new FakeNodeKeyRegistry();
 #pragma warning restore CA2000
         var sender = new MockHubMessageSender();

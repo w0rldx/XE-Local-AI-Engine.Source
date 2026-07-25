@@ -8,10 +8,6 @@
     <UserSecretsId>2b47b277-b0a5-4afd-90bf-b644cb1b1228</UserSecretsId>
   </PropertyGroup>
 
-  <PropertyGroup>
-    <NoWarn>$(NoWarn);ASPIREBROWSERLOGS001</NoWarn>
-  </PropertyGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\XE-Local-AI-Engine.Client\XE-Local-AI-Engine.Client.csproj"/>
   </ItemGroup>

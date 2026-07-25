@@ -174,8 +174,12 @@ csharp_style_prefer_local_over_anonymous_function = true:suggestion
 csharp_style_implicit_object_creation_when_type_is_apparent = false
 csharp_style_prefer_tuple_swap = true:suggestion
 csharp_style_prefer_utf8_string_literals = true:suggestion
+# Application-specific exception types are not a public reusable framework and intentionally expose only the
+# constructors their call sites use; DI/reflection-created implementation types are not visible to CA1812.
 dotnet_diagnostic.CA1032.severity = none
 dotnet_diagnostic.CA1812.severity = none
+# Catch blocks sometimes translate or aggregate failures for a caller that owns the final log entry; requiring every
+# catch to log the exception would duplicate operator-visible errors.
 dotnet_diagnostic.S6667.severity = none
 # Rider Code Cleanup reorders type members and splits overloads apart; let the layout win instead of fighting S4136 every build.
 dotnet_diagnostic.S4136.severity = none
@@ -465,7 +469,10 @@ dotnet_naming_rule.parameters_should_be_camel_case.symbols = parameters
 dotnet_naming_rule.parameters_should_be_camel_case.style = camel_case
 dotnet_naming_rule.parameters_should_be_camel_case.severity = warning
 
-# SonarLint Rules Override
+# Application-wide analyzer calibration. These disabled CA/Sonar rules are library-design prescriptions, duplicate
+# another enforced project rule, or produce reflection/DI/serializer false positives in this application. Code-specific
+# exceptions (ownership transfer, fixed SQL, experimental SDKs) stay locally scoped and justified instead of being added
+# to this list. Re-enable entries only as a separate rule-by-rule cleanup with the full solution build and tests.
 dotnet_diagnostic.CA1707.severity = none
 dotnet_diagnostic.CA2217.severity = none
 dotnet_diagnostic.CA1724.severity = none
