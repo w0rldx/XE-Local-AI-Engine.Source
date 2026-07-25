@@ -6,6 +6,10 @@
 //
 // All findings are emitted to Console for the report; the test asserts the load-bearing facts.
 
+// This probe intentionally uses underscore-rich test names (CA1707), instance helpers discovered by the test/runtime
+// infrastructure (CA1822), direct awaits in test code (CA2007), explicit workflow-drain loops (S3267), broad catches
+// that record unexpected workflow events before failing the assertion (CA1031), and MAF's experimental workflow API
+// (MAAIW001). The file is compile-gated behind P0_SPIKE and each shape is part of the probe rather than production code.
 #pragma warning disable CA1707, CA1822, CA2007, S3267, CA1031, MAAIW001
 namespace XE_Local_AI_Engine.AI.Agent.Tests.Invocation;
 

@@ -1965,10 +1965,7 @@ public sealed class InvocationRunnerTests
     private static async IAsyncEnumerable<AgentResponseUpdate> ThrowingUpdates()
     {
         await Task.Yield();
-        throw new InvalidOperationException("stream failed");
-#pragma warning disable CS0162
-        yield return new AgentResponseUpdate(ChatRole.Assistant, "unreachable");
-#pragma warning restore CS0162
+        yield return await Task.FromException<AgentResponseUpdate>(new InvalidOperationException("stream failed"));
     }
 
     private static IOrchestrationAgentFactory CreateOrchestrationFactory(IAsyncEnumerable<OrchestrationUpdate> updates, out Ref<FakeOrchestrationRunSession> sessionRef)

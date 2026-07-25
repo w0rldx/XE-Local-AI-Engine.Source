@@ -34,7 +34,7 @@ import {
 } from "@/features/models/queries/useGgufDownload";
 import { useGgufBrowseStore } from "@/features/models/stores/GgufBrowseStore";
 
-/* eslint-disable react-doctor/no-event-handler, react-doctor/no-chain-state-updates */
+/* eslint-disable react-doctor/no-event-handler, react-doctor/no-chain-state-updates -- Model mutations intentionally coordinate selection, dialogs, and result notifications in their user-event callbacks. */
 
 function errorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : "Unexpected local model error";

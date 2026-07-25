@@ -58,8 +58,6 @@ export function SchedulerPage() {
 			closeEditor();
 			selectRun(null);
 		};
-		// Stable store action refs — safe to omit from the dep array per Zustand conventions.
-		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [closeEditor, selectRun]);
 
 	const [runFilters, setRunFilters] = useState<ScheduledJobRunFilters>({});

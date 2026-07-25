@@ -19,7 +19,7 @@ import { useTranslation } from "react-i18next";
 
 import type { ChatConversationModel } from "@/features/chat/models/ChatModels";
 
-/* eslint-disable react-doctor/no-giant-component */
+/* eslint-disable react-doctor/no-giant-component -- The list and its row menus share selection, mutation, and responsive-collapse state; splitting them would duplicate that coordination. */
 
 interface ConversationListProps {
 	conversations: ChatConversationModel[];

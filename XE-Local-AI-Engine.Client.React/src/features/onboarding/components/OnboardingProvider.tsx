@@ -27,7 +27,7 @@ import {
 	hasVisibleAssistantReply,
 } from "@/features/onboarding/data/TourAdvanceSignals";
 
-/* eslint-disable react-doctor/no-event-handler, react-doctor/no-chain-state-updates, react-doctor/no-adjust-state-on-prop-change */
+/* eslint-disable react-doctor/no-event-handler, react-doctor/no-chain-state-updates, react-doctor/no-adjust-state-on-prop-change -- Joyride is controlled by async route/server events, so its coupled run/index state must react to those external transitions. */
 // The tour advances on ASYNC external server-state (the installed-model list, the resolved default, a streamed chat
 // reply) — not on synchronous user events — so reacting to that state with a useEffect is the correct React pattern
 // here (there is no event handler to fold the logic into). Same suppression convention the chat/model pages use for

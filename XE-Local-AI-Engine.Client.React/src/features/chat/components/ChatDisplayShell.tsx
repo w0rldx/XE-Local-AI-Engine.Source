@@ -17,7 +17,7 @@ const EMPTY_TIMELINE_ENTRIES: ChatDisplayShellProps["timelineEntries"] = [];
 // reference every render (same reasoning as EMPTY_TIMELINE_ENTRIES above).
 const EMPTY_AGENT_OPTIONS: ChatDisplayShellProps["agentOptions"] = [];
 
-/* eslint-disable react-doctor/no-inline-exhaustive-style */
+/* eslint-disable react-doctor/no-inline-exhaustive-style -- A few responsive Mantine styles depend on live pane state; extracting them would not make them static. */
 
 export function ChatDisplayShell({
 	conversations,

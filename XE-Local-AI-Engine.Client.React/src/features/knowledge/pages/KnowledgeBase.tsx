@@ -23,7 +23,7 @@ import {
 import { useKnowledgeSearch } from "@/features/knowledge/queries/useKnowledgeSearch";
 import { useKnowledgeUpload } from "@/features/knowledge/queries/useKnowledgeUpload";
 
-/* eslint-disable react-doctor/no-event-handler, react-doctor/no-chain-state-updates */
+/* eslint-disable react-doctor/no-event-handler, react-doctor/no-chain-state-updates -- Mutation callbacks must coordinate the drawer selection and server-result notifications after each user action. */
 
 // Knowledge-base management surface: ingest documents (drag-drop upload), watch them move through the
 // extract→chunk→embed→index pipeline (live via the SignalR hub), search the indexed corpus, inspect a document's

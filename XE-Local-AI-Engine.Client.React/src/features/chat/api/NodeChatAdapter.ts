@@ -33,7 +33,7 @@ import type {
 } from "@/features/chat/models/ChatModels";
 import type { NodeChatStreamEventDto, NodeChatStreamRequestDto } from "@/features/chat/models/NodeChatStreamTypes";
 
-/* eslint-disable react-doctor/async-await-in-loop */
+/* eslint-disable react-doctor/async-await-in-loop -- The async-iterator bridge must await each SignalR event in wire order before reading the next one. */
 
 interface RequestOptions {
 	signal?: AbortSignal;

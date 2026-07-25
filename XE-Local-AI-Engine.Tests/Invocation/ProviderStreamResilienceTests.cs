@@ -221,19 +221,13 @@ public sealed class ProviderStreamResilienceTests
     private static async IAsyncEnumerable<int> ThrowConnectionRefused()
     {
         await Task.Yield();
-        throw new SocketException((int)SocketError.ConnectionRefused);
-#pragma warning disable CS0162
-        yield break;
-#pragma warning restore CS0162
+        yield return await Task.FromException<int>(new SocketException((int)SocketError.ConnectionRefused));
     }
 
     private static async IAsyncEnumerable<int> ThrowHttp(HttpStatusCode statusCode)
     {
         await Task.Yield();
-        throw new HttpRequestException("provider send failed", inner: null, statusCode);
-#pragma warning disable CS0162
-        yield break;
-#pragma warning restore CS0162
+        yield return await Task.FromException<int>(new HttpRequestException("provider send failed", inner: null, statusCode));
     }
 
     private sealed class MutableTimeProvider : TimeProvider

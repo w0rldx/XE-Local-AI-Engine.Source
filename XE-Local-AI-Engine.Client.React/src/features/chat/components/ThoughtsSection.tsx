@@ -8,7 +8,7 @@ import { CHAT_ACCENT, CHAT_ACCENT_SOFT } from "@/features/chat/components/ChatVi
 import { StreamCaret } from "@/features/chat/components/StreamCaret";
 import classes from "@/features/chat/components/ThoughtsSection.module.css";
 
-/* eslint-disable react-doctor/no-adjust-state-on-prop-change */
+/* eslint-disable react-doctor/no-adjust-state-on-prop-change -- Expanded/timing UI state intentionally resets when the streamed message props change. */
 
 interface ThoughtsSectionProps {
 	messageId: string;

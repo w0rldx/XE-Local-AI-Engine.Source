@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 
 import type { ChatFeedbackRating, ChatMessageFeedback } from "@/features/chat/models/ChatModels";
 
-/* eslint-disable react-doctor/no-derived-state, react-doctor/no-event-handler */
+/* eslint-disable react-doctor/no-derived-state, react-doctor/no-event-handler -- The popover keeps an editable draft synchronized with persisted feedback and submits only on an explicit user action. */
 
 interface MessageFeedbackControlProps {
 	messageId: string;
