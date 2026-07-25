@@ -1,6 +1,8 @@
 namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
 
+using System.ComponentModel;
 using System.Diagnostics;
+using System.Text;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 
 /// <summary>Bounded Linux source-build prerequisite checks.</summary>
@@ -64,7 +66,10 @@ public sealed class StableDiffusionCppSourceBuildPrerequisiteProbe : IStableDiff
         var ninja = await ProbeToolAsync("ninja", ["--version"], "Ninja", ProbeIsolationRoot, ct).ConfigureAwait(false);
         if (ninja.Satisfied)
         {
-            return ninja with { Key = "make-or-ninja" };
+            return ninja with
+            {
+                Key = "make-or-ninja"
+            };
         }
 
         var make = await ProbeToolAsync("make", ["--version"], "Make", ProbeIsolationRoot, ct).ConfigureAwait(false);
@@ -92,8 +97,7 @@ public sealed class StableDiffusionCppSourceBuildPrerequisiteProbe : IStableDiff
         }
     }
 
-    private static async Task<StableDiffusionCppSourceBuildPrerequisiteItem> ProbeToolAsync(
-        string fileName,
+    private static async Task<StableDiffusionCppSourceBuildPrerequisiteItem> ProbeToolAsync(string fileName,
         IReadOnlyList<string> arguments,
         string displayName,
         string isolationRoot,
@@ -155,21 +159,19 @@ public sealed class StableDiffusionCppSourceBuildPrerequisiteProbe : IStableDiff
                 throw;
             }
         }
-        catch (Exception exception) when (exception is InvalidOperationException or System.ComponentModel.Win32Exception or IOException)
+        catch (Exception exception) when (exception is InvalidOperationException or Win32Exception or IOException)
         {
             return Missing(fileName, displayName);
         }
     }
 
-    internal static Task<StableDiffusionCppSourceBuildPrerequisiteItem> ProbeToolForTestsAsync(
-        string fileName,
+    internal static Task<StableDiffusionCppSourceBuildPrerequisiteItem> ProbeToolForTestsAsync(string fileName,
         IReadOnlyList<string> arguments,
         string displayName,
         CancellationToken ct,
         string? isolationRoot = null)
     {
-        isolationRoot ??= Path.Combine(
-            Path.GetTempPath(),
+        isolationRoot ??= Path.Combine(Path.GetTempPath(),
             "xe-local-ai-engine",
             "stable-diffusion-source-probe-tests",
             Environment.ProcessId.ToString());
@@ -197,7 +199,7 @@ public sealed class StableDiffusionCppSourceBuildPrerequisiteProbe : IStableDiff
 
     private static async Task<string> ReadBoundedAsync(StreamReader reader, CancellationToken ct)
     {
-        var output = new System.Text.StringBuilder(MaxProbeOutputChars);
+        var output = new StringBuilder(MaxProbeOutputChars);
         var buffer = new char[1024];
         while (true)
         {
@@ -225,7 +227,7 @@ public sealed class StableDiffusionCppSourceBuildPrerequisiteProbe : IStableDiff
                 _ = process.WaitForExit(milliseconds: 5000);
             }
         }
-        catch (Exception exception) when (exception is InvalidOperationException or System.ComponentModel.Win32Exception)
+        catch (Exception exception) when (exception is InvalidOperationException or Win32Exception)
         {
             // Best-effort bounded probe cleanup.
         }

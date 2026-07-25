@@ -69,8 +69,7 @@ public sealed class ImageJobCoordinatorTests
     {
         using var harness = Harness.Create(blockRuntime: false, admitJobs: false);
 
-        _ = await AssertEx.ThrowsAsync<ImageRuntimeBusyException>(
-            () => harness.Coordinator.EnqueueAsync(NewInput("blocked-by-runtime-mutation"), CancellationToken.None)).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<ImageRuntimeBusyException>(() => harness.Coordinator.EnqueueAsync(NewInput("blocked-by-runtime-mutation"), CancellationToken.None)).ConfigureAwait(false);
 
         AssertEx.Empty(await harness.Coordinator.ListAsync(CancellationToken.None).ConfigureAwait(false));
         AssertEx.Equal(expected: 0, harness.ActivityGate.ActiveLeaseCount);

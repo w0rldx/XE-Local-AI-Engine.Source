@@ -29,7 +29,11 @@ public static partial class StableDiffusionCppSourceBuildRequestValidation
                 throw new StableDiffusionRuntimeException("The official source uses the engine-pinned revision; select custom source to build a specific commit.");
             }
 
-            return request with { Repository = OfficialRepository, Commit = null };
+            return request with
+            {
+                Repository = OfficialRepository,
+                Commit = null
+            };
         }
 
         if (!request.AcknowledgeCustomSourceRisk)

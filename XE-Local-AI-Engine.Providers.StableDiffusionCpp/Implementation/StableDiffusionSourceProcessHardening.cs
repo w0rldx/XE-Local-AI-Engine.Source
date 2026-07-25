@@ -13,8 +13,7 @@ internal static class StableDiffusionSourceProcessHardening
         ArgumentNullException.ThrowIfNull(startInfo);
         ArgumentException.ThrowIfNullOrWhiteSpace(isolationRoot);
 
-        var preserved = PreservedVariables.ToDictionary(
-            static key => key,
+        var preserved = PreservedVariables.ToDictionary(static key => key,
             key => startInfo.Environment.TryGetValue(key, out var value) ? value : null,
             StringComparer.Ordinal);
         var home = Path.Combine(isolationRoot, ".process-home");
@@ -47,8 +46,7 @@ internal static class StableDiffusionSourceProcessHardening
         process.StandardInput.Close();
     }
 
-    private static void CopyIfPresent(
-        ProcessStartInfo startInfo,
+    private static void CopyIfPresent(ProcessStartInfo startInfo,
         IReadOnlyDictionary<string, string?> preserved,
         string key)
     {

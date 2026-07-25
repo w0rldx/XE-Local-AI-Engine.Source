@@ -26,8 +26,7 @@ internal static class ImageRuntimeSourceBuildMapper
         };
     }
 
-    public static StableDiffusionCppSourceBuildPrerequisitesResponse ToResponse(
-        this StableDiffusionCppSourceBuildPrerequisiteReport report,
+    public static StableDiffusionCppSourceBuildPrerequisitesResponse ToResponse(this StableDiffusionCppSourceBuildPrerequisiteReport report,
         SdGpuBackend backend)
     {
         ArgumentNullException.ThrowIfNull(report);

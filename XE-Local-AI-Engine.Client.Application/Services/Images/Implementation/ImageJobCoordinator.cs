@@ -238,6 +238,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         {
             lease.Dispose();
         }
+
         _runtimeActivityLeases.Clear();
         _generationSlot.Dispose();
         _evictionTimer.Dispose();

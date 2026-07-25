@@ -36,15 +36,13 @@ public sealed class StartStableDiffusionCppSourceBuildEndpoint(
             switch (result.Outcome)
             {
                 case StableDiffusionCppSourceBuildStartOutcome.AlreadyRunning:
-                    await BlockAsync(
-                            "already-building",
+                    await BlockAsync("already-building",
                             "A stable-diffusion.cpp source build is already in progress.",
                             result.Activity ?? activityGate.GetSnapshot())
                         .ConfigureAwait(false);
                     return;
                 case StableDiffusionCppSourceBuildStartOutcome.InsufficientDisk:
-                    await BlockAsync(
-                            "prerequisites",
+                    await BlockAsync("prerequisites",
                             "There is not enough free disk space to build the image runtime.",
                             result.Activity ?? activityGate.GetSnapshot())
                         .ConfigureAwait(false);
