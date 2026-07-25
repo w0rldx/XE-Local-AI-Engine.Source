@@ -83,6 +83,10 @@ vi.mock("@/features/node-settings/components/SourceBuildCard", () => ({
 	SourceBuildCard: () => null,
 }));
 
+vi.mock("@/features/node-settings/components/ImageRuntimeSourceBuildCard", () => ({
+	ImageRuntimeSourceBuildCard: () => null,
+}));
+
 // The runtime card renders a TanStack Router <Link> (eject-first notice). Stub it so the page mounts without a
 // RouterProvider OR loading the generated route tree (which eval-fails outside a real router).
 vi.mock("@tanstack/react-router", () => ({

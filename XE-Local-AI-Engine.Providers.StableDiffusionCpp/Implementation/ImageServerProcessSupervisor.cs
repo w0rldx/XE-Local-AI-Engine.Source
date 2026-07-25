@@ -33,6 +33,7 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
     private readonly IImageServerProcessLauncher _launcher;
     private readonly ILogger<ImageServerProcessSupervisor> _logger;
     private readonly IImageModelStore _modelStore;
+    private readonly IImageRuntimeActivityGate _runtimeActivityGate;
     private readonly StableDiffusionRuntimeOptions _options;
 
     // One running daemon per model key.
@@ -56,7 +57,8 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         StableDiffusionRuntimeOptions options,
         TimeProvider? timeProvider = null,
         ILogger<ImageServerProcessSupervisor>? logger = null,
-        IGpuModelLoadAdmission? loadAdmission = null)
+        IGpuModelLoadAdmission? loadAdmission = null,
+        IImageRuntimeActivityGate? runtimeActivityGate = null)
     {
         _modelStore = modelStore ?? throw new ArgumentNullException(nameof(modelStore));
         _backendSelector = backendSelector ?? throw new ArgumentNullException(nameof(backendSelector));
@@ -66,6 +68,7 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _timeProvider = timeProvider ?? TimeProvider.System;
         _logger = logger ?? NullLogger<ImageServerProcessSupervisor>.Instance;
+        _runtimeActivityGate = runtimeActivityGate ?? new ImageRuntimeActivityGate();
 
         // Absent a wired gate (a provider-only host / test), default to the no-op floor so GPU-load serialization is
         // simply off — the composition root injects the real singleton shared with the llama-server supervisor.
@@ -111,6 +114,8 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+        using var activityLease = _runtimeActivityGate.TryAcquireSpawnReadinessLease()
+                                  ?? throw new StableDiffusionRuntimeException("The image runtime is busy with an exclusive operation.");
 
         // Fast path: an already-running, live daemon is reused without taking the spawn gate — subject to a rate-limited
         // liveness probe so a wedged (alive but unresponsive) daemon is respawned instead of handed out.
@@ -131,6 +136,8 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+        using var activityLease = _runtimeActivityGate.TryAcquireSpawnReadinessLease()
+                                  ?? throw new StableDiffusionRuntimeException("The image runtime is busy with an exclusive operation.");
 
         // Abort path: tear down the running daemon (dropping its one in-flight job) and spawn a fresh one.
         return await SpawnUnderGateAsync(modelName, evictFirst: true, ct).ConfigureAwait(false);
@@ -144,6 +151,34 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         {
             await RemoveProcessAsync(modelName, running).ConfigureAwait(false);
         }
+    }
+
+    /// <inheritdoc />
+    public async Task<ImageServerEvictAllResult> EvictAllAsync(CancellationToken ct)
+    {
+        var reservation = _runtimeActivityGate.TryAcquireEvictionReservation();
+        if (reservation is null)
+        {
+            return new ImageServerEvictAllResult(false, _runtimeActivityGate.GetSnapshot());
+        }
+
+        using (reservation)
+        {
+            await _admissionGate.WaitAsync(ct).ConfigureAwait(false);
+            try
+            {
+                foreach (var (key, running) in _processes.ToArray())
+                {
+                    TeardownProcess(key, running);
+                }
+            }
+            finally
+            {
+                _admissionGate.Release();
+            }
+        }
+
+        return new ImageServerEvictAllResult(true, _runtimeActivityGate.GetSnapshot());
     }
 
     /// <inheritdoc />
@@ -336,7 +371,9 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
                 modelName, handle.ProcessId, (_timeProvider.GetUtcNow() - readyStartedUtc).TotalMilliseconds);
 
             var endpoint = new ImageServerEndpoint(modelName, spec.BaseAddress);
-            var running = new RunningServer(handle, endpoint, port, _timeProvider.GetUtcNow());
+            var residentLease = _runtimeActivityGate.TryAcquireResidentProcessLease()
+                                ?? throw new StableDiffusionRuntimeException("The image runtime became busy before the server process could be registered.");
+            var running = new RunningServer(handle, endpoint, port, _timeProvider.GetUtcNow(), residentLease);
             _processes[modelName] = running;
 
             // A DisposeAsync that ran while this spawn was in flight tore down only the daemons present in its
@@ -592,6 +629,7 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         finally
         {
             running.Handle.Dispose();
+            running.ResidentLease.Dispose();
             ReleasePort(running.Port);
         }
     }
@@ -657,7 +695,12 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
     }
 
     /// <summary>A live, registered daemon and its last-used timestamp (drives idle-TTL eviction).</summary>
-    private sealed class RunningServer(IImageServerProcessHandle handle, ImageServerEndpoint endpoint, int port, DateTimeOffset startedUtc)
+    private sealed class RunningServer(
+        IImageServerProcessHandle handle,
+        ImageServerEndpoint endpoint,
+        int port,
+        DateTimeOffset startedUtc,
+        IImageRuntimeActivityLease residentLease)
     {
         private long _lastUsedTicks = startedUtc.UtcTicks;
 
@@ -673,6 +716,8 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         private int _leaseState;
 
         public IImageServerProcessHandle Handle { get; } = handle;
+
+        public IImageRuntimeActivityLease ResidentLease { get; } = residentLease;
 
         /// <summary>Whether a generation currently leases this daemon — best-effort read for the evictor's victim heuristic; the atomic claim is <see cref="TryBeginEvict" />.</summary>
         public bool IsLeased => Volatile.Read(ref _leaseState) > 0;

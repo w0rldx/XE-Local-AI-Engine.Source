@@ -1,8 +1,8 @@
 # Image Generation (stable-diffusion.cpp)
 
-> Last reviewed: 2026-07-06 · Code-grounded.
+> Last reviewed: 2026-07-25 · Code-grounded.
 
-The node generates images **locally** with [stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp). It mirrors the llama.cpp text runtime: the app self-provisions a pinned `sd-server` binary, supervises **one resident daemon per model** on a private loopback port range, and drives generation through a coordinator that serializes work to one job at a time and persists every produced image **encrypted-at-rest**. Nothing about a prompt, an image, or the daemon's HTTP shape ever leaves the node. The feature **ships enabled by default** — there is no off switch in `StableDiffusionRuntimeOptions`; the runtime is always wired.
+The node generates images **locally** with [stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp). It mirrors the llama.cpp text runtime: the app resolves either a pinned prebuilt or a managed source-built `sd-server`, supervises **one resident daemon per model** on a private loopback port range, and drives generation through a coordinator that serializes work to one job at a time and persists every produced image **encrypted-at-rest**. Nothing about a prompt, an image, or the daemon's HTTP shape ever leaves the node. The feature **ships enabled by default** — there is no off switch in `StableDiffusionRuntimeOptions`; the runtime is always wired.
 
 ## Where the code lives
 
@@ -11,10 +11,12 @@ The node generates images **locally** with [stable-diffusion.cpp](https://github
 | Job coordinator (queue / cancel / replay) | `XE-Local-AI-Engine.Client.Application/Services/Images/Implementation/ImageJobCoordinator.cs` (`IImageJobCoordinator`) |
 | Runtime orchestration boundary | `XE-Local-AI-Engine.Providers.StableDiffusionCpp/Implementation/StableDiffusionCppRuntime.cs` (`IImageRuntime`) |
 | Process supervisor (spawn / reuse / evict / tree-kill) | `…/StableDiffusionCpp/Implementation/ImageServerProcessSupervisor.cs` (`IImageServerSupervisor`) |
-| Binary manager (download / verify / cache) | `…/StableDiffusionCpp/Implementation/StableDiffusionCppBinaryManager.cs` |
+| Binary manager (managed selection or download / verify / cache) | `…/StableDiffusionCpp/Implementation/StableDiffusionCppBinaryManager.cs` |
+| Managed source build (probe / fetch / build / adopt / recover) | `…/StableDiffusionCpp/Implementation/StableDiffusionCppSourceBuildService.cs` |
+| Installed-runtime state + mutation gate | `…/StableDiffusionCpp/Implementation/StableDiffusionInstalledRuntimeStore.cs`, `…/StableDiffusionCpp/Implementation/ImageRuntimeActivityCoordinator.cs` |
 | Stale-daemon reaper | `…/StableDiffusionCpp/Implementation/StaleImageServerReaper.cs` |
 | Runtime options | `…/StableDiffusionCpp/Options/StableDiffusionRuntimeOptions.cs` |
-| SignalR hub + publisher | `XE-Local-AI-Engine.Client/Hubs/ImageJobHub.cs`, `…/Hubs/ImageJobEventPublisher.cs` |
+| SignalR hubs + publishers | `XE-Local-AI-Engine.Client/Hubs/ImageJobHub.cs`, `…/ImageJobEventPublisher.cs`, `…/StableDiffusionCppSourceBuildHub.cs`, `…/StableDiffusionCppSourceBuildEventPublisher.cs` |
 | Local endpoints | `XE-Local-AI-Engine.Client/Endpoints/Images/V1/` |
 | React feature | `XE-Local-AI-Engine.Client.React/src/features/images/` |
 
@@ -56,6 +58,8 @@ Progress is **coarse status only** — never the prompt, a path, or a step/perce
 
 **Cancellation is two-mode.** When the token is signalled the runtime asks sd-server to cancel the job: a still-*queued* job cancels cleanly (HTTP 200); a job already *generating* cannot be interrupted (HTTP 409), so the runtime asks the supervisor to **tree-kill + restart** the daemon, dropping the one active job. Because the coordinator serializes to one job, a kill+restart can only ever affect that single job.
 
+The process-wide `ImageRuntimeActivityCoordinator` also serializes runtime mutation against generation, spawn/readiness, and resident-daemon eviction. A source build or removal returns `409 runtime-busy` while one of those leases is active. Eject the resident image runtime first, then build/remove.
+
 ## The process supervisor
 
 `ImageServerProcessSupervisor` (`IImageServerSupervisor`, **Singleton**, `IAsyncDisposable`) owns every resident `sd-server` child. It mirrors `LlamaServerProcessSupervisor` (reduced: no role split, no benchmark profiling, no external-endpoint attach — the image runtime is one resident daemon per model):
@@ -69,9 +73,26 @@ Progress is **coarse status only** — never the prompt, a path, or a step/perce
 
 Like the text runtime, a `StaleImageServerReaper` runs at startup to reap `sd-server` orphans left by a previous run of **this** app — matched strictly against the app's own binaries root (`{LocalApplicationData}/XE-Local-AI-Engine/stable-diffusion.cpp`) so an unrelated install is never touched. See [Local Runtime & Providers](03-local-runtime-and-providers.md) for the shared supervisor pattern and [Hosting & Deployment](11-hosting-and-deployment.md) for process reaping.
 
-## Binary provisioning
+## Binary provisioning and managed source builds
 
-`StableDiffusionCppBinaryManager` downloads a **pinned** `sd-server` release, verifies its integrity, extracts it into the per-user cache directory, and returns the resolved path. It **never source-builds**. Cache layout mirrors llama.cpp: `{cacheRoot}/stable-diffusion.cpp/{tag}/{backend}/`, where `cacheRoot` is `{LocalApplicationData}/XE-Local-AI-Engine`. Because acquisition is on-demand, a fresh node downloads the image runtime the first time a generation is requested.
+`StableDiffusionCppBinaryManager` first checks the authoritative installed-runtime record. An active managed runtime is revalidated by backend, path, permissions, and SHA256 before use. Drift tombstones the record and fails closed: the manager does **not** silently fall back to a different prebuilt while the operator-selected managed runtime is invalid. Node Settings exposes eject/remove recovery for that state even when Development Mode is disabled.
+
+Without a managed selection, the manager downloads the **exact pinned prebuilt for the selected backend**, verifies its integrity, extracts it into the per-user cache, and returns its path. A missing GPU prebuilt is not silently replaced by a CPU asset; the selector must explicitly choose CPU. This matters on Linux NVIDIA hosts: the default prebuilt path remains Vulkan when a Vulkan device enumerates, otherwise CPU, because upstream ships no Linux CUDA prebuilt.
+
+On Linux, Development Mode can build CPU, Vulkan, or CUDA from source. The operator can select the engine-pinned official revision, a custom GitHub repository's default branch, or an explicit 40-hex commit with the custom-source risk acknowledgement. Git and CMake run with an allowlisted environment, isolated `HOME`/`TMPDIR`, disabled credential prompts/config rewriting, and shallow fetch-by-SHA. The result is smoke-tested, hash-recorded, permission-hardened, and adopted through a crash-recoverable journal before it becomes active.
+
+Cache/state layout, where `cacheRoot` is `{LocalApplicationData}/XE-Local-AI-Engine`:
+
+```text
+stable-diffusion.cpp/
+├── {tag}/{backend}/                       # downloaded, hash-verified prebuilt
+├── managed/{backend}/{resolvedCommit}/    # adopted source-build tree
+├── source-build/
+│   ├── .work/                             # disposable isolated build workspace
+│   └── adoption-journal.json              # present only while adoption needs recovery
+├── installed-runtime.json                 # authoritative active/invalid managed record
+└── desired-runtime.json                   # redundant fail-closed recovery intent
+```
 
 ## Endpoints
 
@@ -86,6 +107,10 @@ Routes under `images/*`, one endpoint class per file in `Endpoints/Images/V1/`:
 | `RetrieveImageEndpoint` | Fetch the produced image bytes for a succeeded job (decrypted on read). |
 | `ListImageModelsEndpoint` | Installed image models available to the runtime. |
 | `StartImageModelDownloadEndpoint` | Begin downloading an image model. |
+| `GetImageRuntimeStatusEndpoint` | Inspect managed-runtime validity and the process-wide activity gate. |
+| `GetStableDiffusionCppSourceBuildPrerequisitesEndpoint` | Probe Linux build prerequisites for the selected backend. |
+| `Start/Cancel/RemoveStableDiffusionCppSourceBuildEndpoint` | Manage the source-build lifecycle and installed runtime. |
+| `EjectImageRuntimeEndpoint` | Evict resident `sd-server` processes before a build/remove mutation. |
 
 All endpoints are loopback/local-only, operator-authenticated, and secret-redacted — see [Security & Privacy](12-security-and-privacy.md). They are surfaced to React via OpenAPI → hey-api; see [API & Hubs](09-api-and-hubs.md).
 
@@ -102,6 +127,8 @@ All endpoints are loopback/local-only, operator-authenticated, and secret-redact
 3. **No sd-server flag/route/HTTP shape escapes `Providers.StableDiffusionCpp`** (architecture invariant §3).
 4. **Progress is coarse status only** — never the prompt, a path, or a step/percent (privacy §10).
 5. **The sd-server port range (18200–18299) is disjoint from llama.cpp's (18100–18199)** — keep them from ever colliding.
+6. **Managed runtime records are authoritative and fail closed.** Never fall back to another binary after drift without an explicit operator remove/repair.
+7. **Eject before build/remove.** Runtime mutation must not race active jobs, spawn/readiness, or a resident daemon.
 
 ## Related pages
 

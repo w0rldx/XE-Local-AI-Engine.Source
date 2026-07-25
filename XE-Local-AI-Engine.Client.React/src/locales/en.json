@@ -1190,6 +1190,82 @@
 					"repositoryPlaceholder": "https://github.com/owner/llama.cpp"
 				}
 			},
+			"imageRuntime": {
+				"sourceBuild": {
+					"title": "stable-diffusion.cpp build from source",
+					"description": "Build and manage the image runtime from official stable-diffusion.cpp or a trusted public GitHub fork.",
+					"devBadge": "Dev",
+					"recoveryBadge": "Recovery",
+					"recoveryDescription": "The managed image runtime is invalid and remains fail-closed. Eject any resident image process, then remove the invalid runtime before using image generation again.",
+					"backend": "Backend",
+					"backends": {
+						"cpu": "CPU",
+						"vulkan": "Vulkan",
+						"cuda": "CUDA"
+					},
+					"source": "Source",
+					"sources": {
+						"official": "Official upstream",
+						"custom": "Custom public fork"
+					},
+					"revisions": {
+						"enginePinned": "Engine-pinned revision",
+						"defaultBranch": "Default branch",
+						"explicitCommit": "Explicit commit"
+					},
+					"revisionBehavior": {
+						"enginePinned": "Official builds use the engine-pinned commit selected by the server.",
+						"defaultBranch": "Without a commit SHA, a custom build resolves the repository's default branch.",
+						"explicitCommit": "This custom build uses the exact 40-character commit SHA entered below."
+					},
+					"prerequisites": {
+						"os-is-linux": "Linux host",
+						"cmake": "CMake",
+						"gcc": "C compiler",
+						"g++": "C++ compiler",
+						"make-or-ninja": "Make or Ninja",
+						"git": "Git",
+						"nvidia-gpu": "NVIDIA GPU",
+						"nvcc": "CUDA compiler",
+						"nvidia-smi": "NVIDIA driver",
+						"glslc": "Vulkan shader compiler",
+						"vulkaninfo": "Vulkan runtime",
+						"free-disk": "Free disk space"
+					},
+					"prerequisiteAvailability": {
+						"available": "Available",
+						"missing": "Missing or unavailable"
+					},
+					"repository": "GitHub repository",
+					"repositoryPlaceholder": "https://github.com/owner/stable-diffusion.cpp",
+					"riskWarning": "Custom repository code executes with the app user's privileges. It is trusted code, not sandboxed.",
+					"riskAcknowledgement": "I trust this public GitHub repository and accept the code-execution risk.",
+					"commit": "Commit SHA (optional)",
+					"validity": {
+						"active": "Active {{backend}} managed image runtime",
+						"invalid": "Invalid {{backend}} managed image runtime"
+					},
+					"activity": {
+						"idle": "Image runtime idle",
+						"busy": "Image runtime busy",
+						"detail": "{{jobs}} job(s), {{starting}} starting, {{processes}} resident process(es)"
+					},
+					"build": "Build",
+					"rebuild": "Rebuild",
+					"cancel": "Cancel",
+					"eject": "Eject image processes",
+					"remove": "Remove",
+					"startError": "Could not start the image-runtime source build.",
+					"cancelError": "Could not cancel the image-runtime source build.",
+					"ejectError": "Could not eject the image-runtime processes.",
+					"removeError": "Could not remove the managed image runtime.",
+					"validation": {
+						"commit": "Commit must be a full 40-character hexadecimal SHA.",
+						"repository": "Use a canonical public GitHub HTTPS repository URL.",
+						"acknowledgement": "Acknowledge that custom repository code executes with the app user's privileges."
+					}
+				}
+			},
 			"hfToken": {
 				"title": "Hugging Face token",
 				"configured": "Token configured",

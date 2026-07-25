@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Images;
 using XE_Local_AI_Engine.Client.Services.Images.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
+using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -61,6 +62,18 @@ public sealed class ImageJobCoordinatorTests
         AssertEx.Equal(ImageJobStatus.Generating, AssertEx.NotNull(firstView).Status);
 
         harness.Runtime.Release();
+    }
+
+    [Test]
+    public async Task EnqueueAsync_WhenRuntimeMutationReserved_RejectsBeforePersistence()
+    {
+        using var harness = Harness.Create(blockRuntime: false, admitJobs: false);
+
+        _ = await AssertEx.ThrowsAsync<ImageRuntimeBusyException>(
+            () => harness.Coordinator.EnqueueAsync(NewInput("blocked-by-runtime-mutation"), CancellationToken.None)).ConfigureAwait(false);
+
+        AssertEx.Empty(await harness.Coordinator.ListAsync(CancellationToken.None).ConfigureAwait(false));
+        AssertEx.Equal(expected: 0, harness.ActivityGate.ActiveLeaseCount);
     }
 
     [Test]
@@ -115,6 +128,7 @@ public sealed class ImageJobCoordinatorTests
         AssertEx.True(harness.Images.Added.TryGetValue((Guid)imageId, out var storedJobId), "The image must be persisted via the store.");
         AssertEx.Equal(jobId, storedJobId);
         AssertEx.NotNull((object?)view.DurationMs, "A succeeded job records its duration.");
+        AssertEx.Equal(expected: 0, harness.ActivityGate.ActiveLeaseCount);
     }
 
     [Test]
@@ -152,7 +166,8 @@ public sealed class ImageJobCoordinatorTests
             scopeFactory,
             new NullImageJobEventPublisher(),
             timeProvider,
-            NullLogger<ImageJobCoordinator>.Instance);
+            NullLogger<ImageJobCoordinator>.Instance,
+            new FakeImageRuntimeActivityGate());
         AssertEx.NotNull(timeProvider.EvictionCallback, "The coordinator must arm a periodic eviction timer at construction.");
 
         var jobId = await coordinator.EnqueueAsync(NewInput("idle-eviction"), CancellationToken.None).ConfigureAwait(false);
@@ -285,18 +300,24 @@ public sealed class ImageJobCoordinatorTests
             $"Job {jobId} did not reach status {status}.").ConfigureAwait(false);
     }
 
-    private sealed record Harness(ImageJobCoordinator Coordinator, FakeImageRuntime Runtime, FakeImageJobStore Store, FakeGeneratedImageStore Images) : IDisposable
+    private sealed record Harness(
+        ImageJobCoordinator Coordinator,
+        FakeImageRuntime Runtime,
+        FakeImageJobStore Store,
+        FakeGeneratedImageStore Images,
+        FakeImageRuntimeActivityGate ActivityGate) : IDisposable
     {
         public void Dispose()
         {
             Coordinator.Dispose();
         }
 
-        public static Harness Create(bool blockRuntime)
+        public static Harness Create(bool blockRuntime, bool admitJobs = true)
         {
             var runtime = new FakeImageRuntime(blockRuntime);
             var store = new FakeImageJobStore();
             var images = new FakeGeneratedImageStore();
+            var activityGate = new FakeImageRuntimeActivityGate(admitJobs);
 
             var services = new ServiceCollection();
             services.AddScoped<IImageJobStore>(_ => store);
@@ -309,10 +330,77 @@ public sealed class ImageJobCoordinatorTests
                 scopeFactory,
                 new NullImageJobEventPublisher(),
                 TimeProvider.System,
-                NullLogger<ImageJobCoordinator>.Instance);
+                NullLogger<ImageJobCoordinator>.Instance,
+                activityGate);
 #pragma warning restore CA2000
 
-            return new Harness(coordinator, runtime, store, images);
+            return new Harness(coordinator, runtime, store, images, activityGate);
+        }
+    }
+
+    private sealed class FakeImageRuntimeActivityGate(bool admitJobs = true) : IImageRuntimeActivityGate
+    {
+        private int _activeLeaseCount;
+
+        public int ActiveLeaseCount => Volatile.Read(ref _activeLeaseCount);
+
+        public ImageRuntimeActivitySnapshot GetSnapshot()
+        {
+            return new ImageRuntimeActivitySnapshot(ActiveLeaseCount,
+                SpawnReadinessCount: 0,
+                ResidentProcessCount: 0,
+                MutationReserved: !admitJobs,
+                EvictionReserved: false);
+        }
+
+        public IImageRuntimeActivityLease? TryAcquireJobLease()
+        {
+            if (!admitJobs)
+            {
+                return null;
+            }
+
+            _ = Interlocked.Increment(ref _activeLeaseCount);
+            return new Lease(this);
+        }
+
+        public IImageRuntimeActivityLease? TryAcquireSpawnReadinessLease()
+        {
+            throw new NotSupportedException();
+        }
+
+        public IImageRuntimeActivityLease? TryAcquireResidentProcessLease()
+        {
+            throw new NotSupportedException();
+        }
+
+        public IImageRuntimeActivityLease? TryAcquireEvictionReservation()
+        {
+            throw new NotSupportedException();
+        }
+
+        public IImageRuntimeActivityLease? TryAcquireMutationReservation()
+        {
+            throw new NotSupportedException();
+        }
+
+        private sealed class Lease(FakeImageRuntimeActivityGate owner) : IImageRuntimeActivityLease
+        {
+            private int _disposed;
+
+            public void Dispose()
+            {
+                if (Interlocked.Exchange(ref _disposed, value: 1) == 0)
+                {
+                    _ = Interlocked.Decrement(ref owner._activeLeaseCount);
+                }
+            }
+
+            public ValueTask DisposeAsync()
+            {
+                Dispose();
+                return ValueTask.CompletedTask;
+            }
         }
     }
 

@@ -16,23 +16,26 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 ///     asset, and a Vulkan pick with no enumerable Vulkan device makes <c>sd-server</c> hard-fail — e.g. WSL2, where the
 ///     NVIDIA GPU is exposed via CUDA/dxcore, not Vulkan); Windows AMD/Intel → Vulkan; none/unknown → CPU.
 ///     <para>
-///         follow-up: a Linux NVIDIA box will prefer an in-app/BYO source-built CUDA <c>sd-server</c> once that build
-///         lane is wired for the image runtime (mirroring the llama.cpp managed-CUDA lane); until then Linux NVIDIA
-///         selects Vulkan (when a Vulkan device exists) or CPU. An active bring-your-own override
-///         (<see cref="StableDiffusionServerRuntimeOverrideOptions.IsActive" />) short-circuits the probe entirely with
-///         its configured backend; the path is validated by the binary manager, never here.
+///         An active operator override or validated managed source build short-circuits hardware selection with its
+///         configured backend, which is how Linux CUDA source builds remain selected despite the missing prebuilt.
+///         Their paths and bytes are validated by the binary manager, never here. Without either signal, Linux NVIDIA
+///         selects Vulkan when a Vulkan device exists, otherwise CPU.
 ///     </para>
 /// </remarks>
 public sealed class SdGpuBackendSelector : ISdGpuBackendSelector
 {
     private readonly IHardwareProfiler _hardwareProfiler;
     private readonly bool _isWindows;
+    private readonly IStableDiffusionManagedSourceBuildSignal _managedSourceSignal;
     private readonly StableDiffusionServerRuntimeOverrideOptions _overrideOptions;
     private readonly IVulkanDeviceProbe _vulkanDeviceProbe;
 
     /// <summary>Creates a selector over the shared hardware profiler + override options + Vulkan device probe, defaulting OS detection to the live host.</summary>
-    public SdGpuBackendSelector(IHardwareProfiler hardwareProfiler, StableDiffusionServerRuntimeOverrideOptions overrideOptions, IVulkanDeviceProbe vulkanDeviceProbe)
-        : this(hardwareProfiler, OperatingSystem.IsWindows(), vulkanDeviceProbe, overrideOptions)
+    public SdGpuBackendSelector(IHardwareProfiler hardwareProfiler,
+        StableDiffusionServerRuntimeOverrideOptions overrideOptions,
+        IVulkanDeviceProbe vulkanDeviceProbe,
+        IStableDiffusionManagedSourceBuildSignal managedSourceSignal)
+        : this(hardwareProfiler, OperatingSystem.IsWindows(), vulkanDeviceProbe, overrideOptions, managedSourceSignal)
     {
     }
 
@@ -41,12 +44,17 @@ public sealed class SdGpuBackendSelector : ISdGpuBackendSelector
     ///     a faked Vulkan device probe. The override options default to an inactive instance so the vendor-rule path stays
     ///     unchanged.
     /// </summary>
-    internal SdGpuBackendSelector(IHardwareProfiler hardwareProfiler, bool isWindows, IVulkanDeviceProbe vulkanDeviceProbe, StableDiffusionServerRuntimeOverrideOptions? overrideOptions = null)
+    internal SdGpuBackendSelector(IHardwareProfiler hardwareProfiler,
+        bool isWindows,
+        IVulkanDeviceProbe vulkanDeviceProbe,
+        StableDiffusionServerRuntimeOverrideOptions? overrideOptions = null,
+        IStableDiffusionManagedSourceBuildSignal? managedSourceSignal = null)
     {
         _hardwareProfiler = hardwareProfiler ?? throw new ArgumentNullException(nameof(hardwareProfiler));
         _isWindows = isWindows;
         _vulkanDeviceProbe = vulkanDeviceProbe ?? throw new ArgumentNullException(nameof(vulkanDeviceProbe));
         _overrideOptions = overrideOptions ?? new StableDiffusionServerRuntimeOverrideOptions();
+        _managedSourceSignal = managedSourceSignal ?? new StableDiffusionManagedSourceBuildSignal();
     }
 
     /// <inheritdoc />
@@ -58,6 +66,11 @@ public sealed class SdGpuBackendSelector : ISdGpuBackendSelector
         if (_overrideOptions.IsActive)
         {
             return _overrideOptions.Backend;
+        }
+
+        if (_managedSourceSignal.ActiveBackend is { } managedBackend)
+        {
+            return managedBackend;
         }
 
         var profile = await _hardwareProfiler.GetProfileAsync(forceRefresh: false, ct).ConfigureAwait(false);

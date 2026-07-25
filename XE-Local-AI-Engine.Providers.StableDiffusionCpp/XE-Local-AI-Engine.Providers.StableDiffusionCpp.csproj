@@ -18,8 +18,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Tests construct the internal OS/arch-pinned binary-manager constructor + invoke the pure GPU-backend
-         selection rule directly, rather than shelling out to hardware probes or downloading real binaries. -->
+    <!-- Tests exercise security-critical process hardening, adoption recovery, and deterministic OS/arch selection
+         through internal seams so they never spawn real builds, probe hardware, or download binaries. -->
     <InternalsVisibleTo Include="XE-Local-AI-Engine.Tests" />
   </ItemGroup>
 

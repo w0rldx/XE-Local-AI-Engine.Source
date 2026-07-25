@@ -12,7 +12,7 @@ namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 ///     the daemon's last-used timestamp on each poll so the idle window is measured from the last observed progress, not
 ///     from job submission.
 /// </remarks>
-internal interface IImageServerJobLease : IDisposable
+public interface IImageServerJobLease : IDisposable
 {
     /// <summary>Refreshes the leased daemon's last-used timestamp so a long generation never drifts past the idle window.</summary>
     void Touch();

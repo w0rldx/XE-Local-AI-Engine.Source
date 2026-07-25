@@ -2,10 +2,12 @@ namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 
 /// <summary>
 ///     Owns the resident <c>sd-server</c> daemon(s): reuse-or-spawn one process per model, readiness-gate it, and
-///     tree-kill + restart it on demand. Mirrors <c>ILlamaServerProcessSupervisor</c> for the image runtime; consumed
-///     only by <see cref="Implementation.StableDiffusionCppRuntime" />.
+///     tree-kill + restart it on demand. Mirrors <c>ILlamaServerProcessSupervisor</c> for the image runtime and also
+///     exposes the operator eject boundary used before managed-runtime mutation.
 /// </summary>
-internal interface IImageServerSupervisor
+public sealed record ImageServerEvictAllResult(bool Evicted, ImageRuntimeActivitySnapshot Activity);
+
+public interface IImageServerSupervisor
 {
     /// <summary>
     ///     Ensures a ready <c>sd-server</c> daemon serving <paramref name="modelName" /> is running and returns its
@@ -24,6 +26,12 @@ internal interface IImageServerSupervisor
 
     /// <summary>Tree-kills and forgets the daemon serving <paramref name="modelName" />, if any. Idempotent.</summary>
     Task EvictAsync(string modelName, CancellationToken ct);
+
+    /// <summary>
+    ///     Ejects every idle resident daemon while atomically blocking new ensure/job leases. Returns busy without
+    ///     eviction when a job, spawn/readiness window, or runtime mutation is active.
+    /// </summary>
+    Task<ImageServerEvictAllResult> EvictAllAsync(CancellationToken ct);
 
     /// <summary>
     ///     Acquires an active-job lease against the resident daemon serving <paramref name="modelName" /> so the idle

@@ -1480,6 +1480,41 @@ export type XeLocalAiEngineClientEndpointsImagesV1ImageJobRouteRequest = {
 	[key: string]: never;
 };
 
+export type XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildStatusResponse = {
+	phase: string;
+	isRunning: boolean;
+	terminal: boolean;
+	logStartSequence: number;
+	logLines: Array<string>;
+	sanitizedError?: string | null;
+	currentBuild?: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildDescriptorResponse | null;
+	startedAtUtc?: number | null;
+	completedAtUtc?: number | null;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildDescriptorResponse = {
+	buildId: string;
+	backend: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBackendDto;
+	source: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceSelectionDto;
+	repository: string;
+	revisionMode: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceRevisionModeDto;
+	requestedCommit?: string | null;
+	resolvedCommit?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBackendDto = "cpu" | "vulkan" | "cuda";
+
+export type XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceSelectionDto = "official" | "custom";
+
+export type XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceRevisionModeDto =
+	| "enginePinned"
+	| "defaultBranch"
+	| "explicitCommit";
+
+export type XeLocalAiEngineClientEndpointsImagesV1ImageRuntimeActionRequest = {
+	accepted?: boolean | null;
+};
+
 export type XeLocalAiEngineClientEndpointsImagesV1ImageJobResponse = {
 	id: string;
 	modelName: string;
@@ -1501,6 +1536,21 @@ export type XeLocalAiEngineClientEndpointsImagesV1ImageJobResponse = {
 	cancellationRequestedAtUtc?: number | null;
 };
 
+export type XeLocalAiEngineClientEndpointsImagesV1ImageRuntimeBlockedResponse = {
+	reason: string;
+	message: string;
+	activity: XeLocalAiEngineClientEndpointsImagesV1ImageRuntimeActivityResponse;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1ImageRuntimeActivityResponse = {
+	activeJobCount: number;
+	spawnReadinessCount: number;
+	residentProcessCount: number;
+	mutationReserved: boolean;
+	evictionReserved: boolean;
+	isBusy: boolean;
+};
+
 export type XeLocalAiEngineClientEndpointsImagesV1CreateImageJobRequest = {
 	modelName: string;
 	prompt: string;
@@ -1511,6 +1561,41 @@ export type XeLocalAiEngineClientEndpointsImagesV1CreateImageJobRequest = {
 	steps?: number;
 	sampler?: string | null;
 	cfgScale?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1ImageRuntimeStatusResponse = {
+	managedRuntime?: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionInstalledRuntimeResponse | null;
+	activity: XeLocalAiEngineClientEndpointsImagesV1ImageRuntimeActivityResponse;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1StableDiffusionInstalledRuntimeResponse = {
+	validity: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionInstalledRuntimeValidityDto;
+	desiredBackend: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBackendDto;
+	sourceRepository: string;
+	sourceCommit: string;
+	sourceSelection: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceSelectionDto;
+	sourceRevisionMode: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceRevisionModeDto;
+	sourceRequestedCommit?: string | null;
+	installedAtUtc: number;
+	invalidReason?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1StableDiffusionInstalledRuntimeValidityDto = "active" | "invalid";
+
+export type XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildPrerequisitesResponse = {
+	backend: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBackendDto;
+	items: Array<XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildPrerequisiteItemResponse>;
+	canBuild: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildPrerequisiteItemResponse = {
+	key: string;
+	satisfied: boolean;
+	detail: string;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1GetStableDiffusionCppSourceBuildPrerequisitesRequest = {
+	[key: string]: never;
 };
 
 export type XeLocalAiEngineClientEndpointsImagesV1ListImageJobsResponse = {
@@ -1559,6 +1644,19 @@ export type XeLocalAiEngineClientEndpointsImagesV1ImageModelPartDownloadRequest 
 	role: string;
 	fileName: string;
 	sha256?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1StartStableDiffusionCppSourceBuildResponse = {
+	started: boolean;
+	status: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildStatusResponse;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1StartStableDiffusionCppSourceBuildRequest = {
+	backend: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBackendDto;
+	source: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceSelectionDto;
+	repository?: string | null;
+	commit?: string | null;
+	acknowledgeCustomSourceRisk: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentCapabilityResponse = {
@@ -5619,6 +5717,34 @@ export type CancelImageJobResponses = {
 
 export type CancelImageJobResponse = CancelImageJobResponses[keyof CancelImageJobResponses];
 
+export type CancelStableDiffusionCppSourceBuildData = {
+	body: XeLocalAiEngineClientEndpointsImagesV1ImageRuntimeActionRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/images/runtime/source-build/cancel";
+};
+
+export type CancelStableDiffusionCppSourceBuildErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type CancelStableDiffusionCppSourceBuildResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildStatusResponse;
+};
+
+export type CancelStableDiffusionCppSourceBuildResponse =
+	CancelStableDiffusionCppSourceBuildResponses[keyof CancelStableDiffusionCppSourceBuildResponses];
+
 export type ListImageJobsData = {
 	body?: never;
 	path?: never;
@@ -5655,6 +5781,10 @@ export type CreateImageJobData = {
 
 export type CreateImageJobErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsErrorResponse;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -5662,7 +5792,10 @@ export type CreateImageJobErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	409: XeLocalAiEngineClientEndpointsImagesV1ImageRuntimeBlockedResponse;
 };
+
+export type CreateImageJobError = CreateImageJobErrors[keyof CreateImageJobErrors];
 
 export type CreateImageJobResponses = {
 	/**
@@ -5672,6 +5805,36 @@ export type CreateImageJobResponses = {
 };
 
 export type CreateImageJobResponse = CreateImageJobResponses[keyof CreateImageJobResponses];
+
+export type EjectImageRuntimeData = {
+	body: XeLocalAiEngineClientEndpointsImagesV1ImageRuntimeActionRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/images/runtime/eject";
+};
+
+export type EjectImageRuntimeErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	409: XeLocalAiEngineClientEndpointsImagesV1ImageRuntimeBlockedResponse;
+};
+
+export type EjectImageRuntimeError = EjectImageRuntimeErrors[keyof EjectImageRuntimeErrors];
+
+export type EjectImageRuntimeResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsImagesV1ImageRuntimeStatusResponse;
+};
+
+export type EjectImageRuntimeResponse = EjectImageRuntimeResponses[keyof EjectImageRuntimeResponses];
 
 export type GetImageJobData = {
 	body?: never;
@@ -5702,6 +5865,98 @@ export type GetImageJobResponses = {
 
 export type GetImageJobResponse = GetImageJobResponses[keyof GetImageJobResponses];
 
+export type GetImageRuntimeStatusData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/images/runtime";
+};
+
+export type GetImageRuntimeStatusErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetImageRuntimeStatusResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsImagesV1ImageRuntimeStatusResponse;
+};
+
+export type GetImageRuntimeStatusResponse = GetImageRuntimeStatusResponses[keyof GetImageRuntimeStatusResponses];
+
+export type GetStableDiffusionCppSourceBuildPrerequisitesData = {
+	body?: never;
+	path?: never;
+	query: {
+		backend: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBackendDto;
+	};
+	url: "/api/local/v1/images/runtime/source-build/prerequisites";
+};
+
+export type GetStableDiffusionCppSourceBuildPrerequisitesErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsErrorResponse;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetStableDiffusionCppSourceBuildPrerequisitesError =
+	GetStableDiffusionCppSourceBuildPrerequisitesErrors[keyof GetStableDiffusionCppSourceBuildPrerequisitesErrors];
+
+export type GetStableDiffusionCppSourceBuildPrerequisitesResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildPrerequisitesResponse;
+};
+
+export type GetStableDiffusionCppSourceBuildPrerequisitesResponse =
+	GetStableDiffusionCppSourceBuildPrerequisitesResponses[keyof GetStableDiffusionCppSourceBuildPrerequisitesResponses];
+
+export type GetStableDiffusionCppSourceBuildStatusData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/images/runtime/source-build/status";
+};
+
+export type GetStableDiffusionCppSourceBuildStatusErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetStableDiffusionCppSourceBuildStatusResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildStatusResponse;
+};
+
+export type GetStableDiffusionCppSourceBuildStatusResponse =
+	GetStableDiffusionCppSourceBuildStatusResponses[keyof GetStableDiffusionCppSourceBuildStatusResponses];
+
 export type ListImageModelsData = {
 	body?: never;
 	path?: never;
@@ -5728,6 +5983,38 @@ export type ListImageModelsResponses = {
 };
 
 export type ListImageModelsResponse = ListImageModelsResponses[keyof ListImageModelsResponses];
+
+export type RemoveStableDiffusionCppSourceBuildData = {
+	body: XeLocalAiEngineClientEndpointsImagesV1ImageRuntimeActionRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/images/runtime/source-build/remove";
+};
+
+export type RemoveStableDiffusionCppSourceBuildErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	409: XeLocalAiEngineClientEndpointsImagesV1ImageRuntimeBlockedResponse;
+};
+
+export type RemoveStableDiffusionCppSourceBuildError =
+	RemoveStableDiffusionCppSourceBuildErrors[keyof RemoveStableDiffusionCppSourceBuildErrors];
+
+export type RemoveStableDiffusionCppSourceBuildResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsImagesV1ImageRuntimeStatusResponse;
+};
+
+export type RemoveStableDiffusionCppSourceBuildResponse =
+	RemoveStableDiffusionCppSourceBuildResponses[keyof RemoveStableDiffusionCppSourceBuildResponses];
 
 export type RetrieveImageData = {
 	body?: never;
@@ -5784,6 +6071,42 @@ export type StartImageModelDownloadResponses = {
 };
 
 export type StartImageModelDownloadResponse = StartImageModelDownloadResponses[keyof StartImageModelDownloadResponses];
+
+export type StartStableDiffusionCppSourceBuildData = {
+	body: XeLocalAiEngineClientEndpointsImagesV1StartStableDiffusionCppSourceBuildRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/images/runtime/source-build";
+};
+
+export type StartStableDiffusionCppSourceBuildErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsErrorResponse;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	409: XeLocalAiEngineClientEndpointsImagesV1ImageRuntimeBlockedResponse;
+};
+
+export type StartStableDiffusionCppSourceBuildError =
+	StartStableDiffusionCppSourceBuildErrors[keyof StartStableDiffusionCppSourceBuildErrors];
+
+export type StartStableDiffusionCppSourceBuildResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsImagesV1StartStableDiffusionCppSourceBuildResponse;
+};
+
+export type StartStableDiffusionCppSourceBuildResponse =
+	StartStableDiffusionCppSourceBuildResponses[keyof StartStableDiffusionCppSourceBuildResponses];
 
 export type GetDevelopmentCapabilityData = {
 	body?: never;

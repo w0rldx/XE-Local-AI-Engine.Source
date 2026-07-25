@@ -28,6 +28,7 @@ import {
 	cancelNodeChatMessage,
 	cancelPreviewRun,
 	cancelScheduledJobRun,
+	cancelStableDiffusionCppSourceBuild,
 	clearCloudSettings,
 	codexLogin,
 	codexLogout,
@@ -61,6 +62,7 @@ import {
 	disableScheduledJob,
 	disconnectConnection,
 	downloadRecommendedReranker,
+	ejectImageRuntime,
 	ejectRunningModel,
 	enableAutoConnect,
 	enableScheduledJob,
@@ -92,6 +94,7 @@ import {
 	getHardwareProfile,
 	getHfTokenStatus,
 	getImageJob,
+	getImageRuntimeStatus,
 	getInvocationMonitor,
 	getKnowledgeDocument,
 	getLatestRecommendations,
@@ -110,6 +113,8 @@ import {
 	getScheduledJob,
 	getScheduledJobRun,
 	getSkill,
+	getStableDiffusionCppSourceBuildPrerequisites,
+	getStableDiffusionCppSourceBuildStatus,
 	getToolCapableModels,
 	getToolCatalog,
 	getTutorialState,
@@ -166,6 +171,7 @@ import {
 	rejectSuggestedPlaybookAction,
 	removeCudaBuild,
 	removeLlamaCppSourceBuild,
+	removeStableDiffusionCppSourceBuild,
 	renameNodeChatConversation,
 	resolveToolApproval,
 	retrieveImage,
@@ -188,6 +194,7 @@ import {
 	startImageModelDownload,
 	startLlamaCppSourceBuild,
 	startNodeBinding,
+	startStableDiffusionCppSourceBuild,
 	triggerScheduledJob,
 	unhandledExceptionProbe,
 	unloadLocalModel,
@@ -239,6 +246,8 @@ import type {
 	CancelPreviewRunResponse,
 	CancelScheduledJobRunData,
 	CancelScheduledJobRunResponse,
+	CancelStableDiffusionCppSourceBuildData,
+	CancelStableDiffusionCppSourceBuildResponse,
 	ClearCloudSettingsData,
 	ClearCloudSettingsResponse,
 	CodexLoginData,
@@ -258,6 +267,7 @@ import type {
 	CreateGoldenConversationData,
 	CreateGoldenConversationResponse,
 	CreateImageJobData,
+	CreateImageJobError,
 	CreateImageJobResponse,
 	CreateMcpServerData,
 	CreateMcpServerResponse,
@@ -308,6 +318,9 @@ import type {
 	DisconnectConnectionResponse,
 	DownloadRecommendedRerankerData,
 	DownloadRecommendedRerankerResponse,
+	EjectImageRuntimeData,
+	EjectImageRuntimeError,
+	EjectImageRuntimeResponse,
 	EjectRunningModelData,
 	EjectRunningModelResponse,
 	EnableAutoConnectData,
@@ -371,6 +384,8 @@ import type {
 	GetHfTokenStatusResponse,
 	GetImageJobData,
 	GetImageJobResponse,
+	GetImageRuntimeStatusData,
+	GetImageRuntimeStatusResponse,
 	GetInvocationMonitorData,
 	GetInvocationMonitorResponse,
 	GetKnowledgeDocumentData,
@@ -410,6 +425,11 @@ import type {
 	GetScheduledJobRunResponse,
 	GetSkillData,
 	GetSkillResponse,
+	GetStableDiffusionCppSourceBuildPrerequisitesData,
+	GetStableDiffusionCppSourceBuildPrerequisitesError,
+	GetStableDiffusionCppSourceBuildPrerequisitesResponse,
+	GetStableDiffusionCppSourceBuildStatusData,
+	GetStableDiffusionCppSourceBuildStatusResponse,
 	GetToolCapableModelsData,
 	GetToolCapableModelsResponse,
 	GetToolCatalogData,
@@ -525,6 +545,9 @@ import type {
 	RemoveLlamaCppSourceBuildData,
 	RemoveLlamaCppSourceBuildError,
 	RemoveLlamaCppSourceBuildResponse,
+	RemoveStableDiffusionCppSourceBuildData,
+	RemoveStableDiffusionCppSourceBuildError,
+	RemoveStableDiffusionCppSourceBuildResponse,
 	RenameNodeChatConversationData,
 	RenameNodeChatConversationResponse,
 	ResolveToolApprovalData,
@@ -575,6 +598,9 @@ import type {
 	StartLlamaCppSourceBuildResponse,
 	StartNodeBindingData,
 	StartNodeBindingResponse,
+	StartStableDiffusionCppSourceBuildData,
+	StartStableDiffusionCppSourceBuildError,
+	StartStableDiffusionCppSourceBuildResponse,
 	TriggerScheduledJobData,
 	TriggerScheduledJobResponse,
 	UnhandledExceptionProbeData,
@@ -2924,6 +2950,30 @@ export const cancelImageJobMutation = (
 	return mutationOptions;
 };
 
+export const cancelStableDiffusionCppSourceBuildMutation = (
+	options?: Partial<Options<CancelStableDiffusionCppSourceBuildData>>,
+): UseMutationOptions<
+	CancelStableDiffusionCppSourceBuildResponse,
+	AxiosError<DefaultError>,
+	Options<CancelStableDiffusionCppSourceBuildData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		CancelStableDiffusionCppSourceBuildResponse,
+		AxiosError<DefaultError>,
+		Options<CancelStableDiffusionCppSourceBuildData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await cancelStableDiffusionCppSourceBuild({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
 export const listImageJobsQueryKey = (options?: Options<ListImageJobsData>) => createQueryKey("listImageJobs", options);
 
 export const listImageJobsOptions = (options?: Options<ListImageJobsData>) =>
@@ -2942,10 +2992,34 @@ export const listImageJobsOptions = (options?: Options<ListImageJobsData>) =>
 
 export const createImageJobMutation = (
 	options?: Partial<Options<CreateImageJobData>>,
-): UseMutationOptions<CreateImageJobResponse, AxiosError<DefaultError>, Options<CreateImageJobData>> => {
-	const mutationOptions: UseMutationOptions<CreateImageJobResponse, AxiosError<DefaultError>, Options<CreateImageJobData>> = {
+): UseMutationOptions<CreateImageJobResponse, AxiosError<CreateImageJobError>, Options<CreateImageJobData>> => {
+	const mutationOptions: UseMutationOptions<
+		CreateImageJobResponse,
+		AxiosError<CreateImageJobError>,
+		Options<CreateImageJobData>
+	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await createImageJob({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const ejectImageRuntimeMutation = (
+	options?: Partial<Options<EjectImageRuntimeData>>,
+): UseMutationOptions<EjectImageRuntimeResponse, AxiosError<EjectImageRuntimeError>, Options<EjectImageRuntimeData>> => {
+	const mutationOptions: UseMutationOptions<
+		EjectImageRuntimeResponse,
+		AxiosError<EjectImageRuntimeError>,
+		Options<EjectImageRuntimeData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await ejectImageRuntime({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -2972,6 +3046,75 @@ export const getImageJobOptions = (options: Options<GetImageJobData>) =>
 		queryKey: getImageJobQueryKey(options),
 	});
 
+export const getImageRuntimeStatusQueryKey = (options?: Options<GetImageRuntimeStatusData>) =>
+	createQueryKey("getImageRuntimeStatus", options);
+
+export const getImageRuntimeStatusOptions = (options?: Options<GetImageRuntimeStatusData>) =>
+	queryOptions<
+		GetImageRuntimeStatusResponse,
+		AxiosError<DefaultError>,
+		GetImageRuntimeStatusResponse,
+		ReturnType<typeof getImageRuntimeStatusQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getImageRuntimeStatus({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getImageRuntimeStatusQueryKey(options),
+	});
+
+export const getStableDiffusionCppSourceBuildPrerequisitesQueryKey = (
+	options: Options<GetStableDiffusionCppSourceBuildPrerequisitesData>,
+) => createQueryKey("getStableDiffusionCppSourceBuildPrerequisites", options);
+
+export const getStableDiffusionCppSourceBuildPrerequisitesOptions = (
+	options: Options<GetStableDiffusionCppSourceBuildPrerequisitesData>,
+) =>
+	queryOptions<
+		GetStableDiffusionCppSourceBuildPrerequisitesResponse,
+		AxiosError<GetStableDiffusionCppSourceBuildPrerequisitesError>,
+		GetStableDiffusionCppSourceBuildPrerequisitesResponse,
+		ReturnType<typeof getStableDiffusionCppSourceBuildPrerequisitesQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getStableDiffusionCppSourceBuildPrerequisites({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getStableDiffusionCppSourceBuildPrerequisitesQueryKey(options),
+	});
+
+export const getStableDiffusionCppSourceBuildStatusQueryKey = (options?: Options<GetStableDiffusionCppSourceBuildStatusData>) =>
+	createQueryKey("getStableDiffusionCppSourceBuildStatus", options);
+
+export const getStableDiffusionCppSourceBuildStatusOptions = (options?: Options<GetStableDiffusionCppSourceBuildStatusData>) =>
+	queryOptions<
+		GetStableDiffusionCppSourceBuildStatusResponse,
+		AxiosError<DefaultError>,
+		GetStableDiffusionCppSourceBuildStatusResponse,
+		ReturnType<typeof getStableDiffusionCppSourceBuildStatusQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getStableDiffusionCppSourceBuildStatus({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getStableDiffusionCppSourceBuildStatusQueryKey(options),
+	});
+
 export const listImageModelsQueryKey = (options?: Options<ListImageModelsData>) => createQueryKey("listImageModels", options);
 
 export const listImageModelsOptions = (options?: Options<ListImageModelsData>) =>
@@ -2992,6 +3135,30 @@ export const listImageModelsOptions = (options?: Options<ListImageModelsData>) =
 		},
 		queryKey: listImageModelsQueryKey(options),
 	});
+
+export const removeStableDiffusionCppSourceBuildMutation = (
+	options?: Partial<Options<RemoveStableDiffusionCppSourceBuildData>>,
+): UseMutationOptions<
+	RemoveStableDiffusionCppSourceBuildResponse,
+	AxiosError<RemoveStableDiffusionCppSourceBuildError>,
+	Options<RemoveStableDiffusionCppSourceBuildData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		RemoveStableDiffusionCppSourceBuildResponse,
+		AxiosError<RemoveStableDiffusionCppSourceBuildError>,
+		Options<RemoveStableDiffusionCppSourceBuildData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await removeStableDiffusionCppSourceBuild({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
 
 export const retrieveImageQueryKey = (options: Options<RetrieveImageData>) => createQueryKey("retrieveImage", options);
 
@@ -3019,6 +3186,30 @@ export const startImageModelDownloadMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await startImageModelDownload({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const startStableDiffusionCppSourceBuildMutation = (
+	options?: Partial<Options<StartStableDiffusionCppSourceBuildData>>,
+): UseMutationOptions<
+	StartStableDiffusionCppSourceBuildResponse,
+	AxiosError<StartStableDiffusionCppSourceBuildError>,
+	Options<StartStableDiffusionCppSourceBuildData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		StartStableDiffusionCppSourceBuildResponse,
+		AxiosError<StartStableDiffusionCppSourceBuildError>,
+		Options<StartStableDiffusionCppSourceBuildData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await startStableDiffusionCppSourceBuild({
 				...options,
 				...fnOptions,
 				throwOnError: true,

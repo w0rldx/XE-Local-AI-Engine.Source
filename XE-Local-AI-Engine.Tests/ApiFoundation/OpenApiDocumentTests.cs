@@ -116,6 +116,74 @@ public sealed class OpenApiDocumentTests
             ["sourceRepository", "sourceCommit", "sourceSelection", "sourceRevisionMode", "sourceRequestedCommit"]);
     }
 
+    [Test]
+    public async Task LocalOpenApiDocument_DescribesImageRuntimeSourceBuildSurface()
+    {
+        await using var factory = new TestingWebAppFactory();
+        using var client = factory.CreateClient();
+        using var response = await client.GetAsync("/openapi/local/v1/v1.json").ConfigureAwait(false);
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await using var responseStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
+        using var document = await JsonDocument.ParseAsync(responseStream).ConfigureAwait(false);
+        var paths = document.RootElement.GetProperty("paths");
+
+        foreach (var path in new[]
+                 {
+                     "/api/local/v1/images/runtime",
+                     "/api/local/v1/images/runtime/eject",
+                     "/api/local/v1/images/runtime/source-build",
+                     "/api/local/v1/images/runtime/source-build/prerequisites",
+                     "/api/local/v1/images/runtime/source-build/status",
+                     "/api/local/v1/images/runtime/source-build/cancel",
+                     "/api/local/v1/images/runtime/source-build/remove"
+                 })
+        {
+            AssertEx.True(paths.TryGetProperty(path, out _), $"Expected image-runtime path '{path}'.");
+        }
+
+        var schemas = document.RootElement.GetProperty("components").GetProperty("schemas");
+        AssertSchemaEnum(schemas, "StableDiffusionCppSourceBackendDto", ["cpu", "vulkan", "cuda"]);
+        AssertSchemaEnum(schemas, "StableDiffusionCppSourceSelectionDto", ["official", "custom"]);
+        AssertSchemaEnum(schemas, "StableDiffusionCppSourceRevisionModeDto", ["enginePinned", "defaultBranch", "explicitCommit"]);
+        AssertSchemaEnum(schemas, "StableDiffusionInstalledRuntimeValidityDto", ["active", "invalid"]);
+
+        AssertResponses(paths, "/api/local/v1/images/runtime", "get", ["200"]);
+        AssertResponses(paths, "/api/local/v1/images/runtime/eject", "post", ["200", "409"]);
+        AssertResponses(paths, "/api/local/v1/images/runtime/source-build", "post", ["200", "400", "409"]);
+        AssertResponses(paths, "/api/local/v1/images/runtime/source-build/prerequisites", "get", ["200", "400"]);
+        AssertResponses(paths, "/api/local/v1/images/runtime/source-build/status", "get", ["200"]);
+        AssertResponses(paths, "/api/local/v1/images/runtime/source-build/cancel", "post", ["200"]);
+        AssertResponses(paths, "/api/local/v1/images/runtime/source-build/remove", "post", ["200", "409"]);
+        AssertResponses(paths, "/api/local/v1/images/jobs", "post", ["200", "400", "409"]);
+
+        foreach (var path in new[]
+                 {
+                     "/api/local/v1/images/runtime/eject",
+                     "/api/local/v1/images/runtime/source-build/cancel",
+                     "/api/local/v1/images/runtime/source-build/remove"
+                 })
+        {
+            var content = paths.GetProperty(path).GetProperty("post").GetProperty("requestBody").GetProperty("content");
+            AssertEx.True(content.TryGetProperty("application/json", out _),
+                $"Expected generated transport metadata for '{path}' to accept an explicit empty JSON action body.");
+        }
+
+        var requestSchema = FindSchema(schemas, "StartStableDiffusionCppSourceBuildRequest");
+        AssertEx.True(requestSchema.GetProperty("required").EnumerateArray()
+                                   .Any(static property => property.GetString() == "acknowledgeCustomSourceRisk"),
+            "The stable-diffusion.cpp custom-source risk acknowledgement must be required on the wire.");
+        AssertSchemaProperties(schemas, "StableDiffusionCppSourceBuildDescriptorResponse",
+            ["buildId", "backend", "source", "repository", "revisionMode", "requestedCommit", "resolvedCommit"]);
+        AssertSchemaProperties(schemas, "StableDiffusionInstalledRuntimeResponse",
+            ["validity", "desiredBackend", "sourceRepository", "sourceCommit", "sourceSelection", "sourceRevisionMode",
+                "sourceRequestedCommit", "installedAtUtc", "invalidReason"]);
+        AssertSchemaProperties(schemas, "ImageRuntimeActivityResponse",
+            ["activeJobCount", "spawnReadinessCount", "residentProcessCount", "mutationReserved", "evictionReserved", "isBusy"]);
+        AssertSchemaProperties(schemas, "ImageRuntimeStatusResponse", ["managedRuntime", "activity"]);
+        AssertSchemaProperties(schemas, "ImageRuntimeBlockedResponse", ["reason", "message", "activity"]);
+    }
+
     private static void AssertResponses(JsonElement paths, string path, string verb, IReadOnlyList<string> expected)
     {
         var responses = paths.GetProperty(path).GetProperty(verb).GetProperty("responses");

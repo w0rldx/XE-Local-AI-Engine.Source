@@ -53,6 +53,9 @@ creating it on HEAD is the operator's release-time step, and the packager refuse
   validation, independent review, hash-bound evidence, and an explicit final host apply.
 - Generalized llama.cpp **managed source builds** — build a llama-server from source (official or custom repository)
   as a first-class managed runtime, with provenance tracking and lifecycle recovery.
+- Linux stable-diffusion.cpp **managed source builds** for CPU, Vulkan, and CUDA — including official pinned or
+  operator-acknowledged custom GitHub revisions, prerequisite checks, streamed build logs, crash-safe adoption,
+  provenance tracking, repair/removal controls, and fail-closed runtime validation.
 - Token-usage and cost accounting: a usage ledger with a fine-grained provider dimension, an `agents/usage-summary`
   aggregate, server-computed `EstimatedCostUsd` per bucket/provider/total, an approximate default rate table, and
   operator-editable per-model rate overrides with a usage dashboard.
@@ -102,6 +105,9 @@ creating it on HEAD is the operator's release-time step, and the packager refuse
   only `detail`. It now resolves `detail → message → title`.
 - Source-build lifecycle: relocated source runtimes are preserved, source selection provenance is retained, runtime
   mutations are serialized, the mutation gate is released during readiness, and the runtime fails closed on drift.
+- Image source builds now run git/CMake in an allowlisted environment with isolated Git configuration and fetch custom
+  revisions directly by SHA; invalid managed image runtimes expose an eject/remove recovery path without requiring
+  Development Mode.
 - A DI factory read node settings unguarded at construction, NRE-ing every host-based test; `Load()` is now null-guarded.
 - Local-default chat resolves the concrete model through the installed mirror.
 - Terminal image-job replay logs are evicted on an idle node, and the CUDA build log is bounded.

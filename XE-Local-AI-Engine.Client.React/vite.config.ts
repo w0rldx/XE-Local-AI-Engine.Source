@@ -154,6 +154,7 @@ export default defineConfig(({ command, mode }) => {
 						"/api/local/v1/model-fit/llamacpp/source-build/hub": localProxy(proxyTarget, true),
 						"/api/local/v1/knowledge-base/hub": localProxy(proxyTarget, true),
 						"/api/local/v1/images/hub": localProxy(proxyTarget, true),
+						"/api/local/v1/images/runtime/source-build/hub": localProxy(proxyTarget, true),
 						"/api/local/v1/development/hub": localProxy(proxyTarget, true),
 						"/api": localProxy(proxyTarget),
 						"/openapi": {
