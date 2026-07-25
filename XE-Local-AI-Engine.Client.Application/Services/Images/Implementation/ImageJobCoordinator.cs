@@ -4,6 +4,7 @@ using System.Collections.Concurrent;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
+using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 
 /// <summary>
 ///     Default <see cref="IImageJobCoordinator" />. Mirrors the GGUF download coordinator: a per-job in-flight
@@ -43,12 +44,14 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
     private readonly IImageJobEventPublisher _eventPublisher;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<ImageJobCoordinator> _logger;
+    private readonly IImageRuntimeActivityGate _runtimeActivityGate;
 
     // Serializes generation to one running job; extra jobs wait here (still Queued) until the slot frees.
     private readonly SemaphoreSlim _generationSlot = new(initialCount: 1, maxCount: 1);
 
     // Keyed by job id. An in-flight job owns a live CTS; Cancel signals it via the registry.
     private readonly ConcurrentDictionary<Guid, CancellationTokenSource> _inFlight = new();
+    private readonly ConcurrentDictionary<Guid, IImageRuntimeActivityLease> _runtimeActivityLeases = new();
 
     // Detached run tasks by job id so DisposeAsync can drain them (bounded) after cancelling — giving each run task a
     // chance to persist its terminal state before the process exits.
@@ -70,7 +73,8 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         IServiceScopeFactory scopeFactory,
         IImageJobEventPublisher eventPublisher,
         TimeProvider timeProvider,
-        ILogger<ImageJobCoordinator> logger)
+        ILogger<ImageJobCoordinator> logger,
+        IImageRuntimeActivityGate runtimeActivityGate)
     {
         _runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
         _imageStore = imageStore ?? throw new ArgumentNullException(nameof(imageStore));
@@ -78,6 +82,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         _eventPublisher = eventPublisher ?? throw new ArgumentNullException(nameof(eventPublisher));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _runtimeActivityGate = runtimeActivityGate ?? throw new ArgumentNullException(nameof(runtimeActivityGate));
         // The callback only walks concurrent dictionaries (safe against a racing Dispose) and never throws.
         _evictionTimer = _timeProvider.CreateTimer(static state => ((ImageJobCoordinator)state!).EvictExpiredEventLogs(),
             this,
@@ -92,9 +97,21 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
 
         var jobId = Guid.NewGuid();
         var createdAt = NowUnixMs();
+        var runtimeActivityLease = _runtimeActivityGate.TryAcquireJobLease()
+                                   ?? throw new ImageRuntimeBusyException("Image generation is temporarily unavailable while the image runtime is changing.");
 
-        // Persist the queued row first (encrypts the prompt at rest). If this throws, nothing is registered.
-        await CreateQueuedAsync(jobId, input, createdAt, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            // The lease is acquired before the queued-row commit and held through the terminal transition. Enqueue and
+            // runtime mutation therefore share one atomic admission point rather than a racy check-then-persist window.
+            await CreateQueuedAsync(jobId, input, createdAt, cancellationToken).ConfigureAwait(false);
+            _runtimeActivityLeases[jobId] = runtimeActivityLease;
+        }
+        catch
+        {
+            runtimeActivityLease.Dispose();
+            throw;
+        }
 
         var cts = new CancellationTokenSource();
         _inFlight[jobId] = cts;
@@ -217,6 +234,11 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
 
         _inFlight.Clear();
         _runTasks.Clear();
+        foreach (var lease in _runtimeActivityLeases.Values)
+        {
+            lease.Dispose();
+        }
+        _runtimeActivityLeases.Clear();
         _generationSlot.Dispose();
         _evictionTimer.Dispose();
     }
@@ -440,6 +462,10 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
 
         _ = _runTasks.TryRemove(jobId, out _);
         _lastProgressPushTicks.TryRemove(jobId, out _);
+        if (_runtimeActivityLeases.TryRemove(jobId, out var runtimeActivityLease))
+        {
+            runtimeActivityLease.Dispose();
+        }
     }
 
     private JobEventLog GetOrCreateEventLog(Guid jobId)

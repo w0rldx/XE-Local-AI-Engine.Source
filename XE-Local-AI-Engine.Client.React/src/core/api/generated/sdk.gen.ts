@@ -56,6 +56,9 @@ import type {
 	CancelScheduledJobRunData,
 	CancelScheduledJobRunErrors,
 	CancelScheduledJobRunResponses,
+	CancelStableDiffusionCppSourceBuildData,
+	CancelStableDiffusionCppSourceBuildErrors,
+	CancelStableDiffusionCppSourceBuildResponses,
 	ClearCloudSettingsData,
 	ClearCloudSettingsErrors,
 	ClearCloudSettingsResponses,
@@ -155,6 +158,9 @@ import type {
 	DownloadRecommendedRerankerData,
 	DownloadRecommendedRerankerErrors,
 	DownloadRecommendedRerankerResponses,
+	EjectImageRuntimeData,
+	EjectImageRuntimeErrors,
+	EjectImageRuntimeResponses,
 	EjectRunningModelData,
 	EjectRunningModelErrors,
 	EjectRunningModelResponses,
@@ -248,6 +254,9 @@ import type {
 	GetImageJobData,
 	GetImageJobErrors,
 	GetImageJobResponses,
+	GetImageRuntimeStatusData,
+	GetImageRuntimeStatusErrors,
+	GetImageRuntimeStatusResponses,
 	GetInvocationMonitorData,
 	GetInvocationMonitorErrors,
 	GetInvocationMonitorResponses,
@@ -302,6 +311,12 @@ import type {
 	GetSkillData,
 	GetSkillErrors,
 	GetSkillResponses,
+	GetStableDiffusionCppSourceBuildPrerequisitesData,
+	GetStableDiffusionCppSourceBuildPrerequisitesErrors,
+	GetStableDiffusionCppSourceBuildPrerequisitesResponses,
+	GetStableDiffusionCppSourceBuildStatusData,
+	GetStableDiffusionCppSourceBuildStatusErrors,
+	GetStableDiffusionCppSourceBuildStatusResponses,
 	GetToolCapableModelsData,
 	GetToolCapableModelsErrors,
 	GetToolCapableModelsResponses,
@@ -465,6 +480,9 @@ import type {
 	RemoveLlamaCppSourceBuildData,
 	RemoveLlamaCppSourceBuildErrors,
 	RemoveLlamaCppSourceBuildResponses,
+	RemoveStableDiffusionCppSourceBuildData,
+	RemoveStableDiffusionCppSourceBuildErrors,
+	RemoveStableDiffusionCppSourceBuildResponses,
 	RenameNodeChatConversationData,
 	RenameNodeChatConversationErrors,
 	RenameNodeChatConversationResponses,
@@ -531,6 +549,9 @@ import type {
 	StartNodeBindingData,
 	StartNodeBindingErrors,
 	StartNodeBindingResponses,
+	StartStableDiffusionCppSourceBuildData,
+	StartStableDiffusionCppSourceBuildErrors,
+	StartStableDiffusionCppSourceBuildResponses,
 	TriggerScheduledJobData,
 	TriggerScheduledJobErrors,
 	TriggerScheduledJobResponses,
@@ -608,6 +629,8 @@ import {
 	zCancelPreviewRunResponse,
 	zCancelScheduledJobRunPath,
 	zCancelScheduledJobRunResponse,
+	zCancelStableDiffusionCppSourceBuildBody,
+	zCancelStableDiffusionCppSourceBuildResponse,
 	zClearCloudSettingsResponse,
 	zCodexLoginResponse,
 	zCodexLogoutResponse,
@@ -669,6 +692,8 @@ import {
 	zDisableScheduledJobResponse,
 	zDisconnectConnectionResponse,
 	zDownloadRecommendedRerankerResponse,
+	zEjectImageRuntimeBody,
+	zEjectImageRuntimeResponse,
 	zEjectRunningModelBody,
 	zEjectRunningModelResponse,
 	zEnableAutoConnectResponse,
@@ -718,6 +743,7 @@ import {
 	zGetHfTokenStatusResponse,
 	zGetImageJobPath,
 	zGetImageJobResponse,
+	zGetImageRuntimeStatusResponse,
 	zGetInvocationMonitorResponse,
 	zGetKnowledgeDocumentPath,
 	zGetKnowledgeDocumentResponse,
@@ -749,6 +775,9 @@ import {
 	zGetScheduledJobRunResponse,
 	zGetSkillPath,
 	zGetSkillResponse,
+	zGetStableDiffusionCppSourceBuildPrerequisitesQuery,
+	zGetStableDiffusionCppSourceBuildPrerequisitesResponse,
+	zGetStableDiffusionCppSourceBuildStatusResponse,
 	zGetToolCapableModelsResponse,
 	zGetToolCatalogResponse,
 	zGetTutorialStateResponse,
@@ -838,6 +867,8 @@ import {
 	zRejectSuggestedPlaybookActionResponse,
 	zRemoveCudaBuildResponse,
 	zRemoveLlamaCppSourceBuildResponse,
+	zRemoveStableDiffusionCppSourceBuildBody,
+	zRemoveStableDiffusionCppSourceBuildResponse,
 	zRenameNodeChatConversationBody,
 	zRenameNodeChatConversationPath,
 	zRenameNodeChatConversationResponse,
@@ -884,6 +915,8 @@ import {
 	zStartLlamaCppSourceBuildBody,
 	zStartLlamaCppSourceBuildResponse,
 	zStartNodeBindingResponse,
+	zStartStableDiffusionCppSourceBuildBody,
+	zStartStableDiffusionCppSourceBuildResponse,
 	zTriggerScheduledJobPath,
 	zTriggerScheduledJobResponse,
 	zUnhandledExceptionProbeResponse,
@@ -3483,6 +3516,36 @@ export const cancelImageJob = <ThrowOnError extends boolean = false>(options: Op
 		...options,
 	});
 
+export const cancelStableDiffusionCppSourceBuild = <ThrowOnError extends boolean = false>(
+	options: Options<CancelStableDiffusionCppSourceBuildData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<
+		CancelStableDiffusionCppSourceBuildResponses,
+		CancelStableDiffusionCppSourceBuildErrors,
+		ThrowOnError
+	>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zCancelStableDiffusionCppSourceBuildBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zCancelStableDiffusionCppSourceBuildResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/images/runtime/source-build/cancel",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
 export const listImageJobs = <ThrowOnError extends boolean = false>(options?: Options<ListImageJobsData, ThrowOnError>) =>
 	(options?.client ?? client).get<ListImageJobsResponses, ListImageJobsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
@@ -3527,6 +3590,30 @@ export const createImageJob = <ThrowOnError extends boolean = false>(options: Op
 		},
 	});
 
+export const ejectImageRuntime = <ThrowOnError extends boolean = false>(options: Options<EjectImageRuntimeData, ThrowOnError>) =>
+	(options.client ?? client).post<EjectImageRuntimeResponses, EjectImageRuntimeErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zEjectImageRuntimeBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zEjectImageRuntimeResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/images/runtime/eject",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
 export const getImageJob = <ThrowOnError extends boolean = false>(options: Options<GetImageJobData, ThrowOnError>) =>
 	(options.client ?? client).get<GetImageJobResponses, GetImageJobErrors, ThrowOnError>({
 		requestValidator: async (data) =>
@@ -3544,6 +3631,80 @@ export const getImageJob = <ThrowOnError extends boolean = false>(options: Optio
 			{ scheme: "bearer", type: "http" },
 		],
 		url: "/api/local/v1/images/jobs/{jobId}",
+		...options,
+	});
+
+export const getImageRuntimeStatus = <ThrowOnError extends boolean = false>(
+	options?: Options<GetImageRuntimeStatusData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<GetImageRuntimeStatusResponses, GetImageRuntimeStatusErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetImageRuntimeStatusResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/images/runtime",
+		...options,
+	});
+
+export const getStableDiffusionCppSourceBuildPrerequisites = <ThrowOnError extends boolean = false>(
+	options: Options<GetStableDiffusionCppSourceBuildPrerequisitesData, ThrowOnError>,
+) =>
+	(options.client ?? client).get<
+		GetStableDiffusionCppSourceBuildPrerequisitesResponses,
+		GetStableDiffusionCppSourceBuildPrerequisitesErrors,
+		ThrowOnError
+	>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: zGetStableDiffusionCppSourceBuildPrerequisitesQuery,
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetStableDiffusionCppSourceBuildPrerequisitesResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/images/runtime/source-build/prerequisites",
+		...options,
+	});
+
+export const getStableDiffusionCppSourceBuildStatus = <ThrowOnError extends boolean = false>(
+	options?: Options<GetStableDiffusionCppSourceBuildStatusData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<
+		GetStableDiffusionCppSourceBuildStatusResponses,
+		GetStableDiffusionCppSourceBuildStatusErrors,
+		ThrowOnError
+	>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetStableDiffusionCppSourceBuildStatusResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/images/runtime/source-build/status",
 		...options,
 	});
 
@@ -3565,6 +3726,36 @@ export const listImageModels = <ThrowOnError extends boolean = false>(options?: 
 		],
 		url: "/api/local/v1/images/models",
 		...options,
+	});
+
+export const removeStableDiffusionCppSourceBuild = <ThrowOnError extends boolean = false>(
+	options: Options<RemoveStableDiffusionCppSourceBuildData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<
+		RemoveStableDiffusionCppSourceBuildResponses,
+		RemoveStableDiffusionCppSourceBuildErrors,
+		ThrowOnError
+	>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zRemoveStableDiffusionCppSourceBuildBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zRemoveStableDiffusionCppSourceBuildResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/images/runtime/source-build/remove",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
 	});
 
 export const retrieveImage = <ThrowOnError extends boolean = false>(options: Options<RetrieveImageData, ThrowOnError>) =>
@@ -3605,6 +3796,36 @@ export const startImageModelDownload = <ThrowOnError extends boolean = false>(
 			{ scheme: "bearer", type: "http" },
 		],
 		url: "/api/local/v1/images/models/downloads",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const startStableDiffusionCppSourceBuild = <ThrowOnError extends boolean = false>(
+	options: Options<StartStableDiffusionCppSourceBuildData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<
+		StartStableDiffusionCppSourceBuildResponses,
+		StartStableDiffusionCppSourceBuildErrors,
+		ThrowOnError
+	>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zStartStableDiffusionCppSourceBuildBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zStartStableDiffusionCppSourceBuildResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/images/runtime/source-build",
 		...options,
 		headers: {
 			"Content-Type": "application/json",

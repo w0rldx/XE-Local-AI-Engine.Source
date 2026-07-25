@@ -26,7 +26,7 @@ public sealed record StableDiffusionAssetPin(
 
 /// <summary>
 ///     Verified, pinned stable-diffusion.cpp prebuilt-release table — the recommended-pinned acquisition source for
-///     <see cref="Implementation.StableDiffusionCppBinaryManager" />. No source-build, ever.
+///     <see cref="Implementation.StableDiffusionCppBinaryManager" /> when no managed source-built runtime is selected.
 /// </summary>
 /// <remarks>
 ///     <para>
@@ -42,8 +42,9 @@ public sealed record StableDiffusionAssetPin(
 ///     </para>
 ///     <para>
 ///         <strong>Constraint:</strong> stable-diffusion.cpp ships NO prebuilt Linux CUDA asset — a Linux NVIDIA box
-///         selects Vulkan (enforced by <see cref="Implementation.SdGpuBackendSelector" />). Windows CUDA also needs the
-///         separate <c>cudart-…</c> runtime archive; the Windows-CUDA pin row carries it as
+///         defaults to Vulkan when a Vulkan device enumerates, otherwise CPU (enforced by
+///         <see cref="Implementation.SdGpuBackendSelector" />). A validated managed source build can instead select CUDA.
+///         Windows CUDA also needs the separate <c>cudart-…</c> runtime archive; the Windows-CUDA pin row carries it as
 ///         <see cref="StableDiffusionAssetPin.CudartAssetName" />/<see cref="StableDiffusionAssetPin.CudartSha256" />.
 ///     </para>
 /// </remarks>
@@ -51,6 +52,9 @@ public static class StableDiffusionReleasePins
 {
     /// <summary>The recommended-pinned stable-diffusion.cpp rolling release tag.</summary>
     public const string PinnedTag = "master-742-1a13107";
+
+    /// <summary>The exact canonical source revision used by official managed builds.</summary>
+    public const string PinnedSourceCommitSha = "1a13107bac236b0cd6fadbf5c264f3644874ba4f";
 
     // stable-diffusion.cpp ships sd-server at the archive root as a bare file name (no build/bin/ nesting).
     private const string WindowsServerPath = "sd-server.exe";
@@ -71,7 +75,7 @@ public static class StableDiffusionReleasePins
             [(OSPlatform.Windows, Architecture.X64, SdGpuBackend.Cpu)] =
                 new("sd-master-1a13107-bin-win-cpu-x64.zip", "9fb05b3e4544294126bfd8b4ce4100e72b31129a57215433f992796acc0df08f", WindowsServerPath),
 
-            // Linux x64 (no prebuilt CUDA exists upstream — a Linux NVIDIA box falls back to Vulkan).
+            // Linux x64 (no prebuilt CUDA exists upstream; managed source builds provide the CUDA lane).
             [(OSPlatform.Linux, Architecture.X64, SdGpuBackend.Vulkan)] =
                 new("sd-master-1a13107-bin-Linux-Ubuntu-24.04-x86_64-vulkan.zip", "c29937b7d12d09d5d18295894d998d09aa73b17fec792c833683cf1a88f35add", UnixServerPath),
             [(OSPlatform.Linux, Architecture.X64, SdGpuBackend.Cpu)] =
@@ -90,7 +94,9 @@ public static class StableDiffusionReleasePins
 
     /// <summary>
     ///     Resolves the pinned asset for the given OS/arch/backend, falling back to the CPU floor when no GPU prebuilt
-    ///     exists for the host. Returns <see langword="null" /> only when even the CPU floor is unavailable.
+    ///     exists for the host. Returns <see langword="null" /> only when even the CPU floor is unavailable. Runtime
+    ///     acquisition uses this fallback only for an explicit CPU selection; GPU selections must use
+    ///     <see cref="ResolveExact" /> so the resolved bytes cannot contradict the requested backend.
     /// </summary>
     public static StableDiffusionAssetPin? Resolve(OSPlatform os, Architecture arch, SdGpuBackend backend)
     {
@@ -101,5 +107,14 @@ public static class StableDiffusionReleasePins
 
         // Fall back to the universal CPU floor for the host OS/arch.
         return Pins.TryGetValue((os, arch, SdGpuBackend.Cpu), out var cpuPin) ? cpuPin : null;
+    }
+
+    /// <summary>
+    ///     Resolves only the exact OS/arch/backend asset. Unlike <see cref="Resolve"/>, a missing GPU prebuilt never
+    ///     substitutes the CPU floor.
+    /// </summary>
+    public static StableDiffusionAssetPin? ResolveExact(OSPlatform os, Architecture arch, SdGpuBackend backend)
+    {
+        return Pins.TryGetValue((os, arch, backend), out var pin) ? pin : null;
     }
 }

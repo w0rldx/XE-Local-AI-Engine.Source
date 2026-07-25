@@ -6,6 +6,7 @@ using XE_Local_AI_Engine.Client.Endpoints.Images.V1.Mappers;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Images;
+using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 
 /// <summary>
 ///     FastEndpoints handler that enqueues a text-to-image job (POST images/jobs). Thin transport over the
@@ -13,15 +14,21 @@ using XE_Local_AI_Engine.Client.Services.Images;
 ///     coordinator (which persists the job Queued with the prompt encrypted at rest and runs generation detached), then
 ///     returns the freshly-created Queued view. Operator-gated.
 /// </summary>
-public sealed class CreateImageJobEndpoint(IImageJobCoordinator coordinator)
+public sealed class CreateImageJobEndpoint(IImageJobCoordinator coordinator, IImageRuntimeActivityGate activityGate)
     : Endpoint<CreateImageJobRequest, ImageJobResponse>
 {
     private readonly IImageJobCoordinator _coordinator = coordinator ?? throw new ArgumentNullException(nameof(coordinator));
+    private readonly IImageRuntimeActivityGate _activityGate = activityGate ?? throw new ArgumentNullException(nameof(activityGate));
 
     public override void Configure()
     {
         Post(LocalApiRoutes.Images.Jobs);
         Policies(NodeAuthorizationPolicies.Operator);
+        Description(builder => builder
+                               .Accepts<CreateImageJobRequest>("application/json")
+                               .Produces<ImageJobResponse>(StatusCodes.Status200OK)
+                               .ProducesProblemFE(StatusCodes.Status400BadRequest)
+                               .Produces<ImageRuntimeBlockedResponse>(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(CreateImageJobRequest req, CancellationToken ct)
@@ -48,7 +55,21 @@ public sealed class CreateImageJobEndpoint(IImageJobCoordinator coordinator)
             return;
         }
 
-        var jobId = await _coordinator.EnqueueAsync(req.ToInput(), ct).ConfigureAwait(false);
+        Guid jobId;
+        try
+        {
+            jobId = await _coordinator.EnqueueAsync(req.ToInput(), ct).ConfigureAwait(false);
+        }
+        catch (ImageRuntimeBusyException exception)
+        {
+            await Send.ResultAsync(Results.Conflict(new ImageRuntimeBlockedResponse
+            {
+                Reason = "runtime-busy",
+                Message = exception.Message,
+                Activity = _activityGate.GetSnapshot().ToResponse()
+            })).ConfigureAwait(false);
+            return;
+        }
 
         var view = await _coordinator.GetAsync(jobId, ct).ConfigureAwait(false);
         if (view is null)

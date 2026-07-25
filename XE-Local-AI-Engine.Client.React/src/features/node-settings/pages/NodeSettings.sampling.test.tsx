@@ -85,6 +85,10 @@ vi.mock("@/features/node-settings/components/SourceBuildCard", () => ({
 	SourceBuildCard: () => null,
 }));
 
+vi.mock("@/features/node-settings/components/ImageRuntimeSourceBuildCard", () => ({
+	ImageRuntimeSourceBuildCard: () => null,
+}));
+
 describe("NodeSettings developer-mode switch", () => {
 	beforeEach(() => {
 		localStorage.clear();

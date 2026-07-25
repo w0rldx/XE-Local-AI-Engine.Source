@@ -41,6 +41,7 @@ using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.PreviewWorkflows;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using LoggerExtensions = XE_Local_AI_Engine.Client.Common.Extensions.LoggerExtensions;
 
 /// <summary>
@@ -160,6 +161,7 @@ public static class ConfigureServices
         // status transitions push live to operator clients (ImageJobHub mapped in Program). IHubContext is singleton-safe,
         // so the singleton image-job coordinator can resolve it.
         builder.Services.AddSingleton<IImageJobEventPublisher, ImageJobEventPublisher>();
+        builder.Services.AddSingleton<IStableDiffusionCppSourceBuildEventPublisher, StableDiffusionCppSourceBuildEventPublisher>();
 
         // Development ships enabled. Keep the no-op publisher only when the administrator explicitly disables it.
         if (configuration.GetValue($"{DevelopmentOptions.Section}:Enabled", defaultValue: true))

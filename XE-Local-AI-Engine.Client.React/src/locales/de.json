@@ -1190,6 +1190,82 @@
 					"repositoryPlaceholder": "https://github.com/owner/llama.cpp"
 				}
 			},
+			"imageRuntime": {
+				"sourceBuild": {
+					"title": "stable-diffusion.cpp aus Quellcode bauen",
+					"description": "Die Bildlaufzeit aus dem offiziellen stable-diffusion.cpp-Upstream oder einem vertrauenswürdigen öffentlichen GitHub-Fork bauen und verwalten.",
+					"devBadge": "Entwicklung",
+					"recoveryBadge": "Wiederherstellung",
+					"recoveryDescription": "Die verwaltete Bildlaufzeit ist ungültig und bleibt gesperrt. Wirf alle aktiven Bildprozesse aus und entferne anschließend die ungültige Laufzeit, bevor die Bilderzeugung erneut verwendet wird.",
+					"backend": "Backend",
+					"backends": {
+						"cpu": "CPU",
+						"vulkan": "Vulkan",
+						"cuda": "CUDA"
+					},
+					"source": "Quelle",
+					"sources": {
+						"official": "Offizieller Upstream",
+						"custom": "Benutzerdefinierter öffentlicher Fork"
+					},
+					"revisions": {
+						"enginePinned": "Von der Engine festgelegte Revision",
+						"defaultBranch": "Standardbranch",
+						"explicitCommit": "Expliziter Commit"
+					},
+					"revisionBehavior": {
+						"enginePinned": "Offizielle Builds verwenden den vom Server ausgewählten, festgelegten Engine-Commit.",
+						"defaultBranch": "Ohne Commit-SHA verwendet ein benutzerdefinierter Build den Standardbranch des Repositorys.",
+						"explicitCommit": "Dieser benutzerdefinierte Build verwendet exakt die unten eingegebene 40-stellige Commit-SHA."
+					},
+					"prerequisites": {
+						"os-is-linux": "Linux-Host",
+						"cmake": "CMake",
+						"gcc": "C-Compiler",
+						"g++": "C++-Compiler",
+						"make-or-ninja": "Make oder Ninja",
+						"git": "Git",
+						"nvidia-gpu": "NVIDIA-GPU",
+						"nvcc": "CUDA-Compiler",
+						"nvidia-smi": "NVIDIA-Treiber",
+						"glslc": "Vulkan-Shader-Compiler",
+						"vulkaninfo": "Vulkan-Laufzeit",
+						"free-disk": "Freier Speicherplatz"
+					},
+					"prerequisiteAvailability": {
+						"available": "Verfügbar",
+						"missing": "Fehlt oder ist nicht verfügbar"
+					},
+					"repository": "GitHub-Repository",
+					"repositoryPlaceholder": "https://github.com/owner/stable-diffusion.cpp",
+					"riskWarning": "Code aus einem benutzerdefinierten Repository wird mit den Rechten der App ausgeführt. Der Code gilt als vertrauenswürdig und läuft nicht in einer Sandbox.",
+					"riskAcknowledgement": "Ich vertraue diesem öffentlichen GitHub-Repository und akzeptiere das Risiko der Codeausführung.",
+					"commit": "Commit-SHA (optional)",
+					"validity": {
+						"active": "Aktive verwaltete {{backend}}-Bildlaufzeit",
+						"invalid": "Ungültige verwaltete {{backend}}-Bildlaufzeit"
+					},
+					"activity": {
+						"idle": "Bildlaufzeit im Leerlauf",
+						"busy": "Bildlaufzeit beschäftigt",
+						"detail": "{{jobs}} Auftrag/Aufträge, {{starting}} im Start, {{processes}} aktive(r) Prozess(e)"
+					},
+					"build": "Bauen",
+					"rebuild": "Neu bauen",
+					"cancel": "Abbrechen",
+					"eject": "Bildprozesse auswerfen",
+					"remove": "Entfernen",
+					"startError": "Der Quellbuild der Bildlaufzeit konnte nicht gestartet werden.",
+					"cancelError": "Der Quellbuild der Bildlaufzeit konnte nicht abgebrochen werden.",
+					"ejectError": "Die Prozesse der Bildlaufzeit konnten nicht ausgeworfen werden.",
+					"removeError": "Die verwaltete Bildlaufzeit konnte nicht entfernt werden.",
+					"validation": {
+						"commit": "Der Commit muss eine vollständige hexadezimale SHA mit 40 Zeichen sein.",
+						"repository": "Verwende eine kanonische öffentliche GitHub-HTTPS-Repository-URL.",
+						"acknowledgement": "Bestätige, dass Code aus dem benutzerdefinierten Repository mit den Rechten der App ausgeführt wird."
+					}
+				}
+			},
 			"hfToken": {
 				"title": "Hugging-Face-Token",
 				"configured": "Token konfiguriert",

@@ -41,6 +41,11 @@ public static class StableDiffusionCppServiceCollectionExtensions
         services.TryAddSingleton(overrideOptions);
 
         services.TryAddSingleton(new StableDiffusionRuntimeOptions());
+        services.TryAddSingleton<IImageRuntimeActivityGate, ImageRuntimeActivityGate>();
+        services.TryAddSingleton<IStableDiffusionInstalledRuntimeStore, StableDiffusionInstalledRuntimeStore>();
+        services.TryAddSingleton<IStableDiffusionManagedSourceBuildSignal, StableDiffusionManagedSourceBuildSignal>();
+        services.TryAddSingleton<IStableDiffusionCppSourceBuildPrerequisiteProbe, StableDiffusionCppSourceBuildPrerequisiteProbe>();
+        services.TryAddSingleton<IStableDiffusionCppSourceBuildEventPublisher, NullStableDiffusionCppSourceBuildEventPublisher>();
 
         services.AddHttpClient(BinaryHttpClientName);
 
@@ -51,13 +56,19 @@ public static class StableDiffusionCppServiceCollectionExtensions
         services.TryAddSingleton<ISdGpuBackendSelector>(static sp =>
             new SdGpuBackendSelector(sp.GetRequiredService<IHardwareProfiler>(),
                 sp.GetRequiredService<StableDiffusionServerRuntimeOverrideOptions>(),
-                sp.GetRequiredService<IVulkanDeviceProbe>()));
+                sp.GetRequiredService<IVulkanDeviceProbe>(),
+                sp.GetRequiredService<IStableDiffusionManagedSourceBuildSignal>()));
 
         services.TryAddSingleton<IStableDiffusionBinaryManager>(static sp =>
             new StableDiffusionCppBinaryManager(sp.GetRequiredService<IHttpClientFactory>().CreateClient(BinaryHttpClientName),
                 cacheRoot: null,
                 activeTag: null,
-                sp.GetRequiredService<StableDiffusionServerRuntimeOverrideOptions>()));
+                sp.GetRequiredService<StableDiffusionServerRuntimeOverrideOptions>(),
+                sp.GetRequiredService<IStableDiffusionInstalledRuntimeStore>(),
+                sp.GetRequiredService<IStableDiffusionManagedSourceBuildSignal>()));
+
+        services.TryAddSingleton<IStableDiffusionCppSourceBuildService, StableDiffusionCppSourceBuildService>();
+        services.AddHostedService<StableDiffusionCppSourceBuildLifecycle>();
 
         return services;
     }

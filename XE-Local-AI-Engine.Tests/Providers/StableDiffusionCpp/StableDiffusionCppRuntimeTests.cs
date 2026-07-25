@@ -195,6 +195,13 @@ public sealed class StableDiffusionCppRuntimeTests
             return Task.CompletedTask;
         }
 
+        public Task<ImageServerEvictAllResult> EvictAllAsync(CancellationToken ct)
+        {
+            EvictCount++;
+            return Task.FromResult(new ImageServerEvictAllResult(true,
+                new ImageRuntimeActivitySnapshot(0, 0, 0, MutationReserved: false, EvictionReserved: false)));
+        }
+
         // The runtime now acquires a job lease across submit→poll→complete. This fake has no resident daemon
         // to lease, so it returns null — the runtime then proceeds leaseless, exactly as it does against a genuinely
         // absent daemon, keeping these runtime tests behaviour-identical.

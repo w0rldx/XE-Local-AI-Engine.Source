@@ -218,6 +218,24 @@ A startup reaper (`StaleLlamaServerReaper`, in `XE-Local-AI-Engine.Providers.Lla
 - GPU offload requires `--n-gpu-layers` to actually be emitted for non-CPU variants. It was once silently missing: CUDA initialized, zero layers offloaded, model quietly ran on CPU. If you touch `LlamaServerProcessSupervisor.BuildLaunchSpec`, confirm it's still wired.
 - **`LlamaCppSourceBuildRequestValidation.Normalize` must stay IDEMPOTENT — it runs at three layers.** The FluentValidation request validator, `StartLlamaCppSourceBuildEndpoint`, and `LlamaCppSourceBuildService.StartAsync` each normalized the same request. For `source=official` the first pass *writes* the server-selected `Repository`, and the strict "the official repository is selected by the server" rule then rejected that value on the second pass — so **every** official-source build answered 409 `{"reason":"prerequisites"}` from the day the feature was generalized, while custom-source builds worked fine (their normalization was already idempotent). The rule is now "reject any repository that is not the canonical one" and the endpoint no longer pre-normalizes. If you add another normalization layer, `Normalize(Normalize(x)) == Normalize(x)` must hold (`LlamaCppSourceBuildCoreTests.Normalize_*AppliedTwice_IsIdempotent`).
 
+### stable-diffusion.cpp managed source builds
+
+- **Eject first, then build/remove.** The image-runtime activity coordinator atomically blocks mutation while an image
+  job, spawn/readiness lease, or resident `sd-server` exists. The source-build start/remove endpoints deliberately
+  return `409 runtime-busy`; do not bypass the gate. Use the eject action, then retry the mutation.
+- **An installed managed-runtime record is authoritative, including an invalid tombstone.** Backend mismatch, path/SHA
+  drift, or unsafe permissions fail closed instead of falling back to a prebuilt. Clearing the in-memory managed signal
+  prevents the selector from advertising dead bytes, but recovery still requires an explicit remove/rebuild. The
+  invalid-state eject/remove UI must remain reachable even when Development Mode is disabled.
+- **A requested GPU backend never substitutes the CPU prebuilt.** Binary acquisition uses
+  `StableDiffusionReleasePins.ResolveExact` for CUDA/Vulkan and fails if that exact OS/arch/backend asset does not exist;
+  only an explicit CPU selection uses the CPU floor. This keeps the UI/runtime backend claim aligned with the bytes
+  actually launched, especially for Linux CUDA where source build is the supported lane.
+- **Source-build subprocesses must use the scrubbed allowlist and isolated Git home.** Inheriting the host environment
+  re-enables Git URL rewriting/hooks and leaks compiler/loader/credential variables into arbitrary upstream build
+  scripts and streamed logs. Keep Git prompts disabled, close stdin, and fetch explicit revisions by SHA with protocol
+  hardening; a plain clone followed by checkout cannot resolve commits outside the default branch.
+
 ### Per-node state must never be written to the install directory
 
 Route every writer of per-node state (settings, encrypted credential stores, hardware-profile cache) through **`INodeDataDirectory`** (`XE-Local-AI-Engine.Providers.Abstractions/INodeDataDirectory.cs`), which resolves to `LocalApplicationData` in desktop mode. Writing to `ContentRootPath` breaks on a self-contained desktop build where that directory may not be writable.

@@ -443,9 +443,21 @@ public static class LocalApiRoutes
         // Image-model weight download (POST start). Fire-and-forget file-set pull; presence surfaces via Models.
         public const string ModelDownloads = "images/models/downloads";
 
+        // Managed stable-diffusion.cpp runtime and Linux source-build orchestration.
+        public const string Runtime = "images/runtime";
+        public const string RuntimeEject = "images/runtime/eject";
+        public const string RuntimeSourceBuild = "images/runtime/source-build";
+        public const string RuntimeSourceBuildPrerequisites = "images/runtime/source-build/prerequisites";
+        public const string RuntimeSourceBuildStatus = "images/runtime/source-build/status";
+        public const string RuntimeSourceBuildCancel = "images/runtime/source-build/cancel";
+        public const string RuntimeSourceBuildRemove = "images/runtime/source-build/remove";
+
         // SignalR push hub for image-job progress. Full path (mapped via MapHub, not the FastEndpoints prefix),
         // mirroring the other local hubs. Each push carries the coarse status + seq.
         public const string Hub = "/api/local/v1/images/hub";
+
+        // SignalR push hub for stable-diffusion.cpp source-build phase and log changes.
+        public const string RuntimeSourceBuildHub = "/api/local/v1/images/runtime/source-build/hub";
     }
 
     /// <summary>

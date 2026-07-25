@@ -5141,6 +5141,53 @@
         ]
       }
     },
+    "/api/local/v1/images/runtime/source-build/cancel": {
+      "post": {
+        "tags": [
+          "Images"
+        ],
+        "operationId": "cancelStableDiffusionCppSourceBuild",
+        "requestBody": {
+          "x-name": "ImageRuntimeActionRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1ImageRuntimeActionRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1StableDiffusionCppSourceBuildStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/images/jobs": {
       "post": {
         "tags": [
@@ -5171,11 +5218,31 @@
               }
             }
           },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                }
+              }
+            }
+          },
           "401": {
             "description": "Unauthorized"
           },
           "403": {
             "description": "Forbidden"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1ImageRuntimeBlockedResponse"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -5208,6 +5275,63 @@
           },
           "403": {
             "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/images/runtime/eject": {
+      "post": {
+        "tags": [
+          "Images"
+        ],
+        "operationId": "ejectImageRuntime",
+        "requestBody": {
+          "x-name": "ImageRuntimeActionRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1ImageRuntimeActionRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1ImageRuntimeStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1ImageRuntimeBlockedResponse"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -5265,6 +5389,132 @@
         ]
       }
     },
+    "/api/local/v1/images/runtime": {
+      "get": {
+        "tags": [
+          "Images"
+        ],
+        "operationId": "getImageRuntimeStatus",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1ImageRuntimeStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/images/runtime/source-build/prerequisites": {
+      "get": {
+        "tags": [
+          "Images"
+        ],
+        "operationId": "getStableDiffusionCppSourceBuildPrerequisites",
+        "parameters": [
+          {
+            "name": "backend",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1StableDiffusionCppSourceBackendDto"
+                }
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1StableDiffusionCppSourceBuildPrerequisitesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/images/runtime/source-build/status": {
+      "get": {
+        "tags": [
+          "Images"
+        ],
+        "operationId": "getStableDiffusionCppSourceBuildStatus",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1StableDiffusionCppSourceBuildStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/images/models": {
       "get": {
         "tags": [
@@ -5287,6 +5537,63 @@
           },
           "403": {
             "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/images/runtime/source-build/remove": {
+      "post": {
+        "tags": [
+          "Images"
+        ],
+        "operationId": "removeStableDiffusionCppSourceBuild",
+        "requestBody": {
+          "x-name": "ImageRuntimeActionRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1ImageRuntimeActionRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1ImageRuntimeStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1ImageRuntimeBlockedResponse"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -5372,6 +5679,73 @@
           },
           "403": {
             "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/images/runtime/source-build": {
+      "post": {
+        "tags": [
+          "Images"
+        ],
+        "operationId": "startStableDiffusionCppSourceBuild",
+        "requestBody": {
+          "x-name": "StartStableDiffusionCppSourceBuildRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1StartStableDiffusionCppSourceBuildRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1StartStableDiffusionCppSourceBuildResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1ImageRuntimeBlockedResponse"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -13540,6 +13914,144 @@
         "type": "object",
         "additionalProperties": false
       },
+      "XE_Local_AI_EngineClientEndpointsImagesV1StableDiffusionCppSourceBuildStatusResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "phase",
+          "isRunning",
+          "terminal",
+          "logStartSequence",
+          "logLines"
+        ],
+        "properties": {
+          "phase": {
+            "type": "string"
+          },
+          "isRunning": {
+            "type": "boolean"
+          },
+          "terminal": {
+            "type": "boolean"
+          },
+          "logStartSequence": {
+            "type": "integer"
+          },
+          "logLines": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "sanitizedError": {
+            "type": "string",
+            "nullable": true
+          },
+          "currentBuild": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1StableDiffusionCppSourceBuildDescriptorResponse"
+              }
+            ]
+          },
+          "startedAtUtc": {
+            "type": "integer",
+            "nullable": true
+          },
+          "completedAtUtc": {
+            "type": "integer",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsImagesV1StableDiffusionCppSourceBuildDescriptorResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "buildId",
+          "backend",
+          "source",
+          "repository",
+          "revisionMode"
+        ],
+        "properties": {
+          "buildId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "backend": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1StableDiffusionCppSourceBackendDto"
+          },
+          "source": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1StableDiffusionCppSourceSelectionDto"
+          },
+          "repository": {
+            "type": "string"
+          },
+          "revisionMode": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1StableDiffusionCppSourceRevisionModeDto"
+          },
+          "requestedCommit": {
+            "type": "string",
+            "nullable": true
+          },
+          "resolvedCommit": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsImagesV1StableDiffusionCppSourceBackendDto": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Cpu",
+          "Vulkan",
+          "Cuda"
+        ],
+        "enum": [
+          "cpu",
+          "vulkan",
+          "cuda"
+        ]
+      },
+      "XE_Local_AI_EngineClientEndpointsImagesV1StableDiffusionCppSourceSelectionDto": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Official",
+          "Custom"
+        ],
+        "enum": [
+          "official",
+          "custom"
+        ]
+      },
+      "XE_Local_AI_EngineClientEndpointsImagesV1StableDiffusionCppSourceRevisionModeDto": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "EnginePinned",
+          "DefaultBranch",
+          "ExplicitCommit"
+        ],
+        "enum": [
+          "enginePinned",
+          "defaultBranch",
+          "explicitCommit"
+        ]
+      },
+      "XE_Local_AI_EngineClientEndpointsImagesV1ImageRuntimeActionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "accepted": {
+            "type": "boolean",
+            "nullable": true
+          }
+        }
+      },
       "XE_Local_AI_EngineClientEndpointsImagesV1ImageJobResponse": {
         "type": "object",
         "additionalProperties": false,
@@ -13626,6 +14138,61 @@
           }
         }
       },
+      "XE_Local_AI_EngineClientEndpointsImagesV1ImageRuntimeBlockedResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reason",
+          "message",
+          "activity"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "activity": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1ImageRuntimeActivityResponse"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsImagesV1ImageRuntimeActivityResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "activeJobCount",
+          "spawnReadinessCount",
+          "residentProcessCount",
+          "mutationReserved",
+          "evictionReserved",
+          "isBusy"
+        ],
+        "properties": {
+          "activeJobCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "spawnReadinessCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "residentProcessCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "mutationReserved": {
+            "type": "boolean"
+          },
+          "evictionReserved": {
+            "type": "boolean"
+          },
+          "isBusy": {
+            "type": "boolean"
+          }
+        }
+      },
       "XE_Local_AI_EngineClientEndpointsImagesV1CreateImageJobRequest": {
         "type": "object",
         "additionalProperties": false,
@@ -13669,6 +14236,129 @@
             "format": "double"
           }
         }
+      },
+      "XE_Local_AI_EngineClientEndpointsImagesV1ImageRuntimeStatusResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "activity"
+        ],
+        "properties": {
+          "managedRuntime": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1StableDiffusionInstalledRuntimeResponse"
+              }
+            ]
+          },
+          "activity": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1ImageRuntimeActivityResponse"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsImagesV1StableDiffusionInstalledRuntimeResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "validity",
+          "desiredBackend",
+          "sourceRepository",
+          "sourceCommit",
+          "sourceSelection",
+          "sourceRevisionMode",
+          "installedAtUtc"
+        ],
+        "properties": {
+          "validity": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1StableDiffusionInstalledRuntimeValidityDto"
+          },
+          "desiredBackend": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1StableDiffusionCppSourceBackendDto"
+          },
+          "sourceRepository": {
+            "type": "string"
+          },
+          "sourceCommit": {
+            "type": "string"
+          },
+          "sourceSelection": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1StableDiffusionCppSourceSelectionDto"
+          },
+          "sourceRevisionMode": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1StableDiffusionCppSourceRevisionModeDto"
+          },
+          "sourceRequestedCommit": {
+            "type": "string",
+            "nullable": true
+          },
+          "installedAtUtc": {
+            "type": "integer"
+          },
+          "invalidReason": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsImagesV1StableDiffusionInstalledRuntimeValidityDto": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Active",
+          "Invalid"
+        ],
+        "enum": [
+          "active",
+          "invalid"
+        ]
+      },
+      "XE_Local_AI_EngineClientEndpointsImagesV1StableDiffusionCppSourceBuildPrerequisitesResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "backend",
+          "items",
+          "canBuild"
+        ],
+        "properties": {
+          "backend": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1StableDiffusionCppSourceBackendDto"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1StableDiffusionCppSourceBuildPrerequisiteItemResponse"
+            }
+          },
+          "canBuild": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsImagesV1StableDiffusionCppSourceBuildPrerequisiteItemResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "satisfied",
+          "detail"
+        ],
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "satisfied": {
+            "type": "boolean"
+          },
+          "detail": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsImagesV1GetStableDiffusionCppSourceBuildPrerequisitesRequest": {
+        "type": "object",
+        "additionalProperties": false
       },
       "XE_Local_AI_EngineClientEndpointsImagesV1ListImageJobsResponse": {
         "type": "object",
@@ -13831,6 +14521,50 @@
           "sha256": {
             "type": "string",
             "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsImagesV1StartStableDiffusionCppSourceBuildResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "started",
+          "status"
+        ],
+        "properties": {
+          "started": {
+            "type": "boolean"
+          },
+          "status": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1StableDiffusionCppSourceBuildStatusResponse"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsImagesV1StartStableDiffusionCppSourceBuildRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "backend",
+          "source",
+          "acknowledgeCustomSourceRisk"
+        ],
+        "properties": {
+          "backend": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1StableDiffusionCppSourceBackendDto"
+          },
+          "source": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1StableDiffusionCppSourceSelectionDto"
+          },
+          "repository": {
+            "type": "string",
+            "nullable": true
+          },
+          "commit": {
+            "type": "string",
+            "nullable": true
+          },
+          "acknowledgeCustomSourceRisk": {
+            "type": "boolean"
           }
         }
       },

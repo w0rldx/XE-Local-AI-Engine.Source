@@ -1763,6 +1763,42 @@ export const zXeLocalAiEngineClientEndpointsInvocationsV1InvocationMonitorRespon
 
 export const zXeLocalAiEngineClientEndpointsImagesV1ImageJobRouteRequest = z.record(z.string(), z.never());
 
+export const zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBackendDto = z.enum(["cpu", "vulkan", "cuda"]);
+
+export const zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceSelectionDto = z.enum(["official", "custom"]);
+
+export const zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceRevisionModeDto = z.enum([
+	"enginePinned",
+	"defaultBranch",
+	"explicitCommit",
+]);
+
+export const zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildDescriptorResponse = z.object({
+	buildId: z.guid(),
+	backend: zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBackendDto,
+	source: zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceSelectionDto,
+	repository: z.string(),
+	revisionMode: zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceRevisionModeDto,
+	requestedCommit: z.string().nullish(),
+	resolvedCommit: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildStatusResponse = z.object({
+	phase: z.string(),
+	isRunning: z.boolean(),
+	terminal: z.boolean(),
+	logStartSequence: z.int(),
+	logLines: z.array(z.string()),
+	sanitizedError: z.string().nullish(),
+	currentBuild: zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildDescriptorResponse.nullish(),
+	startedAtUtc: z.int().nullish(),
+	completedAtUtc: z.int().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1ImageRuntimeActionRequest = z.object({
+	accepted: z.boolean().nullish(),
+});
+
 export const zXeLocalAiEngineClientEndpointsImagesV1ImageJobResponse = z.object({
 	id: z.guid(),
 	modelName: z.string(),
@@ -1793,6 +1829,30 @@ export const zXeLocalAiEngineClientEndpointsImagesV1ImageJobResponse = z.object(
 	cancellationRequestedAtUtc: z.int().nullish(),
 });
 
+export const zXeLocalAiEngineClientEndpointsImagesV1ImageRuntimeActivityResponse = z.object({
+	activeJobCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	spawnReadinessCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	residentProcessCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	mutationReserved: z.boolean(),
+	evictionReserved: z.boolean(),
+	isBusy: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1ImageRuntimeBlockedResponse = z.object({
+	reason: z.string(),
+	message: z.string(),
+	activity: zXeLocalAiEngineClientEndpointsImagesV1ImageRuntimeActivityResponse,
+});
+
 export const zXeLocalAiEngineClientEndpointsImagesV1CreateImageJobRequest = z.object({
 	modelName: z.string(),
 	prompt: z.string(),
@@ -1816,6 +1876,42 @@ export const zXeLocalAiEngineClientEndpointsImagesV1CreateImageJobRequest = z.ob
 	sampler: z.string().nullish(),
 	cfgScale: z.number().optional(),
 });
+
+export const zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionInstalledRuntimeValidityDto = z.enum(["active", "invalid"]);
+
+export const zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionInstalledRuntimeResponse = z.object({
+	validity: zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionInstalledRuntimeValidityDto,
+	desiredBackend: zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBackendDto,
+	sourceRepository: z.string(),
+	sourceCommit: z.string(),
+	sourceSelection: zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceSelectionDto,
+	sourceRevisionMode: zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceRevisionModeDto,
+	sourceRequestedCommit: z.string().nullish(),
+	installedAtUtc: z.int(),
+	invalidReason: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1ImageRuntimeStatusResponse = z.object({
+	managedRuntime: zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionInstalledRuntimeResponse.nullish(),
+	activity: zXeLocalAiEngineClientEndpointsImagesV1ImageRuntimeActivityResponse,
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildPrerequisiteItemResponse = z.object({
+	key: z.string(),
+	satisfied: z.boolean(),
+	detail: z.string(),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildPrerequisitesResponse = z.object({
+	backend: zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBackendDto,
+	items: z.array(zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildPrerequisiteItemResponse),
+	canBuild: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1GetStableDiffusionCppSourceBuildPrerequisitesRequest = z.record(
+	z.string(),
+	z.never(),
+);
 
 export const zXeLocalAiEngineClientEndpointsImagesV1ListImageJobsResponse = z.object({
 	items: z.array(zXeLocalAiEngineClientEndpointsImagesV1ImageJobResponse),
@@ -1861,6 +1957,19 @@ export const zXeLocalAiEngineClientEndpointsImagesV1StartImageModelDownloadReque
 	kind: z.string().nullish(),
 	revision: z.string().nullish(),
 	parts: z.array(zXeLocalAiEngineClientEndpointsImagesV1ImageModelPartDownloadRequest),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1StartStableDiffusionCppSourceBuildResponse = z.object({
+	started: z.boolean(),
+	status: zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildStatusResponse,
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1StartStableDiffusionCppSourceBuildRequest = z.object({
+	backend: zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBackendDto,
+	source: zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceSelectionDto,
+	repository: z.string().nullish(),
+	commit: z.string().nullish(),
+	acknowledgeCustomSourceRisk: z.boolean(),
 });
 
 export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentCapabilityResponse = z.object({
@@ -3696,6 +3805,14 @@ export const zCancelImageJobPath = z.object({
  */
 export const zCancelImageJobResponse = z.void();
 
+export const zCancelStableDiffusionCppSourceBuildBody = zXeLocalAiEngineClientEndpointsImagesV1ImageRuntimeActionRequest;
+
+/**
+ * Success
+ */
+export const zCancelStableDiffusionCppSourceBuildResponse =
+	zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildStatusResponse;
+
 /**
  * Success
  */
@@ -3707,6 +3824,13 @@ export const zCreateImageJobBody = zXeLocalAiEngineClientEndpointsImagesV1Create
  * Success
  */
 export const zCreateImageJobResponse = zXeLocalAiEngineClientEndpointsImagesV1ImageJobResponse;
+
+export const zEjectImageRuntimeBody = zXeLocalAiEngineClientEndpointsImagesV1ImageRuntimeActionRequest;
+
+/**
+ * Success
+ */
+export const zEjectImageRuntimeResponse = zXeLocalAiEngineClientEndpointsImagesV1ImageRuntimeStatusResponse;
 
 export const zGetImageJobPath = z.object({
 	jobId: z.guid(),
@@ -3720,7 +3844,35 @@ export const zGetImageJobResponse = zXeLocalAiEngineClientEndpointsImagesV1Image
 /**
  * Success
  */
+export const zGetImageRuntimeStatusResponse = zXeLocalAiEngineClientEndpointsImagesV1ImageRuntimeStatusResponse;
+
+export const zGetStableDiffusionCppSourceBuildPrerequisitesQuery = z.object({
+	backend: zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBackendDto,
+});
+
+/**
+ * Success
+ */
+export const zGetStableDiffusionCppSourceBuildPrerequisitesResponse =
+	zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildPrerequisitesResponse;
+
+/**
+ * Success
+ */
+export const zGetStableDiffusionCppSourceBuildStatusResponse =
+	zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildStatusResponse;
+
+/**
+ * Success
+ */
 export const zListImageModelsResponse = zXeLocalAiEngineClientEndpointsImagesV1ListImageModelsResponse;
+
+export const zRemoveStableDiffusionCppSourceBuildBody = zXeLocalAiEngineClientEndpointsImagesV1ImageRuntimeActionRequest;
+
+/**
+ * Success
+ */
+export const zRemoveStableDiffusionCppSourceBuildResponse = zXeLocalAiEngineClientEndpointsImagesV1ImageRuntimeStatusResponse;
 
 export const zRetrieveImagePath = z.object({
 	imageId: z.guid(),
@@ -3737,6 +3889,15 @@ export const zStartImageModelDownloadBody = zXeLocalAiEngineClientEndpointsImage
  * Success
  */
 export const zStartImageModelDownloadResponse = zXeLocalAiEngineClientEndpointsImagesV1StartImageModelDownloadResponse;
+
+export const zStartStableDiffusionCppSourceBuildBody =
+	zXeLocalAiEngineClientEndpointsImagesV1StartStableDiffusionCppSourceBuildRequest;
+
+/**
+ * Success
+ */
+export const zStartStableDiffusionCppSourceBuildResponse =
+	zXeLocalAiEngineClientEndpointsImagesV1StartStableDiffusionCppSourceBuildResponse;
 
 /**
  * Success

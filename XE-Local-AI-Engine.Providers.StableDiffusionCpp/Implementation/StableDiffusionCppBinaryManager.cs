@@ -7,10 +7,11 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Configuration;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 
 /// <summary>
-///     Default <see cref="IStableDiffusionBinaryManager" />: resolves the pinned prebuilt asset for the host, downloads
-///     it over HTTP, verifies its SHA256 against <see cref="StableDiffusionReleasePins" />, extracts it under a stable
-///     cache directory, and returns the resolved <c>sd-server</c> path. Never source-builds. Mirrors
-///     <c>LlamaCppBinaryManager</c>'s acquisition pipeline for the image runtime.
+///     Default <see cref="IStableDiffusionBinaryManager" />: validates and resolves the selected managed runtime or,
+///     when none is selected, downloads the exact pinned prebuilt asset for the host/backend, verifies its SHA256
+///     against <see cref="StableDiffusionReleasePins" />, extracts it under a stable cache directory, and returns the
+///     resolved <c>sd-server</c> path. Source compilation is delegated to
+///     <see cref="StableDiffusionCppSourceBuildService" />.
 /// </summary>
 /// <remarks>
 ///     <para>
@@ -35,6 +36,8 @@ public sealed class StableDiffusionCppBinaryManager : IStableDiffusionBinaryMana
     private readonly Architecture _arch;
     private readonly string _cacheRoot;
     private readonly HttpClient _httpClient;
+    private readonly IStableDiffusionInstalledRuntimeStore? _installedRuntimeStore;
+    private readonly IStableDiffusionManagedSourceBuildSignal? _managedSourceSignal;
     private readonly OSPlatform _os;
     private readonly StableDiffusionServerRuntimeOverrideOptions? _overrideOptions;
 
@@ -47,13 +50,17 @@ public sealed class StableDiffusionCppBinaryManager : IStableDiffusionBinaryMana
     public StableDiffusionCppBinaryManager(HttpClient httpClient,
         string? cacheRoot = null,
         string? activeTag = null,
-        StableDiffusionServerRuntimeOverrideOptions? overrideOptions = null)
+        StableDiffusionServerRuntimeOverrideOptions? overrideOptions = null,
+        IStableDiffusionInstalledRuntimeStore? installedRuntimeStore = null,
+        IStableDiffusionManagedSourceBuildSignal? managedSourceSignal = null)
         : this(httpClient,
             cacheRoot ?? DefaultCacheRoot(),
             activeTag ?? StableDiffusionReleasePins.PinnedTag,
             CurrentOsPlatform(),
             RuntimeInformation.ProcessArchitecture,
-            overrideOptions)
+            overrideOptions,
+            installedRuntimeStore,
+            managedSourceSignal)
     {
     }
 
@@ -63,7 +70,9 @@ public sealed class StableDiffusionCppBinaryManager : IStableDiffusionBinaryMana
         string activeTag,
         OSPlatform os,
         Architecture arch,
-        StableDiffusionServerRuntimeOverrideOptions? overrideOptions = null)
+        StableDiffusionServerRuntimeOverrideOptions? overrideOptions = null,
+        IStableDiffusionInstalledRuntimeStore? installedRuntimeStore = null,
+        IStableDiffusionManagedSourceBuildSignal? managedSourceSignal = null)
     {
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         ArgumentException.ThrowIfNullOrWhiteSpace(cacheRoot);
@@ -73,6 +82,8 @@ public sealed class StableDiffusionCppBinaryManager : IStableDiffusionBinaryMana
         _os = os;
         _arch = arch;
         _overrideOptions = overrideOptions;
+        _installedRuntimeStore = installedRuntimeStore;
+        _managedSourceSignal = managedSourceSignal;
     }
 
     /// <inheritdoc />
@@ -86,7 +97,33 @@ public sealed class StableDiffusionCppBinaryManager : IStableDiffusionBinaryMana
             return ResolveOverrideBinary(_overrideOptions);
         }
 
-        var pin = StableDiffusionReleasePins.Resolve(_os, _arch, backend)
+        var installed = _installedRuntimeStore is null
+            ? null
+            : await _installedRuntimeStore.ReadAsync(ct).ConfigureAwait(false);
+        if (installed is not null)
+        {
+            if (installed.DesiredBackend != backend)
+            {
+                throw new StableDiffusionRuntimeException("The selected managed stable-diffusion.cpp runtime backend is unavailable.");
+            }
+
+            if (installed.Validity != StableDiffusionInstalledRuntimeValidity.Active)
+            {
+                throw new StableDiffusionRuntimeException("The recorded managed stable-diffusion.cpp runtime is invalid and must be rebuilt or removed.");
+            }
+
+            var managed = await TryResolveManagedRuntimeAsync(installed, ct).ConfigureAwait(false);
+            if (managed is not null)
+            {
+                return managed;
+            }
+
+            throw new StableDiffusionRuntimeException("The recorded managed stable-diffusion.cpp runtime is unavailable or failed validation.");
+        }
+
+        var pin = (backend == SdGpuBackend.Cpu
+                      ? StableDiffusionReleasePins.Resolve(_os, _arch, backend)
+                      : StableDiffusionReleasePins.ResolveExact(_os, _arch, backend))
                   ?? throw new StableDiffusionRuntimeException("No prebuilt stable-diffusion.cpp runtime is available for this operating system and CPU architecture.");
 
         var backendDir = Path.Combine(_cacheRoot, "stable-diffusion.cpp", _activeTag, BackendSlug(backend));
@@ -110,6 +147,106 @@ public sealed class StableDiffusionCppBinaryManager : IStableDiffusionBinaryMana
         await EnsureCudartRuntimeAsync(pin, backend, backendDir, serverPath, ct).ConfigureAwait(false);
 
         return new SdBinary(serverPath, _activeTag, backend, IsPinnedFallback: true);
+    }
+
+    private async Task<SdBinary?> TryResolveManagedRuntimeAsync(StableDiffusionInstalledRuntimeState state, CancellationToken ct)
+    {
+        if (state.SourceBuildPath is not { Length: > 0 } buildPath
+            || state.ServerSha256 is not { Length: 64 } expectedSha
+            || !expectedSha.All(Uri.IsHexDigit))
+        {
+            await TombstoneAsync(state, "The managed runtime record is incomplete.", ct).ConfigureAwait(false);
+            return null;
+        }
+
+        try
+        {
+            var serverPath = Path.Combine(buildPath, OperatingSystem.IsWindows() ? "sd-server.exe" : "sd-server");
+            EnsureManagedPathSecure(serverPath);
+            if (!await HashMatchesAsync(serverPath, expectedSha, ct).ConfigureAwait(false))
+            {
+                await TombstoneAsync(state, "The managed runtime binary failed integrity verification.", ct).ConfigureAwait(false);
+                return null;
+            }
+
+            _managedSourceSignal?.SetActive(state.DesiredBackend);
+            return new SdBinary(serverPath, state.SourceCommit, state.DesiredBackend, IsPinnedFallback: false);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception) when (exception is IOException
+                                          or UnauthorizedAccessException
+                                          or ArgumentException
+                                          or NotSupportedException
+                                          or StableDiffusionRuntimeException)
+        {
+            await TombstoneAsync(state, "The managed runtime path failed security validation.", ct).ConfigureAwait(false);
+            return null;
+        }
+    }
+
+    private async Task TombstoneAsync(StableDiffusionInstalledRuntimeState state, string reason, CancellationToken ct)
+    {
+        if (_installedRuntimeStore is not null)
+        {
+            await _installedRuntimeStore.WriteAsync(state with
+            {
+                Validity = StableDiffusionInstalledRuntimeValidity.Invalid,
+                InvalidReason = reason,
+                SourceBuildPath = null,
+                ServerSha256 = null
+            }, ct).ConfigureAwait(false);
+        }
+
+        // A tombstone remains authoritative and fail-closed in the installed-runtime store, but it must no longer
+        // advertise an active managed source backend to the selector. Otherwise the stale in-memory signal keeps
+        // steering selection toward a runtime that this method has just proven unusable.
+        _managedSourceSignal?.Clear();
+    }
+
+    private void EnsureManagedPathSecure(string serverPath)
+    {
+        var root = Path.GetFullPath(_cacheRoot);
+        var full = Path.GetFullPath(serverPath);
+        var rootPrefix = root.EndsWith(Path.DirectorySeparatorChar) ? root : root + Path.DirectorySeparatorChar;
+        if (!full.StartsWith(rootPrefix, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)
+            || !File.Exists(full)
+            || new FileInfo(full).LinkTarget is not null)
+        {
+            throw new StableDiffusionRuntimeException("The managed stable-diffusion.cpp runtime path is invalid.");
+        }
+
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var fileMode = File.GetUnixFileMode(full);
+        if ((fileMode & UnixFileMode.OtherWrite) != UnixFileMode.None
+            || (fileMode & UnixFileMode.UserExecute) == UnixFileMode.None)
+        {
+            throw new StableDiffusionRuntimeException("The managed stable-diffusion.cpp runtime permissions are insecure.");
+        }
+
+        var directory = Path.GetDirectoryName(full);
+        while (!string.IsNullOrEmpty(directory) && directory.Length >= root.Length)
+        {
+            var info = new DirectoryInfo(directory);
+            if (info.LinkTarget is not null
+                || (File.GetUnixFileMode(directory) & UnixFileMode.OtherWrite) != UnixFileMode.None)
+            {
+                throw new StableDiffusionRuntimeException("The managed stable-diffusion.cpp runtime path chain is insecure.");
+            }
+
+            if (string.Equals(directory, root, StringComparison.Ordinal))
+            {
+                break;
+            }
+
+            directory = Path.GetDirectoryName(directory);
+        }
     }
 
     /// <summary>
