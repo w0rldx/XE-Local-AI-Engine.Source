@@ -6,8 +6,7 @@ using XE_Local_AI_Engine.Client.Endpoints.Images.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 
-public sealed class GetStableDiffusionCppSourceBuildPrerequisitesEndpoint(
-    IStableDiffusionCppSourceBuildPrerequisiteProbe prerequisiteProbe)
+public sealed class GetStableDiffusionCppSourceBuildPrerequisitesEndpoint(IStableDiffusionCppSourceBuildPrerequisiteProbe prerequisiteProbe)
     : Endpoint<GetStableDiffusionCppSourceBuildPrerequisitesRequest, StableDiffusionCppSourceBuildPrerequisitesResponse>
 {
     public override void Configure()

@@ -8,7 +8,12 @@ public sealed class StableDiffusionInstalledRuntimeStore : IStableDiffusionInsta
 {
     private const string DesiredFileName = "desired-runtime.json";
     private const string StateFileName = "installed-runtime.json";
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web) { WriteIndented = true };
+
+    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
+    {
+        WriteIndented = true
+    };
+
     private readonly string _desiredPath;
     private readonly SemaphoreSlim _lock = new(initialCount: 1, maxCount: 1);
     private readonly string _statePath;
@@ -49,8 +54,7 @@ public sealed class StableDiffusionInstalledRuntimeStore : IStableDiffusionInsta
             var desired = await TryReadAsync<DesiredRuntimeState>(_desiredPath, ct).ConfigureAwait(false);
             return desired is null || !IsValidDesired(desired)
                 ? null
-                : new StableDiffusionInstalledRuntimeState(
-                    StableDiffusionInstalledRuntimeValidity.Invalid,
+                : new StableDiffusionInstalledRuntimeState(StableDiffusionInstalledRuntimeValidity.Invalid,
                     desired.Backend,
                     desired.Repository,
                     desired.Commit,
@@ -131,8 +135,7 @@ public sealed class StableDiffusionInstalledRuntimeStore : IStableDiffusionInsta
     private static bool IsValidState(StableDiffusionInstalledRuntimeState state)
     {
         if (!Enum.IsDefined(state.Validity)
-            || !IsValidDesiredCore(
-                state.DesiredBackend,
+            || !IsValidDesiredCore(state.DesiredBackend,
                 state.SourceRepository,
                 state.SourceCommit,
                 state.SourceSelection,
@@ -157,8 +160,7 @@ public sealed class StableDiffusionInstalledRuntimeStore : IStableDiffusionInsta
 
     private static bool IsValidDesired(DesiredRuntimeState desired)
     {
-        return IsValidDesiredCore(
-            desired.Backend,
+        return IsValidDesiredCore(desired.Backend,
             desired.Repository,
             desired.Commit,
             desired.SourceSelection,
@@ -167,8 +169,7 @@ public sealed class StableDiffusionInstalledRuntimeStore : IStableDiffusionInsta
             desired.InstalledAtUtc);
     }
 
-    private static bool IsValidDesiredCore(
-        SdGpuBackend backend,
+    private static bool IsValidDesiredCore(SdGpuBackend backend,
         string? repository,
         string? commit,
         StableDiffusionCppSourceSelection sourceSelection,
@@ -201,12 +202,10 @@ public sealed class StableDiffusionInstalledRuntimeStore : IStableDiffusionInsta
         };
     }
 
-    private static StableDiffusionInstalledRuntimeState? TryCreateTombstone(
-        StableDiffusionInstalledRuntimeState state,
+    private static StableDiffusionInstalledRuntimeState? TryCreateTombstone(StableDiffusionInstalledRuntimeState state,
         string reason)
     {
-        return IsValidDesiredCore(
-            state.DesiredBackend,
+        return IsValidDesiredCore(state.DesiredBackend,
             state.SourceRepository,
             state.SourceCommit,
             state.SourceSelection,
@@ -232,8 +231,7 @@ public sealed class StableDiffusionInstalledRuntimeStore : IStableDiffusionInsta
 
         try
         {
-            return string.Equals(
-                StableDiffusionCppSourceBuildRequestValidation.NormalizeGitHubRepository(value),
+            return string.Equals(StableDiffusionCppSourceBuildRequestValidation.NormalizeGitHubRepository(value),
                 value,
                 StringComparison.Ordinal);
         }

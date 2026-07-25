@@ -191,8 +191,7 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
             BuildId = Guid.Parse("11111111-1111-4111-8111-111111111111")
         };
 
-        await publisher.PublishStatusAsync(
-            new StableDiffusionCppSourceBuildStatusEvent(StableDiffusionCppSourceBuildPhase.SmokeTesting, ["line"], 9, false, null, descriptor));
+        await publisher.PublishStatusAsync(new StableDiffusionCppSourceBuildStatusEvent(StableDiffusionCppSourceBuildPhase.SmokeTesting, ["line"], 9, false, null, descriptor));
 
         var payloadJson = JsonSerializer.Serialize(payload, payload!.GetType(), WebJsonOptions);
         using var body = JsonDocument.Parse(payloadJson);
@@ -220,7 +219,10 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
         using var client = factory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/images/runtime/eject")
         {
-            Content = JsonContent.Create(new ImageRuntimeActionRequest { Accepted = true })
+            Content = JsonContent.Create(new ImageRuntimeActionRequest
+            {
+                Accepted = true
+            })
         };
         factory.AddNodeBearerToken(request);
 
@@ -267,8 +269,7 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
         AssertEx.Equal("The image runtime is changing; try again shortly.", body.RootElement.GetProperty("message").GetString());
     }
 
-    private static TestingWebAppFactory CreateFactory(
-        IStableDiffusionCppSourceBuildService service,
+    private static TestingWebAppFactory CreateFactory(IStableDiffusionCppSourceBuildService service,
         IImageRuntimeActivityGate gate,
         IImageServerSupervisor? supervisor = null,
         IStableDiffusionInstalledRuntimeStore? store = null,

@@ -176,8 +176,10 @@ public sealed class OpenApiDocumentTests
         AssertSchemaProperties(schemas, "StableDiffusionCppSourceBuildDescriptorResponse",
             ["buildId", "backend", "source", "repository", "revisionMode", "requestedCommit", "resolvedCommit"]);
         AssertSchemaProperties(schemas, "StableDiffusionInstalledRuntimeResponse",
-            ["validity", "desiredBackend", "sourceRepository", "sourceCommit", "sourceSelection", "sourceRevisionMode",
-                "sourceRequestedCommit", "installedAtUtc", "invalidReason"]);
+        [
+            "validity", "desiredBackend", "sourceRepository", "sourceCommit", "sourceSelection", "sourceRevisionMode",
+            "sourceRequestedCommit", "installedAtUtc", "invalidReason"
+        ]);
         AssertSchemaProperties(schemas, "ImageRuntimeActivityResponse",
             ["activeJobCount", "spawnReadinessCount", "residentProcessCount", "mutationReserved", "evictionReserved", "isBusy"]);
         AssertSchemaProperties(schemas, "ImageRuntimeStatusResponse", ["managedRuntime", "activity"]);

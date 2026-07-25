@@ -177,10 +177,10 @@ public sealed class StableDiffusionCppBinaryManager : IStableDiffusionBinaryMana
             throw;
         }
         catch (Exception exception) when (exception is IOException
-                                          or UnauthorizedAccessException
-                                          or ArgumentException
-                                          or NotSupportedException
-                                          or StableDiffusionRuntimeException)
+                                              or UnauthorizedAccessException
+                                              or ArgumentException
+                                              or NotSupportedException
+                                              or StableDiffusionRuntimeException)
         {
             await TombstoneAsync(state, "The managed runtime path failed security validation.", ct).ConfigureAwait(false);
             return null;

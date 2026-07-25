@@ -5,8 +5,7 @@ using XE_Local_AI_Engine.Client.Endpoints.Images.V1;
 using XE_Local_AI_Engine.Client.Endpoints.Images.V1.Mappers;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 
-internal sealed class StableDiffusionCppSourceBuildEventPublisher(
-    IHubContext<StableDiffusionCppSourceBuildHub> hubContext) : IStableDiffusionCppSourceBuildEventPublisher
+internal sealed class StableDiffusionCppSourceBuildEventPublisher(IHubContext<StableDiffusionCppSourceBuildHub> hubContext) : IStableDiffusionCppSourceBuildEventPublisher
 {
     public Task PublishStatusAsync(StableDiffusionCppSourceBuildStatusEvent statusEvent, CancellationToken ct = default)
     {
