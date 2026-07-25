@@ -38,6 +38,16 @@ public sealed class SaveNodeSettingsEndpoint(
             return;
         }
 
+        // Like the speculative-mode guard above, validate the MERGED result so a partial request may enable the feature
+        // while keeping an already-stored model, but can never persist an enabled state with no selected model.
+        if (settings.KeepModelWarmEnabled is true
+            && string.IsNullOrWhiteSpace(settings.KeepModelWarmModelName))
+        {
+            AddError(r => r.KeepModelWarmModelName, "Keep model warm is enabled, but no model was selected.");
+            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            return;
+        }
+
         await _nodeSettingsStore.SaveAsync(settings, ct).ConfigureAwait(false);
         await TryReportCapabilitiesAsync(ct).ConfigureAwait(false);
         await Send.OkAsync(settings.ToResponse(), ct).ConfigureAwait(false);

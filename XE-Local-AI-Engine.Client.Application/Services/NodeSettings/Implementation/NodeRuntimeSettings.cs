@@ -107,6 +107,15 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
     public async Task<TimeSpan> GetLlamaIdleTimeToLiveAsync(CancellationToken cancellationToken = default) =>
         ResolveLlamaIdleTimeToLive(await LoadAsync(cancellationToken).ConfigureAwait(false));
 
+    public async Task<bool> GetKeepModelWarmEnabledAsync(CancellationToken cancellationToken = default) =>
+        ResolveKeepModelWarmEnabled(await LoadAsync(cancellationToken).ConfigureAwait(false));
+
+    public async Task<string?> GetKeepModelWarmModelNameAsync(CancellationToken cancellationToken = default) =>
+        ResolveKeepModelWarmModelName(await LoadAsync(cancellationToken).ConfigureAwait(false));
+
+    public async Task<TimeSpan> GetKeepModelWarmIntervalAsync(CancellationToken cancellationToken = default) =>
+        ResolveKeepModelWarmInterval(await LoadAsync(cancellationToken).ConfigureAwait(false));
+
     public async Task<int> GetMaxResponseSizeMbAsync(CancellationToken cancellationToken = default) =>
         ResolveMaxResponseSizeMb(await LoadAsync(cancellationToken).ConfigureAwait(false));
 
@@ -244,6 +253,15 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
 
     private static TimeSpan ResolveLlamaIdleTimeToLive(StoredNodeSettings stored) =>
         TimeSpan.FromSeconds(stored.LlamaIdleTimeToLiveSeconds ?? StoredNodeSettings.DefaultLlamaIdleTimeToLiveSeconds);
+
+    private static bool ResolveKeepModelWarmEnabled(StoredNodeSettings stored) =>
+        stored.KeepModelWarmEnabled ?? StoredNodeSettings.DefaultKeepModelWarmEnabled;
+
+    private static string? ResolveKeepModelWarmModelName(StoredNodeSettings stored) =>
+        string.IsNullOrWhiteSpace(stored.KeepModelWarmModelName) ? null : stored.KeepModelWarmModelName;
+
+    private static TimeSpan ResolveKeepModelWarmInterval(StoredNodeSettings stored) =>
+        TimeSpan.FromSeconds(stored.KeepModelWarmIntervalSeconds ?? StoredNodeSettings.DefaultKeepModelWarmIntervalSeconds);
 
     private int ResolveMaxResponseSizeMb(StoredNodeSettings stored) =>
         stored.MaxResponseSizeMb ?? _maxResponseSizeMbSeed;

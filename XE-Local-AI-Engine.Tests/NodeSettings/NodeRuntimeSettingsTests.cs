@@ -29,6 +29,9 @@ public sealed class NodeRuntimeSettingsTests
                 OllamaEndpoint = "http://stored:1234",
                 LlamaMaxLoadedProcesses = 9,
                 LlamaIdleTimeToLiveSeconds = 1200,
+                KeepModelWarmEnabled = true,
+                KeepModelWarmModelName = "stored-warm-model",
+                KeepModelWarmIntervalSeconds = 240,
                 MaxResponseSizeMb = 42,
                 RecommendedLlamaCppTag = "b8888",
                 OrchestrationIdleTimeoutSeconds = 333
@@ -44,6 +47,9 @@ public sealed class NodeRuntimeSettingsTests
         AssertEx.Equal("http://stored:1234", await sut.GetOllamaEndpointAsync());
         AssertEx.Equal(expected: 9, await sut.GetLlamaMaxLoadedProcessesAsync());
         AssertEx.Equal(TimeSpan.FromSeconds(1200), await sut.GetLlamaIdleTimeToLiveAsync());
+        AssertEx.Equal(expected: true, await sut.GetKeepModelWarmEnabledAsync());
+        AssertEx.Equal("stored-warm-model", await sut.GetKeepModelWarmModelNameAsync());
+        AssertEx.Equal(TimeSpan.FromSeconds(240), await sut.GetKeepModelWarmIntervalAsync());
         AssertEx.Equal(expected: 42, await sut.GetMaxResponseSizeMbAsync());
         AssertEx.Equal("b8888", await sut.GetRecommendedLlamaCppTagAsync());
         AssertEx.Equal(expected: 333, await sut.GetOrchestrationIdleTimeoutSecondsAsync());
@@ -102,6 +108,9 @@ public sealed class NodeRuntimeSettingsTests
         AssertEx.Equal(StoredNodeSettings.DefaultHuggingFaceDiskMarginBytes, await sut.GetHuggingFaceDiskMarginBytesAsync());
         AssertEx.Equal(expected: StoredNodeSettings.DefaultLlamaMaxLoadedProcesses, await sut.GetLlamaMaxLoadedProcessesAsync());
         AssertEx.Equal(TimeSpan.FromSeconds(StoredNodeSettings.DefaultLlamaIdleTimeToLiveSeconds), await sut.GetLlamaIdleTimeToLiveAsync());
+        AssertEx.Equal(expected: StoredNodeSettings.DefaultKeepModelWarmEnabled, await sut.GetKeepModelWarmEnabledAsync());
+        AssertEx.Null(await sut.GetKeepModelWarmModelNameAsync());
+        AssertEx.Equal(TimeSpan.FromSeconds(StoredNodeSettings.DefaultKeepModelWarmIntervalSeconds), await sut.GetKeepModelWarmIntervalAsync());
         AssertEx.Equal(LlamaCppReleasePins.PinnedTag, await sut.GetRecommendedLlamaCppTagAsync());
     }
 

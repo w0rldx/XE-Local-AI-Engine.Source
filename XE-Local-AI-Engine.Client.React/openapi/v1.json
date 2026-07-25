@@ -10043,6 +10043,27 @@
             "type": "integer",
             "format": "int32"
           },
+          "keepModelWarmEnabled": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "keepModelWarmModelName": {
+            "type": "string",
+            "nullable": true
+          },
+          "keepModelWarmIntervalSeconds": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minKeepModelWarmIntervalSeconds": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedKeepModelWarmIntervalSeconds": {
+            "type": "integer",
+            "format": "int32"
+          },
           "maxResponseSizeMb": {
             "type": "integer",
             "format": "int32",
@@ -10318,6 +10339,19 @@
             "nullable": true
           },
           "llamaIdleTimeToLiveSeconds": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "keepModelWarmEnabled": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "keepModelWarmModelName": {
+            "type": "string",
+            "nullable": true
+          },
+          "keepModelWarmIntervalSeconds": {
             "type": "integer",
             "format": "int32",
             "nullable": true

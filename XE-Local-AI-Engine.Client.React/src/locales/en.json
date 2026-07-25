@@ -1296,6 +1296,7 @@
 					"positive": "Enter a positive whole number.",
 					"mode": "Unknown speculative decoding mode.",
 					"required": "Select a draft model for this mode.",
+					"requiredKeepWarmModel": "Select a model to keep warm.",
 					"rate": "Each rate needs a model name and non-negative input and output values."
 				},
 				"localChat": {
@@ -1322,6 +1323,16 @@
 				},
 				"llamaIdleTimeToLiveSeconds": {
 					"label": "Idle process time-to-live"
+				},
+				"keepModelWarm": {
+					"enabledLabel": "Keep a model warm",
+					"enabledDescription": "Continuously keeps one selected llama.cpp chat model resident. Changes take effect without restarting the node.",
+					"modelLabel": "Model to keep warm",
+					"modelDescription": "Choose an installed llama.cpp chat model.",
+					"modelPlaceholder": "Select a model",
+					"noModels": "No installed llama.cpp chat models",
+					"intervalLabel": "Warm interval",
+					"help": "Pinning keeps VRAM occupied and permanently uses one MaxLoadedProcesses slot (default 3). The warm interval must remain below the idle TTL to prevent eviction."
 				},
 				"ollamaEndpoint": {
 					"label": "Ollama endpoint",

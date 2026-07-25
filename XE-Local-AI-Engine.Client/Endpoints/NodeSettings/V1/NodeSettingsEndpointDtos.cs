@@ -41,6 +41,16 @@ public sealed record NodeSettingsResponse
 
     public int MaxAllowedLlamaIdleTimeToLiveSeconds { get; init; }
 
+    public bool? KeepModelWarmEnabled { get; init; }
+
+    public string? KeepModelWarmModelName { get; init; }
+
+    public int? KeepModelWarmIntervalSeconds { get; init; }
+
+    public int MinKeepModelWarmIntervalSeconds { get; init; }
+
+    public int MaxAllowedKeepModelWarmIntervalSeconds { get; init; }
+
     public int? MaxResponseSizeMb { get; init; }
 
     public int MinMaxResponseSizeMb { get; init; }
@@ -153,6 +163,12 @@ public sealed record SaveNodeSettingsRequest
 
     public int? LlamaIdleTimeToLiveSeconds { get; init; }
 
+    public bool? KeepModelWarmEnabled { get; init; }
+
+    public string? KeepModelWarmModelName { get; init; }
+
+    public int? KeepModelWarmIntervalSeconds { get; init; }
+
     public int? MaxResponseSizeMb { get; init; }
 
     public string? RecommendedLlamaCppTag { get; init; }
@@ -227,6 +243,11 @@ internal static class NodeSettingsEndpointDtoMapper
             LlamaIdleTimeToLiveSeconds = settings.LlamaIdleTimeToLiveSeconds,
             MinLlamaIdleTimeToLiveSeconds = StoredNodeSettings.MinLlamaIdleTimeToLiveSeconds,
             MaxAllowedLlamaIdleTimeToLiveSeconds = StoredNodeSettings.MaxLlamaIdleTimeToLiveSeconds,
+            KeepModelWarmEnabled = settings.KeepModelWarmEnabled,
+            KeepModelWarmModelName = settings.KeepModelWarmModelName,
+            KeepModelWarmIntervalSeconds = settings.KeepModelWarmIntervalSeconds,
+            MinKeepModelWarmIntervalSeconds = StoredNodeSettings.MinKeepModelWarmIntervalSeconds,
+            MaxAllowedKeepModelWarmIntervalSeconds = StoredNodeSettings.MaxKeepModelWarmIntervalSeconds,
             MaxResponseSizeMb = settings.MaxResponseSizeMb,
             MinMaxResponseSizeMb = StoredNodeSettings.MinMaxResponseSizeMb,
             MaxAllowedMaxResponseSizeMb = StoredNodeSettings.MaxMaxResponseSizeMb,
@@ -293,6 +314,11 @@ internal static class NodeSettingsEndpointDtoMapper
             HuggingFaceDiskMarginBytes = request.HuggingFaceDiskMarginBytes ?? currentSettings.HuggingFaceDiskMarginBytes,
             LlamaMaxLoadedProcesses = request.LlamaMaxLoadedProcesses ?? currentSettings.LlamaMaxLoadedProcesses,
             LlamaIdleTimeToLiveSeconds = request.LlamaIdleTimeToLiveSeconds ?? currentSettings.LlamaIdleTimeToLiveSeconds,
+            KeepModelWarmEnabled = request.KeepModelWarmEnabled ?? currentSettings.KeepModelWarmEnabled,
+            KeepModelWarmModelName = request.KeepModelWarmModelName is null
+                ? currentSettings.KeepModelWarmModelName
+                : request.KeepModelWarmModelName.Trim(),
+            KeepModelWarmIntervalSeconds = request.KeepModelWarmIntervalSeconds ?? currentSettings.KeepModelWarmIntervalSeconds,
             MaxResponseSizeMb = request.MaxResponseSizeMb ?? currentSettings.MaxResponseSizeMb,
             RecommendedLlamaCppTag = request.RecommendedLlamaCppTag is null
                 ? currentSettings.RecommendedLlamaCppTag

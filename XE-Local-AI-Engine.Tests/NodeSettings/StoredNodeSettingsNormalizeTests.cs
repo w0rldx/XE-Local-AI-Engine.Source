@@ -35,6 +35,9 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
         AssertEx.Null(loaded.ToolCapableModels);
         AssertEx.Null(loaded.OllamaEndpoint);
         AssertEx.Null(loaded.LlamaMaxLoadedProcesses);
+        AssertEx.Null(loaded.KeepModelWarmEnabled);
+        AssertEx.Null(loaded.KeepModelWarmModelName);
+        AssertEx.Null(loaded.KeepModelWarmIntervalSeconds);
         AssertEx.Null(loaded.RecommendedLlamaCppTag);
         AssertEx.Null(loaded.SamplingDefaults);
     }
@@ -52,6 +55,9 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
             HuggingFaceDiskMarginBytes = 2_000_000_000,
             LlamaMaxLoadedProcesses = 8,
             LlamaIdleTimeToLiveSeconds = 600,
+            KeepModelWarmEnabled = true,
+            KeepModelWarmModelName = "  repo/model:Q4_K_M  ",
+            KeepModelWarmIntervalSeconds = 300,
             MaxResponseSizeMb = 50,
             RecommendedLlamaCppTag = "b9999",
             OrchestrationIdleTimeoutSeconds = 300,
@@ -69,6 +75,9 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
         AssertEx.Equal(expected: 2_000_000_000L, loaded.HuggingFaceDiskMarginBytes);
         AssertEx.Equal(expected: 8, loaded.LlamaMaxLoadedProcesses);
         AssertEx.Equal(expected: 600, loaded.LlamaIdleTimeToLiveSeconds);
+        AssertEx.Equal(expected: true, loaded.KeepModelWarmEnabled);
+        AssertEx.Equal("repo/model:Q4_K_M", loaded.KeepModelWarmModelName);
+        AssertEx.Equal(expected: 300, loaded.KeepModelWarmIntervalSeconds);
         AssertEx.Equal(expected: 50, loaded.MaxResponseSizeMb);
         AssertEx.Equal("b9999", loaded.RecommendedLlamaCppTag);
         AssertEx.Equal(expected: 300, loaded.OrchestrationIdleTimeoutSeconds);
@@ -85,6 +94,32 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
             LlamaMaxLoadedProcesses = value
         });
         AssertEx.Null(loaded.LlamaMaxLoadedProcesses);
+    }
+
+    [Test]
+    [Arguments(4)]
+    [Arguments(3601)]
+    public async Task KeepModelWarmIntervalSeconds_OutOfRange_FallsBackToNull(int value)
+    {
+        var loaded = await SaveAndReloadAsync(new StoredNodeSettings
+        {
+            DefaultModelName = "keep-unrelated",
+            KeepModelWarmIntervalSeconds = value
+        });
+
+        AssertEx.Null(loaded.KeepModelWarmIntervalSeconds);
+        AssertEx.Equal("keep-unrelated", loaded.DefaultModelName);
+    }
+
+    [Test]
+    public async Task KeepModelWarmModelName_Blank_FallsBackToNull()
+    {
+        var loaded = await SaveAndReloadAsync(new StoredNodeSettings
+        {
+            KeepModelWarmModelName = "   "
+        });
+
+        AssertEx.Null(loaded.KeepModelWarmModelName);
     }
 
     [Test]

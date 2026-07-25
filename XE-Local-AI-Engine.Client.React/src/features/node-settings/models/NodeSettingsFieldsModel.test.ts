@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import type { XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse as NodeSettingsResponse } from "@/core/api/generated";
 import {
 	buildNodeSettingsRequest,
-	nodeSettingsFieldDefaults,
 	newUsageRateRow,
+	nodeSettingsFieldDefaults,
 	toNodeSettingsFieldBounds,
 	toNodeSettingsFieldsForm,
 	toUsageRateRows,
@@ -107,7 +107,7 @@ describe("validateUsageRates", () => {
 });
 
 describe("NodeSettingsFieldsModel mapping", () => {
-	const response: NodeSettingsResponse = {
+	const response = {
 		defaultModelName: "qwen3:8b",
 		enableTools: false,
 		toolCapableModels: ["qwen3:8b"],
@@ -119,7 +119,12 @@ describe("NodeSettingsFieldsModel mapping", () => {
 		llamaIdleTimeToLiveSeconds: 600,
 		maxResponseSizeMb: 12,
 		recommendedLlamaCppTag: "b9692",
-	};
+		keepModelWarmEnabled: true,
+		keepModelWarmModelName: "qwen3:8b",
+		keepModelWarmIntervalSeconds: 120,
+		minKeepModelWarmIntervalSeconds: 10,
+		maxAllowedKeepModelWarmIntervalSeconds: 1800,
+	} satisfies NodeSettingsResponse;
 
 	it("maps a response into the form, falling back to seed defaults for absent fields", () => {
 		const form = toNodeSettingsFieldsForm(response);
@@ -129,6 +134,9 @@ describe("NodeSettingsFieldsModel mapping", () => {
 		expect(form.enableTools).toBe(false);
 		expect(form.toolCapableModels).toEqual(["qwen3:8b"]);
 		expect(form.llamaMaxLoadedProcesses).toBe(5);
+		expect(form.keepModelWarmEnabled).toBe(true);
+		expect(form.keepModelWarmModelName).toBe("qwen3:8b");
+		expect(form.keepModelWarmIntervalSeconds).toBe(120);
 		// Absent in the response -> seed default (StoredNodeSettings.DefaultMaxPendingToolCallAgeMinutes).
 		expect(form.maxPendingToolCallAgeMinutes).toBe(10);
 	});
@@ -139,6 +147,9 @@ describe("NodeSettingsFieldsModel mapping", () => {
 		expect(nodeSettingsFieldDefaults.enableTools).toBe(true); // DefaultEnableTools
 		expect(nodeSettingsFieldDefaults.llamaMaxLoadedProcesses).toBe(3); // DefaultLlamaMaxLoadedProcesses
 		expect(nodeSettingsFieldDefaults.llamaIdleTimeToLiveSeconds).toBe(900); // DefaultLlamaIdleTimeToLiveSeconds
+		expect(nodeSettingsFieldDefaults.keepModelWarmEnabled).toBe(false);
+		expect(nodeSettingsFieldDefaults.keepModelWarmModelName).toBe("");
+		expect(nodeSettingsFieldDefaults.keepModelWarmIntervalSeconds).toBe(300);
 		expect(nodeSettingsFieldDefaults.maxResponseSizeMb).toBe(10); // DefaultMaxResponseSizeMb
 		expect(nodeSettingsFieldDefaults.orchestrationIdleTimeoutSeconds).toBe(120); // DefaultOrchestrationIdleTimeoutSeconds
 		expect(nodeSettingsFieldDefaults.agentHomePrepareTimeoutSeconds).toBe(900); // DefaultAgentHomePrepareTimeoutSeconds
@@ -151,8 +162,10 @@ describe("NodeSettingsFieldsModel mapping", () => {
 	it("resolves bounds from the response with a hardcoded fallback", () => {
 		const bounds = toNodeSettingsFieldBounds(response);
 		expect(bounds.llamaMaxLoadedProcesses).toEqual({ min: 1, max: 16 });
+		expect(bounds.keepModelWarmIntervalSeconds).toEqual({ min: 10, max: 1800 });
 		// Absent server bound -> hardcoded fallback range.
 		expect(bounds.maxResponseSizeMb).toEqual({ min: 1, max: 100 });
+		expect(toNodeSettingsFieldBounds(undefined).keepModelWarmIntervalSeconds).toEqual({ min: 5, max: 3600 });
 	});
 });
 
@@ -172,6 +185,103 @@ describe("buildNodeSettingsRequest", () => {
 		const { body, errors } = buildNodeSettingsRequest(form, baseline, bounds, false);
 		expect(errors["llamaMaxLoadedProcesses"]).toBe("range");
 		expect(body.llamaMaxLoadedProcesses).toBeUndefined();
+	});
+
+	it("enables keep-warm with a trimmed model and bounded interval", () => {
+		const form = {
+			...baseline,
+			keepModelWarmEnabled: true,
+			keepModelWarmModelName: "  qwen3:8b  ",
+			keepModelWarmIntervalSeconds: 120,
+		};
+
+		const { body, errors } = buildNodeSettingsRequest(form, baseline, bounds, false);
+
+		expect(errors).toEqual({});
+		expect(body).toEqual({
+			keepModelWarmEnabled: true,
+			keepModelWarmModelName: "qwen3:8b",
+			keepModelWarmIntervalSeconds: 120,
+		});
+	});
+
+	it("requires a selected model when keep-warm is enabled", () => {
+		const form = { ...baseline, keepModelWarmEnabled: true, keepModelWarmModelName: "  " };
+
+		const { body, errors } = buildNodeSettingsRequest(form, baseline, bounds, false);
+
+		expect(errors["keepModelWarmModelName"]).toBe("requiredKeepWarmModel");
+		expect(body.keepModelWarmModelName).toBeUndefined();
+	});
+
+	it("emits explicit false and no unchanged keep-warm fields when disabling", () => {
+		const enabledBaseline = {
+			...baseline,
+			keepModelWarmEnabled: true,
+			keepModelWarmModelName: "qwen3:8b",
+			keepModelWarmIntervalSeconds: 120,
+		};
+
+		const { body, errors } = buildNodeSettingsRequest(
+			{ ...enabledBaseline, keepModelWarmEnabled: false },
+			enabledBaseline,
+			bounds,
+			false,
+		);
+
+		expect(errors).toEqual({});
+		expect(body).toEqual({ keepModelWarmEnabled: false });
+	});
+
+	it("lets disabling win over an invalid interval draft", () => {
+		const enabledBaseline = {
+			...baseline,
+			keepModelWarmEnabled: true,
+			keepModelWarmModelName: "qwen3:8b",
+			keepModelWarmIntervalSeconds: 120,
+		};
+
+		const { body, errors } = buildNodeSettingsRequest(
+			{ ...enabledBaseline, keepModelWarmEnabled: false, keepModelWarmIntervalSeconds: "" },
+			enabledBaseline,
+			bounds,
+			false,
+		);
+
+		expect(errors).toEqual({});
+		expect(body).toEqual({ keepModelWarmEnabled: false });
+	});
+
+	it("uses an empty string to explicitly clear the selected keep-warm model while disabled", () => {
+		const enabledBaseline = {
+			...baseline,
+			keepModelWarmEnabled: false,
+			keepModelWarmModelName: "qwen3:8b",
+		};
+
+		const { body, errors } = buildNodeSettingsRequest(
+			{ ...enabledBaseline, keepModelWarmModelName: "" },
+			enabledBaseline,
+			bounds,
+			false,
+		);
+
+		expect(errors).toEqual({});
+		expect(body.keepModelWarmModelName).toBe("");
+	});
+
+	it("rejects an out-of-range keep-warm interval", () => {
+		const form = {
+			...baseline,
+			keepModelWarmEnabled: true,
+			keepModelWarmModelName: "qwen3:8b",
+			keepModelWarmIntervalSeconds: 3601,
+		};
+
+		const { body, errors } = buildNodeSettingsRequest(form, baseline, bounds, false);
+
+		expect(errors["keepModelWarmIntervalSeconds"]).toBe("range");
+		expect(body.keepModelWarmIntervalSeconds).toBeUndefined();
 	});
 
 	it("rejects a malformed recommended tag", () => {

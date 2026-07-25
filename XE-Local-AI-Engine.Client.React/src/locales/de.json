@@ -1296,6 +1296,7 @@
 					"positive": "Bitte eine positive ganze Zahl eingeben.",
 					"mode": "Unbekannter Modus für spekulatives Decoding.",
 					"required": "Wähle für diesen Modus ein Entwurfsmodell.",
+					"requiredKeepWarmModel": "Wähle ein Modell aus, das warmgehalten werden soll.",
 					"rate": "Jede Rate benötigt einen Modellnamen sowie nicht-negative Eingabe- und Ausgabewerte."
 				},
 				"localChat": {
@@ -1322,6 +1323,16 @@
 				},
 				"llamaIdleTimeToLiveSeconds": {
 					"label": "Leerlauf-Prozess-Lebensdauer"
+				},
+				"keepModelWarm": {
+					"enabledLabel": "Modell warmhalten",
+					"enabledDescription": "Hält ein ausgewähltes llama.cpp-Chatmodell dauerhaft geladen. Änderungen werden ohne Neustart des Knotens wirksam.",
+					"modelLabel": "Warmzuhaltendes Modell",
+					"modelDescription": "Wähle ein installiertes llama.cpp-Chatmodell.",
+					"modelPlaceholder": "Modell auswählen",
+					"noModels": "Keine installierten llama.cpp-Chatmodelle",
+					"intervalLabel": "Warmhalteintervall",
+					"help": "Das Anheften belegt dauerhaft VRAM und einen MaxLoadedProcesses-Platz (Standard: 3). Das Warmhalteintervall muss unter der Leerlauf-Lebensdauer bleiben, um ein Entladen zu verhindern."
 				},
 				"ollamaEndpoint": {
 					"label": "Ollama-Endpunkt",

@@ -1,9 +1,9 @@
 import { z } from "zod";
 
 import type {
+	XeLocalAiEngineClientServicesNodeSettingsModelRate as ModelRate,
 	XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse as NodeSettingsResponse,
 	XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest as SaveNodeSettingsRequest,
-	XeLocalAiEngineClientServicesNodeSettingsModelRate as ModelRate,
 } from "@/core/api/generated";
 
 // The migrated appsettings knobs as editable form state. Numbers are kept as `number | string` so an in-progress
@@ -23,6 +23,7 @@ export interface NumericBounds {
 const nodeSettingsFieldBounds = {
 	llamaMaxLoadedProcesses: { min: 1, max: 16 },
 	llamaIdleTimeToLiveSeconds: { min: 30, max: 86400 },
+	keepModelWarmIntervalSeconds: { min: 5, max: 3600 },
 	maxResponseSizeMb: { min: 1, max: 100 },
 	orchestrationIdleTimeoutSeconds: { min: 1, max: 3600 },
 	agentHomeTimeoutSeconds: { min: 1, max: 86400 },
@@ -248,6 +249,9 @@ export interface NodeSettingsFieldsForm {
 	recommendedLlamaCppTag: string;
 	llamaMaxLoadedProcesses: number | string;
 	llamaIdleTimeToLiveSeconds: number | string;
+	keepModelWarmEnabled: boolean;
+	keepModelWarmModelName: string;
+	keepModelWarmIntervalSeconds: number | string;
 	maxResponseSizeMb: number | string;
 	// Chat launch tuning (speculative decoding + prompt-cache reuse)
 	speculativeMode: string;
@@ -278,6 +282,9 @@ export const nodeSettingsFieldDefaults: NodeSettingsFieldsForm = {
 	recommendedLlamaCppTag: "",
 	llamaMaxLoadedProcesses: 3,
 	llamaIdleTimeToLiveSeconds: 900,
+	keepModelWarmEnabled: false,
+	keepModelWarmModelName: "",
+	keepModelWarmIntervalSeconds: 300,
 	maxResponseSizeMb: 10,
 	speculativeMode: SPECULATIVE_DISABLED_MODE,
 	speculativeDraftModelName: "",
@@ -315,6 +322,12 @@ export function toNodeSettingsFieldsForm(response: NodeSettingsResponse | undefi
 		llamaIdleTimeToLiveSeconds: numberOr(
 			response.llamaIdleTimeToLiveSeconds,
 			nodeSettingsFieldDefaults.llamaIdleTimeToLiveSeconds,
+		),
+		keepModelWarmEnabled: response.keepModelWarmEnabled ?? nodeSettingsFieldDefaults.keepModelWarmEnabled,
+		keepModelWarmModelName: response.keepModelWarmModelName ?? "",
+		keepModelWarmIntervalSeconds: numberOr(
+			response.keepModelWarmIntervalSeconds,
+			nodeSettingsFieldDefaults.keepModelWarmIntervalSeconds,
 		),
 		maxResponseSizeMb: numberOr(response.maxResponseSizeMb, nodeSettingsFieldDefaults.maxResponseSizeMb),
 		speculativeMode: response.speculativeMode ?? nodeSettingsFieldDefaults.speculativeMode,
@@ -358,6 +371,7 @@ function boundsOf(min: number | undefined, max: number | undefined, fallback: Nu
 export interface NodeSettingsFieldBounds {
 	readonly llamaMaxLoadedProcesses: NumericBounds;
 	readonly llamaIdleTimeToLiveSeconds: NumericBounds;
+	readonly keepModelWarmIntervalSeconds: NumericBounds;
 	readonly maxResponseSizeMb: NumericBounds;
 	readonly chatCacheReuse: NumericBounds;
 	readonly speculativeDraftMaxTokens: NumericBounds;
@@ -377,6 +391,11 @@ export function toNodeSettingsFieldBounds(response: NodeSettingsResponse | undef
 			response?.minLlamaIdleTimeToLiveSeconds,
 			response?.maxAllowedLlamaIdleTimeToLiveSeconds,
 			nodeSettingsFieldBounds.llamaIdleTimeToLiveSeconds,
+		),
+		keepModelWarmIntervalSeconds: boundsOf(
+			response?.minKeepModelWarmIntervalSeconds,
+			response?.maxAllowedKeepModelWarmIntervalSeconds,
+			nodeSettingsFieldBounds.keepModelWarmIntervalSeconds,
 		),
 		maxResponseSizeMb: boundsOf(
 			response?.minMaxResponseSizeMb,
@@ -501,6 +520,35 @@ export function buildNodeSettingsRequest(
 			body.llamaIdleTimeToLiveSeconds = v;
 		},
 	);
+
+	if (form.keepModelWarmEnabled !== baseline.keepModelWarmEnabled) {
+		// Explicit false is meaningful: omission preserves the stored value, while false turns the live service off.
+		body.keepModelWarmEnabled = form.keepModelWarmEnabled;
+	}
+
+	const keepWarmModelName = form.keepModelWarmModelName.trim();
+	if (form.keepModelWarmEnabled && keepWarmModelName.length === 0) {
+		errors["keepModelWarmModelName"] = "requiredKeepWarmModel";
+	} else if (form.keepModelWarmModelName !== baseline.keepModelWarmModelName) {
+		// The PUT is null-preserving (null/omitted = keep current), so an empty string is the explicit clear signal.
+		body.keepModelWarmModelName = keepWarmModelName;
+	}
+
+	if (form.keepModelWarmEnabled) {
+		// A disabled feature must always be saveable, even if the operator entered an invalid interval before turning it
+		// off. The disabled interval control cannot be corrected in that state, and omission preserves the last valid value.
+		collectBoundedInt(
+			form.keepModelWarmIntervalSeconds,
+			baseline.keepModelWarmIntervalSeconds,
+			bounds.keepModelWarmIntervalSeconds,
+			"keepModelWarmIntervalSeconds",
+			body,
+			errors,
+			(v) => {
+				body.keepModelWarmIntervalSeconds = v;
+			},
+		);
+	}
 	collectBoundedInt(
 		form.maxResponseSizeMb,
 		baseline.maxResponseSizeMb,

@@ -37,6 +37,15 @@ public interface INodeRuntimeSettings
     /// <summary>The llama.cpp idle eviction TTL (stored &gt; seed 15 minutes).</summary>
     Task<TimeSpan> GetLlamaIdleTimeToLiveAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>Whether periodic keep-warm is enabled (stored &gt; off).</summary>
+    Task<bool> GetKeepModelWarmEnabledAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>The selected local chat model to keep resident, or <see langword="null" /> when unset.</summary>
+    Task<string?> GetKeepModelWarmModelNameAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>The keep-warm touch cadence (stored &gt; 5 minutes).</summary>
+    Task<TimeSpan> GetKeepModelWarmIntervalAsync(CancellationToken cancellationToken = default);
+
     /// <summary>The worker response-size cap in MiB (stored &gt; <c>WorkerNode:MaxResponseSizeMb</c> &gt; 10).</summary>
     Task<int> GetMaxResponseSizeMbAsync(CancellationToken cancellationToken = default);
 

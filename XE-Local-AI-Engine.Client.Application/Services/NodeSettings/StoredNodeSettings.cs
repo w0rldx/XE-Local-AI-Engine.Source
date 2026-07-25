@@ -42,6 +42,18 @@ public sealed partial record StoredNodeSettings
 
     public const int MaxLlamaIdleTimeToLiveSeconds = 86400;
 
+    /// <summary>Keep-model-warm is opt-in; an absent stored value stays off.</summary>
+    public const bool DefaultKeepModelWarmEnabled = false;
+
+    /// <summary>Default cadence for refreshing the selected model's idle timestamp.</summary>
+    public const int DefaultKeepModelWarmIntervalSeconds = 300;
+
+    /// <summary>Smallest supported keep-warm cadence; matches the background service's live-settings poll interval.</summary>
+    public const int MinKeepModelWarmIntervalSeconds = 5;
+
+    /// <summary>Largest supported keep-warm cadence. It must still remain below the configured llama.cpp idle TTL.</summary>
+    public const int MaxKeepModelWarmIntervalSeconds = 3600;
+
     public const int DefaultMaxResponseSizeMb = 10;
 
     public const int MinMaxResponseSizeMb = 1;
@@ -179,6 +191,21 @@ public sealed partial record StoredNodeSettings
 
     /// <summary>Idle TTL (seconds) after which an unused llama.cpp process is reaped. Seed: 900.</summary>
     public int? LlamaIdleTimeToLiveSeconds { get; init; }
+
+    /// <summary>
+    ///     Whether the selected local chat model is periodically touched so the runtime keeps it resident. Absent reads
+    ///     as <see cref="DefaultKeepModelWarmEnabled" /> (off).
+    /// </summary>
+    public bool? KeepModelWarmEnabled { get; init; }
+
+    /// <summary>The installed local chat model name to keep resident. Blank values normalize to <see langword="null" />.</summary>
+    public string? KeepModelWarmModelName { get; init; }
+
+    /// <summary>
+    ///     Seconds between keep-warm touches. Seed: 300. The value must remain below the active llama.cpp idle TTL to
+    ///     prevent eviction.
+    /// </summary>
+    public int? KeepModelWarmIntervalSeconds { get; init; }
 
     /// <summary>Worker response-size cap in MiB. Seed: <c>WorkerNode:MaxResponseSizeMb</c>.</summary>
     public int? MaxResponseSizeMb { get; init; }

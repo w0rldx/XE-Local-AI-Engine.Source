@@ -120,6 +120,33 @@ public sealed class SupervisorEvictionTests
     }
 
     [Test]
+    public async Task EnsureRunning_ReusedBeforeIdleTtl_RefreshesLastUsedAndPreventsEviction()
+    {
+        var launcher = new FakeProcessLauncher();
+        var time = new AdvanceableTimeProvider();
+        var ttl = TimeSpan.FromMinutes(15);
+        await using var supervisor = SupervisorFactory.Create(launcher, options: CapOf(cap: 1, ttl), timeProvider: time);
+
+        await supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
+        time.Advance(TimeSpan.FromMinutes(14));
+
+        // This is the exact reuse touch the keep-warm service performs. It must refresh LastUsed without another spawn.
+        await supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
+        time.Advance(TimeSpan.FromMinutes(2));
+
+        // Sixteen minutes elapsed since launch, but only two since the keep-warm touch: model-a is not an idle victim.
+        await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => supervisor.EnsureRunningAsync("model-b", ModelRole.Chat, CancellationToken.None));
+        AssertEx.Equal(expected: 1, launcher.LaunchCount);
+        AssertEx.False(launcher.Handles.Single().WasTreeKilled);
+
+        // Once the refreshed TTL really elapses, normal LRU admission can evict it.
+        time.Advance(TimeSpan.FromMinutes(14));
+        await supervisor.EnsureRunningAsync("model-b", ModelRole.Chat, CancellationToken.None);
+        AssertEx.Equal(expected: 2, launcher.LaunchCount);
+        AssertEx.True(launcher.Handles.OrderBy(handle => handle.ProcessId).First().WasTreeKilled);
+    }
+
+    [Test]
     public async Task Reaper_LeasedProcessPastIdleTtl_IsNotReaped_UntilLeaseReleases()
     {
         var launcher = new FakeProcessLauncher();
