@@ -52,6 +52,18 @@ public sealed class EnsureLlamaCppBinaryEndpoint(
 
         try
         {
+            if (await LlamaCppPrebuiltRuntimeMutationGuard
+                      .IsKeepModelWarmEnabledAsync(_nodeRuntimeSettings, ct)
+                      .ConfigureAwait(false))
+            {
+                await Send.ResultAsync(Results.Conflict(new LlamaCppUpdateBlockedResponse
+                {
+                    RunningProcessCount = _processSupervisor.CountRunningProcesses(),
+                    Message = LlamaCppPrebuiltRuntimeMutationGuard.KeepModelWarmBlockedMessage
+                })).ConfigureAwait(false);
+                return;
+            }
+
             var (mutationLease, runningProcessCount, blockedMessage) = await LlamaCppPrebuiltRuntimeMutationGuard
                                                                              .TryAcquireAsync(_installedRuntimeStore, _sourceBuildActivity, _processSupervisor, ct)
                                                                              .ConfigureAwait(false);

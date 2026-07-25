@@ -29,6 +29,15 @@ public interface ILlamaServerProcessSupervisor
     }
 
     /// <summary>
+    ///     Whether automatic keep-warm starts must yield to a pending or in-flight runtime mutation. Interactive model
+    ///     requests remain governed by <see cref="EnsureRunningAsync" /> and are not suppressed by this signal.
+    /// </summary>
+    bool IsKeepWarmSuppressed()
+    {
+        return false;
+    }
+
+    /// <summary>
     ///     Reuses the running <c>(model, role)</c> process or spawns one (single-flight per key), then returns its
     ///     localhost OpenAI-compatible endpoint. Spawning a new distinct model when the loaded-cap is full rejects.
     /// </summary>

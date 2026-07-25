@@ -122,13 +122,32 @@ describe("NodeSettingsFieldsCard — keep model warm", () => {
 		expect(onChange).toHaveBeenCalledWith("keepModelWarmIntervalSeconds", 120);
 	});
 
-	it("surfaces the VRAM, MaxLoadedProcesses slot, and idle-TTL caveats", () => {
-		renderCard();
+	it("surfaces the VRAM, live MaxLoadedProcesses capacity, and idle-TTL caveats", () => {
+		renderCard({
+			form: { ...toNodeSettingsFieldsForm(undefined), llamaMaxLoadedProcesses: 7 },
+		});
 
 		const help = screen.getByTestId("node-settings-keep-model-warm-help").textContent ?? "";
 		expect(help).toContain("VRAM");
-		expect(help).toContain("one MaxLoadedProcesses slot (default 3)");
+		expect(help).toContain("one of the configured 7 MaxLoadedProcesses slots");
 		expect(help).toContain("below the idle TTL");
+	});
+
+	it("marks a stale selected model as unavailable", () => {
+		renderCard({
+			form: {
+				...toNodeSettingsFieldsForm(undefined),
+				keepModelWarmEnabled: true,
+				keepModelWarmModelName: "deleted-model",
+			},
+			keepWarmModelOptions: [{ value: "deleted-model", label: "deleted-model (not installed)" }],
+			errors: { keepModelWarmModelName: "unavailableKeepWarmModel" },
+		});
+
+		expect(screen.getByText("The selected model deleted-model is no longer installed.")).toBeTruthy();
+		const listbox = screen.getByRole("listbox", { name: "Model to keep warm", hidden: true });
+		expect(screen.getByRole("option", { name: "deleted-model (not installed)", hidden: true })).toBeTruthy();
+		expect(listbox).toBeTruthy();
 	});
 });
 

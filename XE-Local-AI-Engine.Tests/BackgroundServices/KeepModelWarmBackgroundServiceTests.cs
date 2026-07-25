@@ -1,11 +1,16 @@
 namespace XE_Local_AI_Engine.Tests.BackgroundServices;
 
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.BackgroundServices;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer.Options;
+using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class KeepModelWarmBackgroundServiceTests
 {
@@ -100,6 +105,114 @@ public sealed class KeepModelWarmBackgroundServiceTests
     }
 
     [Test]
+    public async Task RunIterationAsync_WhenWarmFailsRepeatedly_LogsOneWarningUntilSuccess()
+    {
+        var harness = CreateHarness(enabled: true, modelName: "model-a", intervalSeconds: 60);
+        var shouldFail = true;
+        harness.Provider.WarmModelAsync("model-a", Arg.Any<CancellationToken>())
+               .Returns(_ => shouldFail
+                   ? Task.FromException(new InvalidOperationException("load failed"))
+                   : Task.CompletedTask);
+
+        await harness.Service.RunIterationAsync(CancellationToken.None);
+        harness.Clock.Advance(TimeSpan.FromSeconds(60));
+        await harness.Service.RunIterationAsync(CancellationToken.None);
+
+        AssertEx.Equal(expected: 1, harness.Logger.Entries.Count(entry => entry.Level == LogLevel.Warning && entry.Message.Contains("iteration failed", StringComparison.Ordinal)));
+        AssertEx.Equal(expected: 1, harness.Logger.Entries.Count(entry => entry.Level == LogLevel.Debug && entry.Message.Contains("iteration failed", StringComparison.Ordinal)));
+
+        shouldFail = false;
+        harness.Clock.Advance(TimeSpan.FromSeconds(60));
+        await harness.Service.RunIterationAsync(CancellationToken.None);
+        shouldFail = true;
+        harness.Clock.Advance(TimeSpan.FromSeconds(60));
+        await harness.Service.RunIterationAsync(CancellationToken.None);
+
+        AssertEx.Equal(expected: 2, harness.Logger.Entries.Count(entry => entry.Level == LogLevel.Warning && entry.Message.Contains("iteration failed", StringComparison.Ordinal)));
+    }
+
+    [Test]
+    public async Task RunIterationAsync_WhenLlamaRuntimeFails_LeavesWarningOwnershipWithSupervisor()
+    {
+        var harness = CreateHarness(enabled: true, modelName: "model-a", intervalSeconds: 60);
+        harness.Provider.WarmModelAsync("model-a", Arg.Any<CancellationToken>())
+               .Returns(Task.FromException(new LlamaRuntimeException("spawn failed")));
+
+        await harness.Service.RunIterationAsync(CancellationToken.None);
+
+        AssertEx.Equal(expected: 0, harness.Logger.Entries.Count(entry => entry.Level == LogLevel.Warning));
+        AssertEx.Equal(expected: 1, harness.Logger.Entries.Count(entry =>
+            entry.Level == LogLevel.Debug && entry.Message.Contains("llama.cpp model", StringComparison.Ordinal)));
+    }
+
+    [Test]
+    public async Task RunIterationAsync_WhenMutationEnds_ResetsFailureBudget()
+    {
+        var harness = CreateHarness(enabled: true, modelName: "model-a", intervalSeconds: 60);
+        harness.Provider.WarmModelAsync("model-a", Arg.Any<CancellationToken>())
+               .Returns(Task.FromException(new InvalidOperationException("load failed")));
+
+        await harness.Service.RunIterationAsync(CancellationToken.None);
+        harness.RuntimeMutationSuppressed = true;
+        await harness.Service.RunIterationAsync(CancellationToken.None);
+        harness.RuntimeMutationSuppressed = false;
+        await harness.Service.RunIterationAsync(CancellationToken.None);
+
+        AssertEx.Equal(expected: 2, harness.Logger.Entries.Count(entry =>
+            entry.Level == LogLevel.Warning && entry.Message.Contains("iteration failed", StringComparison.Ordinal)));
+    }
+
+    [Test]
+    public async Task RunIterationAsync_WhenActiveProcessCapIsOne_DoesNotWarmModel()
+    {
+        var harness = CreateHarness(enabled: true, modelName: "model-a", intervalSeconds: 60, maxLoadedProcesses: 1);
+
+        await harness.Service.RunIterationAsync(CancellationToken.None);
+
+        await harness.Provider.DidNotReceiveWithAnyArgs().WarmModelAsync(default!, default);
+    }
+
+    [Test]
+    public async Task RunIterationAsync_WhenRuntimeMutationIsSuppressed_DoesNotWarmModel()
+    {
+        var harness = CreateHarness(enabled: true, modelName: "model-a", intervalSeconds: 60);
+        harness.RuntimeMutationSuppressed = true;
+
+        await harness.Service.RunIterationAsync(CancellationToken.None);
+
+        await harness.Provider.DidNotReceiveWithAnyArgs().WarmModelAsync(default!, default);
+    }
+
+    [Test]
+    public async Task RunIterationAsync_WhenSourceBuildIsActive_DoesNotWarmModel()
+    {
+        var harness = CreateHarness(enabled: true, modelName: "model-a", intervalSeconds: 60);
+        harness.SourceBuildActive = true;
+
+        await harness.Service.RunIterationAsync(CancellationToken.None);
+
+        await harness.Provider.DidNotReceiveWithAnyArgs().WarmModelAsync(default!, default);
+    }
+
+    [Test]
+    public async Task RunIterationAsync_WhenConfiguredIntervalExceedsActiveTtl_UsesHalfActiveTtl()
+    {
+        var harness = CreateHarness(enabled: true,
+            modelName: "model-a",
+            intervalSeconds: 300,
+            idleTimeToLive: TimeSpan.FromSeconds(30));
+        await harness.Service.RunIterationAsync(CancellationToken.None);
+
+        harness.Clock.Advance(TimeSpan.FromSeconds(14));
+        await harness.Service.RunIterationAsync(CancellationToken.None);
+        await harness.Provider.Received(1).WarmModelAsync("model-a", Arg.Any<CancellationToken>());
+
+        harness.Clock.Advance(TimeSpan.FromSeconds(1));
+        await harness.Service.RunIterationAsync(CancellationToken.None);
+        await harness.Provider.Received(2).WarmModelAsync("model-a", Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task RunIterationAsync_WhenEnabledWithoutModel_DoesNotResolveProvider()
     {
         var harness = CreateHarness(enabled: true, modelName: null, intervalSeconds: 300);
@@ -121,8 +234,13 @@ public sealed class KeepModelWarmBackgroundServiceTests
                            return false;
                        });
         var resolver = Substitute.For<ILocalModelProviderResolver>();
+        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        var sourceBuildActivity = Substitute.For<ILlamaCppSourceBuildActivity>();
         using var service = new KeepModelWarmBackgroundService(runtimeSettings,
             resolver,
+            supervisor,
+            sourceBuildActivity,
+            new LlamaServerSupervisorOptions(),
             TimeProvider.System,
             NullLogger<KeepModelWarmBackgroundService>.Instance);
 
@@ -135,13 +253,20 @@ public sealed class KeepModelWarmBackgroundServiceTests
         await resolver.DidNotReceiveWithAnyArgs().ResolveProviderForModelAsync(default!, default);
     }
 
-    private static Harness CreateHarness(bool enabled, string? modelName, int intervalSeconds)
+    private static Harness CreateHarness(bool enabled,
+        string? modelName,
+        int intervalSeconds,
+        int maxLoadedProcesses = 3,
+        TimeSpan? idleTimeToLive = null)
     {
         var runtimeSettings = Substitute.For<INodeRuntimeSettings>();
         var resolver = Substitute.For<ILocalModelProviderResolver>();
         var provider = Substitute.For<ILocalModelProvider>();
+        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        var sourceBuildActivity = Substitute.For<ILlamaCppSourceBuildActivity>();
         var clock = new ManualTimeProvider();
-        var harness = new Harness(resolver, provider, clock)
+        var logger = new RecordingLogger<KeepModelWarmBackgroundService>();
+        var harness = new Harness(resolver, provider, supervisor, sourceBuildActivity, clock, logger)
         {
             Enabled = enabled,
             ModelName = modelName,
@@ -154,17 +279,29 @@ public sealed class KeepModelWarmBackgroundServiceTests
                        .Returns(_ => TimeSpan.FromSeconds(harness.IntervalSeconds));
         resolver.ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(provider);
         provider.ProviderName.Returns("llamacpp");
+        supervisor.IsKeepWarmSuppressed().Returns(_ => harness.RuntimeMutationSuppressed);
+        sourceBuildActivity.ActiveBuildId.Returns(_ => harness.SourceBuildActive ? Guid.Parse("58fce305-7417-4a9f-a9c3-058567492496") : (Guid?)null);
 
         harness.Service = new KeepModelWarmBackgroundService(runtimeSettings,
             resolver,
+            supervisor,
+            sourceBuildActivity,
+            new LlamaServerSupervisorOptions
+            {
+                MaxLoadedProcesses = maxLoadedProcesses,
+                IdleTimeToLive = idleTimeToLive ?? TimeSpan.FromMinutes(15)
+            },
             clock,
-            NullLogger<KeepModelWarmBackgroundService>.Instance);
+            logger);
         return harness;
     }
 
     private sealed class Harness(ILocalModelProviderResolver resolver,
         ILocalModelProvider provider,
-        ManualTimeProvider clock)
+        ILlamaServerProcessSupervisor supervisor,
+        ILlamaCppSourceBuildActivity sourceBuildActivity,
+        ManualTimeProvider clock,
+        RecordingLogger<KeepModelWarmBackgroundService> logger)
     {
         public ManualTimeProvider Clock { get; } = clock;
 
@@ -178,7 +315,17 @@ public sealed class KeepModelWarmBackgroundServiceTests
 
         public ILocalModelProviderResolver Resolver { get; } = resolver;
 
+        public bool RuntimeMutationSuppressed { get; set; }
+
         public KeepModelWarmBackgroundService Service { get; set; } = null!;
+
+        public bool SourceBuildActive { get; set; }
+
+        public ILlamaServerProcessSupervisor Supervisor { get; } = supervisor;
+
+        public ILlamaCppSourceBuildActivity SourceBuildActivity { get; } = sourceBuildActivity;
+
+        public RecordingLogger<KeepModelWarmBackgroundService> Logger { get; } = logger;
     }
 
     private sealed class ManualTimeProvider : TimeProvider
@@ -196,5 +343,28 @@ public sealed class KeepModelWarmBackgroundServiceTests
         {
             _timestamp += interval.Ticks;
         }
+    }
+
+    private sealed class RecordingLogger<T> : ILogger<T>
+    {
+        public List<Entry> Entries { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull =>
+            null;
+
+        public bool IsEnabled(LogLevel logLevel) =>
+            true;
+
+        public void Log<TState>(LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            Entries.Add(new Entry(logLevel, formatter(state, exception)));
+        }
+
+        public sealed record Entry(LogLevel Level, string Message);
     }
 }

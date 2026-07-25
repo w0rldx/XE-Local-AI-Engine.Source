@@ -20,6 +20,10 @@ public sealed class StubNodeRuntimeSettings
     private bool _enableTools = StoredNodeSettings.DefaultEnableTools;
     private long _huggingFaceDiskMarginBytes = StoredNodeSettings.DefaultHuggingFaceDiskMarginBytes;
     private string _huggingFaceDefaultQuant = StoredNodeSettings.DefaultHuggingFaceQuant;
+    private TimeSpan _keepModelWarmInterval = TimeSpan.FromSeconds(StoredNodeSettings.DefaultKeepModelWarmIntervalSeconds);
+    private bool _keepModelWarmEnabled = StoredNodeSettings.DefaultKeepModelWarmEnabled;
+    private string? _keepModelWarmModelName;
+    private TimeSpan _llamaIdleTimeToLive = TimeSpan.FromSeconds(StoredNodeSettings.DefaultLlamaIdleTimeToLiveSeconds);
     private int _llamaMaxLoadedProcesses = StoredNodeSettings.DefaultLlamaMaxLoadedProcesses;
     private int _maxPendingToolCallAgeMinutes = StoredNodeSettings.DefaultMaxPendingToolCallAgeMinutes;
     private int _maxResponseSizeMb = StoredNodeSettings.DefaultMaxResponseSizeMb;
@@ -73,6 +77,22 @@ public sealed class StubNodeRuntimeSettings
     public StubNodeRuntimeSettings WithLlamaMaxLoadedProcesses(int llamaMaxLoadedProcesses)
     {
         _llamaMaxLoadedProcesses = llamaMaxLoadedProcesses;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithLlamaIdleTimeToLive(TimeSpan llamaIdleTimeToLive)
+    {
+        _llamaIdleTimeToLive = llamaIdleTimeToLive;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithKeepModelWarm(bool enabled,
+        string? modelName = null,
+        TimeSpan? interval = null)
+    {
+        _keepModelWarmEnabled = enabled;
+        _keepModelWarmModelName = modelName;
+        _keepModelWarmInterval = interval ?? _keepModelWarmInterval;
         return this;
     }
 
@@ -165,7 +185,10 @@ public sealed class StubNodeRuntimeSettings
         settings.GetHuggingFaceDiskMarginBytesAsync(Arg.Any<CancellationToken>()).Returns(_huggingFaceDiskMarginBytes);
         settings.GetLlamaMaxLoadedProcessesAsync(Arg.Any<CancellationToken>()).Returns(_llamaMaxLoadedProcesses);
         settings.GetLlamaIdleTimeToLiveAsync(Arg.Any<CancellationToken>())
-                .Returns(TimeSpan.FromSeconds(StoredNodeSettings.DefaultLlamaIdleTimeToLiveSeconds));
+                .Returns(_llamaIdleTimeToLive);
+        settings.GetKeepModelWarmEnabledAsync(Arg.Any<CancellationToken>()).Returns(_keepModelWarmEnabled);
+        settings.GetKeepModelWarmModelNameAsync(Arg.Any<CancellationToken>()).Returns(_keepModelWarmModelName);
+        settings.GetKeepModelWarmIntervalAsync(Arg.Any<CancellationToken>()).Returns(_keepModelWarmInterval);
         settings.GetMaxResponseSizeMbAsync(Arg.Any<CancellationToken>()).Returns(_maxResponseSizeMb);
         settings.GetRecommendedLlamaCppTagAsync(Arg.Any<CancellationToken>()).Returns(StoredNodeSettings.DefaultRecommendedLlamaCppTag);
         settings.GetOrchestrationIdleTimeoutSecondsAsync(Arg.Any<CancellationToken>()).Returns(_orchestrationIdleTimeoutSeconds);
@@ -190,7 +213,7 @@ public sealed class StubNodeRuntimeSettings
         settings.GetHuggingFaceDefaultQuant().Returns(_huggingFaceDefaultQuant);
         settings.GetHuggingFaceDiskMarginBytes().Returns(_huggingFaceDiskMarginBytes);
         settings.GetLlamaMaxLoadedProcesses().Returns(_llamaMaxLoadedProcesses);
-        settings.GetLlamaIdleTimeToLive().Returns(TimeSpan.FromSeconds(StoredNodeSettings.DefaultLlamaIdleTimeToLiveSeconds));
+        settings.GetLlamaIdleTimeToLive().Returns(_llamaIdleTimeToLive);
         settings.GetMaxResponseSizeMb().Returns(_maxResponseSizeMb);
         settings.GetOrchestrationIdleTimeoutSeconds().Returns(_orchestrationIdleTimeoutSeconds);
         settings.GetMaxPendingToolCallAgeMinutes().Returns(_maxPendingToolCallAgeMinutes);

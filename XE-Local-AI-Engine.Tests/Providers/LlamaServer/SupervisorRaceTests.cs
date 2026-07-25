@@ -31,7 +31,7 @@ public sealed class SupervisorRaceTests
     }
 
     [Test]
-    public async Task RuntimeMutationLease_WhenProcessRunning_FailsAtomically()
+    public async Task RuntimeMutationLease_WhenProcessRunning_FailsWithoutLeavingSuppressionBehind()
     {
         await using var supervisor = SupervisorFactory.Create();
         await supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
@@ -39,6 +39,41 @@ public sealed class SupervisorRaceTests
         var lease = await supervisor.TryAcquireRuntimeMutationLeaseAsync(CancellationToken.None);
 
         AssertEx.Null(lease);
+        AssertEx.False(supervisor.IsKeepWarmSuppressed());
+    }
+
+    [Test]
+    public async Task RuntimeMutationLease_WhileHeld_SuppressesKeepWarmUntilDisposed()
+    {
+        await using var supervisor = SupervisorFactory.Create();
+
+        var lease = await supervisor.TryAcquireRuntimeMutationLeaseAsync(CancellationToken.None);
+
+        AssertEx.NotNull(lease);
+        AssertEx.True(supervisor.IsKeepWarmSuppressed());
+
+        await lease!.DisposeAsync();
+        AssertEx.False(supervisor.IsKeepWarmSuppressed());
+    }
+
+    [Test]
+    public async Task RuntimeMutationLease_CancelledPendingAttemptReleasesItsSuppression()
+    {
+        await using var supervisor = SupervisorFactory.Create();
+        var ownedLease = await supervisor.TryAcquireRuntimeMutationLeaseAsync(CancellationToken.None);
+        AssertEx.NotNull(ownedLease);
+        using var pendingCancellation = new CancellationTokenSource();
+        var pendingAttempt = supervisor.TryAcquireRuntimeMutationLeaseAsync(pendingCancellation.Token);
+
+        await Task.Delay(50);
+        AssertEx.True(supervisor.IsKeepWarmSuppressed());
+
+        await pendingCancellation.CancelAsync();
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() => pendingAttempt);
+        AssertEx.True(supervisor.IsKeepWarmSuppressed());
+
+        await ownedLease!.DisposeAsync();
+        AssertEx.False(supervisor.IsKeepWarmSuppressed());
     }
 
     [Test]

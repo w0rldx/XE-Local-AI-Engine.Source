@@ -1297,6 +1297,9 @@
 					"mode": "Unknown speculative decoding mode.",
 					"required": "Select a draft model for this mode.",
 					"requiredKeepWarmModel": "Select a model to keep warm.",
+					"keepWarmCapacity": "Keep model warm requires at least two loaded-process slots.",
+					"belowIdleTtl": "The warm interval must be shorter than the idle TTL.",
+					"unavailableKeepWarmModel": "The selected model {{model}} is no longer installed.",
 					"rate": "Each rate needs a model name and non-negative input and output values."
 				},
 				"localChat": {
@@ -1332,7 +1335,8 @@
 					"modelPlaceholder": "Select a model",
 					"noModels": "No installed llama.cpp chat models",
 					"intervalLabel": "Warm interval",
-					"help": "Pinning keeps VRAM occupied and permanently uses one MaxLoadedProcesses slot (default 3). The warm interval must remain below the idle TTL to prevent eviction."
+					"help": "Pinning keeps VRAM occupied and permanently uses one of the configured {{maxLoadedProcesses}} MaxLoadedProcesses slots. The warm interval must remain below the idle TTL to prevent eviction.",
+					"unavailableOption": "{{model}} (not installed)"
 				},
 				"ollamaEndpoint": {
 					"label": "Ollama endpoint",

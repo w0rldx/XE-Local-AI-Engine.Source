@@ -10,10 +10,12 @@ using NSubstitute;
 using XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1;
 using XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.Mappers;
 using XE_Local_AI_Engine.Client.Hubs;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 public sealed class LlamaCppSourceBuildTransportTests
 {
@@ -119,6 +121,50 @@ public sealed class LlamaCppSourceBuildTransportTests
         await prerequisiteProbe.DidNotReceiveWithAnyArgs().ProbeAsync(default, default);
         _ = supervisor.DidNotReceiveWithAnyArgs().CountRunningProcesses();
         await supervisor.DidNotReceiveWithAnyArgs().TryAcquireRuntimeMutationLeaseAsync(default);
+    }
+
+    [Test]
+    public async Task StartEndpoint_WhenKeepModelWarmEnabled_BlocksBeforeStartingBuild()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        var service = Substitute.For<ILlamaCppSourceBuildService>();
+        var runtimeSettings = StubNodeRuntimeSettings.Create()
+                                                     .WithKeepModelWarm(enabled: true, modelName: "model-a")
+                                                     .Build();
+        await using var factory = new TestingWebAppFactory
+        {
+            EnableDevelopmentMode = true,
+            ConfigureAdditionalTestServices = services =>
+            {
+                services.RemoveAll<ILlamaCppSourceBuildService>();
+                services.AddSingleton(service);
+                services.RemoveAll<INodeRuntimeSettings>();
+                services.AddSingleton(runtimeSettings);
+            }
+        };
+        using var client = factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/model-fit/llamacpp/source-build")
+        {
+            Content = JsonContent.Create(new StartLlamaCppSourceBuildRequest
+            {
+                Backend = LlamaCppSourceBackendDto.Cpu,
+                Source = LlamaCppSourceSelectionDto.Official,
+                AcknowledgeCustomSourceRisk = false
+            })
+        };
+        factory.AddNodeBearerToken(request);
+
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        AssertEx.Equal("keep-model-warm-enabled", body.RootElement.GetProperty("reason").GetString());
+        AssertEx.Contains(body.RootElement.GetProperty("message").GetString()!, "Disable Keep Model Warm", StringComparison.Ordinal);
+        await service.DidNotReceive().StartAsync(Arg.Any<LlamaCppSourceBuildRequest>(), Arg.Any<CancellationToken>());
     }
 
     [Test]

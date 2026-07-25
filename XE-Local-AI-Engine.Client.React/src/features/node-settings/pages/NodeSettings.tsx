@@ -89,7 +89,7 @@ export function NodeSettings() {
 
 	// Keep-warm targets the supervised llama-server runtime, so only installed chat models owned by the llama.cpp
 	// provider are eligible. Provider matching is case-insensitive because provider names cross a persisted/API boundary.
-	const keepWarmModelOptions = useMemo(
+	const installedKeepWarmModelOptions = useMemo(
 		() =>
 			toChatModelOptions(
 				(localModels?.items ?? []).filter((model) => (model.provider ?? "").toLowerCase() === "llamacpp"),
@@ -97,6 +97,30 @@ export function NodeSettings() {
 			).map((option) => ({ value: option.value, label: option.label })),
 		[localModels],
 	);
+	const selectedKeepWarmModel = fieldsForm.keepModelWarmModelName.trim();
+	const keepWarmModelUnavailable =
+		localModels !== undefined &&
+		fieldsForm.keepModelWarmEnabled &&
+		selectedKeepWarmModel.length > 0 &&
+		!installedKeepWarmModelOptions.some((option) => option.value === selectedKeepWarmModel);
+	const keepWarmModelOptions = useMemo(
+		() =>
+			keepWarmModelUnavailable
+				? [
+						...installedKeepWarmModelOptions,
+						{
+							value: selectedKeepWarmModel,
+							label: t("pages.nodeSettings.fields.keepModelWarm.unavailableOption", "{{model}} (not installed)", {
+								model: selectedKeepWarmModel,
+							}),
+						},
+					]
+				: installedKeepWarmModelOptions,
+		[installedKeepWarmModelOptions, keepWarmModelUnavailable, selectedKeepWarmModel, t],
+	);
+	const visibleFieldErrors = keepWarmModelUnavailable
+		? { ...fieldErrors, keepModelWarmModelName: "unavailableKeepWarmModel" }
+		: fieldErrors;
 
 	// Installed models offered as the knowledge-base reranker. Reranker GGUFs are not a chat kind, so this list is NOT
 	// filtered to chat-capable models (value = model name, resolved server-side).
@@ -239,6 +263,11 @@ export function NodeSettings() {
 		if (timeoutToSave === undefined) {
 			return;
 		}
+		if (keepWarmModelUnavailable) {
+			setFieldErrors((current) => ({ ...current, keepModelWarmModelName: "unavailableKeepWarmModel" }));
+			toast.error(t("pages.nodeSettings.fields.validationError", "Some settings are invalid. Fix the highlighted fields."));
+			return;
+		}
 		const baseline = fieldsBaselineRef.current ?? toNodeSettingsFieldsForm(undefined);
 		const { body, errors } = buildNodeSettingsRequest(fieldsForm, baseline, fieldBounds, developerMode);
 		if (Object.keys(errors).length > 0) {
@@ -361,7 +390,7 @@ export function NodeSettings() {
 				<NodeSettingsFieldsCard
 					form={fieldsForm}
 					bounds={fieldBounds}
-					errors={fieldErrors}
+					errors={visibleFieldErrors}
 					onChange={handleFieldChange}
 					showDeveloperFields={developerMode}
 					draftModelOptions={draftModelOptions}

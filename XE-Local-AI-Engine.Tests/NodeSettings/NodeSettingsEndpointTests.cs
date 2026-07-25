@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 public sealed class NodeSettingsEndpointTests
 {
@@ -315,6 +316,109 @@ public sealed class NodeSettingsEndpointTests
     }
 
     [Test]
+    public async Task SaveNodeSettings_WhenKeepModelWarmEnabledWithOneProcessSlot_ReturnsValidationProblem()
+    {
+        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
+        nodeSettingsStore.LoadAsync(Arg.Any<CancellationToken>())
+                         .Returns(new StoredNodeSettings
+                         {
+                             KeepModelWarmEnabled = true,
+                             KeepModelWarmModelName = "model-a",
+                             LlamaMaxLoadedProcesses = 3
+                         });
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            LlamaMaxLoadedProcesses = 1
+        });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await nodeSettingsStore.DidNotReceiveWithAnyArgs().SaveAsync(Arg.Any<StoredNodeSettings>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task SaveNodeSettings_WhenKeepModelWarmIntervalIsNotBelowMergedIdleTtl_ReturnsValidationProblem()
+    {
+        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
+        nodeSettingsStore.LoadAsync(Arg.Any<CancellationToken>())
+                         .Returns(new StoredNodeSettings
+                         {
+                             KeepModelWarmEnabled = true,
+                             KeepModelWarmModelName = "model-a",
+                             KeepModelWarmIntervalSeconds = 300,
+                             LlamaIdleTimeToLiveSeconds = 900
+                         });
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            LlamaIdleTimeToLiveSeconds = 300
+        });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await nodeSettingsStore.DidNotReceiveWithAnyArgs().SaveAsync(Arg.Any<StoredNodeSettings>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task SaveNodeSettings_WhenEffectiveRuntimeProcessCapIsOne_ReturnsValidationProblem()
+    {
+        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
+        nodeSettingsStore.LoadAsync(Arg.Any<CancellationToken>())
+                         .Returns(new StoredNodeSettings
+                         {
+                             KeepModelWarmEnabled = true,
+                             KeepModelWarmModelName = "model-a",
+                             KeepModelWarmIntervalSeconds = 60,
+                             LlamaIdleTimeToLiveSeconds = 900
+                         });
+        var runtimeSettings = StubNodeRuntimeSettings.Create()
+                                                     .WithLlamaMaxLoadedProcesses(1)
+                                                     .Build();
+        await using var factory = CreateFactory(nodeSettingsStore, runtimeSettings: runtimeSettings);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = JsonContent.Create(new SaveNodeSettingsRequest());
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await nodeSettingsStore.DidNotReceiveWithAnyArgs().SaveAsync(Arg.Any<StoredNodeSettings>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task SaveNodeSettings_WhenEffectiveRuntimeIdleTtlMatchesInterval_ReturnsValidationProblem()
+    {
+        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
+        nodeSettingsStore.LoadAsync(Arg.Any<CancellationToken>())
+                         .Returns(new StoredNodeSettings
+                         {
+                             KeepModelWarmEnabled = true,
+                             KeepModelWarmModelName = "model-a",
+                             KeepModelWarmIntervalSeconds = 300,
+                             LlamaMaxLoadedProcesses = 3
+                         });
+        var runtimeSettings = StubNodeRuntimeSettings.Create()
+                                                     .WithLlamaIdleTimeToLive(TimeSpan.FromSeconds(300))
+                                                     .Build();
+        await using var factory = CreateFactory(nodeSettingsStore, runtimeSettings: runtimeSettings);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = JsonContent.Create(new SaveNodeSettingsRequest());
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await nodeSettingsStore.DidNotReceiveWithAnyArgs().SaveAsync(Arg.Any<StoredNodeSettings>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public void NodeSettings_KeepModelWarmFields_RoundTripThroughMapper()
     {
         var stored = new SaveNodeSettingsRequest
@@ -566,7 +670,9 @@ public sealed class NodeSettingsEndpointTests
         AssertEx.True(valid.IsValid);
     }
 
-    private static TestingWebAppFactory CreateFactory(INodeSettingsStore nodeSettingsStore, ICapabilityReporter? capabilityReporter = null)
+    private static TestingWebAppFactory CreateFactory(INodeSettingsStore nodeSettingsStore,
+        ICapabilityReporter? capabilityReporter = null,
+        INodeRuntimeSettings? runtimeSettings = null)
     {
         return new TestingWebAppFactory
         {
@@ -576,6 +682,11 @@ public sealed class NodeSettingsEndpointTests
                 services.AddSingleton(nodeSettingsStore);
                 services.RemoveAll<ICapabilityReporter>();
                 services.AddSingleton(capabilityReporter ?? Substitute.For<ICapabilityReporter>());
+                if (runtimeSettings is not null)
+                {
+                    services.RemoveAll<INodeRuntimeSettings>();
+                    services.AddSingleton(runtimeSettings);
+                }
             }
         };
     }
