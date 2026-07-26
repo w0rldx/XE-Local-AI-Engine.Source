@@ -11,9 +11,9 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     <see cref="InferenceInvalidationEvaluator" /> tests: a changed active build tag marks stale; live free VRAM below
-///     the frozen baseline marks stale; and when the VRAM probe reports "unknown" the verdict degrades to the build +
-///     hardware axes only (so a matching build + matching hardware is NOT stale). Every probe is mocked.
+///     <see cref="InferenceInvalidationEvaluator" /> tests: refreshed NVIDIA global-free VRAM is authoritative, the
+///     llama.cpp process budget is only a fallback when global free is unknown, and unavailable live data degrades to the
+///     build + hardware axes.
 /// </summary>
 public sealed class InferenceInvalidationEvaluatorTests
 {
@@ -24,7 +24,10 @@ public sealed class InferenceInvalidationEvaluatorTests
     public async Task Invalidation_OnBuildChange_MarksStale()
     {
         // Active installed tag differs from the frozen build → stale on the build axis (hardware/VRAM match otherwise).
-        var evaluator = BuildEvaluator(installedTag: "b9999", hardware: NvidiaProfile(24 * Gb), probeFreeVram: null);
+        var evaluator = BuildEvaluator(installedTag: "b9999",
+            hardware: NvidiaProfile(24 * Gb, availableVramBytes: 8 * Gb),
+            processBudgetVram: null,
+            out _);
 
         var stale = await evaluator.IsStaleAsync(FrozenRecord(FrozenBuild, freeVramAtFreeze: 8 * Gb), CancellationToken.None);
 
@@ -32,28 +35,52 @@ public sealed class InferenceInvalidationEvaluatorTests
     }
 
     [Test]
-    public async Task Invalidation_OnLowerFreeVram_MarksStale()
+    public async Task Invalidation_OnLowerGlobalFreeVram_MarksStale_WithoutProcessProbe()
     {
-        // Build + hardware match; live free VRAM (4 GB) has dropped below the frozen baseline (8 GB) → stale.
-        var evaluator = BuildEvaluator(installedTag: FrozenBuild, hardware: NvidiaProfile(24 * Gb), probeFreeVram: 4 * Gb);
+        var evaluator = BuildEvaluator(installedTag: FrozenBuild,
+            hardware: NvidiaProfile(24 * Gb, availableVramBytes: 4 * Gb),
+            processBudgetVram: 20 * Gb,
+            out var processProbe);
 
         var stale = await evaluator.IsStaleAsync(FrozenRecord(FrozenBuild, freeVramAtFreeze: 8 * Gb), CancellationToken.None);
 
         AssertEx.True(stale);
+        await processProbe.DidNotReceive()
+                          .TryGetProcessBudgetBytesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Invalidation_WhenGlobalFreeUnknown_UsesProcessBudgetFallback()
+    {
+        var evaluator = BuildEvaluator(installedTag: FrozenBuild,
+            hardware: NvidiaProfile(24 * Gb, availableVramBytes: null),
+            processBudgetVram: 4 * Gb,
+            out var processProbe);
+
+        var stale = await evaluator.IsStaleAsync(FrozenRecord(FrozenBuild, freeVramAtFreeze: 8 * Gb), CancellationToken.None);
+
+        AssertEx.True(stale);
+        await processProbe.Received(1).TryGetProcessBudgetBytesAsync("cuda", Arg.Any<CancellationToken>());
     }
 
     [Test]
     public async Task Invalidation_WhenProbeUnknown_DegradesToBuildAndHwOnly()
     {
         // Probe returns null (unknown): the live-VRAM check is skipped, so a matching build + matching hardware is NOT stale.
-        var evaluator = BuildEvaluator(installedTag: FrozenBuild, hardware: NvidiaProfile(24 * Gb), probeFreeVram: null);
+        var evaluator = BuildEvaluator(installedTag: FrozenBuild,
+            hardware: NvidiaProfile(24 * Gb, availableVramBytes: null),
+            processBudgetVram: null,
+            out _);
 
         var stale = await evaluator.IsStaleAsync(FrozenRecord(FrozenBuild, freeVramAtFreeze: 8 * Gb), CancellationToken.None);
 
         AssertEx.False(stale);
     }
 
-    private static InferenceInvalidationEvaluator BuildEvaluator(string installedTag, HardwareProfile hardware, long? probeFreeVram)
+    private static InferenceInvalidationEvaluator BuildEvaluator(string installedTag,
+        HardwareProfile hardware,
+        long? processBudgetVram,
+        out IProcessVramBudgetProbe processProbe)
     {
         var installedStore = Substitute.For<IInstalledRuntimeStore>();
         installedStore.ReadAsync(Arg.Any<CancellationToken>())
@@ -63,20 +90,24 @@ public sealed class InferenceInvalidationEvaluatorTests
         hardwareProfiler.GetProfileAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>())
                         .Returns(Task.FromResult(hardware));
 
-        var probe = Substitute.For<IProcessVramBudgetProbe>();
-        probe.TryGetProcessBudgetBytesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-             .Returns(Task.FromResult(probeFreeVram));
+        processProbe = Substitute.For<IProcessVramBudgetProbe>();
+        processProbe.TryGetProcessBudgetBytesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                    .Returns(Task.FromResult(processBudgetVram));
 
-        return new InferenceInvalidationEvaluator(installedStore, hardwareProfiler, probe, NullLogger<InferenceInvalidationEvaluator>.Instance);
+        return new InferenceInvalidationEvaluator(installedStore,
+            hardwareProfiler,
+            processProbe,
+            NullLogger<InferenceInvalidationEvaluator>.Instance);
     }
 
-    private static HardwareProfile NvidiaProfile(long vramBytes)
+    private static HardwareProfile NvidiaProfile(long vramBytes, long? availableVramBytes)
     {
         return new HardwareProfile
         {
             TotalRamBytes = 64 * Gb,
             AvailableRamBytes = 48 * Gb,
             VramBytes = vramBytes,
+            AvailableVramBytes = availableVramBytes,
             VramKnown = true,
             GpuVendor = GpuVendor.Nvidia,
             GpuAccelAvailable = true,
