@@ -494,7 +494,7 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
             throw new InvalidDataException("Embedding response indices were incomplete or duplicated.");
         }
 
-        return ordered.Select(item => (IReadOnlyList<double>)item.Embedding).ToArray();
+        return ordered.Select(item => item.Embedding).ToArray();
     }
 
     private static async Task<IReadOnlyList<double>> PostRerankAsync(HttpClient client,
