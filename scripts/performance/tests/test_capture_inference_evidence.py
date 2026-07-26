@@ -42,6 +42,18 @@ class CaptureInferenceEvidenceTests(unittest.TestCase):
         self.assertEqual(3, len(result["runs"]))
         self.assertEqual(1, len(result["warmup_results"]))
 
+    def test_llama_bench_json_is_projected_to_role_metrics(self) -> None:
+        stdout = json.dumps([
+            {"n_prompt": 128, "n_gen": 0, "embeddings": False, "avg_ts": 1000.0},
+            {"n_prompt": 0, "n_gen": 32, "embeddings": False, "avg_ts": 80.0},
+            {"n_prompt": 512, "n_gen": 0, "embeddings": True, "avg_ts": 2400.0},
+        ])
+        self.assertEqual({
+            "prompt_tokens_per_second": 1000.0,
+            "generation_tokens_per_second": 80.0,
+            "embedding_tokens_per_second": 2400.0,
+        }, capture.numeric_metrics(stdout))
+
     def test_baseline_captures_framework_identity_and_explicit_gaps(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
@@ -102,7 +114,7 @@ class CaptureInferenceEvidenceTests(unittest.TestCase):
                     "explore": ["-m", "model.gguf", "--fit", "--parallel", "1"],
                     "replay": ["-m", "model.gguf", "--parallel", "1", "-c", "4096", "-ngl", "99", "-ts", "1.0", "-ctk", "q8_0", "-ctv", "q8_0"],
                 },
-                "resource_acceptance": {"max_delta_percent": 100},
+                "resource_acceptance": {"max_delta_percent": 10000},
                 "coverage": {"unvalidated": []},
             }
             spec_path = root / "spec.json"

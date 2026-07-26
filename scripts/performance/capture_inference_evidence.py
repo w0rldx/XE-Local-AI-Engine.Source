@@ -222,6 +222,21 @@ def numeric_metrics(stdout: str) -> dict[str, float]:
         parsed = json.loads(stdout)
     except json.JSONDecodeError:
         return {}
+    if isinstance(parsed, list):
+        metrics: dict[str, float] = {}
+        for item in parsed:
+            if not isinstance(item, dict) or not isinstance(item.get("avg_ts"), (int, float)):
+                continue
+            if item.get("embeddings") is True:
+                name = "embedding_tokens_per_second"
+            elif isinstance(item.get("n_gen"), int) and item["n_gen"] > 0:
+                name = "generation_tokens_per_second"
+            elif isinstance(item.get("n_prompt"), int) and item["n_prompt"] > 0:
+                name = "prompt_tokens_per_second"
+            else:
+                continue
+            metrics[name] = float(item["avg_ts"])
+        return metrics
     if not isinstance(parsed, dict):
         return {}
     return {
