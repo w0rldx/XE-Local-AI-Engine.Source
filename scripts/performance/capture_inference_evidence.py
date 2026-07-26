@@ -176,6 +176,33 @@ def global_gpu_used_mib(ambient: dict[str, Any] | None) -> int | None:
     return total
 
 
+def global_gpu_free_mib(ambient: dict[str, Any] | None) -> int | None:
+    if not ambient:
+        return None
+    probe = ambient.get("nvidia_smi")
+    if not isinstance(probe, dict) or probe.get("exit_code") != 0:
+        return None
+    stdout = probe.get("stdout")
+    if not isinstance(stdout, str) or not stdout:
+        return None
+    total = 0
+    for line in stdout.splitlines():
+        parts = [part.strip() for part in line.split(",")]
+        if len(parts) != 8:
+            return None
+        try:
+            total += int(parts[5])
+        except ValueError:
+            return None
+    return total
+
+
+def process_budget_free_mib(device_probe: dict[str, Any]) -> int | None:
+    output = f"{device_probe.get('stdout', '')}\n{device_probe.get('stderr', '')}"
+    values = [int(value) for value in re.findall(r"\((?:\d+ MiB,\s*)?(\d+) MiB free\)", output)]
+    return sum(values) if values else None
+
+
 def capture_host(runtime_binary: Path) -> dict[str, Any]:
     cpu = ""
     cpuinfo = Path("/proc/cpuinfo")
@@ -540,6 +567,12 @@ def capture_fit(spec_path: Path, output_path: Path) -> None:
         gpu_within_tolerance = gpu_delta_percent <= tolerance
         if not gpu_within_tolerance:
             raise CaptureError(f"Explore/replay global GPU-used delta {gpu_delta_percent:.2f}% exceeds {tolerance:.2f}%")
+    host = capture_host(Path(server["path"]))
+    process_free = process_budget_free_mib(host["runtime_devices"])
+    explore_global_free = global_gpu_free_mib(explore_result["runs"][-1]["ambient_during"])
+    replay_global_free = global_gpu_free_mib(replay_result["runs"][-1]["ambient_during"])
+    default_text = default_result["runs"][-1]["stdout"] + "\n" + default_result["runs"][-1]["stderr"]
+    verbose_text = verbose_result["runs"][-1]["stdout"] + "\n" + verbose_result["runs"][-1]["stderr"]
     artifact = {
         "schema_version": SCHEMA_VERSION,
         "kind": "fit-replay-evidence",
@@ -548,7 +581,7 @@ def capture_fit(spec_path: Path, output_path: Path) -> None:
         "completed_at_utc": utc_now(),
         "spec_sha256": sha256_file(spec_path),
         "verified_identity": {"server": server, "fit_helper": helper},
-        "host": capture_host(Path(server["path"])),
+        "host": host,
         "captures": {
             "default_verbosity": default_result,
             "verbose": verbose_result,
@@ -570,6 +603,20 @@ def capture_fit(spec_path: Path, output_path: Path) -> None:
             "global_vram_samples": {
                 "explore": explore_result["runs"][-1]["ambient_during"],
                 "replay": replay_result["runs"][-1]["ambient_during"],
+            },
+            "vram_semantics": {
+                "global_free_mib": {"explore": explore_global_free, "replay": replay_global_free},
+                "process_budget_free_mib": process_free,
+                "process_minus_global_free_mib": {
+                    "explore": None if process_free is None or explore_global_free is None else process_free - explore_global_free,
+                    "replay": None if process_free is None or replay_global_free is None else process_free - replay_global_free,
+                },
+                "interpretation": "Global free VRAM governs contention/invalidation; process-budget VRAM describes this process's WDDM/CUDA fit budget. Divergence is reported, never averaged.",
+            },
+            "verbosity_evidence": {
+                "default_fit_detail_lines": default_text.count("common_params_fit_impl"),
+                "verbose_fit_detail_lines": verbose_text.count("common_params_fit_impl"),
+                "helper_stdout_argv": fitted,
             },
         },
         "coverage": spec.get("coverage", {}),
