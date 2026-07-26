@@ -37,7 +37,8 @@ relative paths plus each file hash. The spec must also fix:
 
 - repository source commit and exact MAF, MEAI, and OpenAI package versions;
 - runtime tag, provenance (`managed-source-build`, `pinned-prebuilt`, or `BYO`),
-  backend, runtime binary hash, and the recorded `--list-devices` output;
+  backend, runtime binary hash, hashes for every auxiliary benchmark/helper binary,
+  and the recorded `--list-devices` output;
 - cache state and the exact cache preparation procedure;
 - warmup/repeat counts per command;
 - the statistical rule. Use median plus nearest-rank p95. Lane 4 may ship only at
