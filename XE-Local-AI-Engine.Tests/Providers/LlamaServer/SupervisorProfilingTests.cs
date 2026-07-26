@@ -163,23 +163,32 @@ public sealed class SupervisorProfilingTests
         await supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None);
         var warmHandle = launcher.Handles.Single();
 
-        var warmEvictedAtBody = false;
+        var warmEvictedAtCapture = false;
+        var launchCountAtCapture = -1;
+        LlamaServerProfilingVramSnapshot? capturedPreSpawnVram = null;
         var launchCountAtBody = 0;
         await supervisor.RunExclusiveProfilingAsync("llama3",
             ModelRole.Chat,
             ResolvedLaunchArguments.Explore(),
             enableMetrics: false,
-            (_, _) =>
+            (context, _) =>
             {
-                // Inside the body: the warm process was tree-killed and a fresh exclusive process spawned.
-                warmEvictedAtBody = warmHandle.WasTreeKilled;
+                capturedPreSpawnVram = context.PreSpawnVram;
                 launchCountAtBody = launcher.LaunchCount;
                 return Task.FromResult(result: true);
             },
-            CancellationToken.None);
+            CancellationToken.None,
+            _ =>
+            {
+                warmEvictedAtCapture = warmHandle.WasTreeKilled;
+                launchCountAtCapture = launcher.LaunchCount;
+                return Task.FromResult(new LlamaServerProfilingVramSnapshot(6, 8));
+            });
 
-        AssertEx.True(warmEvictedAtBody, "The warm process must be evicted before the profiling spawn.");
+        AssertEx.True(warmEvictedAtCapture, "The warm process must be evicted before ambient VRAM is captured.");
+        AssertEx.Equal(expected: 1, launchCountAtCapture); // only the warm process has launched at capture time.
         AssertEx.Equal(expected: 2, launchCountAtBody); // warm + exclusive profiling spawn.
+        AssertEx.Equal(new LlamaServerProfilingVramSnapshot(6, 8), capturedPreSpawnVram);
     }
 
     [Test]

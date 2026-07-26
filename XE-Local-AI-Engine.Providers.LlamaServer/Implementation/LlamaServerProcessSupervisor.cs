@@ -1156,7 +1156,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         ResolvedLaunchArguments launchArgs,
         bool enableMetrics,
         Func<LlamaServerProfilingContext, CancellationToken, Task<T>> body,
-        CancellationToken ct)
+        CancellationToken ct,
+        Func<CancellationToken, Task<LlamaServerProfilingVramSnapshot>>? captureVramBeforeSpawn = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
         ArgumentNullException.ThrowIfNull(launchArgs);
@@ -1178,6 +1179,10 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                 // Explicitly evict any warm process for this key — admission only auto-evicts an IDLE LRU victim, so a
                 // freshly-used warm process would otherwise survive and the profiling spawn would not be exclusive.
                 await EvictAsync(modelName, role, ct).ConfigureAwait(false);
+
+                var preSpawnVram = captureVramBeforeSpawn is null
+                    ? null
+                    : await captureVramBeforeSpawn(ct).ConfigureAwait(false);
 
                 // Thread-safe per-line sink backing the StartupCapture callback (both server pipes Enqueue concurrently).
                 var startupOutput = new ConcurrentQueue<string>();
@@ -1210,6 +1215,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                         fitParamsOutput.ToArray(),
                         running.Handle.ProcessId)
                     {
+                        PreSpawnVram = preSpawnVram,
                         SuccessfulLaunchArguments = running.SuccessfulLaunchArguments
                     };
                     return await body(context, ct).ConfigureAwait(false);

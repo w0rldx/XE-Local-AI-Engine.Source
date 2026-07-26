@@ -201,7 +201,8 @@ public sealed class InferenceProfileService : IInferenceProfileService
                 replay,
                 enableMetrics: true,
                 body: (context, innerCt) => _harness.RunAsync(context, spec, innerCt),
-                ct).ConfigureAwait(false);
+                ct,
+                captureVramBeforeSpawn: innerCt => CapturePreSpawnVramAsync(profile.Backend, innerCt)).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -317,6 +318,18 @@ public sealed class InferenceProfileService : IInferenceProfileService
         }
 
         return ProfileActionResult.Ok(ToView(frozen));
+    }
+
+    private async Task<LlamaServerProfilingVramSnapshot> CapturePreSpawnVramAsync(string backend, CancellationToken ct)
+    {
+        if (string.Equals(backend, InferenceBackends.Cpu, StringComparison.OrdinalIgnoreCase))
+        {
+            return new LlamaServerProfilingVramSnapshot(GlobalFreeBytes: null, ProcessBudgetBytes: null);
+        }
+
+        var hardware = await _hardwareProfiler.GetProfileAsync(forceRefresh: true, ct).ConfigureAwait(false);
+        var processBudget = await _processVramBudgetProbe.TryGetProcessBudgetBytesAsync(backend, ct).ConfigureAwait(false);
+        return new LlamaServerProfilingVramSnapshot(hardware.AvailableVramBytes, processBudget);
     }
 
     /// <inheritdoc />

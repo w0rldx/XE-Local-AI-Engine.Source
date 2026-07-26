@@ -133,7 +133,7 @@ public sealed class InferenceBenchmarkHarnessTests
     }
 
     [Test]
-    public async Task RunAsync_StablePostLoadDivergence_EstablishesBaseline_AndDoesNotReject()
+    public async Task RunAsync_CleanPreSpawnState_AllowsExpectedSelfResidencyDivergence()
     {
         using var handler = new RoleBenchmarkHandler();
         var harness = BuildHarness(modelCallsTool: false,
@@ -146,7 +146,10 @@ public sealed class InferenceBenchmarkHarnessTests
             MeasuredRuns = 1
         };
 
-        var metrics = await harness.RunAsync(ProfilingContext(ModelRole.Embedding), spec, CancellationToken.None);
+        var metrics = await harness.RunAsync(ProfilingContext(ModelRole.Embedding,
+                preSpawnVram: new LlamaServerProfilingVramSnapshot(8 * Gb, 8 * Gb)),
+            spec,
+            CancellationToken.None);
 
         AssertEx.True(metrics.Success, metrics.FailureReason);
         AssertEx.False(metrics.ExternalPressureDetected);
@@ -157,7 +160,32 @@ public sealed class InferenceBenchmarkHarnessTests
     }
 
     [Test]
-    public async Task RunAsync_DivergenceGrowingAfterPostLoadBaseline_RejectsAsExternalPressure()
+    public async Task RunAsync_PreExistingExternalPressure_RejectsBeforeWorkload()
+    {
+        using var handler = new RoleBenchmarkHandler();
+        var harness = BuildHarness(modelCallsTool: false,
+            handler,
+            globalFreeVram: 4 * Gb,
+            processBudgetVram: 8 * Gb);
+        var spec = InferenceBenchmarkSpec.Golden("cuda", ctxSize: 2048) with
+        {
+            WarmupRuns = 0,
+            MeasuredRuns = 1
+        };
+
+        var metrics = await harness.RunAsync(ProfilingContext(ModelRole.Embedding,
+                preSpawnVram: new LlamaServerProfilingVramSnapshot(6 * Gb, 8 * Gb)),
+            spec,
+            CancellationToken.None);
+
+        AssertEx.False(metrics.Success);
+        AssertEx.True(metrics.ExternalPressureDetected);
+        AssertEx.Contains(metrics.FailureReason!, "external GPU pressure");
+        AssertEx.Equal(0, handler.PostPaths.Count);
+    }
+
+    [Test]
+    public async Task RunAsync_PressureIntroducedDuringBenchmark_RejectsAsExternalPressure()
     {
         using var handler = new RoleBenchmarkHandler();
         var harness = BuildHarness(modelCallsTool: false,
@@ -171,7 +199,10 @@ public sealed class InferenceBenchmarkHarnessTests
             MeasuredRuns = 1
         };
 
-        var metrics = await harness.RunAsync(ProfilingContext(ModelRole.Embedding), spec, CancellationToken.None);
+        var metrics = await harness.RunAsync(ProfilingContext(ModelRole.Embedding,
+                preSpawnVram: new LlamaServerProfilingVramSnapshot(8 * Gb, 8 * Gb)),
+            spec,
+            CancellationToken.None);
 
         AssertEx.False(metrics.Success);
         AssertEx.True(metrics.ExternalPressureDetected);
@@ -205,14 +236,19 @@ public sealed class InferenceBenchmarkHarnessTests
         AssertEx.Equal<long?>(8 * Gb, metrics.MinimumProcessBudgetVramBytes);
     }
 
-    private static LlamaServerProfilingContext ProfilingContext(ModelRole role, int? processId = null)
+    private static LlamaServerProfilingContext ProfilingContext(ModelRole role,
+        int? processId = null,
+        LlamaServerProfilingVramSnapshot? preSpawnVram = null)
     {
         return new LlamaServerProfilingContext(new LlamaServerEndpoint("bartowski/Model-GGUF:Q4_K_M",
                 role,
                 new Uri("http://127.0.0.1:18100/v1")),
             [],
             FitParamsOutput: [],
-            processId);
+            processId)
+        {
+            PreSpawnVram = preSpawnVram
+        };
     }
 
     private static InferenceBenchmarkHarness BuildHarness(bool modelCallsTool,
