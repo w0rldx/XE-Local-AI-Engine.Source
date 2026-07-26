@@ -63,8 +63,8 @@ public sealed class InferenceInvalidationEvaluatorTests
         hardwareProfiler.GetProfileAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>())
                         .Returns(Task.FromResult(hardware));
 
-        var probe = Substitute.For<IAvailableVramProbe>();
-        probe.TryGetFreeVramBytesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+        var probe = Substitute.For<IProcessVramBudgetProbe>();
+        probe.TryGetProcessBudgetBytesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
              .Returns(Task.FromResult(probeFreeVram));
 
         return new InferenceInvalidationEvaluator(installedStore, hardwareProfiler, probe, NullLogger<InferenceInvalidationEvaluator>.Instance);

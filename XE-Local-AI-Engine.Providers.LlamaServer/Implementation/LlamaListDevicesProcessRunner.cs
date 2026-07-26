@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging;
 
 /// <summary>
 ///     Shared runner for a short-lived <c>llama-server --list-devices</c> probe. Both the available-VRAM probe
-///     (<see cref="LlamaListDevicesVramProbe" />) and the device-inventory probe
+///     (<see cref="LlamaListDevicesProcessVramBudgetProbe" />) and the device-inventory probe
 ///     (<see cref="LlamaDeviceInventoryProbe" />) ask llama.cpp the same question — "what devices does THIS binary
 ///     enumerate?" — so the process launch + pipe draining + bounded wait lives here once rather than being duplicated.
 /// </summary>

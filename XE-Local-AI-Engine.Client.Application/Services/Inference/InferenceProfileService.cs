@@ -31,7 +31,7 @@ public sealed class InferenceProfileService : IInferenceProfileService
     private readonly IInstalledRuntimeStore _runtimeStore;
     private readonly IModelFitSnapshotStore _snapshotStore;
     private readonly ILlamaServerProcessSupervisor _supervisor;
-    private readonly IAvailableVramProbe _vramProbe;
+    private readonly IProcessVramBudgetProbe _vramProbe;
     private readonly IGpuVariantSelector _variantSelector;
 
     public InferenceProfileService(ILlamaServerProcessSupervisor supervisor,
@@ -45,7 +45,7 @@ public sealed class InferenceProfileService : IInferenceProfileService
         IMachineKeyProvider machineKeyProvider,
         IGpuVariantSelector variantSelector,
         IInstalledRuntimeStore runtimeStore,
-        IAvailableVramProbe vramProbe,
+        IProcessVramBudgetProbe vramProbe,
         ILogger<InferenceProfileService> logger)
     {
         ArgumentNullException.ThrowIfNull(supervisor);
@@ -236,7 +236,7 @@ public sealed class InferenceProfileService : IInferenceProfileService
         }
 
         // Re-probe free VRAM at freeze time as the invalidation baseline.
-        var freeVramAtFreeze = await _vramProbe.TryGetFreeVramBytesAsync(profile.Backend, ct).ConfigureAwait(false);
+        var freeVramAtFreeze = await _vramProbe.TryGetProcessBudgetBytesAsync(profile.Backend, ct).ConfigureAwait(false);
 
         var frozen = await _profileStore.MarkFrozenAsync(profileId, benchmark.SnapshotId, freeVramAtFreeze, ct).ConfigureAwait(false);
         if (frozen is null)

@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// <summary>
 ///     Default <see cref="IGgufVariantRecommender" />. Resolves the active llama.cpp backend the same way the inference
 ///     profiler does (<see cref="IGpuVariantSelector" /> → <see cref="InferenceBackends.FromVariant" />), probes free
-///     VRAM once via <see cref="IAvailableVramProbe" />, then grades each file's quality tier and fit verdict and flags a
+///     VRAM once via <see cref="IProcessVramBudgetProbe" />, then grades each file's quality tier and fit verdict and flags a
 ///     single recommended variant. Stateless (singletons only) → singleton. Read-time computation; degrades to
 ///     "unknown" rather than throwing when the backend/probe is unavailable.
 /// </summary>
@@ -25,10 +25,10 @@ public sealed class GgufVariantRecommender : IGgufVariantRecommender
 
     private readonly ILogger<GgufVariantRecommender> _logger;
     private readonly IGpuVariantSelector _variantSelector;
-    private readonly IAvailableVramProbe _vramProbe;
+    private readonly IProcessVramBudgetProbe _vramProbe;
 
     public GgufVariantRecommender(IGpuVariantSelector variantSelector,
-        IAvailableVramProbe vramProbe,
+        IProcessVramBudgetProbe vramProbe,
         ILogger<GgufVariantRecommender> logger)
     {
         _variantSelector = variantSelector ?? throw new ArgumentNullException(nameof(variantSelector));
@@ -75,7 +75,7 @@ public sealed class GgufVariantRecommender : IGgufVariantRecommender
         {
             var variant = await _variantSelector.SelectVariantAsync(ct).ConfigureAwait(false);
             var backend = InferenceBackends.FromVariant(variant);
-            return await _vramProbe.TryGetFreeVramBytesAsync(backend, ct).ConfigureAwait(false);
+            return await _vramProbe.TryGetProcessBudgetBytesAsync(backend, ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {

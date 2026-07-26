@@ -155,7 +155,7 @@ public sealed class InferenceProfileServiceTests
         var snapshotId = Guid.NewGuid();
         fixture.BenchmarkStore.GetLatestSuccessfulForProfileAsync(profile.Id, Arg.Any<CancellationToken>())
                .Returns(Task.FromResult<ModelFitBenchmarkRecord?>(BenchmarkRowFor(profile, snapshotId)));
-        fixture.VramProbe.TryGetFreeVramBytesAsync("cuda", Arg.Any<CancellationToken>()).Returns(Task.FromResult<long?>(2000));
+        fixture.VramProbe.TryGetProcessBudgetBytesAsync("cuda", Arg.Any<CancellationToken>()).Returns(Task.FromResult<long?>(2000));
         fixture.ProfileStore.MarkFrozenAsync(profile.Id, snapshotId, 2000, Arg.Any<CancellationToken>())
                .Returns(Task.FromResult<InferenceProfileRecord?>(profile with
                {
@@ -325,7 +325,7 @@ public sealed class InferenceProfileServiceTests
 
         public IInstalledRuntimeStore RuntimeStore { get; } = Substitute.For<IInstalledRuntimeStore>();
 
-        public IAvailableVramProbe VramProbe { get; } = Substitute.For<IAvailableVramProbe>();
+        public IProcessVramBudgetProbe VramProbe { get; } = Substitute.For<IProcessVramBudgetProbe>();
 
         public ServiceFixture()
         {

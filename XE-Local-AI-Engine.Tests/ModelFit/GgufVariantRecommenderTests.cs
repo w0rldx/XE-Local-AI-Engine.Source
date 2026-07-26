@@ -185,8 +185,8 @@ public sealed class GgufVariantRecommenderTests
         var selector = Substitute.For<IGpuVariantSelector>();
         selector.SelectVariantAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(variant));
 
-        var probe = Substitute.For<IAvailableVramProbe>();
-        probe.TryGetFreeVramBytesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+        var probe = Substitute.For<IProcessVramBudgetProbe>();
+        probe.TryGetProcessBudgetBytesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
              .Returns(Task.FromResult(freeVramBytes));
 
         return new GgufVariantRecommender(selector, probe, NullLogger<GgufVariantRecommender>.Instance);
