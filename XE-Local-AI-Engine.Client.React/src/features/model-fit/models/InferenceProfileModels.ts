@@ -31,17 +31,32 @@ export interface InferenceProfileView {
 	readonly frozenVramBytes: number | null;
 }
 
-// One benchmark's metrics, all nullable because the runner may omit a figure (e.g. no tool-loop on a non-agent
-// run, no cache-hit when the prefix cache is cold). cacheHitRate is a 0..1 ratio; the card renders it as a %.
+// One benchmark's metrics, all nullable because each model role emits only the measurements that apply to it.
+// cacheHitRate is a 0..1 ratio; the card renders it as a %. The explicit global-free and process-budget VRAM
+// figures stay separate so WDDM residency pressure cannot be mistaken for globally available device memory.
 export interface InferenceBenchmarkMetrics {
+	readonly role: string | null;
 	readonly tokensPerSecond: number | null;
 	readonly ppTokensPerSecond: number | null;
 	readonly ttftMs: number | null;
 	readonly totalLatencyMs: number | null;
 	readonly cacheHitRate: number | null;
 	readonly toolLoopMs: number | null;
+	readonly itemsPerSecond: number | null;
+	readonly inputTokensPerSecond: number | null;
+	readonly p50LatencyMs: number | null;
+	readonly p95LatencyMs: number | null;
+	readonly batchSize: number | null;
+	readonly outputDimension: number | null;
+	readonly valuesFinite: boolean | null;
+	readonly deterministicOutput: boolean | null;
 	readonly vramLoadBytes: number | null;
 	readonly vramAfterBytes: number | null;
+	readonly globalFreeVramLoadBytes: number | null;
+	readonly globalFreeVramAfterBytes: number | null;
+	readonly processBudgetVramLoadBytes: number | null;
+	readonly processBudgetVramAfterBytes: number | null;
+	readonly externalPressureDetected: boolean;
 	readonly runs: number | null;
 }
 
