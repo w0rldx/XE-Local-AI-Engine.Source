@@ -64,6 +64,19 @@ public sealed class HeuristicTokenEstimatorTests
     }
 
     [Test]
+    public void EstimateTokens_CalibratedDivisorOne_IsAcceptedAndConservative()
+    {
+        var calibrations = new TokenEstimatorCalibrationStore();
+        calibrations.SetDivisor("model-a", charsPerToken: 1);
+        var estimator = new HeuristicTokenEstimator(calibrations);
+        var ascii = new ChatMessage(ChatRole.User, [new TextContent(new string('x', 40))]);
+        var cjk = new ChatMessage(ChatRole.User, [new TextContent(new string('中', 40))]);
+
+        AssertEx.Equal(expected: 40 + OverheadTokens, estimator.EstimateTokens(ascii, "model-a"));
+        AssertEx.Equal(expected: 40 + OverheadTokens, estimator.EstimateTokens(cjk, "model-a"));
+    }
+
+    [Test]
     public void EstimateTokens_CountsToolResultContentLength()
     {
         // The budgeter's truncation savings rely on a tool result's characters counting toward the estimate.

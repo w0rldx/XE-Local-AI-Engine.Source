@@ -61,7 +61,10 @@ internal static class AddNodeInvocationExtensions
                    "Invalid ConversationContextBudgetOptions configuration.")
                .ValidateOnStart();
         builder.Services.TryAddSingleton<ITokenEstimatorCalibrationStore, TokenEstimatorCalibrationStore>();
-        builder.Services.AddSingleton<LlamaTokenEstimatorCalibrationService>();
+        builder.Services.AddSingleton(static sp => new LlamaTokenEstimatorCalibrationService(
+            new HttpClient(LlamaTokenEstimatorCalibrationService.CreateProductionHandler(), disposeHandler: true),
+            sp.GetRequiredService<ITokenEstimatorCalibrationStore>(),
+            sp.GetRequiredService<ILogger<LlamaTokenEstimatorCalibrationService>>()));
         builder.Services.AddSingleton<ITokenEstimatorCalibrationScheduler>(static sp =>
             sp.GetRequiredService<LlamaTokenEstimatorCalibrationService>());
         builder.Services.AddHostedService(static sp => sp.GetRequiredService<LlamaTokenEstimatorCalibrationService>());

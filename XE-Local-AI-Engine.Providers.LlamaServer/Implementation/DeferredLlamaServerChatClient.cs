@@ -57,6 +57,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
     private readonly ITokenEstimatorCalibrationScheduler _calibrationScheduler;
 
     private IChatClient? _inner;
+    private Uri? _innerEndpoint;
 
     public DeferredLlamaServerChatClient(ILlamaServerProcessSupervisor supervisor,
         string modelName,
@@ -88,6 +89,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
             var acquisition = _supervisor.TryAcquireInferenceLease(_modelName, ModelRole.Chat);
             if (acquisition.ProcessEvicting)
             {
+                _calibrationScheduler.Invalidate(_modelName);
                 throw new LlamaServerModelEjectedException(ModelEjectingMessage);
             }
 
@@ -102,6 +104,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
                 // truthful, not a generic provider drop.
                 if (lease is { WasEjected: true })
                 {
+                    _calibrationScheduler.Invalidate(_modelName);
                     throw new LlamaServerModelEjectedException(ModelEjectedMessage, ex);
                 }
 
@@ -138,6 +141,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
             var acquisition = _supervisor.TryAcquireInferenceLease(_modelName, ModelRole.Chat);
             if (acquisition.ProcessEvicting)
             {
+                _calibrationScheduler.Invalidate(_modelName);
                 throw new LlamaServerModelEjectedException(ModelEjectingMessage);
             }
 
@@ -163,6 +167,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
                         // the drop happened before OR mid-stream.
                         if (lease is { WasEjected: true })
                         {
+                            _calibrationScheduler.Invalidate(_modelName);
                             throw new LlamaServerModelEjectedException(ModelEjectedMessage, ex);
                         }
 
@@ -266,24 +271,29 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
 
     private async Task<IChatClient> EnsureInnerAsync(CancellationToken ct)
     {
-        var existing = Volatile.Read(ref _inner);
-        if (existing is not null)
-        {
-            return existing;
-        }
+        // Resolve the CURRENT endpoint for every real request. Besides allowing the supervisor to cheaply confirm the
+        // process is live, this is the request-triggered due check for calibration; no timer ever polls a cached target.
+        var endpoint = await _supervisor.EnsureRunningAsync(_modelName, ModelRole.Chat, ct).ConfigureAwait(false);
 
         await _initGate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
             var current = Volatile.Read(ref _inner);
-            if (current is not null)
+            if (current is not null && _innerEndpoint == endpoint.BaseAddress)
             {
+                _calibrationScheduler.Schedule(_modelName, endpoint.BaseAddress);
                 return current;
             }
 
-            var endpoint = await _supervisor.EnsureRunningAsync(_modelName, ModelRole.Chat, ct).ConfigureAwait(false);
+            if (current is not null)
+            {
+                _calibrationScheduler.Invalidate(_modelName);
+                current.Dispose();
+            }
+
             _calibrationScheduler.Schedule(_modelName, endpoint.BaseAddress);
             var built = LlamaServerOpenAIAdapterFactory.CreateChatClient(endpoint.BaseAddress, _modelName, _networkTimeout);
+            _innerEndpoint = endpoint.BaseAddress;
             Volatile.Write(ref _inner, built);
             return built;
         }
@@ -298,6 +308,8 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
     private void InvalidateInner()
     {
         var stale = Interlocked.Exchange(ref _inner, null);
+        _innerEndpoint = null;
+        _calibrationScheduler.Invalidate(_modelName);
         stale?.Dispose();
     }
 

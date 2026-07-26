@@ -45,9 +45,20 @@ public sealed class HeuristicTokenEstimator : ITokenEstimator
 
     public int EstimateTokens(ChatMessage message, string? modelName)
     {
-        ArgumentNullException.ThrowIfNull(message);
+        return EstimateTokensWithDivisor(message, ResolveDivisor(modelName));
+    }
 
-        var divisor = _calibrationStore.ResolveDivisor(modelName);
+    public int ResolveDivisor(string? modelName)
+    {
+        return _calibrationStore.ResolveDivisor(modelName);
+    }
+
+    public int EstimateTokensWithDivisor(ChatMessage message, int charsPerToken)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        var divisor = Math.Clamp(charsPerToken,
+            TokenEstimatorCalibrationStore.MinimumCharsPerToken,
+            TokenEstimatorCalibrationStore.MaximumCharsPerToken);
         var profile = PerMessageCharacterProfileCache.GetValue(message, ComputeMessageCharacterProfile);
         return (profile.WeightedLength(divisor) / divisor) + PerMessageOverheadTokens;
     }
@@ -57,7 +68,7 @@ public sealed class HeuristicTokenEstimator : ITokenEstimator
         var profile = new TokenCharacterProfile();
         foreach (var content in message.Contents)
         {
-            profile.Add(EstimateContentCharacters(content));
+            AddContent(profile, content);
         }
 
         return profile;
@@ -70,20 +81,24 @@ public sealed class HeuristicTokenEstimator : ITokenEstimator
 
     public int EstimateTokens(IReadOnlyList<ChatMessage> messages, string? modelName)
     {
+        return EstimateTokensWithDivisor(messages, ResolveDivisor(modelName));
+    }
+
+    public int EstimateTokensWithDivisor(IReadOnlyList<ChatMessage> messages, int charsPerToken)
+    {
         ArgumentNullException.ThrowIfNull(messages);
 
         var total = 0;
         for (var index = 0; index < messages.Count; index++)
         {
-            total += EstimateTokens(messages[index], modelName);
+            total += EstimateTokensWithDivisor(messages[index], charsPerToken);
         }
 
         return total;
     }
 
-    private static TokenCharacterProfile EstimateContentCharacters(AIContent content)
+    private static void AddContent(TokenCharacterProfile profile, AIContent content)
     {
-        var profile = new TokenCharacterProfile();
         switch (content)
         {
             case TextContent text:
@@ -111,7 +126,5 @@ public sealed class HeuristicTokenEstimator : ITokenEstimator
                 profile.Add(content.ToString());
                 break;
         }
-
-        return profile;
     }
 }

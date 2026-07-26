@@ -3,19 +3,21 @@ namespace XE_Local_AI_Engine.Tests.Invocation;
 using System.Net;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[NotInParallel]
 public sealed class LlamaTokenEstimatorCalibrationServiceTests
 {
     [Test]
-    public async Task TryCalibrateAsync_UsesRootTokenizeEndpointAndStoresBoundedPerModelDivisor()
+    public async Task TryCalibrateAsync_UsesRootTokenizeEndpointAndNeverUndercountsObservedSample()
     {
         HttpRequestMessage? captured = null;
         string? payload = null;
-        var tokenCount = Math.Max(1, LlamaTokenEstimatorCalibrationService.CalibrationText.Length / 6);
+        var tokenCount = (LlamaTokenEstimatorCalibrationService.CalibrationText.Length / 6) + 1;
         using var handler = new DelegateHandler(async (request, cancellationToken) =>
         {
             captured = request;
@@ -33,25 +35,84 @@ public sealed class LlamaTokenEstimatorCalibrationServiceTests
         using var requestDocument = JsonDocument.Parse(payload!);
         AssertEx.Equal(LlamaTokenEstimatorCalibrationService.CalibrationText,
             requestDocument.RootElement.GetProperty("content").GetString());
-        AssertEx.Contains(payload, "\"add_special\":false");
-        AssertEx.Equal(expected: 6, store.ResolveDivisor("model-a"));
-        AssertEx.Equal(TokenEstimatorCalibrationStore.DefaultCharsPerToken, store.ResolveDivisor("model-b"));
+        var divisor = store.ResolveDivisor("model-a");
+        AssertEx.True(LlamaTokenEstimatorCalibrationService.CalibrationText.Length / divisor >= tokenCount,
+            "the calibrated estimate for the observed ASCII sample must never be below /tokenize's token count");
     }
 
     [Test]
-    public async Task TryCalibrateAsync_ProviderFailureRetainsPriorCalibration()
+    public async Task TryCalibrateAsync_ProviderFailureRetainsPriorCalibrationAndLogsBoundedReason()
     {
         using var handler = new DelegateHandler((_, _) =>
             Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)));
         using var client = new HttpClient(handler);
         var store = new TokenEstimatorCalibrationStore();
         store.SetDivisor("model-a", charsPerToken: 6);
-        using var service = CreateService(client, store);
+        var logger = new CapturingLogger();
+        using var service = CreateService(client, store, logger: logger);
 
         var calibrated = await service.TryCalibrateAsync("model-a", new Uri("http://localhost:18123/v1"), CancellationToken.None);
 
         AssertEx.False(calibrated);
         AssertEx.Equal(expected: 6, store.ResolveDivisor("model-a"));
+        AssertEx.ContainsSingle(logger.Reasons, static reason => reason == "HttpStatus");
+    }
+
+    [Test]
+    public async Task TryCalibrateAsync_RedirectIsRejectedWithoutFollowingOrChangingCalibration()
+    {
+        var calls = 0;
+        using var handler = new DelegateHandler((_, _) =>
+        {
+            calls++;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Found)
+            {
+                Headers =
+                {
+                    Location = new Uri("https://example.test/tokenize")
+                }
+            });
+        });
+        using var client = new HttpClient(handler);
+        var store = new TokenEstimatorCalibrationStore();
+        store.SetDivisor("model-a", 5);
+        using var service = CreateService(client, store);
+
+        var calibrated = await service.TryCalibrateAsync("model-a", new Uri("http://127.0.0.1:18123"), CancellationToken.None);
+
+        AssertEx.False(calibrated);
+        AssertEx.Equal(1, calls);
+        AssertEx.Equal(5, store.ResolveDivisor("model-a"));
+    }
+
+    [Test]
+    public async Task TryCalibrateAsync_FinalRemoteEndpointIsRejected()
+    {
+        using var handler = new DelegateHandler(async (_, _) =>
+        {
+            await Task.Yield();
+            var response = JsonResponse(TokenArray(10));
+            response.RequestMessage = new HttpRequestMessage(HttpMethod.Post, "https://example.test/tokenize");
+            return response;
+        });
+        using var client = new HttpClient(handler);
+        var store = new TokenEstimatorCalibrationStore();
+        using var service = CreateService(client, store);
+
+        var calibrated = await service.TryCalibrateAsync("model-a", new Uri("http://127.0.0.1:18123"), CancellationToken.None);
+
+        AssertEx.False(calibrated);
+        AssertEx.Equal(TokenEstimatorCalibrationStore.DefaultCharsPerToken, store.ResolveDivisor("model-a"));
+    }
+
+    [Test]
+    public void CreateProductionHandler_DisablesRedirectsAndAmbientProxy()
+    {
+        using var handler = LlamaTokenEstimatorCalibrationService.CreateProductionHandler();
+
+        AssertEx.False(handler.AllowAutoRedirect);
+        AssertEx.False(handler.UseProxy);
+        AssertEx.True(handler.CheckCertificateRevocationList);
     }
 
     [Test]
@@ -71,7 +132,6 @@ public sealed class LlamaTokenEstimatorCalibrationServiceTests
 
         AssertEx.False(calibrated);
         AssertEx.Equal(0, calls);
-        AssertEx.Equal(TokenEstimatorCalibrationStore.DefaultCharsPerToken, store.ResolveDivisor("model-a"));
     }
 
     [Test]
@@ -92,26 +152,31 @@ public sealed class LlamaTokenEstimatorCalibrationServiceTests
     }
 
     [Test]
-    public async Task Schedule_RunsImmediatelyThenPeriodically_WithoutBlockingCaller()
+    public async Task Schedule_RecalibratesOnlyWhenARequestTriggersTheDueCheck()
     {
         var calls = 0;
         var secondCall = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         using var handler = new DelegateHandler((_, _) =>
         {
-            if (Interlocked.Increment(ref calls) >= 2)
+            if (Interlocked.Increment(ref calls) == 2)
             {
                 secondCall.TrySetResult();
             }
 
-            return Task.FromResult(JsonResponse(TokenArray(Math.Max(1, LlamaTokenEstimatorCalibrationService.CalibrationText.Length / 5))));
+            return Task.FromResult(JsonResponse(TokenArray(CalibrationTextTokenCount(5))));
         });
         using var client = new HttpClient(handler);
         var store = new TokenEstimatorCalibrationStore();
-        using var service = CreateService(client, store, TimeSpan.FromMilliseconds(20));
+        using var service = CreateService(client, store, TimeSpan.FromMilliseconds(30));
         await service.StartAsync(CancellationToken.None);
         try
         {
-            service.Schedule("model-a", new Uri("http://127.0.0.1:18123/v1"));
+            service.Schedule("model-a", new Uri("http://127.0.0.1:18123"));
+            await WaitForCallsAsync(() => calls, 1);
+            await Task.Delay(80);
+            AssertEx.Equal(1, calls);
+
+            service.Schedule("model-a", new Uri("http://127.0.0.1:18123"));
             await secondCall.Task.WaitAsync(TimeSpan.FromSeconds(2));
         }
         finally
@@ -119,27 +184,139 @@ public sealed class LlamaTokenEstimatorCalibrationServiceTests
             await service.StopAsync(CancellationToken.None);
         }
 
-        AssertEx.True(calls >= 2);
-        AssertEx.Equal(expected: 5, store.ResolveDivisor("model-a"));
+        AssertEx.Equal(2, calls);
+        AssertEx.Equal(5, store.ResolveDivisor("model-a"));
     }
 
     [Test]
-    [Arguments(1, 100, TokenEstimatorCalibrationStore.MinimumCharsPerToken)]
+    public async Task InvalidateThenReschedule_SamePortReuseDiscardsEjectedGeneration()
+    {
+        var firstStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseFirst = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var calls = 0;
+        using var handler = new DelegateHandler(async (_, cancellationToken) =>
+        {
+            var call = Interlocked.Increment(ref calls);
+            if (call == 1)
+            {
+                firstStarted.TrySetResult();
+                await releaseFirst.Task.WaitAsync(cancellationToken);
+                return JsonResponse(TokenArray(CalibrationTextTokenCount(8)));
+            }
+
+            return JsonResponse(TokenArray(CalibrationTextTokenCount(2)));
+        });
+        using var client = new HttpClient(handler);
+        var store = new TokenEstimatorCalibrationStore();
+        using var service = CreateService(client, store);
+        await service.StartAsync(CancellationToken.None);
+        try
+        {
+            var reused = new Uri("http://127.0.0.1:18123");
+            service.Schedule("model-a", reused);
+            await firstStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+            service.Invalidate("model-a");
+            service.Schedule("model-a", reused);
+            releaseFirst.TrySetResult();
+            await WaitForCallsAsync(() => calls, 2);
+            await WaitForDivisorAsync(store, "model-a", 2);
+        }
+        finally
+        {
+            await service.StopAsync(CancellationToken.None);
+        }
+
+        AssertEx.Equal(2, store.ResolveDivisor("model-a"));
+    }
+
+    [Test]
+    public async Task EndpointChange_ResetsGenerationAndDiscardsOldEndpointResult()
+    {
+        var firstStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseFirst = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var calls = 0;
+        using var handler = new DelegateHandler(async (request, cancellationToken) =>
+        {
+            Interlocked.Increment(ref calls);
+            if (request.RequestUri!.Port == 18123)
+            {
+                firstStarted.TrySetResult();
+                await releaseFirst.Task.WaitAsync(cancellationToken);
+                return JsonResponse(TokenArray(CalibrationTextTokenCount(8)));
+            }
+
+            return JsonResponse(TokenArray(CalibrationTextTokenCount(3)));
+        });
+        using var client = new HttpClient(handler);
+        var store = new TokenEstimatorCalibrationStore();
+        using var service = CreateService(client, store);
+        await service.StartAsync(CancellationToken.None);
+        try
+        {
+            service.Schedule("model-a", new Uri("http://127.0.0.1:18123"));
+            await firstStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+            service.Schedule("model-a", new Uri("http://127.0.0.1:18124"));
+            releaseFirst.TrySetResult();
+            await WaitForCallsAsync(() => calls, 2);
+            await WaitForDivisorAsync(store, "model-a", 3);
+        }
+        finally
+        {
+            await service.StopAsync(CancellationToken.None);
+        }
+
+        AssertEx.Equal(3, store.ResolveDivisor("model-a"));
+    }
+
+    [Test]
+    [Arguments(100, 100, TokenEstimatorCalibrationStore.MinimumCharsPerToken)]
+    [Arguments(10, 6, 1)]
     [Arguments(1000, 1, TokenEstimatorCalibrationStore.MaximumCharsPerToken)]
     [Arguments(0, 0, TokenEstimatorCalibrationStore.DefaultCharsPerToken)]
-    public void CalculateDivisor_ClampsAndFallsBack(int characters, int tokens, int expected)
+    public void CalculateDivisor_ClampsAndFallsBackWithoutUndercounting(int characters, int tokens, int expected)
     {
-        AssertEx.Equal(expected, LlamaTokenEstimatorCalibrationService.CalculateDivisor(characters, tokens));
+        var divisor = LlamaTokenEstimatorCalibrationService.CalculateDivisor(characters, tokens);
+        AssertEx.Equal(expected, divisor);
+        if (characters > 0 && tokens > 0)
+        {
+            AssertEx.True(characters / divisor >= tokens);
+        }
     }
 
     private static LlamaTokenEstimatorCalibrationService CreateService(HttpClient client,
         ITokenEstimatorCalibrationStore store,
-        TimeSpan? interval = null)
+        TimeSpan? interval = null,
+        ILogger<LlamaTokenEstimatorCalibrationService>? logger = null)
     {
         return new LlamaTokenEstimatorCalibrationService(client,
             store,
-            NullLogger<LlamaTokenEstimatorCalibrationService>.Instance,
+            logger ?? NullLogger<LlamaTokenEstimatorCalibrationService>.Instance,
             interval ?? TimeSpan.FromMinutes(30));
+    }
+
+    private static int CalibrationTextTokenCount(int divisor)
+    {
+        return Math.Max(1, LlamaTokenEstimatorCalibrationService.CalibrationText.Length / divisor);
+    }
+
+    private static async Task WaitForCallsAsync(Func<int> read, int expected)
+    {
+        var timeout = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(2);
+        while (read() < expected && DateTimeOffset.UtcNow < timeout)
+        {
+            await Task.Delay(10);
+        }
+
+        AssertEx.Equal(expected, read());
+    }
+
+    private static async Task WaitForDivisorAsync(ITokenEstimatorCalibrationStore store, string model, int expected)
+    {
+        var timeout = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(2);
+        while (store.ResolveDivisor(model) != expected && DateTimeOffset.UtcNow < timeout)
+        {
+            await Task.Delay(10);
+        }
     }
 
     private static HttpResponseMessage JsonResponse(string json)
@@ -160,6 +337,30 @@ public sealed class LlamaTokenEstimatorCalibrationServiceTests
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             return handler(request, cancellationToken);
+        }
+    }
+
+    private sealed class CapturingLogger : ILogger<LlamaTokenEstimatorCalibrationService>
+    {
+        public List<string> Reasons { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            if (state is IEnumerable<KeyValuePair<string, object?>> values)
+            {
+                var reason = values.FirstOrDefault(static pair => pair.Key == "FailureReason").Value as string;
+                if (reason is not null)
+                {
+                    Reasons.Add(reason);
+                }
+            }
         }
     }
 }

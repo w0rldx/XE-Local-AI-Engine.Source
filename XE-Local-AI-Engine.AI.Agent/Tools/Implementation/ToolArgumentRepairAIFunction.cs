@@ -56,6 +56,11 @@ internal sealed class ToolArgumentRepairAIFunction : DelegatingAIFunction
             return RecordInvalidAndBuildResult(scope, validation.Reason!);
         }
 
+        if (validation.WasCoerced)
+        {
+            RecordRepair("coercion");
+        }
+
         try
         {
             var result = await base.InvokeCoreAsync(arguments, cancellationToken).ConfigureAwait(false);

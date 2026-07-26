@@ -100,6 +100,21 @@ public sealed class ToolArgumentRepairAIFunctionTests
     }
 
     [Test]
+    public async Task InvokeAsync_SuccessfulCoercion_IncrementsContentFreeCoercionMetric()
+    {
+        var measurements = new List<(long Value, string? Source, int TagCount)>();
+        using var listener = CreateRepairMetricListener(measurements);
+        var function = Build(_ => { });
+
+        _ = await function.InvokeAsync(Args(("path", "a.txt"), ("count", "5")));
+
+        AssertEx.ContainsSingle(measurements,
+            static measurement => measurement.Value == 1
+                                  && measurement.Source == "coercion"
+                                  && measurement.TagCount == 1);
+    }
+
+    [Test]
     public async Task InvokeAsync_HandlerThrowsJsonException_ReturnsActionableResultNotThrow()
     {
         var function = Build(_ => throw new JsonException("bad shape"));
