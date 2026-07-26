@@ -36,7 +36,10 @@ These are fixed-system prerequisite-versus-candidate measurements, not
 framework-only attribution. The exact framework and application contract suites
 remained green; their single-run wall-time changes are retained as diagnostic
 evidence, not throughput claims. No result reaches the plan's at-least-20%
-throughput gate, so no Lane 4 optimization grid is authorized by this evidence.
+throughput gate, so this prerequisite/framework delta alone authorizes no tuning
+claim. A later Lane 4 grid was run, then invalidated during review; its samples are
+historical diagnostics only and cannot support either a shipping or no-change
+decision. See `2026-07-26-lane4-invalidated.md`.
 
 ## Fit/replay and VRAM semantics
 
@@ -69,4 +72,3 @@ not relax the gate.
 - 8 GB/constrained-VRAM behavior needs representative hardware or a proven
   process-budget constraint.
 - MoE placement is outside the fixed dense-model experiment and remains excluded.
-
