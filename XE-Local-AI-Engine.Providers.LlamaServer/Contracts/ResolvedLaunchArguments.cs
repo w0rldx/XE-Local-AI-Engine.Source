@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// <summary>
 ///     The resolved llama-server launch-argument decision for one <c>(model, role, backend)</c> spawn, produced by an
 ///     <see cref="IInferenceProfileResolver" /> and consumed by the supervisor's single launch-spec builder. Two modes:
-///     <see cref="ExploreMode" /> (let llama.cpp auto-fit choose placement and print the fitted params) versus replay
+///     <see cref="ExploreMode" /> (let llama.cpp auto-fit choose placement) versus replay
 ///     (a frozen/explored profile whose explicit <c>-c/-ngl/-ts/-ot/-ctk/-ctv</c> args are emitted verbatim).
 /// </summary>
 /// <remarks>
@@ -53,7 +53,8 @@ public sealed record ResolvedLaunchArguments
 
     /// <summary>
     ///     Explore mode: the supervisor emits <c>--fit on</c> + <c>--metrics</c> so llama.cpp auto-fits placement and
-    ///     prints the fitted params for capture. The default a self-satisfying resolver returns when no profile exists.
+    ///     obtains the fitted replay arguments separately from <c>llama-fit-params</c>. The default a self-satisfying
+    ///     resolver returns when no profile exists.
     /// </summary>
     public static ResolvedLaunchArguments Explore()
     {

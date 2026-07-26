@@ -11,9 +11,10 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 public interface IInferenceProfileService
 {
     /// <summary>
-    ///     Explores <paramref name="modelName" /> for <paramref name="role" />: spawns one auto-fit llama-server, parses
-    ///     the fitted args (falling back to the GGUF native context when the banner is unparseable) and upserts the single
-    ///     Explored profile for the key. Rejects (no spawn) when the model is not a local GGUF.
+    ///     Explores <paramref name="modelName" /> for <paramref name="role" />: acquires fitted args from the sibling
+    ///     machine-readable <c>llama-fit-params</c> capability, spawns one auto-fit llama-server, and upserts the single
+    ///     Explored profile for the key. Missing or incomplete helper output falls back observably to the GGUF native
+    ///     context instead of persisting partial placement. Rejects (no spawn) when the model is not a local GGUF.
     /// </summary>
     Task<ExploreResult> ExploreAsync(string modelName, ModelRole role, CancellationToken ct);
 
