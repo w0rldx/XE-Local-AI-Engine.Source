@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "capturedAtUtc": "2026-07-26T22:07:52Z",
+  "sourceCommit": "d868e335cb4f7bc9137043919a1fdef3fb2330c9",
+  "purpose": "retrospective execution proof for the expanded deterministic Lane 0 suite on the exact pre-upgrade tree",
+  "packages": {
+    "Microsoft.Agents.AI": "1.13.0",
+    "Microsoft.Extensions.AI": "10.7.0",
+    "OpenAI": "2.11.0",
+    "ModelContextProtocol": "1.4.0"
+  },
+  "result": "passed",
+  "tests": {
+    "total": 198,
+    "failed": 0,
+    "succeeded": 198,
+    "skipped": 0
+  },
+  "build": {
+    "warnings": 0,
+    "errors": 0
+  },
+  "assemblyGuard": "unchanged",
+  "log": {
+    "path": "lane0-pre-upgrade.log",
+    "sha256": "8d27df1ff1a8cfcb1fdcbb28b902567f586fe7161f854ba4fc6ebf72ce41926a"
+  },
+  "testDiscovery": {
+    "count": 198,
+    "path": "lane0-pre-upgrade-tests.log",
+    "sha256": "886f8101bd62879d3edcf2efd79f97ff5835e605b2347b3254100de5be923e48"
+  }
+}

@@ -5,6 +5,29 @@ This document closes the reproducibility and hardware-lane gaps in
 The deterministic compatibility tests remain the permanent release gate. The real
 llama-server lane below is explicitly opt-in and hardware-dependent.
 
+## Pre-upgrade Lane 0 proof
+
+The expanded deterministic suite was committed before the MAF pin change, but the
+original implementation history did not retain a test log from that interval. To
+close the behavioral evidence gap without rewriting history, the exact immediate
+pre-upgrade tree was checked out at
+`d868e335cb4f7bc9137043919a1fdef3fb2330c9` and validated retrospectively:
+
+- MAF `1.13.0`, MEAI `10.7.0`, OpenAI `2.11.0`, and MCP `1.4.0`;
+- Release restore and build: 0 warnings, 0 errors;
+- all 198 `XE-Local-AI-Engine.AI.Agent.Tests` tests passed;
+- the assembly guard confirmed the test binaries did not change during execution.
+
+The discovery log includes the expanded streaming approval matrix, reverse-ordered
+mixed approval responses, cancellation before the first streaming update,
+instructions-once containment, workflow/handoff, tool-contract, and provider-budget
+tests. The sanitized logs and integrity manifest are under
+`docs/agent-framework/evidence/baseline/`.
+
+This proves the pre-upgrade code and pins satisfy Lane 0. It does not pretend the
+proof was captured before the package commit; the timestamp and retrospective
+purpose remain explicit in the manifest.
+
 ## Reproducible dependency graphs
 
 Run:
