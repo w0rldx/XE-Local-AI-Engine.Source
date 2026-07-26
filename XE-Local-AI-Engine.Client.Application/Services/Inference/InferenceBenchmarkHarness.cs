@@ -26,11 +26,11 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
     private readonly IInferenceChatClientFactory _chatClientFactory;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<InferenceBenchmarkHarness> _logger;
-    private readonly IAvailableVramProbe _vramProbe;
+    private readonly IProcessVramBudgetProbe _vramProbe;
 
     public InferenceBenchmarkHarness(IInferenceChatClientFactory chatClientFactory,
         IHttpClientFactory httpClientFactory,
-        IAvailableVramProbe vramProbe,
+        IProcessVramBudgetProbe vramProbe,
         ILogger<InferenceBenchmarkHarness> logger)
     {
         ArgumentNullException.ThrowIfNull(chatClientFactory);
@@ -58,7 +58,7 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
             using var chatClient = _chatClientFactory.CreateChatClient(endpoint.BaseAddress, endpoint.ModelName);
 
             var totalStopwatch = Stopwatch.StartNew();
-            var vramLoad = await _vramProbe.TryGetFreeVramBytesAsync(spec.Backend, ct).ConfigureAwait(false);
+            var vramLoad = await _vramProbe.TryGetProcessBudgetBytesAsync(spec.Backend, ct).ConfigureAwait(false);
             var baseline = await ScrapeMetricsAsync(metricsUri, ct).ConfigureAwait(false);
 
             var chatOptions = BuildOptions(endpoint.ModelName, spec, tools: null);
@@ -131,7 +131,7 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
             _ = await chatClient.GetResponseAsync(longMessages, chatOptions, ct).ConfigureAwait(false);
             var afterAll = await ScrapeMetricsAsync(metricsUri, ct).ConfigureAwait(false);
 
-            var vramAfter = await _vramProbe.TryGetFreeVramBytesAsync(spec.Backend, ct).ConfigureAwait(false);
+            var vramAfter = await _vramProbe.TryGetProcessBudgetBytesAsync(spec.Backend, ct).ConfigureAwait(false);
             totalStopwatch.Stop();
 
             var ppTokensPerSecond = DeriveRate(baseline, afterAll, PromptTokensMetric, PromptSecondsMetric);

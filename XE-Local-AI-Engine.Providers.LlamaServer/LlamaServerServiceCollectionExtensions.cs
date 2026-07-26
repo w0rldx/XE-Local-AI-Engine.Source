@@ -89,9 +89,9 @@ public static class LlamaServerServiceCollectionExtensions
         services.TryAddSingleton<ILlamaCppSourceBuildActivity, LlamaCppSourceBuildActivity>();
 
         // Real available-VRAM probe: parses `llama-server --list-devices`. PLAIN AddSingleton (not TryAdd) so
-        // it WINS over the Application-layer TryAddSingleton<IAvailableVramProbe, UnknownAvailableVramProbe>() floor
+        // it WINS over the Application-layer TryAddSingleton<IProcessVramBudgetProbe, UnknownProcessVramBudgetProbe>() floor
         // regardless of registration order — TryAdd no-ops once a registration exists, and last-wins resolves to this one.
-        services.AddSingleton<IAvailableVramProbe, LlamaListDevicesVramProbe>();
+        services.AddSingleton<IProcessVramBudgetProbe, LlamaListDevicesProcessVramBudgetProbe>();
 
         // AUD4-03 device-inventory probe: parses `llama-server --list-devices` into a structured {variant, devices[]}
         // (sharing the process runner with the VRAM probe), cached per resolved binary. The Application-layer runtime

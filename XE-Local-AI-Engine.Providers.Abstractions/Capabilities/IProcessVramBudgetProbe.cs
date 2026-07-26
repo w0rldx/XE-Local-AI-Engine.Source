@@ -15,24 +15,24 @@ namespace XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 ///         (the <c>--list-devices</c> parser) needs.
 ///     </para>
 /// </remarks>
-public interface IAvailableVramProbe
+public interface IProcessVramBudgetProbe
 {
     /// <summary>
     ///     Returns the currently-free VRAM in bytes for <paramref name="backend" />, or <see langword="null" /> when the
     ///     figure is unknown/unsupported.
     /// </summary>
-    Task<long?> TryGetFreeVramBytesAsync(string backend, CancellationToken ct);
+    Task<long?> TryGetProcessBudgetBytesAsync(string backend, CancellationToken ct);
 }
 
 /// <summary>
-///     Default <see cref="IAvailableVramProbe" /> that always reports "unknown" (<see langword="null" />). Wired via
+///     Default <see cref="IProcessVramBudgetProbe" /> that always reports "unknown" (<see langword="null" />). Wired via
 ///     <c>TryAddSingleton</c> so the invalidation evaluator simply skips the live free-VRAM check until the real
 ///     <c>--list-devices</c>-backed probe replaces it.
 /// </summary>
-public sealed class UnknownAvailableVramProbe : IAvailableVramProbe
+public sealed class UnknownProcessVramBudgetProbe : IProcessVramBudgetProbe
 {
     /// <inheritdoc />
-    public Task<long?> TryGetFreeVramBytesAsync(string backend, CancellationToken ct)
+    public Task<long?> TryGetProcessBudgetBytesAsync(string backend, CancellationToken ct)
     {
         return Task.FromResult<long?>(null);
     }

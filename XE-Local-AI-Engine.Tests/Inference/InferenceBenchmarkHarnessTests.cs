@@ -89,7 +89,7 @@ public sealed class InferenceBenchmarkHarnessTests
         var httpClientFactory = Substitute.For<IHttpClientFactory>();
         httpClientFactory.CreateClient(Arg.Any<string>()).Returns(_ => new HttpClient(new EmptyMetricsHandler()));
 
-        var vramProbe = Substitute.For<IAvailableVramProbe>();
+        var vramProbe = Substitute.For<IProcessVramBudgetProbe>();
 
         return new InferenceBenchmarkHarness(chatClientFactory, httpClientFactory, vramProbe, NullLogger<InferenceBenchmarkHarness>.Instance);
     }

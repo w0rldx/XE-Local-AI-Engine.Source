@@ -15,11 +15,11 @@ public sealed class InferenceInvalidationEvaluator : IInferenceInvalidationEvalu
     private readonly IHardwareProfiler _hardwareProfiler;
     private readonly IInstalledRuntimeStore _installedRuntimeStore;
     private readonly ILogger<InferenceInvalidationEvaluator> _logger;
-    private readonly IAvailableVramProbe _vramProbe;
+    private readonly IProcessVramBudgetProbe _vramProbe;
 
     public InferenceInvalidationEvaluator(IInstalledRuntimeStore installedRuntimeStore,
         IHardwareProfiler hardwareProfiler,
-        IAvailableVramProbe vramProbe,
+        IProcessVramBudgetProbe vramProbe,
         ILogger<InferenceInvalidationEvaluator> logger)
     {
         _installedRuntimeStore = installedRuntimeStore ?? throw new ArgumentNullException(nameof(installedRuntimeStore));
@@ -86,7 +86,7 @@ public sealed class InferenceInvalidationEvaluator : IInferenceInvalidationEvalu
     }
 
     // Live free VRAM below the frozen baseline. Degrades (skips) when the profile never recorded a baseline or the probe
-    // reports "unknown". The real --list-devices probe has shipped (LlamaListDevicesVramProbe wins the registered floor),
+    // reports "unknown". The real --list-devices probe has shipped (LlamaListDevicesProcessVramBudgetProbe wins the registered floor),
     // so on supported backends this check runs; it only skips where that probe still reports unknown free VRAM.
     private async Task<bool> HasLiveFreeVramRegressedAsync(InferenceProfileRecord profile, CancellationToken ct)
     {
@@ -95,7 +95,7 @@ public sealed class InferenceInvalidationEvaluator : IInferenceInvalidationEvalu
             return false;
         }
 
-        var freeNow = await _vramProbe.TryGetFreeVramBytesAsync(profile.Backend, ct).ConfigureAwait(false);
+        var freeNow = await _vramProbe.TryGetProcessBudgetBytesAsync(profile.Backend, ct).ConfigureAwait(false);
         if (freeNow is not { } currentFree)
         {
             return false;
