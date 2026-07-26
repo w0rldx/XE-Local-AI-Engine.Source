@@ -74,7 +74,16 @@
         "maf_version": { "type": "string", "minLength": 1 },
         "meai_version": { "type": "string", "minLength": 1 },
         "openai_version": { "type": "string", "minLength": 1 },
-        "mcp_version": { "type": "string" }
+        "mcp_version": { "type": "string" },
+        "central_package_pins": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path", "sha256"],
+          "properties": {
+            "path": { "type": "string", "minLength": 1 },
+            "sha256": { "$ref": "#/$defs/sha256" }
+          }
+        }
       }
     },
     "benchmark": {
@@ -129,6 +138,20 @@
         "comparability": { "type": "string", "minLength": 1 },
         "argv": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
         "cwd": { "type": "string" },
+        "framework_assemblies": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": ["name", "path", "sha256"],
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "path": { "type": "string", "minLength": 1 },
+              "sha256": { "$ref": "#/$defs/sha256" }
+            }
+          }
+        },
         "env": { "type": "object", "additionalProperties": { "type": "string" } },
         "warmups": { "type": "integer", "minimum": 0 },
         "repeats": { "type": "integer", "minimum": 1 },

@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -18,6 +19,85 @@ SPEC.loader.exec_module(capture)
 
 def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def git(cwd: Path, *arguments: str) -> str:
+    completed = subprocess.run(
+        ["git", "-C", str(cwd), *arguments],
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    return completed.stdout.strip()
+
+
+def framework_baseline_spec(root: Path, repository: Path, marker: Path) -> dict:
+    model = root / "model.gguf"
+    corpus = root / "corpus.json"
+    runtime = root / "llama-server"
+    assembly = repository / "bin" / "Framework.Tests.dll"
+    model.write_text("model", encoding="utf-8")
+    corpus.write_text("corpus", encoding="utf-8")
+    runtime.write_text("#!/bin/sh\nprintf 'fake runtime\\n'\n", encoding="utf-8")
+    runtime.chmod(0o755)
+    assembly.parent.mkdir()
+    assembly.write_text("built assembly", encoding="utf-8")
+    pins = repository / "Directory.Packages.props"
+    return {
+        "schema_version": "1.0",
+        "kind": "inference-benchmark-capture",
+        "capture_id": "framework-baseline-test",
+        "phase": "baseline",
+        "models": [
+            {
+                "name": "dense",
+                "role": "chat",
+                "quant": "Q4_K_M",
+                "path": str(model),
+                "sha256": digest(model),
+            }
+        ],
+        "corpus": {"name": "golden", "path": str(corpus), "sha256": digest(corpus)},
+        "runtime": {
+            "tag": "b9692",
+            "provenance": "managed-source-build",
+            "backend": "cuda",
+            "path": str(runtime),
+            "sha256": digest(runtime),
+        },
+        "framework": {
+            "source_commit": git(repository, "rev-parse", "HEAD"),
+            "maf_version": "1.15.0",
+            "meai_version": "10.8.1",
+            "openai_version": "2.12.0",
+            "central_package_pins": {
+                "path": "Directory.Packages.props",
+                "sha256": digest(pins),
+            },
+        },
+        "benchmark": {
+            "cache_state": "cold",
+            "cache_preparation": "delete cache",
+            "ambient_load_policy": "idle",
+            "acceptance_rule": "median/p95",
+        },
+        "coverage": {"unvalidated": [{"target": "Vulkan", "reason": "No ICD"}]},
+        "commands": [
+            {
+                "name": "framework-contract",
+                "partition": "framework-contract",
+                "comparability": "same test filter; verified framework identity is the intended variable",
+                "argv": ["/bin/sh", "-c", f"printf done > {marker}; printf '{{\"latency_ms\": 10}}'"],
+                "cwd": str(repository),
+                "framework_assemblies": [
+                    {"name": assembly.name, "path": str(assembly), "sha256": digest(assembly)}
+                ],
+                "warmups": 0,
+                "repeats": 1,
+                "timeout_seconds": 5,
+            }
+        ],
+    }
 
 
 def fit_capture_spec(server: Path, helper: Path) -> dict:
@@ -255,6 +335,118 @@ class CaptureInferenceEvidenceTests(unittest.TestCase):
             self.assertEqual("Vulkan", artifact["coverage"]["unvalidated"][0]["target"])
             self.assertEqual(10, artifact["commands"][0]["aggregates"]["ttft_ms"]["median"])
 
+    def test_framework_command_verifies_historical_worktree_pins_and_assemblies_before_execution(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            repository = root / "historical-worktree"
+            repository.mkdir()
+            git(repository, "init", "-q")
+            git(repository, "config", "user.email", "capture@example.invalid")
+            git(repository, "config", "user.name", "Capture Test")
+            (repository / ".gitignore").write_text("bin/\n", encoding="utf-8")
+            (repository / "Directory.Packages.props").write_text(
+                "<Project><ItemGroup>"
+                '<PackageVersion Include="Microsoft.Agents.AI" Version="1.15.0" />'
+                '<PackageVersion Include="Microsoft.Extensions.AI" Version="10.8.1" />'
+                '<PackageVersion Include="OpenAI" Version="2.12.0" />'
+                "</ItemGroup></Project>",
+                encoding="utf-8",
+            )
+            git(repository, "add", ".gitignore", "Directory.Packages.props")
+            git(repository, "commit", "-qm", "historical baseline")
+            marker = root / "executed"
+            spec = framework_baseline_spec(root, repository, marker)
+            spec_path = root / "spec.json"
+            output = root / "output.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+
+            capture.capture_baseline(spec_path, output)
+
+            artifact = json.loads(output.read_text(encoding="utf-8"))
+            identity = artifact["verified_identity"]["framework"]
+            command_tree = identity["command_trees"][0]
+            self.assertTrue(marker.exists())
+            self.assertTrue(identity["verified"])
+            self.assertEqual(spec["framework"]["source_commit"], command_tree["git_head"])
+            self.assertTrue(command_tree["git_clean"])
+            self.assertTrue(command_tree["central_package_pins"]["sha256_verified"])
+            self.assertTrue(command_tree["assemblies"][0]["sha256_verified"])
+            self.assertEqual(
+                "1.15.0",
+                command_tree["resolved_package_versions"]["Microsoft.Agents.AI"],
+            )
+
+    def test_framework_command_rejects_declared_commit_drift_before_execution(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            repository = root / "historical-worktree"
+            repository.mkdir()
+            git(repository, "init", "-q")
+            git(repository, "config", "user.email", "capture@example.invalid")
+            git(repository, "config", "user.name", "Capture Test")
+            (repository / ".gitignore").write_text("bin/\n", encoding="utf-8")
+            (repository / "Directory.Packages.props").write_text(
+                "<Project><ItemGroup>"
+                '<PackageVersion Include="Microsoft.Agents.AI" Version="1.15.0" />'
+                '<PackageVersion Include="Microsoft.Extensions.AI" Version="10.8.1" />'
+                '<PackageVersion Include="OpenAI" Version="2.12.0" />'
+                "</ItemGroup></Project>",
+                encoding="utf-8",
+            )
+            git(repository, "add", ".gitignore", "Directory.Packages.props")
+            git(repository, "commit", "-qm", "historical baseline")
+            first_commit = git(repository, "rev-parse", "HEAD")
+            (repository / "tracked.txt").write_text("next", encoding="utf-8")
+            git(repository, "add", "tracked.txt")
+            git(repository, "commit", "-qm", "later commit")
+            marker = root / "executed"
+            spec = framework_baseline_spec(root, repository, marker)
+            spec["framework"]["source_commit"] = first_commit
+            spec_path = root / "spec.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+
+            with self.assertRaisesRegex(capture.CaptureError, "does not match"):
+                capture.capture_baseline(spec_path, root / "output.json")
+
+            self.assertFalse(marker.exists())
+
+    def test_framework_command_rejects_dirty_tree_and_package_version_drift_before_execution(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            repository = root / "historical-worktree"
+            repository.mkdir()
+            git(repository, "init", "-q")
+            git(repository, "config", "user.email", "capture@example.invalid")
+            git(repository, "config", "user.name", "Capture Test")
+            (repository / ".gitignore").write_text("bin/\n", encoding="utf-8")
+            pins = repository / "Directory.Packages.props"
+            pins.write_text(
+                "<Project><ItemGroup>"
+                '<PackageVersion Include="Microsoft.Agents.AI" Version="1.15.0" />'
+                '<PackageVersion Include="Microsoft.Extensions.AI" Version="10.8.1" />'
+                '<PackageVersion Include="OpenAI" Version="2.12.0" />'
+                "</ItemGroup></Project>",
+                encoding="utf-8",
+            )
+            git(repository, "add", ".gitignore", "Directory.Packages.props")
+            git(repository, "commit", "-qm", "historical baseline")
+            marker = root / "executed"
+            spec = framework_baseline_spec(root, repository, marker)
+            spec_path = root / "spec.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+
+            pins.write_text(pins.read_text(encoding="utf-8") + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(capture.CaptureError, "Git tree is not clean"):
+                capture.capture_baseline(spec_path, root / "dirty-output.json")
+            self.assertFalse(marker.exists())
+
+            git(repository, "restore", "Directory.Packages.props")
+            spec["framework"]["maf_version"] = "9.9.9"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+            with self.assertRaisesRegex(capture.CaptureError, "Microsoft.Agents.AI is pinned"):
+                capture.capture_baseline(spec_path, root / "version-output.json")
+            self.assertFalse(marker.exists())
+
     def test_fit_capture_proves_default_verbose_helper_and_replay_vectors(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
@@ -336,7 +528,28 @@ class CaptureInferenceEvidenceTests(unittest.TestCase):
     def test_compare_rejects_changed_runtime_identity(self) -> None:
         baseline = {
             "kind": "inference-benchmark-evidence",
-            "verified_identity": {"models": [], "corpus": {}, "runtime": {"tag": "a", "provenance": "source", "backend": "cuda", "sha256": "1"}},
+            "framework": {
+                "source_commit": "1234567",
+                "maf_version": "1",
+                "meai_version": "1",
+                "openai_version": "1",
+            },
+            "verified_identity": {
+                "models": [],
+                "corpus": {},
+                "runtime": {"tag": "a", "provenance": "source", "backend": "cuda", "sha256": "1"},
+                "framework": {
+                    "required": False,
+                    "verified": True,
+                    "declaration": {
+                        "source_commit": "1234567",
+                        "maf_version": "1",
+                        "meai_version": "1",
+                        "openai_version": "1",
+                    },
+                    "command_trees": [],
+                },
+            },
             "host": {}, "commands": [],
         }
         candidate = json.loads(json.dumps(baseline))
@@ -347,6 +560,45 @@ class CaptureInferenceEvidenceTests(unittest.TestCase):
             first.write_text(json.dumps(baseline), encoding="utf-8")
             second.write_text(json.dumps(candidate), encoding="utf-8")
             with self.assertRaisesRegex(capture.CaptureError, "identity differs"):
+                capture.compare_artifacts(first, second, output)
+
+    def test_compare_rejects_framework_declaration_that_diverges_from_verified_identity(self) -> None:
+        artifact = {
+            "kind": "inference-benchmark-evidence",
+            "framework": {
+                "source_commit": "1234567",
+                "maf_version": "1.15.0",
+                "meai_version": "10.8.1",
+                "openai_version": "2.12.0",
+            },
+            "verified_identity": {
+                "models": [],
+                "corpus": {},
+                "runtime": {},
+                "framework": {
+                    "required": False,
+                    "verified": True,
+                    "declaration": {
+                        "source_commit": "1234567",
+                        "maf_version": "1.15.0",
+                        "meai_version": "10.8.1",
+                        "openai_version": "2.12.0",
+                    },
+                    "command_trees": [],
+                },
+            },
+            "host": {},
+            "commands": [],
+        }
+        candidate = json.loads(json.dumps(artifact))
+        candidate["framework"]["maf_version"] = "9.9.9"
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            first, second, output = root / "first.json", root / "second.json", root / "output.json"
+            first.write_text(json.dumps(artifact), encoding="utf-8")
+            second.write_text(json.dumps(candidate), encoding="utf-8")
+
+            with self.assertRaisesRegex(capture.CaptureError, "declaration differs"):
                 capture.compare_artifacts(first, second, output)
 
     def test_sanitize_replaces_absolute_paths_and_rejects_unmapped_home(self) -> None:

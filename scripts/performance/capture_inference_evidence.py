@@ -22,6 +22,7 @@ import statistics
 import subprocess
 import sys
 import time
+import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -65,6 +66,13 @@ FIT_HELPER_ARGS_WITH_VALUE = {
     "--pooling",
 }
 FIT_HELPER_VALUELESS_ARGS = {"--mlock", "--mmap", "--no-mmap", "--no-host", "--no-op-offload"}
+FRAMEWORK_COMMAND_PARTITIONS = {"framework-contract", "application-harness", "provider-contract"}
+FRAMEWORK_PACKAGE_NAMES = {
+    "maf_version": "Microsoft.Agents.AI",
+    "meai_version": "Microsoft.Extensions.AI",
+    "openai_version": "OpenAI",
+    "mcp_version": "ModelContextProtocol",
+}
 
 
 class CaptureError(RuntimeError):
@@ -172,6 +180,150 @@ def capture_text(argv: list[str], timeout_seconds: float = 10) -> dict[str, Any]
         }
     except (OSError, subprocess.TimeoutExpired) as exc:
         return {"argv": argv, "available": True, "exit_code": None, "stdout": "", "stderr": str(exc)}
+
+
+def git_text(cwd: Path, arguments: list[str], context: str) -> str:
+    try:
+        completed = subprocess.run(
+            ["git", "-C", str(cwd), *arguments],
+            text=True,
+            capture_output=True,
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise CaptureError(f"{context} Git probe failed: {exc}") from exc
+    if completed.returncode != 0:
+        detail = completed.stderr.strip() or completed.stdout.strip() or f"exit {completed.returncode}"
+        raise CaptureError(f"{context} Git probe failed: {detail}")
+    return completed.stdout.strip()
+
+
+def central_package_versions(path: Path) -> dict[str, str]:
+    try:
+        root = ET.parse(path).getroot()
+    except (OSError, ET.ParseError) as exc:
+        raise CaptureError(f"Could not parse central package pins from {path}: {exc}") from exc
+    versions: dict[str, str] = {}
+    for element in root.iter():
+        if element.tag.rsplit("}", 1)[-1] != "PackageVersion":
+            continue
+        name = element.get("Include") or element.get("Update")
+        version = element.get("Version")
+        if name and version:
+            versions[name] = version
+    return versions
+
+
+def is_relative_to(path: Path, parent: Path) -> bool:
+    try:
+        path.relative_to(parent)
+        return True
+    except ValueError:
+        return False
+
+
+def verify_framework_identity(framework: dict[str, Any], commands: list[dict[str, Any]]) -> dict[str, Any]:
+    protected = [
+        (index, command)
+        for index, command in enumerate(commands)
+        if command.get("partition", "native-performance") in FRAMEWORK_COMMAND_PARTITIONS
+    ]
+    declaration = {
+        key: framework.get(key)
+        for key in ("source_commit", "maf_version", "meai_version", "openai_version", "mcp_version")
+        if key in framework
+    }
+    if not protected:
+        return {"required": False, "verified": True, "declaration": declaration, "command_trees": []}
+
+    package_pins = framework.get("central_package_pins")
+    if not isinstance(package_pins, dict):
+        raise CaptureError("spec.framework.central_package_pins must be an identity object for framework/application commands")
+    package_pins_path = Path(require_string(package_pins, "path", "spec.framework.central_package_pins"))
+    if package_pins_path.is_absolute():
+        raise CaptureError("spec.framework.central_package_pins.path must be relative to each command Git root")
+
+    command_trees: list[dict[str, Any]] = []
+    for index, command in protected:
+        context = f"spec.commands[{index}]"
+        raw_cwd = command.get("cwd")
+        if not isinstance(raw_cwd, str) or not raw_cwd:
+            raise CaptureError(f"{context}.cwd is required for framework/application commands")
+        cwd = Path(raw_cwd).expanduser().resolve()
+        if not cwd.is_dir():
+            raise CaptureError(f"{context}.cwd must be an existing directory")
+        git_root = Path(git_text(cwd, ["rev-parse", "--show-toplevel"], context)).resolve()
+        head = git_text(cwd, ["rev-parse", "HEAD"], context)
+        declared_commit = require_string(framework, "source_commit", "spec.framework")
+        resolved_declared = git_text(cwd, ["rev-parse", f"{declared_commit}^{{commit}}"], context)
+        if resolved_declared != head:
+            raise CaptureError(
+                f"{context} Git HEAD {head} does not match spec.framework.source_commit {declared_commit}"
+            )
+        status = git_text(cwd, ["status", "--porcelain=v1", "--untracked-files=all"], context)
+        if status:
+            raise CaptureError(f"{context} Git tree is not clean; framework evidence cannot be attributed to {head}")
+
+        resolved_pins = (git_root / package_pins_path).resolve()
+        if not is_relative_to(resolved_pins, git_root):
+            raise CaptureError("spec.framework.central_package_pins.path escapes the command Git root")
+        verified_pins = verify_identity(
+            "spec.framework.central_package_pins",
+            {**package_pins, "path": str(resolved_pins)},
+        )
+        resolved_versions = central_package_versions(resolved_pins)
+        for field, package_name in FRAMEWORK_PACKAGE_NAMES.items():
+            if field not in framework:
+                continue
+            declared_version = require_string(framework, field, "spec.framework")
+            actual_version = resolved_versions.get(package_name)
+            if actual_version != declared_version:
+                raise CaptureError(
+                    f"{context} declares {field}={declared_version}, but {package_name} is pinned to "
+                    f"{actual_version!r} in {resolved_pins}"
+                )
+
+        assemblies = command.get("framework_assemblies")
+        if not isinstance(assemblies, list) or not assemblies or not all(isinstance(item, dict) for item in assemblies):
+            raise CaptureError(f"{context}.framework_assemblies must be a non-empty array of identity objects")
+        verified_assemblies = []
+        for assembly_index, assembly in enumerate(assemblies):
+            assembly_context = f"{context}.framework_assemblies[{assembly_index}]"
+            assembly_path = Path(require_string(assembly, "path", assembly_context)).expanduser()
+            if not assembly_path.is_absolute():
+                assembly_path = git_root / assembly_path
+            assembly_path = assembly_path.resolve()
+            if not is_relative_to(assembly_path, git_root):
+                raise CaptureError(f"{assembly_context}.path must identify a built assembly under the command Git root")
+            if not assembly_path.is_file():
+                raise CaptureError(f"{assembly_context}.path must identify an existing assembly file")
+            verified_assemblies.append(
+                verify_identity(assembly_context, {**assembly, "path": str(assembly_path)})
+            )
+        command_trees.append({
+            "command": require_string(command, "name", context),
+            "partition": command.get("partition"),
+            "cwd": str(cwd),
+            "git_root": str(git_root),
+            "git_head": head,
+            "git_head_verified": True,
+            "git_clean": True,
+            "central_package_pins": verified_pins,
+            "resolved_package_versions": {
+                package_name: resolved_versions.get(package_name)
+                for field, package_name in FRAMEWORK_PACKAGE_NAMES.items()
+                if field in framework
+            },
+            "declared_versions_verified": True,
+            "assemblies": verified_assemblies,
+        })
+    return {
+        "required": True,
+        "verified": True,
+        "declaration": declaration,
+        "command_trees": command_trees,
+    }
 
 
 def capture_ambient() -> dict[str, Any]:
@@ -445,6 +597,8 @@ def capture_baseline(spec_path: Path, output_path: Path) -> None:
     commands = spec.get("commands")
     if not isinstance(commands, list) or not commands:
         raise CaptureError("spec.commands must be a non-empty array")
+    if not all(isinstance(command, dict) for command in commands):
+        raise CaptureError("Every spec.commands entry must be an object")
     benchmark = spec.get("benchmark")
     framework = spec.get("framework")
     coverage = spec.get("coverage")
@@ -458,10 +612,9 @@ def capture_baseline(spec_path: Path, output_path: Path) -> None:
     if not isinstance(gaps, list) or not gaps or not all(isinstance(item, dict) and item.get("target") and item.get("reason") for item in gaps):
         raise CaptureError("spec.coverage.unvalidated must explicitly list target/reason objects")
 
+    framework_identity = verify_framework_identity(framework, commands)
     started_at = utc_now()
-    results = [run_command(command, f"spec.commands[{index}]") for index, command in enumerate(commands) if isinstance(command, dict)]
-    if len(results) != len(commands):
-        raise CaptureError("Every spec.commands entry must be an object")
+    results = [run_command(command, f"spec.commands[{index}]") for index, command in enumerate(commands)]
     artifact = {
         "schema_version": SCHEMA_VERSION,
         "kind": "inference-benchmark-evidence",
@@ -471,7 +624,12 @@ def capture_baseline(spec_path: Path, output_path: Path) -> None:
         "completed_at_utc": utc_now(),
         "spec_sha256": sha256_file(spec_path),
         "source_spec": spec,
-        "verified_identity": {"models": verified_models, "corpus": verified_corpus, "runtime": verified_runtime},
+        "verified_identity": {
+            "models": verified_models,
+            "corpus": verified_corpus,
+            "runtime": verified_runtime,
+            "framework": framework_identity,
+        },
         "host": capture_host(Path(verified_runtime["path"])),
         "framework": framework,
         "benchmark": benchmark,
@@ -815,6 +973,40 @@ def identity_projection(artifact: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def framework_identity_projection(artifact: dict[str, Any]) -> dict[str, Any]:
+    framework = artifact.get("framework")
+    identity = artifact.get("verified_identity", {}).get("framework")
+    if not isinstance(framework, dict) or not isinstance(identity, dict) or identity.get("verified") is not True:
+        raise CaptureError("Artifact lacks verified framework identity")
+    declaration = {
+        key: framework.get(key)
+        for key in ("source_commit", "maf_version", "meai_version", "openai_version", "mcp_version")
+        if key in framework
+    }
+    if identity.get("declaration") != declaration:
+        raise CaptureError("Artifact framework declaration differs from its verified framework identity")
+    command_trees = identity.get("command_trees")
+    if not isinstance(command_trees, list):
+        raise CaptureError("Artifact verified framework identity has invalid command_trees")
+    if identity.get("required") is True:
+        if not command_trees:
+            raise CaptureError("Artifact framework/application commands lack verified command-tree identity")
+        for item in command_trees:
+            if (
+                not isinstance(item, dict)
+                or item.get("git_head_verified") is not True
+                or item.get("git_clean") is not True
+                or item.get("declared_versions_verified") is not True
+                or not isinstance(item.get("assemblies"), list)
+                or not item["assemblies"]
+            ):
+                raise CaptureError("Artifact contains incomplete verified framework command-tree identity")
+    return {
+        "declaration": declaration,
+        "command_trees": command_trees,
+    }
+
+
 def compare_artifacts(baseline_path: Path, candidate_path: Path, output_path: Path) -> None:
     baseline = load_json(baseline_path)
     candidate = load_json(candidate_path)
@@ -825,6 +1017,8 @@ def compare_artifacts(baseline_path: Path, candidate_path: Path, output_path: Pa
     mismatches = [key for key in baseline_identity if baseline_identity[key] != candidate_identity[key]]
     if mismatches:
         raise CaptureError("Artifacts are not comparable; identity differs in: " + ", ".join(mismatches))
+    baseline_framework_identity = framework_identity_projection(baseline)
+    candidate_framework_identity = framework_identity_projection(candidate)
     base_commands = {item["name"]: item for item in baseline.get("commands", [])}
     candidate_commands = {item["name"]: item for item in candidate.get("commands", [])}
     if set(base_commands) != set(candidate_commands):
@@ -847,6 +1041,11 @@ def compare_artifacts(baseline_path: Path, candidate_path: Path, output_path: Pa
         "baseline": str(baseline_path.resolve()),
         "candidate": str(candidate_path.resolve()),
         "identity_equal": True,
+        "framework_identity_equal": baseline_framework_identity == candidate_framework_identity,
+        "framework_identity": {
+            "baseline": baseline_framework_identity,
+            "candidate": candidate_framework_identity,
+        },
         "commands": comparison,
         "generated_at_utc": utc_now(),
     })

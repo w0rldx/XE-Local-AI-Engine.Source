@@ -48,6 +48,13 @@ The corpus may be a file or directory. Directory identity is deterministic: sort
 relative paths plus each file hash. The spec must also fix:
 
 - repository source commit and exact MAF, MEAI, and OpenAI package versions;
+- the SHA-256 of `Directory.Packages.props` relative to each framework/application
+  command's Git root, plus the relevant built assembly SHA-256 identities on each
+  command. Before the first measured process starts, the tool proves that every
+  such command runs from a clean Git worktree at the declared source commit, that
+  the central pins file matches its declared hash and package versions, and that
+  the declared assemblies match the bytes on disk. The verified command-tree and
+  assembly identities are persisted under `verified_identity.framework`;
 - runtime tag, provenance (`managed-source-build`, `pinned-prebuilt`, or `BYO`),
   backend, runtime binary hash, hashes for every auxiliary benchmark/helper binary,
   a deterministic hash manifest of every runtime-local dependency resolved by
@@ -81,7 +88,10 @@ Lane 0/2 artifacts have four explicit evidence partitions:
 Every command declares its partition and comparability rule. Framework/application
 commands use identical method filters and product inputs across e67d/current; native
 commands use identical argv, model/corpus/runtime, and machine identity. Compare
-within a partition only.
+within a partition only. Framework/application/provider commands must also declare
+`cwd` and a non-empty `framework_assemblies` identity array. `cwd` may deliberately
+point at a clean historical worktree for baseline capture; it is verified against
+`framework.source_commit` rather than forced to the capture script's own checkout.
 
 ```bash
 python3 scripts/performance/capture_inference_evidence.py baseline \
@@ -106,7 +116,11 @@ python3 scripts/performance/capture_inference_evidence.py compare \
   --output artifacts/performance/framework-delta.json
 ```
 
-The comparison fails closed if an immutable identity or argv differs. Review
+The comparison fails closed if an immutable identity or argv differs, or if either
+artifact's declared framework fields no longer match its persisted verified
+framework identity. Expected framework/tree/assembly differences are retained
+explicitly in the comparison as the baseline and candidate identities rather than
+being mistaken for immutable runtime/model differences. Review
 token accounting, streaming cadence, tool-loop latency, TTFT, and output-quality
 evidence before attributing any delta to llama.cpp settings.
 
@@ -213,4 +227,7 @@ contention; the process-visible reader describes the launch process's budget.
 - Chat, embedding, reranker, provider tests, and deterministic suites use separate
   named commands so failures cannot be averaged away.
 - Framework rebaseline uses the identical capture contract.
+- Every framework/application command records a clean command Git tree at the
+  declared commit, a verified central-package-pins hash/version projection, and
+  verified relevant assembly hashes before execution.
 - Coverage gaps remain attached to every artifact.
