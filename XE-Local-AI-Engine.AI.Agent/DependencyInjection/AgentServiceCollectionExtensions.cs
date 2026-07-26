@@ -21,6 +21,7 @@ using XE_Local_AI_Engine.AI.Agent.PreviewWorkflows;
 using XE_Local_AI_Engine.AI.Agent.PreviewWorkflows.Implementation;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
+using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 
 /// <summary>
 ///     Composition-root extensions for the local AI agent runtime.
@@ -39,6 +40,7 @@ public static class AgentServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(configuration);
+        services.TryAddSingleton<ITokenEstimatorCalibrationStore, TokenEstimatorCalibrationStore>();
 
         _ = services.AddOptions<LocalChatAgentOptions>()
                     .Bind(configuration.GetSection(LocalChatAgentOptions.Section))
@@ -155,7 +157,9 @@ public static class AgentServiceCollectionExtensions
                         // Below UseFunctionInvocation so it re-budgets EVERY inner tool-loop round (and MAF participant
                         // round), and above UseOpenTelemetry so the recorded gen_ai span reflects the budgeted message
                         // set actually sent. Gated on an ambient ProviderCallBudget scope the invocation runner seeds.
-                        .Use(chatClient => new ProviderCallBudgetChatClient(chatClient, serviceProvider.GetRequiredService<ILogger<ProviderCallBudgetChatClient>>()))
+                        .Use(chatClient => new ProviderCallBudgetChatClient(chatClient,
+                            serviceProvider.GetRequiredService<ILogger<ProviderCallBudgetChatClient>>(),
+                            serviceProvider.GetRequiredService<ITokenEstimatorCalibrationStore>()))
                         .UseOpenTelemetry(serviceProvider.GetRequiredService<ILoggerFactory>(),
                             sourceName: "Microsoft.Extensions.AI",
                             configure: openTelemetryChatClient => openTelemetryChatClient.EnableSensitiveData = telemetryOptions.CaptureSensitiveContent)

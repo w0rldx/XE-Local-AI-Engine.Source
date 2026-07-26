@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.AI;
+using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 // Aliased (not a blanket `using OpenAI.Chat`) so OpenAI.Chat.ChatMessage never collides with the MEAI ChatMessage this
 // client's IChatClient signatures use — a blanket import makes ChatMessage ambiguous and breaks the interface impl.
@@ -53,15 +54,20 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
     private readonly string _modelName;
     private readonly TimeSpan _networkTimeout;
     private readonly ILlamaServerProcessSupervisor _supervisor;
+    private readonly ITokenEstimatorCalibrationScheduler _calibrationScheduler;
 
     private IChatClient? _inner;
 
-    public DeferredLlamaServerChatClient(ILlamaServerProcessSupervisor supervisor, string modelName, TimeSpan networkTimeout)
+    public DeferredLlamaServerChatClient(ILlamaServerProcessSupervisor supervisor,
+        string modelName,
+        TimeSpan networkTimeout,
+        ITokenEstimatorCalibrationScheduler? calibrationScheduler = null)
     {
         _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
         _modelName = modelName;
         _networkTimeout = networkTimeout;
+        _calibrationScheduler = calibrationScheduler ?? new NullTokenEstimatorCalibrationScheduler();
     }
 
     public async Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages,
@@ -276,6 +282,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
             }
 
             var endpoint = await _supervisor.EnsureRunningAsync(_modelName, ModelRole.Chat, ct).ConfigureAwait(false);
+            _calibrationScheduler.Schedule(_modelName, endpoint.BaseAddress);
             var built = LlamaServerOpenAIAdapterFactory.CreateChatClient(endpoint.BaseAddress, _modelName, _networkTimeout);
             Volatile.Write(ref _inner, built);
             return built;

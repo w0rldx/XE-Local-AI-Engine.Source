@@ -272,6 +272,7 @@ public sealed partial class InvocationRunner
     /// </summary>
     private async Task<IReadOnlyList<ChatMessage>> ApplyContextBudgetAsync(IReadOnlyList<ChatMessage> messages,
         RuntimePackage package,
+        string resolvedModel,
         string stage,
         TurnPolicy turnPolicy,
         StreamTransport transport,
@@ -285,7 +286,8 @@ public sealed partial class InvocationRunner
             turnPolicy.ContextCapacityTokens,
             turnPolicy.ReservedOutputTokens,
             package.ResolvedSystemPrompt,
-            BuildToolBudgetDefinitions(package));
+            BuildToolBudgetDefinitions(package),
+            resolvedModel);
 
         if (!result.Trimmed && !result.ExceedsBudget)
         {
