@@ -331,6 +331,14 @@ def capture_baseline(spec_path: Path, output_path: Path) -> None:
     require_string(runtime, "backend", "spec.runtime")
     verified_corpus = verify_identity("spec.corpus", corpus)
     verified_runtime = verify_identity("spec.runtime", runtime)
+    auxiliaries = runtime.get("auxiliary_binaries", [])
+    if not isinstance(auxiliaries, list) or not all(isinstance(item, dict) for item in auxiliaries):
+        raise CaptureError("spec.runtime.auxiliary_binaries must be an array of identity objects")
+    verified_auxiliaries = [
+        verify_identity(f"spec.runtime.auxiliary_binaries[{index}]", item)
+        for index, item in enumerate(auxiliaries)
+    ]
+    verified_runtime["auxiliary_binaries"] = verified_auxiliaries
     commands = spec.get("commands")
     if not isinstance(commands, list) or not commands:
         raise CaptureError("spec.commands must be a non-empty array")
@@ -535,7 +543,13 @@ def identity_projection(artifact: dict[str, Any]) -> dict[str, Any]:
     return {
         "models": [{key: item.get(key) for key in ("name", "role", "quant", "sha256")} for item in identity.get("models", [])],
         "corpus": {key: identity.get("corpus", {}).get(key) for key in ("name", "sha256")},
-        "runtime": {key: identity.get("runtime", {}).get(key) for key in ("tag", "provenance", "backend", "sha256")},
+        "runtime": {
+            **{key: identity.get("runtime", {}).get(key) for key in ("tag", "provenance", "backend", "sha256")},
+            "auxiliary_binaries": [
+                {key: item.get(key) for key in ("name", "sha256")}
+                for item in identity.get("runtime", {}).get("auxiliary_binaries", [])
+            ],
+        },
         "machine": {key: host.get(key) for key in ("os", "kernel", "architecture", "cpu", "logical_cpu_count")},
         "devices": host.get("runtime_devices"),
     }

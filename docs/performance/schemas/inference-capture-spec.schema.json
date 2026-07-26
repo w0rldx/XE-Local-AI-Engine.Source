@@ -48,6 +48,19 @@
         "provenance": { "enum": ["managed-source-build", "pinned-prebuilt", "BYO"] },
         "backend": { "enum": ["cuda", "vulkan", "cpu", "other"] },
         "build_options": { "type": "array", "items": { "type": "string" } },
+        "auxiliary_binaries": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": ["name", "path", "sha256"],
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "path": { "type": "string", "minLength": 1 },
+              "sha256": { "$ref": "#/$defs/sha256" }
+            }
+          }
+        },
         "path": { "type": "string", "minLength": 1 },
         "sha256": { "$ref": "#/$defs/sha256" }
       }
