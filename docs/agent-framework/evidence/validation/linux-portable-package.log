@@ -1,10 +1,10 @@
 >> Packaging XE Local AI Engine 0.1.0-rc.4.2 for: linux-x64
 >> Building React SPA (pnpm build)…
 Already up to date
-Done in 44ms using pnpm v11.2.2
+Done in 40ms using pnpm v11.2.2
 $ tsc --noEmit && node scripts/CheckEventCurrentTargetInUpdaters.mjs && biome lint && stylelint "src/**/*.css" && vite build
 CheckEventCurrentTargetInUpdaters: OK (0 violations)
-Checked 714 files in 1088ms. No fixes applied.
+Checked 714 files in 998ms. No fixes applied.
 Skipping ASP.NET Core development certificate plugin in non-development mode.
 Skipping Tabler development server bugfix plugin in non-development mode.
 vite v8.1.0 building client environment for production...
@@ -180,39 +180,36 @@ dist/assets/index-DNe9huk_.js                           1,060.96 kB │ gzip:   
 [38;5;246m─────╯[0m
 
 [33m[PLUGIN_TIMINGS] [0mYour build spent significant time in plugins. Here is a breakdown:
-  - unocss:global:build:scan (77%)
-  - unocss:global:build:generate (7%)
-  - unocss:transformers:post (3%)
-  - @tanstack/devtools:remove-devtools-on-build (3%)
-  - unocss:transformers:default (2%)
+  - unocss:global:build:scan (84%)
+  - unocss:global:build:generate (5%)
 See https://rolldown.rs/reference/InputOptions.checks#plugintimings for more details.
 
-✓ built in 4.70s
+✓ built in 4.11s
 >> Publishing linux-x64 (single-file self-contained)…
   Determining projects to restore...
-  Restored $REPO/XE-Local-AI-Engine.Providers.Abstractions/XE-Local-AI-Engine.Providers.Abstractions.csproj (in 203 ms).
-  Restored $REPO/XE-Local-AI-Engine.Providers.CodexOAuth/XE-Local-AI-Engine.Providers.CodexOAuth.csproj (in 203 ms).
+  Restored $REPO/XE-Local-AI-Engine.AI.Contracts/XE-Local-AI-Engine.AI.Contracts.csproj (in 207 ms).
+  Restored $REPO/XE-Local-AI-Engine.Providers.CodexOAuth/XE-Local-AI-Engine.Providers.CodexOAuth.csproj (in 206 ms).
+  Restored $REPO/XE-Local-AI-Engine.Providers.Ollama/XE-Local-AI-Engine.Providers.Ollama.csproj (in 206 ms).
   Restored $REPO/XE-Local-AI-Engine.AI.Agent/XE-Local-AI-Engine.AI.Agent.csproj (in 206 ms).
-  Restored $REPO/XE-Local-AI-Engine.ServiceDefaults/XE-Local-AI-Engine.ServiceDefaults.csproj (in 203 ms).
-  Restored $REPO/XE-Local-AI-Engine.Providers.Ollama/XE-Local-AI-Engine.Providers.Ollama.csproj (in 203 ms).
-  Restored $REPO/XE-Local-AI-Engine.AI.Contracts/XE-Local-AI-Engine.AI.Contracts.csproj (in 4 ms).
-  Restored $REPO/XE-Local-AI-Engine.Providers.Capabilities/XE-Local-AI-Engine.Providers.Capabilities.csproj (in 7 ms).
-  Restored $REPO/XE-Local-AI-Engine.Providers.LlamaServer/XE-Local-AI-Engine.Providers.LlamaServer.csproj (in 11 ms).
-  Restored $REPO/XE-Local-AI-Engine.Providers.StableDiffusionCpp/XE-Local-AI-Engine.Providers.StableDiffusionCpp.csproj (in 15 ms).
-  Restored $REPO/XE-Local-AI-Engine.Providers.HuggingFace/XE-Local-AI-Engine.Providers.HuggingFace.csproj (in 17 ms).
-  Restored $REPO/XE-Local-AI-Engine.Client.Persistence/XE-Local-AI-Engine.Client.Persistence.csproj (in 264 ms).
-  Restored $REPO/XE-Local-AI-Engine.Client.Application/XE-Local-AI-Engine.Client.Application.csproj (in 255 ms).
-  Restored $REPO/XE-Local-AI-Engine.Client/XE-Local-AI-Engine.Client.csproj (in 255 ms).
-  XE-Local-AI-Engine.ServiceDefaults -> $REPO/XE-Local-AI-Engine.ServiceDefaults/bin/Release/net10.0/XE-Local-AI-Engine.ServiceDefaults.dll
-  XE-Local-AI-Engine.Client.Persistence -> $REPO/XE-Local-AI-Engine.Client.Persistence/bin/Release/net10.0/XE-Local-AI-Engine.Client.Persistence.dll
+  Restored $REPO/XE-Local-AI-Engine.ServiceDefaults/XE-Local-AI-Engine.ServiceDefaults.csproj (in 206 ms).
+  Restored $REPO/XE-Local-AI-Engine.Providers.Abstractions/XE-Local-AI-Engine.Providers.Abstractions.csproj (in 4 ms).
+  Restored $REPO/XE-Local-AI-Engine.Providers.Capabilities/XE-Local-AI-Engine.Providers.Capabilities.csproj (in 3 ms).
+  Restored $REPO/XE-Local-AI-Engine.Providers.LlamaServer/XE-Local-AI-Engine.Providers.LlamaServer.csproj (in 14 ms).
+  Restored $REPO/XE-Local-AI-Engine.Providers.HuggingFace/XE-Local-AI-Engine.Providers.HuggingFace.csproj (in 12 ms).
+  Restored $REPO/XE-Local-AI-Engine.Providers.StableDiffusionCpp/XE-Local-AI-Engine.Providers.StableDiffusionCpp.csproj (in 12 ms).
+  Restored $REPO/XE-Local-AI-Engine.Client.Persistence/XE-Local-AI-Engine.Client.Persistence.csproj (in 266 ms).
+  Restored $REPO/XE-Local-AI-Engine.Client.Application/XE-Local-AI-Engine.Client.Application.csproj (in 260 ms).
+  Restored $REPO/XE-Local-AI-Engine.Client/XE-Local-AI-Engine.Client.csproj (in 258 ms).
   XE-Local-AI-Engine.Providers.Abstractions -> $REPO/XE-Local-AI-Engine.Providers.Abstractions/bin/Release/net10.0/XE-Local-AI-Engine.Providers.Abstractions.dll
+  XE-Local-AI-Engine.Client.Persistence -> $REPO/XE-Local-AI-Engine.Client.Persistence/bin/Release/net10.0/XE-Local-AI-Engine.Client.Persistence.dll
+  XE-Local-AI-Engine.ServiceDefaults -> $REPO/XE-Local-AI-Engine.ServiceDefaults/bin/Release/net10.0/XE-Local-AI-Engine.ServiceDefaults.dll
   XE-Local-AI-Engine.Providers.StableDiffusionCpp -> $REPO/XE-Local-AI-Engine.Providers.StableDiffusionCpp/bin/Release/net10.0/XE-Local-AI-Engine.Providers.StableDiffusionCpp.dll
   XE-Local-AI-Engine.Providers.Capabilities -> $REPO/XE-Local-AI-Engine.Providers.Capabilities/bin/Release/net10.0/XE-Local-AI-Engine.Providers.Capabilities.dll
-  XE-Local-AI-Engine.Providers.CodexOAuth -> $REPO/XE-Local-AI-Engine.Providers.CodexOAuth/bin/Release/net10.0/XE-Local-AI-Engine.Providers.CodexOAuth.dll
-  XE-Local-AI-Engine.Providers.LlamaServer -> $REPO/XE-Local-AI-Engine.Providers.LlamaServer/bin/Release/net10.0/XE-Local-AI-Engine.Providers.LlamaServer.dll
-  XE-Local-AI-Engine.Providers.Ollama -> $REPO/XE-Local-AI-Engine.Providers.Ollama/bin/Release/net10.0/XE-Local-AI-Engine.Providers.Ollama.dll
-  XE-Local-AI-Engine.AI.Agent -> $REPO/XE-Local-AI-Engine.AI.Agent/bin/Release/net10.0/XE-Local-AI-Engine.AI.Agent.dll
   XE-Local-AI-Engine.Providers.HuggingFace -> $REPO/XE-Local-AI-Engine.Providers.HuggingFace/bin/Release/net10.0/XE-Local-AI-Engine.Providers.HuggingFace.dll
+  XE-Local-AI-Engine.Providers.Ollama -> $REPO/XE-Local-AI-Engine.Providers.Ollama/bin/Release/net10.0/XE-Local-AI-Engine.Providers.Ollama.dll
+  XE-Local-AI-Engine.Providers.LlamaServer -> $REPO/XE-Local-AI-Engine.Providers.LlamaServer/bin/Release/net10.0/XE-Local-AI-Engine.Providers.LlamaServer.dll
+  XE-Local-AI-Engine.Providers.CodexOAuth -> $REPO/XE-Local-AI-Engine.Providers.CodexOAuth/bin/Release/net10.0/XE-Local-AI-Engine.Providers.CodexOAuth.dll
+  XE-Local-AI-Engine.AI.Agent -> $REPO/XE-Local-AI-Engine.AI.Agent/bin/Release/net10.0/XE-Local-AI-Engine.AI.Agent.dll
   XE-Local-AI-Engine.AI.Contracts -> $REPO/XE-Local-AI-Engine.AI.Contracts/bin/Release/net10.0/XE-Local-AI-Engine.AI.Contracts.dll
   XE-Local-AI-Engine.Client.Application -> $REPO/XE-Local-AI-Engine.Client.Application/bin/Release/net10.0/XE-Local-AI-Engine.Client.Application.dll
   XE-Local-AI-Engine.Client -> $REPO/XE-Local-AI-Engine.Client/bin/Release/net10.0/linux-x64/XE-Local-AI-Engine.Client.dll
@@ -221,5 +218,5 @@ See https://rolldown.rs/reference/InputOptions.checks#plugintimings for more det
 >> App-update config is inert by design: channel 'main' — repository URL is a placeholder (https://github.com/REPLACE_OWNER/REPLACE_MAIN_REPO); GitHub App client ID is not a real 'Iv…' id (REPLACE_MAIN_CLIENT_ID).
    AppUpdateChannelOptions.IsConfigured is false, so the in-app updater ships disabled.
 >> Built $REPO/publish/dist/xe-local-ai-engine-0.1.0-rc.4.2-linux-x64.zip
-   size 86M  sha256 48401f15a78041523ec87c8a62bcf059232577c8a2e5e38f72a21cf59871193a
+   size 86M  sha256 77f1ff2ecbefd2535e4bcb91efdbb07faece691b95c4c68d4c77632138d286bc
 >> Done. Artifacts in $REPO/publish/dist

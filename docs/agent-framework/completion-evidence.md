@@ -119,16 +119,18 @@ hosting smoke tests, runs the release-script static-analysis/P0 compile gate, an
 builds the real portable `linux-x64` package. Logs are path-sanitized and hashed in
 `docs/agent-framework/evidence/validation/manifest.json`.
 
-The captured validation manifest tests source commit
-`0a39b49363d6d89547410b5f9b547b25c5cf3bcc` and records `result: passed`:
+The refreshed validation manifest tests source commit
+`7ed1f03de49af59456b242324804b1eeee58ad44` and records `result: passed`:
 
 - Release solution restore/build: passed with 0 warnings and 0 errors;
+- permanent Release Agent Framework compatibility gate: 202/202 passed, with
+  unchanged test assemblies;
 - Debug solution restore/build: passed with 0 warnings and 0 errors;
 - Debug DevUI registration smoke: 1/1 passed;
 - Debug DevUI hosting/route smoke: 1/1 passed;
 - release-script static analysis and the `P0_SPIKE` compile gate: clean;
 - real portable `linux-x64` package: built, 86 MiB, SHA-256
-  `48401f15a78041523ec87c8a62bcf059232577c8a2e5e38f72a21cf59871193a`.
+  `77f1ff2ecbefd2535e4bcb91efdbb07faece691b95c4c68d4c77632138d286bc`.
 
 ### Native Windows gap
 

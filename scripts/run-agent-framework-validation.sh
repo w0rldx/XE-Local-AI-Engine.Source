@@ -21,6 +21,7 @@ Options:
 
 This lane is intentionally Linux-safe. It runs:
   * Release restore + build
+  * the permanent deterministic Agent Framework compatibility suite
   * Debug restore + build
   * the Debug-only DevUI registration/hosting smoke tests
   * release-script static analysis (shellcheck + PSScriptAnalyzer + P0_SPIKE compile gate)
@@ -73,6 +74,11 @@ run_step release-restore scripts/with-build-lock.sh --lock-file "${SHARED_BUILD_
   dotnet restore XE-Local-AI-Engine.slnx -p:Configuration=Release
 run_step release-build scripts/with-build-lock.sh --lock-file "${SHARED_BUILD_LOCK}" -- \
   dotnet build XE-Local-AI-Engine.slnx --configuration Release --no-restore
+run_step release-agent-deterministic-tests scripts/with-build-lock.sh --lock-file "${SHARED_BUILD_LOCK}" -- \
+  scripts/assembly-guard.sh guard --test-bins -- \
+  dotnet test \
+    --project XE-Local-AI-Engine.AI.Agent.Tests/XE-Local-AI-Engine.AI.Agent.Tests.csproj \
+    --configuration Release --no-build --max-parallel-test-modules 1
 run_step debug-restore scripts/with-build-lock.sh --lock-file "${SHARED_BUILD_LOCK}" -- \
   dotnet restore XE-Local-AI-Engine.slnx -p:Configuration=Debug
 run_step debug-build scripts/with-build-lock.sh --lock-file "${SHARED_BUILD_LOCK}" -- \

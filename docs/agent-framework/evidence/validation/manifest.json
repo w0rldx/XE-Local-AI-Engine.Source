@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "capturedAtUtc": "2026-07-26T22:46:46.442155+00:00",
-  "commit": "0a39b49363d6d89547410b5f9b547b25c5cf3bcc",
+  "capturedAtUtc": "2026-07-26T23:17:52.395825+00:00",
+  "commit": "7ed1f03de49af59456b242324804b1eeee58ad44",
   "result": "passed",
   "linuxPortablePackageIncluded": true,
   "windowsTesterPackage": {
@@ -12,31 +12,35 @@
   "logs": [
     {
       "step": "debug-build",
-      "sha256": "a52c92ec77cbbc65e2ee27e82dec9e30c04da69e08e9716762127fbf9e91e303"
+      "sha256": "c85de701e3b8a64ad79e442cbcbe7c97ab604ed60fbb4ef737d03962fc02eb6f"
     },
     {
       "step": "debug-devui-hosting-smoke",
-      "sha256": "2ea957db77aa3890894d5dbd687191d9e39b0391dbf26fd415cdd6c51685c518"
+      "sha256": "49010a4e8e867b394e9b69a11fcd38364051a9a5294be7a30c7e90d6c16058c1"
     },
     {
       "step": "debug-devui-registration-smoke",
-      "sha256": "045c7bcd25fecd48ae14b9b98073b4f9494d14ec094d7b0edcf963bfd43cb5c4"
+      "sha256": "912268e608dd0bc05af4995b1945b3d86b101da30e8bd7f619460027e6005f6b"
     },
     {
       "step": "debug-restore",
-      "sha256": "0fe253ad66593ad4581bfe30a87f10e026a23ebd1c5e53bd8011e2788157f2d0"
+      "sha256": "46a2f2a4f68964385f1602193120f29232f858f7d68e08c56f63bed8fc2afe60"
     },
     {
       "step": "linux-portable-package",
-      "sha256": "40f634407d145a417cfb813ec4c39eebd06597be21ba31809d95fefe54c004af"
+      "sha256": "9f7540d4ce117910df9574253b8a45bab0693941e618ada50fc9cfe5ab32013c"
+    },
+    {
+      "step": "release-agent-deterministic-tests",
+      "sha256": "c005ec78da74497d0ca3d6c79399637e19c57bf1b320f48b278551527eee5fb9"
     },
     {
       "step": "release-build",
-      "sha256": "6f7e0478cde820fd70099eb1ca7af2bccadcfcf12dba6a7f4290b0a96c4f0923"
+      "sha256": "cf648d2d5f91bfbdfd780702b636330a5b83e0504ed97814216123958ee3119b"
     },
     {
       "step": "release-restore",
-      "sha256": "a87ed9214c698bbdd89d90ca3b60ce47b55a2ed31257db129e3480c2719496e1"
+      "sha256": "2aafe91a7b11b9e2a25f2e1612255ff47b34a6a20ab0354f3ee523dc5fd34f1d"
     },
     {
       "step": "release-static-analysis",
