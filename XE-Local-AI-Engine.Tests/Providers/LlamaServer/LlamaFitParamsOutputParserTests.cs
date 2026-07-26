@@ -4,15 +4,16 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Coverage for the stable stdout grammar emitted by llama.cpp b9692's <c>llama-fit-params</c> tool. These fixtures
-///     use the tool's ready-to-replay CLI format rather than constructed startup-log banners.
+///     Coverage for the stdout grammar emitted by llama.cpp b9692's <c>llama-fit-params</c> tool, including the captured
+///     unchanged-sentinel output and the verbose server evidence required to turn automatic full offload into a concrete
+///     replay vector.
 /// </summary>
 public sealed class LlamaFitParamsOutputParserTests
 {
     [Test]
-    public void TryParseFittedArgs_CapturedB9692Output_ReturnsCompleteReplay()
+    public void TryParseFittedArgs_ConcreteOutputWithOverride_ReturnsCompleteReplay()
     {
-        // Captured b9692 README output, reduced to one captured tensor override while preserving the exact stdout grammar.
+        // Representative concrete b9692 grammar, reduced to one tensor override for a focused assertion.
         string[] fitParamsOutput =
         [
             "ggml_cuda_init: found 1 CUDA devices:",
@@ -39,6 +40,63 @@ public sealed class LlamaFitParamsOutputParserTests
         AssertEx.Equal(expected: 32, draft.NGpuLayers!.Value);
         AssertEx.Equal("7,3", draft.TensorSplit);
         AssertEx.Null(draft.OverrideTensor);
+    }
+
+    [Test]
+    public void TryParseFittedArgs_CapturedUnresolvedDefaults_ReturnsNull()
+    {
+        // Captured from the real b9692 helper. These are llama.cpp sentinels, not frozen values:
+        // context 0 means the model-trained context and GPU layers -1 means automatic placement.
+        var resolved = LlamaFitParamsOutputParser.TryParseFittedArgs(
+            ["-c 0 -ngl -1"],
+            ["load_tensors: offloaded 25/25 layers to GPU"]);
+
+        AssertEx.Null(resolved);
+    }
+
+    [Test]
+    public void TryParseFittedArgs_AutomaticLayersWithFullOffloadEvidence_NormalizesToExplicitAllLayers()
+    {
+        var resolved = LlamaFitParamsOutputParser.TryParseFittedArgs(
+            ["-c 8192 -ngl -1"],
+            ["load_tensors: offloaded 25/25 layers to GPU"]);
+
+        var draft = AssertEx.NotNull(resolved);
+        AssertEx.Equal(expected: 8192, draft.CtxSize);
+        AssertEx.Equal(expected: -2, draft.NGpuLayers!.Value);
+    }
+
+    [Test]
+    public void TryParseFittedArgs_AutomaticLayersWithoutFullOffloadEvidence_ReturnsNull()
+    {
+        var resolved = LlamaFitParamsOutputParser.TryParseFittedArgs(
+            ["-c 8192 -ngl -1"],
+            ["load_tensors: offloaded 24/25 layers to GPU"]);
+
+        AssertEx.Null(resolved);
+    }
+
+    [Test]
+    public void TryParseFittedArgs_AutomaticLayersWithMixedStartupPlacements_ReturnsNull()
+    {
+        var resolved = LlamaFitParamsOutputParser.TryParseFittedArgs(
+            ["-c 8192 -ngl -1"],
+            [
+                "load_tensors: offloaded 25/25 layers to GPU",
+                "load_tensors: offloaded 4/10 layers to GPU"
+            ]);
+
+        AssertEx.Null(resolved);
+    }
+
+    [Test]
+    public void TryParseFittedArgs_ExplicitAllLayers_PreservesConcreteAllLayersValue()
+    {
+        var resolved = LlamaFitParamsOutputParser.TryParseFittedArgs(["-c 8192 -ngl -2"]);
+
+        var draft = AssertEx.NotNull(resolved);
+        AssertEx.Equal(expected: 8192, draft.CtxSize);
+        AssertEx.Equal(expected: -2, draft.NGpuLayers!.Value);
     }
 
     [Test]

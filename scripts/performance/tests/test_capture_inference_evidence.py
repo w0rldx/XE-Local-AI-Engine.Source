@@ -61,6 +61,43 @@ class CaptureInferenceEvidenceTests(unittest.TestCase):
         self.assertEqual(["--metrics", "--jinja"], capture.without_fit_semantics(replay))
         self.assertEqual({"-c": ["0"], "-ngl": ["-1"]}, capture.extract_fit_flags(replay))
 
+    def test_fit_flags_reject_unresolved_or_partial_placement(self) -> None:
+        invalid = (
+            ({}, "exactly one -c"),
+            ({"-c": ["4096"]}, "exactly one -ngl"),
+            ({"-c": ["0"], "-ngl": ["32"]}, "positive concrete integer"),
+            ({"-c": ["model"], "-ngl": ["32"]}, "positive concrete integer"),
+            ({"-c": ["4096"], "-ngl": ["-1"]}, "automatic placement"),
+            ({"-c": ["4096"], "-ngl": ["layers"]}, "integer"),
+            ({"-c": ["4096", "8192"], "-ngl": ["32"]}, "exactly one -c"),
+            ({"-c": ["4096"], "-ngl": ["32", "16"]}, "exactly one -ngl"),
+        )
+
+        for fitted, message in invalid:
+            with self.subTest(fitted=fitted), self.assertRaisesRegex(capture.CaptureError, message):
+                capture.validate_concrete_fit_flags(fitted)
+
+    def test_fit_flags_accept_concrete_count_and_explicit_all_layers(self) -> None:
+        capture.validate_concrete_fit_flags({"-c": ["4096"], "-ngl": ["32"]})
+        capture.validate_concrete_fit_flags({"-c": ["4096"], "-ngl": ["-2"]})
+
+    def test_fit_flags_normalize_auto_only_with_authoritative_full_offload(self) -> None:
+        fitted = {"-c": ["4096"], "-ngl": ["-1"]}
+        verbose = "load_tensors: offloaded 25/25 layers to GPU"
+
+        self.assertEqual(
+            {"-c": ["4096"], "-ngl": ["-2"]},
+            capture.normalize_fit_flags(fitted, verbose),
+        )
+
+        for evidence in (
+            "",
+            "load_tensors: offloaded 24/25 layers to GPU",
+            "load_tensors: offloaded 25/25 layers to GPU\nload_tensors: offloaded 4/10 layers to GPU",
+        ):
+            with self.subTest(evidence=evidence), self.assertRaisesRegex(capture.CaptureError, "full-offload evidence"):
+                capture.normalize_fit_flags(fitted, evidence)
+
     def test_vram_readers_parse_global_and_process_budget_separately(self) -> None:
         ambient = {"nvidia_smi": {"exit_code": 0, "stdout": "0, GPU, UUID, 1.0, 32607, 28496, 3692, 5"}}
         device = {"stdout": "CUDA0: GPU (32606 MiB, 30927 MiB free)", "stderr": ""}
@@ -104,7 +141,7 @@ class CaptureInferenceEvidenceTests(unittest.TestCase):
             helper.write_text("#!/bin/sh\nprintf '%s\\n' '-c 4096 -ngl 99 -ts 1.0 -ctk q8_0 -ctv q8_0'\n", encoding="utf-8")
             server.chmod(0o755)
             helper.chmod(0o755)
-            common = [str(server), "-m", "model.gguf", "--fit"]
+            common = [str(server), "-m", "model.gguf", "--fit", "--parallel", "1"]
             spec = {
                 "schema_version": "1.0", "kind": "fit-replay-capture", "capture_id": "fit-test", "phase": "fit-proof",
                 "binaries": {
@@ -115,7 +152,7 @@ class CaptureInferenceEvidenceTests(unittest.TestCase):
                     "default_verbosity": {"name": "default", "argv": common, "repeats": 1, "timeout_seconds": 2},
                     "verbose": {"name": "verbose", "argv": common + ["-v"], "repeats": 1, "timeout_seconds": 2},
                     "fit_params": {"name": "fit", "argv": [str(helper), "-m", "model.gguf"], "repeats": 1, "timeout_seconds": 2},
-                    "explore": {"name": "explore", "argv": common + ["--parallel", "1"], "repeats": 1, "timeout_seconds": 2},
+                    "explore": {"name": "explore", "argv": common, "repeats": 1, "timeout_seconds": 2},
                     "replay": {
                         "name": "replay",
                         "argv": [str(server), "-m", "model.gguf", "--parallel", "1", "-c", "4096", "-ngl", "99", "-ts", "1.0", "-ctk", "q8_0", "-ctv", "q8_0"],

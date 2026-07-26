@@ -7,8 +7,12 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 public interface IFittedArgsParser
 {
     /// <summary>
-    ///     Builds a replay draft from <paramref name="fitParamsOutput" />, or <see langword="null" /> when the complete
-    ///     <c>-c N -ngl N [-ts ...] [-ot "..."]</c> grammar cannot be located.
+    ///     Builds a replay draft from <paramref name="fitParamsOutput" /> plus authoritative
+    ///     <paramref name="startupOutput" /> placement evidence, or <see langword="null" /> when no concrete replay can
+    ///     be proven. The helper's automatic <c>-ngl -1</c> sentinel is replayable only when startup output proves every
+    ///     layer was offloaded.
     /// </summary>
-    ResolvedLaunchArguments? TryParseFittedArgs(IReadOnlyList<string> fitParamsOutput);
+    ResolvedLaunchArguments? TryParseFittedArgs(
+        IReadOnlyList<string> fitParamsOutput,
+        IReadOnlyList<string> startupOutput);
 }
