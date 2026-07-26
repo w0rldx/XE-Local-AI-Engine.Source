@@ -734,8 +734,9 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     /// <remarks>
     ///     The <paramref name="resolveArgs" /> delegate is awaited at the same point the profile resolver used to be, so
     ///     admission ordering and the "a slow profile read never stalls admission" invariant are unchanged. When
-    ///     <paramref name="startupCapture" /> and <paramref name="ensureMetrics" /> are both their normal-path defaults
-    ///     (<see langword="null" /> / <see langword="false" />) the built spec is identical to the legacy spawn.
+    ///     <paramref name="startupCapture" />, <paramref name="fitParamsCapture" />, and
+    ///     <paramref name="ensureMetrics" /> are their normal-path defaults (<see langword="null" />,
+    ///     <see langword="null" />, <see langword="false" />), the built spec is identical to the legacy spawn.
     /// </remarks>
     private async Task<RunningProcess> SpawnCoreAsync(ProcessKey key,
         Func<GpuVariant, CancellationToken, Task<ResolvedLaunchArguments>> resolveArgs,
