@@ -182,9 +182,20 @@ One Kestrel process serves both API and UI: `app.UseStaticFiles()` + `app.MapFal
 
 ### This WSL2 box HAS a GPU
 
-**RTX 4080, 16 GB, CUDA toolkit 13.3, compute arch sm_89 (Ada).** Verified live. Any note claiming "WSL has no GPU, GPU work can't be tested here" is **wrong** — CUDA builds, VRAM offload, and `nvidia-smi`-gated paths can all be built and live-tested on this box. cmake/gcc/ninja are present, so a from-source CUDA llama.cpp build works (pass `-DCMAKE_CUDA_ARCHITECTURES=89`).
+**RTX 5090, 32 GB, CUDA toolkit 13.3, compute arch sm_120 (Blackwell), driver 610.74.** Verified live 2026-07-26 via `nvidia-smi`. Any note claiming "WSL has no GPU, GPU work can't be tested here" is **wrong** — CUDA builds, VRAM offload, and `nvidia-smi`-gated paths can all be built and live-tested on this box. cmake/gcc/ninja are present, so a from-source CUDA llama.cpp build works.
 
-Don't hardcode the CUDA minor version — it has already drifted (13.1 → 13.3). Read `nvcc --version` if it matters.
+**This entry said "RTX 4080, 16 GB, sm_89 (Ada)" until 2026-07-26.** The hardware changed; the doc did not. Don't trust a remembered GPU model — read `nvidia-smi` if it matters, exactly as you would for the CUDA version.
+
+Don't hardcode the CUDA minor version — it has already drifted (13.1 → 13.3). Read `nvcc --version` if it matters. **The same applies to the compute arch**: `CudaBuildService` detects it live, but its fallback constant `DefaultCudaArchitectures = "75;86;89"` (`:26`) has **no `120`**, so any detection failure yields a build with no native Blackwell code. If a GPU build is mysteriously slow, check what arch it was actually compiled for.
+
+Rest of the box, for sizing assumptions: **AMD Ryzen 9 9950X3D** host, **8 processors exposed to WSL**, **~31 GiB RAM in the VM**. All three are well above the stated consumer target (≈16 GB RAM, 8–16 GB VRAM), so **local benchmark numbers over-report** — never quote them as consumer-hardware figures.
+
+**Two GPU-behaviour traps specific to WSL2/WDDM** (both measured 2026-07-26; they apply to native Windows too, since it is the same driver model):
+
+- **VRAM exhaustion does not OOM — it silently degrades.** WDDM demand-pages GPU memory to host RAM. With ~1.2 GB truly free, `llama-server -ngl 99` loaded and served at **161.7 tok/s** versus **698.4 tok/s** unloaded — a **4.3× slowdown with zero errors**. So (a) OOM-recovery paths cannot be exercised by VRAM pressure here, and (b) any benchmark taken while something else holds VRAM silently reports paged numbers that do not transfer. Don't deliberately drive true OOM either — WSL2 GPU OOM has been reported to kernel-panic Hyper-V and BSOD the host.
+- **The two free-VRAM readers disagree under pressure.** `nvidia-smi memory.free` (→ `HardwareProfiler` → `CapacityService`) reports the true global figure; `llama-server --list-devices` (→ `LlamaListDevicesVramProbe` → profile invalidation, benchmark metrics) is built on `cudaMemGetInfo`, which on WDDM reports the **calling process's residency budget**. Measured divergence with another process holding VRAM: **492 MiB vs 29697 MiB**. See `Plans/2026-07-26-vram-reader-divergence-defect.md`.
+
+**`nvidia-smi --query-compute-apps` returns an empty list under WSL** even when a process is holding tens of GB. Per-process VRAM attribution is unavailable here; anything relying on it is untestable on this box.
 
 ### This WSL2 box has no keyring
 
@@ -211,7 +222,7 @@ A startup reaper (`StaleLlamaServerReaper`, in `XE-Local-AI-Engine.Providers.Lla
 ### llama.cpp binaries
 
 - `LlamaCppReleasePins.PinnedTag` is only the **offline-fallback floor**. The updater resolves a live "recommended" tag from GitHub Releases first, then a cached `installed-runtime.json`, and only then this constant. If you bump it, re-verify the archive layout for that tag.
-- **Upstream ships no Linux CUDA prebuilt — Windows only.** On Linux, an NVIDIA box's `GpuVariantSelector` resolves to **Vulkan**, never CUDA. For CUDA on Linux, use either the bring-your-own-binary override (`XE_LLAMACPP_SERVER_PATH` + `XE_LLAMACPP_VARIANT`) or the in-app build-from-source feature — both exist and were live-verified against this box's 4080.
+- **Upstream ships no Linux CUDA prebuilt — Windows only.** On Linux, an NVIDIA box's `GpuVariantSelector` resolves to **Vulkan**, never CUDA. For CUDA on Linux, use either the bring-your-own-binary override (`XE_LLAMACPP_SERVER_PATH` + `XE_LLAMACPP_VARIANT`) or the in-app build-from-source feature — both exist and were live-verified against this box's GPU.
 - **A GPU-variant binary can see ZERO devices and silently run on the CPU — the device audit exists to catch this (AUD4-03).** On this WSL2 box the shipped Vulkan build's `llama-server --list-devices` returns an empty list (no Vulkan ICD), so inference ran 4-thread CPU while the advisor/UI sized models to 16 GB VRAM. `IRuntimeDeviceAudit` (Application) composes the hardware profile + the selected variant + `ILlamaDeviceInventoryProbe` (a cached `--list-devices` parse, per binary path+mtime) into a `RuntimeDeviceAuditState {inferenceBackend, gpuExpected, cpuFallback, reason, remediation}`. **A failed/timed-out probe is "unknown", never "no GPU"** — it must never raise a false CPU-fallback alarm. On `cpuFallback`, `GetEffectiveProfileAsync` degrades the profile to CPU-mode (`VramKnown=false`) so the advisor + capacity gate size against RAM, not phantom VRAM; a `device_fallback` metric + a Warning fire once per binary. The audit is computed lazily on first demand and cached **only when determinate** — an indeterminate probe result ("unknown") is returned uncached so the next call re-probes (latching it would keep capacity/advisor trusting phantom VRAM until restart or a forced refresh; the probe layer likewise never caches failed probes). It is a pure function of the selected binary, so it is deliberately **not** wired per-spawn (zero warm-path cost). The hardware-profile endpoint returns the raw physical profile PLUS the audit block.
 - Verify GitHub asset digests via the Releases API `digest: "sha256:..."` field. There are **no `.sha256` sidecar files** — don't go looking for them.
 - Archive layout is not guaranteed to match `ServerRelativePath = build/bin/llama-server`; the resolver falls back to a recursive search by executable name. This was a real shipped bug — don't hardcode the extraction path.
@@ -513,7 +524,8 @@ Old notes (and agents who half-remember them) assert these. They are **false tod
 
 | Stale belief | Reality |
 |---|---|
-| "The WSL dev box has no GPU, so GPU work can't be tested here." | It has an **RTX 4080 + CUDA 13.3**, live-verified. GPU paths are testable here. |
+| "The WSL dev box has no GPU, so GPU work can't be tested here." | It has an **RTX 5090 (32 GB, sm_120) + CUDA 13.3**, live-verified. GPU paths are testable here. |
+| "The dev box is an RTX 4080 with 16 GB (sm_89 / Ada); build CUDA with `-DCMAKE_CUDA_ARCHITECTURES=89`." | **Wrong since 2026-07-26** — it is an **RTX 5090, 32 GB, sm_120 (Blackwell)**. Read `nvidia-smi`; never hardcode the arch. `CudaBuildService`'s fallback constant still lacks `120`. |
 | "Ollama was removed from the app." | Removed only from *Aspire dev orchestration*. It remains a supported, gated, opt-in secondary provider with 50+ live call sites. llama.cpp is the *default*, not the *only*, runtime. |
 | "`dotnet test` reports zero tests — run the native test-host exe instead." | Fixed by the `global.json` MTP runner pin. `dotnet test` works against the whole solution. Native exe still works, but is no longer required. |
 | "`--treenode-filter` alternation `(A|B)` silently matches zero tests." | **False** on TUnit 1.58 — it returns the union (9 + 6 = 15, re-verified 2026-07-24). The claim survives in `AGENTS.md`; believe the measurement. |
