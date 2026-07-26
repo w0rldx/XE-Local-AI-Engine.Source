@@ -28,6 +28,10 @@ using XE_Local_AI_Engine.Tests.Testing.Builders;
 public sealed class AgentFrameworkHardwareCompatibilityTests
 {
     private const string ModelName = "framework-compatibility/Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M";
+    private static readonly JsonSerializerOptions EvidenceJsonOptions = new()
+    {
+        WriteIndented = true
+    };
 
     [Test]
     public async Task ProductionInvocationRunner_CompletesThroughLlamaServerMeaiAndMaf()
@@ -159,10 +163,7 @@ public sealed class AgentFrameworkHardwareCompatibilityTests
         Directory.CreateDirectory(Path.GetDirectoryName(fullPath)
                                   ?? throw new InvalidOperationException("Evidence path has no parent directory."));
         await File.WriteAllTextAsync(fullPath,
-                JsonSerializer.Serialize(payload, new JsonSerializerOptions
-                {
-                    WriteIndented = true
-                }) + Environment.NewLine)
+                JsonSerializer.Serialize(payload, EvidenceJsonOptions) + Environment.NewLine)
             .ConfigureAwait(false);
     }
 
