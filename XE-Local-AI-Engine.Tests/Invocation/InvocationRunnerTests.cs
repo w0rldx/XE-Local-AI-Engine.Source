@@ -1030,6 +1030,66 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
+    public async Task ResolveApprovalResult_WhenRequestIdIsUnmatched_DoesNotResumeThePendingApproval()
+    {
+        var sender = new MockHubMessageSender();
+        var segment = 0;
+        var factory = CreateFactory(_ =>
+        {
+            segment++;
+            return segment == 1 ? ApprovalRequestUpdates() : CreateUpdates("done");
+        });
+        var runner = CreateRunner(sender, factory);
+        var invocationId = Guid.NewGuid();
+
+        var runTask = RunAsync(runner,
+            RuntimePackageBuilder.Valid().WithInvocationId(invocationId).WithAllowedTool("run_in_agent_home").Build());
+        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
+
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent($"unmatched-{Guid.NewGuid():N}", Approved: true));
+
+        AssertEx.False(runTask.IsCompleted, "an unmatched approval response must not resume the held invocation");
+        AssertEx.Equal(expected: 1, segment, "an unmatched approval response must not start the resume segment");
+
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals.Single().RequestId, Approved: true));
+        await runTask;
+
+        AssertEx.Equal(expected: 2, segment, "the matching approval response must resume the invocation");
+    }
+
+    [Test]
+    public async Task ResolveApprovalResult_WhenDecisionIsDuplicated_FirstDecisionWins()
+    {
+        var sender = new MockHubMessageSender();
+        IReadOnlyList<ChatMessage>? resumeMessages = null;
+        var segment = 0;
+        var factory = CreateMessageCapturingFactory(_ =>
+            {
+                segment++;
+                return segment == 1 ? ApprovalRequestUpdates() : CreateUpdates("done");
+            },
+            messages => resumeMessages = messages);
+        var runner = CreateRunner(sender, factory);
+        var invocationId = Guid.NewGuid();
+
+        var runTask = RunAsync(runner,
+            RuntimePackageBuilder.Valid().WithInvocationId(invocationId).WithAllowedTool("run_in_agent_home").Build());
+        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
+
+        var requestId = sender.SentApprovals.Single().RequestId;
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(requestId, Approved: false));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(requestId, Approved: true));
+        await runTask;
+
+        var response = AssertEx.NotNull(resumeMessages)
+                               .SelectMany(static message => message.Contents)
+                               .OfType<ToolApprovalResponseContent>()
+                               .Single();
+        AssertEx.False(response.Approved, "a duplicate response must not overwrite the first approval decision");
+        AssertEx.Equal(expected: 2, segment, "the duplicate response must not trigger a second resume segment");
+    }
+
+    [Test]
     public async Task RunAsync_WhenTwoToolApprovalsInOneSegment_AnswersBothOnResume()
     {
         // A parallel-tool-call turn surfaces TWO approval requests in one segment. The runner must present and
