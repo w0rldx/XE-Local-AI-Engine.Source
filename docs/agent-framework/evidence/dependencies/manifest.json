@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
-  "capturedAtUtc": "2026-07-26T21:20:16.946114+00:00",
+  "capturedAtUtc": "2026-07-26T22:43:42.797798+00:00",
   "baselineCommit": "e67d669709169fefc4cffab444af66654526a8d8",
-  "currentCommit": "1a809330ed5295360d4e57a45f8c8062ffa765d2",
+  "currentCommit": "4d84956ca04119f27139e3af9e1f9f42349799c0",
   "configurations": [
     "Release",
     "Debug"
@@ -33,7 +33,7 @@
     },
     {
       "path": "baseline/debug/outdated.json",
-      "sha256": "4bac01bc980df28208de773628731d4c7b2ee5bdd9fce9f4a238abaa1c6399fc"
+      "sha256": "a08c784d870c788f504ea32b71363f473a01788ccc9c00aca24ff1e3cd168003"
     },
     {
       "path": "baseline/debug/vulnerable.json",
@@ -49,7 +49,7 @@
     },
     {
       "path": "baseline/release/outdated.json",
-      "sha256": "ae137cdb395d1d1e8750ded035ade944889877d30deb7f122d530590bb67ef57"
+      "sha256": "7db5cb7c10b4ada60f236c0fc3a843e0ff0d3a6e65267d9c2666635c87b8cce8"
     },
     {
       "path": "baseline/release/vulnerable.json",
@@ -61,7 +61,7 @@
     },
     {
       "path": "current/commit.txt",
-      "sha256": "3ad634e889a1294643bd58aa8899a9d34b60452a0d299f5d95c53270d70646ff"
+      "sha256": "a47a0e09fd6653f7f67eda4787fcbd35525e3b19c784629980b736be2b621610"
     },
     {
       "path": "current/debug/dependency-graph.json",
@@ -73,7 +73,7 @@
     },
     {
       "path": "current/debug/outdated.json",
-      "sha256": "3c1a85631835234212f86ab8cbdfe8e439d71f8aa67e8ac821d2c08ddf1a3adf"
+      "sha256": "5ec18ad0fb44332350e1adc7c686874c47bca615961f53ec5da10658c69d730a"
     },
     {
       "path": "current/debug/vulnerable.json",
@@ -89,7 +89,7 @@
     },
     {
       "path": "current/release/outdated.json",
-      "sha256": "85c8a3184a93fc38b24361f4f6c0cf28fbc00aa6bf604f37160805fd5e3640af"
+      "sha256": "cb8f4f07f24d03314c2c88dbbb13810682ab52c6a3bf9faad39d6cbd1a3abef6"
     },
     {
       "path": "current/release/vulnerable.json",
