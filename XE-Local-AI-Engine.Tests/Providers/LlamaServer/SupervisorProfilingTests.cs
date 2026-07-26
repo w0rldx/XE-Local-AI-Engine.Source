@@ -7,9 +7,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     Coverage for the operator profiling seam (<see cref="LlamaServerProcessSupervisor.RunExclusiveProfilingAsync{T}" />):
-///     it captures the startup banner from the launch streams, evicts any warm process so the spawn is exclusive, pins
-///     the process against idle eviction for the benchmark, appends <c>--metrics</c> to a replay spawn when asked, and
-///     always releases the single-flight gate + evicts the transient process — even when the body throws.
+///     it acquires machine-readable fit output before an explore spawn, evicts any warm process so the spawn is
+///     exclusive, pins the process against idle eviction for the benchmark, appends <c>--metrics</c> to a replay spawn
+///     when asked, and always releases the single-flight gate + evicts the transient process — even when the body throws.
 /// </summary>
 public sealed class SupervisorProfilingTests
 {
@@ -57,21 +57,14 @@ public sealed class SupervisorProfilingTests
     }
 
     [Test]
-    public async Task Profiling_CapturesStartupOutput_FromBothStreams()
+    public async Task Profiling_Explore_AcquiresMachineReadableFitParams()
     {
-        // The fake launcher replays these through the spec's StartupCapture sink, exactly as the production launcher
-        // forwards each stdout/stderr line (the fit/device banner prints across both streams).
-        var launcher = new FakeProcessLauncher
-        {
-            StartupLines =
-            [
-                "ggml_cuda_init: found 1 CUDA devices:",
-                "llama_params_fit: n_ctx = 8192",
-                "llama_params_fit: n_gpu_layers = 32"
-            ]
-        };
+        var launcher = new FakeProcessLauncher();
+        var fitRunner = new FakeLlamaFitParamsRunner(
+            LlamaFitParamsRunResult.Success(["-c 8192 -ngl 32"]));
         await using var supervisor = SupervisorFactory.Create(launcher,
-            variantSelector: new FakeVariantSelector(GpuVariant.Cuda));
+            variantSelector: new FakeVariantSelector(GpuVariant.Cuda),
+            fitParamsRunner: fitRunner);
 
         IReadOnlyList<string> captured = [];
         await supervisor.RunExclusiveProfilingAsync("llama3",
@@ -80,14 +73,34 @@ public sealed class SupervisorProfilingTests
             enableMetrics: false,
             (context, _) =>
             {
-                captured = context.StartupOutput;
+                captured = context.FitParamsOutput;
                 return Task.FromResult(result: true);
             },
             CancellationToken.None);
 
-        AssertEx.Contains(captured, "llama_params_fit: n_ctx = 8192");
-        AssertEx.Contains(captured, "llama_params_fit: n_gpu_layers = 32");
-        AssertEx.Contains(captured, "ggml_cuda_init: found 1 CUDA devices:");
+        AssertEx.Contains(captured, "-c 8192 -ngl 32");
+        AssertEx.Equal(expected: 1, fitRunner.Calls.Count);
+        AssertEx.True(fitRunner.Calls.TryPeek(out var spec));
+        AssertEx.Contains(spec!.Arguments, "--fit");
+    }
+
+    [Test]
+    public async Task Profiling_Replay_DoesNotInvokeFitParamsCapability()
+    {
+        var fitRunner = new FakeLlamaFitParamsRunner(
+            LlamaFitParamsRunResult.Success(["-c 8192 -ngl 32"]));
+        await using var supervisor = SupervisorFactory.Create(
+            variantSelector: new FakeVariantSelector(GpuVariant.Cuda),
+            fitParamsRunner: fitRunner);
+
+        await supervisor.RunExclusiveProfilingAsync("llama3",
+            ModelRole.Chat,
+            ResolvedLaunchArguments.Replay(ctxSize: 8192, nGpuLayers: 32),
+            enableMetrics: false,
+            (_, _) => Task.FromResult(result: true),
+            CancellationToken.None);
+
+        AssertEx.Equal(expected: 0, fitRunner.Calls.Count);
     }
 
     [Test]

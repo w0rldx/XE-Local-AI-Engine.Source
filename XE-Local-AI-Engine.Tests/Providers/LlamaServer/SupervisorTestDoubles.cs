@@ -208,6 +208,20 @@ internal sealed class FakeInferenceProfileResolver(ResolvedLaunchArguments? reso
     }
 }
 
+/// <summary>Deterministic machine-readable fit helper fake for profiling tests.</summary>
+internal sealed class FakeLlamaFitParamsRunner(LlamaFitParamsRunResult? result = null) : ILlamaFitParamsRunner
+{
+    private readonly LlamaFitParamsRunResult _result = result ?? LlamaFitParamsRunResult.Missing();
+
+    public ConcurrentQueue<LlamaServerLaunchSpec> Calls { get; } = new();
+
+    public Task<LlamaFitParamsRunResult> RunAsync(LlamaServerLaunchSpec serverSpec, CancellationToken ct)
+    {
+        Calls.Enqueue(serverSpec);
+        return Task.FromResult(_result);
+    }
+}
+
 /// <summary>
 ///     Supervisor fake whose <see cref="CheckHealthAsync" /> returns a configurable health list so the runtime-status
 ///     running-count surface and the pre-update 409 safety gate can be exercised deterministically without spawning any
