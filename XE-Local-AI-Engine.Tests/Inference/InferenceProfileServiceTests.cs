@@ -32,7 +32,7 @@ public sealed class InferenceProfileServiceTests
         var fixture = new ServiceFixture();
         fixture.WithLocalModel();
         fixture.WithMetadata(new GgufModelMetadata(ParamCount: 7_000_000_000, QuantType: "15", ContextLength: 8192, ExpertCount: null, IsMoe: false));
-        fixture.WithExploreStartupOutput("n_ctx = 8192", "n_gpu_layers = 33");
+        fixture.WithExploreFitParamsOutput("-c 8192 -ngl 33");
         fixture.EchoExploredUpsert();
 
         var result = await fixture.CreateService().ExploreAsync(Model, ModelRole.Chat, CancellationToken.None);
@@ -53,8 +53,8 @@ public sealed class InferenceProfileServiceTests
         var fixture = new ServiceFixture();
         fixture.WithLocalModel();
         fixture.WithMetadata(new GgufModelMetadata(ParamCount: 7_000_000_000, QuantType: "15", ContextLength: 8192, ExpertCount: null, IsMoe: false));
-        // No fitted context size in the banner → the parser returns null → conservative fallback.
-        fixture.WithExploreStartupOutput("loading model", "warming up");
+        // Incomplete machine-readable output → the parser returns null → conservative fallback.
+        fixture.WithExploreFitParamsOutput("-c 8192");
         fixture.EchoExploredUpsert();
 
         var result = await fixture.CreateService().ExploreAsync(Model, ModelRole.Chat, CancellationToken.None);
@@ -385,11 +385,12 @@ public sealed class InferenceProfileServiceTests
                          .Returns(Task.FromResult(Summary(snapshotId, ModelFitRunStatus.Running)));
         }
 
-        // Drives the explore profiling body: invokes it with a canned startup-output context so the real fit parser runs.
-        public void WithExploreStartupOutput(params string[] startupOutput)
+        // Drives the explore profiling body with machine-readable helper stdout so the real fit parser runs.
+        public void WithExploreFitParamsOutput(params string[] fitParamsOutput)
         {
             var context = new LlamaServerProfilingContext(new LlamaServerEndpoint(Model, ModelRole.Chat, new Uri("http://127.0.0.1:18100/v1")),
-                startupOutput);
+                StartupOutput: [],
+                FitParamsOutput: fitParamsOutput);
             Supervisor.RunExclusiveProfilingAsync(Arg.Any<string>(),
                           Arg.Any<ModelRole>(),
                           Arg.Any<ResolvedLaunchArguments>(),
