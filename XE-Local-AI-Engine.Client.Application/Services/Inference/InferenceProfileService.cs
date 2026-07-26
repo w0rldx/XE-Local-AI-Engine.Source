@@ -104,12 +104,13 @@ public sealed class InferenceProfileService : IInferenceProfileService
             role,
             ResolvedLaunchArguments.Explore(),
             enableMetrics: false,
-            body: (context, _) => Task.FromResult(result: _fittedArgsParser.TryParseFittedArgs(context.StartupOutput)),
+            body: (context, _) => Task.FromResult(result: _fittedArgsParser.TryParseFittedArgs(context.FitParamsOutput)),
             ct).ConfigureAwait(false);
 
         if (draft is null)
         {
-            _logger.LogWarning("Fit banner was unparseable for the explored model; persisting a conservative Explored profile from the GGUF context length.");
+            _logger.LogWarning(
+                "Machine-readable llama-fit-params output was unavailable or incomplete for the explored model; persisting a conservative Explored profile from the GGUF context length instead of freezing partial GPU placement.");
         }
 
         var input = BuildExploreInput(machineKey, modelName, role, backend, build, metadata, draft);
