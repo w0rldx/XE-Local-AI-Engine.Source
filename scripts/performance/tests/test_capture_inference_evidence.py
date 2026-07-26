@@ -61,6 +61,12 @@ class CaptureInferenceEvidenceTests(unittest.TestCase):
         self.assertEqual(["--metrics", "--jinja"], capture.without_fit_semantics(replay))
         self.assertEqual({"-c": ["0"], "-ngl": ["-1"]}, capture.extract_fit_flags(replay))
 
+    def test_vram_readers_parse_global_and_process_budget_separately(self) -> None:
+        ambient = {"nvidia_smi": {"exit_code": 0, "stdout": "0, GPU, UUID, 1.0, 32607, 28496, 3692, 5"}}
+        device = {"stdout": "CUDA0: GPU (32606 MiB, 30927 MiB free)", "stderr": ""}
+        self.assertEqual(28496, capture.global_gpu_free_mib(ambient))
+        self.assertEqual(30927, capture.process_budget_free_mib(device))
+
     def test_baseline_captures_framework_identity_and_explicit_gaps(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
