@@ -64,6 +64,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     private readonly ILlamaServerHealthProbe _healthProbe;
     private readonly ILlamaFitParamsRunner _fitParamsRunner;
     private readonly ILlamaServerLaunchPolicy _launchPolicy;
+    private readonly IProcessContextAllocationResolver _allocationResolver;
     private readonly ILogger<LlamaServerProcessSupervisor> _logger;
     private readonly ILlamaServerProcessLauncher _launcher;
     private readonly ILlamaCppSourceBuildActivity _sourceBuildActivity;
@@ -102,7 +103,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         ILogger<LlamaServerProcessSupervisor>? logger = null,
         IGpuModelLoadAdmission? loadAdmission = null,
         ILlamaCppSourceBuildActivity? sourceBuildActivity = null,
-        ILlamaFitParamsRunner? fitParamsRunner = null)
+        ILlamaFitParamsRunner? fitParamsRunner = null,
+        IProcessContextAllocationResolver? allocationResolver = null)
     {
         _binaryManager = binaryManager ?? throw new ArgumentNullException(nameof(binaryManager));
         _variantSelector = variantSelector ?? throw new ArgumentNullException(nameof(variantSelector));
@@ -113,6 +115,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         _options.Validate();
         _profileResolver = profileResolver ?? throw new ArgumentNullException(nameof(profileResolver));
         _launchPolicy = launchPolicy ?? throw new ArgumentNullException(nameof(launchPolicy));
+        _allocationResolver = allocationResolver ?? new DefaultProcessContextAllocationResolver(_options);
         _externalEndpoints = externalEndpoints ?? new LlamaServerExternalEndpointOptions();
         _timeProvider = timeProvider ?? TimeProvider.System;
         _logger = logger ?? NullLogger<LlamaServerProcessSupervisor>.Instance;
@@ -807,7 +810,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         // AUD4-02/05/17: the central launch policy fills in the deterministic context (-c), the GPU KV-cache
         // quantization + flash-attention optimization, and the CPU thread policy the audited launch defaults omitted.
         // Operator profiling spawns bypass it (applyLaunchPolicy: false) so the supplied args ARE the experiment.
-        var planCandidates = await BuildLaunchPlanCandidatesAsync(key, variant, resolved, applyLaunchPolicy, ct).ConfigureAwait(false);
+        var planSet = await BuildLaunchPlanCandidatesAsync(key, variant, resolved, applyLaunchPolicy, ct).ConfigureAwait(false);
+        var planCandidates = planSet.Candidates;
 
         Exception? optimizedFailure = null;
         for (var attempt = 0; attempt < planCandidates.Count; attempt++)
@@ -817,6 +821,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             var port = await AdmitAndAllocatePortAsync(ct).ConfigureAwait(false);
 
             ILlamaServerProcessHandle? handle = null;
+            var automaticCapture = applyLaunchPolicy ? new BoundedStartupCapture() : null;
             try
             {
                 var spec = BuildLaunchSpec(key, binary.ServerExecutablePath, modelFilePath, port, variant, resolved,
@@ -832,11 +837,15 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                 }
 
                 // Operator profiling spawns capture both pipes; the normal path leaves the sink null (spec unchanged).
-                if (startupCapture is not null)
+                if (startupCapture is not null || automaticCapture is not null)
                 {
                     spec = spec with
                     {
-                        StartupCapture = startupCapture
+                        StartupCapture = line =>
+                        {
+                            startupCapture?.Invoke(line);
+                            automaticCapture?.Add(line);
+                        }
                     };
                 }
 
@@ -920,6 +929,25 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                     continue;
                 }
 
+                if (automaticCapture is not null
+                    && LlamaStartupFailureClassifier.Classify(automaticCapture.Snapshot()) == LlamaStartupFailureKind.OutOfMemory
+                    && planSet.Allocation is not null
+                    && _allocationResolver.TryDownTierAfterOutOfMemory(planSet.Allocation, out var downTiered))
+                {
+                    planSet = planSet with
+                    {
+                        Allocation = downTiered
+                    };
+                    var downTierPlan = await _launchPolicy.ResolveAsync(key.Role, variant, resolved, downTiered, ct).ConfigureAwait(false);
+                    planCandidates.Add(candidate is { UseKvCacheQuantization: false }
+                        ? downTierPlan.WithoutKvCacheQuantization()
+                        : downTierPlan);
+                    _logger.LogWarning(
+                        "llama-server automatic context allocation encountered a classified startup OOM; retrying at context tier {ContextTokens}.",
+                        downTiered.ProcessContextTokens);
+                    continue;
+                }
+
                 throw;
             }
         }
@@ -934,7 +962,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     ///     (KV/FA off) fallback candidate to try once if the optimized one cannot reach readiness. Operator profiling and
     ///     replay-without-optimization spawns get a single <see langword="null" /> plan (today's byte-for-byte behavior).
     /// </summary>
-    private async Task<IReadOnlyList<LlamaServerLaunchPlan?>> BuildLaunchPlanCandidatesAsync(ProcessKey key,
+    private async Task<LaunchPlanSet> BuildLaunchPlanCandidatesAsync(ProcessKey key,
         GpuVariant variant,
         ResolvedLaunchArguments resolved,
         bool applyLaunchPolicy,
@@ -942,29 +970,51 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     {
         if (!applyLaunchPolicy)
         {
-            return [null];
+            return new LaunchPlanSet(null, [null]);
         }
 
-        var trainContext = await TryResolveTrainContextAsync(key.ModelName, ct).ConfigureAwait(false);
-        var plan = await _launchPolicy.ResolveAsync(key.Role, variant, resolved, trainContext, ct).ConfigureAwait(false);
+        var allocation = await _allocationResolver.ResolveAsync(key.ModelName, key.Role, variant, resolved, ct).ConfigureAwait(false)
+                         ?? throw NonRetryable("The requested model's process context could not be allocated.");
+        var plan = await _launchPolicy.ResolveAsync(key.Role, variant, resolved, allocation, ct).ConfigureAwait(false);
 
-        return plan.UseKvCacheQuantization
-            ? [plan, plan.WithoutKvCacheQuantization()]
-            : [plan];
+        return new LaunchPlanSet(allocation,
+            plan.UseKvCacheQuantization
+                ? [plan, plan.WithoutKvCacheQuantization()]
+                : [plan]);
     }
 
-    /// <summary>Reads the model's advertised train context (GGUF header), returning null when unknown — never fatal.</summary>
-    private async Task<long?> TryResolveTrainContextAsync(string modelName, CancellationToken ct)
+    private sealed record LaunchPlanSet(ProcessContextAllocation? Allocation, List<LlamaServerLaunchPlan?> Candidates);
+
+    private sealed class BoundedStartupCapture
     {
-        try
+        private const int MaximumCharacters = 16 * 1024;
+        private const int MaximumLines = 64;
+        private readonly Lock _gate = new();
+        private readonly List<string> _lines = [];
+        private int _characters;
+
+        public void Add(string line)
         {
-            var facts = await _modelStore.ResolveModelFootprintFactsAsync(modelName, ct).ConfigureAwait(false);
-            return facts?.ContextLength;
+            lock (_gate)
+            {
+                if (_lines.Count >= MaximumLines || _characters >= MaximumCharacters)
+                {
+                    return;
+                }
+
+                var remaining = MaximumCharacters - _characters;
+                var captured = line.Length <= remaining ? line : line[..remaining];
+                _lines.Add(captured);
+                _characters += captured.Length;
+            }
         }
-        catch (Exception exception) when (exception is not OperationCanceledException)
+
+        public IReadOnlyList<string> Snapshot()
         {
-            _logger.LogDebug(exception, "Resolving the train context for model {ModelName} failed; the requested context will not be capped.", modelName);
-            return null;
+            lock (_gate)
+            {
+                return [.. _lines];
+            }
         }
     }
 

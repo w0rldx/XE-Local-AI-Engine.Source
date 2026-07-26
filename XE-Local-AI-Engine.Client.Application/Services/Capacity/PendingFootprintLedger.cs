@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Capacity;
 
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+
 /// <summary>
 ///     Default <see cref="IPendingFootprintLedger" />. A single <see cref="SemaphoreSlim" />(1,1) serializes every local
 ///     decide-commit, and an <see cref="Interlocked" />-maintained byte total tracks in-flight reservations. The gate is
@@ -9,10 +11,11 @@ namespace XE_Local_AI_Engine.Client.Services.Capacity;
 public sealed class PendingFootprintLedger : IPendingFootprintLedger, IDisposable
 {
     private readonly SemaphoreSlim _decisionGate = new(initialCount: 1, maxCount: 1);
-    private long _reservedBytes;
+    private long _reservedGpuBytes;
+    private long _reservedRamBytes;
 
     /// <inheritdoc />
-    public long ReservedBytes => Interlocked.Read(ref _reservedBytes);
+    public ResourceFootprint Reserved => new(Interlocked.Read(ref _reservedGpuBytes), Interlocked.Read(ref _reservedRamBytes));
 
     /// <summary>Disposes the decide-commit gate. Invoked by the container on shutdown (the ledger is a singleton).</summary>
     public void Dispose()
@@ -28,16 +31,21 @@ public sealed class PendingFootprintLedger : IPendingFootprintLedger, IDisposabl
     }
 
     /// <inheritdoc />
-    public IDisposable Reserve(long bytes)
+    public IDisposable Reserve(ResourceFootprint footprint)
     {
-        ArgumentOutOfRangeException.ThrowIfNegative(bytes);
-        Interlocked.Add(ref _reservedBytes, bytes);
-        return new Reservation(this, bytes);
+        if (footprint.GpuBytes < 0 || footprint.RamBytes < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(footprint), "Resource axes must be non-negative.");
+        }
+        Interlocked.Add(ref _reservedGpuBytes, footprint.GpuBytes);
+        Interlocked.Add(ref _reservedRamBytes, footprint.RamBytes);
+        return new Reservation(this, footprint);
     }
 
-    private void Release(long bytes)
+    private void Release(ResourceFootprint footprint)
     {
-        Interlocked.Add(ref _reservedBytes, -bytes);
+        Interlocked.Add(ref _reservedGpuBytes, -footprint.GpuBytes);
+        Interlocked.Add(ref _reservedRamBytes, -footprint.RamBytes);
     }
 
     // Releases the decide-commit gate exactly once. The capacity service disposes it as soon as the decision is
@@ -65,21 +73,21 @@ public sealed class PendingFootprintLedger : IPendingFootprintLedger, IDisposabl
     // so a double-dispose (e.g. both a finally and a using) cannot drive the total negative.
     private sealed class Reservation : IDisposable
     {
-        private readonly long _bytes;
+        private readonly ResourceFootprint _footprint;
         private readonly PendingFootprintLedger _ledger;
         private int _released;
 
-        public Reservation(PendingFootprintLedger ledger, long bytes)
+        public Reservation(PendingFootprintLedger ledger, ResourceFootprint footprint)
         {
             _ledger = ledger;
-            _bytes = bytes;
+            _footprint = footprint;
         }
 
         public void Dispose()
         {
             if (Interlocked.Exchange(ref _released, 1) == 0)
             {
-                _ledger.Release(_bytes);
+                _ledger.Release(_footprint);
             }
         }
     }

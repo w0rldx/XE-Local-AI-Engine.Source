@@ -7,6 +7,7 @@ using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 
 /// <summary>
 ///     Captures the versioned identity of every launch-affecting fact that makes a persisted replay comparable. The
@@ -41,7 +42,7 @@ public sealed class LaunchPolicyFingerprintProvider(
     IInstalledRuntimeStore installedRuntimeStore,
     ILlamaCppBinaryManager binaryManager) : ILaunchPolicyFingerprintProvider
 {
-    public const int CurrentVersion = 1;
+    public const int CurrentVersion = 2;
 
     private const int ParallelSlots = 1;
     private const string RuntimeDefaultMode = "llama-runtime-default";
@@ -156,6 +157,28 @@ public sealed class LaunchPolicyFingerprintProvider(
             },
             launch = new
             {
+                contextAllocation = new
+                {
+                    policyVersion = LlamaServerLaunchPolicyOptions.ContextAllocationPolicyVersion,
+                    precedence = "frozen-profile>deterministic-override>hardware-tier",
+                    chatTiers = LlamaServerLaunchPolicyOptions.ChatContextTiers,
+                    auxiliaryRoleCapTokens = 2048,
+                    trainCeilingSafetyMarginTokens = 256,
+                    contextAlignmentTokens = LlamaServerLaunchPolicyOptions.ContextAlignmentTokens,
+                    gpuReserve = new
+                    {
+                        fraction = LlamaServerLaunchPolicyOptions.GpuReserveFraction,
+                        minimumBytes = LlamaServerLaunchPolicyOptions.MinimumGpuReserveBytes
+                    },
+                    ramReserve = new
+                    {
+                        fraction = LlamaServerLaunchPolicyOptions.RamReserveFraction,
+                        minimumBytes = LlamaServerLaunchPolicyOptions.MinimumRamReserveBytes
+                    },
+                    kvFootprintBaseline = "f16-conservative",
+                    admission = "global-free-gpu-and-available-ram",
+                    processAllocationEvidence = "stable-total-or-process-budget-no-live-free-sample"
+                },
                 role,
                 backend = input.Backend.ToUpperInvariant(),
                 parallel = ParallelSlots,

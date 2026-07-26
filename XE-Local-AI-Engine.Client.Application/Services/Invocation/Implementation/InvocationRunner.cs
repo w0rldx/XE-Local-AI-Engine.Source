@@ -296,7 +296,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // budgeter sizes history against the real window. The per-send num_ctx override still wins; an unknown
             // window (cloud/Ollama/not-yet-started) keeps the configured default. The same value is threaded into the
             // agent definition below so the INNER provider-round budgeter (num_ctx side channel) agrees.
-            turnPolicy = ApplyEffectiveContext(turnPolicy, package, effectiveContextTokens);
+            turnPolicy = ApplyEffectiveContext(turnPolicy, effectiveContextTokens);
 
             // Branch: a package carrying a compiled orchestration spec drives the handoff workflow; everything else is
             // the unchanged single-agent loop. Both accumulate into `stream`, then share the completion block below.
@@ -714,16 +714,17 @@ public sealed partial class InvocationRunner : IInvocationRunner
     ///     wins and is left untouched; otherwise a known effective window replaces the configured default so the outer
     ///     conversation budgeter sizes against the real window. An unknown window leaves the policy unchanged.
     /// </summary>
-    private static TurnPolicy ApplyEffectiveContext(TurnPolicy turnPolicy, RuntimePackage package, int? effectiveContextTokens)
+    private static TurnPolicy ApplyEffectiveContext(TurnPolicy turnPolicy, int? effectiveContextTokens)
     {
-        if (package.SamplingOptions?.NumCtx is > 0 || effectiveContextTokens is not > 0)
+        if (effectiveContextTokens is not > 0)
         {
             return turnPolicy;
         }
 
         return turnPolicy with
         {
-            ContextCapacityTokens = effectiveContextTokens.Value
+            ContextCapacityTokens = Math.Min(turnPolicy.ContextCapacityTokens, effectiveContextTokens.Value),
+            ReservedOutputTokens = Math.Min(turnPolicy.ReservedOutputTokens, effectiveContextTokens.Value)
         };
     }
 

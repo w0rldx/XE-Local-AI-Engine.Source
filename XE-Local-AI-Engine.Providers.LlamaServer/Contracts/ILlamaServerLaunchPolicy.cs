@@ -18,7 +18,7 @@ public interface ILlamaServerLaunchPolicy
     Task<LlamaServerLaunchPlan> ResolveAsync(ModelRole role,
         GpuVariant variant,
         ResolvedLaunchArguments resolved,
-        long? modelTrainContextTokens,
+        ProcessContextAllocation allocation,
         CancellationToken ct);
 
     /// <summary>

@@ -113,6 +113,8 @@ public static class LlamaServerServiceCollectionExtensions
         // AUD4-02/05/17: the central launch policy (deterministic -c per role, GPU KV-cache quant + flash attention,
         // CPU threads) plus its persistent safe-fallback store. Options default here; the host overrides from node config.
         services.TryAddSingleton(new LlamaServerLaunchPolicyOptions());
+        services.TryAddSingleton<IProcessContextAllocationResolver>(static sp =>
+            new DefaultProcessContextAllocationResolver(sp.GetRequiredService<LlamaServerLaunchPolicyOptions>()));
         services.TryAddSingleton<ILlamaServerLaunchFallbackStore>(static _ => new LlamaServerLaunchFallbackStore());
         services.TryAddSingleton<ILlamaServerLaunchPolicy>(static sp =>
             new LlamaServerLaunchPolicy(sp.GetRequiredService<LlamaServerLaunchPolicyOptions>(),
@@ -153,7 +155,8 @@ public static class LlamaServerServiceCollectionExtensions
             sp.GetService<TimeProvider>(),
             sp.GetRequiredService<ILogger<LlamaServerProcessSupervisor>>(),
             sp.GetRequiredService<IGpuModelLoadAdmission>(),
-            sp.GetRequiredService<ILlamaCppSourceBuildActivity>()));
+            sp.GetRequiredService<ILlamaCppSourceBuildActivity>(),
+            allocationResolver: sp.GetRequiredService<IProcessContextAllocationResolver>()));
         services.TryAddSingleton<ILlamaServerProcessSupervisor>(static sp =>
             sp.GetRequiredService<LlamaServerProcessSupervisor>());
 
