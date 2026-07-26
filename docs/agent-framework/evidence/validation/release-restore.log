@@ -1,0 +1,5 @@
+  Determining projects to restore...
+  Restored $REPO/XE-Local-AI-Engine.Client.Persistence.Tests/XE-Local-AI-Engine.Client.Persistence.Tests.csproj (in 228 ms).
+  Restored $REPO/XE-Local-AI-Engine.Client.Testing/XE-Local-AI-Engine.Client.Testing.csproj (in 260 ms).
+  Restored $REPO/XE-Local-AI-Engine.Tests.E2ETests/XE-Local-AI-Engine.Tests.E2ETests.csproj (in 229 ms).
+  17 of 20 projects are up-to-date for restore.

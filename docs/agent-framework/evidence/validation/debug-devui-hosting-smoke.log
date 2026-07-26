@@ -1,0 +1,14 @@
+[guard] snapshot: 2911 assemblies across 8 root(s) -> $REPO/.tmp/assembly-guard-WPGaGC.state
+Running tests from $REPO/XE-Local-AI-Engine.Tests/bin/Debug/net10.0/XE-Local-AI-Engine.Tests.dll (net10.0|x64)
+$REPO/XE-Local-AI-Engine.Tests/bin/Debug/net10.0/XE-Local-AI-Engine.Tests.dll (net10.0|x64) passed (344ms)
+
+  In process file artifacts produced:
+    - $REPO/XE-Local-AI-Engine.Tests/bin/Debug/net10.0/TestResults/XE-Local-AI-Engine.Tests-linux-net10.0-report.html
+
+Test run summary: Passed!
+  total: 1
+  failed: 0
+  succeeded: 1
+  skipped: 0
+  duration: 482ms
+[guard] verify: build output unchanged during the run — result is trustworthy.
