@@ -11,7 +11,7 @@ public sealed class LlamaFitParamsProcessRunnerTests
     [Test]
     public async Task RunAsync_WhenSiblingHelperIsMissing_ReportsMissingCapability()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TestDirectory();
         var spec = CreateSpec(temp.Path);
         var runner = new LlamaFitParamsProcessRunner();
 
@@ -29,7 +29,7 @@ public sealed class LlamaFitParamsProcessRunnerTests
 
         var arguments = LlamaFitParamsProcessRunner.BuildArguments(spec.Arguments);
 
-        AssertEx.SequenceEqual(
+        AssertEx.True(arguments.SequenceEqual(
         [
             "-m", "/models/model.gguf",
             "--parallel", "1",
@@ -39,7 +39,7 @@ public sealed class LlamaFitParamsProcessRunnerTests
             "-ctk", "q8_0",
             "-ctv", "q8_0",
             "--pooling", "rank"
-        ], arguments);
+        ]));
         AssertEx.False(arguments.Contains("--host"));
         AssertEx.False(arguments.Contains("--port"));
         AssertEx.False(arguments.Contains("--metrics"));
@@ -68,4 +68,20 @@ public sealed class LlamaFitParamsProcessRunnerTests
             ],
             Port: 18080,
             workingDirectory);
+
+    private sealed class TestDirectory : IDisposable
+    {
+        public TestDirectory()
+        {
+            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"xe-fit-params-{Guid.NewGuid():N}");
+            Directory.CreateDirectory(Path);
+        }
+
+        public string Path { get; }
+
+        public void Dispose()
+        {
+            Directory.Delete(Path, recursive: true);
+        }
+    }
 }
