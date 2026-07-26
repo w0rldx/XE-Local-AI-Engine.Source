@@ -127,7 +127,9 @@ public sealed class FrameworkApprovalGateTests
     }
 
     [Test]
-    public async Task ApprovalRequiredTools_StreamingParallelRequests_CorrelatesReverseOrderedResponsesAndExecutesEachOnce()
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task ApprovalRequiredTools_StreamingParallelRequests_CorrelatesReverseOrderedMixedResponsesAndExecutesEachOnce(bool approveArchive)
     {
         const string secondToolName = "destructive_archive";
         var cleanupExecutions = 0;
@@ -157,14 +159,20 @@ public sealed class FrameworkApprovalGateTests
         var resume = new List<ChatMessage>(seed);
         resume.AddRange(first.Messages);
         resume.Add(new ChatMessage(ChatRole.User,
-            requests.AsEnumerable().Reverse().Select(request => (AIContent)request.CreateResponse(true)).ToList()));
+            requests.Select((request, index) => (AIContent)request.CreateResponse(index == 0 || approveArchive))
+                    .Reverse()
+                    .ToList()));
 
         _ = await agent
                   .RunStreamingAsync(resume, session: null, options: null, CancellationToken.None)
                   .ToAgentResponseAsync(CancellationToken.None);
 
         AssertEx.Equal(expected: 1, cleanupExecutions, "the first approved parallel tool must execute exactly once");
-        AssertEx.Equal(expected: 1, archiveExecutions, "the second approved parallel tool must execute exactly once");
+        AssertEx.Equal(expected: approveArchive ? 1 : 0,
+            archiveExecutions,
+            approveArchive
+                ? "the second approved parallel tool must execute exactly once"
+                : "the rejected parallel tool must never execute");
         AssertEx.Equal(expected: 2, scripted.CallCount, "parallel approvals must resume in one model round after all decisions arrive");
     }
 
