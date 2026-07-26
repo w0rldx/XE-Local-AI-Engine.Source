@@ -8,8 +8,9 @@ using XE_Local_AI_Engine.Client.Services.Inference;
 
 /// <summary>
 ///     FastEndpoints handler that explores a node-local GGUF model to draft its launch args (POST
-///     model-fit/profiles/explore). Validates the model name (non-blank) and role (<c>chat|embedding</c>) before calling
-///     <see cref="IInferenceProfileService.ExploreAsync" />. A domain rejection — a cloud or missing model, or any
+///     model-fit/profiles/explore). Validates the model name (non-blank) and role
+///     (<c>chat|embedding|reranker</c>) before calling <see cref="IInferenceProfileService.ExploreAsync" />. A domain
+///     rejection — a cloud or missing model, or any
 ///     sanitized failure reason the service returns — is surfaced as a 400 via <c>AddError</c> + <c>Send.ErrorsAsync</c>,
 ///     not an exception. On success it returns the drafted/updated profile view (machine key omitted).
 /// </summary>

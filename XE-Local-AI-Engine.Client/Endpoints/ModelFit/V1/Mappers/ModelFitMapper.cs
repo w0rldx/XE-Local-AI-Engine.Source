@@ -477,7 +477,7 @@ internal static class ModelFitMapper
     // Wire-string → enum parsing (case-insensitive; null/unknown handled by the caller)
     // -----------------------------------------------------------------------
 
-    /// <summary>Parses a wire role string (<c>chat|embedding</c>) into <see cref="ModelRole" />; null/empty defaults to chat. Unknown → null.</summary>
+    /// <summary>Parses a wire role string (<c>chat|embedding|reranker</c>) into <see cref="ModelRole" />; null/empty defaults to chat. Unknown → null.</summary>
     public static ModelRole? TryParseRole(string? role)
     {
         // Upper-invariant (CA1308: upper-casing round-trips safely) for case-insensitive matching of the wire tokens.
@@ -485,6 +485,7 @@ internal static class ModelFitMapper
         {
             null or "" or "CHAT" => ModelRole.Chat,
             "EMBEDDING" => ModelRole.Embedding,
+            "RERANKER" => ModelRole.Reranker,
             _ => null
         };
     }
@@ -522,6 +523,7 @@ internal static class ModelFitMapper
         return role switch
         {
             ModelRole.Embedding => "embedding",
+            ModelRole.Reranker => "reranker",
             _ => "chat"
         };
     }
