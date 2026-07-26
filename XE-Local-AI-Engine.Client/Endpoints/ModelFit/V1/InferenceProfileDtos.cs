@@ -68,14 +68,14 @@ public sealed class ListInferenceProfilesResponse
 /// <summary>
 ///     Body for <c>POST model-fit/profiles/explore</c>. Explores a node-local GGUF model to draft its launch args.
 ///     <see cref="ModelName" /> must be non-blank and resolve to a local GGUF (a cloud or missing model is rejected with a
-///     400). <see cref="Role" /> is <c>chat|embedding</c> (case-insensitive; defaults to <c>chat</c> when omitted); an
-///     unknown role is rejected with a 400.
+///     400). <see cref="Role" /> is <c>chat|embedding|reranker</c> (case-insensitive; defaults to <c>chat</c> when
+///     omitted); an unknown role is rejected with a 400.
 /// </summary>
 public sealed class ExploreInferenceProfileRequest
 {
     public required string ModelName { get; init; }
 
-    /// <summary>Role to explore — <c>chat|embedding</c>. Defaults to <c>chat</c> when omitted.</summary>
+    /// <summary>Role to explore — <c>chat|embedding|reranker</c>. Defaults to <c>chat</c> when omitted.</summary>
     public string? Role { get; init; }
 }
 
