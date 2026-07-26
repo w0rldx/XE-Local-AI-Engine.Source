@@ -79,7 +79,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
         var healed = false;
         while (true)
         {
-            var inner = await EnsureInnerAsync(cancellationToken).ConfigureAwait(false);
+            var resolved = await EnsureInnerAsync(cancellationToken).ConfigureAwait(false);
 
             // Hold an inference lease for the duration of the request so a graceful operator eject waits for it to
             // finish before teardown. A refused lease is classified: an EVICTING process fails the request up front as
@@ -93,10 +93,11 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
                 throw new LlamaServerModelEjectedException(ModelEjectingMessage);
             }
 
+            _calibrationScheduler.Schedule(_modelName, resolved.BaseAddress);
             var lease = acquisition.Lease;
             try
             {
-                return await inner.GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
+                return await resolved.Client.GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex) when (!cancellationToken.IsCancellationRequested && IsServerGone(ex))
             {
@@ -134,7 +135,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
         var healed = false;
         while (true)
         {
-            var inner = await EnsureInnerAsync(cancellationToken).ConfigureAwait(false);
+            var resolved = await EnsureInnerAsync(cancellationToken).ConfigureAwait(false);
 
             // Same refusal classification as the non-streaming path: an eject-in-progress fails the request before the
             // stream opens; only an absent/exited process streams leaseless and relies on the pre-first-chunk self-heal.
@@ -145,9 +146,10 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
                 throw new LlamaServerModelEjectedException(ModelEjectingMessage);
             }
 
+            _calibrationScheduler.Schedule(_modelName, resolved.BaseAddress);
             var lease = acquisition.Lease;
             var enumerator =
-                inner.GetStreamingResponseAsync(messages, options, cancellationToken).GetAsyncEnumerator(cancellationToken);
+                resolved.Client.GetStreamingResponseAsync(messages, options, cancellationToken).GetAsyncEnumerator(cancellationToken);
             var retry = false;
             try
             {
@@ -269,7 +271,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
         return patched;
     }
 
-    private async Task<IChatClient> EnsureInnerAsync(CancellationToken ct)
+    private async Task<ResolvedChatClient> EnsureInnerAsync(CancellationToken ct)
     {
         // Resolve the CURRENT endpoint for every real request. Besides allowing the supervisor to cheaply confirm the
         // process is live, this is the request-triggered due check for calibration; no timer ever polls a cached target.
@@ -281,8 +283,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
             var current = Volatile.Read(ref _inner);
             if (current is not null && _innerEndpoint == endpoint.BaseAddress)
             {
-                _calibrationScheduler.Schedule(_modelName, endpoint.BaseAddress);
-                return current;
+                return new ResolvedChatClient(current, endpoint.BaseAddress);
             }
 
             if (current is not null)
@@ -291,11 +292,14 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
                 current.Dispose();
             }
 
-            _calibrationScheduler.Schedule(_modelName, endpoint.BaseAddress);
+            // The created adapter is transferred into _inner immediately and remains owned by this wrapper; both
+            // InvalidateInner and Dispose release it. CA2000 cannot follow that ownership through ResolvedChatClient.
+#pragma warning disable CA2000
             var built = LlamaServerOpenAIAdapterFactory.CreateChatClient(endpoint.BaseAddress, _modelName, _networkTimeout);
+#pragma warning restore CA2000
             _innerEndpoint = endpoint.BaseAddress;
             Volatile.Write(ref _inner, built);
-            return built;
+            return new ResolvedChatClient(built, endpoint.BaseAddress);
         }
         finally
         {
@@ -312,6 +316,8 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
         _calibrationScheduler.Invalidate(_modelName);
         stale?.Dispose();
     }
+
+    private readonly record struct ResolvedChatClient(IChatClient Client, Uri BaseAddress);
 
     // True when the exception chain indicates the target llama-server is unreachable (refused / connection error) — i.e.
     // the process is gone — rather than a model/runtime error. Walks the full chain (including AggregateException fan-out
