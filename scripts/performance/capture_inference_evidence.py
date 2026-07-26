@@ -96,7 +96,29 @@ def verify_identity(label: str, entry: dict[str, Any]) -> dict[str, Any]:
     actual = sha256_tree(raw_path)
     if actual != expected:
         raise CaptureError(f"{label} hash mismatch: expected {expected}, got {actual} ({raw_path})")
-    return {**entry, "path": str(raw_path), "sha256_verified": True}
+    return {
+        **entry,
+        "path": str(raw_path),
+        "sha256_verified": True,
+        "runtime_local_dependencies": runtime_local_dependencies(raw_path) if raw_path.is_file() and os.access(raw_path, os.X_OK) else None,
+    }
+
+
+def runtime_local_dependencies(binary: Path) -> dict[str, Any]:
+    probe = capture_text(["ldd", str(binary)])
+    dependencies: list[dict[str, str]] = []
+    if probe["exit_code"] == 0:
+        binary_directory = binary.parent.resolve()
+        for line in probe["stdout"].splitlines():
+            candidate = line.partition("=>")[2].strip().split(" ", 1)[0] if "=>" in line else line.strip().split(" ", 1)[0]
+            if not candidate.startswith("/"):
+                continue
+            path = Path(candidate).resolve()
+            if path.is_file() and path.parent == binary_directory:
+                dependencies.append({"name": path.name, "sha256": sha256_file(path)})
+    dependencies.sort(key=lambda item: item["name"])
+    manifest_digest = hashlib.sha256(json.dumps(dependencies, separators=(",", ":"), sort_keys=True).encode()).hexdigest()
+    return {"ldd": probe, "files": dependencies, "manifest_sha256": manifest_digest}
 
 
 def capture_text(argv: list[str], timeout_seconds: float = 10) -> dict[str, Any]:
@@ -546,8 +568,12 @@ def identity_projection(artifact: dict[str, Any]) -> dict[str, Any]:
         "corpus": {key: identity.get("corpus", {}).get(key) for key in ("name", "sha256")},
         "runtime": {
             **{key: identity.get("runtime", {}).get(key) for key in ("tag", "provenance", "backend", "sha256")},
+            "dependency_manifest_sha256": (identity.get("runtime", {}).get("runtime_local_dependencies") or {}).get("manifest_sha256"),
             "auxiliary_binaries": [
-                {key: item.get(key) for key in ("name", "sha256")}
+                {
+                    **{key: item.get(key) for key in ("name", "sha256")},
+                    "dependency_manifest_sha256": (item.get("runtime_local_dependencies") or {}).get("manifest_sha256"),
+                }
                 for item in identity.get("runtime", {}).get("auxiliary_binaries", [])
             ],
         },
