@@ -35,11 +35,11 @@ public sealed class FrameworkDevUiHostingSmokeTests
         app.MapOpenAIConversations();
         app.MapDevUI();
 
-        var routes = app.DataSources
-                        .SelectMany(static source => source.Endpoints)
-                        .OfType<RouteEndpoint>()
-                        .Select(static endpoint => endpoint.RoutePattern.RawText ?? string.Empty)
-                        .ToArray();
+        var routes = ((IEndpointRouteBuilder)app).DataSources
+                                                .SelectMany(static source => source.Endpoints)
+                                                .OfType<RouteEndpoint>()
+                                                .Select(static endpoint => endpoint.RoutePattern.RawText ?? string.Empty)
+                                                .ToArray();
 
         AssertEx.True(routes.Any(static route => route.Contains("responses", StringComparison.OrdinalIgnoreCase)),
             "The OpenAI Responses endpoint must be mapped before DevUI.");

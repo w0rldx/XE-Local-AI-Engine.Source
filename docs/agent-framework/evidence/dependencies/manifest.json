@@ -1,0 +1,99 @@
+{
+  "schemaVersion": 1,
+  "capturedAtUtc": "2026-07-26T21:20:16.946114+00:00",
+  "baselineCommit": "e67d669709169fefc4cffab444af66654526a8d8",
+  "currentCommit": "1a809330ed5295360d4e57a45f8c8062ffa765d2",
+  "configurations": [
+    "Release",
+    "Debug"
+  ],
+  "reports": {
+    "dependency-graph.json": "exact direct and transitive resolved packages",
+    "vulnerable.json": "NuGet vulnerability status",
+    "deprecated.json": "NuGet deprecation status",
+    "outdated.json": "NuGet current/latest status, including prereleases",
+    "central-pins.tsv": "exact centrally declared versions"
+  },
+  "files": [
+    {
+      "path": "baseline/central-pins.tsv",
+      "sha256": "aee1c29e91ae558f5ee5906f6772230832c04e6bfef4385bc1f6f8af3f69d127"
+    },
+    {
+      "path": "baseline/commit.txt",
+      "sha256": "40d5993c79beb4d7c71bca4e275f760061f1704bf3901b7710ea218184cccffe"
+    },
+    {
+      "path": "baseline/debug/dependency-graph.json",
+      "sha256": "52e7b294adde5aaf868535e94e0a4641a6623170c15e34c1ca7b8b1f237263cb"
+    },
+    {
+      "path": "baseline/debug/deprecated.json",
+      "sha256": "020082090506e4b22be25bda4634bee95a2efff1bf919248a99800602d627193"
+    },
+    {
+      "path": "baseline/debug/outdated.json",
+      "sha256": "4bac01bc980df28208de773628731d4c7b2ee5bdd9fce9f4a238abaa1c6399fc"
+    },
+    {
+      "path": "baseline/debug/vulnerable.json",
+      "sha256": "285542f99d664d65fcebef1ed710b2e69fc822f32467da1313052c2a4eea304e"
+    },
+    {
+      "path": "baseline/release/dependency-graph.json",
+      "sha256": "3c6b12f9645b8f5a845b540985227a3b0def86d7ab9269a7ea73ab7e7e452186"
+    },
+    {
+      "path": "baseline/release/deprecated.json",
+      "sha256": "020082090506e4b22be25bda4634bee95a2efff1bf919248a99800602d627193"
+    },
+    {
+      "path": "baseline/release/outdated.json",
+      "sha256": "ae137cdb395d1d1e8750ded035ade944889877d30deb7f122d530590bb67ef57"
+    },
+    {
+      "path": "baseline/release/vulnerable.json",
+      "sha256": "285542f99d664d65fcebef1ed710b2e69fc822f32467da1313052c2a4eea304e"
+    },
+    {
+      "path": "current/central-pins.tsv",
+      "sha256": "05704f71b592acb05086c8cddf1efca466811b4b61a886347351c540073a0a13"
+    },
+    {
+      "path": "current/commit.txt",
+      "sha256": "3ad634e889a1294643bd58aa8899a9d34b60452a0d299f5d95c53270d70646ff"
+    },
+    {
+      "path": "current/debug/dependency-graph.json",
+      "sha256": "a736936592568e49eb8fbd6227546221cb76933d09abdac13fb1f6d3123b15bb"
+    },
+    {
+      "path": "current/debug/deprecated.json",
+      "sha256": "020082090506e4b22be25bda4634bee95a2efff1bf919248a99800602d627193"
+    },
+    {
+      "path": "current/debug/outdated.json",
+      "sha256": "3c1a85631835234212f86ab8cbdfe8e439d71f8aa67e8ac821d2c08ddf1a3adf"
+    },
+    {
+      "path": "current/debug/vulnerable.json",
+      "sha256": "285542f99d664d65fcebef1ed710b2e69fc822f32467da1313052c2a4eea304e"
+    },
+    {
+      "path": "current/release/dependency-graph.json",
+      "sha256": "3b1a0cfe8b881b8a7b7b06e434b953938ccc11a572738ce60f7cdc7198676c7a"
+    },
+    {
+      "path": "current/release/deprecated.json",
+      "sha256": "020082090506e4b22be25bda4634bee95a2efff1bf919248a99800602d627193"
+    },
+    {
+      "path": "current/release/outdated.json",
+      "sha256": "85c8a3184a93fc38b24361f4f6c0cf28fbc00aa6bf604f37160805fd5e3640af"
+    },
+    {
+      "path": "current/release/vulnerable.json",
+      "sha256": "285542f99d664d65fcebef1ed710b2e69fc822f32467da1313052c2a4eea304e"
+    }
+  ]
+}
