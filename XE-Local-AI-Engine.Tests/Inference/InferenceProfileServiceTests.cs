@@ -178,6 +178,36 @@ public sealed class InferenceProfileServiceTests
     }
 
     [Test]
+    public async Task Freeze_CpuProfile_DoesNotCaptureUnrelatedGpuVram()
+    {
+        var fixture = new ServiceFixture();
+        var profile = ExploredRecord() with
+        {
+            Backend = InferenceBackends.Cpu
+        };
+        fixture.WithProfiles(profile);
+        var snapshotId = Guid.NewGuid();
+        fixture.BenchmarkStore.GetLatestSuccessfulForProfileAsync(profile.Id, Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult<ModelFitBenchmarkRecord?>(BenchmarkRowFor(profile, snapshotId)));
+        fixture.HardwareProfiler.GetProfileAsync(forceRefresh: true, Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult(NvidiaProfile(availableVramBytes: 2000)));
+        fixture.ProfileStore.MarkFrozenAsync(profile.Id, snapshotId, freeVramAtFreezeBytes: null, Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult<InferenceProfileRecord?>(profile with
+               {
+                   Status = InferenceProfileStatus.Frozen,
+                   BenchmarkSnapshotId = snapshotId
+               }));
+
+        var result = await fixture.CreateService().FreezeAsync(profile.Id, CancellationToken.None);
+
+        AssertEx.True(result.Success);
+        await fixture.ProfileStore.Received(1)
+                     .MarkFrozenAsync(profile.Id, snapshotId, freeVramAtFreezeBytes: null, Arg.Any<CancellationToken>());
+        await fixture.ProcessVramBudgetProbe.DidNotReceive()
+                     .TryGetProcessBudgetBytesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task Freeze_WithoutSuccessfulBenchmark_ReturnsFailed_StaysExplored()
     {
         var fixture = new ServiceFixture();

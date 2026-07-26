@@ -77,6 +77,25 @@ public sealed class InferenceInvalidationEvaluatorTests
         AssertEx.False(stale);
     }
 
+    [Test]
+    public async Task Invalidation_CpuProfile_IgnoresUnrelatedGpuPressure()
+    {
+        var evaluator = BuildEvaluator(installedTag: FrozenBuild,
+            hardware: NvidiaProfile(24 * Gb, availableVramBytes: 2 * Gb),
+            processBudgetVram: 1 * Gb,
+            out var processProbe);
+        var profile = FrozenRecord(FrozenBuild, freeVramAtFreeze: 8 * Gb) with
+        {
+            Backend = InferenceBackends.Cpu
+        };
+
+        var stale = await evaluator.IsStaleAsync(profile, CancellationToken.None);
+
+        AssertEx.False(stale);
+        await processProbe.DidNotReceive()
+                          .TryGetProcessBudgetBytesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
     private static InferenceInvalidationEvaluator BuildEvaluator(string installedTag,
         HardwareProfile hardware,
         long? processBudgetVram,
