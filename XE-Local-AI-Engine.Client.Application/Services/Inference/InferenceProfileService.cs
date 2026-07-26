@@ -109,7 +109,10 @@ public sealed class InferenceProfileService : IInferenceProfileService
             ResolvedLaunchArguments.Explore(),
             enableMetrics: false,
             body: (context, _) => Task.FromResult(
-                result: _fittedArgsParser.TryParseFittedArgs(context.FitParamsOutput, context.StartupOutput)),
+                result: _fittedArgsParser.TryParseFittedArgs(
+                    context.FitParamsOutput,
+                    context.StartupOutput,
+                    context.SuccessfulLaunchArguments)),
             ct).ConfigureAwait(false);
 
         if (draft is null)

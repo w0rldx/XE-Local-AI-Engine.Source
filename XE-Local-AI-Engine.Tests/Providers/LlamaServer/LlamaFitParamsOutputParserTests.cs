@@ -43,6 +43,50 @@ public sealed class LlamaFitParamsOutputParserTests
     }
 
     [Test]
+    public void TryParseFittedArgs_OptimizedSuccessfulLaunch_PreservesKvTypesAndFlashAttention()
+    {
+        var resolved = LlamaFitParamsOutputParser.TryParseFittedArgs(
+            ["-c 8192 -ngl 32"],
+            startupOutput: [],
+            successfulLaunchArguments: ["-fa", "on", "-ctk", "q8_0", "-ctv", "q8_0"]);
+
+        var draft = AssertEx.NotNull(resolved);
+        AssertEx.Equal("q8_0", draft.KvTypeK);
+        AssertEx.Equal("q8_0", draft.KvTypeV);
+        AssertEx.True(draft.FlashAttn);
+    }
+
+    [Test]
+    public void TryParseFittedArgs_SafeSuccessfulLaunch_PreservesAbsentKvAndFlashAttention()
+    {
+        var resolved = LlamaFitParamsOutputParser.TryParseFittedArgs(
+            ["-c 8192 -ngl 32"],
+            startupOutput: [],
+            successfulLaunchArguments: ["--fit", "on", "-c", "8192"]);
+
+        var draft = AssertEx.NotNull(resolved);
+        AssertEx.Null(draft.KvTypeK);
+        AssertEx.Null(draft.KvTypeV);
+        AssertEx.False(draft.FlashAttn);
+    }
+
+    [Test]
+    [Arguments("-ctk q8_0 -ctv q8_0")]
+    [Arguments("-fa on")]
+    [Arguments("-fa on -ctk q8_0")]
+    [Arguments("-fa on -ctk q8_0 -ctv q4_0")]
+    [Arguments("-fa off -ctk q8_0 -ctv q8_0")]
+    public void TryParseFittedArgs_InconsistentSuccessfulLaunchPolicy_ReturnsNull(string launchArguments)
+    {
+        var resolved = LlamaFitParamsOutputParser.TryParseFittedArgs(
+            ["-c 8192 -ngl 32"],
+            startupOutput: [],
+            successfulLaunchArguments: launchArguments.Split(' ', StringSplitOptions.RemoveEmptyEntries));
+
+        AssertEx.Null(resolved);
+    }
+
+    [Test]
     public void TryParseFittedArgs_CapturedUnresolvedDefaults_ReturnsNull()
     {
         // Captured from the real b9692 helper. These are llama.cpp sentinels, not frozen values:

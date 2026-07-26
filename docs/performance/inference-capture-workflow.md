@@ -118,10 +118,13 @@ model and non-fit launch arguments in all vectors.
 
 The five required commands are deliberately explicit:
 
-1. `default_verbosity`: verified `llama-server`, with `--fit`, without `-v`;
-2. `verbose`: byte-identical argv plus exactly one `-v` (or `--verbose`);
+1. `default_verbosity`: verified `llama-server`, with `--fit`, using the production
+   profiling vector with its one diagnostic `-v`/`--verbose` flag removed;
+2. `verbose`: byte-identical argv plus exactly one `-v` (or `--verbose`); this
+   must also be the exact production Explore profiling vector;
 3. `fit_params`: verified sibling `llama-fit-params`, which must exit successfully
-   and emit a deterministic line starting with `-c`.
+   and emit a deterministic line starting with `-c`; its argv must exactly equal
+   the production `LlamaFitParamsProcessRunner` projection of the Explore vector.
 4. `explore`: verified `llama-server` with the exact explore launch vector;
 5. `replay`: verified `llama-server` with the exact replay launch vector.
 
@@ -138,17 +141,25 @@ python3 scripts/performance/capture_inference_evidence.py fit \
 The spec also supplies the **exact** application explore and replay argument arrays.
 The tool proves:
 
-- default-verbosity and explore use the same production launch vector, including
-  the policy's positive context rather than llama.cpp's unresolved `-c 0`
-  sentinel;
+- verbose and Explore use the same production profiling vector, including the
+  policy's positive context and diagnostic verbosity required to prove
+  full-offload placement; default-verbosity differs by that one diagnostic flag
+  only;
 - explore contains `--fit`; replay does not;
-- non-fit arguments are byte-equal after removing fit/placement semantics;
+- non-fit arguments are byte-equal after removing fit/placement semantics and
+  diagnostic acquisition flags (`-v` and `--metrics`; the latter is separately
+  required exactly once in both profiling vectors because replay appends it
+  after its role flags);
+- GPU KV-cache and flash-attention policy is equal across Explore and replay:
+  matching `-ctk/-ctv` values plus flash attention `on`, or all three absent for
+  the successful safe-fallback candidate;
 - replay contains exactly the `-c`, `-ngl`, `-ts`, `-ot`, `-ctk`, and `-ctv`
   values emitted by `llama-fit-params` (when present);
 - helper `-ngl -1` (automatic placement) is normalized to replay `-ngl -2`
-  (explicit all layers) only when verbose startup independently records
-  `offloaded N/N layers to GPU`; otherwise the proof fails rather than recording
-  automatic placement as frozen;
+  (explicit all layers) only when the **actual production Explore command's**
+  startup output records `offloaded N/N layers to GPU`; the earlier independent
+  verbose probe cannot authorize normalization for a different Explore run;
+  otherwise the proof fails rather than recording automatic placement as frozen;
 - explore/replay peak process RSS is within the declared resource tolerance, with
   global VRAM sampled while each process is resident;
 - default and verbose startup captures used the verified server binary;

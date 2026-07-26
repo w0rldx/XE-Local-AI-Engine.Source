@@ -67,6 +67,7 @@ public sealed class SupervisorProfilingTests
             fitParamsRunner: fitRunner);
 
         IReadOnlyList<string> captured = [];
+        IReadOnlyList<string> successfulLaunchArguments = [];
         int? capturedProcessId = null;
         await supervisor.RunExclusiveProfilingAsync("llama3",
             ModelRole.Chat,
@@ -75,6 +76,7 @@ public sealed class SupervisorProfilingTests
             (context, _) =>
             {
                 captured = context.FitParamsOutput;
+                successfulLaunchArguments = context.SuccessfulLaunchArguments;
                 capturedProcessId = context.ProcessId;
                 return Task.FromResult(result: true);
             },
@@ -93,6 +95,43 @@ public sealed class SupervisorProfilingTests
         AssertEx.True(launcher.Launches.TryPeek(out var launchedSpec));
         AssertEx.True(spec.Arguments.SequenceEqual(launchedSpec!.Arguments),
             "The helper and profiling server must receive the same production-equivalent launch vector.");
+        AssertEx.True(successfulLaunchArguments.SequenceEqual(launchedSpec.Arguments),
+            "The profiling body must receive the exact successful server vector so replay preserves its policy.");
+    }
+
+    [Test]
+    public async Task Profiling_Explore_WhenOptimizedCandidateFails_ExposesSuccessfulSafeLaunchArguments()
+    {
+        var launcher = new FakeProcessLauncher();
+        var fitRunner = new FakeLlamaFitParamsRunner(
+            LlamaFitParamsRunResult.Success(["-c 8192 -ngl 32"]));
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            healthProbe: new FirstReadinessFailsHealthProbe(),
+            variantSelector: new FakeVariantSelector(GpuVariant.Cuda),
+            fitParamsRunner: fitRunner);
+
+        IReadOnlyList<string> successfulLaunchArguments = [];
+        await supervisor.RunExclusiveProfilingAsync("llama3",
+            ModelRole.Chat,
+            ResolvedLaunchArguments.Explore(),
+            enableMetrics: false,
+            (context, _) =>
+            {
+                successfulLaunchArguments = context.SuccessfulLaunchArguments;
+                return Task.FromResult(result: true);
+            },
+            CancellationToken.None);
+
+        AssertEx.Equal(expected: 2, fitRunner.Calls.Count);
+        AssertEx.Equal(expected: 2, launcher.LaunchCount);
+        AssertEx.True(launcher.Launches.TryDequeue(out var optimized));
+        AssertEx.Contains(optimized!.Arguments, "-ctk");
+        AssertEx.True(launcher.Launches.TryDequeue(out var safe));
+        AssertEx.False(safe!.Arguments.Contains("-ctk"));
+        AssertEx.False(safe.Arguments.Contains("-ctv"));
+        AssertEx.False(safe.Arguments.Contains("-fa"));
+        AssertEx.True(successfulLaunchArguments.SequenceEqual(safe.Arguments),
+            "The failed optimized candidate's KV/FA policy must not leak into the safe replay profile.");
     }
 
     [Test]
@@ -263,5 +302,25 @@ public sealed class SupervisorProfilingTests
 
         AssertEx.True(index >= 0 && index + 1 < arguments.Count, $"Expected argument '{argument}' with a value.");
         AssertEx.Equal(expectedValue, arguments[index + 1]);
+    }
+
+    private sealed class FirstReadinessFailsHealthProbe : ILlamaServerHealthProbe
+    {
+        private int _readinessCalls;
+
+        public Task<bool> WaitForReadyAsync(Uri baseAddress, TimeSpan readinessTimeout, CancellationToken ct)
+        {
+            return Task.FromResult(Interlocked.Increment(ref _readinessCalls) > 1);
+        }
+
+        public Task<bool> CheckResponsiveAsync(Uri baseAddress, CancellationToken ct)
+        {
+            return Task.FromResult(true);
+        }
+
+        public Task<int?> TryReadEffectiveContextTokensAsync(Uri baseAddress, CancellationToken ct)
+        {
+            return Task.FromResult<int?>(null);
+        }
     }
 }

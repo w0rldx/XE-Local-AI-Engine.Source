@@ -86,6 +86,48 @@ public sealed class InferenceProfileServiceTests
     }
 
     [Test]
+    public async Task Explore_WhenOptimizedCandidateSucceeds_PersistsItsKvAndFlashAttentionPolicy()
+    {
+        var fixture = new ServiceFixture();
+        fixture.WithLocalModel();
+        fixture.WithMetadata(new GgufModelMetadata(ParamCount: 7_000_000_000, QuantType: "15", ContextLength: 8192, ExpertCount: null, IsMoe: false));
+        fixture.WithExploreFitParamsOutput(
+            startupOutput: [],
+            successfulLaunchArguments: ["-fa", "on", "-ctk", "q8_0", "-ctv", "q8_0"],
+            "-c 8192 -ngl 33");
+        fixture.EchoExploredUpsert();
+
+        var result = await fixture.CreateService().ExploreAsync(Model, ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.True(result.Success);
+        var profile = AssertEx.NotNull(result.Profile);
+        AssertEx.Equal("q8_0", profile.KvTypeK);
+        AssertEx.Equal("q8_0", profile.KvTypeV);
+        AssertEx.True(profile.FlashAttn);
+    }
+
+    [Test]
+    public async Task Explore_WhenSafeCandidateSucceeds_PersistsKvAndFlashAttentionAsAbsent()
+    {
+        var fixture = new ServiceFixture();
+        fixture.WithLocalModel();
+        fixture.WithMetadata(new GgufModelMetadata(ParamCount: 7_000_000_000, QuantType: "15", ContextLength: 8192, ExpertCount: null, IsMoe: false));
+        fixture.WithExploreFitParamsOutput(
+            startupOutput: [],
+            successfulLaunchArguments: ["--fit", "on", "-c", "8192"],
+            "-c 8192 -ngl 33");
+        fixture.EchoExploredUpsert();
+
+        var result = await fixture.CreateService().ExploreAsync(Model, ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.True(result.Success);
+        var profile = AssertEx.NotNull(result.Profile);
+        AssertEx.Null(profile.KvTypeK);
+        AssertEx.Null(profile.KvTypeV);
+        AssertEx.False(profile.FlashAttn);
+    }
+
+    [Test]
     public async Task Explore_CloudOrMissingModel_Rejected_NoSpawn()
     {
         var fixture = new ServiceFixture();
@@ -502,9 +544,20 @@ public sealed class InferenceProfileServiceTests
 
         public void WithExploreFitParamsOutput(IReadOnlyList<string> startupOutput, params string[] fitParamsOutput)
         {
+            WithExploreFitParamsOutput(startupOutput, successfulLaunchArguments: [], fitParamsOutput);
+        }
+
+        public void WithExploreFitParamsOutput(
+            IReadOnlyList<string> startupOutput,
+            IReadOnlyList<string> successfulLaunchArguments,
+            params string[] fitParamsOutput)
+        {
             var context = new LlamaServerProfilingContext(new LlamaServerEndpoint(Model, ModelRole.Chat, new Uri("http://127.0.0.1:18100/v1")),
                 startupOutput,
-                FitParamsOutput: fitParamsOutput);
+                FitParamsOutput: fitParamsOutput)
+            {
+                SuccessfulLaunchArguments = successfulLaunchArguments
+            };
             Supervisor.RunExclusiveProfilingAsync(Arg.Any<string>(),
                           Arg.Any<ModelRole>(),
                           Arg.Any<ResolvedLaunchArguments>(),
