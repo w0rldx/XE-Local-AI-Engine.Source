@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// </summary>
 public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildService, IDisposable
 {
+    private const string ManagedFitParamsFileName = "llama-fit-params";
     private const string ManagedServerFileName = "llama-server";
     private const string ManifestFileName = ".source-build-manifest.json";
 
@@ -429,14 +430,14 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
             SetPhase(LlamaCppSourceBuildPhase.Building);
             var jobs = Math.Max(1, Math.Min(Environment.ProcessorCount, MaxBuildJobs));
             var buildExit = await RunStreamingStepAsync("cmake",
-                ["--build", buildDir, "--target", "llama-server", "-j", jobs.ToString()],
+                ["--build", buildDir, "--target", ManagedServerFileName, ManagedFitParamsFileName, "-j", jobs.ToString()],
                 environment,
                 cloneDir,
                 BuildTimeout,
                 ct).ConfigureAwait(false);
             if (buildExit != 0)
             {
-                throw new LlamaRuntimeException("Compiling the source-built llama-server failed.");
+                throw new LlamaRuntimeException("Compiling the source-built llama.cpp runtime failed.");
             }
 
             // 6. Stage the built tree, harden it, then swap it into place — the previous runtime is only removed AFTER the
@@ -446,6 +447,11 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
             if (!File.Exists(Path.Combine(builtBin, ManagedServerFileName)))
             {
                 throw new LlamaRuntimeException("The build did not produce the expected server executable.");
+            }
+
+            if (!File.Exists(Path.Combine(builtBin, ManagedFitParamsFileName)))
+            {
+                throw new LlamaRuntimeException("The build did not produce the expected fit-params helper.");
             }
 
             // Stage the placed tree at a sibling dir (same filesystem → atomic moves) and harden it there.
