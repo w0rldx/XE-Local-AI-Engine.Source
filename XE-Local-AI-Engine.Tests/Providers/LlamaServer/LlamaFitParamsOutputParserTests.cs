@@ -16,7 +16,7 @@ public sealed class LlamaFitParamsOutputParserTests
         string[] fitParamsOutput =
         [
             "ggml_cuda_init: found 1 CUDA devices:",
-            """-c 4096 -ngl 48 -ot "blk\.14\.ffn_(up|down|gate)_(ch|)exps=CPU""""
+            @"-c 4096 -ngl 48 -ot ""blk\.14\.ffn_(up|down|gate)_(ch|)exps=CPU"""
         ];
 
         var resolved = LlamaFitParamsOutputParser.TryParseFittedArgs(fitParamsOutput);
