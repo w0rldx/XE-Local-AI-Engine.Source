@@ -1,0 +1,15 @@
+[lint] shellcheck 0.11.0
+[lint] === shellcheck (10 file(s)) ===
+[lint] shellcheck: clean
+[lint] PSScriptAnalyzer 1.25.0 (settings: scripts/PSScriptAnalyzerSettings.psd1)
+[lint] === PSScriptAnalyzer: publish/package-tester-win.ps1 ===
+clean
+[lint] === PSScriptAnalyzer: publish/windows/uninstall-xe-local-ai-engine.ps1 ===
+clean
+[lint] === P0_SPIKE compile check: XE-Local-AI-Engine.AI.Agent.Tests/XE-Local-AI-Engine.AI.Agent.Tests.csproj ===
+[lint] DefineConstants: default [TRACE;RELEASE] -> effective [TRACE;RELEASE;P0_SPIKE]
+[lint] P0_SPIKE: compiles clean (0 warnings, 0 errors) and the gated type is present.
+[lint] Restoring an ungated build (no P0_SPIKE binary may be left behind)...
+[lint] Restore build verified: no P0_SPIKE code remains in bin/.
+
+[lint] RESULT: clean.

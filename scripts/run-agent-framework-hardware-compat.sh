@@ -66,7 +66,11 @@ export XE_FRAMEWORK_COMPAT_GGUF_PATH="${MODEL_PATH}"
 export XE_LLAMACPP_SERVER_PATH="${SERVER_PATH}"
 export XE_LLAMACPP_VARIANT="${VARIANT}"
 export XE_FRAMEWORK_COMPAT_EVIDENCE_PATH="${EVIDENCE_PATH}"
-export XE_OLLAMA_RUNTIME_ENABLED="false"
+# Keep the normal production Ollama registrations available because the web host maps
+# Ollama management endpoints at startup. The fixed GGUF name still resolves explicitly
+# to llama.cpp, and hosted services are disabled by TestingWebAppFactory, so this does
+# not start or call an Ollama daemon.
+export XE_OLLAMA_RUNTIME_ENABLED="true"
 
 cd "${REPO_ROOT}"
 scripts/with-build-lock.sh --lock-file "${SHARED_BUILD_LOCK}" -- \

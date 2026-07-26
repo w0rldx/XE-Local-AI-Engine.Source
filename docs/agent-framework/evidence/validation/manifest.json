@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "capturedAtUtc": "2026-07-26T21:31:08.996569+00:00",
+  "commit": "705f5d7625e504896c112f4b4ed5c3aad6be0b3c",
+  "result": "passed",
+  "linuxPortablePackageIncluded": true,
+  "windowsTesterPackage": {
+    "status": "gap",
+    "reason": "publish/package-tester-win.ps1 requires a native Windows packaging machine",
+    "replay": "pwsh ./publish/package-tester-win.ps1 -SkipUpload"
+  },
+  "logs": [
+    {
+      "step": "debug-build",
+      "sha256": "48f499f07f3791f5cefe97f9a4dcbfe1c6ea2b516fa956f6d9990b5eebde6f53"
+    },
+    {
+      "step": "debug-devui-hosting-smoke",
+      "sha256": "c8d65104eca9e69d7cdf9bc7d468a5aba5b7c150e6ce2b67118baa1d80accf9b"
+    },
+    {
+      "step": "debug-devui-registration-smoke",
+      "sha256": "11fdc3d69b7be9d59463442038f9a55ba5b362fdd0f38067718b1be362daefa0"
+    },
+    {
+      "step": "debug-restore",
+      "sha256": "efd69c89c53b2d7f82804abb4177a880d888fe8c499276324ab413c8b529821e"
+    },
+    {
+      "step": "linux-portable-package",
+      "sha256": "5efa1fff9c033e50e96d878ce11963cb93ea94f97c93436eef85283a64834729"
+    },
+    {
+      "step": "release-build",
+      "sha256": "b8b7917bce598faeae58493c3fc94c06d4ecebee6d0d8d4e3b6f4d2f823480f4"
+    },
+    {
+      "step": "release-restore",
+      "sha256": "406a82693baec1ac68f4a8302b8ba11c08a34fd22169de85eb0baf179e6c613e"
+    },
+    {
+      "step": "release-static-analysis",
+      "sha256": "1a24629736b911912c2bbca33ff3f4bab56a4c33a4e640249d9ccd44c018be0a"
+    }
+  ]
+}

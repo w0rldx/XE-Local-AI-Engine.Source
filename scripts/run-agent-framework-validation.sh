@@ -57,6 +57,7 @@ import sys
 source, destination, repo = sys.argv[1:]
 text = pathlib.Path(source).read_text(encoding="utf-8", errors="replace")
 text = text.replace(repo, "$REPO").replace(repo.replace("/", "\\"), "$REPO")
+text = "\n".join(line.rstrip() for line in text.splitlines()) + "\n"
 pathlib.Path(destination).write_text(text, encoding="utf-8")
 PY
   else
