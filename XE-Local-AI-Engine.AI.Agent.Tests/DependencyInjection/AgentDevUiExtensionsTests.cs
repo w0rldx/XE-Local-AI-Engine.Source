@@ -20,7 +20,7 @@ public sealed class AgentDevUiExtensionsTests
         var chatClient = Substitute.For<IChatClient>();
         var instructionProvider = new FixedInstructionProvider(instructions);
         builder.Services.AddSingleton(chatClient);
-        builder.Services.AddSingleton(instructionProvider);
+        builder.Services.AddSingleton<IAgentInstructionProvider>(instructionProvider);
 
         _ = builder.AddLocalAiAgentDevUi();
 
