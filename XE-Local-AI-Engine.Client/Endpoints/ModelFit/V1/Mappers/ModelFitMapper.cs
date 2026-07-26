@@ -447,14 +447,28 @@ internal static class ModelFitMapper
 
         return new InferenceBenchmarkMetricsDto
         {
+            Role = metrics.Role,
             TokensPerSecond = metrics.TokensPerSecond,
             PpTokensPerSecond = metrics.PpTokensPerSecond,
             TtftMs = metrics.TtftMs,
             TotalLatencyMs = metrics.TotalLatencyMs,
             CacheHitRate = metrics.CacheHitRate,
             ToolLoopMs = metrics.ToolLoopMs,
+            ItemsPerSecond = metrics.ItemsPerSecond,
+            InputTokensPerSecond = metrics.InputTokensPerSecond,
+            P50LatencyMs = metrics.P50LatencyMs,
+            P95LatencyMs = metrics.P95LatencyMs,
+            BatchSize = metrics.BatchSize,
+            OutputDimension = metrics.OutputDimension,
+            ValuesFinite = metrics.ValuesFinite,
+            DeterministicOutput = metrics.DeterministicOutput,
             VramLoadBytes = metrics.VramLoadBytes,
             VramAfterBytes = metrics.VramAfterBytes,
+            GlobalFreeVramLoadBytes = metrics.GlobalFreeVramLoadBytes,
+            GlobalFreeVramAfterBytes = metrics.GlobalFreeVramAfterBytes,
+            ProcessBudgetVramLoadBytes = metrics.ProcessBudgetVramLoadBytes,
+            ProcessBudgetVramAfterBytes = metrics.ProcessBudgetVramAfterBytes,
+            ExternalPressureDetected = metrics.ExternalPressureDetected,
             Runs = metrics.Runs
         };
     }
