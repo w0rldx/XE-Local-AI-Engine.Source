@@ -7,10 +7,10 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
 ///     Default <see cref="IGgufVariantRecommender" />. Resolves the active llama.cpp backend the same way the inference
-///     profiler does (<see cref="IGpuVariantSelector" /> → <see cref="InferenceBackends.FromVariant" />), probes free
-///     VRAM once via <see cref="IProcessVramBudgetProbe" />, then grades each file's quality tier and fit verdict and flags a
-///     single recommended variant. Stateless (singletons only) → singleton. Read-time computation; degrades to
-///     "unknown" rather than throwing when the backend/probe is unavailable.
+///     profiler does (<see cref="IGpuVariantSelector" /> → <see cref="InferenceBackends.FromVariant" />), probes the
+///     llama.cpp process-local VRAM budget once via <see cref="IProcessVramBudgetProbe" />, then grades each file's
+///     quality tier and fit verdict and flags a single recommended variant. Stateless (singletons only) → singleton.
+///     Read-time computation; degrades to "unknown" rather than throwing when the backend/probe is unavailable.
 /// </summary>
 public sealed class GgufVariantRecommender : IGgufVariantRecommender
 {
@@ -24,15 +24,15 @@ public sealed class GgufVariantRecommender : IGgufVariantRecommender
     private const long MinHeadroomBytes = 1024L * 1024 * 1024; // ~1 GiB floor for fixed KV/runtime overhead.
 
     private readonly ILogger<GgufVariantRecommender> _logger;
+    private readonly IProcessVramBudgetProbe _processVramBudgetProbe;
     private readonly IGpuVariantSelector _variantSelector;
-    private readonly IProcessVramBudgetProbe _vramProbe;
 
     public GgufVariantRecommender(IGpuVariantSelector variantSelector,
-        IProcessVramBudgetProbe vramProbe,
+        IProcessVramBudgetProbe processVramBudgetProbe,
         ILogger<GgufVariantRecommender> logger)
     {
         _variantSelector = variantSelector ?? throw new ArgumentNullException(nameof(variantSelector));
-        _vramProbe = vramProbe ?? throw new ArgumentNullException(nameof(vramProbe));
+        _processVramBudgetProbe = processVramBudgetProbe ?? throw new ArgumentNullException(nameof(processVramBudgetProbe));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -67,15 +67,15 @@ public sealed class GgufVariantRecommender : IGgufVariantRecommender
         return annotations;
     }
 
-    // Resolve the active backend exactly as the inference profiler does, then probe free VRAM once. Any non-cancellation
-    // failure degrades to "unknown" (null) — the picker must never 500 over a missing GPU/probe.
+    // Resolve the active backend exactly as the inference profiler does, then probe the process-local budget once. Any
+    // non-cancellation failure degrades to "unknown" (null) — the picker must never 500 over a missing GPU/probe.
     private async Task<long?> TryResolveFreeVramAsync(CancellationToken ct)
     {
         try
         {
             var variant = await _variantSelector.SelectVariantAsync(ct).ConfigureAwait(false);
             var backend = InferenceBackends.FromVariant(variant);
-            return await _vramProbe.TryGetProcessBudgetBytesAsync(backend, ct).ConfigureAwait(false);
+            return await _processVramBudgetProbe.TryGetProcessBudgetBytesAsync(backend, ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -83,7 +83,7 @@ public sealed class GgufVariantRecommender : IGgufVariantRecommender
         }
         catch (Exception exception) when (exception is InvalidOperationException or IOException or TimeoutException or OperationCanceledException)
         {
-            _logger.LogWarning(exception, "Free-VRAM probe failed during GGUF variant recommendation; treating free VRAM as unknown.");
+            _logger.LogWarning(exception, "Process-VRAM-budget probe failed during GGUF variant recommendation; treating the budget as unknown.");
             return null;
         }
     }
