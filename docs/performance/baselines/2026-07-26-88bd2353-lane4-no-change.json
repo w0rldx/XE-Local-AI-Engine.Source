@@ -1,0 +1,3227 @@
+{
+  "captured_at_utc": "2026-07-26T20:41:56Z",
+  "chat_launch_contract": {
+    "requirement": "No chat setting is varied; source remains pinned at 88bd2353 and no production launch-policy edit is made.",
+    "supervisor_sha256": "949272f09494a23d103cb571836f8d083c9b3e700f3e6ee1240e6d20f33d2d60"
+  },
+  "corpus": {
+    "concurrent": [
+      [
+        "search_document: A concise local inference note.",
+        "search_document: A concise local inference note."
+      ],
+      [
+        "search_document: A concise local inference note.",
+        "search_document: A concise local inference note."
+      ],
+      [
+        "search_document: A concise local inference note.",
+        "search_document: A concise local inference note."
+      ],
+      [
+        "search_document: A concise local inference note.",
+        "search_document: A concise local inference note."
+      ],
+      [
+        "search_document: A concise local inference note.",
+        "search_document: A concise local inference note."
+      ],
+      [
+        "search_document: A concise local inference note.",
+        "search_document: A concise local inference note."
+      ],
+      [
+        "search_document: A concise local inference note.",
+        "search_document: A concise local inference note."
+      ],
+      [
+        "search_document: A concise local inference note.",
+        "search_document: A concise local inference note."
+      ]
+    ],
+    "large": [
+      "search_document: Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. ",
+      "search_document: Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. ",
+      "search_document: Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. ",
+      "search_document: Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. ",
+      "search_document: Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. ",
+      "search_document: Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. ",
+      "search_document: Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. ",
+      "search_document: Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. ",
+      "search_document: Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. ",
+      "search_document: Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. ",
+      "search_document: Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. ",
+      "search_document: Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. ",
+      "search_document: Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. ",
+      "search_document: Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. ",
+      "search_document: Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. ",
+      "search_document: Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. "
+    ],
+    "max": [
+      "search_document: evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence evidence "
+    ],
+    "median": [
+      "search_document: Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. ",
+      "search_document: Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. ",
+      "search_document: Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. ",
+      "search_document: Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. ",
+      "search_document: Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. ",
+      "search_document: Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. ",
+      "search_document: Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. ",
+      "search_document: Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. Scheduling affects independent request occupancy and physical batch capacity. "
+    ],
+    "short": [
+      "search_document: A concise local inference note.",
+      "search_document: A concise local inference note.",
+      "search_document: A concise local inference note.",
+      "search_document: A concise local inference note.",
+      "search_document: A concise local inference note.",
+      "search_document: A concise local inference note.",
+      "search_document: A concise local inference note.",
+      "search_document: A concise local inference note.",
+      "search_document: A concise local inference note.",
+      "search_document: A concise local inference note.",
+      "search_document: A concise local inference note.",
+      "search_document: A concise local inference note.",
+      "search_document: A concise local inference note.",
+      "search_document: A concise local inference note.",
+      "search_document: A concise local inference note.",
+      "search_document: A concise local inference note."
+    ],
+    "token_readback": {
+      "max_with_nomic_prefix_and_special_tokens": 512,
+      "median": 240,
+      "short": 13
+    }
+  },
+  "decision": {
+    "acceptance_rule": "All five corpus scenarios >=20% median throughput improvement; token/readback and semantic correctness gates pass; peak RSS and global GPU-used regression each <=5%.",
+    "comparisons": [
+      {
+        "backend": "cuda",
+        "candidate": "p2",
+        "comparable_to_baseline": true,
+        "global_gpu_used_delta_percent": -1.3520822065981597,
+        "qualifies": false,
+        "role": "embedding",
+        "rss_delta_percent": -21.927827561152824,
+        "throughput_delta_percent": {
+          "concurrent": 59.595380829374655,
+          "large": 26.92870059095105,
+          "max": -4.434537772723934,
+          "median": 25.15547192891021,
+          "short": 41.09000072887983
+        }
+      },
+      {
+        "backend": "cuda",
+        "candidate": "p4",
+        "comparable_to_baseline": true,
+        "global_gpu_used_delta_percent": 0.43266630611140666,
+        "qualifies": false,
+        "role": "embedding",
+        "rss_delta_percent": -0.5249455073867759,
+        "throughput_delta_percent": {
+          "concurrent": 14.453037484119658,
+          "large": 29.413923454700708,
+          "max": 0.27234563588331984,
+          "median": 22.2362887282914,
+          "short": 82.04556595990616
+        }
+      },
+      {
+        "backend": "cuda",
+        "candidate": "p4-kvu",
+        "comparable_to_baseline": true,
+        "global_gpu_used_delta_percent": 0.10816657652785722,
+        "qualifies": false,
+        "role": "embedding",
+        "rss_delta_percent": 0.16650520707193195,
+        "throughput_delta_percent": {
+          "concurrent": 20.46186829597365,
+          "large": 29.81744888605109,
+          "max": -0.9699724466925463,
+          "median": 22.88545248118301,
+          "short": 82.43968207398188
+        }
+      },
+      {
+        "backend": "cuda",
+        "candidate": "p4-c4096-b1024",
+        "comparable_to_baseline": true,
+        "global_gpu_used_delta_percent": 0.10816657652785722,
+        "qualifies": false,
+        "role": "embedding",
+        "rss_delta_percent": 0.1562121579074871,
+        "throughput_delta_percent": {
+          "concurrent": 24.566549694622353,
+          "large": 27.567691724059664,
+          "max": 3.6376714423280276,
+          "median": 24.39024884145993,
+          "short": 79.45233925227096
+        }
+      },
+      {
+        "backend": "cuda",
+        "candidate": "p4-c4096-ub1024",
+        "comparable_to_baseline": true,
+        "global_gpu_used_delta_percent": 0.48674959437533527,
+        "qualifies": false,
+        "role": "embedding",
+        "rss_delta_percent": 11.042625333010413,
+        "throughput_delta_percent": {
+          "concurrent": 18.89777767023755,
+          "large": 55.090160742959185,
+          "max": -6.35753780335474,
+          "median": 56.393093322769914,
+          "short": 87.28546360212121
+        }
+      },
+      {
+        "backend": "cuda",
+        "candidate": "p2",
+        "comparable_to_baseline": false,
+        "global_gpu_used_delta_percent": 2.4154589371980784,
+        "qualifies": false,
+        "role": "reranker",
+        "rss_delta_percent": -0.5740150340752925,
+        "throughput_delta_percent": {
+          "concurrent": 46.78846557020031,
+          "large": -1.9719464399263864,
+          "max": null,
+          "median": 0.27590217425086383,
+          "short": 50.83562158368722
+        }
+      },
+      {
+        "backend": "cuda",
+        "candidate": "p4",
+        "comparable_to_baseline": false,
+        "global_gpu_used_delta_percent": 7.568438003220601,
+        "qualifies": false,
+        "role": "reranker",
+        "rss_delta_percent": 12.928866009535223,
+        "throughput_delta_percent": {
+          "concurrent": 2.565755821417315,
+          "large": -4.13320501276927,
+          "max": null,
+          "median": -2.6866846513272313,
+          "short": 113.36864579314496
+        }
+      },
+      {
+        "backend": "cuda",
+        "candidate": "p4-kvu",
+        "comparable_to_baseline": false,
+        "global_gpu_used_delta_percent": 5.7434245840042975,
+        "qualifies": false,
+        "role": "reranker",
+        "rss_delta_percent": 12.932522156249092,
+        "throughput_delta_percent": {
+          "concurrent": 1.8847924212546996,
+          "large": -1.0738436489566738,
+          "max": null,
+          "median": -2.131643389463822,
+          "short": 110.7237442635269
+        }
+      },
+      {
+        "backend": "cuda",
+        "candidate": "p4-c4096-b1024",
+        "comparable_to_baseline": false,
+        "global_gpu_used_delta_percent": 4.213633923778848,
+        "qualifies": false,
+        "role": "reranker",
+        "rss_delta_percent": 12.899982450495774,
+        "throughput_delta_percent": {
+          "concurrent": 0.7363571315316841,
+          "large": -1.5494549271098723,
+          "max": null,
+          "median": -5.58209713096367,
+          "short": 119.66503149715008
+        }
+      },
+      {
+        "backend": "cuda",
+        "candidate": "p4-c4096-ub1024",
+        "comparable_to_baseline": false,
+        "global_gpu_used_delta_percent": 6.199677938808379,
+        "qualifies": false,
+        "role": "reranker",
+        "rss_delta_percent": 65.23406651262103,
+        "throughput_delta_percent": {
+          "concurrent": 0.6360137445608816,
+          "large": 14.301402438398213,
+          "max": null,
+          "median": 5.230766036163748,
+          "short": 113.63746273129362
+        }
+      },
+      {
+        "backend": "cpu",
+        "candidate": "p2",
+        "comparable_to_baseline": true,
+        "global_gpu_used_delta_percent": -2.3822269807280527,
+        "qualifies": false,
+        "role": "embedding",
+        "rss_delta_percent": 0.009618489484930492,
+        "throughput_delta_percent": {
+          "concurrent": 97.9168919107266,
+          "large": 80.3117861924522,
+          "max": 6.0459560443740346,
+          "median": 81.27348198429073,
+          "short": 98.79959138114356
+        }
+      },
+      {
+        "backend": "cpu",
+        "candidate": "p4",
+        "comparable_to_baseline": true,
+        "global_gpu_used_delta_percent": 4.148822269807284,
+        "qualifies": false,
+        "role": "embedding",
+        "rss_delta_percent": 25.708848323291168,
+        "throughput_delta_percent": {
+          "concurrent": 519.5832985778175,
+          "large": 78.62880723981958,
+          "max": 3.1049624159579903,
+          "median": 61.246997988735515,
+          "short": 1817.5453398545458
+        }
+      },
+      {
+        "backend": "cpu",
+        "candidate": "p4-kvu",
+        "comparable_to_baseline": true,
+        "global_gpu_used_delta_percent": 4.3897216274090045,
+        "qualifies": false,
+        "role": "embedding",
+        "rss_delta_percent": 25.699916868769446,
+        "throughput_delta_percent": {
+          "concurrent": 486.77110368826027,
+          "large": 47.803491426816635,
+          "max": -16.366576864820047,
+          "median": 47.277631248778754,
+          "short": 1856.7500671108344
+        }
+      },
+      {
+        "backend": "cpu",
+        "candidate": "p4-c4096-b1024",
+        "comparable_to_baseline": true,
+        "global_gpu_used_delta_percent": 2.1948608137045023,
+        "qualifies": false,
+        "role": "embedding",
+        "rss_delta_percent": 25.670374365351446,
+        "throughput_delta_percent": {
+          "concurrent": 493.9073492371165,
+          "large": 80.23685186136717,
+          "max": 3.1305974403701864,
+          "median": 64.88567953649422,
+          "short": 1833.9963698975755
+        }
+      },
+      {
+        "backend": "cpu",
+        "candidate": "p4-c4096-ub1024",
+        "comparable_to_baseline": true,
+        "global_gpu_used_delta_percent": 2.1948608137045023,
+        "qualifies": false,
+        "role": "embedding",
+        "rss_delta_percent": 37.42210741104615,
+        "throughput_delta_percent": {
+          "concurrent": 525.2404796198044,
+          "large": 200.8161982811437,
+          "max": -2.7598246876163524,
+          "median": 188.69837176483125,
+          "short": 1729.8134007664273
+        }
+      },
+      {
+        "backend": "cpu",
+        "candidate": "p2",
+        "comparable_to_baseline": false,
+        "global_gpu_used_delta_percent": -0.6479481641468721,
+        "qualifies": false,
+        "role": "reranker",
+        "rss_delta_percent": -0.11812113370539556,
+        "throughput_delta_percent": {
+          "concurrent": 743.6012454980383,
+          "large": 0.5277843158250528,
+          "max": null,
+          "median": -2.2211418450916676,
+          "short": 771.7275660491284
+        }
+      },
+      {
+        "backend": "cpu",
+        "candidate": "p4",
+        "comparable_to_baseline": false,
+        "global_gpu_used_delta_percent": -1.160907127429811,
+        "qualifies": false,
+        "role": "reranker",
+        "rss_delta_percent": -0.03636972236705782,
+        "throughput_delta_percent": {
+          "concurrent": 1166.5591471643256,
+          "large": 0.6620805013721753,
+          "max": null,
+          "median": -0.6795884281341036,
+          "short": 1637.9266401802379
+        }
+      },
+      {
+        "backend": "cpu",
+        "candidate": "p4-kvu",
+        "comparable_to_baseline": false,
+        "global_gpu_used_delta_percent": -0.7289416846652297,
+        "qualifies": false,
+        "role": "reranker",
+        "rss_delta_percent": -0.03862271401811057,
+        "throughput_delta_percent": {
+          "concurrent": 1180.1646571920883,
+          "large": 1.6424125737406037,
+          "max": null,
+          "median": -6.145602157230757,
+          "short": 1606.1206186235759
+        }
+      },
+      {
+        "backend": "cpu",
+        "candidate": "p4-c4096-b1024",
+        "comparable_to_baseline": false,
+        "global_gpu_used_delta_percent": 4.994600431965446,
+        "qualifies": false,
+        "role": "reranker",
+        "rss_delta_percent": -0.039266425918416115,
+        "throughput_delta_percent": {
+          "concurrent": 1056.2591607258616,
+          "large": -7.610272065383327,
+          "max": null,
+          "median": 2.626571582401782,
+          "short": 1555.8934431480168
+        }
+      },
+      {
+        "backend": "cpu",
+        "candidate": "p4-c4096-ub1024",
+        "comparable_to_baseline": false,
+        "global_gpu_used_delta_percent": 7.5323974082073475,
+        "qualifies": false,
+        "role": "reranker",
+        "rss_delta_percent": 45.98195031831553,
+        "throughput_delta_percent": {
+          "concurrent": 1078.3264755666282,
+          "large": 123.81573426235626,
+          "max": null,
+          "median": 101.3098356764015,
+          "short": 1508.1407977877216
+        }
+      }
+    ],
+    "outcome": "no-change",
+    "ship_production_tuning": false,
+    "winners": []
+  },
+  "gaps": [
+    "Vulkan: no NVIDIA Vulkan ICD",
+    "Native Windows manual",
+    "8 GB hardware unavailable",
+    "native Linux OOM unavailable"
+  ],
+  "grid": {
+    "backends": [
+      "cuda",
+      "cpu"
+    ],
+    "configs": [
+      [
+        "baseline",
+        1,
+        512,
+        512,
+        2048,
+        false
+      ],
+      [
+        "p2",
+        2,
+        512,
+        512,
+        2048,
+        false
+      ],
+      [
+        "p4",
+        4,
+        512,
+        512,
+        2048,
+        false
+      ],
+      [
+        "p4-kvu",
+        4,
+        512,
+        512,
+        2048,
+        true
+      ],
+      [
+        "p4-c4096-b1024",
+        4,
+        1024,
+        512,
+        4096,
+        false
+      ],
+      [
+        "p4-c4096-ub1024",
+        4,
+        1024,
+        1024,
+        4096,
+        false
+      ]
+    ],
+    "roles": [
+      "embedding",
+      "reranker"
+    ]
+  },
+  "kind": "lane4-scheduling-grid",
+  "results": [
+    {
+      "argv": [
+        "$RUNTIME_ROOT/build-cuda/bin/llama-server",
+        "-m",
+        "$MODEL_ROOT/nomic-embed-text-v1.5.Q4_K_M.gguf",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "19300",
+        "--parallel",
+        "1",
+        "--no-warmup",
+        "--metrics",
+        "-c",
+        "2048",
+        "-b",
+        "512",
+        "-ub",
+        "512",
+        "-ngl",
+        "-1",
+        "--threads",
+        "16",
+        "--no-kv-unified",
+        "--embeddings",
+        "--pooling",
+        "mean"
+      ],
+      "argv_sha256": "4e27f83e4f21a848d32a94e005b3ae850e253042245556fde07a198dc15b9d2d",
+      "backend": "cuda",
+      "correctness_passed": true,
+      "gpu_after": {
+        "free_mib": 29224,
+        "total_mib": 32607,
+        "used_mib": 2964,
+        "utilization_percent": 22
+      },
+      "gpu_before": {
+        "free_mib": 29217,
+        "total_mib": 32607,
+        "used_mib": 2971,
+        "utilization_percent": 15
+      },
+      "kv_unified": false,
+      "n_batch": 512,
+      "n_ubatch": 512,
+      "name": "baseline",
+      "parallel": 1,
+      "peak_global_gpu_used_mib": 3698,
+      "peak_rss_bytes": 676495360,
+      "readback_per_sequence_context": 2048,
+      "requested_total_context": 2048,
+      "role": "embedding",
+      "scenarios": {
+        "concurrent": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.023552889999336912,
+            0.023989240999071626,
+            0.021723455998653662
+          ],
+          "median_items_per_second": 679.3221553894426,
+          "median_seconds": 0.023552889999336912,
+          "p95_seconds": 0.023989240999071626
+        },
+        "large": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.04447300100036955,
+            0.0433864110000286,
+            0.044259764999878826
+          ],
+          "median_items_per_second": 361.5021453467682,
+          "median_seconds": 0.044259764999878826,
+          "p95_seconds": 0.04447300100036955
+        },
+        "max": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.006134678000307758,
+            0.004658218998883967,
+            0.004323614999520942
+          ],
+          "median_items_per_second": 214.6743208594494,
+          "median_seconds": 0.004658218998883967,
+          "p95_seconds": 0.006134678000307758
+        },
+        "median": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.022463905999757117,
+            0.02210801699948206,
+            0.02161176400113618
+          ],
+          "median_items_per_second": 361.8596819510054,
+          "median_seconds": 0.02210801699948206,
+          "p95_seconds": 0.022463905999757117
+        },
+        "short": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.02392100399993069,
+            0.025014962999193813,
+            0.02384987799996452
+          ],
+          "median_items_per_second": 668.8682465019594,
+          "median_seconds": 0.02392100399993069,
+          "p95_seconds": 0.025014962999193813
+        }
+      },
+      "startup_log_sha256": "8690338c998841b58275f2eb574db61861229936e1eeb6b257372f95570dd5bb",
+      "token_gate_passed": true,
+      "token_gate_required": 512
+    },
+    {
+      "argv": [
+        "$RUNTIME_ROOT/build-cuda/bin/llama-server",
+        "-m",
+        "$MODEL_ROOT/nomic-embed-text-v1.5.Q4_K_M.gguf",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "19301",
+        "--parallel",
+        "2",
+        "--no-warmup",
+        "--metrics",
+        "-c",
+        "2048",
+        "-b",
+        "512",
+        "-ub",
+        "512",
+        "-ngl",
+        "-1",
+        "--threads",
+        "16",
+        "--no-kv-unified",
+        "--embeddings",
+        "--pooling",
+        "mean"
+      ],
+      "argv_sha256": "73f6139d07a1a899caa5eec703e8ee071c052a5713925e1921aae2217d44063c",
+      "backend": "cuda",
+      "correctness_passed": false,
+      "gpu_after": {
+        "free_mib": 29201,
+        "total_mib": 32607,
+        "used_mib": 2987,
+        "utilization_percent": 31
+      },
+      "gpu_before": {
+        "free_mib": 29216,
+        "total_mib": 32607,
+        "used_mib": 2972,
+        "utilization_percent": 22
+      },
+      "kv_unified": false,
+      "n_batch": 512,
+      "n_ubatch": 512,
+      "name": "p2",
+      "parallel": 2,
+      "peak_global_gpu_used_mib": 3648,
+      "peak_rss_bytes": 528154624,
+      "readback_per_sequence_context": 1024,
+      "requested_total_context": 2048,
+      "role": "embedding",
+      "scenarios": {
+        "concurrent": {
+          "deterministic_response": false,
+          "elapsed_seconds": [
+            0.014519484999254928,
+            0.01636981399860815,
+            0.014757876999283326
+          ],
+          "median_items_per_second": 1084.1667809520973,
+          "median_seconds": 0.014757876999283326,
+          "p95_seconds": 0.01636981399860815
+        },
+        "large": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.034592017998875235,
+            0.03486978500041005,
+            0.035313757000039914
+          ],
+          "median_items_per_second": 458.8499756970641,
+          "median_seconds": 0.03486978500041005,
+          "p95_seconds": 0.035313757000039914
+        },
+        "max": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.006261231999815209,
+            0.0047391000007337425,
+            0.004874374999417341
+          ],
+          "median_items_per_second": 205.15450701259854,
+          "median_seconds": 0.004874374999417341,
+          "p95_seconds": 0.006261231999815209
+        },
+        "median": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.016895893999389955,
+            0.01766444299937575,
+            0.017780202000722056
+          ],
+          "median_items_per_second": 452.88719266623434,
+          "median_seconds": 0.01766444299937575,
+          "p95_seconds": 0.017780202000722056
+        },
+        "short": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.016954429000179516,
+            0.01759860799938906,
+            0.01682641599836643
+          ],
+          "median_items_per_second": 943.7062138648603,
+          "median_seconds": 0.016954429000179516,
+          "p95_seconds": 0.01759860799938906
+        }
+      },
+      "startup_log_sha256": "db4ce0e21a86f3f70d35400d126fc3d81c13a34d16318c7a8d864c2f1622f1f4",
+      "token_gate_passed": true,
+      "token_gate_required": 512
+    },
+    {
+      "argv": [
+        "$RUNTIME_ROOT/build-cuda/bin/llama-server",
+        "-m",
+        "$MODEL_ROOT/nomic-embed-text-v1.5.Q4_K_M.gguf",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "19302",
+        "--parallel",
+        "4",
+        "--no-warmup",
+        "--metrics",
+        "-c",
+        "2048",
+        "-b",
+        "512",
+        "-ub",
+        "512",
+        "-ngl",
+        "-1",
+        "--threads",
+        "16",
+        "--no-kv-unified",
+        "--embeddings",
+        "--pooling",
+        "mean"
+      ],
+      "argv_sha256": "384587a9b8e21a8610cee55aceaa0e6c3c7040f6c638428c47db666d277a1ae5",
+      "backend": "cuda",
+      "correctness_passed": false,
+      "gpu_after": {
+        "free_mib": 29201,
+        "total_mib": 32607,
+        "used_mib": 2987,
+        "utilization_percent": 36
+      },
+      "gpu_before": {
+        "free_mib": 29201,
+        "total_mib": 32607,
+        "used_mib": 2987,
+        "utilization_percent": 31
+      },
+      "kv_unified": false,
+      "n_batch": 512,
+      "n_ubatch": 512,
+      "name": "p4",
+      "parallel": 4,
+      "peak_global_gpu_used_mib": 3714,
+      "peak_rss_bytes": 672944128,
+      "readback_per_sequence_context": 512,
+      "requested_total_context": 2048,
+      "role": "embedding",
+      "scenarios": {
+        "concurrent": {
+          "deterministic_response": false,
+          "elapsed_seconds": [
+            0.020168230001218035,
+            0.026523549000557978,
+            0.02057865000097081
+          ],
+          "median_items_per_second": 777.5048411458084,
+          "median_seconds": 0.02057865000097081,
+          "p95_seconds": 0.026523549000557978
+        },
+        "large": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.0336850340008823,
+            0.03420015699884971,
+            0.034367162001217366
+          ],
+          "median_items_per_second": 467.83410966616754,
+          "median_seconds": 0.03420015699884971,
+          "p95_seconds": 0.034367162001217366
+        },
+        "max": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.005758989000241854,
+            0.00464556699989771,
+            0.004340225999840186
+          ],
+          "median_items_per_second": 215.25897700367227,
+          "median_seconds": 0.00464556699989771,
+          "p95_seconds": 0.005758989000241854
+        },
+        "median": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.018559211999672698,
+            0.01808629600054701,
+            0.017911019998791744
+          ],
+          "median_items_per_second": 442.32384562090795,
+          "median_seconds": 0.01808629600054701,
+          "p95_seconds": 0.018559211999672698
+        },
+        "short": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.012854975999289309,
+            0.013630186998852878,
+            0.01314011899921752
+          ],
+          "median_items_per_second": 1217.6449848705922,
+          "median_seconds": 0.01314011899921752,
+          "p95_seconds": 0.013630186998852878
+        }
+      },
+      "startup_log_sha256": "387782b65580a59044a5e81fbeda1d6b06468fd8fd66c3e7f7b38584e1632b0f",
+      "token_gate_passed": true,
+      "token_gate_required": 512
+    },
+    {
+      "argv": [
+        "$RUNTIME_ROOT/build-cuda/bin/llama-server",
+        "-m",
+        "$MODEL_ROOT/nomic-embed-text-v1.5.Q4_K_M.gguf",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "19303",
+        "--parallel",
+        "4",
+        "--no-warmup",
+        "--metrics",
+        "-c",
+        "2048",
+        "-b",
+        "512",
+        "-ub",
+        "512",
+        "-ngl",
+        "-1",
+        "--threads",
+        "16",
+        "--kv-unified",
+        "--embeddings",
+        "--pooling",
+        "mean"
+      ],
+      "argv_sha256": "5c9eeb608598cc74eed99978870158143083392a23f54f77e4bf1bf3270fd684",
+      "backend": "cuda",
+      "correctness_passed": false,
+      "gpu_after": {
+        "free_mib": 29213,
+        "total_mib": 32607,
+        "used_mib": 2975,
+        "utilization_percent": 50
+      },
+      "gpu_before": {
+        "free_mib": 29201,
+        "total_mib": 32607,
+        "used_mib": 2987,
+        "utilization_percent": 4
+      },
+      "kv_unified": true,
+      "n_batch": 512,
+      "n_ubatch": 512,
+      "name": "p4-kvu",
+      "parallel": 4,
+      "peak_global_gpu_used_mib": 3702,
+      "peak_rss_bytes": 677621760,
+      "readback_per_sequence_context": 2048,
+      "requested_total_context": 2048,
+      "role": "embedding",
+      "scenarios": {
+        "concurrent": {
+          "deterministic_response": false,
+          "elapsed_seconds": [
+            0.019974185001046862,
+            0.019552153999029542,
+            0.019214208999983384
+          ],
+          "median_items_per_second": 818.3241601305999,
+          "median_seconds": 0.019552153999029542,
+          "p95_seconds": 0.019974185001046862
+        },
+        "large": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.03469108999888704,
+            0.03401385300094262,
+            0.03409384900078294
+          ],
+          "median_items_per_second": 469.2928627575189,
+          "median_seconds": 0.03409384900078294,
+          "p95_seconds": 0.03469108999888704
+        },
+        "max": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.0059086209985252935,
+            0.004657174000385567,
+            0.004703844999312423
+          ],
+          "median_items_per_second": 212.5920390969884,
+          "median_seconds": 0.004703844999312423,
+          "p95_seconds": 0.0059086209985252935
+        },
+        "median": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.017452313000831055,
+            0.018749353001112468,
+            0.01799075199960498
+          ],
+          "median_items_per_second": 444.67290751246276,
+          "median_seconds": 0.01799075199960498,
+          "p95_seconds": 0.018749353001112468
+        },
+        "short": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.012953638999533723,
+            0.013137277999703656,
+            0.013111733000187087
+          ],
+          "median_items_per_second": 1220.2811024119924,
+          "median_seconds": 0.013111733000187087,
+          "p95_seconds": 0.013137277999703656
+        }
+      },
+      "startup_log_sha256": "a53d3ff7f58b9620519d396fe5a45ad50a9ed8b8b691ee99a184b39ef5dee6ca",
+      "token_gate_passed": true,
+      "token_gate_required": 512
+    },
+    {
+      "argv": [
+        "$RUNTIME_ROOT/build-cuda/bin/llama-server",
+        "-m",
+        "$MODEL_ROOT/nomic-embed-text-v1.5.Q4_K_M.gguf",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "19304",
+        "--parallel",
+        "4",
+        "--no-warmup",
+        "--metrics",
+        "-c",
+        "4096",
+        "-b",
+        "1024",
+        "-ub",
+        "512",
+        "-ngl",
+        "-1",
+        "--threads",
+        "16",
+        "--no-kv-unified",
+        "--embeddings",
+        "--pooling",
+        "mean"
+      ],
+      "argv_sha256": "2e4338ac43e54f6ae643f471dd978fe66d98f742fe6c26c09fb49dd680f120f4",
+      "backend": "cuda",
+      "correctness_passed": false,
+      "gpu_after": {
+        "free_mib": 29213,
+        "total_mib": 32607,
+        "used_mib": 2975,
+        "utilization_percent": 12
+      },
+      "gpu_before": {
+        "free_mib": 29213,
+        "total_mib": 32607,
+        "used_mib": 2975,
+        "utilization_percent": 6
+      },
+      "kv_unified": false,
+      "n_batch": 1024,
+      "n_ubatch": 512,
+      "name": "p4-c4096-b1024",
+      "parallel": 4,
+      "peak_global_gpu_used_mib": 3702,
+      "peak_rss_bytes": 677552128,
+      "readback_per_sequence_context": 1024,
+      "requested_total_context": 4096,
+      "role": "embedding",
+      "scenarios": {
+        "concurrent": {
+          "deterministic_response": false,
+          "elapsed_seconds": [
+            0.018103750999216572,
+            0.018907876999946893,
+            0.019353863999640453
+          ],
+          "median_items_per_second": 846.2081702797697,
+          "median_seconds": 0.018907876999946893,
+          "p95_seconds": 0.019353863999640453
+        },
+        "large": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.034695120999458595,
+            0.03488397999899462,
+            0.03442508800071664
+          ],
+          "median_items_per_second": 461.15994235182734,
+          "median_seconds": 0.034695120999458595,
+          "p95_seconds": 0.03488397999899462
+        },
+        "max": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.005547701999603305,
+            0.004382155999337556,
+            0.004494715998589527
+          ],
+          "median_items_per_second": 222.48346732336526,
+          "median_seconds": 0.004494715998589527,
+          "p95_seconds": 0.005547701999603305
+        },
+        "median": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.017771041000742116,
+            0.018368907998592476,
+            0.017773110999769415
+          ],
+          "median_items_per_second": 450.1181588357711,
+          "median_seconds": 0.017773110999769415,
+          "p95_seconds": 0.018368907998592476
+        },
+        "short": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.0127637589994265,
+            0.013330003999726614,
+            0.013450057000227389
+          ],
+          "median_items_per_second": 1200.2997148634122,
+          "median_seconds": 0.013330003999726614,
+          "p95_seconds": 0.013450057000227389
+        }
+      },
+      "startup_log_sha256": "560a3052f9957242a01eb227beafa877f8eb382ff53c08d4e3f288868b255a3b",
+      "token_gate_passed": true,
+      "token_gate_required": 512
+    },
+    {
+      "argv": [
+        "$RUNTIME_ROOT/build-cuda/bin/llama-server",
+        "-m",
+        "$MODEL_ROOT/nomic-embed-text-v1.5.Q4_K_M.gguf",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "19305",
+        "--parallel",
+        "4",
+        "--no-warmup",
+        "--metrics",
+        "-c",
+        "4096",
+        "-b",
+        "1024",
+        "-ub",
+        "1024",
+        "-ngl",
+        "-1",
+        "--threads",
+        "16",
+        "--no-kv-unified",
+        "--embeddings",
+        "--pooling",
+        "mean"
+      ],
+      "argv_sha256": "a85e8795b9a77590ab850bc920b76ae1d0bf630368de0a805bbbdc247a28a792",
+      "backend": "cuda",
+      "correctness_passed": false,
+      "gpu_after": {
+        "free_mib": 29224,
+        "total_mib": 32607,
+        "used_mib": 2964,
+        "utilization_percent": 13
+      },
+      "gpu_before": {
+        "free_mib": 29213,
+        "total_mib": 32607,
+        "used_mib": 2975,
+        "utilization_percent": 12
+      },
+      "kv_unified": false,
+      "n_batch": 1024,
+      "n_ubatch": 1024,
+      "name": "p4-c4096-ub1024",
+      "parallel": 4,
+      "peak_global_gpu_used_mib": 3716,
+      "peak_rss_bytes": 751198208,
+      "readback_per_sequence_context": 1024,
+      "requested_total_context": 4096,
+      "role": "embedding",
+      "scenarios": {
+        "concurrent": {
+          "deterministic_response": false,
+          "elapsed_seconds": [
+            0.02098676700006763,
+            0.019616330000644666,
+            0.019809360999715864
+          ],
+          "median_items_per_second": 807.6989459796051,
+          "median_seconds": 0.019809360999715864,
+          "p95_seconds": 0.02098676700006763
+        },
+        "large": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.028806649999751244,
+            0.02772947099947487,
+            0.02853808699910587
+          ],
+          "median_items_per_second": 560.6542583075487,
+          "median_seconds": 0.02853808699910587,
+          "p95_seconds": 0.028806649999751244
+        },
+        "max": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.006482806000349228,
+            0.004974473000402213,
+            0.004619326999090845
+          ],
+          "median_items_per_second": 201.02631975671486,
+          "median_seconds": 0.004974473000402213,
+          "p95_seconds": 0.006482806000349228
+        },
+        "median": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.014559797000401886,
+            0.014136185000097612,
+            0.013701183999728528
+          ],
+          "median_items_per_second": 565.9235500911143,
+          "median_seconds": 0.014136185000097612,
+          "p95_seconds": 0.014559797000401886
+        },
+        "short": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.012264326000149595,
+            0.01312833399970259,
+            0.012772482999935164
+          ],
+          "median_items_per_second": 1252.6929963485736,
+          "median_seconds": 0.012772482999935164,
+          "p95_seconds": 0.01312833399970259
+        }
+      },
+      "startup_log_sha256": "b93a14d5bd01c2f685f6f467f1c920720d69f7473d8cc8c3025681c1dcef2adf",
+      "token_gate_passed": true,
+      "token_gate_required": 512
+    },
+    {
+      "argv": [
+        "$RUNTIME_ROOT/build-cuda/bin/llama-server",
+        "-m",
+        "$MODEL_ROOT/bge-reranker-v2-m3-Q4_K_M.gguf",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "19306",
+        "--parallel",
+        "1",
+        "--no-warmup",
+        "--metrics",
+        "-c",
+        "2048",
+        "-b",
+        "512",
+        "-ub",
+        "512",
+        "-ngl",
+        "-1",
+        "--threads",
+        "16",
+        "--no-kv-unified",
+        "--rerank",
+        "--pooling",
+        "rank"
+      ],
+      "argv_sha256": "01a274beb5fdd9ae13058685532a45fb5e5f6530d7054fb8aeb318e07f4cd24a",
+      "backend": "cuda",
+      "correctness_passed": false,
+      "gpu_after": {
+        "free_mib": 29223,
+        "total_mib": 32607,
+        "used_mib": 2965,
+        "utilization_percent": 21
+      },
+      "gpu_before": {
+        "free_mib": 29224,
+        "total_mib": 32607,
+        "used_mib": 2964,
+        "utilization_percent": 13
+      },
+      "kv_unified": false,
+      "n_batch": 512,
+      "n_ubatch": 512,
+      "name": "baseline",
+      "parallel": 1,
+      "peak_global_gpu_used_mib": 3726,
+      "peak_rss_bytes": 1120305152,
+      "readback_per_sequence_context": 2048,
+      "requested_total_context": 2048,
+      "role": "reranker",
+      "scenarios": {
+        "concurrent": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.04550327800097875,
+            0.044151011999929324,
+            0.04519582799912314
+          ],
+          "median_items_per_second": 354.0149767874686,
+          "median_seconds": 0.04519582799912314,
+          "p95_seconds": 0.04550327800097875
+        },
+        "large": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.08646891500029597,
+            0.08949672099879535,
+            0.0874342519982747
+          ],
+          "median_items_per_second": 182.99464608350192,
+          "median_seconds": 0.0874342519982747,
+          "p95_seconds": 0.08949672099879535
+        },
+        "max": {
+          "deterministic_response": false,
+          "error_body": "{\"error\":{\"code\":500,\"message\":\"input (523 tokens) is too large to process. increase the physical batch size (current batch size: 512)\",\"type\":\"server_error\"}}",
+          "http_status": 500,
+          "rejected": true
+        },
+        "median": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.04460334400027932,
+            0.04472678300044208,
+            0.04406557999936922
+          ],
+          "median_items_per_second": 179.35874942358362,
+          "median_seconds": 0.04460334400027932,
+          "p95_seconds": 0.04472678300044208
+        },
+        "short": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.044724331999532296,
+            0.04509780299849808,
+            0.04445090499939397
+          ],
+          "median_items_per_second": 357.74709838410377,
+          "median_seconds": 0.044724331999532296,
+          "p95_seconds": 0.04509780299849808
+        }
+      },
+      "startup_log_sha256": "94ed3c61c494183d2df6d72b6e1157b98bd429a7a052e541e5f26ae4fdb25a49",
+      "token_gate_passed": false,
+      "token_gate_required": 512,
+      "token_gate_runtime_rejection": "{\"error\":{\"code\":500,\"message\":\"input (523 tokens) is too large to process. increase the physical batch size (current batch size: 512)\",\"type\":\"server_error\"}}"
+    },
+    {
+      "argv": [
+        "$RUNTIME_ROOT/build-cuda/bin/llama-server",
+        "-m",
+        "$MODEL_ROOT/bge-reranker-v2-m3-Q4_K_M.gguf",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "19307",
+        "--parallel",
+        "2",
+        "--no-warmup",
+        "--metrics",
+        "-c",
+        "2048",
+        "-b",
+        "512",
+        "-ub",
+        "512",
+        "-ngl",
+        "-1",
+        "--threads",
+        "16",
+        "--no-kv-unified",
+        "--rerank",
+        "--pooling",
+        "rank"
+      ],
+      "argv_sha256": "79ce8b60a471955a06f4cd20941a40099de64da7843ee6944868f38e3b3d0d27",
+      "backend": "cuda",
+      "correctness_passed": false,
+      "gpu_after": {
+        "free_mib": 29133,
+        "total_mib": 32607,
+        "used_mib": 3055,
+        "utilization_percent": 4
+      },
+      "gpu_before": {
+        "free_mib": 29223,
+        "total_mib": 32607,
+        "used_mib": 2965,
+        "utilization_percent": 4
+      },
+      "kv_unified": false,
+      "n_batch": 512,
+      "n_ubatch": 512,
+      "name": "p2",
+      "parallel": 2,
+      "peak_global_gpu_used_mib": 3816,
+      "peak_rss_bytes": 1113874432,
+      "readback_per_sequence_context": 1024,
+      "requested_total_context": 2048,
+      "role": "reranker",
+      "scenarios": {
+        "concurrent": {
+          "deterministic_response": false,
+          "elapsed_seconds": [
+            0.030402976999539533,
+            0.031065098999533802,
+            0.030789767999522155
+          ],
+          "median_items_per_second": 519.653152315026,
+          "median_seconds": 0.030789767999522155,
+          "p95_seconds": 0.031065098999533802
+        },
+        "large": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.0928024490003736,
+            0.08908861500094645,
+            0.08919309200064163
+          ],
+          "median_items_per_second": 179.3860896748024,
+          "median_seconds": 0.08919309200064163,
+          "p95_seconds": 0.0928024490003736
+        },
+        "max": {
+          "deterministic_response": false,
+          "error_body": "{\"error\":{\"code\":500,\"message\":\"input (523 tokens) is too large to process. increase the physical batch size (current batch size: 512)\",\"type\":\"server_error\"}}",
+          "http_status": 500,
+          "rejected": true
+        },
+        "median": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.04409047599983751,
+            0.04448062099982053,
+            0.045072736000292934
+          ],
+          "median_items_per_second": 179.85360411295244,
+          "median_seconds": 0.04448062099982053,
+          "p95_seconds": 0.045072736000292934
+        },
+        "short": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.03017795599953388,
+            0.028740649000610574,
+            0.029651041000761325
+          ],
+          "median_items_per_second": 539.610059545268,
+          "median_seconds": 0.029651041000761325,
+          "p95_seconds": 0.03017795599953388
+        }
+      },
+      "startup_log_sha256": "ad86920b3f0cb940172898428a88cf7da2dd14a55678ed4b83ddf174500b8cd6",
+      "token_gate_passed": false,
+      "token_gate_required": 512,
+      "token_gate_runtime_rejection": "{\"error\":{\"code\":500,\"message\":\"input (523 tokens) is too large to process. increase the physical batch size (current batch size: 512)\",\"type\":\"server_error\"}}"
+    },
+    {
+      "argv": [
+        "$RUNTIME_ROOT/build-cuda/bin/llama-server",
+        "-m",
+        "$MODEL_ROOT/bge-reranker-v2-m3-Q4_K_M.gguf",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "19308",
+        "--parallel",
+        "4",
+        "--no-warmup",
+        "--metrics",
+        "-c",
+        "2048",
+        "-b",
+        "512",
+        "-ub",
+        "512",
+        "-ngl",
+        "-1",
+        "--threads",
+        "16",
+        "--no-kv-unified",
+        "--rerank",
+        "--pooling",
+        "rank"
+      ],
+      "argv_sha256": "2324d3290910d2a07efb0624c03afe1b9a70036351ebe5e8c2ca4628fd313224",
+      "backend": "cuda",
+      "correctness_passed": false,
+      "gpu_after": {
+        "free_mib": 29048,
+        "total_mib": 32607,
+        "used_mib": 3140,
+        "utilization_percent": 5
+      },
+      "gpu_before": {
+        "free_mib": 29133,
+        "total_mib": 32607,
+        "used_mib": 3055,
+        "utilization_percent": 4
+      },
+      "kv_unified": false,
+      "n_batch": 512,
+      "n_ubatch": 512,
+      "name": "p4",
+      "parallel": 4,
+      "peak_global_gpu_used_mib": 4008,
+      "peak_rss_bytes": 1265147904,
+      "readback_per_sequence_context": 512,
+      "requested_total_context": 2048,
+      "role": "reranker",
+      "scenarios": {
+        "concurrent": {
+          "deterministic_response": false,
+          "elapsed_seconds": [
+            0.04406522200042673,
+            0.030871126999045373,
+            0.04447535799954494
+          ],
+          "median_items_per_second": 363.0981366630822,
+          "median_seconds": 0.04406522200042673,
+          "p95_seconds": 0.04447535799954494
+        },
+        "large": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.08945532399957301,
+            0.0912038959995698,
+            0.09306104400093318
+          ],
+          "median_items_per_second": 175.43110219847924,
+          "median_seconds": 0.0912038959995698,
+          "p95_seconds": 0.09306104400093318
+        },
+        "max": {
+          "deterministic_response": false,
+          "error_body": "{\"error\":{\"code\":500,\"message\":\"input (523 tokens) is too large to process. increase the physical batch size (current batch size: 512)\",\"type\":\"server_error\"}}",
+          "http_status": 500,
+          "rejected": true
+        },
+        "median": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.0487449550000747,
+            0.04493240700139722,
+            0.04583477999949537
+          ],
+          "median_items_per_second": 174.53994543200773,
+          "median_seconds": 0.04583477999949537,
+          "p95_seconds": 0.0487449550000747
+        },
+        "short": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.020536859999992885,
+            0.021342436999475467,
+            0.020961060999979964
+          ],
+          "median_items_per_second": 763.3201391864321,
+          "median_seconds": 0.020961060999979964,
+          "p95_seconds": 0.021342436999475467
+        }
+      },
+      "startup_log_sha256": "710640514fed604ffb87f462a30dd35d0eb5017fb0f443024f530a9421b40088",
+      "token_gate_passed": false,
+      "token_gate_required": 512,
+      "token_gate_runtime_rejection": "{\"error\":{\"code\":500,\"message\":\"input (523 tokens) is too large to process. increase the physical batch size (current batch size: 512)\",\"type\":\"server_error\"}}"
+    },
+    {
+      "argv": [
+        "$RUNTIME_ROOT/build-cuda/bin/llama-server",
+        "-m",
+        "$MODEL_ROOT/bge-reranker-v2-m3-Q4_K_M.gguf",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "19309",
+        "--parallel",
+        "4",
+        "--no-warmup",
+        "--metrics",
+        "-c",
+        "2048",
+        "-b",
+        "512",
+        "-ub",
+        "512",
+        "-ngl",
+        "-1",
+        "--threads",
+        "16",
+        "--kv-unified",
+        "--rerank",
+        "--pooling",
+        "rank"
+      ],
+      "argv_sha256": "69de6af39fd540e470a57baa44907ddd00fd9ad55ae6d208042bdc37df36e68f",
+      "backend": "cuda",
+      "correctness_passed": false,
+      "gpu_after": {
+        "free_mib": 29096,
+        "total_mib": 32607,
+        "used_mib": 3092,
+        "utilization_percent": 16
+      },
+      "gpu_before": {
+        "free_mib": 29047,
+        "total_mib": 32607,
+        "used_mib": 3141,
+        "utilization_percent": 5
+      },
+      "kv_unified": true,
+      "n_batch": 512,
+      "n_ubatch": 512,
+      "name": "p4-kvu",
+      "parallel": 4,
+      "peak_global_gpu_used_mib": 3940,
+      "peak_rss_bytes": 1265188864,
+      "readback_per_sequence_context": 2048,
+      "requested_total_context": 2048,
+      "role": "reranker",
+      "scenarios": {
+        "concurrent": {
+          "deterministic_response": false,
+          "elapsed_seconds": [
+            0.04435973900035606,
+            0.04464175199973397,
+            0.043748553998739226
+          ],
+          "median_items_per_second": 360.6874242400654,
+          "median_seconds": 0.04435973900035606,
+          "p95_seconds": 0.04464175199973397
+        },
+        "large": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.08838335099972028,
+            0.08764160099963192,
+            0.09125879299972439
+          ],
+          "median_items_per_second": 181.0295696986035,
+          "median_seconds": 0.08838335099972028,
+          "p95_seconds": 0.09125879299972439
+        },
+        "max": {
+          "deterministic_response": false,
+          "error_body": "{\"error\":{\"code\":500,\"message\":\"input (523 tokens) is too large to process. increase the physical batch size (current batch size: 512)\",\"type\":\"server_error\"}}",
+          "http_status": 500,
+          "rejected": true
+        },
+        "median": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.0455748370004585,
+            0.04706302699923981,
+            0.04508065399932093
+          ],
+          "median_items_per_second": 175.53546049807082,
+          "median_seconds": 0.0455748370004585,
+          "p95_seconds": 0.04706302699923981
+        },
+        "short": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.02144204000069294,
+            0.020723456998894108,
+            0.02122415400117461
+          ],
+          "median_items_per_second": 753.8580807091067,
+          "median_seconds": 0.02122415400117461,
+          "p95_seconds": 0.02144204000069294
+        }
+      },
+      "startup_log_sha256": "d8f28ce4de3d9763596de6a3f1db57914e1d6434d3a4163e5c7e0f0d70315cf4",
+      "token_gate_passed": false,
+      "token_gate_required": 512,
+      "token_gate_runtime_rejection": "{\"error\":{\"code\":500,\"message\":\"input (523 tokens) is too large to process. increase the physical batch size (current batch size: 512)\",\"type\":\"server_error\"}}"
+    },
+    {
+      "argv": [
+        "$RUNTIME_ROOT/build-cuda/bin/llama-server",
+        "-m",
+        "$MODEL_ROOT/bge-reranker-v2-m3-Q4_K_M.gguf",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "19310",
+        "--parallel",
+        "4",
+        "--no-warmup",
+        "--metrics",
+        "-c",
+        "4096",
+        "-b",
+        "1024",
+        "-ub",
+        "512",
+        "-ngl",
+        "-1",
+        "--threads",
+        "16",
+        "--no-kv-unified",
+        "--rerank",
+        "--pooling",
+        "rank"
+      ],
+      "argv_sha256": "6110def66c0306c0f1317a0e59896d584de008be67519f94190e42fe7d06db10",
+      "backend": "cuda",
+      "correctness_passed": false,
+      "gpu_after": {
+        "free_mib": 29125,
+        "total_mib": 32607,
+        "used_mib": 3063,
+        "utilization_percent": 10
+      },
+      "gpu_before": {
+        "free_mib": 29122,
+        "total_mib": 32607,
+        "used_mib": 3066,
+        "utilization_percent": 4
+      },
+      "kv_unified": false,
+      "n_batch": 1024,
+      "n_ubatch": 512,
+      "name": "p4-c4096-b1024",
+      "parallel": 4,
+      "peak_global_gpu_used_mib": 3883,
+      "peak_rss_bytes": 1264824320,
+      "readback_per_sequence_context": 1024,
+      "requested_total_context": 4096,
+      "role": "reranker",
+      "scenarios": {
+        "concurrent": {
+          "deterministic_response": false,
+          "elapsed_seconds": [
+            0.04485212299914565,
+            0.04535987499912153,
+            0.04486545799954911
+          ],
+          "median_items_per_second": 356.62179131573333,
+          "median_seconds": 0.04486545799954911,
+          "p95_seconds": 0.04535987499912153
+        },
+        "large": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.0866912700003013,
+            0.08944671399876825,
+            0.08881032800127286
+          ],
+          "median_items_per_second": 180.15922652341382,
+          "median_seconds": 0.08881032800127286,
+          "p95_seconds": 0.08944671399876825
+        },
+        "max": {
+          "deterministic_response": false,
+          "error_body": "{\"error\":{\"code\":500,\"message\":\"input (523 tokens) is too large to process. increase the physical batch size (current batch size: 512)\",\"type\":\"server_error\"}}",
+          "http_status": 500,
+          "rejected": true
+        },
+        "median": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.04724034599894367,
+            0.047751240999787115,
+            0.04457083499983128
+          ],
+          "median_items_per_second": 169.34676981787743,
+          "median_seconds": 0.04724034599894367,
+          "p95_seconds": 0.047751240999787115
+        },
+        "short": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.020197502999508288,
+            0.020483078998950077,
+            0.020360241998787387
+          ],
+          "median_items_per_second": 785.8452763455821,
+          "median_seconds": 0.020360241998787387,
+          "p95_seconds": 0.020483078998950077
+        }
+      },
+      "startup_log_sha256": "7709f58db0920901e172f386fb92bdd0b367e5f07ceec055d4f5d8f488afb760",
+      "token_gate_passed": false,
+      "token_gate_required": 512,
+      "token_gate_runtime_rejection": "{\"error\":{\"code\":500,\"message\":\"input (523 tokens) is too large to process. increase the physical batch size (current batch size: 512)\",\"type\":\"server_error\"}}"
+    },
+    {
+      "argv": [
+        "$RUNTIME_ROOT/build-cuda/bin/llama-server",
+        "-m",
+        "$MODEL_ROOT/bge-reranker-v2-m3-Q4_K_M.gguf",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "19311",
+        "--parallel",
+        "4",
+        "--no-warmup",
+        "--metrics",
+        "-c",
+        "4096",
+        "-b",
+        "1024",
+        "-ub",
+        "1024",
+        "-ngl",
+        "-1",
+        "--threads",
+        "16",
+        "--no-kv-unified",
+        "--rerank",
+        "--pooling",
+        "rank"
+      ],
+      "argv_sha256": "a518d548f5101693f82ed73093daa2434907cd76fa73bbbb1be8063f90e91a08",
+      "backend": "cuda",
+      "correctness_passed": false,
+      "gpu_after": {
+        "free_mib": 29157,
+        "total_mib": 32607,
+        "used_mib": 3031,
+        "utilization_percent": 4
+      },
+      "gpu_before": {
+        "free_mib": 29127,
+        "total_mib": 32607,
+        "used_mib": 3061,
+        "utilization_percent": 3
+      },
+      "kv_unified": false,
+      "n_batch": 1024,
+      "n_ubatch": 1024,
+      "name": "p4-c4096-ub1024",
+      "parallel": 4,
+      "peak_global_gpu_used_mib": 3957,
+      "peak_rss_bytes": 1851125760,
+      "readback_per_sequence_context": 1024,
+      "requested_total_context": 4096,
+      "role": "reranker",
+      "scenarios": {
+        "concurrent": {
+          "deterministic_response": false,
+          "elapsed_seconds": [
+            0.048773414999232045,
+            0.044910192998941056,
+            0.042824932001167326
+          ],
+          "median_items_per_second": 356.2665606976409,
+          "median_seconds": 0.044910192998941056,
+          "p95_seconds": 0.048773414999232045
+        },
+        "large": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.07630744699963543,
+            0.076494470000398,
+            0.08030703400072525
+          ],
+          "median_items_per_second": 209.16544686062605,
+          "median_seconds": 0.076494470000398,
+          "p95_seconds": 0.08030703400072525
+        },
+        "max": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.012133422000260907,
+            0.008729676001166808,
+            0.009191629998895223
+          ],
+          "median_items_per_second": 108.79463165077291,
+          "median_seconds": 0.009191629998895223,
+          "p95_seconds": 0.012133422000260907
+        },
+        "median": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.04365280999991228,
+            0.042386220000480535,
+            0.04053222599941364
+          ],
+          "median_items_per_second": 188.74058597132048,
+          "median_seconds": 0.042386220000480535,
+          "p95_seconds": 0.04365280999991228
+        },
+        "short": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.020934685999236535,
+            0.02064701800009061,
+            0.021597539000140387
+          ],
+          "median_items_per_second": 764.281823982624,
+          "median_seconds": 0.020934685999236535,
+          "p95_seconds": 0.021597539000140387
+        }
+      },
+      "startup_log_sha256": "3d72b51324b1a2e28d10b31949d676b6786c9aea71e050940b0697a420b50743",
+      "token_gate_passed": true,
+      "token_gate_required": 512
+    },
+    {
+      "argv": [
+        "$RUNTIME_ROOT/build-cuda/bin/llama-server",
+        "-m",
+        "$MODEL_ROOT/nomic-embed-text-v1.5.Q4_K_M.gguf",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "19312",
+        "--parallel",
+        "1",
+        "--no-warmup",
+        "--metrics",
+        "-c",
+        "2048",
+        "-b",
+        "512",
+        "-ub",
+        "512",
+        "-ngl",
+        "0",
+        "--threads",
+        "16",
+        "--no-kv-unified",
+        "--embeddings",
+        "--pooling",
+        "mean"
+      ],
+      "argv_sha256": "cfd1ffa95c51b9eb845fadd12be55bd553325d6c10a3e1a79da92316435ea90d",
+      "backend": "cpu",
+      "correctness_passed": true,
+      "gpu_after": {
+        "free_mib": 29088,
+        "total_mib": 32607,
+        "used_mib": 3100,
+        "utilization_percent": 19
+      },
+      "gpu_before": {
+        "free_mib": 29158,
+        "total_mib": 32607,
+        "used_mib": 3030,
+        "utilization_percent": 4
+      },
+      "kv_unified": false,
+      "n_batch": 512,
+      "n_ubatch": 512,
+      "name": "baseline",
+      "parallel": 1,
+      "peak_global_gpu_used_mib": 3736,
+      "peak_rss_bytes": 596185088,
+      "readback_per_sequence_context": 2048,
+      "requested_total_context": 2048,
+      "role": "embedding",
+      "scenarios": {
+        "concurrent": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            1.2393999609994353,
+            1.194045112000822,
+            1.202343157001451
+          ],
+          "median_items_per_second": 13.307348993362876,
+          "median_seconds": 1.202343157001451,
+          "p95_seconds": 1.2393999609994353
+        },
+        "large": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.2406630479999876,
+            0.23706218299957982,
+            0.2419822789997852
+          ],
+          "median_items_per_second": 66.48299409887314,
+          "median_seconds": 0.2406630479999876,
+          "p95_seconds": 0.2419822789997852
+        },
+        "max": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.020008616000268376,
+            0.016675816999850213,
+            0.017836179000369157
+          ],
+          "median_items_per_second": 56.065819925854235,
+          "median_seconds": 0.017836179000369157,
+          "p95_seconds": 0.020008616000268376
+        },
+        "median": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.1192398109997157,
+            0.11854730300001393,
+            0.11834176800039131
+          ],
+          "median_items_per_second": 67.48361031881983,
+          "median_seconds": 0.11854730300001393,
+          "p95_seconds": 0.1192398109997157
+        },
+        "short": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            1.214940972000477,
+            1.2018049549988064,
+            1.1878999789987574
+          ],
+          "median_items_per_second": 13.313308397880496,
+          "median_seconds": 1.2018049549988064,
+          "p95_seconds": 1.214940972000477
+        }
+      },
+      "startup_log_sha256": "835ed2139aaf4cd280807fd5635c60e2269fe2029e3d4ce4018eab466688a46c",
+      "token_gate_passed": true,
+      "token_gate_required": 512
+    },
+    {
+      "argv": [
+        "$RUNTIME_ROOT/build-cuda/bin/llama-server",
+        "-m",
+        "$MODEL_ROOT/nomic-embed-text-v1.5.Q4_K_M.gguf",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "19313",
+        "--parallel",
+        "2",
+        "--no-warmup",
+        "--metrics",
+        "-c",
+        "2048",
+        "-b",
+        "512",
+        "-ub",
+        "512",
+        "-ngl",
+        "0",
+        "--threads",
+        "16",
+        "--no-kv-unified",
+        "--embeddings",
+        "--pooling",
+        "mean"
+      ],
+      "argv_sha256": "630e0a57c0f55e1008ce526ae8892f0ebbabbd0f9d74a94ea4bfccd4cbd814ee",
+      "backend": "cpu",
+      "correctness_passed": true,
+      "gpu_after": {
+        "free_mib": 29193,
+        "total_mib": 32607,
+        "used_mib": 2995,
+        "utilization_percent": 5
+      },
+      "gpu_before": {
+        "free_mib": 29093,
+        "total_mib": 32607,
+        "used_mib": 3095,
+        "utilization_percent": 17
+      },
+      "kv_unified": false,
+      "n_batch": 512,
+      "n_ubatch": 512,
+      "name": "p2",
+      "parallel": 2,
+      "peak_global_gpu_used_mib": 3647,
+      "peak_rss_bytes": 596242432,
+      "readback_per_sequence_context": 1024,
+      "requested_total_context": 2048,
+      "role": "embedding",
+      "scenarios": {
+        "concurrent": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.5949953169983928,
+            0.6074990090000938,
+            0.6341864730002271
+          ],
+          "median_items_per_second": 26.337491523377167,
+          "median_seconds": 0.6074990090000938,
+          "p95_seconds": 0.6341864730002271
+        },
+        "large": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.13434531600069022,
+            0.13347050300035335,
+            0.13058702099988295
+          ],
+          "median_items_per_second": 119.87667417390074,
+          "median_seconds": 0.13347050300035335,
+          "p95_seconds": 0.13434531600069022
+        },
+        "max": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.01933894800095004,
+            0.016805400999146514,
+            0.016819291999127017
+          ],
+          "median_items_per_second": 59.455534754489285,
+          "median_seconds": 0.016819291999127017,
+          "p95_seconds": 0.01933894800095004
+        },
+        "median": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.06658314199921733,
+            0.06539693600097962,
+            0.06518153499928303
+          ],
+          "median_items_per_second": 122.32989019363481,
+          "median_seconds": 0.06539693600097962,
+          "p95_seconds": 0.06658314199921733
+        },
+        "short": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.6045308980010304,
+            0.593319158999293,
+            0.6133244190004916
+          ],
+          "median_items_per_second": 26.466802694297897,
+          "median_seconds": 0.6045308980010304,
+          "p95_seconds": 0.6133244190004916
+        }
+      },
+      "startup_log_sha256": "8aa3daad2835fb15a20c14d7cbe7ca82dcb554a262d0ff891e75e761b4502594",
+      "token_gate_passed": true,
+      "token_gate_required": 512
+    },
+    {
+      "argv": [
+        "$RUNTIME_ROOT/build-cuda/bin/llama-server",
+        "-m",
+        "$MODEL_ROOT/nomic-embed-text-v1.5.Q4_K_M.gguf",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "19314",
+        "--parallel",
+        "4",
+        "--no-warmup",
+        "--metrics",
+        "-c",
+        "2048",
+        "-b",
+        "512",
+        "-ub",
+        "512",
+        "-ngl",
+        "0",
+        "--threads",
+        "16",
+        "--no-kv-unified",
+        "--embeddings",
+        "--pooling",
+        "mean"
+      ],
+      "argv_sha256": "0cf0d621580c2dd6704981fd46683e1d0cbff154eb7ac2bb4b0ea3ef329b8d24",
+      "backend": "cpu",
+      "correctness_passed": false,
+      "gpu_after": {
+        "free_mib": 29008,
+        "total_mib": 32607,
+        "used_mib": 3180,
+        "utilization_percent": 5
+      },
+      "gpu_before": {
+        "free_mib": 29193,
+        "total_mib": 32607,
+        "used_mib": 2995,
+        "utilization_percent": 5
+      },
+      "kv_unified": false,
+      "n_batch": 512,
+      "n_ubatch": 512,
+      "name": "p4",
+      "parallel": 4,
+      "peak_global_gpu_used_mib": 3891,
+      "peak_rss_bytes": 749457408,
+      "readback_per_sequence_context": 512,
+      "requested_total_context": 2048,
+      "role": "embedding",
+      "scenarios": {
+        "concurrent": {
+          "deterministic_response": false,
+          "elapsed_seconds": [
+            0.20003472499956843,
+            0.19173960399893986,
+            0.19405674100016768
+          ],
+          "median_items_per_second": 82.4501118463397,
+          "median_seconds": 0.19405674100016768,
+          "p95_seconds": 0.20003472499956843
+        },
+        "large": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.1336142669988476,
+            0.1347280160007358,
+            0.1381981579997955
+          ],
+          "median_items_per_second": 118.75777937613671,
+          "median_seconds": 0.1347280160007358,
+          "p95_seconds": 0.1381981579997955
+        },
+        "max": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.018559896998340264,
+            0.017299049999564886,
+            0.017081607998989057
+          ],
+          "median_items_per_second": 57.806642562750696,
+          "median_seconds": 0.017299049999564886,
+          "p95_seconds": 0.018559896998340264
+        },
+        "median": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.07351907600059349,
+            0.07477140999981202,
+            0.07296506700004102
+          ],
+          "median_items_per_second": 108.81529577351353,
+          "median_seconds": 0.07351907600059349,
+          "p95_seconds": 0.07477140999981202
+        },
+        "short": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.06267413500063412,
+            0.06131436699979531,
+            0.06423489900043933
+          ],
+          "median_items_per_second": 255.2887247640213,
+          "median_seconds": 0.06267413500063412,
+          "p95_seconds": 0.06423489900043933
+        }
+      },
+      "startup_log_sha256": "1de4631e227bedd53a4f9c4b9c6e7a8f058caae7a6df59d4e901884672feea9b",
+      "token_gate_passed": true,
+      "token_gate_required": 512
+    },
+    {
+      "argv": [
+        "$RUNTIME_ROOT/build-cuda/bin/llama-server",
+        "-m",
+        "$MODEL_ROOT/nomic-embed-text-v1.5.Q4_K_M.gguf",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "19315",
+        "--parallel",
+        "4",
+        "--no-warmup",
+        "--metrics",
+        "-c",
+        "2048",
+        "-b",
+        "512",
+        "-ub",
+        "512",
+        "-ngl",
+        "0",
+        "--threads",
+        "16",
+        "--kv-unified",
+        "--embeddings",
+        "--pooling",
+        "mean"
+      ],
+      "argv_sha256": "9ae644c4bde2f050576052f1fbe9955cf0de788d49e194cd1efb6c1704099fb1",
+      "backend": "cpu",
+      "correctness_passed": false,
+      "gpu_after": {
+        "free_mib": 28957,
+        "total_mib": 32607,
+        "used_mib": 3231,
+        "utilization_percent": 8
+      },
+      "gpu_before": {
+        "free_mib": 29008,
+        "total_mib": 32607,
+        "used_mib": 3180,
+        "utilization_percent": 5
+      },
+      "kv_unified": true,
+      "n_batch": 512,
+      "n_ubatch": 512,
+      "name": "p4-kvu",
+      "parallel": 4,
+      "peak_global_gpu_used_mib": 3900,
+      "peak_rss_bytes": 749404160,
+      "readback_per_sequence_context": 2048,
+      "requested_total_context": 2048,
+      "role": "embedding",
+      "scenarios": {
+        "concurrent": {
+          "deterministic_response": false,
+          "elapsed_seconds": [
+            0.21366752099856967,
+            0.19929182999840123,
+            0.20490837899887993
+          ],
+          "median_items_per_second": 78.08367856000393,
+          "median_seconds": 0.20490837899887993,
+          "p95_seconds": 0.21366752099856967
+        },
+        "large": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.16282636200048728,
+            0.16583434300082445,
+            0.15825694500017562
+          ],
+          "median_items_per_second": 98.26418648321896,
+          "median_seconds": 0.16282636200048728,
+          "p95_seconds": 0.16583434300082445
+        },
+        "max": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.02098834199932753,
+            0.021326616000806098,
+            0.023670923999816296
+          ],
+          "median_items_per_second": 46.88976441279771,
+          "median_seconds": 0.021326616000806098,
+          "p95_seconds": 0.023670923999816296
+        },
+        "median": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.08049240199943597,
+            0.07772890900014318,
+            0.08380749999923864
+          ],
+          "median_items_per_second": 99.38826275871428,
+          "median_seconds": 0.08049240199943597,
+          "p95_seconds": 0.08380749999923864
+        },
+        "short": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.05959862800045812,
+            0.06141841899989231,
+            0.06734735899954103
+          ],
+          "median_items_per_second": 260.50817101019896,
+          "median_seconds": 0.06141841899989231,
+          "p95_seconds": 0.06734735899954103
+        }
+      },
+      "startup_log_sha256": "b67940eba3d62d3d06003a463c158c94c99a8190800b7c32131881a31525aedf",
+      "token_gate_passed": true,
+      "token_gate_required": 512
+    },
+    {
+      "argv": [
+        "$RUNTIME_ROOT/build-cuda/bin/llama-server",
+        "-m",
+        "$MODEL_ROOT/nomic-embed-text-v1.5.Q4_K_M.gguf",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "19316",
+        "--parallel",
+        "4",
+        "--no-warmup",
+        "--metrics",
+        "-c",
+        "4096",
+        "-b",
+        "1024",
+        "-ub",
+        "512",
+        "-ngl",
+        "0",
+        "--threads",
+        "16",
+        "--no-kv-unified",
+        "--embeddings",
+        "--pooling",
+        "mean"
+      ],
+      "argv_sha256": "6a29e15a9c90ad4d6ab609ff0bf0d635a134dcb2a32f8a78c5cee41449b31fc0",
+      "backend": "cpu",
+      "correctness_passed": false,
+      "gpu_after": {
+        "free_mib": 29086,
+        "total_mib": 32607,
+        "used_mib": 3102,
+        "utilization_percent": 6
+      },
+      "gpu_before": {
+        "free_mib": 28957,
+        "total_mib": 32607,
+        "used_mib": 3231,
+        "utilization_percent": 8
+      },
+      "kv_unified": false,
+      "n_batch": 1024,
+      "n_ubatch": 512,
+      "name": "p4-c4096-b1024",
+      "parallel": 4,
+      "peak_global_gpu_used_mib": 3818,
+      "peak_rss_bytes": 749228032,
+      "readback_per_sequence_context": 1024,
+      "requested_total_context": 4096,
+      "role": "embedding",
+      "scenarios": {
+        "concurrent": {
+          "deterministic_response": false,
+          "elapsed_seconds": [
+            0.20244624999941152,
+            0.2033545829999639,
+            0.1935830080001324
+          ],
+          "median_items_per_second": 79.03332366021355,
+          "median_seconds": 0.20244624999941152,
+          "p95_seconds": 0.2033545829999639
+        },
+        "large": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.13535997800136101,
+            0.13352599399877363,
+            0.13218394900104613
+          ],
+          "median_items_per_second": 119.82685558698745,
+          "median_seconds": 0.13352599399877363,
+          "p95_seconds": 0.13535997800136101
+        },
+        "max": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.019377598000573926,
+            0.016930710000451654,
+            0.017294749999564374
+          ],
+          "median_items_per_second": 57.82101504937558,
+          "median_seconds": 0.017294749999564374,
+          "p95_seconds": 0.019377598000573926
+        },
+        "median": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.07256052200136764,
+            0.07189666399972339,
+            0.06792501199925027
+          ],
+          "median_items_per_second": 111.27080944994582,
+          "median_seconds": 0.07189666399972339,
+          "p95_seconds": 0.07256052200136764
+        },
+        "short": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.06189786399954755,
+            0.06214101400109939,
+            0.06290332500066143
+          ],
+          "median_items_per_second": 257.47890112827787,
+          "median_seconds": 0.06214101400109939,
+          "p95_seconds": 0.06290332500066143
+        }
+      },
+      "startup_log_sha256": "b792470e8e2e5c5fe0973c722f7d2e5c81e48ac90224043c7f3858c012cfce2f",
+      "token_gate_passed": true,
+      "token_gate_required": 512
+    },
+    {
+      "argv": [
+        "$RUNTIME_ROOT/build-cuda/bin/llama-server",
+        "-m",
+        "$MODEL_ROOT/nomic-embed-text-v1.5.Q4_K_M.gguf",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "19317",
+        "--parallel",
+        "4",
+        "--no-warmup",
+        "--metrics",
+        "-c",
+        "4096",
+        "-b",
+        "1024",
+        "-ub",
+        "1024",
+        "-ngl",
+        "0",
+        "--threads",
+        "16",
+        "--no-kv-unified",
+        "--embeddings",
+        "--pooling",
+        "mean"
+      ],
+      "argv_sha256": "0117a66d1ec16bf2ea2be049367bda5bd3266ad503a77897db9bf38b9d51f977",
+      "backend": "cpu",
+      "correctness_passed": false,
+      "gpu_after": {
+        "free_mib": 29101,
+        "total_mib": 32607,
+        "used_mib": 3087,
+        "utilization_percent": 3
+      },
+      "gpu_before": {
+        "free_mib": 29086,
+        "total_mib": 32607,
+        "used_mib": 3102,
+        "utilization_percent": 6
+      },
+      "kv_unified": false,
+      "n_batch": 1024,
+      "n_ubatch": 1024,
+      "name": "p4-c4096-ub1024",
+      "parallel": 4,
+      "peak_global_gpu_used_mib": 3818,
+      "peak_rss_bytes": 819290112,
+      "readback_per_sequence_context": 1024,
+      "requested_total_context": 4096,
+      "role": "embedding",
+      "scenarios": {
+        "concurrent": {
+          "deterministic_response": false,
+          "elapsed_seconds": [
+            0.19248006499947223,
+            0.06046584000068833,
+            0.19230091399913363
+          ],
+          "median_items_per_second": 83.20293267078327,
+          "median_seconds": 0.19230091399913363,
+          "p95_seconds": 0.19248006499947223
+        },
+        "large": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.08429872200031241,
+            0.08000335399992764,
+            0.07834136000019498
+          ],
+          "median_items_per_second": 199.99161535170728,
+          "median_seconds": 0.08000335399992764,
+          "p95_seconds": 0.08429872200031241
+        },
+        "max": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.018342397001106292,
+            0.018632840001373552,
+            0.017704215000776458
+          ],
+          "median_items_per_second": 54.51850158622598,
+          "median_seconds": 0.018342397001106292,
+          "p95_seconds": 0.018632840001373552
+        },
+        "median": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.04106268500072474,
+            0.041649150000012014,
+            0.04001390199846355
+          ],
+          "median_items_per_second": 194.8240841985565,
+          "median_seconds": 0.04106268500072474,
+          "p95_seconds": 0.041649150000012014
+        },
+        "short": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.06720351900003152,
+            0.06331933600085904,
+            0.06567909899968072
+          ],
+          "median_items_per_second": 243.60870114977948,
+          "median_seconds": 0.06567909899968072,
+          "p95_seconds": 0.06720351900003152
+        }
+      },
+      "startup_log_sha256": "c001a0a5f86772a4e74fb05ad04b728c15bc987ca6aba951919f33041a7223b9",
+      "token_gate_passed": true,
+      "token_gate_required": 512
+    },
+    {
+      "argv": [
+        "$RUNTIME_ROOT/build-cuda/bin/llama-server",
+        "-m",
+        "$MODEL_ROOT/bge-reranker-v2-m3-Q4_K_M.gguf",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "19318",
+        "--parallel",
+        "1",
+        "--no-warmup",
+        "--metrics",
+        "-c",
+        "2048",
+        "-b",
+        "512",
+        "-ub",
+        "512",
+        "-ngl",
+        "0",
+        "--threads",
+        "16",
+        "--no-kv-unified",
+        "--rerank",
+        "--pooling",
+        "rank"
+      ],
+      "argv_sha256": "7b9af08de0935164c3e56137b79f06cbd91d55b3148195a4301e94542ad65176",
+      "backend": "cpu",
+      "correctness_passed": false,
+      "gpu_after": {
+        "free_mib": 29148,
+        "total_mib": 32607,
+        "used_mib": 3040,
+        "utilization_percent": 5
+      },
+      "gpu_before": {
+        "free_mib": 29101,
+        "total_mib": 32607,
+        "used_mib": 3087,
+        "utilization_percent": 3
+      },
+      "kv_unified": false,
+      "n_batch": 512,
+      "n_ubatch": 512,
+      "name": "baseline",
+      "parallel": 1,
+      "peak_global_gpu_used_mib": 3704,
+      "peak_rss_bytes": 1272619008,
+      "readback_per_sequence_context": 2048,
+      "requested_total_context": 2048,
+      "role": "reranker",
+      "scenarios": {
+        "concurrent": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            2.9039661919996433,
+            2.88725681699907,
+            2.9530385739999474
+          ],
+          "median_items_per_second": 5.509706016578159,
+          "median_seconds": 2.9039661919996433,
+          "p95_seconds": 2.9530385739999474
+        },
+        "large": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.7247594370001025,
+            0.7288452110005892,
+            0.6853588800004218
+          ],
+          "median_items_per_second": 22.07629067408437,
+          "median_seconds": 0.7247594370001025,
+          "p95_seconds": 0.7288452110005892
+        },
+        "max": {
+          "deterministic_response": false,
+          "error_body": "{\"error\":{\"code\":500,\"message\":\"input (523 tokens) is too large to process. increase the physical batch size (current batch size: 512)\",\"type\":\"server_error\"}}",
+          "http_status": 500,
+          "rejected": true
+        },
+        "median": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.3465837839994492,
+            0.369365774000471,
+            0.35859239700039325
+          ],
+          "median_items_per_second": 22.309452366864395,
+          "median_seconds": 0.35859239700039325,
+          "p95_seconds": 0.369365774000471
+        },
+        "short": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            2.9222125520009286,
+            2.9753909230003046,
+            2.9547214829999575
+          ],
+          "median_items_per_second": 5.415061992156041,
+          "median_seconds": 2.9547214829999575,
+          "p95_seconds": 2.9753909230003046
+        }
+      },
+      "startup_log_sha256": "5ebd245d677933a8fc855bf6ac975f8a6da7381ba83e46eacfd92af583315e47",
+      "token_gate_passed": false,
+      "token_gate_required": 512,
+      "token_gate_runtime_rejection": "{\"error\":{\"code\":500,\"message\":\"input (523 tokens) is too large to process. increase the physical batch size (current batch size: 512)\",\"type\":\"server_error\"}}"
+    },
+    {
+      "argv": [
+        "$RUNTIME_ROOT/build-cuda/bin/llama-server",
+        "-m",
+        "$MODEL_ROOT/bge-reranker-v2-m3-Q4_K_M.gguf",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "19319",
+        "--parallel",
+        "2",
+        "--no-warmup",
+        "--metrics",
+        "-c",
+        "2048",
+        "-b",
+        "512",
+        "-ub",
+        "512",
+        "-ngl",
+        "0",
+        "--threads",
+        "16",
+        "--no-kv-unified",
+        "--rerank",
+        "--pooling",
+        "rank"
+      ],
+      "argv_sha256": "41145c7d0232ec82120c3ba16972fa9891d8be6bda11fb70e9f8482172a20349",
+      "backend": "cpu",
+      "correctness_passed": false,
+      "gpu_after": {
+        "free_mib": 29139,
+        "total_mib": 32607,
+        "used_mib": 3049,
+        "utilization_percent": 7
+      },
+      "gpu_before": {
+        "free_mib": 29148,
+        "total_mib": 32607,
+        "used_mib": 3040,
+        "utilization_percent": 5
+      },
+      "kv_unified": false,
+      "n_batch": 512,
+      "n_ubatch": 512,
+      "name": "p2",
+      "parallel": 2,
+      "peak_global_gpu_used_mib": 3680,
+      "peak_rss_bytes": 1271115776,
+      "readback_per_sequence_context": 1024,
+      "requested_total_context": 2048,
+      "role": "reranker",
+      "scenarios": {
+        "concurrent": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.3326093410014437,
+            0.34423446000073454,
+            0.35708974600129295
+          ],
+          "median_items_per_second": 46.479948579133705,
+          "median_seconds": 0.34423446000073454,
+          "p95_seconds": 0.35708974600129295
+        },
+        "large": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.7063023179998709,
+            0.7209543530007068,
+            0.7285451689986076
+          ],
+          "median_items_per_second": 22.192805873778134,
+          "median_seconds": 0.7209543530007068,
+          "p95_seconds": 0.7285451689986076
+        },
+        "max": {
+          "deterministic_response": false,
+          "error_body": "{\"error\":{\"code\":500,\"message\":\"input (523 tokens) is too large to process. increase the physical batch size (current batch size: 512)\",\"type\":\"server_error\"}}",
+          "http_status": 500,
+          "rejected": true
+        },
+        "median": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.3693770419995417,
+            0.3667381720006233,
+            0.34983154800102056
+          ],
+          "median_items_per_second": 21.813927784933178,
+          "median_seconds": 0.3667381720006233,
+          "p95_seconds": 0.3693770419995417
+        },
+        "short": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.34119037100026617,
+            0.3389501029996609,
+            0.32769182399897545
+          ],
+          "median_items_per_second": 47.20458810427329,
+          "median_seconds": 0.3389501029996609,
+          "p95_seconds": 0.34119037100026617
+        }
+      },
+      "startup_log_sha256": "ef7535cc420e5eec1b94cd938faadaba367cdd526d37d5365161bb13d6bce695",
+      "token_gate_passed": false,
+      "token_gate_required": 512,
+      "token_gate_runtime_rejection": "{\"error\":{\"code\":500,\"message\":\"input (523 tokens) is too large to process. increase the physical batch size (current batch size: 512)\",\"type\":\"server_error\"}}"
+    },
+    {
+      "argv": [
+        "$RUNTIME_ROOT/build-cuda/bin/llama-server",
+        "-m",
+        "$MODEL_ROOT/bge-reranker-v2-m3-Q4_K_M.gguf",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "19320",
+        "--parallel",
+        "4",
+        "--no-warmup",
+        "--metrics",
+        "-c",
+        "2048",
+        "-b",
+        "512",
+        "-ub",
+        "512",
+        "-ngl",
+        "0",
+        "--threads",
+        "16",
+        "--no-kv-unified",
+        "--rerank",
+        "--pooling",
+        "rank"
+      ],
+      "argv_sha256": "b02dac3cc42b7ccfde746cd13bc77b8070bbeb931c75c573b250d518608415a3",
+      "backend": "cpu",
+      "correctness_passed": false,
+      "gpu_after": {
+        "free_mib": 29150,
+        "total_mib": 32607,
+        "used_mib": 3038,
+        "utilization_percent": 4
+      },
+      "gpu_before": {
+        "free_mib": 29139,
+        "total_mib": 32607,
+        "used_mib": 3049,
+        "utilization_percent": 7
+      },
+      "kv_unified": false,
+      "n_batch": 512,
+      "n_ubatch": 512,
+      "name": "p4",
+      "parallel": 4,
+      "peak_global_gpu_used_mib": 3661,
+      "peak_rss_bytes": 1272156160,
+      "readback_per_sequence_context": 512,
+      "requested_total_context": 2048,
+      "role": "reranker",
+      "scenarios": {
+        "concurrent": {
+          "deterministic_response": false,
+          "elapsed_seconds": [
+            0.22927995099962573,
+            0.23134166599993478,
+            0.22331596799995168
+          ],
+          "median_items_per_second": 69.78368553483386,
+          "median_seconds": 0.22927995099962573,
+          "p95_seconds": 0.23134166599993478
+        },
+        "large": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.7301671979985258,
+            0.7117339730011736,
+            0.7199925069999153
+          ],
+          "median_items_per_second": 22.222453490063725,
+          "median_seconds": 0.7199925069999153,
+          "p95_seconds": 0.7301671979985258
+        },
+        "max": {
+          "deterministic_response": false,
+          "error_body": "{\"error\":{\"code\":500,\"message\":\"input (523 tokens) is too large to process. increase the physical batch size (current batch size: 512)\",\"type\":\"server_error\"}}",
+          "http_status": 500,
+          "rejected": true
+        },
+        "median": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.3545611019999342,
+            0.3661609250011679,
+            0.36104602399973373
+          ],
+          "median_items_per_second": 22.157839910199094,
+          "median_seconds": 0.36104602399973373,
+          "p95_seconds": 0.3661609250011679
+        },
+        "short": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.1673490409993974,
+            0.17001416600032826,
+            0.1734633380001469
+          ],
+          "median_items_per_second": 94.10980494395454,
+          "median_seconds": 0.17001416600032826,
+          "p95_seconds": 0.1734633380001469
+        }
+      },
+      "startup_log_sha256": "badf3e37b5d05595a7077cabe1fafd3ea300e1292bcd084344442618af0b77bc",
+      "token_gate_passed": false,
+      "token_gate_required": 512,
+      "token_gate_runtime_rejection": "{\"error\":{\"code\":500,\"message\":\"input (523 tokens) is too large to process. increase the physical batch size (current batch size: 512)\",\"type\":\"server_error\"}}"
+    },
+    {
+      "argv": [
+        "$RUNTIME_ROOT/build-cuda/bin/llama-server",
+        "-m",
+        "$MODEL_ROOT/bge-reranker-v2-m3-Q4_K_M.gguf",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "19321",
+        "--parallel",
+        "4",
+        "--no-warmup",
+        "--metrics",
+        "-c",
+        "2048",
+        "-b",
+        "512",
+        "-ub",
+        "512",
+        "-ngl",
+        "0",
+        "--threads",
+        "16",
+        "--kv-unified",
+        "--rerank",
+        "--pooling",
+        "rank"
+      ],
+      "argv_sha256": "453466c4f135d407807f035ac1c4849568b2755b28797d101b517b663e7fd697",
+      "backend": "cpu",
+      "correctness_passed": false,
+      "gpu_after": {
+        "free_mib": 29138,
+        "total_mib": 32607,
+        "used_mib": 3050,
+        "utilization_percent": 4
+      },
+      "gpu_before": {
+        "free_mib": 29150,
+        "total_mib": 32607,
+        "used_mib": 3038,
+        "utilization_percent": 4
+      },
+      "kv_unified": true,
+      "n_batch": 512,
+      "n_ubatch": 512,
+      "name": "p4-kvu",
+      "parallel": 4,
+      "peak_global_gpu_used_mib": 3677,
+      "peak_rss_bytes": 1272127488,
+      "readback_per_sequence_context": 2048,
+      "requested_total_context": 2048,
+      "role": "reranker",
+      "scenarios": {
+        "concurrent": {
+          "deterministic_response": false,
+          "elapsed_seconds": [
+            0.2224994970001717,
+            0.2268431779993989,
+            0.22792241599927365
+          ],
+          "median_items_per_second": 70.53330913941964,
+          "median_seconds": 0.2268431779993989,
+          "p95_seconds": 0.22792241599927365
+        },
+        "large": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.7130482430002303,
+            0.6946491529997729,
+            0.7227947309984302
+          ],
+          "median_items_per_second": 22.438874447931052,
+          "median_seconds": 0.7130482430002303,
+          "p95_seconds": 0.7227947309984302
+        },
+        "max": {
+          "deterministic_response": false,
+          "error_body": "{\"error\":{\"code\":500,\"message\":\"input (523 tokens) is too large to process. increase the physical batch size (current batch size: 512)\",\"type\":\"server_error\"}}",
+          "http_status": 500,
+          "rejected": true
+        },
+        "median": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.36317322600007174,
+            0.3878795379987423,
+            0.3820730890001869
+          ],
+          "median_items_per_second": 20.93840218094001,
+          "median_seconds": 0.3820730890001869,
+          "p95_seconds": 0.3878795379987423
+        },
+        "short": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.17276651599968318,
+            0.17318362199875992,
+            0.1783951010002056
+          ],
+          "median_items_per_second": 92.38748915942276,
+          "median_seconds": 0.17318362199875992,
+          "p95_seconds": 0.1783951010002056
+        }
+      },
+      "startup_log_sha256": "8c43466bdb1cbf6ed6ce1567f37d08bd6b58a76dfd2ca6e2aafd5e98518c912c",
+      "token_gate_passed": false,
+      "token_gate_required": 512,
+      "token_gate_runtime_rejection": "{\"error\":{\"code\":500,\"message\":\"input (523 tokens) is too large to process. increase the physical batch size (current batch size: 512)\",\"type\":\"server_error\"}}"
+    },
+    {
+      "argv": [
+        "$RUNTIME_ROOT/build-cuda/bin/llama-server",
+        "-m",
+        "$MODEL_ROOT/bge-reranker-v2-m3-Q4_K_M.gguf",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "19322",
+        "--parallel",
+        "4",
+        "--no-warmup",
+        "--metrics",
+        "-c",
+        "4096",
+        "-b",
+        "1024",
+        "-ub",
+        "512",
+        "-ngl",
+        "0",
+        "--threads",
+        "16",
+        "--no-kv-unified",
+        "--rerank",
+        "--pooling",
+        "rank"
+      ],
+      "argv_sha256": "563befa20fd4c58801b084d8e8eb4f633922b0ba9eadfe15626e16d854aee678",
+      "backend": "cpu",
+      "correctness_passed": false,
+      "gpu_after": {
+        "free_mib": 28922,
+        "total_mib": 32607,
+        "used_mib": 3266,
+        "utilization_percent": 4
+      },
+      "gpu_before": {
+        "free_mib": 29138,
+        "total_mib": 32607,
+        "used_mib": 3050,
+        "utilization_percent": 4
+      },
+      "kv_unified": false,
+      "n_batch": 1024,
+      "n_ubatch": 512,
+      "name": "p4-c4096-b1024",
+      "parallel": 4,
+      "peak_global_gpu_used_mib": 3889,
+      "peak_rss_bytes": 1272119296,
+      "readback_per_sequence_context": 1024,
+      "requested_total_context": 4096,
+      "role": "reranker",
+      "scenarios": {
+        "concurrent": {
+          "deterministic_response": false,
+          "elapsed_seconds": [
+            0.2781303049996495,
+            0.25115184299829707,
+            0.24255321500095306
+          ],
+          "median_items_per_second": 63.706480545748924,
+          "median_seconds": 0.25115184299829707,
+          "p95_seconds": 0.2781303049996495
+        },
+        "large": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.9131139300006907,
+            0.7705215490004775,
+            0.7844588929983729
+          ],
+          "median_items_per_second": 20.3962248918417,
+          "median_seconds": 0.7844588929983729,
+          "p95_seconds": 0.9131139300006907
+        },
+        "max": {
+          "deterministic_response": false,
+          "error_body": "{\"error\":{\"code\":500,\"message\":\"input (523 tokens) is too large to process. increase the physical batch size (current batch size: 512)\",\"type\":\"server_error\"}}",
+          "http_status": 500,
+          "rejected": true
+        },
+        "median": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.34941476799940574,
+            0.3619110730014654,
+            0.34589507000055164
+          ],
+          "median_items_per_second": 22.895426102921917,
+          "median_seconds": 0.34941476799940574,
+          "p95_seconds": 0.3619110730014654
+        },
+        "short": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.1784366920001048,
+            0.17337226400013606,
+            0.1795890880002844
+          ],
+          "median_items_per_second": 89.66765647051226,
+          "median_seconds": 0.1784366920001048,
+          "p95_seconds": 0.1795890880002844
+        }
+      },
+      "startup_log_sha256": "39852290b7970ce96eb77297c11c0278a5567918754956f380a9215533eae7cb",
+      "token_gate_passed": false,
+      "token_gate_required": 512,
+      "token_gate_runtime_rejection": "{\"error\":{\"code\":500,\"message\":\"input (523 tokens) is too large to process. increase the physical batch size (current batch size: 512)\",\"type\":\"server_error\"}}"
+    },
+    {
+      "argv": [
+        "$RUNTIME_ROOT/build-cuda/bin/llama-server",
+        "-m",
+        "$MODEL_ROOT/bge-reranker-v2-m3-Q4_K_M.gguf",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "19323",
+        "--parallel",
+        "4",
+        "--no-warmup",
+        "--metrics",
+        "-c",
+        "4096",
+        "-b",
+        "1024",
+        "-ub",
+        "1024",
+        "-ngl",
+        "0",
+        "--threads",
+        "16",
+        "--no-kv-unified",
+        "--rerank",
+        "--pooling",
+        "rank"
+      ],
+      "argv_sha256": "f67a607190eeeb3a056be7be572d6f3546270b5955930c443c52b2e458afcd1c",
+      "backend": "cpu",
+      "correctness_passed": false,
+      "gpu_after": {
+        "free_mib": 28978,
+        "total_mib": 32607,
+        "used_mib": 3210,
+        "utilization_percent": 5
+      },
+      "gpu_before": {
+        "free_mib": 28922,
+        "total_mib": 32607,
+        "used_mib": 3266,
+        "utilization_percent": 4
+      },
+      "kv_unified": false,
+      "n_batch": 1024,
+      "n_ubatch": 1024,
+      "name": "p4-c4096-ub1024",
+      "parallel": 4,
+      "peak_global_gpu_used_mib": 3983,
+      "peak_rss_bytes": 1857794048,
+      "readback_per_sequence_context": 1024,
+      "requested_total_context": 4096,
+      "role": "reranker",
+      "scenarios": {
+        "concurrent": {
+          "deterministic_response": false,
+          "elapsed_seconds": [
+            0.2495589509999263,
+            0.24177452900039498,
+            0.2464483530002326
+          ],
+          "median_items_per_second": 64.92232471922789,
+          "median_seconds": 0.2464483530002326,
+          "p95_seconds": 0.2495589509999263
+        },
+        "large": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.318335787000251,
+            0.3251246279996849,
+            0.32381969899870455
+          ],
+          "median_items_per_second": 49.410212070094005,
+          "median_seconds": 0.32381969899870455,
+          "p95_seconds": 0.3251246279996849
+        },
+        "max": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.054450426001494634,
+            0.050744037000185926,
+            0.04850884799998312
+          ],
+          "median_items_per_second": 19.70674899193251,
+          "median_seconds": 0.050744037000185926,
+          "p95_seconds": 0.054450426001494634
+        },
+        "median": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.17485644699991099,
+            0.17812959600087197,
+            0.182336761001352
+          ],
+          "median_items_per_second": 44.91112190003978,
+          "median_seconds": 0.17812959600087197,
+          "p95_seconds": 0.182336761001352
+        },
+        "short": {
+          "deterministic_response": true,
+          "elapsed_seconds": [
+            0.19080141099948378,
+            0.18373524799972074,
+            0.18302399999993213
+          ],
+          "median_items_per_second": 87.08182112135783,
+          "median_seconds": 0.18373524799972074,
+          "p95_seconds": 0.19080141099948378
+        }
+      },
+      "startup_log_sha256": "98ee06910066d2b7bd3f7bdd66e259aad8cb9653cf0c80aebae10ab7235c06a0",
+      "token_gate_passed": true,
+      "token_gate_required": 512
+    }
+  ],
+  "runtime_identity": {
+    "embedding_model": {
+      "path": "$MODEL_ROOT/nomic-embed-text-v1.5.Q4_K_M.gguf",
+      "sha256": "d4e388894e09cf3816e8b0896d81d265b55e7a9fff9ab03fe8bf4ef5e11295ac"
+    },
+    "reranker_model": {
+      "path": "$MODEL_ROOT/bge-reranker-v2-m3-Q4_K_M.gguf",
+      "sha256": "e186a244ed455b4ab66ec64339ce7427a6ae13f5c0b5e544de96e50f0f8b3673"
+    },
+    "server": {
+      "path": "$RUNTIME_ROOT/build-cuda/bin/llama-server",
+      "sha256": "78cd370e18a911b284c0f732e40ada20a1b3c8fc8ba40f2aabb0e8d7d800a3cc"
+    }
+  },
+  "sanitization": {
+    "replacements": [
+      {
+        "label": "$RUNTIME_ROOT"
+      },
+      {
+        "label": "$MODEL_ROOT"
+      },
+      {
+        "label": "$CURRENT_REPO"
+      },
+      {
+        "label": "$LANE4_REPO"
+      },
+      {
+        "label": "$MODEL_STORE"
+      }
+    ],
+    "source_sha256": "5ba7df70d5031a2d7cff1618fcf972d6ec560c39bc6527c61115c823bc5eb940"
+  },
+  "sanitized": true,
+  "schema_version": "1.0",
+  "source_commit": "88bd2353"
+}
