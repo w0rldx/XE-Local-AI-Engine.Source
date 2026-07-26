@@ -133,24 +133,53 @@ public sealed class InferenceBenchmarkHarnessTests
     }
 
     [Test]
-    public async Task RunAsync_ProcessBudgetMateriallyAboveGlobalFree_RejectsAsExternalPressure()
+    public async Task RunAsync_StablePostLoadDivergence_EstablishesBaseline_AndDoesNotReject()
     {
         using var handler = new RoleBenchmarkHandler();
         var harness = BuildHarness(modelCallsTool: false,
             handler,
-            globalFreeVram: 4 * Gb,
+            globalFreeVram: 6 * Gb,
             processBudgetVram: 8 * Gb);
+        var spec = InferenceBenchmarkSpec.Golden("cuda", ctxSize: 2048) with
+        {
+            WarmupRuns = 0,
+            MeasuredRuns = 1
+        };
 
-        var metrics = await harness.RunAsync(ProfilingContext(ModelRole.Embedding),
-            InferenceBenchmarkSpec.Golden("cuda", ctxSize: 2048),
-            CancellationToken.None);
+        var metrics = await harness.RunAsync(ProfilingContext(ModelRole.Embedding), spec, CancellationToken.None);
+
+        AssertEx.True(metrics.Success, metrics.FailureReason);
+        AssertEx.False(metrics.ExternalPressureDetected);
+        AssertEx.Equal<long?>(6 * Gb, metrics.GlobalFreeVramLoadBytes);
+        AssertEx.Equal<long?>(8 * Gb, metrics.ProcessBudgetVramLoadBytes);
+        AssertEx.NotNullOrEmpty(metrics.DiagnosticsJson);
+        AssertEx.Equal(1, handler.PostPaths.Count(path => path.EndsWith("/v1/embeddings", StringComparison.Ordinal)));
+    }
+
+    [Test]
+    public async Task RunAsync_DivergenceGrowingAfterPostLoadBaseline_RejectsAsExternalPressure()
+    {
+        using var handler = new RoleBenchmarkHandler();
+        var harness = BuildHarness(modelCallsTool: false,
+            handler,
+            globalFreeVram: 6 * Gb,
+            processBudgetVram: 8 * Gb,
+            globalFreeVramSamples: [6 * Gb, 4 * Gb, 4 * Gb]);
+        var spec = InferenceBenchmarkSpec.Golden("cuda", ctxSize: 2048) with
+        {
+            WarmupRuns = 0,
+            MeasuredRuns = 1
+        };
+
+        var metrics = await harness.RunAsync(ProfilingContext(ModelRole.Embedding), spec, CancellationToken.None);
 
         AssertEx.False(metrics.Success);
         AssertEx.True(metrics.ExternalPressureDetected);
-        AssertEx.Equal<long?>(4 * Gb, metrics.GlobalFreeVramLoadBytes);
+        AssertEx.Equal<long?>(6 * Gb, metrics.GlobalFreeVramLoadBytes);
+        AssertEx.Equal<long?>(4 * Gb, metrics.GlobalFreeVramAfterBytes);
         AssertEx.Equal<long?>(8 * Gb, metrics.ProcessBudgetVramLoadBytes);
-        AssertEx.NotNullOrEmpty(metrics.DiagnosticsJson);
-        AssertEx.Equal(0, handler.PostPaths.Count);
+        AssertEx.Equal<long?>(8 * Gb, metrics.ProcessBudgetVramAfterBytes);
+        AssertEx.Equal(1, handler.PostPaths.Count(path => path.EndsWith("/v1/embeddings", StringComparison.Ordinal)));
     }
 
     [Test]
@@ -190,7 +219,8 @@ public sealed class InferenceBenchmarkHarnessTests
         HttpMessageHandler? handler = null,
         long? globalFreeVram = 8 * Gb,
         long? processBudgetVram = 8 * Gb,
-        IInferenceChatClientFactory? chatFactory = null)
+        IInferenceChatClientFactory? chatFactory = null,
+        IReadOnlyList<long?>? globalFreeVramSamples = null)
     {
         chatFactory ??= Substitute.For<IInferenceChatClientFactory>();
         chatFactory.CreateChatClient(Arg.Any<Uri>(), Arg.Any<string>())
@@ -201,9 +231,19 @@ public sealed class InferenceBenchmarkHarnessTests
         httpClientFactory.CreateClient(Arg.Any<string>())
                          .Returns(_ => new HttpClient(handler, disposeHandler: false));
 
+        var remainingGlobalFreeSamples = new Queue<long?>(globalFreeVramSamples ?? [globalFreeVram]);
+        var lastGlobalFreeSample = globalFreeVram;
         var hardwareProfiler = Substitute.For<IHardwareProfiler>();
         hardwareProfiler.GetProfileAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>())
-                        .Returns(Task.FromResult(NvidiaProfile(globalFreeVram)));
+                        .Returns(_ =>
+                        {
+                            if (remainingGlobalFreeSamples.Count > 0)
+                            {
+                                lastGlobalFreeSample = remainingGlobalFreeSamples.Dequeue();
+                            }
+
+                            return Task.FromResult(NvidiaProfile(lastGlobalFreeSample));
+                        });
 
         var processBudgetProbe = Substitute.For<IProcessVramBudgetProbe>();
         processBudgetProbe.TryGetProcessBudgetBytesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())

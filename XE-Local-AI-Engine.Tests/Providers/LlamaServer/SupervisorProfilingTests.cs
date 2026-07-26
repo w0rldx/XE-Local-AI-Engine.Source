@@ -57,7 +57,7 @@ public sealed class SupervisorProfilingTests
     }
 
     [Test]
-    public async Task Profiling_Explore_AcquiresMachineReadableFitParams()
+    public async Task Profiling_Explore_AcquiresMachineReadableFitParamsWithProductionLaunchPolicy()
     {
         var launcher = new FakeProcessLauncher();
         var fitRunner = new FakeLlamaFitParamsRunner(
@@ -85,6 +85,14 @@ public sealed class SupervisorProfilingTests
         AssertEx.Equal(expected: 1, fitRunner.Calls.Count);
         AssertEx.True(fitRunner.Calls.TryPeek(out var spec));
         AssertEx.Contains(spec!.Arguments, "--fit");
+        AssertEx.Contains(spec.Arguments, "-v");
+        AssertArgumentValue(spec.Arguments, "-c", "16384");
+        AssertArgumentValue(spec.Arguments, "-ctk", "q8_0");
+        AssertArgumentValue(spec.Arguments, "-ctv", "q8_0");
+        AssertArgumentValue(spec.Arguments, "-fa", "on");
+        AssertEx.True(launcher.Launches.TryPeek(out var launchedSpec));
+        AssertEx.True(spec.Arguments.SequenceEqual(launchedSpec!.Arguments),
+            "The helper and profiling server must receive the same production-equivalent launch vector.");
     }
 
     [Test]
@@ -239,5 +247,21 @@ public sealed class SupervisorProfilingTests
         var endpoint = await supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None);
         AssertEx.NotNull(endpoint);
         AssertEx.Equal(expected: 2, launcher.LaunchCount);
+    }
+
+    private static void AssertArgumentValue(IReadOnlyList<string> arguments, string argument, string expectedValue)
+    {
+        var index = -1;
+        for (var i = 0; i < arguments.Count; i++)
+        {
+            if (string.Equals(arguments[i], argument, StringComparison.Ordinal))
+            {
+                index = i;
+                break;
+            }
+        }
+
+        AssertEx.True(index >= 0 && index + 1 < arguments.Count, $"Expected argument '{argument}' with a value.");
+        AssertEx.Equal(expectedValue, arguments[index + 1]);
     }
 }

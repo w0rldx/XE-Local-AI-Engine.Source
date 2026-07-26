@@ -809,7 +809,9 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
 
         // AUD4-02/05/17: the central launch policy fills in the deterministic context (-c), the GPU KV-cache
         // quantization + flash-attention optimization, and the CPU thread policy the audited launch defaults omitted.
-        // Operator profiling spawns bypass it (applyLaunchPolicy: false) so the supplied args ARE the experiment.
+        // Replay profiling bypasses it so the supplied frozen args ARE the experiment. Explore profiling applies the
+        // production policy because the helper and server must observe the same concrete context/KV/FA vector as normal
+        // serving; otherwise b9692 can report unchanged `-c 0 -ngl -1` defaults that are not replayable placement.
         var planSet = await BuildLaunchPlanCandidatesAsync(key, variant, resolved, applyLaunchPolicy, ct).ConfigureAwait(false);
         var planCandidates = planSet.Candidates;
 
@@ -849,15 +851,25 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                     };
                 }
 
-                if (fitParamsCapture is not null && resolved.ExploreMode)
+                IReadOnlyList<string>? fittedArgsForSuccessfulAttempt = null;
+                if (fitParamsCapture is not null && resolved.ExploreMode && variant != GpuVariant.Cpu)
                 {
+                    // b9692 leaves -ngl at its automatic sentinel when the initial placement already fits. Verbose
+                    // load_tensors output is the authoritative proof that automatic placement meant every layer was
+                    // offloaded; the fit parser uses that proof to normalize replay to explicit all-layers (-2).
+                    if (!spec.Arguments.Contains("-v", StringComparer.Ordinal)
+                        && !spec.Arguments.Contains("--verbose", StringComparer.Ordinal))
+                    {
+                        spec = spec with
+                        {
+                            Arguments = [.. spec.Arguments, "-v"]
+                        };
+                    }
+
                     var fitResult = await _fitParamsRunner.RunAsync(spec, ct).ConfigureAwait(false);
                     if (fitResult.Status == LlamaFitParamsRunStatus.Succeeded)
                     {
-                        foreach (var line in fitResult.StandardOutput)
-                        {
-                            fitParamsCapture(line);
-                        }
+                        fittedArgsForSuccessfulAttempt = fitResult.StandardOutput;
                     }
                     else if (fitResult.Status == LlamaFitParamsRunStatus.MissingCapability)
                     {
@@ -880,6 +892,16 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                 await WaitForReadyOrExitAsync(handle, spec.BaseAddress, readinessTimeout, ct).ConfigureAwait(false);
                 _logger.LogInformation("llama-server ready for model {ModelName} role {Role} (pid {ProcessId}) after {ElapsedMs:F0} ms (readiness budget {BudgetSeconds:F0}s).",
                     key.ModelName, key.Role, handle.ProcessId, (_timeProvider.GetUtcNow() - readyStartedUtc).TotalMilliseconds, readinessTimeout.TotalSeconds);
+
+                // Publish helper output only for the candidate that actually reached readiness. If the optimized
+                // production policy failed and the safe plan retried, output from the failed candidate must not be frozen.
+                if (fittedArgsForSuccessfulAttempt is not null)
+                {
+                    foreach (var line in fittedArgsForSuccessfulAttempt)
+                    {
+                        fitParamsCapture!(line);
+                    }
+                }
 
                 // AUD4-02: read the effective per-slot context the server actually loaded (best-effort) so both app-side
                 // budgeters and the UI meter size against the REAL window rather than the requested/advertised one.
@@ -959,8 +981,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     /// <summary>
     ///     Builds the ordered launch-plan candidates for a spawn. The normal path (<paramref name="applyLaunchPolicy" />)
     ///     resolves the policy plan and, when it enables the GPU KV-quant + flash-attention optimization, appends a safe
-    ///     (KV/FA off) fallback candidate to try once if the optimized one cannot reach readiness. Operator profiling and
-    ///     replay-without-optimization spawns get a single <see langword="null" /> plan (today's byte-for-byte behavior).
+    ///     (KV/FA off) fallback candidate to try once if the optimized one cannot reach readiness. Replay profiling and
+    ///     any other caller that disables policy application get a single <see langword="null" /> plan.
     /// </summary>
     private async Task<LaunchPlanSet> BuildLaunchPlanCandidatesAsync(ProcessKey key,
         GpuVariant variant,
@@ -1160,14 +1182,15 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                 var startupOutput = new ConcurrentQueue<string>();
                 var fitParamsOutput = new ConcurrentQueue<string>();
 
-                // Spawn exactly one process with the operator-supplied args verbatim (bypass BOTH the profile resolver and
-                // the launch policy — the supplied args ARE the experiment being measured).
+                // Replay profiling uses the supplied frozen args verbatim. Explore profiling bypasses only the profile
+                // resolver and applies the same launch policy as normal serving so helper/server placement evidence is
+                // production-equivalent rather than derived from unset llama.cpp defaults.
                 var running = await SpawnCoreAsync(key,
                         (_, _) => Task.FromResult(launchArgs),
                         startupOutput.Enqueue,
                         fitParamsOutput.Enqueue,
                         ensureMetrics: enableMetrics,
-                        applyLaunchPolicy: false,
+                        applyLaunchPolicy: launchArgs.ExploreMode,
                         ct)
                     .ConfigureAwait(false);
 
@@ -1286,7 +1309,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         //    -c and the KV-quant + flash-attention optimization; GPU replay: the frozen profile args verbatim.
         //  - CPU: the policy -c (explore) or the frozen -c (replay), plus the CPU thread policy; NO --fit/--metrics/-ngl,
         //    KV stays f16 and flash-attention stays auto.
-        // A null plan (operator profiling) reproduces the pre-policy behavior byte-for-byte.
+        // A null plan (replay profiling) reproduces the supplied replay vector byte-for-byte.
         AppendContextPlacementAndThreadArgs(args, variant, resolved, plan);
 
         if (key.Role == ModelRole.Chat)

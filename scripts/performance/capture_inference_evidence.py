@@ -473,6 +473,50 @@ def extract_fit_flags(argv: list[str]) -> dict[str, list[str]]:
     return parsed
 
 
+def validate_concrete_fit_flags(fitted_flags: dict[str, list[str]]) -> None:
+    contexts = fitted_flags.get("-c", [])
+    if len(contexts) != 1:
+        raise CaptureError("llama-fit-params output must contain exactly one -c value")
+
+    gpu_layers = fitted_flags.get("-ngl", [])
+    if len(gpu_layers) != 1:
+        raise CaptureError("llama-fit-params output must contain exactly one -ngl value")
+
+    try:
+        context = int(contexts[0], 10)
+    except ValueError as error:
+        raise CaptureError("llama-fit-params -c must be a positive concrete integer") from error
+    if context <= 0:
+        raise CaptureError("llama-fit-params -c must be a positive concrete integer")
+
+    try:
+        placement = int(gpu_layers[0], 10)
+    except ValueError as error:
+        raise CaptureError("llama-fit-params -ngl must be an integer") from error
+    if placement == -1:
+        raise CaptureError("llama-fit-params -ngl -1 is automatic placement, not a frozen placement")
+    if placement < -2:
+        raise CaptureError("llama-fit-params -ngl must be -2 (all layers) or a non-negative layer count")
+
+
+def normalize_fit_flags(fitted_flags: dict[str, list[str]], verbose_startup: str) -> dict[str, list[str]]:
+    normalized = {key: list(values) for key, values in fitted_flags.items()}
+    gpu_layers = normalized.get("-ngl", [])
+    if gpu_layers == ["-1"]:
+        offload_counts = [
+            (int(match.group(1)), int(match.group(2)))
+            for match in re.finditer(r"offloaded\s+(\d+)/(\d+)\s+layers to GPU", verbose_startup)
+        ]
+        if not offload_counts or any(offloaded <= 0 or offloaded != total for offloaded, total in offload_counts):
+            raise CaptureError(
+                "llama-fit-params -ngl -1 requires authoritative full-offload evidence before it can be normalized"
+            )
+        normalized["-ngl"] = ["-2"]
+
+    validate_concrete_fit_flags(normalized)
+    return normalized
+
+
 def without_fit_semantics(argv: list[str]) -> list[str]:
     result: list[str] = []
     index = 0
@@ -526,6 +570,8 @@ def capture_fit(spec_path: Path, output_path: Path) -> None:
         raise CaptureError("explore and replay must invoke the verified server binary")
     if explore_argv[1:] != explore or replay_argv[1:] != replay:
         raise CaptureError("launch_vectors must exactly equal the explore/replay command argv after the binary path")
+    if default_argv[1:] != explore:
+        raise CaptureError("default_verbosity must use the exact explore launch vector")
 
     default_result = run_command(commands["default_verbosity"], "spec.commands.default_verbosity")
     verbose_result = run_command(commands["verbose"], "spec.commands.verbose")
@@ -536,11 +582,18 @@ def capture_fit(spec_path: Path, output_path: Path) -> None:
     fit_line = next((line.strip() for line in reversed(fit_stdout.splitlines()) if line.strip().startswith("-c ")), "")
     if not fit_line:
         raise CaptureError("llama-fit-params output did not contain a deterministic '-c ...' argument line")
+    default_text = default_result["runs"][-1]["stdout"] + "\n" + default_result["runs"][-1]["stderr"]
+    verbose_text = verbose_result["runs"][-1]["stdout"] + "\n" + verbose_result["runs"][-1]["stderr"]
     fitted = shlex.split(fit_line, posix=True)
     fitted_flags = extract_fit_flags(fitted)
+    normalized_fitted_flags = normalize_fit_flags(fitted_flags, verbose_text)
     replay_flags = extract_fit_flags(replay)
-    if fitted_flags != {key: replay_flags.get(key, []) for key in fitted_flags}:
-        raise CaptureError(f"Replay placement differs from llama-fit-params output: fitted={fitted_flags}, replay={replay_flags}")
+    validate_concrete_fit_flags(replay_flags)
+    if normalized_fitted_flags != {key: replay_flags.get(key, []) for key in normalized_fitted_flags}:
+        raise CaptureError(
+            "Replay placement differs from normalized llama-fit-params output: "
+            f"fitted={fitted_flags}, normalized={normalized_fitted_flags}, replay={replay_flags}"
+        )
     if without_fit_semantics(explore) != without_fit_semantics(replay):
         raise CaptureError("Explore and replay non-fit launch arguments are not byte-equivalent")
     acceptance = spec.get("resource_acceptance")
@@ -571,8 +624,6 @@ def capture_fit(spec_path: Path, output_path: Path) -> None:
     process_free = process_budget_free_mib(host["runtime_devices"])
     explore_global_free = global_gpu_free_mib(explore_result["runs"][-1]["ambient_during"])
     replay_global_free = global_gpu_free_mib(replay_result["runs"][-1]["ambient_during"])
-    default_text = default_result["runs"][-1]["stdout"] + "\n" + default_result["runs"][-1]["stderr"]
-    verbose_text = verbose_result["runs"][-1]["stdout"] + "\n" + verbose_result["runs"][-1]["stderr"]
     artifact = {
         "schema_version": SCHEMA_VERSION,
         "kind": "fit-replay-evidence",
@@ -592,6 +643,7 @@ def capture_fit(spec_path: Path, output_path: Path) -> None:
         "launch_vectors": {"explore": explore, "replay": replay, "fitted_stdout_argv": fitted},
         "equivalence": {
             "fitted_flags": fitted_flags,
+            "normalized_fitted_flags": normalized_fitted_flags,
             "replay_flags": replay_flags,
             "non_fit_vector_equal": True,
             "placement_equal": True,

@@ -9,10 +9,13 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 public sealed class FittedArgsParser : IFittedArgsParser
 {
     /// <inheritdoc />
-    public ResolvedLaunchArguments? TryParseFittedArgs(IReadOnlyList<string> fitParamsOutput)
+    public ResolvedLaunchArguments? TryParseFittedArgs(
+        IReadOnlyList<string> fitParamsOutput,
+        IReadOnlyList<string> startupOutput)
     {
         ArgumentNullException.ThrowIfNull(fitParamsOutput);
+        ArgumentNullException.ThrowIfNull(startupOutput);
 
-        return LlamaFitParamsOutputParser.TryParseFittedArgs(fitParamsOutput);
+        return LlamaFitParamsOutputParser.TryParseFittedArgs(fitParamsOutput, startupOutput);
     }
 }

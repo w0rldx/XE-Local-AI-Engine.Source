@@ -138,10 +138,17 @@ python3 scripts/performance/capture_inference_evidence.py fit \
 The spec also supplies the **exact** application explore and replay argument arrays.
 The tool proves:
 
+- default-verbosity and explore use the same production launch vector, including
+  the policy's positive context rather than llama.cpp's unresolved `-c 0`
+  sentinel;
 - explore contains `--fit`; replay does not;
 - non-fit arguments are byte-equal after removing fit/placement semantics;
 - replay contains exactly the `-c`, `-ngl`, `-ts`, `-ot`, `-ctk`, and `-ctv`
   values emitted by `llama-fit-params` (when present);
+- helper `-ngl -1` (automatic placement) is normalized to replay `-ngl -2`
+  (explicit all layers) only when verbose startup independently records
+  `offloaded N/N layers to GPU`; otherwise the proof fails rather than recording
+  automatic placement as frozen;
 - explore/replay peak process RSS is within the declared resource tolerance, with
   global VRAM sampled while each process is resident;
 - default and verbose startup captures used the verified server binary;

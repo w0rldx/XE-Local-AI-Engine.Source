@@ -13,8 +13,9 @@ public interface IInferenceProfileService
     /// <summary>
     ///     Explores <paramref name="modelName" /> for <paramref name="role" />: acquires fitted args from the sibling
     ///     machine-readable <c>llama-fit-params</c> capability, spawns one auto-fit llama-server, and upserts the single
-    ///     Explored profile for the key. Missing or incomplete helper output falls back observably to the GGUF native
-    ///     context instead of persisting partial placement. Rejects (no spawn) when the model is not a local GGUF.
+    ///     Explored profile for the key. A GPU explore whose helper/startup evidence cannot prove concrete placement fails
+    ///     observably without persisting a partial profile; CPU explores retain the GGUF-context fallback because they do
+    ///     not replay GPU placement. Rejects (no spawn) when the model is not a local GGUF.
     /// </summary>
     Task<ExploreResult> ExploreAsync(string modelName, ModelRole role, CancellationToken ct);
 

@@ -108,13 +108,22 @@ public sealed class InferenceProfileService : IInferenceProfileService
             role,
             ResolvedLaunchArguments.Explore(),
             enableMetrics: false,
-            body: (context, _) => Task.FromResult(result: _fittedArgsParser.TryParseFittedArgs(context.FitParamsOutput)),
+            body: (context, _) => Task.FromResult(
+                result: _fittedArgsParser.TryParseFittedArgs(context.FitParamsOutput, context.StartupOutput)),
             ct).ConfigureAwait(false);
 
         if (draft is null)
         {
+            if (variant != GpuVariant.Cpu)
+            {
+                const string failure =
+                    "llama-fit-params did not produce a concrete replayable context and GPU placement. The live explore spawn remained auto-fit; no partial profile was saved.";
+                _logger.LogWarning("{Failure}", failure);
+                return ExploreResult.Fail(failure);
+            }
+
             _logger.LogWarning(
-                "Machine-readable llama-fit-params output was unavailable or incomplete for the explored model; persisting a conservative Explored profile from the GGUF context length instead of freezing partial GPU placement.");
+                "Machine-readable llama-fit-params output was unavailable for the CPU explore; persisting the GGUF context because CPU profiles do not replay GPU placement.");
         }
 
         var input = await BuildExploreInputAsync(machineKey,

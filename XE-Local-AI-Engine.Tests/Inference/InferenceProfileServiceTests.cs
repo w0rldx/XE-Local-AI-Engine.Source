@@ -13,11 +13,11 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     <see cref="InferenceProfileService" /> orchestration tests over substituted seams: explore persists the parsed (or
-///     conservative) Explored draft and rejects a non-local model without spawning; benchmark runs the harness and
-///     persists the snapshot + repro-keyed row, marking the snapshot Succeeded/Failed; and the freeze gate only freezes a
-///     benchmark-justified Explored profile, never throwing. The supervisor fake actually invokes the passed profiling
-///     body so the explore/benchmark logic runs end to end. No DB, no process.
+///     <see cref="InferenceProfileService" /> orchestration tests over substituted seams: explore persists only a concrete
+///     parsed GPU draft (with a CPU-only context fallback) and rejects a non-local model without spawning; benchmark runs
+///     the harness and persists the snapshot + repro-keyed row, marking the snapshot Succeeded/Failed; and the freeze gate
+///     only freezes a benchmark-justified Explored profile, never throwing. The supervisor fake actually invokes the
+///     passed profiling body so the explore/benchmark logic runs end to end. No DB, no process.
 /// </summary>
 public sealed class InferenceProfileServiceTests
 {
@@ -48,23 +48,41 @@ public sealed class InferenceProfileServiceTests
     }
 
     [Test]
-    public async Task Explore_WhenFitUnparseable_PersistsConservativeExplored()
+    public async Task Explore_WhenFitReturnsUnresolvedDefaults_ReturnsFailureWithoutPersistingPartialPlacement()
     {
         var fixture = new ServiceFixture();
         fixture.WithLocalModel();
         fixture.WithMetadata(new GgufModelMetadata(ParamCount: 7_000_000_000, QuantType: "15", ContextLength: 8192, ExpertCount: null, IsMoe: false));
-        // Incomplete machine-readable output → the parser returns null → conservative fallback.
-        fixture.WithExploreFitParamsOutput("-c 8192");
+        // Automatic GPU placement without authoritative full-offload startup evidence is not replayable.
+        fixture.WithExploreFitParamsOutput(["load_tensors: offloaded 24/25 layers to GPU"], "-c 8192 -ngl -1");
+
+        var result = await fixture.CreateService().ExploreAsync(Model, ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.False(result.Success);
+        AssertEx.True(result.FailureReason!.Contains("concrete", StringComparison.OrdinalIgnoreCase));
+        AssertEx.Null(result.Profile);
+        await fixture.ProfileStore.DidNotReceive()
+                     .CreateOrUpdateExploredAsync(Arg.Any<InferenceProfileInput>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Explore_WhenAutomaticLayersHaveFullOffloadEvidence_PersistsExplicitAllLayersReplay()
+    {
+        var fixture = new ServiceFixture();
+        fixture.WithLocalModel();
+        fixture.WithMetadata(new GgufModelMetadata(ParamCount: 7_000_000_000, QuantType: "15", ContextLength: 8192, ExpertCount: null, IsMoe: false));
+        fixture.WithExploreFitParamsOutput(["load_tensors: offloaded 25/25 layers to GPU"], "-c 8192 -ngl -1");
         fixture.EchoExploredUpsert();
 
         var result = await fixture.CreateService().ExploreAsync(Model, ModelRole.Chat, CancellationToken.None);
 
         AssertEx.True(result.Success);
         var profile = AssertEx.NotNull(result.Profile);
-        AssertEx.Equal(8192, profile.CtxSize);
-        AssertEx.Null(profile.NGpuLayers);
-        await fixture.ProfileStore.Received(1).CreateOrUpdateExploredAsync(Arg.Is<InferenceProfileInput>(input => input.CtxSize == 8192 && input.NGpuLayers == null),
-            Arg.Any<CancellationToken>());
+        AssertEx.Equal<int?>(-2, profile.NGpuLayers);
+        await fixture.ProfileStore.Received(1)
+                     .CreateOrUpdateExploredAsync(
+                         Arg.Is<InferenceProfileInput>(input => input.CtxSize == 8192 && input.NGpuLayers == -2),
+                         Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -479,8 +497,13 @@ public sealed class InferenceProfileServiceTests
         // Drives the explore profiling body with machine-readable helper stdout so the real fit parser runs.
         public void WithExploreFitParamsOutput(params string[] fitParamsOutput)
         {
+            WithExploreFitParamsOutput([], fitParamsOutput);
+        }
+
+        public void WithExploreFitParamsOutput(IReadOnlyList<string> startupOutput, params string[] fitParamsOutput)
+        {
             var context = new LlamaServerProfilingContext(new LlamaServerEndpoint(Model, ModelRole.Chat, new Uri("http://127.0.0.1:18100/v1")),
-                StartupOutput: [],
+                startupOutput,
                 FitParamsOutput: fitParamsOutput);
             Supervisor.RunExclusiveProfilingAsync(Arg.Any<string>(),
                           Arg.Any<ModelRole>(),

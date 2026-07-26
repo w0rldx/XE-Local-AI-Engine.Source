@@ -108,9 +108,10 @@ public interface ILlamaServerProcessSupervisor
     ///     The operator profiling entry point (explore + benchmark). Acquires the SAME single-flight gate the normal
     ///     ensure-running path uses for this <c>(model, role)</c> — so concurrent user <see cref="EnsureRunningAsync" />
     ///     calls for the key queue behind it — then evicts any warm process for the key and spawns exactly ONE
-    ///     <c>llama-server</c> with <paramref name="launchArgs" /> applied verbatim (bypassing the profile resolver:
-    ///     explore passes <see cref="ResolvedLaunchArguments.Explore" />, benchmark passes the drafted
-    ///     <see cref="ResolvedLaunchArguments.Replay" />). When <paramref name="enableMetrics" /> is set and the built
+    ///     <c>llama-server</c>, bypassing the profile resolver. Explore applies the production launch policy to
+    ///     <see cref="ResolvedLaunchArguments.Explore" /> so fitted evidence reflects normal serving; benchmark applies
+    ///     the drafted <see cref="ResolvedLaunchArguments.Replay" /> verbatim. When <paramref name="enableMetrics" /> is
+    ///     set and the built
     ///     args do not already carry <c>--metrics</c>, it is appended so the benchmark can read <c>/metrics</c>. The
     ///     spawned process is pinned against idle eviction for the duration of <paramref name="body" />; on completion,
     ///     throw, or cancellation the pin is dropped and the transient profiling process is evicted (tree-killed) and
@@ -119,7 +120,7 @@ public interface ILlamaServerProcessSupervisor
     /// <typeparam name="T">The result the profiling body produces (for example a captured benchmark measurement).</typeparam>
     /// <param name="modelName">Model to profile.</param>
     /// <param name="role">Role to profile (chat vs embedding).</param>
-    /// <param name="launchArgs">The exact launch arguments to spawn with (explore or a drafted replay profile).</param>
+    /// <param name="launchArgs">Explore mode or the exact drafted replay arguments to spawn with.</param>
     /// <param name="enableMetrics">Append <c>--metrics</c> when the built args do not already include it.</param>
     /// <param name="body">The profiling work to run against the exclusive process and its captured startup output.</param>
     /// <param name="ct">Cancellation token flowed through spawn, body, and teardown.</param>
