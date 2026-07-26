@@ -125,6 +125,8 @@
       "required": ["name", "argv", "warmups", "repeats", "timeout_seconds"],
       "properties": {
         "name": { "type": "string", "minLength": 1 },
+        "partition": { "enum": ["native-performance", "framework-contract", "application-harness", "provider-contract"] },
+        "comparability": { "type": "string", "minLength": 1 },
         "argv": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
         "cwd": { "type": "string" },
         "env": { "type": "object", "additionalProperties": { "type": "string" } },

@@ -333,6 +333,8 @@ def run_command(command: dict[str, Any], context: str) -> dict[str, Any]:
             aggregates[name] = {"median": statistics.median(values), "p95": percentile95(values), "minimum": min(values), "maximum": max(values)}
     return {
         "name": require_string(command, "name", context),
+        "partition": command.get("partition", "native-performance"),
+        "comparability": command.get("comparability", "exact-argv-and-identity"),
         "argv": argv,
         "argv_sha256": hashlib.sha256(json.dumps(argv, separators=(",", ":")).encode()).hexdigest(),
         "warmups": warmups,
