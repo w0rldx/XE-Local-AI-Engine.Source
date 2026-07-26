@@ -19,4 +19,11 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 public sealed record LlamaServerProfilingContext(
     LlamaServerEndpoint Endpoint,
     IReadOnlyList<string> StartupOutput,
-    IReadOnlyList<string> FitParamsOutput);
+    IReadOnlyList<string> FitParamsOutput)
+{
+    /// <summary>Creates a profiling context without machine-readable fit output (replay/benchmark callers).</summary>
+    public LlamaServerProfilingContext(LlamaServerEndpoint endpoint, IReadOnlyList<string> startupOutput)
+        : this(endpoint, startupOutput, FitParamsOutput: [])
+    {
+    }
+}
