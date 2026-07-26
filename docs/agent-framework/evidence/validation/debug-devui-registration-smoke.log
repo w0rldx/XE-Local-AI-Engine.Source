@@ -1,6 +1,6 @@
-[guard] snapshot: 2911 assemblies across 8 root(s) -> $REPO/.tmp/assembly-guard-O0Ujur.state
+[guard] snapshot: 2911 assemblies across 8 root(s) -> $REPO/.tmp/assembly-guard-gqJ4qy.state
 Running tests from $REPO/XE-Local-AI-Engine.AI.Agent.Tests/bin/Debug/net10.0/XE_Local_AI_Engine.AI.Agent.Tests.dll (net10.0|x64)
-$REPO/XE-Local-AI-Engine.AI.Agent.Tests/bin/Debug/net10.0/XE_Local_AI_Engine.AI.Agent.Tests.dll (net10.0|x64) passed (315ms)
+$REPO/XE-Local-AI-Engine.AI.Agent.Tests/bin/Debug/net10.0/XE_Local_AI_Engine.AI.Agent.Tests.dll (net10.0|x64) passed (328ms)
 
   In process file artifacts produced:
     - $REPO/XE-Local-AI-Engine.AI.Agent.Tests/bin/Debug/net10.0/TestResults/XE_Local_AI_Engine.AI.Agent.Tests-linux-net10.0-report.html
@@ -10,5 +10,5 @@ Test run summary: Passed!
   failed: 0
   succeeded: 1
   skipped: 0
-  duration: 438ms
+  duration: 479ms
 [guard] verify: build output unchanged during the run — result is trustworthy.
