@@ -5,6 +5,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
@@ -40,9 +41,12 @@ public sealed record LaunchPolicyFingerprint(int Version, string Value);
 
 public sealed class LaunchPolicyFingerprintProvider(
     IInstalledRuntimeStore installedRuntimeStore,
-    ILlamaCppBinaryManager binaryManager) : ILaunchPolicyFingerprintProvider
+    ILlamaCppBinaryManager binaryManager,
+    IGgufModelStore modelStore,
+    LlamaServerSupervisorOptions supervisorOptions,
+    LlamaServerLaunchPolicyOptions launchPolicyOptions) : ILaunchPolicyFingerprintProvider
 {
-    public const int CurrentVersion = 2;
+    public const int CurrentVersion = 3;
 
     private const int ParallelSlots = 1;
     private const string RuntimeDefaultMode = "llama-runtime-default";
@@ -53,6 +57,11 @@ public sealed class LaunchPolicyFingerprintProvider(
         installedRuntimeStore ?? throw new ArgumentNullException(nameof(installedRuntimeStore));
     private readonly ILlamaCppBinaryManager _binaryManager =
         binaryManager ?? throw new ArgumentNullException(nameof(binaryManager));
+    private readonly LlamaServerLaunchPolicyOptions _launchPolicyOptions =
+        launchPolicyOptions ?? throw new ArgumentNullException(nameof(launchPolicyOptions));
+    private readonly IGgufModelStore _modelStore = modelStore ?? throw new ArgumentNullException(nameof(modelStore));
+    private readonly LlamaServerSupervisorOptions _supervisorOptions =
+        supervisorOptions ?? throw new ArgumentNullException(nameof(supervisorOptions));
 
     public Task<LaunchPolicyFingerprint> CaptureAsync(InferenceProfileRecord profile, string modelFilePath, CancellationToken ct)
     {
@@ -99,6 +108,7 @@ public sealed class LaunchPolicyFingerprintProvider(
             throw new FileNotFoundException("The local GGUF file no longer exists.", input.ModelFilePath);
         }
 
+        var modelSha256 = await ComputeFileSha256Async(input.ModelFilePath, ct).ConfigureAwait(false);
         var runtime = await _installedRuntimeStore.ReadAsync(ct).ConfigureAwait(false);
         var requestedVariant = input.Backend.ToUpperInvariant() switch
         {
@@ -123,9 +133,12 @@ public sealed class LaunchPolicyFingerprintProvider(
         }
 
         var role = Enum.IsDefined(typeof(ModelRole), input.Role)
-            ? ((ModelRole)input.Role).ToString()
-            : $"unknown:{input.Role}";
+            ? (ModelRole)input.Role
+            : (ModelRole?)null;
+        var roleIdentity = role?.ToString() ?? $"unknown:{input.Role}";
         var effectivePerSequenceContext = ResolvePerSequenceContext(input.CtxSize, ParallelSlots, kvUnified: false);
+        var chatLaunch = await ResolveChatLaunchIdentityAsync(role, ct).ConfigureAwait(false);
+        var cpuThreadPolicy = ResolveCpuThreadPolicyIdentity(requestedVariant);
 
         var canonical = new
         {
@@ -152,6 +165,7 @@ public sealed class LaunchPolicyFingerprintProvider(
             model = new
             {
                 identity = input.ModelName,
+                sha256 = modelSha256,
                 fileLengthBytes = file.Length,
                 fileLastWriteUtcTicks = file.LastWriteTimeUtc.Ticks
             },
@@ -179,7 +193,7 @@ public sealed class LaunchPolicyFingerprintProvider(
                     admission = "global-free-gpu-and-available-ram",
                     processAllocationEvidence = "stable-total-or-process-budget-no-live-free-sample"
                 },
-                role,
+                role = roleIdentity,
                 backend = input.Backend.ToUpperInvariant(),
                 parallel = ParallelSlots,
                 batch = new { mode = RuntimeDefaultMode, value = (int?)null },
@@ -198,13 +212,125 @@ public sealed class LaunchPolicyFingerprintProvider(
                 input.OverrideTensor,
                 input.KvTypeK,
                 input.KvTypeV,
-                input.FlashAttn
+                input.FlashAttn,
+                chat = chatLaunch,
+                cpuThreadPolicy
             }
         };
 
         var json = JsonSerializer.Serialize(canonical, SerializerOptions);
         var hash = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(json)));
         return new LaunchPolicyFingerprint(CurrentVersion, hash);
+    }
+
+    private async Task<object?> ResolveChatLaunchIdentityAsync(ModelRole? role, CancellationToken ct)
+    {
+        if (role != ModelRole.Chat)
+        {
+            return null;
+        }
+
+        var speculative = _supervisorOptions.Speculative;
+        var mode = speculative.NormalizedMode;
+        if (!speculative.IsEnabled)
+        {
+            return new
+            {
+                cacheReuseTokens = _supervisorOptions.ChatCacheReuse > 0
+                    ? _supervisorOptions.ChatCacheReuse
+                    : (int?)null,
+                speculative = new
+                {
+                    mode
+                }
+            };
+        }
+
+        if (!speculative.IsDraftMode)
+        {
+            return new
+            {
+                cacheReuseTokens = _supervisorOptions.ChatCacheReuse > 0
+                    ? _supervisorOptions.ChatCacheReuse
+                    : (int?)null,
+                speculative = new
+                {
+                    mode
+                }
+            };
+        }
+
+        var draftModelPath = speculative.DraftModelPath;
+        if (string.IsNullOrWhiteSpace(draftModelPath)
+            && !string.IsNullOrWhiteSpace(_supervisorOptions.SpeculativeDraftModelName))
+        {
+            draftModelPath = await _modelStore.ResolveModelFilePathAsync(
+                    _supervisorOptions.SpeculativeDraftModelName,
+                    ct)
+                .ConfigureAwait(false);
+        }
+
+        if (string.IsNullOrWhiteSpace(draftModelPath) || !File.Exists(draftModelPath))
+        {
+            throw new FileNotFoundException(
+                "The configured speculative-decoding draft GGUF file no longer exists.",
+                draftModelPath);
+        }
+
+        return new
+        {
+            cacheReuseTokens = _supervisorOptions.ChatCacheReuse > 0
+                ? _supervisorOptions.ChatCacheReuse
+                : (int?)null,
+            speculative = new
+            {
+                mode,
+                draftModel = new
+                {
+                    configuredName = _supervisorOptions.SpeculativeDraftModelName,
+                    resolvedPath = Path.GetFullPath(draftModelPath),
+                    sha256 = await ComputeFileSha256Async(draftModelPath, ct).ConfigureAwait(false)
+                },
+                draftMaxTokens = speculative.DraftMaxTokens > 0 ? speculative.DraftMaxTokens : (int?)null,
+                speculative.DraftGpuLayers
+            }
+        };
+    }
+
+    private object? ResolveCpuThreadPolicyIdentity(GpuVariant variant)
+    {
+        if (variant != GpuVariant.Cpu)
+        {
+            return null;
+        }
+
+        var logicalProcessorCount = Environment.ProcessorCount;
+        var estimatedPhysicalProcessorCount =
+            _launchPolicyOptions.AssumeSimultaneousMultithreading && logicalProcessorCount >= 2
+                ? logicalProcessorCount / 2
+                : logicalProcessorCount;
+        estimatedPhysicalProcessorCount = Math.Max(estimatedPhysicalProcessorCount, 1);
+
+        var threads = _launchPolicyOptions.EnableCpuThreadPolicy
+            ? _launchPolicyOptions.CpuThreadCount
+              ?? Math.Max(estimatedPhysicalProcessorCount - _launchPolicyOptions.CpuThreadReserve, 1)
+            : (int?)null;
+        var threadsBatch = _launchPolicyOptions.EnableCpuThreadPolicy
+            ? _launchPolicyOptions.CpuThreadsBatchCount ?? estimatedPhysicalProcessorCount
+            : (int?)null;
+
+        return new
+        {
+            _launchPolicyOptions.EnableCpuThreadPolicy,
+            _launchPolicyOptions.AssumeSimultaneousMultithreading,
+            _launchPolicyOptions.CpuThreadReserve,
+            _launchPolicyOptions.CpuThreadCount,
+            _launchPolicyOptions.CpuThreadsBatchCount,
+            logicalProcessorCount,
+            estimatedPhysicalProcessorCount,
+            resolvedThreads = threads,
+            resolvedThreadsBatch = threadsBatch
+        };
     }
 
     private static int ResolvePerSequenceContext(int requestedTotalContext, int parallel, bool kvUnified)
