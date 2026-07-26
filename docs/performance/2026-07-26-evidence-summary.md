@@ -45,22 +45,35 @@ grid produced zero qualifying cells, so no production tuning ships. See
 
 ## Fit/replay and VRAM semantics
 
-The successful CUDA fit proof records:
+The original fit artifact was invalidated and removed: its `-c 0 -ngl -1`
+values are llama.cpp b9692's unresolved context/automatic-placement sentinels,
+not a frozen replay. The corrected proof at source `3d889021` is
+`baselines/2026-07-27-3d889021-fit-replay.json` and records:
 
-- helper output and replay placement: `-c 0 -ngl -1`;
-- byte-equivalent non-fit explore/replay arguments;
-- peak RSS delta: 0.013%, within the 20% proof tolerance;
+- exact production Explore argv observed through the Aspire application:
+  positive policy context `-c 32512`, `--fit on`, diagnostic `-v`, and
+  `-fa on -ctk q8_0 -ctv q8_0`;
+- exact helper projection of that successful vector, whose raw output was
+  `-c 32512 -ngl -1`;
+- normalization to concrete replay `-c 32512 -ngl -2` only because the actual
+  Explore startup independently reported full `N/N` GPU offload;
+- replay preservation of `q8_0/q8_0` KV cache plus flash attention, with
+  byte-equivalent non-fit/non-diagnostic arguments;
+- peak RSS delta: 0.017%, within the 20% proof tolerance;
 - global GPU-used delta: 0%, within tolerance;
-- global free VRAM: 28,980 MiB for both resident samples;
+- global free VRAM: 28,427 MiB for both resident samples;
 - process-budget free VRAM: 30,927 MiB.
 
-The 1,947 MiB reader divergence is deliberately retained rather than averaged:
+The 2,500 MiB reader divergence is deliberately retained rather than averaged:
 global free VRAM governs contention and sample invalidation, while the runtime's
 process-budget reader describes its fit budget. Default verbosity emitted no
 `common_params_fit_impl` detail lines; verbose mode emitted three, and the sibling
-helper provided the stable replay vector. One clean capture attempt was discarded
-because its explore/replay peak RSS delta exceeded 20%; the successful rerun did
-not relax the gate.
+helper provided the stable machine-readable vector.
+
+The production API then replayed the frozen profile through the benchmark harness:
+five chat runs completed at 602.15 tokens/s, external pressure remained false, and
+the profile froze with both global-free and process-budget VRAM baselines. This
+validates the application path in addition to the standalone artifact.
 
 ## Explicit hardware and distribution gaps
 
