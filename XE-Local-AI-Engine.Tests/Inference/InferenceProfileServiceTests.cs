@@ -144,7 +144,7 @@ public sealed class InferenceProfileServiceTests
             Arg.Any<long>(),
             Arg.Any<CancellationToken>());
         // A failed benchmark never freezes the profile.
-        await fixture.ProfileStore.DidNotReceive().MarkFrozenAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<long?>(), Arg.Any<CancellationToken>());
+        await fixture.ProfileStore.DidNotReceive().MarkFrozenAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<long?>(), Arg.Any<long?>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -153,17 +153,20 @@ public sealed class InferenceProfileServiceTests
         var fixture = new ServiceFixture();
         var profile = ExploredRecord();
         fixture.WithProfiles(profile);
+        fixture.WithLocalModel();
         var snapshotId = Guid.NewGuid();
         fixture.BenchmarkStore.GetLatestSuccessfulForProfileAsync(profile.Id, Arg.Any<CancellationToken>())
                .Returns(Task.FromResult<ModelFitBenchmarkRecord?>(BenchmarkRowFor(profile, snapshotId)));
         fixture.HardwareProfiler.GetProfileAsync(forceRefresh: true, Arg.Any<CancellationToken>())
                .Returns(Task.FromResult(NvidiaProfile(availableVramBytes: 2000)));
-        fixture.ProfileStore.MarkFrozenAsync(profile.Id, snapshotId, 2000, Arg.Any<CancellationToken>())
+        fixture.ProcessVramBudgetProbe.TryGetProcessBudgetBytesAsync(profile.Backend, Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult<long?>(2400));
+        fixture.ProfileStore.MarkFrozenAsync(profile.Id, snapshotId, 2000, 2400, Arg.Any<CancellationToken>())
                .Returns(Task.FromResult<InferenceProfileRecord?>(profile with
                {
                    Status = InferenceProfileStatus.Frozen,
                    BenchmarkSnapshotId = snapshotId,
-                   FreeVramAtFreezeBytes = 2000
+                   GlobalFreeVramAtFreezeBytes = 2000
                }));
 
         var result = await fixture.CreateService().FreezeAsync(profile.Id, CancellationToken.None);
@@ -172,9 +175,9 @@ public sealed class InferenceProfileServiceTests
         var view = AssertEx.NotNull(result.Profile);
         AssertEx.Equal("Frozen", view.Status);
         AssertEx.Equal<Guid?>(snapshotId, view.BenchmarkSnapshotId);
-        await fixture.ProfileStore.Received(1).MarkFrozenAsync(profile.Id, snapshotId, 2000, Arg.Any<CancellationToken>());
-        await fixture.ProcessVramBudgetProbe.DidNotReceive()
-                     .TryGetProcessBudgetBytesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+        await fixture.ProfileStore.Received(1).MarkFrozenAsync(profile.Id, snapshotId, 2000, 2400, Arg.Any<CancellationToken>());
+        await fixture.ProcessVramBudgetProbe.Received(1)
+                     .TryGetProcessBudgetBytesAsync(profile.Backend, Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -186,12 +189,13 @@ public sealed class InferenceProfileServiceTests
             Backend = InferenceBackends.Cpu
         };
         fixture.WithProfiles(profile);
+        fixture.WithLocalModel();
         var snapshotId = Guid.NewGuid();
         fixture.BenchmarkStore.GetLatestSuccessfulForProfileAsync(profile.Id, Arg.Any<CancellationToken>())
                .Returns(Task.FromResult<ModelFitBenchmarkRecord?>(BenchmarkRowFor(profile, snapshotId)));
         fixture.HardwareProfiler.GetProfileAsync(forceRefresh: true, Arg.Any<CancellationToken>())
                .Returns(Task.FromResult(NvidiaProfile(availableVramBytes: 2000)));
-        fixture.ProfileStore.MarkFrozenAsync(profile.Id, snapshotId, freeVramAtFreezeBytes: null, Arg.Any<CancellationToken>())
+        fixture.ProfileStore.MarkFrozenAsync(profile.Id, snapshotId, globalFreeVramAtFreezeBytes: null, processBudgetVramAtFreezeBytes: null, Arg.Any<CancellationToken>())
                .Returns(Task.FromResult<InferenceProfileRecord?>(profile with
                {
                    Status = InferenceProfileStatus.Frozen,
@@ -202,7 +206,7 @@ public sealed class InferenceProfileServiceTests
 
         AssertEx.True(result.Success);
         await fixture.ProfileStore.Received(1)
-                     .MarkFrozenAsync(profile.Id, snapshotId, freeVramAtFreezeBytes: null, Arg.Any<CancellationToken>());
+                     .MarkFrozenAsync(profile.Id, snapshotId, globalFreeVramAtFreezeBytes: null, processBudgetVramAtFreezeBytes: null, Arg.Any<CancellationToken>());
         await fixture.ProcessVramBudgetProbe.DidNotReceive()
                      .TryGetProcessBudgetBytesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
@@ -213,6 +217,7 @@ public sealed class InferenceProfileServiceTests
         var fixture = new ServiceFixture();
         var profile = ExploredRecord();
         fixture.WithProfiles(profile);
+        fixture.WithLocalModel();
         fixture.BenchmarkStore.GetLatestSuccessfulForProfileAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
                .Returns(Task.FromResult<ModelFitBenchmarkRecord?>(null));
 
@@ -221,7 +226,7 @@ public sealed class InferenceProfileServiceTests
         AssertEx.False(result.Success);
         AssertEx.NotNullOrEmpty(result.FailureReason);
         // The Explored profile is never transitioned.
-        await fixture.ProfileStore.DidNotReceive().MarkFrozenAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<long?>(), Arg.Any<CancellationToken>());
+        await fixture.ProfileStore.DidNotReceive().MarkFrozenAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<long?>(), Arg.Any<long?>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -230,6 +235,7 @@ public sealed class InferenceProfileServiceTests
         var fixture = new ServiceFixture();
         var profile = ExploredRecord(); // current ctx = 8192
         fixture.WithProfiles(profile);
+        fixture.WithLocalModel();
         var snapshotId = Guid.NewGuid();
         // The profile's latest successful benchmark was taken at a different ctx (a prior explore); a re-explore then
         // overwrote the profile's args in place (same id, new args), so the benchmark no longer matches the current
@@ -245,7 +251,47 @@ public sealed class InferenceProfileServiceTests
 
         AssertEx.False(result.Success);
         AssertEx.NotNullOrEmpty(result.FailureReason);
-        await fixture.ProfileStore.DidNotReceive().MarkFrozenAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<long?>(), Arg.Any<CancellationToken>());
+        await fixture.ProfileStore.DidNotReceive().MarkFrozenAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<long?>(), Arg.Any<long?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Benchmark_GpuProfileWithoutMachineReadablePlacement_IsRejectedBeforeSpawn()
+    {
+        var fixture = new ServiceFixture();
+        fixture.WithLocalModel();
+        var profile = ExploredRecord() with
+        {
+            NGpuLayers = null
+        };
+        fixture.WithProfiles(profile);
+
+        var result = await fixture.CreateService().BenchmarkAsync(profile.Id, CancellationToken.None);
+
+        AssertEx.False(result.Success);
+        AssertEx.True(result.FailureReason!.Contains("machine-readable GPU placement", StringComparison.Ordinal));
+        await fixture.Supervisor.DidNotReceiveWithAnyArgs()
+                     .RunExclusiveProfilingAsync(default!, default, default!, default,
+                         default(Func<LlamaServerProfilingContext, CancellationToken, Task<InferenceBenchmarkMetrics>>)!,
+                         default);
+    }
+
+    [Test]
+    public async Task Freeze_GpuProfileWithoutMachineReadablePlacement_IsRejectedBeforeBenchmarkLookup()
+    {
+        var fixture = new ServiceFixture();
+        var profile = ExploredRecord() with
+        {
+            NGpuLayers = null
+        };
+        fixture.WithProfiles(profile);
+
+        var result = await fixture.CreateService().FreezeAsync(profile.Id, CancellationToken.None);
+
+        AssertEx.False(result.Success);
+        await fixture.BenchmarkStore.DidNotReceive()
+                     .GetLatestSuccessfulForProfileAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        await fixture.ProfileStore.DidNotReceive()
+                     .MarkFrozenAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<long?>(), Arg.Any<long?>(), Arg.Any<CancellationToken>());
     }
 
     private static InferenceProfileRecord ExploredRecord()
@@ -267,11 +313,13 @@ public sealed class InferenceProfileServiceTests
             NParams: 7_000_000_000,
             IsMoe: false,
             ExpertCount: null,
-            FreeVramAtFreezeBytes: null,
+            GlobalFreeVramAtFreezeBytes: null,
             Status: InferenceProfileStatus.Explored,
             BenchmarkSnapshotId: null,
             CreatedAtUtc: 0,
-            UpdatedAtUtc: 0);
+            UpdatedAtUtc: 0,
+            LaunchPolicyFingerprintVersion: LaunchPolicyFingerprintProvider.CurrentVersion,
+            LaunchPolicyFingerprint: "fingerprint");
     }
 
     private static InferenceBenchmarkMetrics SuccessMetrics()
@@ -332,7 +380,9 @@ public sealed class InferenceProfileServiceTests
             OverrideTensor: profile.OverrideTensor,
             KvTypeV: profile.KvTypeV,
             FlashAttn: profile.FlashAttn,
-            ProfileId: profile.Id);
+            ProfileId: profile.Id,
+            LaunchPolicyFingerprintVersion: profile.LaunchPolicyFingerprintVersion,
+            LaunchPolicyFingerprint: profile.LaunchPolicyFingerprint);
     }
 
     // Wires the substituted seams the orchestrator composes, with safe defaults, and exposes the doubles the tests assert on.
@@ -380,6 +430,9 @@ public sealed class InferenceProfileServiceTests
 
         public IProcessVramBudgetProbe ProcessVramBudgetProbe { get; } = Substitute.For<IProcessVramBudgetProbe>();
 
+        public ILaunchPolicyFingerprintProvider LaunchPolicyFingerprintProvider { get; } =
+            Substitute.For<ILaunchPolicyFingerprintProvider>();
+
         public ServiceFixture()
         {
             MachineKeyProvider.GetMachineKeyAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(MachineKey));
@@ -390,6 +443,14 @@ public sealed class InferenceProfileServiceTests
                             .Returns(Task.FromResult(NvidiaProfile(availableVramBytes: null)));
             ProfileStore.ListAsync(Arg.Any<CancellationToken>())
                         .Returns(Task.FromResult<IReadOnlyList<InferenceProfileRecord>>([]));
+            LaunchPolicyFingerprintProvider.CaptureAsync(Arg.Any<InferenceProfileFingerprintInput>(), Arg.Any<CancellationToken>())
+                                           .Returns(Task.FromResult(new LaunchPolicyFingerprint(
+                                               XE_Local_AI_Engine.Client.Services.Inference.LaunchPolicyFingerprintProvider.CurrentVersion,
+                                               "fingerprint")));
+            LaunchPolicyFingerprintProvider.CaptureAsync(Arg.Any<InferenceProfileRecord>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+                                           .Returns(Task.FromResult(new LaunchPolicyFingerprint(
+                                               XE_Local_AI_Engine.Client.Services.Inference.LaunchPolicyFingerprintProvider.CurrentVersion,
+                                               "fingerprint")));
         }
 
         public void WithLocalModel()
@@ -476,6 +537,7 @@ public sealed class InferenceProfileServiceTests
                 RuntimeStore,
                 HardwareProfiler,
                 ProcessVramBudgetProbe,
+                LaunchPolicyFingerprintProvider,
                 NullLogger<InferenceProfileService>.Instance);
         }
 
@@ -498,11 +560,13 @@ public sealed class InferenceProfileServiceTests
                 input.NParams,
                 input.IsMoe,
                 input.ExpertCount,
-                FreeVramAtFreezeBytes: null,
                 Status: InferenceProfileStatus.Explored,
                 BenchmarkSnapshotId: null,
                 CreatedAtUtc: 0,
-                UpdatedAtUtc: 0);
+                UpdatedAtUtc: 0,
+                input.LaunchPolicyFingerprintVersion,
+                input.LaunchPolicyFingerprint,
+                GlobalFreeVramAtFreezeBytes: null);
         }
     }
 }

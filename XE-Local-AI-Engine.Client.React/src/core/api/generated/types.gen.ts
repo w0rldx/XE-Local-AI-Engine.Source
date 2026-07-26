@@ -525,6 +525,9 @@ export type XeLocalAiEngineClientEndpointsModelFitV1InferenceBenchmarkMetricsDto
 	globalFreeVramAfterBytes?: number | null;
 	processBudgetVramLoadBytes?: number | null;
 	processBudgetVramAfterBytes?: number | null;
+	minimumGlobalFreeVramBytes?: number | null;
+	minimumProcessBudgetVramBytes?: number | null;
+	peakProcessRamBytes?: number | null;
 	externalPressureDetected?: boolean;
 	runs: number;
 };
@@ -546,11 +549,14 @@ export type XeLocalAiEngineClientEndpointsModelFitV1InferenceProfileViewDto = {
 	nParams?: number | null;
 	isMoe: boolean;
 	expertCount?: number | null;
-	freeVramAtFreezeBytes?: number | null;
+	launchPolicyFingerprintVersion?: number | null;
+	launchPolicyFingerprint?: string | null;
 	status: string;
 	benchmarkSnapshotId?: string | null;
 	createdAtUtc: number;
 	updatedAtUtc: number;
+	globalFreeVramAtFreezeBytes?: number | null;
+	processBudgetVramAtFreezeBytes?: number | null;
 };
 
 export type XeLocalAiEngineClientEndpointsModelFitV1BenchmarkInferenceProfileRequest = {

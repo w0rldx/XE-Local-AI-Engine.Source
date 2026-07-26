@@ -26,6 +26,7 @@ public sealed class InferenceProfileService : IInferenceProfileService
     private readonly IGgufModelStore _ggufModelStore;
     private readonly IHardwareProfiler _hardwareProfiler;
     private readonly IInferenceBenchmarkHarness _harness;
+    private readonly ILaunchPolicyFingerprintProvider _launchPolicyFingerprintProvider;
     private readonly ILogger<InferenceProfileService> _logger;
     private readonly IMachineKeyProvider _machineKeyProvider;
     private readonly IInferenceProfileStore _profileStore;
@@ -48,6 +49,7 @@ public sealed class InferenceProfileService : IInferenceProfileService
         IInstalledRuntimeStore runtimeStore,
         IHardwareProfiler hardwareProfiler,
         IProcessVramBudgetProbe processVramBudgetProbe,
+        ILaunchPolicyFingerprintProvider launchPolicyFingerprintProvider,
         ILogger<InferenceProfileService> logger)
     {
         ArgumentNullException.ThrowIfNull(supervisor);
@@ -63,6 +65,7 @@ public sealed class InferenceProfileService : IInferenceProfileService
         ArgumentNullException.ThrowIfNull(runtimeStore);
         ArgumentNullException.ThrowIfNull(hardwareProfiler);
         ArgumentNullException.ThrowIfNull(processVramBudgetProbe);
+        ArgumentNullException.ThrowIfNull(launchPolicyFingerprintProvider);
         ArgumentNullException.ThrowIfNull(logger);
 
         _supervisor = supervisor;
@@ -78,6 +81,7 @@ public sealed class InferenceProfileService : IInferenceProfileService
         _runtimeStore = runtimeStore;
         _hardwareProfiler = hardwareProfiler;
         _processVramBudgetProbe = processVramBudgetProbe;
+        _launchPolicyFingerprintProvider = launchPolicyFingerprintProvider;
         _logger = logger;
     }
 
@@ -113,7 +117,16 @@ public sealed class InferenceProfileService : IInferenceProfileService
                 "Machine-readable llama-fit-params output was unavailable or incomplete for the explored model; persisting a conservative Explored profile from the GGUF context length instead of freezing partial GPU placement.");
         }
 
-        var input = BuildExploreInput(machineKey, modelName, role, backend, build, metadata, draft);
+        var input = await BuildExploreInputAsync(machineKey,
+                modelName,
+                role,
+                backend,
+                build,
+                filePath,
+                metadata,
+                draft,
+                ct)
+            .ConfigureAwait(false);
         var record = await _profileStore.CreateOrUpdateExploredAsync(input, ct).ConfigureAwait(false);
         return ExploreResult.Ok(ToView(record));
     }
@@ -131,6 +144,18 @@ public sealed class InferenceProfileService : IInferenceProfileService
         if (string.IsNullOrWhiteSpace(filePath))
         {
             return BenchmarkResult.Fail($"Model '{profile.ModelName}' is no longer a local GGUF; benchmark is node-local only.");
+        }
+
+        if (!HasCompletePlacement(profile))
+        {
+            return BenchmarkResult.Fail(
+                $"Profile {profileId} has no complete machine-readable GPU placement; re-explore after llama-fit-params is available.");
+        }
+
+        if (!await FingerprintMatchesCurrentAsync(profile, filePath, ct).ConfigureAwait(false))
+        {
+            _ = await _profileStore.MarkStaleAsync(profile.Id, ct).ConfigureAwait(false);
+            return BenchmarkResult.Fail($"Profile {profileId} was created under different launch semantics or model/runtime revision; re-explore before benchmarking.");
         }
 
         ResolvedLaunchArguments replay;
@@ -223,6 +248,20 @@ public sealed class InferenceProfileService : IInferenceProfileService
             return ProfileActionResult.Fail($"Profile {profileId} is {profile.Status}; only an Explored profile can be frozen.");
         }
 
+        if (!HasCompletePlacement(profile))
+        {
+            return ProfileActionResult.Fail(
+                $"Profile {profileId} has no complete machine-readable GPU placement; re-explore after llama-fit-params is available.");
+        }
+
+        var filePath = await _ggufModelStore.ResolveModelFilePathAsync(profile.ModelName, ct).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(filePath)
+            || !await FingerprintMatchesCurrentAsync(profile, filePath, ct).ConfigureAwait(false))
+        {
+            _ = await _profileStore.MarkStaleAsync(profile.Id, ct).ConfigureAwait(false);
+            return ProfileActionResult.Fail($"Profile {profileId} no longer matches the active launch semantics or model/runtime revision; re-explore before freezing.");
+        }
+
         // The freeze gate binds to the EXACT profile revision: only a successful benchmark taken for THIS profile whose
         // recorded launch args still match the profile's current args justifies a freeze. Re-exploring a profile
         // (changing quant/ctx/gpu-layers/kv-types/flash-attn/…) rewrites its args and clears its benchmark
@@ -242,20 +281,23 @@ public sealed class InferenceProfileService : IInferenceProfileService
 
         // Store global-free VRAM as the invalidation baseline wherever NVIDIA/NVML provides it. llama.cpp's
         // --list-devices figure is a process-local residency budget under WDDM and can ignore external pressure, so it is
-        // only the fallback for GPU backends/vendors where global free is unavailable. CPU profiles deliberately keep
-        // no VRAM baseline; unrelated GPU pressure must never invalidate a CPU placement.
+        // recorded independently for diagnostics and must never substitute for missing global-free evidence. CPU profiles
+        // deliberately keep no VRAM baseline; unrelated GPU pressure must never invalidate a CPU placement.
         var hardware = await _hardwareProfiler.GetProfileAsync(forceRefresh: true, ct).ConfigureAwait(false);
-        long? freeVramAtFreeze = null;
+        long? globalFreeVramAtFreeze = null;
+        long? processBudgetVramAtFreeze = null;
         if (!string.Equals(profile.Backend, InferenceBackends.Cpu, StringComparison.OrdinalIgnoreCase))
         {
-            freeVramAtFreeze = hardware.AvailableVramBytes;
-            if (freeVramAtFreeze is null)
-            {
-                freeVramAtFreeze = await _processVramBudgetProbe.TryGetProcessBudgetBytesAsync(profile.Backend, ct).ConfigureAwait(false);
-            }
+            globalFreeVramAtFreeze = hardware.AvailableVramBytes;
+            processBudgetVramAtFreeze =
+                await _processVramBudgetProbe.TryGetProcessBudgetBytesAsync(profile.Backend, ct).ConfigureAwait(false);
         }
 
-        var frozen = await _profileStore.MarkFrozenAsync(profileId, benchmark.SnapshotId, freeVramAtFreeze, ct).ConfigureAwait(false);
+        var frozen = await _profileStore.MarkFrozenAsync(profileId,
+            benchmark.SnapshotId,
+            globalFreeVramAtFreeze,
+            processBudgetVramAtFreeze,
+            ct).ConfigureAwait(false);
         if (frozen is null)
         {
             // The store gate rejected the transition (not Explored at write time) — surface as a failed result, do not throw.
@@ -284,16 +326,30 @@ public sealed class InferenceProfileService : IInferenceProfileService
         return ProfileActionResult.Ok(ToView(updated));
     }
 
-    private static InferenceProfileInput BuildExploreInput(string machineKey,
+    private async Task<InferenceProfileInput> BuildExploreInputAsync(string machineKey,
         string modelName,
         ModelRole role,
         string backend,
         string build,
+        string modelFilePath,
         GgufModelMetadata metadata,
-        ResolvedLaunchArguments? draft)
+        ResolvedLaunchArguments? draft,
+        CancellationToken ct)
     {
         var quant = string.IsNullOrWhiteSpace(metadata.QuantType) ? UnknownQuant : metadata.QuantType;
         var ctxSize = draft?.CtxSize ?? ClampToInt(metadata.ContextLength) ?? DefaultExploreCtxSize;
+        var fingerprint = await _launchPolicyFingerprintProvider.CaptureAsync(new InferenceProfileFingerprintInput(modelName,
+                (int)role,
+                backend,
+                modelFilePath,
+                ctxSize,
+                draft?.NGpuLayers,
+                draft?.TensorSplit,
+                draft?.OverrideTensor,
+                draft?.KvTypeK,
+                draft?.KvTypeV,
+                draft?.FlashAttn ?? false),
+            ct).ConfigureAwait(false);
 
         return new InferenceProfileInput(MachineKey: machineKey,
             ModelName: modelName,
@@ -310,7 +366,9 @@ public sealed class InferenceProfileService : IInferenceProfileService
             FlashAttn: draft?.FlashAttn ?? false,
             NParams: metadata.ParamCount,
             IsMoe: metadata.IsMoe,
-            ExpertCount: metadata.ExpertCount);
+            ExpertCount: metadata.ExpertCount,
+            LaunchPolicyFingerprintVersion: fingerprint.Version,
+            LaunchPolicyFingerprint: fingerprint.Value);
     }
 
     private static ResolvedLaunchArguments BuildReplay(InferenceProfileRecord profile)
@@ -339,6 +397,14 @@ public sealed class InferenceProfileService : IInferenceProfileService
             ToolLoopMs: metrics.ToolLoopMs,
             VramLoadBytes: metrics.VramLoadBytes,
             VramAfterBytes: metrics.VramAfterBytes,
+            GlobalFreeVramLoadBytes: metrics.GlobalFreeVramLoadBytes,
+            GlobalFreeVramAfterBytes: metrics.GlobalFreeVramAfterBytes,
+            ProcessBudgetVramLoadBytes: metrics.ProcessBudgetVramLoadBytes,
+            ProcessBudgetVramAfterBytes: metrics.ProcessBudgetVramAfterBytes,
+            MinimumGlobalFreeVramBytes: metrics.MinimumGlobalFreeVramBytes,
+            MinimumProcessBudgetVramBytes: metrics.MinimumProcessBudgetVramBytes,
+            PeakProcessRamBytes: metrics.PeakProcessRamBytes,
+            ExternalPressureDetected: metrics.ExternalPressureDetected,
             LlamacppBuild: profile.LlamacppBuild,
             Quant: profile.Quant,
             CtxSize: profile.CtxSize,
@@ -350,7 +416,9 @@ public sealed class InferenceProfileService : IInferenceProfileService
             OverrideTensor: profile.OverrideTensor,
             KvTypeV: profile.KvTypeV,
             FlashAttn: profile.FlashAttn,
-            ProfileId: profile.Id);
+            ProfileId: profile.Id,
+            LaunchPolicyFingerprintVersion: profile.LaunchPolicyFingerprintVersion,
+            LaunchPolicyFingerprint: profile.LaunchPolicyFingerprint);
     }
 
     // A benchmark justifies a freeze only when every launch-affecting arg it recorded still matches the profile's
@@ -368,7 +436,27 @@ public sealed class InferenceProfileService : IInferenceProfileService
                && benchmark.TensorSplit == profile.TensorSplit
                && benchmark.OverrideTensor == profile.OverrideTensor
                && benchmark.Backend == profile.Backend
-               && benchmark.MachineKey == profile.MachineKey;
+               && benchmark.MachineKey == profile.MachineKey
+               && benchmark.LaunchPolicyFingerprintVersion == profile.LaunchPolicyFingerprintVersion
+               && string.Equals(benchmark.LaunchPolicyFingerprint, profile.LaunchPolicyFingerprint, StringComparison.Ordinal);
+    }
+
+    private static bool HasCompletePlacement(InferenceProfileRecord profile)
+    {
+        return string.Equals(profile.Backend, InferenceBackends.Cpu, StringComparison.OrdinalIgnoreCase)
+               || profile.NGpuLayers is not null;
+    }
+
+    private async Task<bool> FingerprintMatchesCurrentAsync(InferenceProfileRecord profile, string modelFilePath, CancellationToken ct)
+    {
+        if (profile.LaunchPolicyFingerprintVersion is null || string.IsNullOrWhiteSpace(profile.LaunchPolicyFingerprint))
+        {
+            return false;
+        }
+
+        var current = await _launchPolicyFingerprintProvider.CaptureAsync(profile, modelFilePath, ct).ConfigureAwait(false);
+        return current.Version == profile.LaunchPolicyFingerprintVersion
+               && string.Equals(current.Value, profile.LaunchPolicyFingerprint, StringComparison.Ordinal);
     }
 
     private static InferenceProfileView ToView(InferenceProfileRecord record)
@@ -389,11 +477,14 @@ public sealed class InferenceProfileService : IInferenceProfileService
             record.NParams,
             record.IsMoe,
             record.ExpertCount,
-            record.FreeVramAtFreezeBytes,
             record.Status.ToString(),
             record.BenchmarkSnapshotId,
             record.CreatedAtUtc,
-            record.UpdatedAtUtc);
+            record.UpdatedAtUtc,
+            record.LaunchPolicyFingerprintVersion,
+            record.LaunchPolicyFingerprint,
+            record.GlobalFreeVramAtFreezeBytes,
+            record.ProcessBudgetVramAtFreezeBytes);
     }
 
     private static int? ClampToInt(long? value)

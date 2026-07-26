@@ -65,6 +65,22 @@ internal sealed record class ModelFitBenchmark
     /// <summary>Host-observed free-VRAM delta after the loop (bytes); a delta estimate. Optional. Plaintext.</summary>
     public long? VramAfterBytes { get; set; }
 
+    public long? GlobalFreeVramLoadBytes { get; set; }
+
+    public long? GlobalFreeVramAfterBytes { get; set; }
+
+    public long? ProcessBudgetVramLoadBytes { get; set; }
+
+    public long? ProcessBudgetVramAfterBytes { get; set; }
+
+    public long? MinimumGlobalFreeVramBytes { get; set; }
+
+    public long? MinimumProcessBudgetVramBytes { get; set; }
+
+    public long? PeakProcessRamBytes { get; set; }
+
+    public bool ExternalPressureDetected { get; set; }
+
     // -------------------------------------------------------------------------
     // Reproducibility key (today only in ephemeral job params).
     // -------------------------------------------------------------------------
@@ -115,4 +131,10 @@ internal sealed record class ModelFitBenchmark
 
     /// <summary>The inference profile revision this benchmark measured, or null for legacy rows. Plaintext (structural).</summary>
     public Guid? ProfileId { get; set; }
+
+    /// <summary>Launch-policy fingerprint schema version measured by this benchmark, or null for legacy rows.</summary>
+    public int? LaunchPolicyFingerprintVersion { get; set; }
+
+    /// <summary>Launch-policy fingerprint measured by this benchmark, or null for legacy rows.</summary>
+    public string? LaunchPolicyFingerprint { get; set; }
 }

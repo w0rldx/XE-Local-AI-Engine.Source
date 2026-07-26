@@ -51,6 +51,7 @@ internal static class AddNodeModelFitExtensions
         builder.Services.AddSingleton<IFittedArgsParser, FittedArgsParser>();
         builder.Services.AddSingleton<IInferenceChatClientFactory, OpenAiInferenceChatClientFactory>();
         builder.Services.AddSingleton<IInferenceBenchmarkHarness, InferenceBenchmarkHarness>();
+        builder.Services.AddSingleton<ILaunchPolicyFingerprintProvider, LaunchPolicyFingerprintProvider>();
         builder.Services.AddScoped<IInferenceProfileService, InferenceProfileService>();
         // The request validator allowlists the recommend intent params (use-case + limit bounds). Stateless → singleton.
         builder.Services.AddSingleton<ModelFitRequestValidator>();

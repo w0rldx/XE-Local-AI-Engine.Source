@@ -28,9 +28,12 @@ function toInferenceProfileView(dto: XeLocalAiEngineClientEndpointsModelFitV1Inf
 		ctxSize: dto.ctxSize ?? null,
 		isMoe: dto.isMoe ?? false,
 		expertCount: dto.expertCount ?? null,
+		launchPolicyFingerprintVersion: dto.launchPolicyFingerprintVersion ?? null,
+		launchPolicyFingerprint: dto.launchPolicyFingerprint ?? null,
 		// A frozen profile records the snapshot id it was benchmarked against; its presence gates the Freeze action.
 		hasBenchmark: (dto.benchmarkSnapshotId ?? null) !== null,
-		frozenVramBytes: dto.freeVramAtFreezeBytes ?? null,
+		frozenGlobalFreeVramBytes: dto.globalFreeVramAtFreezeBytes ?? null,
+		frozenProcessBudgetVramBytes: dto.processBudgetVramAtFreezeBytes ?? null,
 	};
 }
 
@@ -65,6 +68,9 @@ function toInferenceBenchmarkMetrics(
 		globalFreeVramAfterBytes: dto.globalFreeVramAfterBytes ?? null,
 		processBudgetVramLoadBytes: dto.processBudgetVramLoadBytes ?? null,
 		processBudgetVramAfterBytes: dto.processBudgetVramAfterBytes ?? null,
+		minimumGlobalFreeVramBytes: dto.minimumGlobalFreeVramBytes ?? null,
+		minimumProcessBudgetVramBytes: dto.minimumProcessBudgetVramBytes ?? null,
+		peakProcessRamBytes: dto.peakProcessRamBytes ?? null,
 		externalPressureDetected: dto.externalPressureDetected ?? false,
 		runs: dto.runs ?? null,
 	};

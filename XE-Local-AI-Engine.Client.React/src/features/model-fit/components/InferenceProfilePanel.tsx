@@ -194,7 +194,7 @@ export function InferenceProfilePanel() {
 								{profiles.map((profile) => {
 									const result = benchmarkResults[profile.id];
 									const tokensPerSecond = result?.metrics?.tokensPerSecond ?? null;
-									const vramBytes = profile.frozenVramBytes ?? result?.metrics?.vramAfterBytes ?? null;
+									const vramBytes = profile.frozenGlobalFreeVramBytes ?? result?.metrics?.globalFreeVramAfterBytes ?? null;
 									const summary = formatProfileOutcomeSummary(tokensPerSecond, vramBytes);
 									const canFreeze = profile.hasBenchmark || result !== undefined;
 									const isBenchmarking = benchmark.isPending && benchmark.variables?.profileId === profile.id;
@@ -237,6 +237,20 @@ export function InferenceProfilePanel() {
 														{profile.quant ? (
 															<Text size="xs" c="dimmed">
 																{profile.quant}
+															</Text>
+														) : null}
+														{profile.launchPolicyFingerprint && profile.launchPolicyFingerprintVersion !== null ? (
+															<Text
+																size="xs"
+																c="dimmed"
+																data-testid={`inference-profile-fingerprint-${profile.id}`}
+															>
+																{`policy v${profile.launchPolicyFingerprintVersion} · ${profile.launchPolicyFingerprint.slice(0, 8)}`}
+															</Text>
+														) : null}
+														{profile.frozenGlobalFreeVramBytes !== null || profile.frozenProcessBudgetVramBytes !== null ? (
+															<Text size="xs" c="dimmed" data-testid={`inference-profile-freeze-vram-${profile.id}`}>
+																{`global free ${profile.frozenGlobalFreeVramBytes === null ? "unknown" : `${(profile.frozenGlobalFreeVramBytes / 1024 ** 3).toFixed(1)} GB`} · process budget ${profile.frozenProcessBudgetVramBytes === null ? "unknown" : `${(profile.frozenProcessBudgetVramBytes / 1024 ** 3).toFixed(1)} GB`}`}
 															</Text>
 														) : null}
 														{profile.isMoe ? (

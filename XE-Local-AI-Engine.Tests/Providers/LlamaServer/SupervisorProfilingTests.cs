@@ -67,6 +67,7 @@ public sealed class SupervisorProfilingTests
             fitParamsRunner: fitRunner);
 
         IReadOnlyList<string> captured = [];
+        int? capturedProcessId = null;
         await supervisor.RunExclusiveProfilingAsync("llama3",
             ModelRole.Chat,
             ResolvedLaunchArguments.Explore(),
@@ -74,11 +75,13 @@ public sealed class SupervisorProfilingTests
             (context, _) =>
             {
                 captured = context.FitParamsOutput;
+                capturedProcessId = context.ProcessId;
                 return Task.FromResult(result: true);
             },
             CancellationToken.None);
 
         AssertEx.Contains(captured, "-c 8192 -ngl 32");
+        AssertEx.Equal<int?>(launcher.Handles.Single().ProcessId, capturedProcessId);
         AssertEx.Equal(expected: 1, fitRunner.Calls.Count);
         AssertEx.True(fitRunner.Calls.TryPeek(out var spec));
         AssertEx.Contains(spec!.Arguments, "--fit");

@@ -2,13 +2,14 @@ namespace XE_Local_AI_Engine.Client.Services.Inference;
 
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
 ///     Default <see cref="IInferenceInvalidationEvaluator" />. Runs three cheap checks against the freeze baseline —
 ///     active build tag, GPU vendor/VRAM delta, and live global-free VRAM. NVIDIA's refreshed global figure is preferred
-///     because llama.cpp's process budget can ignore external WDDM pressure; the vendor-agnostic process-budget probe is
-///     used only when the global figure is unavailable.
+    ///     because llama.cpp's process budget can ignore external WDDM pressure. Process-budget evidence remains
+    ///     diagnostic and is never substituted for a global-free invalidation baseline.
 /// </summary>
 public sealed class InferenceInvalidationEvaluator : IInferenceInvalidationEvaluator
 {
@@ -16,16 +17,23 @@ public sealed class InferenceInvalidationEvaluator : IInferenceInvalidationEvalu
     private const double MaterialFreeVramRegressionRatio = 0.05d;
 
     private readonly IHardwareProfiler _hardwareProfiler;
+    private readonly IGgufModelStore _ggufModelStore;
     private readonly IInstalledRuntimeStore _installedRuntimeStore;
+    private readonly ILaunchPolicyFingerprintProvider _launchPolicyFingerprintProvider;
     private readonly ILogger<InferenceInvalidationEvaluator> _logger;
     private readonly IProcessVramBudgetProbe _processVramBudgetProbe;
 
     public InferenceInvalidationEvaluator(IInstalledRuntimeStore installedRuntimeStore,
+        IGgufModelStore ggufModelStore,
+        ILaunchPolicyFingerprintProvider launchPolicyFingerprintProvider,
         IHardwareProfiler hardwareProfiler,
         IProcessVramBudgetProbe processVramBudgetProbe,
         ILogger<InferenceInvalidationEvaluator> logger)
     {
         _installedRuntimeStore = installedRuntimeStore ?? throw new ArgumentNullException(nameof(installedRuntimeStore));
+        _ggufModelStore = ggufModelStore ?? throw new ArgumentNullException(nameof(ggufModelStore));
+        _launchPolicyFingerprintProvider =
+            launchPolicyFingerprintProvider ?? throw new ArgumentNullException(nameof(launchPolicyFingerprintProvider));
         _hardwareProfiler = hardwareProfiler ?? throw new ArgumentNullException(nameof(hardwareProfiler));
         _processVramBudgetProbe = processVramBudgetProbe ?? throw new ArgumentNullException(nameof(processVramBudgetProbe));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -42,15 +50,47 @@ public sealed class InferenceInvalidationEvaluator : IInferenceInvalidationEvalu
             return true;
         }
 
-        // (b) Hardware delta (vendor / total-VRAM) against the freeze baseline.
+        // (b) The versioned launch-policy identity is authoritative. Legacy/missing fingerprints are stale rather than
+        // being interpreted as equivalent to today's defaults.
+        if (await HasLaunchPolicyDriftedAsync(profile, ct).ConfigureAwait(false))
+        {
+            return true;
+        }
+
+        // (c) Hardware delta (vendor / total-VRAM) against the freeze baseline.
         var hardware = await _hardwareProfiler.GetProfileAsync(forceRefresh: true, ct).ConfigureAwait(false);
         if (HasHardwareDrifted(profile, hardware))
         {
             return true;
         }
 
-        // (c) Live global-free VRAM below the frozen baseline, with process-budget fallback when global free is unknown.
+        // (d) Live global-free VRAM below the frozen global-free baseline. Process budget is never substituted.
         return await HasLiveFreeVramRegressedAsync(profile, hardware, ct).ConfigureAwait(false);
+    }
+
+    private async Task<bool> HasLaunchPolicyDriftedAsync(InferenceProfileRecord profile, CancellationToken ct)
+    {
+        if (profile.LaunchPolicyFingerprintVersion is null || string.IsNullOrWhiteSpace(profile.LaunchPolicyFingerprint))
+        {
+            return true;
+        }
+
+        var path = await _ggufModelStore.ResolveModelFilePathAsync(profile.ModelName, ct).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return true;
+        }
+
+        try
+        {
+            var current = await _launchPolicyFingerprintProvider.CaptureAsync(profile, path, ct).ConfigureAwait(false);
+            return current.Version != profile.LaunchPolicyFingerprintVersion
+                   || !string.Equals(current.Value, profile.LaunchPolicyFingerprint, StringComparison.Ordinal);
+        }
+        catch (FileNotFoundException)
+        {
+            return true;
+        }
     }
 
     // The active installed runtime is the on-disk, smoke-tested tag (IInstalledRuntimeStore). When it is unknown (fresh
@@ -83,7 +123,7 @@ public sealed class InferenceInvalidationEvaluator : IInferenceInvalidationEvalu
         }
 
         return hardware.VramKnown
-               && profile.FreeVramAtFreezeBytes is { } freezeBaseline
+               && profile.GlobalFreeVramAtFreezeBytes is { } freezeBaseline
                && hardware.VramBytes is { } totalVram
                && totalVram < freezeBaseline;
     }
@@ -93,17 +133,22 @@ public sealed class InferenceInvalidationEvaluator : IInferenceInvalidationEvalu
         CancellationToken ct)
     {
         if (string.Equals(profile.Backend, InferenceBackends.Cpu, StringComparison.OrdinalIgnoreCase)
-            || profile.FreeVramAtFreezeBytes is not { } freezeBaseline)
+            || profile.GlobalFreeVramAtFreezeBytes is not { } freezeBaseline)
         {
             return false;
         }
 
         var freeNow = hardware.AvailableVramBytes;
-        var source = "global-free";
-        if (freeNow is null)
+        var processBudgetNow =
+            await _processVramBudgetProbe.TryGetProcessBudgetBytesAsync(profile.Backend, ct).ConfigureAwait(false);
+        if (freeNow is { } globalFree && processBudgetNow is { } processBudget
+            && Math.Abs(processBudget - globalFree) >= MaterialFreeVramRegressionBytes)
         {
-            freeNow = await _processVramBudgetProbe.TryGetProcessBudgetBytesAsync(profile.Backend, ct).ConfigureAwait(false);
-            source = "process-budget fallback";
+            _logger.LogInformation(
+                "Inference profile {ProfileId} observed divergent VRAM evidence: global-free {GlobalFreeBytes} bytes, process budget {ProcessBudgetBytes} bytes.",
+                profile.Id,
+                globalFree,
+                processBudget);
         }
 
         if (freeNow is not { } currentFree)
@@ -117,9 +162,8 @@ public sealed class InferenceInvalidationEvaluator : IInferenceInvalidationEvalu
         if (regression >= materialThreshold)
         {
             _logger.LogInformation(
-                "Inference profile {ProfileId} {VramSource} VRAM dropped materially below the frozen baseline; flagging for re-explore.",
-                profile.Id,
-                source);
+                "Inference profile {ProfileId} global-free VRAM dropped materially below the frozen baseline; flagging for re-explore.",
+                profile.Id);
             return true;
         }
 

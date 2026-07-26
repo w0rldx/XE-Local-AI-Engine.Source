@@ -37,6 +37,9 @@ function makeMetrics(overrides: Partial<InferenceBenchmarkMetrics> = {}): Infere
 		globalFreeVramAfterBytes: null,
 		processBudgetVramLoadBytes: null,
 		processBudgetVramAfterBytes: null,
+		minimumGlobalFreeVramBytes: null,
+		minimumProcessBudgetVramBytes: null,
+		peakProcessRamBytes: null,
 		externalPressureDetected: false,
 		runs: null,
 		...overrides,
@@ -127,6 +130,9 @@ describe("ProfileMetricsCard", () => {
 			globalFreeVramAfterBytes: 5_905_580_032,
 			processBudgetVramLoadBytes: 7_516_192_768,
 			processBudgetVramAfterBytes: 6_979_321_856,
+			minimumGlobalFreeVramBytes: 5_368_709_120,
+			minimumProcessBudgetVramBytes: 6_442_450_944,
+			peakProcessRamBytes: 3_221_225_472,
 		});
 
 		renderCard(<ProfileMetricsCard metrics={metrics} testIdSuffix="embedding" />);
@@ -138,6 +144,9 @@ describe("ProfileMetricsCard", () => {
 		expect(screen.getByTestId("inference-profile-metric-valuesFinite-embedding").textContent).toContain("Yes");
 		expect(screen.getByTestId("inference-profile-metric-globalFreeVramLoad-embedding").textContent).toContain("6.0 GB");
 		expect(screen.getByTestId("inference-profile-metric-processBudgetVramLoad-embedding").textContent).toContain("7.0 GB");
+		expect(screen.getByTestId("inference-profile-metric-minimumGlobalFreeVram-embedding").textContent).toContain("5.0 GB");
+		expect(screen.getByTestId("inference-profile-metric-minimumProcessBudgetVram-embedding").textContent).toContain("6.0 GB");
+		expect(screen.getByTestId("inference-profile-metric-peakProcessRam-embedding").textContent).toContain("3.0 GB");
 		expect(screen.queryByTestId("inference-profile-metric-vramLoad-embedding")).toBeNull();
 	});
 

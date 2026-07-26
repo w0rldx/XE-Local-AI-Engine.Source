@@ -45,8 +45,17 @@ public sealed class InferenceProfileViewDto
 
     public int? ExpertCount { get; init; }
 
-    /// <summary>Free VRAM (bytes) observed when the profile was frozen; null until a freeze records it.</summary>
-    public long? FreeVramAtFreezeBytes { get; init; }
+    /// <summary>Version of the launch-policy fingerprint schema, or null for a legacy profile.</summary>
+    public int? LaunchPolicyFingerprintVersion { get; init; }
+
+    /// <summary>SHA-256 launch-policy fingerprint, or null for a legacy profile that is treated as stale.</summary>
+    public string? LaunchPolicyFingerprint { get; init; }
+
+    /// <summary>Global device-free VRAM captured at freeze; the only VRAM invalidation baseline.</summary>
+    public long? GlobalFreeVramAtFreezeBytes { get; init; }
+
+    /// <summary>Calling-process VRAM budget captured at freeze; diagnostic only.</summary>
+    public long? ProcessBudgetVramAtFreezeBytes { get; init; }
 
     /// <summary>The lifecycle status name — <c>Explored|Frozen|Stale</c>.</summary>
     public required string Status { get; init; }
@@ -188,6 +197,15 @@ public sealed class InferenceBenchmarkMetricsDto
 
     /// <summary>llama.cpp process-local VRAM budget observed after the workload.</summary>
     public long? ProcessBudgetVramAfterBytes { get; init; }
+
+    /// <summary>Lowest globally-free VRAM sampled across warmups and measured passes.</summary>
+    public long? MinimumGlobalFreeVramBytes { get; init; }
+
+    /// <summary>Lowest llama.cpp process budget sampled across warmups and measured passes.</summary>
+    public long? MinimumProcessBudgetVramBytes { get; init; }
+
+    /// <summary>Highest sampled working set of the transient llama-server process.</summary>
+    public long? PeakProcessRamBytes { get; init; }
 
     /// <summary>Whether material process-budget/global-free divergence invalidated the benchmark as external pressure.</summary>
     public bool ExternalPressureDetected { get; init; }

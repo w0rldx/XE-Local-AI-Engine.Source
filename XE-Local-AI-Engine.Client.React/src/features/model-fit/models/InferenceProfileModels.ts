@@ -24,11 +24,14 @@ export interface InferenceProfileView {
 	readonly ctxSize: number | null;
 	readonly isMoe: boolean;
 	readonly expertCount: number | null;
+	readonly launchPolicyFingerprintVersion: number | null;
+	readonly launchPolicyFingerprint: string | null;
 	// True when the profile has a benchmark snapshot — the gate the UI uses to enable Freeze.
 	readonly hasBenchmark: boolean;
 	// Free VRAM (bytes) captured when the profile was frozen; null when absent / not frozen. The only VRAM figure
 	// the list DTO carries (the live benchmark metrics arrive separately from a benchmark run).
-	readonly frozenVramBytes: number | null;
+	readonly frozenGlobalFreeVramBytes: number | null;
+	readonly frozenProcessBudgetVramBytes: number | null;
 }
 
 // One benchmark's metrics, all nullable because each model role emits only the measurements that apply to it.
@@ -56,6 +59,9 @@ export interface InferenceBenchmarkMetrics {
 	readonly globalFreeVramAfterBytes: number | null;
 	readonly processBudgetVramLoadBytes: number | null;
 	readonly processBudgetVramAfterBytes: number | null;
+	readonly minimumGlobalFreeVramBytes: number | null;
+	readonly minimumProcessBudgetVramBytes: number | null;
+	readonly peakProcessRamBytes: number | null;
 	readonly externalPressureDetected: boolean;
 	readonly runs: number | null;
 }

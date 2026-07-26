@@ -173,6 +173,9 @@ public sealed record InferenceBenchmarkMetrics(
     long? GlobalFreeVramAfterBytes = null,
     long? ProcessBudgetVramLoadBytes = null,
     long? ProcessBudgetVramAfterBytes = null,
+    long? MinimumGlobalFreeVramBytes = null,
+    long? MinimumProcessBudgetVramBytes = null,
+    long? PeakProcessRamBytes = null,
     bool ExternalPressureDetected = false,
     string? DiagnosticsJson = null)
 {

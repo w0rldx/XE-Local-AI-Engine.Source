@@ -757,6 +757,9 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1InferenceBenchmarkMetricsD
 	globalFreeVramAfterBytes: z.int().nullish(),
 	processBudgetVramLoadBytes: z.int().nullish(),
 	processBudgetVramAfterBytes: z.int().nullish(),
+	minimumGlobalFreeVramBytes: z.int().nullish(),
+	minimumProcessBudgetVramBytes: z.int().nullish(),
+	peakProcessRamBytes: z.int().nullish(),
 	externalPressureDetected: z.boolean().optional(),
 	runs: z
 		.int()
@@ -792,11 +795,18 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1InferenceProfileViewDto = 
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullish(),
-	freeVramAtFreezeBytes: z.int().nullish(),
+	launchPolicyFingerprintVersion: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	launchPolicyFingerprint: z.string().nullish(),
 	status: z.string(),
 	benchmarkSnapshotId: z.guid().nullish(),
 	createdAtUtc: z.int(),
 	updatedAtUtc: z.int(),
+	globalFreeVramAtFreezeBytes: z.int().nullish(),
+	processBudgetVramAtFreezeBytes: z.int().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1BenchmarkInferenceProfileResponse = z.object({

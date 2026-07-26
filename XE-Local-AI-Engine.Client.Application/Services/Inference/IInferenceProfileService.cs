@@ -59,11 +59,14 @@ public sealed record InferenceProfileView(
     long? NParams,
     bool IsMoe,
     int? ExpertCount,
-    long? FreeVramAtFreezeBytes,
     string Status,
     Guid? BenchmarkSnapshotId,
     long CreatedAtUtc,
-    long UpdatedAtUtc);
+    long UpdatedAtUtc,
+    int? LaunchPolicyFingerprintVersion = null,
+    string? LaunchPolicyFingerprint = null,
+    long? GlobalFreeVramAtFreezeBytes = null,
+    long? ProcessBudgetVramAtFreezeBytes = null);
 
 /// <summary>Outcome of an explore run: the drafted profile, or a sanitized reason when the model was rejected.</summary>
 public sealed record ExploreResult(bool Success, string? FailureReason, InferenceProfileView? Profile)
