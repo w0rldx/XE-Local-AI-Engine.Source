@@ -42,8 +42,8 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 /// </summary>
 internal sealed class SubAgentSpawnService : ISubAgentSpawnService
 {
-    // The inner agent-as-tool exposes a single "query" input parameter (verified against MAF 1.10.0
-    // AIAgentExtensions.AsAIFunction; pinned version is now 1.13.0, not re-verified); the spawn task is passed under
+    // The inner agent-as-tool exposes a single "query" input parameter (re-verified against MAF 1.15.0
+    // AIAgentExtensions.AsAIFunction); the spawn task is passed under
     // that key. AsAIFunction forwards the outer CancellationToken into the inner run (verified by
     // Spawn_PropagatesCancellationToInnerRun), so no linked CTS is needed — the parent ct flows straight through
     // InvokeAsync.
@@ -366,7 +366,8 @@ internal sealed class SubAgentSpawnService : ISubAgentSpawnService
         }
 
         // MAAI001: Agent Skills (AgentSkillsProvider/AgentInlineSkill) shipped [Experimental] in Microsoft.Agents.AI
-        // (verified 1.8.0; pinned 1.13.0, not re-verified). Reached only when the child agent has assigned skills, the
+        // in 1.8.0. The scoped MAAI001 suppression remains at the pinned 1.15.0 until explicit graduation evidence is
+        // available. Reached only when the child agent has assigned skills, the
         // same scoped suppression InvocationAgentFactory uses.
 #pragma warning disable MAAI001
         var inlineSkills = new AgentInlineSkill[resolvedSkills.Count];
