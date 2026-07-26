@@ -40,7 +40,6 @@ public static class AgentServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(configuration);
-        services.TryAddSingleton<ITokenEstimatorCalibrationStore, TokenEstimatorCalibrationStore>();
 
         _ = services.AddOptions<LocalChatAgentOptions>()
                     .Bind(configuration.GetSection(LocalChatAgentOptions.Section))
@@ -123,6 +122,7 @@ public static class AgentServiceCollectionExtensions
     public static IServiceCollection DecorateChatClientPipeline(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
+        services.TryAddSingleton<ITokenEstimatorCalibrationStore, TokenEstimatorCalibrationStore>();
 
         _ = services.Decorate<IChatClient>((inner, serviceProvider) =>
         {
