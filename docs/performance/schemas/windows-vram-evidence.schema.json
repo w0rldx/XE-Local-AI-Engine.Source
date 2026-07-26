@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://xe-local-ai-engine.local/schemas/windows-vram-evidence.schema.json",
+  "title": "Native-Windows global/process-visible VRAM evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "kind", "scenario", "workload_label", "started_at_utc", "completed_at_utc", "interval_seconds", "host", "llama_server", "interpretation", "samples"],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "kind": { "const": "windows-vram-evidence" },
+    "scenario": { "enum": ["idle", "game", "custom"] },
+    "workload_label": { "type": "string" },
+    "started_at_utc": { "type": "string", "format": "date-time" },
+    "completed_at_utc": { "type": "string", "format": "date-time" },
+    "interval_seconds": { "type": "integer", "minimum": 1 },
+    "host": {
+      "type": "object",
+      "required": ["os", "machine_name", "processor"],
+      "properties": {
+        "os": { "type": "string" },
+        "machine_name": { "type": "string" },
+        "processor": { "type": "string" }
+      }
+    },
+    "llama_server": {
+      "type": "object",
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "type": "string" },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    },
+    "interpretation": { "type": "object" },
+    "samples": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["captured_at_utc", "global_vram", "process_budget_probe", "compute_apps"],
+        "properties": {
+          "captured_at_utc": { "type": "string", "format": "date-time" },
+          "global_vram": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["index", "name", "uuid", "driver_version", "total_mib", "free_mib", "used_mib", "utilization_percent"]
+            }
+          },
+          "process_budget_probe": {
+            "type": "object",
+            "required": ["argv", "exit_code", "raw_output"]
+          },
+          "compute_apps": {
+            "type": "object",
+            "required": ["exit_code", "raw_output"]
+          }
+        }
+      }
+    }
+  }
+}
