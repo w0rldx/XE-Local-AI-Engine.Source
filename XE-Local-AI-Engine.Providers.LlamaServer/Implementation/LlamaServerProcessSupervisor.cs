@@ -115,7 +115,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         _options.Validate();
         _profileResolver = profileResolver ?? throw new ArgumentNullException(nameof(profileResolver));
         _launchPolicy = launchPolicy ?? throw new ArgumentNullException(nameof(launchPolicy));
-        _allocationResolver = allocationResolver ?? new DefaultProcessContextAllocationResolver(_options);
+        _allocationResolver = allocationResolver ?? new DefaultProcessContextAllocationResolver(new LlamaServerLaunchPolicyOptions());
         _externalEndpoints = externalEndpoints ?? new LlamaServerExternalEndpointOptions();
         _timeProvider = timeProvider ?? TimeProvider.System;
         _logger = logger ?? NullLogger<LlamaServerProcessSupervisor>.Instance;
