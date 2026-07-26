@@ -1,10 +1,11 @@
 namespace XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 
 /// <summary>
-///     Probes the host for the CURRENTLY-FREE GPU VRAM available to a llama.cpp backend. Consumed by inference-profile
-///     invalidation to detect a frozen profile whose freeze-time free-VRAM baseline no longer holds. Returns
-///     <see langword="null" /> whenever the figure is unknown or unsupported (no GPU, CPU backend, or no real probe
-///     wired) so callers DEGRADE rather than treating "unknown" as "zero".
+///     Probes llama.cpp's CURRENT PROCESS VRAM BUDGET for a backend. The real implementation parses
+///     <c>llama-server --list-devices</c>, which is vendor-agnostic and placement-relevant, but on WDDM/Windows it is not
+///     system-wide free VRAM: CUDA reports the calling process's residency budget and can ignore memory held by games or
+///     other model processes. Consumers that need global admission/invalidation semantics must prefer
+///     <see cref="HardwareProfile.AvailableVramBytes" /> and treat this value as a separate fallback/evidence axis.
 /// </summary>
 /// <remarks>
 ///     <para>
@@ -18,16 +19,15 @@ namespace XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 public interface IProcessVramBudgetProbe
 {
     /// <summary>
-    ///     Returns the currently-free VRAM in bytes for <paramref name="backend" />, or <see langword="null" /> when the
-    ///     figure is unknown/unsupported.
+    ///     Returns llama.cpp's process-local VRAM budget in bytes for <paramref name="backend" />, or
+    ///     <see langword="null" /> when the figure is unknown/unsupported.
     /// </summary>
     Task<long?> TryGetProcessBudgetBytesAsync(string backend, CancellationToken ct);
 }
 
 /// <summary>
 ///     Default <see cref="IProcessVramBudgetProbe" /> that always reports "unknown" (<see langword="null" />). Wired via
-///     <c>TryAddSingleton</c> so the invalidation evaluator simply skips the live free-VRAM check until the real
-///     <c>--list-devices</c>-backed probe replaces it.
+///     <c>TryAddSingleton</c> so callers degrade when the real <c>--list-devices</c>-backed probe is unavailable.
 /// </summary>
 public sealed class UnknownProcessVramBudgetProbe : IProcessVramBudgetProbe
 {
