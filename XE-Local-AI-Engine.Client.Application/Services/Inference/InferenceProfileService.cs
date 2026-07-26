@@ -242,12 +242,17 @@ public sealed class InferenceProfileService : IInferenceProfileService
 
         // Store global-free VRAM as the invalidation baseline wherever NVIDIA/NVML provides it. llama.cpp's
         // --list-devices figure is a process-local residency budget under WDDM and can ignore external pressure, so it is
-        // only the fallback for backends/vendors where global free is unavailable.
+        // only the fallback for GPU backends/vendors where global free is unavailable. CPU profiles deliberately keep
+        // no VRAM baseline; unrelated GPU pressure must never invalidate a CPU placement.
         var hardware = await _hardwareProfiler.GetProfileAsync(forceRefresh: true, ct).ConfigureAwait(false);
-        var freeVramAtFreeze = hardware.AvailableVramBytes;
-        if (freeVramAtFreeze is null)
+        long? freeVramAtFreeze = null;
+        if (!string.Equals(profile.Backend, InferenceBackends.Cpu, StringComparison.OrdinalIgnoreCase))
         {
-            freeVramAtFreeze = await _processVramBudgetProbe.TryGetProcessBudgetBytesAsync(profile.Backend, ct).ConfigureAwait(false);
+            freeVramAtFreeze = hardware.AvailableVramBytes;
+            if (freeVramAtFreeze is null)
+            {
+                freeVramAtFreeze = await _processVramBudgetProbe.TryGetProcessBudgetBytesAsync(profile.Backend, ct).ConfigureAwait(false);
+            }
         }
 
         var frozen = await _profileStore.MarkFrozenAsync(profileId, benchmark.SnapshotId, freeVramAtFreeze, ct).ConfigureAwait(false);

@@ -92,7 +92,8 @@ public sealed class InferenceInvalidationEvaluator : IInferenceInvalidationEvalu
         HardwareProfile hardware,
         CancellationToken ct)
     {
-        if (profile.FreeVramAtFreezeBytes is not { } freezeBaseline)
+        if (string.Equals(profile.Backend, InferenceBackends.Cpu, StringComparison.OrdinalIgnoreCase)
+            || profile.FreeVramAtFreezeBytes is not { } freezeBaseline)
         {
             return false;
         }
