@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "capturedAtUtc": "2026-07-26T21:31:08.996569+00:00",
-  "commit": "705f5d7625e504896c112f4b4ed5c3aad6be0b3c",
+  "capturedAtUtc": "2026-07-26T22:46:46.442155+00:00",
+  "commit": "0a39b49363d6d89547410b5f9b547b25c5cf3bcc",
   "result": "passed",
   "linuxPortablePackageIncluded": true,
   "windowsTesterPackage": {
@@ -12,31 +12,31 @@
   "logs": [
     {
       "step": "debug-build",
-      "sha256": "48f499f07f3791f5cefe97f9a4dcbfe1c6ea2b516fa956f6d9990b5eebde6f53"
+      "sha256": "a52c92ec77cbbc65e2ee27e82dec9e30c04da69e08e9716762127fbf9e91e303"
     },
     {
       "step": "debug-devui-hosting-smoke",
-      "sha256": "c8d65104eca9e69d7cdf9bc7d468a5aba5b7c150e6ce2b67118baa1d80accf9b"
+      "sha256": "2ea957db77aa3890894d5dbd687191d9e39b0391dbf26fd415cdd6c51685c518"
     },
     {
       "step": "debug-devui-registration-smoke",
-      "sha256": "11fdc3d69b7be9d59463442038f9a55ba5b362fdd0f38067718b1be362daefa0"
+      "sha256": "045c7bcd25fecd48ae14b9b98073b4f9494d14ec094d7b0edcf963bfd43cb5c4"
     },
     {
       "step": "debug-restore",
-      "sha256": "efd69c89c53b2d7f82804abb4177a880d888fe8c499276324ab413c8b529821e"
+      "sha256": "0fe253ad66593ad4581bfe30a87f10e026a23ebd1c5e53bd8011e2788157f2d0"
     },
     {
       "step": "linux-portable-package",
-      "sha256": "5efa1fff9c033e50e96d878ce11963cb93ea94f97c93436eef85283a64834729"
+      "sha256": "40f634407d145a417cfb813ec4c39eebd06597be21ba31809d95fefe54c004af"
     },
     {
       "step": "release-build",
-      "sha256": "b8b7917bce598faeae58493c3fc94c06d4ecebee6d0d8d4e3b6f4d2f823480f4"
+      "sha256": "6f7e0478cde820fd70099eb1ca7af2bccadcfcf12dba6a7f4290b0a96c4f0923"
     },
     {
       "step": "release-restore",
-      "sha256": "406a82693baec1ac68f4a8302b8ba11c08a34fd22169de85eb0baf179e6c613e"
+      "sha256": "a87ed9214c698bbdd89d90ca3b60ce47b55a2ed31257db129e3480c2719496e1"
     },
     {
       "step": "release-static-analysis",

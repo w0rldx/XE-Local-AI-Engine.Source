@@ -52,10 +52,11 @@ paths are replaced with `$REPO`; package ids and versions are preserved verbatim
 Debug is captured independently because the Hosting, Hosting.OpenAI, and DevUI
 packages are conditional on `$(Configuration) == Debug`.
 
-Captured on 2026-07-26:
+Captured on 2026-07-27 local time (2026-07-26 UTC):
 
 - baseline `e67d669709169fefc4cffab444af66654526a8d8`;
-- upgraded source `1a809330ed5295360d4e57a45f8c8062ffa765d2`;
+- combined six-plan source
+  `4d84956ca04119f27139e3af9e1f9f42349799c0`;
 - all 14 changed central pins are recorded in the two `central-pins.tsv` files;
 - Release resolves MAF `1.15.0`, MEAI `10.8.1`, and MCP `1.4.1` without
   resolving the Debug-only Hosting/Hosting.OpenAI/DevUI packages;
@@ -91,7 +92,8 @@ and response SHA-256/length. It contains no machine-local paths or model output.
 This lane is not a release gate because arbitrary release machines do not have the
 required runtime/model/hardware.
 
-The opt-in lane passed on 2026-07-26 using CUDA with:
+The opt-in lane passed on 2026-07-27 local time (2026-07-26 UTC) against
+`0a39b49363d6d89547410b5f9b547b25c5cf3bcc` using CUDA with:
 
 - model SHA-256
   `6eb923e7d26e9cea28811e1a8e852009b21242fb157b26149d3b188f3a8c8653`
@@ -118,7 +120,7 @@ builds the real portable `linux-x64` package. Logs are path-sanitized and hashed
 `docs/agent-framework/evidence/validation/manifest.json`.
 
 The captured validation manifest tests source commit
-`705f5d7625e504896c112f4b4ed5c3aad6be0b3c` and records `result: passed`:
+`0a39b49363d6d89547410b5f9b547b25c5cf3bcc` and records `result: passed`:
 
 - Release solution restore/build: passed with 0 warnings and 0 errors;
 - Debug solution restore/build: passed with 0 warnings and 0 errors;
@@ -126,7 +128,7 @@ The captured validation manifest tests source commit
 - Debug DevUI hosting/route smoke: 1/1 passed;
 - release-script static analysis and the `P0_SPIKE` compile gate: clean;
 - real portable `linux-x64` package: built, 86 MiB, SHA-256
-  `75de37a76a745b0f8edc505b8f14ad34a2dbe779186d6b5418faf307c09d4ae9`.
+  `48401f15a78041523ec87c8a62bcf059232577c8a2e5e38f72a21cf59871193a`.
 
 ### Native Windows gap
 

@@ -1,10 +1,10 @@
   Determining projects to restore...
-  Restored $REPO/XE-Local-AI-Engine.AI.Agent/XE-Local-AI-Engine.AI.Agent.csproj (in 301 ms).
-  Restored $REPO/XE-Local-AI-Engine.Client.Application/XE-Local-AI-Engine.Client.Application.csproj (in 369 ms).
-  Restored $REPO/XE-Local-AI-Engine.Client.Testing/XE-Local-AI-Engine.Client.Testing.csproj (in 368 ms).
-  Restored $REPO/XE-Local-AI-Engine.Tests.E2ETests/XE-Local-AI-Engine.Tests.E2ETests.csproj (in 315 ms).
-  Restored $REPO/XE-Local-AI-Engine.Client.Persistence.Tests/XE-Local-AI-Engine.Client.Persistence.Tests.csproj (in 318 ms).
-  Restored $REPO/XE-Local-AI-Engine.AI.Agent.Tests/XE-Local-AI-Engine.AI.Agent.Tests.csproj (in 301 ms).
-  Restored $REPO/XE-Local-AI-Engine.Client/XE-Local-AI-Engine.Client.csproj (in 368 ms).
-  Restored $REPO/XE-Local-AI-Engine.Tests/XE-Local-AI-Engine.Tests.csproj (in 318 ms).
+  Restored $REPO/XE-Local-AI-Engine.AI.Agent/XE-Local-AI-Engine.AI.Agent.csproj (in 451 ms).
+  Restored $REPO/XE-Local-AI-Engine.AI.Agent.Tests/XE-Local-AI-Engine.AI.Agent.Tests.csproj (in 492 ms).
+  Restored $REPO/XE-Local-AI-Engine.Client/XE-Local-AI-Engine.Client.csproj (in 492 ms).
+  Restored $REPO/XE-Local-AI-Engine.Client.Application/XE-Local-AI-Engine.Client.Application.csproj (in 503 ms).
+  Restored $REPO/XE-Local-AI-Engine.Client.Persistence.Tests/XE-Local-AI-Engine.Client.Persistence.Tests.csproj (in 494 ms).
+  Restored $REPO/XE-Local-AI-Engine.Client.Testing/XE-Local-AI-Engine.Client.Testing.csproj (in 382 ms).
+  Restored $REPO/XE-Local-AI-Engine.Tests/XE-Local-AI-Engine.Tests.csproj (in 457 ms).
+  Restored $REPO/XE-Local-AI-Engine.Tests.E2ETests/XE-Local-AI-Engine.Tests.E2ETests.csproj (in 438 ms).
   12 of 20 projects are up-to-date for restore.
