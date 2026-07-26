@@ -11,11 +11,18 @@ namespace XE_Local_AI_Engine.Client.Services.Knowledge;
 public interface IKnowledgeQueryEmbeddingCache
 {
     /// <summary>
-    ///     Returns the cached query vector for <paramref name="vectorIdentity" /> + <paramref name="query" /> when present
-    ///     and unexpired. Records a hit/miss metric.
+    ///     Returns the cached query embedding for <paramref name="policyFamilyIdentity" /> + <paramref name="query" />
+    ///     when present and unexpired. The caller validates the entry's exact identity and width against the current
+    ///     policy before using it. Records a hit/miss metric.
     /// </summary>
-    bool TryGet(string vectorIdentity, string query, out ReadOnlyMemory<float> vector);
+    bool TryGet(string policyFamilyIdentity, string query, out KnowledgeQueryEmbeddingCacheEntry entry);
 
-    /// <summary>Caches <paramref name="vector" /> for <paramref name="vectorIdentity" /> + <paramref name="query" />, evicting to stay within the size bound.</summary>
-    void Store(string vectorIdentity, string query, ReadOnlyMemory<float> vector);
+    /// <summary>Caches <paramref name="entry" /> for the policy family and query, evicting to stay within the size bound.</summary>
+    void Store(string policyFamilyIdentity, string query, KnowledgeQueryEmbeddingCacheEntry entry);
 }
+
+/// <summary>
+///     A cached transformed vector plus its exact canonical model/algorithm/version/width identity. The lookup key uses
+///     the policy family because native width is not known until after the provider's first generation.
+/// </summary>
+public sealed record KnowledgeQueryEmbeddingCacheEntry(ReadOnlyMemory<float> Vector, string VectorIdentity);

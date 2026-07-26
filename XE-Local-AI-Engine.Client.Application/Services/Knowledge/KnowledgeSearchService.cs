@@ -343,10 +343,15 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
             // search degrades to lexical-only on any embedding failure regardless of why the name is what it is.
             var resolution = await _embeddingModelResolver.ResolveAsync(provider, cancellationToken).ConfigureAwait(false);
             var embeddingModelName = resolution.Name;
-            var expectedIdentity = KnowledgeEmbeddingVectorPolicy.TryCreateExpectedIdentity(resolution, _options.EmbeddingVectorMode);
-            if (expectedIdentity is not null && _queryEmbeddingCache.TryGet(expectedIdentity, query, out var cachedVector))
+            var cacheFamilyIdentity = KnowledgeEmbeddingVectorPolicy.CreateCacheFamilyIdentity(resolution, _options.EmbeddingVectorMode);
+            if (_queryEmbeddingCache.TryGet(cacheFamilyIdentity, query, out var cached)
+                && KnowledgeEmbeddingVectorPolicy.MatchesCurrentPolicy(
+                    cached.VectorIdentity,
+                    cached.Vector.Length,
+                    resolution,
+                    _options.EmbeddingVectorMode))
             {
-                return (cachedVector, embeddingModelName, expectedIdentity);
+                return (cached.Vector, embeddingModelName, cached.VectorIdentity);
             }
 
             using var generator = provider.CreateEmbeddingGenerator(new LocalModelSelection
@@ -364,9 +369,12 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
 
             var transformed = KnowledgeEmbeddingVectorPolicy.Transform(resolution, generated[0].Vector, _options.EmbeddingVectorMode);
 
-            // The cache key is the full canonical vector identity, not merely the model name, so native and Matryoshka
-            // vectors from the same resolved model can never collide during a policy change.
-            _queryEmbeddingCache.Store(transformed.Identity, query, transformed.Values);
+            // The pre-generation key isolates the resolved model and policy family. The value retains the exact canonical
+            // identity (including native width), which the read path validates before accepting a hit.
+            _queryEmbeddingCache.Store(
+                cacheFamilyIdentity,
+                query,
+                new KnowledgeQueryEmbeddingCacheEntry(transformed.Values, transformed.Identity));
             return (transformed.Values, embeddingModelName, transformed.Identity);
         }
         catch (Exception exception) when (exception is HttpRequestException or IOException or OllamaException or InvalidOperationException or KnowledgeIngestionException)

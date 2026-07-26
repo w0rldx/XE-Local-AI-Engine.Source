@@ -91,9 +91,9 @@ public sealed class KnowledgeBaseOptions
 
     /// <summary>
     ///     Hard upper bound on the number of query embeddings held in the RAM-only query-embedding cache. Bounded so a
-    ///     long-lived process cannot grow the cache without limit; keyed by (canonical vector identity, query hash) so a
-    ///     model, transform-policy, or width change never returns a stale vector. Default 128; a value of 0 or less still
-    ///     clamps to 1.
+    ///     long-lived process cannot grow the cache without limit; keyed by (model/policy family, query hash), with the
+    ///     exact canonical vector identity and width validated from each entry so a model, transform-policy, or width
+    ///     change never returns a stale vector. Default 128; a value of 0 or less still clamps to 1.
     /// </summary>
     public int QueryEmbeddingCacheMaxEntries { get; set; } = 128;
 
