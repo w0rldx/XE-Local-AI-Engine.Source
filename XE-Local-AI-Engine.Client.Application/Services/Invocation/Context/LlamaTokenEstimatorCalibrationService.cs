@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Invocation.Context;
 
-using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -8,9 +7,9 @@ using System.Threading.Channels;
 using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 
 /// <summary>
-///     Opportunistically calibrates token estimates for llama.cpp models that have already served a real request.
-///     Scheduling is non-blocking; all <c>/tokenize</c> I/O runs here, outside the streaming path. Provider failures leave
-///     the prior calibration (or chars/4 fallback) intact and never affect inference.
+///     Opportunistically calibrates token estimates for llama.cpp models that are serving real requests. Each request
+///     performs only a bounded due check and queue write; /tokenize I/O runs here, outside inference. There is no timer
+///     that can revisit a stale endpoint after eject. Provider failures retain the prior calibration or chars/4 fallback.
 /// </summary>
 internal sealed class LlamaTokenEstimatorCalibrationService : BackgroundService, ITokenEstimatorCalibrationScheduler
 {
@@ -24,17 +23,18 @@ internal sealed class LlamaTokenEstimatorCalibrationService : BackgroundService,
     private static readonly TimeSpan DefaultInterval = TimeSpan.FromMinutes(30);
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(5);
 
+    private readonly Lock _sync = new();
     private readonly ITokenEstimatorCalibrationStore _store;
     private readonly HttpClient _httpClient;
     private readonly ILogger<LlamaTokenEstimatorCalibrationService> _logger;
     private readonly TimeSpan _interval;
-    private readonly ConcurrentDictionary<string, CalibrationTarget> _targets = new(StringComparer.Ordinal);
-    private readonly Channel<byte> _wake = Channel.CreateBounded<byte>(new BoundedChannelOptions(1)
+    private readonly Dictionary<string, CalibrationTarget> _targets = new(StringComparer.Ordinal);
+    private readonly Channel<CalibrationWork> _work = Channel.CreateUnbounded<CalibrationWork>(new UnboundedChannelOptions
     {
-        FullMode = BoundedChannelFullMode.DropWrite,
         SingleReader = true,
         SingleWriter = false
     });
+    private long _generation;
 
     public LlamaTokenEstimatorCalibrationService(HttpClient httpClient,
         ITokenEstimatorCalibrationStore store,
@@ -61,59 +61,122 @@ internal sealed class LlamaTokenEstimatorCalibrationService : BackgroundService,
 
         if (!IsLoopbackHttp(llamaServerBaseAddress))
         {
+            LogFailure(CalibrationFailureReason.RejectedEndpoint);
             return;
         }
 
-        _targets.AddOrUpdate(modelName,
-            _ => new CalibrationTarget(llamaServerBaseAddress, DateTimeOffset.MinValue),
-            (_, current) => current with
+        CalibrationWork? work = null;
+        lock (_sync)
+        {
+            var now = DateTimeOffset.UtcNow;
+            if (!_targets.TryGetValue(modelName, out var target)
+                || target.BaseAddress != llamaServerBaseAddress)
             {
-                BaseAddress = llamaServerBaseAddress
-            });
-        _wake.Writer.TryWrite(0);
+                target = new CalibrationTarget(llamaServerBaseAddress, ++_generation, DateTimeOffset.MinValue, false);
+                _targets[modelName] = target;
+            }
+
+            if (!target.InFlight && target.NextDueUtc <= now)
+            {
+                target = target with
+                {
+                    InFlight = true
+                };
+                _targets[modelName] = target;
+                work = new CalibrationWork(modelName, target.BaseAddress, target.Generation);
+            }
+        }
+
+        if (work is { } due)
+        {
+            _work.Writer.TryWrite(due);
+        }
+    }
+
+    public void Invalidate(string modelName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
+        lock (_sync)
+        {
+            _targets.Remove(modelName);
+            _generation++;
+        }
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var wake = _wake.Reader.ReadAsync(stoppingToken).AsTask();
-        var tick = Task.Delay(_interval, stoppingToken);
-        while (!stoppingToken.IsCancellationRequested)
+        await foreach (var work in _work.Reader.ReadAllAsync(stoppingToken).ConfigureAwait(false))
         {
-            await Task.WhenAny(wake, tick).ConfigureAwait(false);
-
-            if (wake.IsCompleted)
-            {
-                _ = await wake.ConfigureAwait(false);
-                wake = _wake.Reader.ReadAsync(stoppingToken).AsTask();
-            }
-
-            if (tick.IsCompleted)
-            {
-                tick = Task.Delay(_interval, stoppingToken);
-            }
-
-            var now = DateTimeOffset.UtcNow;
-            foreach (var (modelName, target) in _targets)
-            {
-                if (target.NextDueUtc > now)
-                {
-                    continue;
-                }
-
-                _targets.TryUpdate(modelName, target with
-                {
-                    NextDueUtc = now + _interval
-                }, target);
-                await TryCalibrateAsync(modelName, target.BaseAddress, stoppingToken).ConfigureAwait(false);
-            }
+            await TryCalibrateCurrentTargetAsync(work, stoppingToken).ConfigureAwait(false);
         }
     }
 
     internal async Task<bool> TryCalibrateAsync(string modelName, Uri llamaServerBaseAddress, CancellationToken cancellationToken)
     {
-        if (!IsLoopbackHttp(llamaServerBaseAddress))
+        var result = await TryReadDivisorAsync(llamaServerBaseAddress, cancellationToken).ConfigureAwait(false);
+        if (result.Divisor is not { } divisor)
         {
             return false;
+        }
+
+        _store.SetDivisor(modelName, divisor);
+        return true;
+    }
+
+    internal static HttpClientHandler CreateProductionHandler()
+    {
+        return new HttpClientHandler
+        {
+            AllowAutoRedirect = false,
+            UseProxy = false,
+            CheckCertificateRevocationList = true
+        };
+    }
+
+    internal static int CalculateDivisor(int characterCount, int tokenCount)
+    {
+        if (characterCount <= 0 || tokenCount <= 0)
+        {
+            return TokenEstimatorCalibrationStore.DefaultCharsPerToken;
+        }
+
+        // Floor is deliberate: characterCount / divisor must be >= the observed token count for the calibration sample.
+        return Math.Clamp(characterCount / tokenCount,
+            TokenEstimatorCalibrationStore.MinimumCharsPerToken,
+            TokenEstimatorCalibrationStore.MaximumCharsPerToken);
+    }
+
+    private async Task TryCalibrateCurrentTargetAsync(CalibrationWork work, CancellationToken cancellationToken)
+    {
+        var result = await TryReadDivisorAsync(work.BaseAddress, cancellationToken).ConfigureAwait(false);
+        lock (_sync)
+        {
+            if (!_targets.TryGetValue(work.ModelName, out var target)
+                || target.Generation != work.Generation
+                || target.BaseAddress != work.BaseAddress)
+            {
+                return;
+            }
+
+            if (result.Divisor is { } divisor)
+            {
+                _store.SetDivisor(work.ModelName, divisor);
+            }
+
+            _targets[work.ModelName] = target with
+            {
+                InFlight = false,
+                NextDueUtc = DateTimeOffset.UtcNow + _interval
+            };
+        }
+    }
+
+    private async Task<CalibrationResult> TryReadDivisorAsync(Uri llamaServerBaseAddress, CancellationToken cancellationToken)
+    {
+        if (!IsLoopbackHttp(llamaServerBaseAddress))
+        {
+            LogFailure(CalibrationFailureReason.RejectedEndpoint);
+            return default;
         }
 
         try
@@ -130,7 +193,24 @@ internal sealed class LlamaTokenEstimatorCalibrationService : BackgroundService,
                     with_pieces = false
                 },
                 timeout.Token).ConfigureAwait(false);
-            response.EnsureSuccessStatusCode();
+
+            if (IsRedirect(response.StatusCode))
+            {
+                LogFailure(CalibrationFailureReason.Redirect);
+                return default;
+            }
+
+            if (response.RequestMessage?.RequestUri is { } finalAddress && !IsLoopbackHttp(finalAddress))
+            {
+                LogFailure(CalibrationFailureReason.FinalEndpointRejected);
+                return default;
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                LogFailure(CalibrationFailureReason.HttpStatus);
+                return default;
+            }
 
             await using var contentStream = await response.Content.ReadAsStreamAsync(timeout.Token).ConfigureAwait(false);
             using var document = await JsonDocument.ParseAsync(contentStream, cancellationToken: timeout.Token).ConfigureAwait(false);
@@ -138,35 +218,48 @@ internal sealed class LlamaTokenEstimatorCalibrationService : BackgroundService,
                 || tokens.ValueKind != JsonValueKind.Array
                 || tokens.GetArrayLength() <= 0)
             {
-                return false;
+                LogFailure(CalibrationFailureReason.InvalidPayload);
+                return default;
             }
 
-            var divisor = CalculateDivisor(CalibrationText.Length, tokens.GetArrayLength());
-            _store.SetDivisor(modelName, divisor);
-            return true;
+            return new CalibrationResult(CalculateDivisor(CalibrationText.Length, tokens.GetArrayLength()));
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             throw;
         }
-        catch (Exception exception) when (exception is HttpRequestException or OperationCanceledException or JsonException)
+        catch (OperationCanceledException)
         {
-            _ = exception;
-            _logger.LogDebug("llama.cpp token-estimator calibration was unavailable; retaining the prior bounded divisor.");
-            return false;
+            LogFailure(CalibrationFailureReason.Timeout);
+            return default;
+        }
+        catch (HttpRequestException)
+        {
+            LogFailure(CalibrationFailureReason.RequestFailure);
+            return default;
+        }
+        catch (JsonException)
+        {
+            LogFailure(CalibrationFailureReason.InvalidPayload);
+            return default;
         }
     }
 
-    internal static int CalculateDivisor(int characterCount, int tokenCount)
+    private void LogFailure(CalibrationFailureReason reason)
     {
-        if (characterCount <= 0 || tokenCount <= 0)
-        {
-            return TokenEstimatorCalibrationStore.DefaultCharsPerToken;
-        }
+        // Bounded, content-free evidence only: no model, URI, port, prompt, tool, user, request, or response data.
+        _logger.LogDebug("llama.cpp token-estimator calibration unavailable ({FailureReason}); retaining the prior bounded divisor.",
+            reason.ToString());
+    }
 
-        return Math.Clamp(characterCount / tokenCount,
-            TokenEstimatorCalibrationStore.MinimumCharsPerToken,
-            TokenEstimatorCalibrationStore.MaximumCharsPerToken);
+    private static bool IsRedirect(HttpStatusCode statusCode)
+    {
+        return statusCode is HttpStatusCode.MultipleChoices
+            or HttpStatusCode.MovedPermanently
+            or HttpStatusCode.Found
+            or HttpStatusCode.SeeOther
+            or HttpStatusCode.TemporaryRedirect
+            or HttpStatusCode.PermanentRedirect;
     }
 
     private static bool IsLoopbackHttp(Uri address)
@@ -180,5 +273,18 @@ internal sealed class LlamaTokenEstimatorCalibrationService : BackgroundService,
                || (IPAddress.TryParse(address.Host, out var parsed) && IPAddress.IsLoopback(parsed));
     }
 
-    private sealed record CalibrationTarget(Uri BaseAddress, DateTimeOffset NextDueUtc);
+    private sealed record CalibrationTarget(Uri BaseAddress, long Generation, DateTimeOffset NextDueUtc, bool InFlight);
+    private readonly record struct CalibrationWork(string ModelName, Uri BaseAddress, long Generation);
+    private readonly record struct CalibrationResult(int? Divisor);
+
+    private enum CalibrationFailureReason
+    {
+        RejectedEndpoint,
+        Redirect,
+        FinalEndpointRejected,
+        HttpStatus,
+        InvalidPayload,
+        Timeout,
+        RequestFailure
+    }
 }

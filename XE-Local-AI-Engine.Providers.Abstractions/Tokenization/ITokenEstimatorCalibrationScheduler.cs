@@ -7,11 +7,17 @@ namespace XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 public interface ITokenEstimatorCalibrationScheduler
 {
     void Schedule(string modelName, Uri llamaServerBaseAddress);
+
+    void Invalidate(string modelName);
 }
 
 public sealed class NullTokenEstimatorCalibrationScheduler : ITokenEstimatorCalibrationScheduler
 {
     public void Schedule(string modelName, Uri llamaServerBaseAddress)
+    {
+    }
+
+    public void Invalidate(string modelName)
     {
     }
 }

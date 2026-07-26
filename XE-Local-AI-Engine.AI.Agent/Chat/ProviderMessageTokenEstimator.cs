@@ -49,7 +49,7 @@ internal static class ProviderMessageTokenEstimator
         var profile = new TokenCharacterProfile();
         foreach (var content in message.Contents)
         {
-            profile.Add(EstimateContentCharacterProfile(content));
+            AddContent(profile, content);
         }
 
         return profile;
@@ -59,10 +59,11 @@ internal static class ProviderMessageTokenEstimator
     {
         ArgumentNullException.ThrowIfNull(messages);
 
+        var divisor = ClampDivisor(charsPerToken);
         var total = 0;
         for (var index = 0; index < messages.Count; index++)
         {
-            total += EstimateTokens(messages[index], charsPerToken);
+            total += EstimateTokens(messages[index], divisor);
         }
 
         return total;
@@ -95,10 +96,10 @@ internal static class ProviderMessageTokenEstimator
             return 0;
         }
 
+        var divisor = ClampDivisor(charsPerToken);
         var total = 0;
         foreach (var tool in tools)
         {
-            var divisor = ClampDivisor(charsPerToken);
             var profile = new TokenCharacterProfile();
             profile.Add(tool.Name);
             profile.Add(tool.Description);
@@ -113,9 +114,8 @@ internal static class ProviderMessageTokenEstimator
         return total;
     }
 
-    private static TokenCharacterProfile EstimateContentCharacterProfile(AIContent content)
+    private static void AddContent(TokenCharacterProfile profile, AIContent content)
     {
-        var profile = new TokenCharacterProfile();
         switch (content)
         {
             case TextContent text:
@@ -143,8 +143,6 @@ internal static class ProviderMessageTokenEstimator
                 profile.Add(content.ToString());
                 break;
         }
-
-        return profile;
     }
 
     private static int ClampDivisor(int charsPerToken)

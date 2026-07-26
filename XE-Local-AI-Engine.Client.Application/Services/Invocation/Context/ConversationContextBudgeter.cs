@@ -39,9 +39,10 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
         // an actually-over-window request through, deferring to a late inner rejection). Mirrors the inner
         // ProviderCallBudgetChatClient's Instructions + Tools overhead so the two budgeters approximately agree (the
         // outer estimate over-counts slightly by framing each tool as its own System message — the safe direction).
-        var fixedOverhead = EstimateFixedOverhead(systemPrompt, toolDefinitions, modelName);
+        var divisor = _estimator.ResolveDivisor(modelName);
+        var fixedOverhead = EstimateFixedOverhead(systemPrompt, toolDefinitions, divisor);
         var effectiveBudget = Math.Max(contextTokenCapacity - reservedOutputTokens - fixedOverhead, 0);
-        var estimatedBefore = _estimator.EstimateTokens(messages, modelName);
+        var estimatedBefore = _estimator.EstimateTokensWithDivisor(messages, divisor);
 
         if (messages.Count == 0 || estimatedBefore <= effectiveBudget)
         {
@@ -60,7 +61,7 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
         {
             var message = messages[i];
             working[i] = message;
-            perMessageTokens[i] = _estimator.EstimateTokens(message, modelName);
+            perMessageTokens[i] = _estimator.EstimateTokensWithDivisor(message, divisor);
 
             if (message.Role == ChatRole.User)
             {
@@ -105,7 +106,7 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
             }
 
             working[i] = truncated;
-            var newTokens = _estimator.EstimateTokens(truncated, modelName);
+            var newTokens = _estimator.EstimateTokensWithDivisor(truncated, divisor);
             currentEstimate += newTokens - perMessageTokens[i];
             perMessageTokens[i] = newTokens;
             toolResultsTruncated++;
@@ -159,13 +160,13 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
     ///     mirroring the inner <c>ProviderCallBudgetChatClient</c>'s Instructions + Tools estimate so the outer and inner
     ///     budgeters size the same round the same way. Returns 0 when both are absent.
     /// </summary>
-    private int EstimateFixedOverhead(string? systemPrompt, IReadOnlyList<string>? toolDefinitions, string? modelName)
+    private int EstimateFixedOverhead(string? systemPrompt, IReadOnlyList<string>? toolDefinitions, int divisor)
     {
         var overhead = 0;
 
         if (!string.IsNullOrEmpty(systemPrompt))
         {
-            overhead += _estimator.EstimateTokens(new ChatMessage(ChatRole.System, systemPrompt), modelName);
+            overhead += _estimator.EstimateTokensWithDivisor(new ChatMessage(ChatRole.System, systemPrompt), divisor);
         }
 
         if (toolDefinitions is { Count: > 0 })
@@ -179,7 +180,7 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
 
                 // One framed message per tool mirrors the inner estimator's per-tool framing overhead, so a tool-heavy
                 // agent's schema footprint is counted rather than silently ignored.
-                overhead += _estimator.EstimateTokens(new ChatMessage(ChatRole.System, definition), modelName);
+                overhead += _estimator.EstimateTokensWithDivisor(new ChatMessage(ChatRole.System, definition), divisor);
             }
         }
 
