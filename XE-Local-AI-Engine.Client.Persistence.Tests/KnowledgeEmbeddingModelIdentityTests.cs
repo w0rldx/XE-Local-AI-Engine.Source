@@ -180,6 +180,139 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
     }
 
     [Test]
+    public async Task SearchAsync_NativeNomicRepeatedQuery_UsesCachedCanonicalIdentityWithoutRegeneration()
+    {
+        var databasePath = GetDatabasePath("search-native-cache.sqlite");
+        var options = Options.Create(new KnowledgeBaseOptions
+        {
+            EmbeddingVectorMode = KnowledgeEmbeddingVectorMode.Native
+        });
+        var provider = new FixedEmbeddingProvider(Descriptor(ResolvedGgufName));
+        var vectorSearch = EmptyVectorSearch();
+        await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
+        var service = CreateSearchService(
+            context,
+            vectorSearch,
+            CreateProviderResolver(provider),
+            new KnowledgeQueryEmbeddingCache(options),
+            options);
+
+        await service.SearchAsync(new KnowledgeSearchRequest("repeat native query", Limit: 5), CancellationToken.None).ConfigureAwait(false);
+        await service.SearchAsync(new KnowledgeSearchRequest("repeat native query", Limit: 5), CancellationToken.None).ConfigureAwait(false);
+
+        AssertEx.Equal(1, provider.GenerateCallCount);
+        await vectorSearch.Received(2)
+                          .SearchAsync(
+                              Arg.Any<ReadOnlyMemory<float>>(),
+                              ResolvedGgufName,
+                              $"{ResolvedGgufName}::native:v1:{Dimensions}",
+                              Dimensions,
+                              Arg.Any<int>(),
+                              Arg.Any<Guid?>(),
+                              Arg.Any<CancellationToken>())
+                          .ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task SearchAsync_NonNomicRepeatedQuery_UsesCachedCanonicalIdentityWithoutRegeneration()
+    {
+        const string nonNomicModel = "bge-m3";
+        var databasePath = GetDatabasePath("search-non-nomic-cache.sqlite");
+        var options = Options.Create(new KnowledgeBaseOptions
+        {
+            EmbeddingModelName = nonNomicModel
+        });
+        var provider = new FixedEmbeddingProvider(Descriptor(nonNomicModel));
+        var vectorSearch = EmptyVectorSearch();
+        await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
+        var service = CreateSearchService(
+            context,
+            vectorSearch,
+            CreateProviderResolver(provider),
+            new KnowledgeQueryEmbeddingCache(options),
+            options);
+
+        await service.SearchAsync(new KnowledgeSearchRequest("repeat non-nomic query", Limit: 5), CancellationToken.None).ConfigureAwait(false);
+        await service.SearchAsync(new KnowledgeSearchRequest("repeat non-nomic query", Limit: 5), CancellationToken.None).ConfigureAwait(false);
+
+        AssertEx.Equal(1, provider.GenerateCallCount);
+        await vectorSearch.Received(2)
+                          .SearchAsync(
+                              Arg.Any<ReadOnlyMemory<float>>(),
+                              nonNomicModel,
+                              $"{nonNomicModel}::native:v1:{Dimensions}",
+                              Dimensions,
+                              Arg.Any<int>(),
+                              Arg.Any<Guid?>(),
+                              Arg.Any<CancellationToken>())
+                          .ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task SearchAsync_CachedNativeWidthMismatch_ReembedsAndReplacesEntry()
+    {
+        var databasePath = GetDatabasePath("search-native-cache-mismatch.sqlite");
+        const string query = "poisoned native cache query";
+        var options = Options.Create(new KnowledgeBaseOptions
+        {
+            EmbeddingVectorMode = KnowledgeEmbeddingVectorMode.Native
+        });
+        var resolution = new EmbeddingModelResolution(ResolvedGgufName, IsConfident: true);
+        var cacheFamily = KnowledgeEmbeddingVectorPolicy.CreateCacheFamilyIdentity(resolution, options.Value.EmbeddingVectorMode);
+        var cache = new KnowledgeQueryEmbeddingCache(options);
+        cache.Store(
+            cacheFamily,
+            query,
+            new KnowledgeQueryEmbeddingCacheEntry(
+                new float[KnowledgeEmbeddingVectorPolicy.MatryoshkaWidth],
+                $"{ResolvedGgufName}::native:v1:{Dimensions}"));
+        var provider = new FixedEmbeddingProvider(Descriptor(ResolvedGgufName));
+        var vectorSearch = EmptyVectorSearch();
+        await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
+        var service = CreateSearchService(context, vectorSearch, CreateProviderResolver(provider), cache, options);
+
+        await service.SearchAsync(new KnowledgeSearchRequest(query, Limit: 5), CancellationToken.None).ConfigureAwait(false);
+        await service.SearchAsync(new KnowledgeSearchRequest(query, Limit: 5), CancellationToken.None).ConfigureAwait(false);
+
+        AssertEx.Equal(1, provider.GenerateCallCount);
+        AssertEx.True(cache.TryGet(cacheFamily, query, out var repaired), "The invalid record must be replaced by the generated vector.");
+        AssertEx.Equal($"{ResolvedGgufName}::native:v1:{Dimensions}", repaired.VectorIdentity);
+        AssertEx.Equal(Dimensions, repaired.Vector.Length);
+    }
+
+    [Test]
+    public async Task SearchAsync_CachedNativeIdentityMismatchAtSameWidth_ReembedsAndReplacesEntry()
+    {
+        var databasePath = GetDatabasePath("search-native-cache-identity-mismatch.sqlite");
+        const string query = "wrong native identity query";
+        var options = Options.Create(new KnowledgeBaseOptions
+        {
+            EmbeddingVectorMode = KnowledgeEmbeddingVectorMode.Native
+        });
+        var resolution = new EmbeddingModelResolution(ResolvedGgufName, IsConfident: true);
+        var cacheFamily = KnowledgeEmbeddingVectorPolicy.CreateCacheFamilyIdentity(resolution, options.Value.EmbeddingVectorMode);
+        var cache = new KnowledgeQueryEmbeddingCache(options);
+        cache.Store(
+            cacheFamily,
+            query,
+            new KnowledgeQueryEmbeddingCacheEntry(
+                new float[Dimensions],
+                $"different-model::native:v1:{Dimensions}"));
+        var provider = new FixedEmbeddingProvider(Descriptor(ResolvedGgufName));
+        var vectorSearch = EmptyVectorSearch();
+        await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
+        var service = CreateSearchService(context, vectorSearch, CreateProviderResolver(provider), cache, options);
+
+        await service.SearchAsync(new KnowledgeSearchRequest(query, Limit: 5), CancellationToken.None).ConfigureAwait(false);
+        await service.SearchAsync(new KnowledgeSearchRequest(query, Limit: 5), CancellationToken.None).ConfigureAwait(false);
+
+        AssertEx.Equal(1, provider.GenerateCallCount);
+        AssertEx.True(cache.TryGet(cacheFamily, query, out var repaired), "The wrong-identity record must be replaced.");
+        AssertEx.Equal($"{ResolvedGgufName}::native:v1:{Dimensions}", repaired.VectorIdentity);
+        AssertEx.Equal(Dimensions, repaired.Vector.Length);
+    }
+
+    [Test]
     public async Task DuringATransientProviderOutage_ResetReturnsEmptyAndListFlagsNoDocumentStale()
     {
         var databasePath = GetDatabasePath("catalog-outage.sqlite");
@@ -258,9 +391,14 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         return new KnowledgeDocumentCatalogService(context, CreateResolvingProviderResolver(), new EmbeddingModelResolver(options), options, TimeProvider.System);
     }
 
-    private static KnowledgeSearchService CreateSearchService(NodeChatDbContext context, IVectorSearch vectorSearch)
+    private static KnowledgeSearchService CreateSearchService(
+        NodeChatDbContext context,
+        IVectorSearch vectorSearch,
+        ILocalModelProviderResolver? providerResolver = null,
+        IKnowledgeQueryEmbeddingCache? queryEmbeddingCache = null,
+        IOptions<KnowledgeBaseOptions>? options = null)
     {
-        var options = Options.Create(new KnowledgeBaseOptions());
+        options ??= Options.Create(new KnowledgeBaseOptions());
 
         var ftsSearch = Substitute.For<IFtsSearch>();
         ftsSearch.SearchAsync(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>())
@@ -270,7 +408,7 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         vectorSearchFactory.Create().Returns(vectorSearch);
 
         return new KnowledgeSearchService(context,
-            CreateResolvingProviderResolver(),
+            providerResolver ?? CreateResolvingProviderResolver(),
             new EmbeddingModelResolver(options),
             new KnowledgeEmbeddingPrefixer(),
             ftsSearch,
@@ -278,9 +416,24 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
             new ReciprocalRankFusion(),
             Substitute.For<IRerankerClient>(),
             Substitute.For<IContextExpansionService>(),
-            Substitute.For<IKnowledgeQueryEmbeddingCache>(),
+            queryEmbeddingCache ?? Substitute.For<IKnowledgeQueryEmbeddingCache>(),
             options,
             NullLogger<KnowledgeSearchService>.Instance);
+    }
+
+    private static IVectorSearch EmptyVectorSearch()
+    {
+        var vectorSearch = Substitute.For<IVectorSearch>();
+        vectorSearch.SearchAsync(
+                        Arg.Any<ReadOnlyMemory<float>>(),
+                        Arg.Any<string>(),
+                        Arg.Any<string>(),
+                        Arg.Any<int>(),
+                        Arg.Any<int>(),
+                        Arg.Any<Guid?>(),
+                        Arg.Any<CancellationToken>())
+                    .Returns(Task.FromResult<IReadOnlyList<VectorSearchHit>>([]));
+        return vectorSearch;
     }
 
     private static KnowledgeChunkEmbedder CreateEmbedder(IOptions<KnowledgeBaseOptions> options)
@@ -296,6 +449,11 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
     private static ILocalModelProviderResolver CreateResolvingProviderResolver()
     {
         var provider = new FixedEmbeddingProvider(Descriptor(ResolvedGgufName), Descriptor("qwen2.5:Q4_K_M"));
+        return CreateProviderResolver(provider);
+    }
+
+    private static ILocalModelProviderResolver CreateProviderResolver(ILocalModelProvider provider)
+    {
         var resolver = Substitute.For<ILocalModelProviderResolver>();
         resolver.ResolveProvider(Arg.Any<string>()).Returns(provider);
         return resolver;
@@ -477,10 +635,14 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
     // resolver, chunk embedder, and search query embedding all work without Ollama or a network round-trip.
     private sealed class FixedEmbeddingProvider(params LocalModelDescriptor[] models) : ILocalModelProvider
     {
+        private int _generateCallCount;
+
         public string ProviderName => "llamacpp";
 
+        public int GenerateCallCount => Volatile.Read(ref _generateCallCount);
+
         public IEmbeddingGenerator<string, Embedding<float>> CreateEmbeddingGenerator(LocalModelSelection selection) =>
-            new FixedGenerator();
+            new FixedGenerator(this);
 
         public Task<IReadOnlyList<LocalModelDescriptor>> ListModelsAsync(CancellationToken ct) =>
             Task.FromResult<IReadOnlyList<LocalModelDescriptor>>(models);
@@ -503,12 +665,13 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         public Task UnloadModelAsync(string modelName, CancellationToken ct) =>
             throw new NotSupportedException();
 
-        private sealed class FixedGenerator : IEmbeddingGenerator<string, Embedding<float>>
+        private sealed class FixedGenerator(FixedEmbeddingProvider owner) : IEmbeddingGenerator<string, Embedding<float>>
         {
             public Task<GeneratedEmbeddings<Embedding<float>>> GenerateAsync(IEnumerable<string> values,
                 EmbeddingGenerationOptions? options = null,
                 CancellationToken cancellationToken = default)
             {
+                Interlocked.Increment(ref owner._generateCallCount);
                 var embeddings = values.Select(static _ =>
                 {
                     var vector = new float[Dimensions];

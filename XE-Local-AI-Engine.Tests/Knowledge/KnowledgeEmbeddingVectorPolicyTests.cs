@@ -94,6 +94,19 @@ public sealed class KnowledgeEmbeddingVectorPolicyTests
     }
 
     [Test]
+    public void CreateCacheFamilyIdentity_IsolatesNativeAndMatryoshkaWhileLeavingNativeWidthInTheEntry()
+    {
+        var resolution = new EmbeddingModelResolution(NomicV15, IsConfident: true);
+
+        var native = KnowledgeEmbeddingVectorPolicy.CreateCacheFamilyIdentity(resolution, KnowledgeEmbeddingVectorMode.Native);
+        var matryoshka = KnowledgeEmbeddingVectorPolicy.CreateCacheFamilyIdentity(resolution, KnowledgeEmbeddingVectorMode.Matryoshka512);
+
+        AssertEx.Equal($"{NomicV15}::native:v1", native);
+        AssertEx.Equal($"{NomicV15}::layernorm-population-eps1e-5-truncate-l2:v1:512", matryoshka);
+        AssertEx.NotEqual(native, matryoshka);
+    }
+
+    [Test]
     public void Transform_ShortOrNonFiniteNomic_ThrowsContentFreeReason()
     {
         var resolution = new EmbeddingModelResolution(NomicV15, IsConfident: true);

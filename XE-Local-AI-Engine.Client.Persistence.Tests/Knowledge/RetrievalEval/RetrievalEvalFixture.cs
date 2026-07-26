@@ -306,13 +306,13 @@ internal sealed class RetrievalEvalFixture : IDisposable
     /// <summary>A cache that never hits — every query is embedded fresh (the harness is not measuring cache behavior).</summary>
     private sealed class NoOpQueryEmbeddingCache : IKnowledgeQueryEmbeddingCache
     {
-        public bool TryGet(string vectorIdentity, string query, out ReadOnlyMemory<float> vector)
+        public bool TryGet(string policyFamilyIdentity, string query, out KnowledgeQueryEmbeddingCacheEntry entry)
         {
-            vector = ReadOnlyMemory<float>.Empty;
+            entry = default!;
             return false;
         }
 
-        public void Store(string vectorIdentity, string query, ReadOnlyMemory<float> vector)
+        public void Store(string policyFamilyIdentity, string query, KnowledgeQueryEmbeddingCacheEntry entry)
         {
         }
     }

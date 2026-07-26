@@ -100,6 +100,18 @@ public static class KnowledgeEmbeddingVectorPolicy
             : null;
     }
 
+    /// <summary>
+    ///     Returns the stable pre-generation cache family for the resolved model and active policy. Matryoshka width is
+    ///     policy-fixed, while native width remains in the cached entry's exact canonical identity.
+    /// </summary>
+    public static string CreateCacheFamilyIdentity(EmbeddingModelResolution resolution, KnowledgeEmbeddingVectorMode mode)
+    {
+        ArgumentNullException.ThrowIfNull(resolution);
+        return ShouldApplyMatryoshka(resolution, mode)
+            ? CreateIdentity(resolution.Name, MatryoshkaAlgorithm, MatryoshkaWidth)
+            : string.Create(CultureInfo.InvariantCulture, $"{resolution.Name}::{NativeAlgorithm}");
+    }
+
     /// <summary>Checks whether a persisted identity belongs to the currently resolved model and configured policy.</summary>
     public static bool MatchesCurrentPolicy(
         string storedIdentity,
