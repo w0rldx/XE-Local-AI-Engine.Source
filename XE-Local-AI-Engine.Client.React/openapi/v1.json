@@ -7,7 +7,7 @@
   },
   "servers": [
     {
-      "url": "http://127.0.0.1:38527"
+      "url": "http://127.0.0.1:39727"
     }
   ],
   "paths": {
@@ -10652,6 +10652,10 @@
           "runs"
         ],
         "properties": {
+          "role": {
+            "type": "string",
+            "nullable": true
+          },
           "tokensPerSecond": {
             "type": "number",
             "format": "double",
@@ -10682,6 +10686,44 @@
             "format": "double",
             "nullable": true
           },
+          "itemsPerSecond": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "inputTokensPerSecond": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "p50LatencyMs": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "p95LatencyMs": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "batchSize": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "outputDimension": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "valuesFinite": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "deterministicOutput": {
+            "type": "boolean",
+            "nullable": true
+          },
           "vramLoadBytes": {
             "type": "integer",
             "nullable": true
@@ -10689,6 +10731,25 @@
           "vramAfterBytes": {
             "type": "integer",
             "nullable": true
+          },
+          "globalFreeVramLoadBytes": {
+            "type": "integer",
+            "nullable": true
+          },
+          "globalFreeVramAfterBytes": {
+            "type": "integer",
+            "nullable": true
+          },
+          "processBudgetVramLoadBytes": {
+            "type": "integer",
+            "nullable": true
+          },
+          "processBudgetVramAfterBytes": {
+            "type": "integer",
+            "nullable": true
+          },
+          "externalPressureDetected": {
+            "type": "boolean"
           },
           "runs": {
             "type": "integer",
