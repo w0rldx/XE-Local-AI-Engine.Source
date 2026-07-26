@@ -37,9 +37,11 @@ framework-only attribution. The exact framework and application contract suites
 remained green; their single-run wall-time changes are retained as diagnostic
 evidence, not throughput claims. No result reaches the plan's at-least-20%
 throughput gate, so this prerequisite/framework delta alone authorizes no tuning
-claim. A later Lane 4 grid was run, then invalidated during review; its samples are
-historical diagnostics only and cannot support either a shipping or no-change
-decision. See `2026-07-26-lane4-invalidated.md`.
+claim. The first Lane 4 capture was invalidated during review and replaced by a
+schema-2 recapture with canonical baseline comparison, actual role preflights,
+explicit context readback, and fail-closed process-memory evidence. The corrected
+grid produced zero qualifying cells, so no production tuning ships. See
+`2026-07-26-lane4-no-change.md`.
 
 ## Fit/replay and VRAM semantics
 
