@@ -106,7 +106,8 @@ public sealed class InferenceProfileServiceTests
                                                                   && rows[0].Backend == "cuda"
                                                                   && rows[0].MachineKey == MachineKey
                                                                   && rows[0].CtxSize == 8192
-                                                                  && rows[0].LlamacppBuild == Build),
+                                                                  && rows[0].LlamacppBuild == Build
+                                                                  && rows[0].DiagnosticsJson == """{"vram":{"globalFreeBytes":1000,"processBudgetBytes":1200}}"""),
             Arg.Any<CancellationToken>());
         await fixture.SnapshotStore.Received(1).MarkTerminalAsync(snapshotId,
             ModelFitRunStatus.Succeeded,
@@ -155,7 +156,8 @@ public sealed class InferenceProfileServiceTests
         var snapshotId = Guid.NewGuid();
         fixture.BenchmarkStore.GetLatestSuccessfulForProfileAsync(profile.Id, Arg.Any<CancellationToken>())
                .Returns(Task.FromResult<ModelFitBenchmarkRecord?>(BenchmarkRowFor(profile, snapshotId)));
-        fixture.VramProbe.TryGetProcessBudgetBytesAsync("cuda", Arg.Any<CancellationToken>()).Returns(Task.FromResult<long?>(2000));
+        fixture.HardwareProfiler.GetProfileAsync(forceRefresh: true, Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult(NvidiaProfile(availableVramBytes: 2000)));
         fixture.ProfileStore.MarkFrozenAsync(profile.Id, snapshotId, 2000, Arg.Any<CancellationToken>())
                .Returns(Task.FromResult<InferenceProfileRecord?>(profile with
                {
@@ -171,6 +173,8 @@ public sealed class InferenceProfileServiceTests
         AssertEx.Equal("Frozen", view.Status);
         AssertEx.Equal<Guid?>(snapshotId, view.BenchmarkSnapshotId);
         await fixture.ProfileStore.Received(1).MarkFrozenAsync(profile.Id, snapshotId, 2000, Arg.Any<CancellationToken>());
+        await fixture.ProcessVramBudgetProbe.DidNotReceive()
+                     .TryGetProcessBudgetBytesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -253,7 +257,24 @@ public sealed class InferenceProfileServiceTests
             VramLoadBytes: 1000,
             VramAfterBytes: 900,
             Runs: 1,
-            RawJson: "raw-metrics");
+            RawJson: "raw-metrics",
+            DiagnosticsJson: """{"vram":{"globalFreeBytes":1000,"processBudgetBytes":1200}}""");
+    }
+
+    private static HardwareProfile NvidiaProfile(long? availableVramBytes)
+    {
+        return new HardwareProfile
+        {
+            TotalRamBytes = 64L * 1024 * 1024 * 1024,
+            AvailableRamBytes = 48L * 1024 * 1024 * 1024,
+            VramBytes = 24L * 1024 * 1024 * 1024,
+            AvailableVramBytes = availableVramBytes,
+            VramKnown = true,
+            GpuVendor = GpuVendor.Nvidia,
+            GpuAccelAvailable = true,
+            CpuCores = 16,
+            FreeDiskBytes = 500L * 1024 * 1024 * 1024
+        };
     }
 
     // A benchmark row whose recorded launch args match the profile exactly, bound to the profile's id — the shape the
@@ -325,7 +346,9 @@ public sealed class InferenceProfileServiceTests
 
         public IInstalledRuntimeStore RuntimeStore { get; } = Substitute.For<IInstalledRuntimeStore>();
 
-        public IProcessVramBudgetProbe VramProbe { get; } = Substitute.For<IProcessVramBudgetProbe>();
+        public IHardwareProfiler HardwareProfiler { get; } = Substitute.For<IHardwareProfiler>();
+
+        public IProcessVramBudgetProbe ProcessVramBudgetProbe { get; } = Substitute.For<IProcessVramBudgetProbe>();
 
         public ServiceFixture()
         {
@@ -333,6 +356,8 @@ public sealed class InferenceProfileServiceTests
             VariantSelector.SelectVariantAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(GpuVariant.Cuda));
             RuntimeStore.ReadAsync(Arg.Any<CancellationToken>())
                         .Returns(Task.FromResult<InstalledRuntimeState?>(new InstalledRuntimeState(Build, "asset.zip", "sha", GpuVariant.Cuda, DateTimeOffset.UnixEpoch)));
+            HardwareProfiler.GetProfileAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                            .Returns(Task.FromResult(NvidiaProfile(availableVramBytes: null)));
             ProfileStore.ListAsync(Arg.Any<CancellationToken>())
                         .Returns(Task.FromResult<IReadOnlyList<InferenceProfileRecord>>([]));
         }
@@ -418,7 +443,8 @@ public sealed class InferenceProfileServiceTests
                 MachineKeyProvider,
                 VariantSelector,
                 RuntimeStore,
-                VramProbe,
+                HardwareProfiler,
+                ProcessVramBudgetProbe,
                 NullLogger<InferenceProfileService>.Instance);
         }
 
