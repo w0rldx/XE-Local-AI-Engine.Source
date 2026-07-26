@@ -5,26 +5,29 @@ using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     Default <see cref="IInferenceInvalidationEvaluator" />. Runs three cheap, side-effect-free checks against the
-///     freeze baseline — active build tag, GPU vendor/VRAM delta, and (best-effort) live free VRAM — and returns the OR
-///     of them. It is a VERDICT only: nothing here tears down a currently-running llama-server process; demotion to
-///     <c>Stale</c> and the re-explore on the next cold spawn are the resolver's job.
+///     Default <see cref="IInferenceInvalidationEvaluator" />. Runs three cheap checks against the freeze baseline —
+///     active build tag, GPU vendor/VRAM delta, and live global-free VRAM. NVIDIA's refreshed global figure is preferred
+///     because llama.cpp's process budget can ignore external WDDM pressure; the vendor-agnostic process-budget probe is
+///     used only when the global figure is unavailable.
 /// </summary>
 public sealed class InferenceInvalidationEvaluator : IInferenceInvalidationEvaluator
 {
+    private const long MaterialFreeVramRegressionBytes = 512L * 1024 * 1024;
+    private const double MaterialFreeVramRegressionRatio = 0.05d;
+
     private readonly IHardwareProfiler _hardwareProfiler;
     private readonly IInstalledRuntimeStore _installedRuntimeStore;
     private readonly ILogger<InferenceInvalidationEvaluator> _logger;
-    private readonly IProcessVramBudgetProbe _vramProbe;
+    private readonly IProcessVramBudgetProbe _processVramBudgetProbe;
 
     public InferenceInvalidationEvaluator(IInstalledRuntimeStore installedRuntimeStore,
         IHardwareProfiler hardwareProfiler,
-        IProcessVramBudgetProbe vramProbe,
+        IProcessVramBudgetProbe processVramBudgetProbe,
         ILogger<InferenceInvalidationEvaluator> logger)
     {
         _installedRuntimeStore = installedRuntimeStore ?? throw new ArgumentNullException(nameof(installedRuntimeStore));
         _hardwareProfiler = hardwareProfiler ?? throw new ArgumentNullException(nameof(hardwareProfiler));
-        _vramProbe = vramProbe ?? throw new ArgumentNullException(nameof(vramProbe));
+        _processVramBudgetProbe = processVramBudgetProbe ?? throw new ArgumentNullException(nameof(processVramBudgetProbe));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -40,14 +43,14 @@ public sealed class InferenceInvalidationEvaluator : IInferenceInvalidationEvalu
         }
 
         // (b) Hardware delta (vendor / total-VRAM) against the freeze baseline.
-        var hardware = await _hardwareProfiler.GetProfileAsync(forceRefresh: false, ct).ConfigureAwait(false);
+        var hardware = await _hardwareProfiler.GetProfileAsync(forceRefresh: true, ct).ConfigureAwait(false);
         if (HasHardwareDrifted(profile, hardware))
         {
             return true;
         }
 
-        // (c) Live free VRAM below the frozen baseline (degrades to no-op when the probe is unwired).
-        return await HasLiveFreeVramRegressedAsync(profile, ct).ConfigureAwait(false);
+        // (c) Live global-free VRAM below the frozen baseline, with process-budget fallback when global free is unknown.
+        return await HasLiveFreeVramRegressedAsync(profile, hardware, ct).ConfigureAwait(false);
     }
 
     // The active installed runtime is the on-disk, smoke-tested tag (IInstalledRuntimeStore). When it is unknown (fresh
@@ -85,25 +88,37 @@ public sealed class InferenceInvalidationEvaluator : IInferenceInvalidationEvalu
                && totalVram < freezeBaseline;
     }
 
-    // Live free VRAM below the frozen baseline. Degrades (skips) when the profile never recorded a baseline or the probe
-    // reports "unknown". The real --list-devices probe has shipped (LlamaListDevicesProcessVramBudgetProbe wins the registered floor),
-    // so on supported backends this check runs; it only skips where that probe still reports unknown free VRAM.
-    private async Task<bool> HasLiveFreeVramRegressedAsync(InferenceProfileRecord profile, CancellationToken ct)
+    private async Task<bool> HasLiveFreeVramRegressedAsync(InferenceProfileRecord profile,
+        HardwareProfile hardware,
+        CancellationToken ct)
     {
         if (profile.FreeVramAtFreezeBytes is not { } freezeBaseline)
         {
             return false;
         }
 
-        var freeNow = await _vramProbe.TryGetProcessBudgetBytesAsync(profile.Backend, ct).ConfigureAwait(false);
+        var freeNow = hardware.AvailableVramBytes;
+        var source = "global-free";
+        if (freeNow is null)
+        {
+            freeNow = await _processVramBudgetProbe.TryGetProcessBudgetBytesAsync(profile.Backend, ct).ConfigureAwait(false);
+            source = "process-budget fallback";
+        }
+
         if (freeNow is not { } currentFree)
         {
             return false;
         }
 
-        if (currentFree < freezeBaseline)
+        var regression = freezeBaseline - currentFree;
+        var materialThreshold = Math.Max(MaterialFreeVramRegressionBytes,
+            (long)Math.Ceiling(freezeBaseline * MaterialFreeVramRegressionRatio));
+        if (regression >= materialThreshold)
         {
-            _logger.LogInformation("Inference profile {ProfileId} live free VRAM dropped below the frozen baseline; flagging for re-explore.", profile.Id);
+            _logger.LogInformation(
+                "Inference profile {ProfileId} {VramSource} VRAM dropped materially below the frozen baseline; flagging for re-explore.",
+                profile.Id,
+                source);
             return true;
         }
 

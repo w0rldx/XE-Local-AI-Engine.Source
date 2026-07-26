@@ -24,6 +24,7 @@ public sealed class InferenceProfileService : IInferenceProfileService
     private readonly IFittedArgsParser _fittedArgsParser;
     private readonly IGgufMetadataReader _ggufMetadataReader;
     private readonly IGgufModelStore _ggufModelStore;
+    private readonly IHardwareProfiler _hardwareProfiler;
     private readonly IInferenceBenchmarkHarness _harness;
     private readonly ILogger<InferenceProfileService> _logger;
     private readonly IMachineKeyProvider _machineKeyProvider;
@@ -31,7 +32,7 @@ public sealed class InferenceProfileService : IInferenceProfileService
     private readonly IInstalledRuntimeStore _runtimeStore;
     private readonly IModelFitSnapshotStore _snapshotStore;
     private readonly ILlamaServerProcessSupervisor _supervisor;
-    private readonly IProcessVramBudgetProbe _vramProbe;
+    private readonly IProcessVramBudgetProbe _processVramBudgetProbe;
     private readonly IGpuVariantSelector _variantSelector;
 
     public InferenceProfileService(ILlamaServerProcessSupervisor supervisor,
@@ -45,7 +46,8 @@ public sealed class InferenceProfileService : IInferenceProfileService
         IMachineKeyProvider machineKeyProvider,
         IGpuVariantSelector variantSelector,
         IInstalledRuntimeStore runtimeStore,
-        IProcessVramBudgetProbe vramProbe,
+        IHardwareProfiler hardwareProfiler,
+        IProcessVramBudgetProbe processVramBudgetProbe,
         ILogger<InferenceProfileService> logger)
     {
         ArgumentNullException.ThrowIfNull(supervisor);
@@ -59,7 +61,8 @@ public sealed class InferenceProfileService : IInferenceProfileService
         ArgumentNullException.ThrowIfNull(machineKeyProvider);
         ArgumentNullException.ThrowIfNull(variantSelector);
         ArgumentNullException.ThrowIfNull(runtimeStore);
-        ArgumentNullException.ThrowIfNull(vramProbe);
+        ArgumentNullException.ThrowIfNull(hardwareProfiler);
+        ArgumentNullException.ThrowIfNull(processVramBudgetProbe);
         ArgumentNullException.ThrowIfNull(logger);
 
         _supervisor = supervisor;
@@ -73,7 +76,8 @@ public sealed class InferenceProfileService : IInferenceProfileService
         _machineKeyProvider = machineKeyProvider;
         _variantSelector = variantSelector;
         _runtimeStore = runtimeStore;
-        _vramProbe = vramProbe;
+        _hardwareProfiler = hardwareProfiler;
+        _processVramBudgetProbe = processVramBudgetProbe;
         _logger = logger;
     }
 
@@ -235,8 +239,15 @@ public sealed class InferenceProfileService : IInferenceProfileService
             return ProfileActionResult.Fail($"Profile {profileId} was re-explored after its last benchmark (launch arguments changed); re-benchmark before freezing.");
         }
 
-        // Re-probe free VRAM at freeze time as the invalidation baseline.
-        var freeVramAtFreeze = await _vramProbe.TryGetProcessBudgetBytesAsync(profile.Backend, ct).ConfigureAwait(false);
+        // Store global-free VRAM as the invalidation baseline wherever NVIDIA/NVML provides it. llama.cpp's
+        // --list-devices figure is a process-local residency budget under WDDM and can ignore external pressure, so it is
+        // only the fallback for backends/vendors where global free is unavailable.
+        var hardware = await _hardwareProfiler.GetProfileAsync(forceRefresh: true, ct).ConfigureAwait(false);
+        var freeVramAtFreeze = hardware.AvailableVramBytes;
+        if (freeVramAtFreeze is null)
+        {
+            freeVramAtFreeze = await _processVramBudgetProbe.TryGetProcessBudgetBytesAsync(profile.Backend, ct).ConfigureAwait(false);
+        }
 
         var frozen = await _profileStore.MarkFrozenAsync(profileId, benchmark.SnapshotId, freeVramAtFreeze, ct).ConfigureAwait(false);
         if (frozen is null)
@@ -316,7 +327,7 @@ public sealed class InferenceProfileService : IInferenceProfileService
             TotalLatencyMs: metrics.TotalLatencyMs,
             Runs: metrics.Runs,
             RawJson: metrics.RawJson,
-            DiagnosticsJson: null,
+            DiagnosticsJson: metrics.DiagnosticsJson,
             PpTokensPerSecond: metrics.PpTokensPerSecond,
             CacheHitRate: metrics.CacheHitRate,
             ToolLoopMs: metrics.ToolLoopMs,
