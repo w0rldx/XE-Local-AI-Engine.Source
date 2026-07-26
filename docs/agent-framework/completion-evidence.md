@@ -151,14 +151,48 @@ A real rollback branch was created from delivery commit `1a809330`:
 It restores exactly the 14 central pins changed since `e67d6697` and nothing else.
 The delivery branch remains upgraded.
 
-Emergency replay:
+The rollback was also cherry-picked onto the combined six-plan delivery tree at
+`16917a2e` and validated independently:
+
+- proof commit: `bc546d73`
+- `Directory.Packages.props` is byte-identical to the `e67d6697` baseline
+- Release restore/build: passed with 0 warnings and 0 errors
+- Debug restore/build, including the prerelease Hosting/DevUI packages: passed
+  with 0 warnings and 0 errors
+- deterministic Agent Framework gate: 202/202 tests passed
+- assembly guard: unchanged
+
+The sanitized logs, exact pin mapping, hashes, and portable rollback patch are
+under `docs/agent-framework/evidence/rollback/`.
+
+Emergency replay when the local rollback branch/commit is available:
 
 ```bash
 git cherry-pick 30ba0768
+```
+
+Portable replay from the committed evidence, without relying on that
+out-of-branch Git object:
+
+```bash
+git apply --index docs/agent-framework/evidence/rollback/restore-prior-pins.patch
+git commit -m "revert: restore pre-upgrade AI framework pins"
+```
+
+Validate the resulting rollback tree:
+
+```bash
 dotnet restore XE-Local-AI-Engine.slnx
 dotnet build XE-Local-AI-Engine.slnx --configuration Release --no-restore
 dotnet restore XE-Local-AI-Engine.slnx -p:Configuration=Debug
 dotnet build XE-Local-AI-Engine.slnx --configuration Debug --no-restore
+scripts/with-build-lock.sh -- \
+  scripts/assembly-guard.sh guard --test-bins -- \
+  dotnet test \
+    --project XE-Local-AI-Engine.AI.Agent.Tests/XE-Local-AI-Engine.AI.Agent.Tests.csproj \
+    --configuration Release \
+    --no-build \
+    --max-parallel-test-modules 1
 ```
 
 To reapply the upgrade after the rollback is no longer needed, revert the new

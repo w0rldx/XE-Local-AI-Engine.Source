@@ -1,0 +1,14 @@
+[guard] snapshot: 2911 assemblies across 8 root(s) -> <ROLLBACK_WORKTREE>/.tmp/assembly-guard-H2d6jZ.state
+Running tests from <ROLLBACK_WORKTREE>/XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/XE_Local_AI_Engine.AI.Agent.Tests.dll (net10.0|x64)
+<ROLLBACK_WORKTREE>/XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/XE_Local_AI_Engine.AI.Agent.Tests.dll (net10.0|x64) passed (1s 518ms)
+
+  In process file artifacts produced:
+    - <ROLLBACK_WORKTREE>/XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/TestResults/XE_Local_AI_Engine.AI.Agent.Tests-linux-net10.0-report.html
+
+Test run summary: Passed!
+  total: 202
+  failed: 0
+  succeeded: 202
+  skipped: 0
+  duration: 1s 642ms
+[guard] verify: build output unchanged during the run — result is trustworthy.
