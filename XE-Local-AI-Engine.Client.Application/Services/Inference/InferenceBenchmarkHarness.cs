@@ -74,6 +74,14 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
 
             if (resources.ExternalPressureDetected)
             {
+                var preSpawn = resources.PreSpawnVram;
+                _logger.LogWarning(
+                    "Rejected {Role} inference benchmark before workload because ambient VRAM pressure exceeded the configured thresholds. GlobalFreeBytes={GlobalFreeBytes}, ProcessBudgetBytes={ProcessBudgetBytes}, ExcessBytes={ExcessBytes}, ExcessRatio={ExcessRatio}.",
+                    role,
+                    preSpawn?.GlobalFreeBytes,
+                    preSpawn?.ProcessBudgetBytes,
+                    preSpawn?.ProcessBudgetExcessBytes,
+                    preSpawn?.ProcessBudgetExcessRatio);
                 return ApplyResourceEvidence(InferenceBenchmarkMetrics.Failed(ExternalPressureFailureReason), role, resources);
             }
 
