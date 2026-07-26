@@ -133,6 +133,24 @@ class CaptureInferenceEvidenceTests(unittest.TestCase):
             with self.assertRaisesRegex(capture.CaptureError, "identity differs"):
                 capture.compare_artifacts(first, second, output)
 
+    def test_sanitize_replaces_absolute_paths_and_rejects_unmapped_home(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            source = root / "raw.json"
+            output = root / "safe.json"
+            source.write_text(json.dumps({"path": "/home/operator/models/model.gguf", "argv": ["/opt/runtime/llama-server"]}), encoding="utf-8")
+            with self.assertRaisesRegex(capture.CaptureError, "user-home path"):
+                capture.sanitize_artifact(source, output, ["/opt/runtime=$RUNTIME_ROOT"])
+            capture.sanitize_artifact(
+                source,
+                output,
+                ["/home/operator/models=$MODEL_ROOT", "/opt/runtime=$RUNTIME_ROOT"],
+            )
+            sanitized = json.loads(output.read_text(encoding="utf-8"))
+            self.assertEqual("$MODEL_ROOT/model.gguf", sanitized["path"])
+            self.assertEqual("$RUNTIME_ROOT/llama-server", sanitized["argv"][0])
+            self.assertTrue(sanitized["sanitized"])
+
 
 if __name__ == "__main__":
     unittest.main()

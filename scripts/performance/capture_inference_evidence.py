@@ -15,6 +15,7 @@ import json
 import math
 import os
 import platform
+import re
 import shlex
 import shutil
 import statistics
@@ -592,6 +593,40 @@ def compare_artifacts(baseline_path: Path, candidate_path: Path, output_path: Pa
     })
 
 
+def sanitize_artifact(input_path: Path, output_path: Path, replacements: list[str]) -> None:
+    artifact = load_json(input_path)
+    parsed: list[tuple[str, str]] = []
+    for replacement in replacements:
+        source, separator, label = replacement.partition("=")
+        if not separator or not source or not label:
+            raise CaptureError("--replace entries must use ABSOLUTE_PATH=$LABEL syntax")
+        if not Path(source).is_absolute() or not label.startswith("$"):
+            raise CaptureError("--replace source must be absolute and label must start with '$'")
+        parsed.append((str(Path(source).resolve()), label))
+    parsed.sort(key=lambda item: len(item[0]), reverse=True)
+
+    def scrub(value: Any) -> Any:
+        if isinstance(value, dict):
+            return {key: scrub(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [scrub(item) for item in value]
+        if isinstance(value, str):
+            result = value
+            for source, label in parsed:
+                result = result.replace(source, label)
+            return result
+        return value
+
+    sanitized = scrub(artifact)
+    serialized = json.dumps(sanitized, sort_keys=True)
+    leaked = re.search(r"(?:/home/[^/\\s]+|[A-Za-z]:\\\\Users\\\\[^\\\\\\s]+)", serialized)
+    if leaked:
+        raise CaptureError(f"Sanitized artifact still contains a user-home path near {leaked.group(0)!r}; add --replace")
+    sanitized["sanitized"] = True
+    sanitized["sanitization"] = {"replacements": [{"label": label} for _, label in parsed], "source_sha256": sha256_file(input_path)}
+    write_json(output_path, sanitized)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -603,6 +638,10 @@ def build_parser() -> argparse.ArgumentParser:
     compare.add_argument("--baseline", type=Path, required=True)
     compare.add_argument("--candidate", type=Path, required=True)
     compare.add_argument("--output", type=Path, required=True)
+    sanitize = subparsers.add_parser("sanitize")
+    sanitize.add_argument("--input", type=Path, required=True)
+    sanitize.add_argument("--output", type=Path, required=True)
+    sanitize.add_argument("--replace", action="append", default=[])
     return parser
 
 
@@ -613,8 +652,10 @@ def main() -> int:
             capture_baseline(args.spec.resolve(), args.output.resolve())
         elif args.command == "fit":
             capture_fit(args.spec.resolve(), args.output.resolve())
-        else:
+        elif args.command == "compare":
             compare_artifacts(args.baseline.resolve(), args.candidate.resolve(), args.output.resolve())
+        else:
+            sanitize_artifact(args.input.resolve(), args.output.resolve(), args.replace)
     except CaptureError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2

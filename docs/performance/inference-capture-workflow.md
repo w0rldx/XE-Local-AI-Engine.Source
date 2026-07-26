@@ -18,6 +18,18 @@ The scripts have no third-party dependencies:
 Generated artifacts belong under the ignored `artifacts/` directory. Do not commit
 machine names, local paths, or raw benchmark output without reviewing it.
 
+To create a reviewable committed artifact, sanitize the raw capture with explicit
+path labels. The command fails while any Linux or Windows user-home path remains:
+
+```bash
+python3 scripts/performance/capture_inference_evidence.py sanitize \
+  --input artifacts/performance/baseline-cuda.raw.json \
+  --output docs/performance/baselines/2026-07-26-e67d6697-cuda.json \
+  --replace "$PWD/.tmp/perf-models=\$MODEL_ROOT" \
+  --replace "$PWD/.tmp/llama.cpp-b9692=\$RUNTIME_ROOT" \
+  --replace "/home/w0rldx/projects/XE-Local-AI-Engine/.tmp/worktrees/perf-baseline-e67d=\$BASELINE_REPO"
+```
+
 ## 1. Fixed capture contract
 
 Before a baseline, create a JSON specification conforming to
