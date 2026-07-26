@@ -62,6 +62,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     private readonly ConcurrentDictionary<ProcessKey, Task<RunningProcess>> _inflightSpawns = new();
     private readonly LlamaServerExternalEndpointOptions _externalEndpoints;
     private readonly ILlamaServerHealthProbe _healthProbe;
+    private readonly ILlamaFitParamsRunner _fitParamsRunner;
     private readonly ILlamaServerLaunchPolicy _launchPolicy;
     private readonly ILogger<LlamaServerProcessSupervisor> _logger;
     private readonly ILlamaServerProcessLauncher _launcher;
@@ -100,7 +101,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         TimeProvider? timeProvider = null,
         ILogger<LlamaServerProcessSupervisor>? logger = null,
         IGpuModelLoadAdmission? loadAdmission = null,
-        ILlamaCppSourceBuildActivity? sourceBuildActivity = null)
+        ILlamaCppSourceBuildActivity? sourceBuildActivity = null,
+        ILlamaFitParamsRunner? fitParamsRunner = null)
     {
         _binaryManager = binaryManager ?? throw new ArgumentNullException(nameof(binaryManager));
         _variantSelector = variantSelector ?? throw new ArgumentNullException(nameof(variantSelector));
@@ -119,6 +121,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         // simply off — the composition root injects the real, metric-emitting singleton shared with the image supervisor.
         _loadAdmission = loadAdmission ?? new NoOpGpuModelLoadAdmission();
         _sourceBuildActivity = sourceBuildActivity ?? new LlamaCppSourceBuildActivity();
+        _fitParamsRunner = fitParamsRunner ?? new LlamaFitParamsProcessRunner();
 
         _reaperLoop = Task.Run(() => ReapIdleLoopAsync(_shutdownCts.Token));
     }
@@ -717,6 +720,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         return SpawnCoreAsync(key,
             (variant, c) => _profileResolver.ResolveAsync(key.ModelName, key.Role, variant, c),
             startupCapture: null,
+            fitParamsCapture: null,
             ensureMetrics: false,
             applyLaunchPolicy: true,
             ct);
@@ -736,6 +740,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     private async Task<RunningProcess> SpawnCoreAsync(ProcessKey key,
         Func<GpuVariant, CancellationToken, Task<ResolvedLaunchArguments>> resolveArgs,
         Action<string>? startupCapture,
+        Action<string>? fitParamsCapture,
         bool ensureMetrics,
         bool applyLaunchPolicy,
         CancellationToken ct)
@@ -832,6 +837,29 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                     {
                         StartupCapture = startupCapture
                     };
+                }
+
+                if (fitParamsCapture is not null && resolved.ExploreMode)
+                {
+                    var fitResult = await _fitParamsRunner.RunAsync(spec, ct).ConfigureAwait(false);
+                    if (fitResult.Status == LlamaFitParamsRunStatus.Succeeded)
+                    {
+                        foreach (var line in fitResult.StandardOutput)
+                        {
+                            fitParamsCapture(line);
+                        }
+                    }
+                    else if (fitResult.Status == LlamaFitParamsRunStatus.MissingCapability)
+                    {
+                        _logger.LogWarning(
+                            "The resolved llama.cpp runtime does not expose the sibling llama-fit-params capability; the live explore spawn will remain auto-fit, but no placement profile will be drafted.");
+                    }
+                    else
+                    {
+                        _logger.LogWarning(
+                            "llama-fit-params acquisition failed ({Reason}); the live explore spawn will remain auto-fit, but no placement profile will be drafted.",
+                            fitResult.FailureReason ?? "unknown failure");
+                    }
                 }
 
                 handle = _launcher.Launch(spec);
@@ -1079,12 +1107,14 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
 
                 // Thread-safe per-line sink backing the StartupCapture callback (both server pipes Enqueue concurrently).
                 var startupOutput = new ConcurrentQueue<string>();
+                var fitParamsOutput = new ConcurrentQueue<string>();
 
                 // Spawn exactly one process with the operator-supplied args verbatim (bypass BOTH the profile resolver and
                 // the launch policy — the supplied args ARE the experiment being measured).
                 var running = await SpawnCoreAsync(key,
                         (_, _) => Task.FromResult(launchArgs),
                         startupOutput.Enqueue,
+                        fitParamsOutput.Enqueue,
                         ensureMetrics: enableMetrics,
                         applyLaunchPolicy: false,
                         ct)
@@ -1100,7 +1130,9 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                 running.Pin();
                 try
                 {
-                    var context = new LlamaServerProfilingContext(running.Endpoint, startupOutput.ToArray());
+                    var context = new LlamaServerProfilingContext(running.Endpoint,
+                        startupOutput.ToArray(),
+                        fitParamsOutput.ToArray());
                     return await body(context, ct).ConfigureAwait(false);
                 }
                 finally
