@@ -92,7 +92,8 @@ internal sealed class LlamaFitParamsProcessRunner : ILlamaFitParamsRunner
         ArgumentNullException.ThrowIfNull(serverArguments);
 
         var result = new List<string>();
-        for (var index = 0; index < serverArguments.Count; index++)
+        var index = 0;
+        while (index < serverArguments.Count)
         {
             var argument = serverArguments[index];
             if (TakesValue(argument))
@@ -103,12 +104,17 @@ internal sealed class LlamaFitParamsProcessRunner : ILlamaFitParamsRunner
                 }
 
                 result.Add(argument);
-                result.Add(serverArguments[++index]);
+                result.Add(serverArguments[index + 1]);
+                index += 2;
+                continue;
             }
-            else if (IsValueLessFitArgument(argument))
+
+            if (IsValueLessFitArgument(argument))
             {
                 result.Add(argument);
             }
+
+            index++;
         }
 
         return result;
