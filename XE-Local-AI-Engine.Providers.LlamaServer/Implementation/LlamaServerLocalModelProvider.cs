@@ -119,6 +119,11 @@ public sealed class LlamaServerLocalModelProvider : ILocalModelProvider
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    ///     Warm-up is intentionally chat-only: it targets the interactive path. Pre-spawning embedding and reranker
+    ///     processes would consume shared loaded-process slots for work that may never arrive; those roles remain
+    ///     demand-started by their respective clients.
+    /// </remarks>
     public async Task WarmModelAsync(string modelName, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
@@ -144,9 +149,8 @@ public sealed class LlamaServerLocalModelProvider : ILocalModelProvider
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
 
-        // A model may have both a chat and an embedding process; evict both roles. Eviction is idempotent.
-        await _supervisor.EvictAsync(modelName, ModelRole.Chat, ct).ConfigureAwait(false);
-        await _supervisor.EvictAsync(modelName, ModelRole.Embedding, ct).ConfigureAwait(false);
+        // A model may have chat, embedding, and reranker processes; evict every defined role. Eviction is idempotent.
+        await _supervisor.EvictAllRolesAsync(modelName, ct).ConfigureAwait(false);
     }
 
     /// <inheritdoc />

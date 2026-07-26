@@ -432,6 +432,16 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     }
 
     /// <inheritdoc />
+    public async Task EvictAllRolesAsync(string modelName, CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
+        foreach (var role in Enum.GetValues<ModelRole>())
+        {
+            await EvictAsync(modelName, role, ct).ConfigureAwait(false);
+        }
+    }
+
+    /// <inheritdoc />
     public async Task<LlamaServerEjectOutcome> EjectAsync(string modelName, ModelRole role, bool force, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);

@@ -55,6 +55,27 @@ public interface ILlamaServerProcessSupervisor
     Task EvictAsync(string modelName, ModelRole role, CancellationToken ct);
 
     /// <summary>
+    ///     Evicts every role-specific process for <paramref name="modelName" />. The role set is derived from
+    ///     <see cref="Enum.GetValues{TEnum}" /> so a future <see cref="ModelRole" /> member is included automatically
+    ///     instead of silently leaving one process resident. Idempotent when any or all roles are not running.
+    /// </summary>
+    Task EvictAllRolesAsync(string modelName, CancellationToken ct)
+    {
+        return EvictAllRolesCoreAsync(this, modelName, ct);
+
+        static async Task EvictAllRolesCoreAsync(ILlamaServerProcessSupervisor supervisor,
+            string name,
+            CancellationToken cancellationToken)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(name);
+            foreach (var role in Enum.GetValues<ModelRole>())
+            {
+                await supervisor.EvictAsync(name, role, cancellationToken).ConfigureAwait(false);
+            }
+        }
+    }
+
+    /// <summary>
     ///     Operator eject for a supervised <c>(model, role)</c> process. Marks the process evicting (no new leases), then
     ///     waits up to the configured bounded drain window for in-flight inference (tracked via
     ///     <see cref="TryAcquireInferenceLease" />) to finish before tearing it down. An idle process (no active leases)
