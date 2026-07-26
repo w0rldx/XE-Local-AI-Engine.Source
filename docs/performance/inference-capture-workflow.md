@@ -64,6 +64,25 @@ measurements. The capture tool retains raw stdout/stderr, elapsed time, ambient
 load, free memory, global NVIDIA VRAM, exact argv, and aggregates. Keep secrets out
 of argv and output.
 
+Lane 0/2 artifacts have four explicit evidence partitions:
+
+- `native-performance`: identical `llama-bench` chat/embedding commands. These
+  isolate the fixed llama.cpp binary and must not be attributed to framework work.
+- `framework-contract`: exact stable MAF approval/resume tests and invocation
+  streaming/token-usage tests, run by fully-qualified test method rather than a
+  growing class.
+- `application-harness`: exact pre-existing chat harness tests covering tool-loop
+  timing and metrics parsing. The current implementation must run the same methods;
+  new role tests are additional, non-comparable Lane 3 evidence.
+- `provider-contract`: exact reranker route/order/degradation tests. A pre-change
+  real reranker throughput value is impossible because the shipped harness calls
+  chat for that role; the artifact records that gap rather than inventing a number.
+
+Every command declares its partition and comparability rule. Framework/application
+commands use identical method filters and product inputs across e67d/current; native
+commands use identical argv, model/corpus/runtime, and machine identity. Compare
+within a partition only.
+
 ```bash
 python3 scripts/performance/capture_inference_evidence.py baseline \
   --spec artifacts/performance/baseline-spec.json \
