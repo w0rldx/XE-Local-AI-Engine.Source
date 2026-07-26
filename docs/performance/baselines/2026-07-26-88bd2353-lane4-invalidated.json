@@ -95,6 +95,80 @@
     }
   },
   "decision": {
+    "acceptance_rule": "A fresh schema-2.0 capture must pass actual role-request preflight, explicit context readback, repeat determinism, same-backend/same-role baseline semantic equivalence at 1e-5 with order preserved, and process-scoped memory gates.",
+    "comparisons": [],
+    "outcome": "invalidated",
+    "ship_production_tuning": false,
+    "valid_for_shipping_decision": false,
+    "winners": []
+  },
+  "gaps": [
+    "Vulkan: no NVIDIA Vulkan ICD",
+    "Native Windows manual",
+    "8 GB hardware unavailable",
+    "native Linux OOM unavailable"
+  ],
+  "grid": {
+    "backends": [
+      "cuda",
+      "cpu"
+    ],
+    "configs": [
+      [
+        "baseline",
+        1,
+        512,
+        512,
+        2048,
+        false
+      ],
+      [
+        "p2",
+        2,
+        512,
+        512,
+        2048,
+        false
+      ],
+      [
+        "p4",
+        4,
+        512,
+        512,
+        2048,
+        false
+      ],
+      [
+        "p4-kvu",
+        4,
+        512,
+        512,
+        2048,
+        true
+      ],
+      [
+        "p4-c4096-b1024",
+        4,
+        1024,
+        512,
+        4096,
+        false
+      ],
+      [
+        "p4-c4096-ub1024",
+        4,
+        1024,
+        1024,
+        4096,
+        false
+      ]
+    ],
+    "roles": [
+      "embedding",
+      "reranker"
+    ]
+  },
+  "invalidated_prior_decision": {
     "acceptance_rule": "All five corpus scenarios >=20% median throughput improvement; token/readback and semantic correctness gates pass; peak RSS and global GPU-used regression each <=5%.",
     "comparisons": [
       {
@@ -422,73 +496,7 @@
     "ship_production_tuning": false,
     "winners": []
   },
-  "gaps": [
-    "Vulkan: no NVIDIA Vulkan ICD",
-    "Native Windows manual",
-    "8 GB hardware unavailable",
-    "native Linux OOM unavailable"
-  ],
-  "grid": {
-    "backends": [
-      "cuda",
-      "cpu"
-    ],
-    "configs": [
-      [
-        "baseline",
-        1,
-        512,
-        512,
-        2048,
-        false
-      ],
-      [
-        "p2",
-        2,
-        512,
-        512,
-        2048,
-        false
-      ],
-      [
-        "p4",
-        4,
-        512,
-        512,
-        2048,
-        false
-      ],
-      [
-        "p4-kvu",
-        4,
-        512,
-        512,
-        2048,
-        true
-      ],
-      [
-        "p4-c4096-b1024",
-        4,
-        1024,
-        512,
-        4096,
-        false
-      ],
-      [
-        "p4-c4096-ub1024",
-        4,
-        1024,
-        1024,
-        4096,
-        false
-      ]
-    ],
-    "roles": [
-      "embedding",
-      "reranker"
-    ]
-  },
-  "kind": "lane4-scheduling-grid",
+  "kind": "lane4-scheduling-grid-invalidated",
   "results": [
     {
       "argv": [
@@ -3187,6 +3195,19 @@
       "token_gate_required": 512
     }
   ],
+  "review_status": {
+    "reasons": [
+      "Candidate outputs were checked only for repeat determinism and were not compared with canonical same-backend/same-role baseline outputs.",
+      "Embedding inputs were duplicated, so response reordering could not be detected reliably.",
+      "GPU memory used a host-global peak contaminated by unrelated processes instead of llama-server process residency.",
+      "CPU cells were incorrectly gated on unrelated host GPU activity.",
+      "Reranker maximum requests included template overhead only at runtime and the rejecting baseline was still used for partial comparisons.",
+      "Per-sequence context was derived when explicit runtime readback was missing."
+    ],
+    "required_recapture_schema_version": "2.0",
+    "status": "invalidated_pending_recapture",
+    "valid_for_shipping_decision": false
+  },
   "runtime_identity": {
     "embedding_model": {
       "path": "$MODEL_ROOT/nomic-embed-text-v1.5.Q4_K_M.gguf",
