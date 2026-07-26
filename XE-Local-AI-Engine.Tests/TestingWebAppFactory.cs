@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests;
 
 using System.Net.Http.Headers;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -230,6 +231,14 @@ public class TestingWebAppFactory : WebApplicationFactory<Program>, IAsyncInitia
         _ = builder.ConfigureTestServices(services =>
         {
             services.RemoveAll<IHostedService>();
+
+            // Program pins Data Protection before WebApplicationFactory applies this fixture's late configuration
+            // overrides, so without an explicit test override every factory shares the source-tree dp-keys directory.
+            // That lets one host's operator-secret-derived ring poison another host and makes encrypted-token endpoint
+            // tests order-dependent. Keep the production encryptor, but isolate the repository with the rest of this
+            // factory's per-host node data.
+            services.AddDataProtection()
+                    .PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(_nodeDataDirectory, "dp-keys")));
 
             if (!SkipDefaultBaseUrlOverride)
             {
