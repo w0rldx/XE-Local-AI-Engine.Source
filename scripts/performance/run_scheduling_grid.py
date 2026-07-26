@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import concurrent.futures
 import hashlib
 import json
 import os
@@ -16,6 +15,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Callable
 
@@ -353,7 +353,7 @@ def scenario(fn, port: int, items, repeats: int, concurrent: bool = False) -> di
     def once():
         if concurrent:
             started = time.perf_counter()
-            with concurrent_futures.ThreadPoolExecutor(max_workers=8) as executor:
+            with ThreadPoolExecutor(max_workers=8) as executor:
                 results = list(executor.map(lambda batch: fn(port, batch), items))
             return time.perf_counter() - started, results
         return run_request(fn, port, items)

@@ -118,6 +118,25 @@ class SchedulingGridTests(unittest.TestCase):
         self.assertTrue(stable["repeat_deterministic"])
         self.assertFalse(unstable["repeat_deterministic"])
 
+    def test_concurrent_scenario_preserves_batch_order_and_item_count(self):
+        batches = [["first-a", "first-b"], ["second-a", "second-b"]]
+        measured = grid.scenario(
+            lambda _port, items: {"data": list(items)},
+            0,
+            batches,
+            2,
+            concurrent=True,
+        )
+        self.assertTrue(measured["repeat_deterministic"])
+        self.assertEqual(
+            [
+                {"data": ["first-a", "first-b"]},
+                {"data": ["second-a", "second-b"]},
+            ],
+            measured["_canonical_output"],
+        )
+        self.assertGreater(measured["median_items_per_second"], 0)
+
     def test_evaluator_accepts_only_baseline_equivalent_deterministic_outputs(self):
         data = complete_grid(
             lambda backend, role: result(
