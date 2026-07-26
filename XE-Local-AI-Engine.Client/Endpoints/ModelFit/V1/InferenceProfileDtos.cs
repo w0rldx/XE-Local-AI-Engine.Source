@@ -126,6 +126,9 @@ public sealed class InferenceProfileActionResponse
 /// </summary>
 public sealed class InferenceBenchmarkMetricsDto
 {
+    /// <summary>Role-specific harness that produced the metrics (<c>Chat</c>, <c>Embedding</c>, or <c>Reranker</c>).</summary>
+    public string? Role { get; init; }
+
     /// <summary>Generation throughput in tokens/second; null when not measured.</summary>
     public double? TokensPerSecond { get; init; }
 
@@ -144,13 +147,52 @@ public sealed class InferenceBenchmarkMetricsDto
     /// <summary>Wall-clock of the tool-call round in milliseconds; null when not measured.</summary>
     public double? ToolLoopMs { get; init; }
 
-    /// <summary>Free VRAM (bytes) observed at load; null when not measured.</summary>
+    /// <summary>Role items processed per second (texts for embedding, pairs for reranker); null for chat.</summary>
+    public double? ItemsPerSecond { get; init; }
+
+    /// <summary>Input tokens processed per wall-clock second; null when the server counters were unavailable.</summary>
+    public double? InputTokensPerSecond { get; init; }
+
+    /// <summary>Median request latency across repeated role-specific runs.</summary>
+    public double? P50LatencyMs { get; init; }
+
+    /// <summary>95th percentile request latency across repeated role-specific runs.</summary>
+    public double? P95LatencyMs { get; init; }
+
+    /// <summary>Number of texts/pairs in each role-specific request batch.</summary>
+    public int? BatchSize { get; init; }
+
+    /// <summary>Embedding vector dimension; null for chat and reranker.</summary>
+    public int? OutputDimension { get; init; }
+
+    /// <summary>Whether all embedding values/reranker scores were finite.</summary>
+    public bool? ValuesFinite { get; init; }
+
+    /// <summary>Whether repeated vectors or reranker scores/order stayed within the deterministic tolerance.</summary>
+    public bool? DeterministicOutput { get; init; }
+
+    /// <summary>Effective free VRAM (global-free when available, otherwise process budget) observed at load.</summary>
     public long? VramLoadBytes { get; init; }
 
-    /// <summary>Free VRAM (bytes) observed after the loop; null when not measured.</summary>
+    /// <summary>Effective free VRAM (global-free when available, otherwise process budget) observed after the loop.</summary>
     public long? VramAfterBytes { get; init; }
 
-    /// <summary>Number of transcript passes measured (one golden pass = 1).</summary>
+    /// <summary>System-wide NVIDIA free VRAM observed at load.</summary>
+    public long? GlobalFreeVramLoadBytes { get; init; }
+
+    /// <summary>System-wide NVIDIA free VRAM observed after the workload.</summary>
+    public long? GlobalFreeVramAfterBytes { get; init; }
+
+    /// <summary>llama.cpp process-local VRAM budget observed at load.</summary>
+    public long? ProcessBudgetVramLoadBytes { get; init; }
+
+    /// <summary>llama.cpp process-local VRAM budget observed after the workload.</summary>
+    public long? ProcessBudgetVramAfterBytes { get; init; }
+
+    /// <summary>Whether material process-budget/global-free divergence invalidated the benchmark as external pressure.</summary>
+    public bool ExternalPressureDetected { get; init; }
+
+    /// <summary>Number of measured passes.</summary>
     public required int Runs { get; init; }
 }
 
