@@ -255,7 +255,7 @@ def run_once(argv: list[str], timeout_seconds: float, expected_timeout: bool, cw
         "ambient_during": ambient_during,
         "stdout": stdout,
         "stderr": stderr,
-        "metrics": numeric_metrics(stdout),
+        "metrics": {"wall_elapsed_ms": round(elapsed_ms, 3), **numeric_metrics(stdout)},
     }
 
 
