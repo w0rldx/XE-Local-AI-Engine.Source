@@ -153,6 +153,10 @@ public sealed class InferenceProfileServiceTests
         var snapshotId = Guid.NewGuid();
         fixture.WithRunningSnapshot(snapshotId);
         var metrics = SuccessMetrics();
+        fixture.HardwareProfiler.GetProfileAsync(forceRefresh: true, Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult(NvidiaProfile(availableVramBytes: 6000)));
+        fixture.ProcessVramBudgetProbe.TryGetProcessBudgetBytesAsync(profile.Backend, Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult<long?>(8000));
         fixture.WithBenchmarkResult(metrics);
 
         var result = await fixture.CreateService().BenchmarkAsync(profile.Id, CancellationToken.None);
@@ -160,6 +164,8 @@ public sealed class InferenceProfileServiceTests
         AssertEx.True(result.Success);
         AssertEx.Equal<Guid?>(snapshotId, result.SnapshotId);
         AssertEx.Equal<double?>(42d, AssertEx.NotNull(result.Metrics).TokensPerSecond);
+        AssertEx.Equal(new LlamaServerProfilingVramSnapshot(6000, 8000),
+            AssertEx.NotNull(fixture.CapturedBenchmarkContext).PreSpawnVram);
         await fixture.BenchmarkStore.Received(1).ReplaceForSnapshotAsync(snapshotId,
             Arg.Is<IReadOnlyList<ModelFitBenchmarkInput>>(rows => rows.Count == 1
                                                                   && Math.Abs((rows[0].TokensPerSecond ?? 0d) - 42d) < 0.0001
@@ -493,6 +499,8 @@ public sealed class InferenceProfileServiceTests
         public ILaunchPolicyFingerprintProvider LaunchPolicyFingerprintProvider { get; } =
             Substitute.For<ILaunchPolicyFingerprintProvider>();
 
+        public LlamaServerProfilingContext? CapturedBenchmarkContext { get; private set; }
+
         public ServiceFixture()
         {
             MachineKeyProvider.GetMachineKeyAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(MachineKey));
@@ -575,20 +583,32 @@ public sealed class InferenceProfileServiceTests
         public void WithBenchmarkResult(InferenceBenchmarkMetrics metrics)
         {
             Harness.RunAsync(Arg.Any<LlamaServerProfilingContext>(), Arg.Any<InferenceBenchmarkSpec>(), Arg.Any<CancellationToken>())
-                   .Returns(Task.FromResult(metrics));
+                   .Returns(callInfo =>
+                   {
+                       CapturedBenchmarkContext = callInfo.Arg<LlamaServerProfilingContext>();
+                       return Task.FromResult(metrics);
+                   });
 
-            var context = new LlamaServerProfilingContext(new LlamaServerEndpoint(Model, ModelRole.Chat, new Uri("http://127.0.0.1:18100/v1")),
-                []);
             Supervisor.RunExclusiveProfilingAsync(Arg.Any<string>(),
                           Arg.Any<ModelRole>(),
                           Arg.Any<ResolvedLaunchArguments>(),
                           Arg.Any<bool>(),
                           Arg.Any<Func<LlamaServerProfilingContext, CancellationToken, Task<InferenceBenchmarkMetrics>>>(),
-                          Arg.Any<CancellationToken>())
-                      .Returns(callInfo =>
+                          Arg.Any<CancellationToken>(),
+                          Arg.Any<Func<CancellationToken, Task<LlamaServerProfilingVramSnapshot>>>())
+                      .Returns(async callInfo =>
                       {
+                          var captureVram =
+                              callInfo.Arg<Func<CancellationToken, Task<LlamaServerProfilingVramSnapshot>>>();
+                          var preSpawnVram = await captureVram(CancellationToken.None);
+                          var context = new LlamaServerProfilingContext(
+                              new LlamaServerEndpoint(Model, ModelRole.Chat, new Uri("http://127.0.0.1:18100/v1")),
+                              [])
+                          {
+                              PreSpawnVram = preSpawnVram
+                          };
                           var body = callInfo.Arg<Func<LlamaServerProfilingContext, CancellationToken, Task<InferenceBenchmarkMetrics>>>();
-                          return body(context, CancellationToken.None);
+                          return await body(context, CancellationToken.None);
                       });
         }
 

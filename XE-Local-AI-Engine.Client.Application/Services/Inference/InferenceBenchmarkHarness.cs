@@ -14,9 +14,9 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// <summary>
 ///     Role-aware inference benchmark harness. Chat retains the fixed golden transcript; embedding and reranker use their
 ///     valid llama-server endpoints with warm-up + repeated measurements, output correctness checks, and median/p95
-///     latency. Every run records global-free VRAM separately from llama.cpp's process-local budget so WDDM contention
-///     that grows beyond the post-load baseline invalidates a benchmark instead of producing silently paged performance
-///     numbers.
+///     latency. Every run records global-free VRAM separately from llama.cpp's process-local budget and rejects material
+///     divergence both before the profiling server starts and when it grows during measurement, so WDDM contention cannot
+///     produce silently paged performance numbers.
 /// </summary>
 public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
 {
@@ -25,7 +25,7 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
     private const string PromptSecondsMetric = "llamacpp:prompt_seconds_total";
     private const string PredictedSecondsMetric = "llamacpp:tokens_predicted_seconds_total";
     private const string ExternalPressureFailureReason =
-        "Benchmark invalid: VRAM divergence grew materially beyond the post-load baseline; new external GPU pressure is present.";
+        "Benchmark invalid: material VRAM divergence indicates external GPU pressure before or during measurement.";
 
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
@@ -66,10 +66,16 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
 
         try
         {
-            var resources = new ResourceEvidenceCollector(spec.VramDivergenceAbsoluteThresholdBytes,
+            var resources = new ResourceEvidenceCollector(context.PreSpawnVram,
+                spec.VramDivergenceAbsoluteThresholdBytes,
                 spec.VramDivergenceRatioThreshold);
             var load = await CaptureResourcesAsync(spec, context.ProcessId, ct).ConfigureAwait(false);
             resources.Add(load);
+
+            if (resources.ExternalPressureDetected)
+            {
+                return ApplyResourceEvidence(InferenceBenchmarkMetrics.Failed(ExternalPressureFailureReason), role, resources);
+            }
 
             async Task CapturePassResourcesAsync(CancellationToken innerCt)
             {
@@ -470,7 +476,7 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
     {
         var load = resources.First.Vram;
         var after = resources.Last.Vram;
-        var externalPressure = resources.Samples.Any(static sample => sample.Vram.ExternalPressureDetected);
+        var externalPressure = resources.ExternalPressureDetected;
         var success = metrics.Success && !externalPressure;
         var failureReason = externalPressure
             ? ExternalPressureFailureReason
@@ -492,6 +498,7 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
                 },
                 vram = new
                 {
+                    preSpawn = resources.PreSpawnVram,
                     load,
                     after,
                     minimumGlobalFreeBytes = resources.MinimumGlobalFreeBytes,
@@ -807,13 +814,24 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
         private readonly double _ratioThreshold;
         private readonly List<ResourceObservation> _samples = [];
 
-        public ResourceEvidenceCollector(long absoluteThresholdBytes, double ratioThreshold)
+        public ResourceEvidenceCollector(LlamaServerProfilingVramSnapshot? preSpawnVram,
+            long absoluteThresholdBytes,
+            double ratioThreshold)
         {
             _absoluteThresholdBytes = Math.Max(0, absoluteThresholdBytes);
             _ratioThreshold = Math.Max(0d, ratioThreshold);
+            PreSpawnVram = preSpawnVram is null
+                ? null
+                : MarkMaterialPressure(VramObservation.Create(preSpawnVram.GlobalFreeBytes, preSpawnVram.ProcessBudgetBytes));
         }
 
         public IReadOnlyList<ResourceObservation> Samples => _samples;
+
+        public VramObservation? PreSpawnVram { get; }
+
+        public bool ExternalPressureDetected =>
+            PreSpawnVram?.ExternalPressureDetected == true
+            || _samples.Any(static sample => sample.Vram.ExternalPressureDetected);
 
         public ResourceObservation First => _samples[0];
 
@@ -827,8 +845,9 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
 
         public void Add(ResourceObservation sample)
         {
-            // The profiling server is already resident at the first sample, so its own VRAM is a stable gap between the
-            // global-free and per-process-budget readers. Only growth beyond that post-load gap indicates new pressure.
+            // Pre-existing pressure is decided from the pre-spawn sample. Once the profiling server is resident, its own
+            // VRAM becomes a stable gap between the global-free and per-process-budget readers. Only growth beyond that
+            // post-load gap indicates pressure introduced during measurement.
             if (_samples.Count > 0
                 && _samples[0].Vram.GlobalFreeBytes is not null
                 && _samples[0].Vram.ProcessBudgetBytes is not null
@@ -849,6 +868,18 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
             }
 
             _samples.Add(sample);
+        }
+
+        private VramObservation MarkMaterialPressure(VramObservation observation)
+        {
+            var material = observation.ProcessBudgetExcessBytes is { } excess
+                           && observation.ProcessBudgetExcessRatio is { } ratio
+                           && excess >= _absoluteThresholdBytes
+                           && ratio >= _ratioThreshold;
+            return observation with
+            {
+                ExternalPressureDetected = material
+            };
         }
 
         private static long? MaxNullable(IEnumerable<long?> values)

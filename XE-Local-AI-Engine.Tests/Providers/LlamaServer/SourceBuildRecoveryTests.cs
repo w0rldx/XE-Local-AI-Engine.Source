@@ -370,7 +370,8 @@ public sealed class SourceBuildRecoveryTests
             throw new NotSupportedException();
 
         public Task<T> RunExclusiveProfilingAsync<T>(string modelName, ModelRole role, ResolvedLaunchArguments launchArgs, bool enableMetrics,
-            Func<LlamaServerProfilingContext, CancellationToken, Task<T>> body, CancellationToken ct) =>
+            Func<LlamaServerProfilingContext, CancellationToken, Task<T>> body, CancellationToken ct,
+            Func<CancellationToken, Task<LlamaServerProfilingVramSnapshot>>? captureVramBeforeSpawn = null) =>
             throw new NotSupportedException();
 
         public Task<IReadOnlyList<LlamaServerProcessHealth>> CheckHealthAsync(CancellationToken ct) =>

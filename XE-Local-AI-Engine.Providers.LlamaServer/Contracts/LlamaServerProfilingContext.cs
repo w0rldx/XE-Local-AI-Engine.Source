@@ -27,6 +27,12 @@ public sealed record LlamaServerProfilingContext(
     int? ProcessId = null)
 {
     /// <summary>
+    ///     Ambient VRAM evidence captured after same-key eviction and immediately before this profiling process was
+    ///     spawned. Benchmarks use it to reject pressure that already existed before model residency.
+    /// </summary>
+    public LlamaServerProfilingVramSnapshot? PreSpawnVram { get; init; }
+
+    /// <summary>
     ///     Exact server argv for the candidate that reached readiness. For Explore profiling this distinguishes the
     ///     optimized KV/flash-attention plan from a successful safe fallback; failed-candidate arguments are never exposed.
     /// </summary>

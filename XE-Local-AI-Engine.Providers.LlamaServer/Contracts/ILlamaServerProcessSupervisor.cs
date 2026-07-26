@@ -124,12 +124,17 @@ public interface ILlamaServerProcessSupervisor
     /// <param name="enableMetrics">Append <c>--metrics</c> when the built args do not already include it.</param>
     /// <param name="body">The profiling work to run against the exclusive process and its captured startup output.</param>
     /// <param name="ct">Cancellation token flowed through spawn, body, and teardown.</param>
+    /// <param name="captureVramBeforeSpawn">
+    ///     Optional ambient-VRAM capture invoked after same-key eviction and before the transient process is spawned.
+    ///     Its result is propagated through <see cref="LlamaServerProfilingContext.PreSpawnVram" />.
+    /// </param>
     Task<T> RunExclusiveProfilingAsync<T>(string modelName,
         ModelRole role,
         ResolvedLaunchArguments launchArgs,
         bool enableMetrics,
         Func<LlamaServerProfilingContext, CancellationToken, Task<T>> body,
-        CancellationToken ct);
+        CancellationToken ct,
+        Func<CancellationToken, Task<LlamaServerProfilingVramSnapshot>>? captureVramBeforeSpawn = null);
 
     /// <summary>
     ///     Aggregates every running process's health into one snapshot — operational iff the supervisor can serve

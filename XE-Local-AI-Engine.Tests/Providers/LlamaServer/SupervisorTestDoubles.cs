@@ -273,7 +273,8 @@ internal sealed class FakeProcessSupervisor(params LlamaServerProcessHealth[] ru
         ResolvedLaunchArguments launchArgs,
         bool enableMetrics,
         Func<LlamaServerProfilingContext, CancellationToken, Task<T>> body,
-        CancellationToken ct)
+        CancellationToken ct,
+        Func<CancellationToken, Task<LlamaServerProfilingVramSnapshot>>? captureVramBeforeSpawn = null)
     {
         throw new NotSupportedException("FakeProcessSupervisor does not run profiling.");
     }
