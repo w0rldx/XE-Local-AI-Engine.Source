@@ -28,7 +28,7 @@ from typing import Any
 
 
 SCHEMA_VERSION = "1.0"
-FIT_FLAGS_WITH_VALUE = ("-c", "--ctx-size", "-ngl", "--gpu-layers", "-ts", "--tensor-split", "-ot", "--override-tensor", "-ctk", "--cache-type-k", "-ctv", "--cache-type-v")
+FIT_FLAGS_WITH_VALUE = ("-c", "--ctx-size", "-ngl", "--gpu-layers", "--n-gpu-layers", "-ts", "--tensor-split", "-ot", "--override-tensor", "-ctk", "--cache-type-k", "-ctv", "--cache-type-v")
 
 
 class CaptureError(RuntimeError):
@@ -436,7 +436,7 @@ def extract_fit_flags(argv: list[str]) -> dict[str, list[str]]:
             if index + 1 >= len(argv):
                 raise CaptureError(f"Launch vector ends after {flag}")
             canonical = {
-                "--ctx-size": "-c", "--gpu-layers": "-ngl", "--tensor-split": "-ts", "--override-tensor": "-ot",
+                "--ctx-size": "-c", "--gpu-layers": "-ngl", "--n-gpu-layers": "-ngl", "--tensor-split": "-ts", "--override-tensor": "-ot",
                 "--cache-type-k": "-ctk", "--cache-type-v": "-ctv",
             }.get(flag, flag)
             parsed.setdefault(canonical, []).append(argv[index + 1])
@@ -452,7 +452,7 @@ def without_fit_semantics(argv: list[str]) -> list[str]:
     while index < len(argv):
         item = argv[index]
         if item == "--fit":
-            index += 1
+            index += 2 if index + 1 < len(argv) and argv[index + 1] in {"on", "off"} else 1
         elif item in FIT_FLAGS_WITH_VALUE:
             index += 2
         else:
