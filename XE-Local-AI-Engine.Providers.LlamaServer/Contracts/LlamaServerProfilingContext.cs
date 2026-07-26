@@ -26,6 +26,12 @@ public sealed record LlamaServerProfilingContext(
     IReadOnlyList<string> FitParamsOutput,
     int? ProcessId = null)
 {
+    /// <summary>
+    ///     Exact server argv for the candidate that reached readiness. For Explore profiling this distinguishes the
+    ///     optimized KV/flash-attention plan from a successful safe fallback; failed-candidate arguments are never exposed.
+    /// </summary>
+    public IReadOnlyList<string> SuccessfulLaunchArguments { get; init; } = [];
+
     /// <summary>Creates a profiling context without machine-readable fit output (replay/benchmark callers).</summary>
     public LlamaServerProfilingContext(LlamaServerEndpoint endpoint, IReadOnlyList<string> startupOutput)
         : this(endpoint, startupOutput, FitParamsOutput: [], ProcessId: null)

@@ -8,11 +8,14 @@ public interface IFittedArgsParser
 {
     /// <summary>
     ///     Builds a replay draft from <paramref name="fitParamsOutput" /> plus authoritative
-    ///     <paramref name="startupOutput" /> placement evidence, or <see langword="null" /> when no concrete replay can
-    ///     be proven. The helper's automatic <c>-ngl -1</c> sentinel is replayable only when startup output proves every
-    ///     layer was offloaded.
+    ///     <paramref name="startupOutput" /> placement evidence and the exact
+    ///     <paramref name="successfulLaunchArguments" /> that reached readiness, or <see langword="null" /> when no
+    ///     concrete replay can be proven. The helper's automatic <c>-ngl -1</c> sentinel is replayable only when startup
+    ///     output proves every layer was offloaded. KV/flash-attention policy is preserved only from the successful argv,
+    ///     so a failed optimized candidate cannot contaminate a safe fallback profile.
     /// </summary>
     ResolvedLaunchArguments? TryParseFittedArgs(
         IReadOnlyList<string> fitParamsOutput,
-        IReadOnlyList<string> startupOutput);
+        IReadOnlyList<string> startupOutput,
+        IReadOnlyList<string> successfulLaunchArguments);
 }

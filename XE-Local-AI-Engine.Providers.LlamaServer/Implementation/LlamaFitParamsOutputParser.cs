@@ -24,9 +24,15 @@ internal static partial class LlamaFitParamsOutputParser
     /// </summary>
     public static ResolvedLaunchArguments? TryParseFittedArgs(
         IReadOnlyList<string> fitParamsOutput,
-        IReadOnlyList<string>? startupOutput = null)
+        IReadOnlyList<string>? startupOutput = null,
+        IReadOnlyList<string>? successfulLaunchArguments = null)
     {
         ArgumentNullException.ThrowIfNull(fitParamsOutput);
+
+        if (!TryParseSuccessfulLaunchPolicy(successfulLaunchArguments, out var kvTypeK, out var kvTypeV, out var flashAttn))
+        {
+            return null;
+        }
 
         foreach (var line in fitParamsOutput)
         {
@@ -62,7 +68,13 @@ internal static partial class LlamaFitParamsOutputParser
 
             var tensorSplit = OptionalValue(match, "ts");
             var overrideTensor = OptionalValue(match, "ot");
-            return ResolvedLaunchArguments.Replay(ctxSize, gpuLayers, tensorSplit, overrideTensor);
+            return ResolvedLaunchArguments.Replay(ctxSize,
+                gpuLayers,
+                tensorSplit,
+                overrideTensor,
+                kvTypeK,
+                kvTypeV,
+                flashAttn);
         }
 
         return null;
@@ -104,6 +116,79 @@ internal static partial class LlamaFitParamsOutputParser
         }
 
         return foundPlacement;
+    }
+
+    private static bool TryParseSuccessfulLaunchPolicy(
+        IReadOnlyList<string>? arguments,
+        out string? kvTypeK,
+        out string? kvTypeV,
+        out bool flashAttn)
+    {
+        kvTypeK = null;
+        kvTypeV = null;
+        flashAttn = false;
+        string? flashAttnValue = null;
+
+        if (arguments is null)
+        {
+            return true;
+        }
+
+        for (var index = 0; index < arguments.Count; index++)
+        {
+            var argument = arguments[index];
+            if (argument is "-ctk" or "--cache-type-k")
+            {
+                if (!TryReadSingleValue(arguments, ref index, ref kvTypeK))
+                {
+                    return false;
+                }
+            }
+            else if (argument is "-ctv" or "--cache-type-v")
+            {
+                if (!TryReadSingleValue(arguments, ref index, ref kvTypeV))
+                {
+                    return false;
+                }
+            }
+            else if ((argument is "-fa" or "--flash-attn")
+                     && !TryReadSingleValue(arguments, ref index, ref flashAttnValue))
+            {
+                return false;
+            }
+        }
+
+        if (flashAttnValue is not null)
+        {
+            if (!string.Equals(flashAttnValue, "on", StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            flashAttn = true;
+        }
+
+        var kvKeySet = kvTypeK is not null;
+        var kvValueSet = kvTypeV is not null;
+        return kvKeySet
+            ? kvValueSet
+              && flashAttn
+              && string.Equals(kvTypeK, kvTypeV, StringComparison.Ordinal)
+            : !kvValueSet && !flashAttn;
+    }
+
+    private static bool TryReadSingleValue(
+        IReadOnlyList<string> arguments,
+        ref int index,
+        ref string? value)
+    {
+        if (value is not null || index + 1 >= arguments.Count || string.IsNullOrWhiteSpace(arguments[index + 1]))
+        {
+            return false;
+        }
+
+        value = arguments[++index];
+        return true;
     }
 
     private static string? OptionalValue(Match match, string groupName)

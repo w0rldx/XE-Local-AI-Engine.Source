@@ -28,7 +28,43 @@ from typing import Any
 
 
 SCHEMA_VERSION = "1.0"
-FIT_FLAGS_WITH_VALUE = ("-c", "--ctx-size", "-ngl", "--gpu-layers", "--n-gpu-layers", "-ts", "--tensor-split", "-ot", "--override-tensor", "-ctk", "--cache-type-k", "-ctv", "--cache-type-v")
+FIT_FLAGS_WITH_VALUE = (
+    "-c", "--ctx-size",
+    "-ngl", "--gpu-layers", "--n-gpu-layers",
+    "-ts", "--tensor-split",
+    "-ot", "--override-tensor",
+    "-ctk", "--cache-type-k",
+    "-ctv", "--cache-type-v",
+    "-fa", "--flash-attn",
+)
+FIT_FLAG_CANONICAL = {
+    "--ctx-size": "-c",
+    "--gpu-layers": "-ngl",
+    "--n-gpu-layers": "-ngl",
+    "--tensor-split": "-ts",
+    "--override-tensor": "-ot",
+    "--cache-type-k": "-ctk",
+    "--cache-type-v": "-ctv",
+    "--flash-attn": "-fa",
+}
+FIT_HELPER_ARGS_WITH_VALUE = {
+    "-m", "--model",
+    "-c", "--ctx-size",
+    "-b", "--batch-size",
+    "-ub", "--ubatch-size",
+    "-np", "--parallel",
+    "-fa", "--flash-attn",
+    "-ctk", "--cache-type-k",
+    "-ctv", "--cache-type-v",
+    "-dev", "--device",
+    "-sm", "--split-mode",
+    "-mg", "--main-gpu",
+    "-fit", "--fit",
+    "-fitt", "--fit-target",
+    "-fitc", "--fit-ctx",
+    "--pooling",
+}
+FIT_HELPER_VALUELESS_ARGS = {"--mlock", "--mmap", "--no-mmap", "--no-host", "--no-op-offload"}
 
 
 class CaptureError(RuntimeError):
@@ -462,15 +498,64 @@ def extract_fit_flags(argv: list[str]) -> dict[str, list[str]]:
         if flag in FIT_FLAGS_WITH_VALUE:
             if index + 1 >= len(argv):
                 raise CaptureError(f"Launch vector ends after {flag}")
-            canonical = {
-                "--ctx-size": "-c", "--gpu-layers": "-ngl", "--n-gpu-layers": "-ngl", "--tensor-split": "-ts", "--override-tensor": "-ot",
-                "--cache-type-k": "-ctk", "--cache-type-v": "-ctv",
-            }.get(flag, flag)
+            canonical = FIT_FLAG_CANONICAL.get(flag, flag)
             parsed.setdefault(canonical, []).append(argv[index + 1])
             index += 2
         else:
             index += 1
     return parsed
+
+
+def project_fit_helper_arguments(server_argv: list[str]) -> list[str]:
+    """Mirror LlamaFitParamsProcessRunner.BuildArguments over one production server vector."""
+    projected: list[str] = []
+    index = 0
+    while index < len(server_argv):
+        argument = server_argv[index]
+        if argument in FIT_HELPER_ARGS_WITH_VALUE:
+            if index + 1 >= len(server_argv):
+                raise CaptureError(f"Production Explore vector ends after helper-relevant argument {argument}")
+            projected.extend((argument, server_argv[index + 1]))
+            index += 2
+        elif argument in FIT_HELPER_VALUELESS_ARGS:
+            projected.append(argument)
+            index += 1
+        else:
+            index += 1
+    return projected
+
+
+def option_values(argv: list[str], option: str) -> list[str]:
+    values: list[str] = []
+    for index, argument in enumerate(argv):
+        if argument != option:
+            continue
+        if index + 1 >= len(argv):
+            raise CaptureError(f"Launch vector ends after {option}")
+        values.append(argv[index + 1])
+    return values
+
+
+def validate_kv_flash_equivalence(explore_flags: dict[str, list[str]], replay_flags: dict[str, list[str]]) -> None:
+    for flag in ("-ctk", "-ctv", "-fa"):
+        explore_values = explore_flags.get(flag, [])
+        replay_values = replay_flags.get(flag, [])
+        if len(explore_values) > 1 or len(replay_values) > 1:
+            raise CaptureError(f"Explore and replay must contain at most one {flag} value")
+        if explore_values != replay_values:
+            raise CaptureError(
+                f"Explore and replay KV/flash-attention settings differ for {flag}: "
+                f"explore={explore_values}, replay={replay_values}"
+            )
+
+    kv_k = explore_flags.get("-ctk", [])
+    kv_v = explore_flags.get("-ctv", [])
+    flash = explore_flags.get("-fa", [])
+    if kv_k or kv_v or flash:
+        if len(kv_k) != 1 or kv_k != kv_v or flash != ["on"]:
+            raise CaptureError(
+                "Optimized Explore/replay must use matching -ctk/-ctv values with flash attention set to on"
+            )
 
 
 def validate_concrete_fit_flags(fitted_flags: dict[str, list[str]]) -> None:
@@ -526,6 +611,10 @@ def without_fit_semantics(argv: list[str]) -> list[str]:
             index += 2 if index + 1 < len(argv) and argv[index + 1] in {"on", "off"} else 1
         elif item in FIT_FLAGS_WITH_VALUE:
             index += 2
+        elif item in {"-v", "--verbose", "--metrics"}:
+            # Profiling-only diagnostics do not change fit placement. Explore carries verbosity so startup can prove
+            # full offload; both vectors carry --metrics, but replay appends it after role flags.
+            index += 1
         else:
             result.append(item)
             index += 1
@@ -562,16 +651,29 @@ def capture_fit(spec_path: Path, output_path: Path) -> None:
     replay = vectors.get("replay")
     if not isinstance(explore, list) or not isinstance(replay, list) or not all(isinstance(item, str) for item in explore + replay):
         raise CaptureError("launch_vectors.explore and replay must be string arrays")
-    if "--fit" not in explore or "--fit" in replay:
-        raise CaptureError("explore must contain --fit and replay must not")
+    if option_values(explore, "--fit") != ["on"] or "--fit" in replay:
+        raise CaptureError("explore must contain exactly one '--fit on' pair and replay must not contain --fit")
+    if explore.count("--metrics") != 1 or replay.count("--metrics") != 1:
+        raise CaptureError("production Explore and replay profiling vectors must each contain exactly one --metrics flag")
+    verbose_count = sum(explore.count(flag) for flag in ("-v", "--verbose"))
+    if verbose_count != 1:
+        raise CaptureError("production Explore must contain exactly one -v/--verbose flag")
+    if "-v" in replay or "--verbose" in replay:
+        raise CaptureError("replay must not contain the profiling-only -v/--verbose flag")
     explore_argv = command_argv(commands["explore"], "spec.commands.explore")
     replay_argv = command_argv(commands["replay"], "spec.commands.replay")
     if Path(explore_argv[0]).resolve() != Path(server["path"]) or Path(replay_argv[0]).resolve() != Path(server["path"]):
         raise CaptureError("explore and replay must invoke the verified server binary")
     if explore_argv[1:] != explore or replay_argv[1:] != replay:
         raise CaptureError("launch_vectors must exactly equal the explore/replay command argv after the binary path")
-    if default_argv[1:] != explore:
-        raise CaptureError("default_verbosity must use the exact explore launch vector")
+    if verbose_argv[1:] != explore:
+        raise CaptureError("verbose must use the exact production Explore launch vector")
+    projected_helper_argv = project_fit_helper_arguments(explore)
+    if fit_argv[1:] != projected_helper_argv:
+        raise CaptureError(
+            "fit_params argv must exactly equal the production helper projection of Explore: "
+            f"expected={projected_helper_argv}, actual={fit_argv[1:]}"
+        )
 
     default_result = run_command(commands["default_verbosity"], "spec.commands.default_verbosity")
     verbose_result = run_command(commands["verbose"], "spec.commands.verbose")
@@ -584,9 +686,17 @@ def capture_fit(spec_path: Path, output_path: Path) -> None:
         raise CaptureError("llama-fit-params output did not contain a deterministic '-c ...' argument line")
     default_text = default_result["runs"][-1]["stdout"] + "\n" + default_result["runs"][-1]["stderr"]
     verbose_text = verbose_result["runs"][-1]["stdout"] + "\n" + verbose_result["runs"][-1]["stderr"]
+    explore_text = explore_result["runs"][-1]["stdout"] + "\n" + explore_result["runs"][-1]["stderr"]
     fitted = shlex.split(fit_line, posix=True)
     fitted_flags = extract_fit_flags(fitted)
-    normalized_fitted_flags = normalize_fit_flags(fitted_flags, verbose_text)
+    unexpected_fitted_flags = set(fitted_flags) - {"-c", "-ngl", "-ts", "-ot"}
+    if unexpected_fitted_flags:
+        raise CaptureError(
+            "llama-fit-params stdout contains unsupported flags outside its machine-readable grammar: "
+            f"{sorted(unexpected_fitted_flags)}"
+        )
+    normalized_fitted_flags = normalize_fit_flags(fitted_flags, explore_text)
+    explore_flags = extract_fit_flags(explore)
     replay_flags = extract_fit_flags(replay)
     validate_concrete_fit_flags(replay_flags)
     if normalized_fitted_flags != {key: replay_flags.get(key, []) for key in normalized_fitted_flags}:
@@ -594,6 +704,7 @@ def capture_fit(spec_path: Path, output_path: Path) -> None:
             "Replay placement differs from normalized llama-fit-params output: "
             f"fitted={fitted_flags}, normalized={normalized_fitted_flags}, replay={replay_flags}"
         )
+    validate_kv_flash_equivalence(explore_flags, replay_flags)
     if without_fit_semantics(explore) != without_fit_semantics(replay):
         raise CaptureError("Explore and replay non-fit launch arguments are not byte-equivalent")
     acceptance = spec.get("resource_acceptance")
@@ -644,9 +755,15 @@ def capture_fit(spec_path: Path, output_path: Path) -> None:
         "equivalence": {
             "fitted_flags": fitted_flags,
             "normalized_fitted_flags": normalized_fitted_flags,
+            "explore_policy_flags": {
+                key: explore_flags.get(key, [])
+                for key in ("-ctk", "-ctv", "-fa")
+            },
             "replay_flags": replay_flags,
             "non_fit_vector_equal": True,
             "placement_equal": True,
+            "kv_flash_equal": True,
+            "metrics_enabled_for_both": True,
             "peak_rss_delta_percent": rss_delta_percent,
             "peak_rss_within_tolerance": rss_within_tolerance,
             "global_gpu_used_delta_percent": gpu_delta_percent,

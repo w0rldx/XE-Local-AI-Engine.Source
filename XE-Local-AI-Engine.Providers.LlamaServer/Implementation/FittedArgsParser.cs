@@ -11,11 +11,13 @@ public sealed class FittedArgsParser : IFittedArgsParser
     /// <inheritdoc />
     public ResolvedLaunchArguments? TryParseFittedArgs(
         IReadOnlyList<string> fitParamsOutput,
-        IReadOnlyList<string> startupOutput)
+        IReadOnlyList<string> startupOutput,
+        IReadOnlyList<string> successfulLaunchArguments)
     {
         ArgumentNullException.ThrowIfNull(fitParamsOutput);
         ArgumentNullException.ThrowIfNull(startupOutput);
+        ArgumentNullException.ThrowIfNull(successfulLaunchArguments);
 
-        return LlamaFitParamsOutputParser.TryParseFittedArgs(fitParamsOutput, startupOutput);
+        return LlamaFitParamsOutputParser.TryParseFittedArgs(fitParamsOutput, startupOutput, successfulLaunchArguments);
     }
 }

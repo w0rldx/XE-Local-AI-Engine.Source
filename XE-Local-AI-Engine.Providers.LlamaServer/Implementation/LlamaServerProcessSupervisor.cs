@@ -910,7 +910,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                 var endpoint = new LlamaServerEndpoint(key.ModelName, key.Role, spec.BaseAddress);
                 var running = new RunningProcess(handle, endpoint, port, _timeProvider.GetUtcNow())
                 {
-                    EffectiveContextTokens = effectiveContext
+                    EffectiveContextTokens = effectiveContext,
+                    SuccessfulLaunchArguments = fitParamsCapture is null ? [] : [.. spec.Arguments]
                 };
                 _processes[key] = running;
 
@@ -1207,7 +1208,10 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                     var context = new LlamaServerProfilingContext(running.Endpoint,
                         startupOutput.ToArray(),
                         fitParamsOutput.ToArray(),
-                        running.Handle.ProcessId);
+                        running.Handle.ProcessId)
+                    {
+                        SuccessfulLaunchArguments = running.SuccessfulLaunchArguments
+                    };
                     return await body(context, ct).ConfigureAwait(false);
                 }
                 finally
@@ -1824,6 +1828,9 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         ///     actually loaded, captured once after readiness. <see langword="null" /> when <c>/props</c> was unavailable.
         /// </summary>
         public int? EffectiveContextTokens { get; init; }
+
+        /// <summary>Immutable snapshot of the exact argv for the candidate that reached readiness.</summary>
+        public IReadOnlyList<string> SuccessfulLaunchArguments { get; init; } = [];
 
         public DateTimeOffset LastUsedUtc => new(Interlocked.Read(ref _lastUsedTicks), TimeSpan.Zero);
 

@@ -20,6 +20,77 @@ def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def fit_capture_spec(server: Path, helper: Path) -> dict:
+    base = [
+        str(server),
+        "-m", "model.gguf",
+        "--host", "127.0.0.1",
+        "--port", "19150",
+        "--parallel", "1",
+        "--no-warmup",
+    ]
+    explore = [
+        *base,
+        "--fit", "on",
+        "--metrics",
+        "-c", "4096",
+        "-fa", "on",
+        "-ctk", "q8_0",
+        "-ctv", "q8_0",
+        "--jinja",
+        "-v",
+    ]
+    replay = [
+        *base,
+        "-c", "4096",
+        "--n-gpu-layers", "99",
+        "-ts", "1.0",
+        "-ctk", "q8_0",
+        "-ctv", "q8_0",
+        "--flash-attn", "on",
+        "--jinja",
+        "--metrics",
+    ]
+    helper_argv = [
+        str(helper),
+        "-m", "model.gguf",
+        "--parallel", "1",
+        "--fit", "on",
+        "-c", "4096",
+        "-fa", "on",
+        "-ctk", "q8_0",
+        "-ctv", "q8_0",
+    ]
+    return {
+        "schema_version": "1.0",
+        "kind": "fit-replay-capture",
+        "capture_id": "fit-test",
+        "phase": "fit-proof",
+        "binaries": {
+            "server": {"path": str(server), "sha256": digest(server)},
+            "fit_helper": {"path": str(helper), "sha256": digest(helper)},
+        },
+        "commands": {
+            "default_verbosity": {
+                "name": "default",
+                "argv": explore[:-1],
+                "repeats": 1,
+                "timeout_seconds": 2,
+            },
+            "verbose": {"name": "verbose", "argv": list(explore), "repeats": 1, "timeout_seconds": 2},
+            "fit_params": {"name": "fit", "argv": helper_argv, "repeats": 1, "timeout_seconds": 2},
+            "explore": {"name": "explore", "argv": list(explore), "repeats": 1, "timeout_seconds": 2},
+            "replay": {"name": "replay", "argv": list(replay), "repeats": 1, "timeout_seconds": 2},
+        },
+        "launch_vectors": {
+            "explore": explore[1:],
+            "replay": replay[1:],
+        },
+        "resource_acceptance": {"max_delta_percent": 10000},
+        "coverage": {"unvalidated": []},
+    }
+
+
 class CaptureInferenceEvidenceTests(unittest.TestCase):
     def test_baseline_rejects_identity_hash_mismatch(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -55,11 +126,63 @@ class CaptureInferenceEvidenceTests(unittest.TestCase):
         }, capture.numeric_metrics(stdout))
 
     def test_supervisor_fit_on_and_long_gpu_layers_alias_normalize_for_replay(self) -> None:
-        explore = ["--fit", "on", "--metrics", "--jinja"]
-        replay = ["-c", "0", "--n-gpu-layers", "-1", "--metrics", "--jinja"]
-        self.assertEqual(["--metrics", "--jinja"], capture.without_fit_semantics(explore))
-        self.assertEqual(["--metrics", "--jinja"], capture.without_fit_semantics(replay))
-        self.assertEqual({"-c": ["0"], "-ngl": ["-1"]}, capture.extract_fit_flags(replay))
+        explore = ["--fit", "on", "--metrics", "-fa", "on", "-ctk", "q8_0", "-ctv", "q8_0", "--jinja", "-v"]
+        replay = ["-c", "0", "--n-gpu-layers", "-1", "-ctk", "q8_0", "-ctv", "q8_0", "--flash-attn", "on", "--jinja", "--metrics"]
+        self.assertEqual(["--jinja"], capture.without_fit_semantics(explore))
+        self.assertEqual(["--jinja"], capture.without_fit_semantics(replay))
+        self.assertEqual(
+            {
+                "-c": ["0"],
+                "-ngl": ["-1"],
+                "-ctk": ["q8_0"],
+                "-ctv": ["q8_0"],
+                "-fa": ["on"],
+            },
+            capture.extract_fit_flags(replay),
+        )
+
+    def test_fit_helper_projection_matches_production_runner_contract(self) -> None:
+        explore = [
+            "-m", "model.gguf",
+            "--host", "127.0.0.1",
+            "--port", "19150",
+            "--parallel", "1",
+            "--no-warmup",
+            "--fit", "on",
+            "--metrics",
+            "-c", "4096",
+            "-fa", "on",
+            "-ctk", "q8_0",
+            "-ctv", "q8_0",
+            "--jinja",
+            "-v",
+        ]
+
+        self.assertEqual(
+            [
+                "-m", "model.gguf",
+                "--parallel", "1",
+                "--fit", "on",
+                "-c", "4096",
+                "-fa", "on",
+                "-ctk", "q8_0",
+                "-ctv", "q8_0",
+            ],
+            capture.project_fit_helper_arguments(explore),
+        )
+
+    def test_fit_capture_requires_exact_fit_on_and_matching_kv_flash_policy(self) -> None:
+        self.assertEqual(["on"], capture.option_values(["--fit", "on"], "--fit"))
+        with self.assertRaisesRegex(capture.CaptureError, "settings differ"):
+            capture.validate_kv_flash_equivalence(
+                {"-ctk": ["q8_0"], "-ctv": ["q8_0"], "-fa": ["on"]},
+                {"-ctk": ["q8_0"], "-ctv": ["q4_0"], "-fa": ["on"]},
+            )
+        with self.assertRaisesRegex(capture.CaptureError, "matching -ctk/-ctv"):
+            capture.validate_kv_flash_equivalence(
+                {"-fa": ["on"]},
+                {"-fa": ["on"]},
+            )
 
     def test_fit_flags_reject_unresolved_or_partial_placement(self) -> None:
         invalid = (
@@ -138,35 +261,10 @@ class CaptureInferenceEvidenceTests(unittest.TestCase):
             server = root / "llama-server"
             helper = root / "llama-fit-params"
             server.write_text("#!/bin/sh\nprintf 'server output\\n'\n", encoding="utf-8")
-            helper.write_text("#!/bin/sh\nprintf '%s\\n' '-c 4096 -ngl 99 -ts 1.0 -ctk q8_0 -ctv q8_0'\n", encoding="utf-8")
+            helper.write_text("#!/bin/sh\nprintf '%s\\n' '-c 4096 -ngl 99 -ts 1.0'\n", encoding="utf-8")
             server.chmod(0o755)
             helper.chmod(0o755)
-            common = [str(server), "-m", "model.gguf", "--fit", "--parallel", "1"]
-            spec = {
-                "schema_version": "1.0", "kind": "fit-replay-capture", "capture_id": "fit-test", "phase": "fit-proof",
-                "binaries": {
-                    "server": {"path": str(server), "sha256": digest(server)},
-                    "fit_helper": {"path": str(helper), "sha256": digest(helper)},
-                },
-                "commands": {
-                    "default_verbosity": {"name": "default", "argv": common, "repeats": 1, "timeout_seconds": 2},
-                    "verbose": {"name": "verbose", "argv": common + ["-v"], "repeats": 1, "timeout_seconds": 2},
-                    "fit_params": {"name": "fit", "argv": [str(helper), "-m", "model.gguf"], "repeats": 1, "timeout_seconds": 2},
-                    "explore": {"name": "explore", "argv": common, "repeats": 1, "timeout_seconds": 2},
-                    "replay": {
-                        "name": "replay",
-                        "argv": [str(server), "-m", "model.gguf", "--parallel", "1", "-c", "4096", "-ngl", "99", "-ts", "1.0", "-ctk", "q8_0", "-ctv", "q8_0"],
-                        "repeats": 1,
-                        "timeout_seconds": 2,
-                    },
-                },
-                "launch_vectors": {
-                    "explore": ["-m", "model.gguf", "--fit", "--parallel", "1"],
-                    "replay": ["-m", "model.gguf", "--parallel", "1", "-c", "4096", "-ngl", "99", "-ts", "1.0", "-ctk", "q8_0", "-ctv", "q8_0"],
-                },
-                "resource_acceptance": {"max_delta_percent": 10000},
-                "coverage": {"unvalidated": []},
-            }
+            spec = fit_capture_spec(server, helper)
             spec_path = root / "spec.json"
             output = root / "result.json"
             spec_path.write_text(json.dumps(spec), encoding="utf-8")
@@ -174,10 +272,66 @@ class CaptureInferenceEvidenceTests(unittest.TestCase):
             artifact = json.loads(output.read_text(encoding="utf-8"))
             self.assertTrue(artifact["equivalence"]["placement_equal"])
             self.assertTrue(artifact["equivalence"]["non_fit_vector_equal"])
+            self.assertTrue(artifact["equivalence"]["kv_flash_equal"])
+            self.assertEqual(
+                {"-ctk": ["q8_0"], "-ctv": ["q8_0"], "-fa": ["on"]},
+                artifact["equivalence"]["explore_policy_flags"],
+            )
             self.assertNotIn("-v", artifact["captures"]["default_verbosity"]["argv"])
             self.assertIn("-v", artifact["captures"]["verbose"]["argv"])
+            self.assertEqual(artifact["captures"]["verbose"]["argv"], artifact["captures"]["explore"]["argv"])
             self.assertEqual(artifact["launch_vectors"]["explore"], artifact["captures"]["explore"]["argv"][1:])
             self.assertEqual(artifact["launch_vectors"]["replay"], artifact["captures"]["replay"]["argv"][1:])
+
+    def test_fit_capture_rejects_production_explore_without_exactly_one_verbose_flag(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            server = root / "llama-server"
+            helper = root / "llama-fit-params"
+            server.write_text("#!/bin/sh\nprintf 'server output\\n'\n", encoding="utf-8")
+            helper.write_text("#!/bin/sh\nprintf '%s\\n' '-c 4096 -ngl 99 -ts 1.0'\n", encoding="utf-8")
+            server.chmod(0o755)
+            helper.chmod(0o755)
+            spec = fit_capture_spec(server, helper)
+            for name in ("verbose", "explore"):
+                spec["commands"][name]["argv"].remove("-v")
+            spec["launch_vectors"]["explore"].remove("-v")
+            spec_path = root / "spec.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+
+            with self.assertRaisesRegex(capture.CaptureError, "exactly one -v/--verbose"):
+                capture.capture_fit(spec_path, root / "result.json")
+
+    def test_fit_capture_normalizes_automatic_layers_from_actual_explore_startup_only(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            counter = root / "server-count"
+            server = root / "llama-server"
+            helper = root / "llama-fit-params"
+            server.write_text(
+                "#!/usr/bin/env python3\n"
+                "from pathlib import Path\n"
+                f"counter = Path({str(counter)!r})\n"
+                "count = int(counter.read_text()) + 1 if counter.exists() else 1\n"
+                "counter.write_text(str(count))\n"
+                "if count == 2:\n"
+                "    print('load_tensors: offloaded 25/25 layers to GPU')\n"
+                "elif count == 3:\n"
+                "    print('load_tensors: offloaded 24/25 layers to GPU')\n",
+                encoding="utf-8",
+            )
+            helper.write_text("#!/bin/sh\nprintf '%s\\n' '-c 4096 -ngl -1'\n", encoding="utf-8")
+            server.chmod(0o755)
+            helper.chmod(0o755)
+            spec = fit_capture_spec(server, helper)
+            replay = spec["commands"]["replay"]["argv"]
+            replay[replay.index("--n-gpu-layers") + 1] = "-2"
+            spec["launch_vectors"]["replay"] = replay[1:]
+            spec_path = root / "spec.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+
+            with self.assertRaisesRegex(capture.CaptureError, "full-offload evidence"):
+                capture.capture_fit(spec_path, root / "result.json")
 
     def test_compare_rejects_changed_runtime_identity(self) -> None:
         baseline = {
