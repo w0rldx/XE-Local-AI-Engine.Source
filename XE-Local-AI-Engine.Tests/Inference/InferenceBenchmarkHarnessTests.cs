@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class InferenceBenchmarkHarnessTests
 {
     private const long Gb = 1024L * 1024 * 1024;
+    private static readonly EmptyMetricsHandler SharedEmptyMetricsHandler = new();
 
     private const string MetricsScrape = """
                                                  # HELP llamacpp:prompt_tokens_total Number of prompt tokens processed.
@@ -162,7 +163,7 @@ public sealed class InferenceBenchmarkHarnessTests
         chatFactory.CreateChatClient(Arg.Any<Uri>(), Arg.Any<string>())
                    .Returns(_ => new FakeBenchmarkChatClient(modelCallsTool));
 
-        handler ??= new EmptyMetricsHandler();
+        handler ??= SharedEmptyMetricsHandler;
         var httpClientFactory = Substitute.For<IHttpClientFactory>();
         httpClientFactory.CreateClient(Arg.Any<string>())
                          .Returns(_ => new HttpClient(handler, disposeHandler: false));
