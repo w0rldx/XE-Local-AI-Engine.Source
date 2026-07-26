@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "capturedAtUtc": "2026-07-26T23:23:51.615Z",
+  "sourceCommit": "e29571c4",
+  "backend": "cuda",
+  "profile": {
+    "launchPolicyFingerprintVersion": 3,
+    "stateBeforeBenchmark": "Explored"
+  },
+  "thresholds": {
+    "absoluteBytes": 536870912,
+    "ratio": 0.05
+  },
+  "preSpawn": {
+    "globalFreeBytes": 30150754304,
+    "processBudgetBytes": 32429309952,
+    "processBudgetExcessBytes": 2278555648,
+    "processBudgetExcessRatio": 0.0702622304135545
+  },
+  "result": {
+    "status": "rejected",
+    "httpStatus": 400,
+    "workloadStarted": false,
+    "externalPressureDetected": true,
+    "failureReason": "Benchmark invalid: material VRAM divergence indicates external GPU pressure before or during measurement."
+  }
+}

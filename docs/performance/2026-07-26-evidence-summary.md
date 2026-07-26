@@ -70,10 +70,20 @@ process-budget reader describes its fit budget. Default verbosity emitted no
 `common_params_fit_impl` detail lines; verbose mode emitted three, and the sibling
 helper provided the stable machine-readable vector.
 
-The production API then replayed the frozen profile through the benchmark harness:
-five chat runs completed at 602.15 tokens/s, external pressure remained false, and
-the profile froze with both global-free and process-budget VRAM baselines. This
-validates the application path in addition to the standalone artifact.
+The original production-API run replayed the version-2 profile for five chat runs
+at 602.15 tokens/s and froze it. That historical run sampled only after the
+profiling process was resident, so its stable 2,500 MiB gap cannot prove the host
+was free of ambient contention. It remains evidence for replay correctness, but
+is superseded as benchmark-admission evidence.
+
+The corrected version-3 path captures both readers after same-key eviction and
+before the profiling spawn. On the final Aspire/Chrome validation run it observed
+30,150,754,304 global-free bytes versus a 32,429,309,952-byte process budget:
+a 2,278,555,648-byte (7.026%) material divergence. The API returned HTTP 400
+before any benchmark workload, the UI kept the version-3 profile `Explored` with
+Freeze disabled, and the operator-facing alert named external GPU pressure. The
+sanitized proof is
+`baselines/2026-07-27-e29571c4-ambient-vram-rejection.json`.
 
 ## Explicit hardware and distribution gaps
 
@@ -87,3 +97,6 @@ validates the application path in addition to the standalone artifact.
 - 8 GB/constrained-VRAM behavior needs representative hardware or a proven
   process-budget constraint.
 - MoE placement is outside the fixed dense-model experiment and remains excluded.
+- A clean native-Windows idle capture is still required to produce a new
+  version-3 frozen benchmark; the final WSL2 run correctly rejected the ambient
+  2.12 GiB reader divergence rather than relabelling it as clean.

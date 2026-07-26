@@ -1,0 +1,14 @@
+[guard] snapshot: 2911 assemblies across 8 root(s) -> $REPO/.tmp/assembly-guard-BCekHQ.state
+Running tests from $REPO/XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/XE_Local_AI_Engine.AI.Agent.Tests.dll (net10.0|x64)
+$REPO/XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/XE_Local_AI_Engine.AI.Agent.Tests.dll (net10.0|x64) passed (1s 520ms)
+
+  In process file artifacts produced:
+    - $REPO/XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/TestResults/XE_Local_AI_Engine.AI.Agent.Tests-linux-net10.0-report.html
+
+Test run summary: Passed!
+  total: 202
+  failed: 0
+  succeeded: 202
+  skipped: 0
+  duration: 1s 652ms
+[guard] verify: build output unchanged during the run — result is trustworthy.
