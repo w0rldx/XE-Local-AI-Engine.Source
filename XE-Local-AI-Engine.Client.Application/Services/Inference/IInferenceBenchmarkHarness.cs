@@ -46,6 +46,49 @@ public sealed record InferenceBenchmarkSpec(
     int Seed,
     float Temperature)
 {
+    /// <summary>Untimed role-specific warm-up passes before measurements begin.</summary>
+    public int WarmupRuns { get; init; } = 1;
+
+    /// <summary>Repeated measured passes used for median/p95 and stability checks.</summary>
+    public int MeasuredRuns { get; init; } = 5;
+
+    /// <summary>Fixed embedding batch used by the embedding-role benchmark.</summary>
+    public IReadOnlyList<string> EmbeddingInputs { get; init; } =
+    [
+        "Local inference keeps private data on the operator's machine.",
+        "Vector search maps semantically related passages near one another.",
+        "A deterministic benchmark repeats the same corpus for every profile.",
+        "GPU memory pressure can invalidate otherwise fast benchmark results.",
+        "Embedding dimensions must stay stable across repeated requests.",
+        "Finite vectors are required before a benchmark can justify a profile.",
+        "Warm-up passes are excluded from the measured latency distribution.",
+        "Median and p95 describe typical and tail request latency."
+    ];
+
+    /// <summary>Fixed reranker query used by the reranker-role benchmark.</summary>
+    public string RerankerQuery { get; init; } = "Which passage explains local private inference?";
+
+    /// <summary>Fixed reranker candidate batch used by the reranker-role benchmark.</summary>
+    public IReadOnlyList<string> RerankerDocuments { get; init; } =
+    [
+        "Local inference processes prompts on the operator's own machine.",
+        "A tropical storm forms over warm ocean water.",
+        "Private retrieval can avoid sending documents to a cloud service.",
+        "The benchmark records median and tail latency."
+    ];
+
+    /// <summary>Maximum absolute per-element drift accepted for repeated embedding vectors and reranker scores.</summary>
+    public double DeterminismTolerance { get; init; } = 1e-5;
+
+    /// <summary>
+    ///     Minimum absolute process-budget/global-free divergence that can invalidate a benchmark. The relative threshold
+    ///     below must also be exceeded, avoiding false pressure evidence from small driver-reporting jitter.
+    /// </summary>
+    public long VramDivergenceAbsoluteThresholdBytes { get; init; } = 512L * 1024 * 1024;
+
+    /// <summary>Minimum process-budget/global-free divergence ratio that can invalidate a benchmark.</summary>
+    public double VramDivergenceRatioThreshold { get; init; } = 0.05d;
+
     /// <summary>Builds the canonical golden transcript for <paramref name="backend" />, with the long-context stage sized to ~75% of <paramref name="ctxSize" />.</summary>
     public static InferenceBenchmarkSpec Golden(string backend, int ctxSize)
     {
@@ -87,9 +130,10 @@ public sealed record InferenceBenchmarkSpec(
 }
 
 /// <summary>
-///     The measured outcome of one golden-transcript benchmark run. Throughput (TG/PP tokens-per-second) and cache-hit
-///     rate are derived from the llama-server <c>/metrics</c> scrape; TTFT and tool-loop are wall-clock; VRAM load/after
-///     are host-observed free-VRAM samples. Any figure that could not be derived is <see langword="null" />.
+///     The measured outcome of one role-specific benchmark run. Chat keeps TG/PP/cache/tool metrics; embedding and
+///     reranker add item throughput, latency distribution, batch shape, and output-correctness evidence. Global-free VRAM
+///     and llama.cpp's process-local budget are recorded separately so WDDM pressure cannot masquerade as a valid run.
+///     Any figure that could not be derived is <see langword="null" />.
 /// </summary>
 /// <param name="Success">Whether the run completed; <see langword="false" /> blocks the freeze gate.</param>
 /// <param name="FailureReason">Sanitized failure reason when <paramref name="Success" /> is false.</param>
@@ -99,9 +143,9 @@ public sealed record InferenceBenchmarkSpec(
 /// <param name="TotalLatencyMs">Total wall-clock of the whole transcript, in milliseconds.</param>
 /// <param name="CacheHitRate">Prompt-token reuse ratio (cold vs warm), 0..1.</param>
 /// <param name="ToolLoopMs">Wall-clock of the tool-call round, in milliseconds.</param>
-/// <param name="VramLoadBytes">Free VRAM observed at load.</param>
-/// <param name="VramAfterBytes">Free VRAM observed after the loop.</param>
-/// <param name="Runs">Number of transcript passes measured (one golden pass = 1).</param>
+/// <param name="VramLoadBytes">Effective free VRAM observed at load (global-free when available, otherwise process budget).</param>
+/// <param name="VramAfterBytes">Effective free VRAM observed after the loop (global-free when available, otherwise process budget).</param>
+/// <param name="Runs">Number of measured passes.</param>
 /// <param name="RawJson">Raw <c>/metrics</c> scrape for operator diagnostics.</param>
 public sealed record InferenceBenchmarkMetrics(
     bool Success,
@@ -115,7 +159,22 @@ public sealed record InferenceBenchmarkMetrics(
     long? VramLoadBytes,
     long? VramAfterBytes,
     int Runs,
-    string? RawJson)
+    string? RawJson,
+    string? Role = null,
+    double? ItemsPerSecond = null,
+    double? InputTokensPerSecond = null,
+    double? P50LatencyMs = null,
+    double? P95LatencyMs = null,
+    int? BatchSize = null,
+    int? OutputDimension = null,
+    bool? ValuesFinite = null,
+    bool? DeterministicOutput = null,
+    long? GlobalFreeVramLoadBytes = null,
+    long? GlobalFreeVramAfterBytes = null,
+    long? ProcessBudgetVramLoadBytes = null,
+    long? ProcessBudgetVramAfterBytes = null,
+    bool ExternalPressureDetected = false,
+    string? DiagnosticsJson = null)
 {
     /// <summary>A failed run carrying only the sanitized <paramref name="reason" />.</summary>
     public static InferenceBenchmarkMetrics Failed(string reason)
