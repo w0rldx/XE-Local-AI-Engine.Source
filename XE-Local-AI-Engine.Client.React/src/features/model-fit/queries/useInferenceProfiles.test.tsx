@@ -63,7 +63,14 @@ describe("useInferenceProfiles mutations", () => {
 		invalidateMock.mutationFn.mockResolvedValue({ profile: { id: "p1" } });
 		benchmarkMock.mutationFn.mockResolvedValue({
 			snapshotId: "snap-1",
-			metrics: { tokensPerSecond: 42, vramAfterBytes: 6_656_000_000 },
+			metrics: {
+				role: "Chat",
+				tokensPerSecond: 42,
+				vramAfterBytes: 6_656_000_000,
+				globalFreeVramAfterBytes: 6_656_000_000,
+				processBudgetVramAfterBytes: 7_200_000_000,
+				externalPressureDetected: false,
+			},
 			profile: { id: "p1", status: "Explored" },
 		});
 	});
@@ -97,14 +104,28 @@ describe("useInferenceProfiles mutations", () => {
 		expect(result.current.data).toEqual({
 			snapshotId: "snap-1",
 			metrics: {
+				role: "Chat",
 				tokensPerSecond: 42,
 				ppTokensPerSecond: null,
 				ttftMs: null,
 				totalLatencyMs: null,
 				cacheHitRate: null,
 				toolLoopMs: null,
+				itemsPerSecond: null,
+				inputTokensPerSecond: null,
+				p50LatencyMs: null,
+				p95LatencyMs: null,
+				batchSize: null,
+				outputDimension: null,
+				valuesFinite: null,
+				deterministicOutput: null,
 				vramLoadBytes: null,
 				vramAfterBytes: 6_656_000_000,
+				globalFreeVramLoadBytes: null,
+				globalFreeVramAfterBytes: 6_656_000_000,
+				processBudgetVramLoadBytes: null,
+				processBudgetVramAfterBytes: 7_200_000_000,
+				externalPressureDetected: false,
 				runs: null,
 			},
 			profile: expect.objectContaining({ id: "p1", status: "explored" }),
