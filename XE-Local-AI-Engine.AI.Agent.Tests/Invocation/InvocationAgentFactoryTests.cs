@@ -715,8 +715,9 @@ public sealed class InvocationAgentFactoryTests
         AssertEx.Equal(expected: -1L, chatOptions.Seed);
     }
 
-    // MAAI001: AgentSkillsProvider/AgentInlineSkill were [Experimental] in Microsoft.Agents.AI 1.8.0 (pinned version is
-    // now 1.13.0, not re-verified); the factory adopts them deliberately for progressive disclosure of agent skills, so
+    // MAAI001: AgentSkillsProvider/AgentInlineSkill were [Experimental] in Microsoft.Agents.AI 1.8.0. The scoped
+    // suppression remains at the pinned 1.15.0 until explicit graduation evidence is available; the factory adopts them
+    // deliberately for progressive disclosure of agent skills, so
     // this test references them under the same scoped suppression the production code uses.
 #pragma warning disable MAAI001
     [Test]
