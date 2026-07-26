@@ -54,6 +54,13 @@ class CaptureInferenceEvidenceTests(unittest.TestCase):
             "embedding_tokens_per_second": 2400.0,
         }, capture.numeric_metrics(stdout))
 
+    def test_supervisor_fit_on_and_long_gpu_layers_alias_normalize_for_replay(self) -> None:
+        explore = ["--fit", "on", "--metrics", "--jinja"]
+        replay = ["-c", "0", "--n-gpu-layers", "-1", "--metrics", "--jinja"]
+        self.assertEqual(["--metrics", "--jinja"], capture.without_fit_semantics(explore))
+        self.assertEqual(["--metrics", "--jinja"], capture.without_fit_semantics(replay))
+        self.assertEqual({"-c": ["0"], "-ngl": ["-1"]}, capture.extract_fit_flags(replay))
+
     def test_baseline_captures_framework_identity_and_explicit_gaps(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
