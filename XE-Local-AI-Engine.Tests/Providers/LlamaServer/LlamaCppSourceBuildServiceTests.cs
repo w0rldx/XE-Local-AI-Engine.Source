@@ -352,7 +352,7 @@ public sealed class LlamaCppSourceBuildServiceTests
         WriteScript(Path.Combine(stubs, "git"),
             $"#!/bin/sh\nif [ \"$1\" = \"clone\" ]; then for last; do :; done; mkdir -p \"$last\"; exit 0; fi\nif [ \"$1\" = \"-C\" ]; then echo '{LlamaCppReleasePins.PinnedSourceCommitSha}'; exit 0; fi\n");
         WriteScript(Path.Combine(stubs, "cmake"),
-            "#!/bin/sh\nif [ \"$1\" = \"-B\" ]; then mkdir -p \"$2\"; exit 0; fi\nif [ \"$1\" = \"--build\" ]; then mkdir -p \"$2/bin\"; printf '#!/bin/sh\\nexit 0\\n' > \"$2/bin/llama-server\"; chmod 755 \"$2/bin/llama-server\"; exit 0; fi\n");
+            "#!/bin/sh\nif [ \"$1\" = \"-B\" ]; then mkdir -p \"$2\"; exit 0; fi\nif [ \"$1\" = \"--build\" ]; then mkdir -p \"$2/bin\"; printf '#!/bin/sh\\nexit 0\\n' > \"$2/bin/llama-server\"; chmod 755 \"$2/bin/llama-server\"; printf '#!/bin/sh\\nexit 0\\n' > \"$2/bin/llama-fit-params\"; chmod 755 \"$2/bin/llama-fit-params\"; exit 0; fi\n");
         using var path = new PathScope(stubs);
         using var store = new InstalledRuntimeStore(temp.Path);
         var signal = new CudaManagedBuildSignal();
@@ -395,7 +395,7 @@ public sealed class LlamaCppSourceBuildServiceTests
         WriteScript(Path.Combine(stubs, "git"),
             $"#!/bin/sh\nif [ \"$1\" = \"clone\" ]; then env > '{envDump}'; for last; do :; done; mkdir -p \"$last\"; exit 0; fi\nif [ \"$1\" = \"-C\" ]; then echo '{LlamaCppReleasePins.PinnedSourceCommitSha}'; exit 0; fi\nexit 0\n");
         WriteScript(Path.Combine(stubs, "cmake"),
-            $"#!/bin/sh\necho \"$@\" >> '{cmakeArgs}'\nif [ \"$1\" = \"-B\" ]; then mkdir -p \"$2\"; exit 0; fi\nif [ \"$1\" = \"--build\" ]; then mkdir -p \"$2/bin\"; printf '#!/bin/sh\\nexit 0\\n' > \"$2/bin/llama-server\"; chmod 755 \"$2/bin/llama-server\"; exit 0; fi\nexit 0\n");
+            $"#!/bin/sh\necho \"$@\" >> '{cmakeArgs}'\nif [ \"$1\" = \"-B\" ]; then mkdir -p \"$2\"; exit 0; fi\nif [ \"$1\" = \"--build\" ]; then mkdir -p \"$2/bin\"; printf '#!/bin/sh\\nexit 0\\n' > \"$2/bin/llama-server\"; chmod 755 \"$2/bin/llama-server\"; printf '#!/bin/sh\\nexit 0\\n' > \"$2/bin/llama-fit-params\"; chmod 755 \"$2/bin/llama-fit-params\"; exit 0; fi\nexit 0\n");
         using var path = new PathScope(stubs);
         Environment.SetEnvironmentVariable("XE_NODE_SQLITE_KEY", "must-not-leak");
         try
@@ -425,6 +425,14 @@ public sealed class LlamaCppSourceBuildServiceTests
             AssertEx.True(args.Contains("-DGGML_CUDA=OFF", StringComparison.Ordinal));
             AssertEx.True(args.Contains("-DGGML_VULKAN=OFF", StringComparison.Ordinal));
             AssertEx.False(args.Contains("CMAKE_CUDA_ARCHITECTURES", StringComparison.Ordinal));
+            AssertEx.True(args.Contains("--target llama-server llama-fit-params", StringComparison.Ordinal));
+            AssertEx.True(File.Exists(Path.Combine(temp.Path,
+                "llama.cpp",
+                "source-build",
+                "active",
+                "build",
+                "bin",
+                "llama-fit-params")));
             var environment = await File.ReadAllTextAsync(envDump);
             AssertEx.False(environment.Contains("must-not-leak", StringComparison.Ordinal));
             AssertEx.True(environment.Contains("GIT_CONFIG_NOSYSTEM=1", StringComparison.Ordinal));

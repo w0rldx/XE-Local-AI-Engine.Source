@@ -186,6 +186,16 @@ public sealed class CudaBuildServiceTests
             "The malformed compute_cap must never reach the cmake invocation.");
 
         await AssertEx.EventuallyAsync(() => service.GetStatus().Terminal, TimeSpan.FromSeconds(30));
+        AssertEx.Equal(CudaBuildPhase.Completed, service.GetStatus().Phase);
+        AssertEx.True(capturedArgs.Contains("--target llama-server llama-fit-params", StringComparison.Ordinal),
+            "The source-CUDA build must compile both the server and machine-readable fit helper.");
+        AssertEx.True(File.Exists(Path.Combine(dir.Path,
+            "llama.cpp",
+            "source-cuda",
+            LlamaCppReleasePins.PinnedTag,
+            "build",
+            "bin",
+            "llama-fit-params")));
     }
 
     [Test]
@@ -321,6 +331,8 @@ public sealed class CudaBuildServiceTests
                      + "esac\n"
                      + "EOF\n"
                      + "  chmod 0755 \"$BIN/llama-server\"\n"
+                     + "  printf '#!/bin/sh\\nexit 0\\n' > \"$BIN/llama-fit-params\"\n"
+                     + "  chmod 0755 \"$BIN/llama-fit-params\"\n"
                      + "  exit 0\n"
                      + "fi\n"
                      + "exit 0\n";
