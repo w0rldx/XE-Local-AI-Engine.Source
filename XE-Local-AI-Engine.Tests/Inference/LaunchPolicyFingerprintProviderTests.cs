@@ -22,6 +22,7 @@ public sealed class LaunchPolicyFingerprintProviderTests
             var second = await provider.CaptureAsync(input, CancellationToken.None);
 
             AssertEx.Equal(LaunchPolicyFingerprintProvider.CurrentVersion, first.Version);
+            AssertEx.Equal(expected: 2, first.Version);
             AssertEx.Equal(first, second);
             AssertEx.Equal(64, first.Value.Length);
         }

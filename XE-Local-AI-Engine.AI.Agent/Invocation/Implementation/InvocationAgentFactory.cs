@@ -158,14 +158,22 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
         // the pre-sampling path — the no-override guarantee.
         ApplySamplingOptions(chatOptions, additionalProperties, definition.Sampling);
 
-        // AUD4-02: when the runtime reported an effective context window and no per-send num_ctx override already set the
-        // key, carry the effective window as num_ctx so the innermost provider-round budgeter sizes against the SAME
-        // window the outer conversation budgeter uses. A per-send override (written above) wins and is left in place.
+        // The request budget can never exceed the process that was actually launched. Preserve a smaller explicit
+        // num_ctx, but clamp a larger explicit/default budget to the effective process context.
         if (definition.EffectiveContextTokens is { } effectiveContext
-            && effectiveContext > 0
-            && !additionalProperties.ContainsKey(OllamaNumCtxKey))
+            && effectiveContext > 0)
         {
-            additionalProperties[OllamaNumCtxKey] = effectiveContext;
+            var requested = effectiveContext;
+            if (definition.Sampling?.NumCtx is { } explicitContext && explicitContext > 0)
+            {
+                requested = explicitContext;
+            }
+            var clampedContext = Math.Min(requested, effectiveContext);
+            additionalProperties[OllamaNumCtxKey] = clampedContext;
+            if (chatOptions.MaxOutputTokens is { } output)
+            {
+                chatOptions.MaxOutputTokens = Math.Min(output, clampedContext);
+            }
         }
 
         InvocationAgentContext context = new()

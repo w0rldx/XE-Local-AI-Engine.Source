@@ -29,10 +29,11 @@ internal sealed class LlamaServerLaunchPolicy : ILlamaServerLaunchPolicy
     public async Task<LlamaServerLaunchPlan> ResolveAsync(ModelRole role,
         GpuVariant variant,
         ResolvedLaunchArguments resolved,
-        long? modelTrainContextTokens,
+        ProcessContextAllocation allocation,
         CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(resolved);
+        ArgumentNullException.ThrowIfNull(allocation);
 
         var (cpuThreads, cpuThreadsBatch) = ResolveCpuThreads(variant);
 
@@ -41,7 +42,7 @@ internal sealed class LlamaServerLaunchPolicy : ILlamaServerLaunchPolicy
         // whether a profile exists.
         if (variant == GpuVariant.Cpu)
         {
-            return new LlamaServerLaunchPlan(ResolveContextTokens(role, modelTrainContextTokens),
+            return new LlamaServerLaunchPlan(allocation.ProcessContextTokens,
                 UseKvCacheQuantization: false,
                 _options.KvCacheType,
                 cpuThreads,
@@ -64,11 +65,34 @@ internal sealed class LlamaServerLaunchPolicy : ILlamaServerLaunchPolicy
         var useKvQuant = _options.EnableGpuKvCacheQuantization
                          && !await _fallbackStore.IsOptimizedConfigDisabledAsync(variant, ct).ConfigureAwait(false);
 
-        return new LlamaServerLaunchPlan(ResolveContextTokens(role, modelTrainContextTokens),
+        return new LlamaServerLaunchPlan(allocation.ProcessContextTokens,
             useKvQuant,
             _options.KvCacheType,
             CpuThreads: null,
             CpuThreadsBatch: null);
+    }
+
+    // Source-compatible test/provider-host bridge. Normal application launches use the shared allocation overload.
+    internal Task<LlamaServerLaunchPlan> ResolveAsync(ModelRole role,
+        GpuVariant variant,
+        ResolvedLaunchArguments resolved,
+        long? modelTrainContextTokens,
+        CancellationToken ct)
+    {
+        var requested = _options.ContextTokensForRole(role);
+        if (modelTrainContextTokens is > 0 && requested >= modelTrainContextTokens.Value)
+        {
+            requested = (int)Math.Max(1, Math.Min(int.MaxValue, modelTrainContextTokens.Value - _options.ContextSafetyMarginTokens));
+        }
+
+        var allocation = new ProcessContextAllocation(requested,
+            modelTrainContextTokens is > 0 ? (int?)Math.Min(int.MaxValue, modelTrainContextTokens.Value) : null,
+            resolved.ExploreMode ? ProcessContextAllocationSource.HardwareTier : ProcessContextAllocationSource.FrozenProfile,
+            variant == GpuVariant.Cpu ? ProcessPlacementMode.Cpu : ProcessPlacementMode.GpuResident,
+            ResourceFootprint.Zero,
+            ContentIdentity: "legacy",
+            CacheKey: "legacy");
+        return ResolveAsync(role, variant, resolved, allocation, ct);
     }
 
     /// <inheritdoc />
@@ -76,26 +100,6 @@ internal sealed class LlamaServerLaunchPolicy : ILlamaServerLaunchPolicy
     {
         _logger.LogWarning("Recording optimized llama-server launch config (KV-cache quant + flash attention) as unsupported for backend {Variant}; future spawns will use the safe config.", variant);
         return _fallbackStore.DisableOptimizedConfigAsync(variant, ct);
-    }
-
-    /// <summary>The role's requested context window, capped to the model's train context (minus the safety margin) when known.</summary>
-    private int ResolveContextTokens(ModelRole role, long? modelTrainContextTokens)
-    {
-        var requested = _options.ContextTokensForRole(role);
-        if (modelTrainContextTokens is not { } trainCtx || trainCtx <= 0)
-        {
-            return requested;
-        }
-
-        // Cap to the model's train context. When the role default would meet or exceed it, back off by the safety
-        // margin so the launched window sits a hair below the model's hard ceiling (floored at 1).
-        if (requested < trainCtx)
-        {
-            return requested;
-        }
-
-        var capped = trainCtx - _options.ContextSafetyMarginTokens;
-        return capped < 1 ? 1 : (int)Math.Min(capped, int.MaxValue);
     }
 
     /// <summary>Derives (<c>-t</c>, <c>-tb</c>) for a CPU build; a GPU build gets (null, null) — no thread flags.</summary>

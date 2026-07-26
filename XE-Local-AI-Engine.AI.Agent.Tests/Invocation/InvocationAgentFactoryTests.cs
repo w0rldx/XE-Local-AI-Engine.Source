@@ -83,7 +83,7 @@ public sealed class InvocationAgentFactoryTests
     }
 
     [Test]
-    public async Task CreateAsync_WhenPerSendNumCtxSet_WinsOverTheEffectiveContextFallback()
+    public async Task CreateAsync_WhenPerSendNumCtxIsSmaller_PreservesIt()
     {
         // A per-send num_ctx override must win over the runtime effective-context fallback.
         var definition = new InvocationAgentDefinition("llama3.2:3b",
@@ -105,6 +105,32 @@ public sealed class InvocationAgentFactoryTests
         var additionalProperties = AssertEx.NotNull(chatOptions.AdditionalProperties);
         AssertEx.True(additionalProperties.TryGetValue<int>("num_ctx", out var numCtx));
         AssertEx.Equal(expected: 4096, numCtx);
+    }
+
+    [Test]
+    public async Task CreateAsync_WhenPerSendNumCtxExceedsProcess_ClampsIt()
+    {
+        var definition = new InvocationAgentDefinition("llama3.2:3b",
+            "Be helpful.",
+            [],
+            [],
+            Sampling: new InvocationSamplingOptions
+            {
+                NumCtx = 65536,
+                MaxOutputTokens = 32768
+            },
+            EffectiveContextTokens: 8192);
+
+        using var chatClient = new FakeChatClient();
+        var sut = CreateSut(chatClient);
+
+        await using var context = await sut.CreateAsync(definition);
+
+        var chatOptions = ((ChatClientAgentRunOptions)context.RunOptions!).ChatOptions!;
+        var additionalProperties = AssertEx.NotNull(chatOptions.AdditionalProperties);
+        AssertEx.True(additionalProperties.TryGetValue<int>("num_ctx", out var numCtx));
+        AssertEx.Equal(expected: 8192, numCtx);
+        AssertEx.Equal(expected: 8192, chatOptions.MaxOutputTokens);
     }
 
     [Test]
