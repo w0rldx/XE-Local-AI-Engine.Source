@@ -222,7 +222,7 @@ public sealed class FrameworkApprovalGateTests
             sp);
     }
 
-    private static ChatClientAgent BuildAgent(IChatClient chatClient, IReadOnlyList<AITool> tools, IServiceProvider sp)
+    private static ChatClientAgent BuildAgent(IChatClient chatClient, IList<AITool> tools, IServiceProvider sp)
     {
         return new ChatClientAgent(chatClient,
             "ci-approval-gate",
