@@ -13,6 +13,8 @@ using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 /// </summary>
 internal sealed class LlamaTokenEstimatorCalibrationService : BackgroundService, ITokenEstimatorCalibrationScheduler
 {
+    internal const int DefaultWorkCapacity = 64;
+
     internal const string CalibrationText =
         "Token estimation calibration sample. The quick brown fox jumps over the lazy dog. " +
         "Structured data: {\"alpha\":123,\"enabled\":true,\"items\":[\"one\",\"two\",\"three\"]}. " +
@@ -28,30 +30,38 @@ internal sealed class LlamaTokenEstimatorCalibrationService : BackgroundService,
     private readonly HttpClient _httpClient;
     private readonly ILogger<LlamaTokenEstimatorCalibrationService> _logger;
     private readonly TimeSpan _interval;
+    private readonly TimeProvider _timeProvider;
     private readonly Dictionary<string, CalibrationTarget> _targets = new(StringComparer.Ordinal);
-    private readonly Channel<CalibrationWork> _work = Channel.CreateUnbounded<CalibrationWork>(new UnboundedChannelOptions
-    {
-        SingleReader = true,
-        SingleWriter = false
-    });
+    private readonly Channel<CalibrationWork> _work;
     private long _generation;
 
     public LlamaTokenEstimatorCalibrationService(HttpClient httpClient,
         ITokenEstimatorCalibrationStore store,
         ILogger<LlamaTokenEstimatorCalibrationService> logger)
-        : this(httpClient, store, logger, DefaultInterval)
+        : this(httpClient, store, logger, DefaultInterval, TimeProvider.System, DefaultWorkCapacity)
     {
     }
 
     internal LlamaTokenEstimatorCalibrationService(HttpClient httpClient,
         ITokenEstimatorCalibrationStore store,
         ILogger<LlamaTokenEstimatorCalibrationService> logger,
-        TimeSpan interval)
+        TimeSpan interval,
+        TimeProvider timeProvider,
+        int workCapacity)
     {
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _interval = interval > TimeSpan.Zero ? interval : throw new ArgumentOutOfRangeException(nameof(interval));
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(workCapacity);
+        _work = Channel.CreateBounded<CalibrationWork>(new BoundedChannelOptions(workCapacity)
+        {
+            SingleReader = true,
+            SingleWriter = false,
+            FullMode = BoundedChannelFullMode.Wait,
+            AllowSynchronousContinuations = false
+        });
     }
 
     public void Schedule(string modelName, Uri llamaServerBaseAddress)
@@ -68,7 +78,7 @@ internal sealed class LlamaTokenEstimatorCalibrationService : BackgroundService,
         CalibrationWork? work = null;
         lock (_sync)
         {
-            var now = DateTimeOffset.UtcNow;
+            var now = _timeProvider.GetUtcNow();
             if (!_targets.TryGetValue(modelName, out var target)
                 || target.BaseAddress != llamaServerBaseAddress)
             {
@@ -87,9 +97,9 @@ internal sealed class LlamaTokenEstimatorCalibrationService : BackgroundService,
             }
         }
 
-        if (work is { } due)
+        if (work is { } due && !_work.Writer.TryWrite(due))
         {
-            _work.Writer.TryWrite(due);
+            ReleaseRejectedWork(due);
         }
     }
 
@@ -148,25 +158,56 @@ internal sealed class LlamaTokenEstimatorCalibrationService : BackgroundService,
 
     private async Task TryCalibrateCurrentTargetAsync(CalibrationWork work, CancellationToken cancellationToken)
     {
-        var result = await TryReadDivisorAsync(work.BaseAddress, cancellationToken).ConfigureAwait(false);
         lock (_sync)
         {
-            if (!_targets.TryGetValue(work.ModelName, out var target)
-                || target.Generation != work.Generation
-                || target.BaseAddress != work.BaseAddress)
+            if (!IsCurrentTarget(work))
             {
                 return;
             }
+        }
+
+        var result = await TryReadDivisorAsync(work.BaseAddress, cancellationToken).ConfigureAwait(false);
+        lock (_sync)
+        {
+            if (!IsCurrentTarget(work))
+            {
+                return;
+            }
+
+            var target = _targets[work.ModelName];
+            _targets[work.ModelName] = target with
+            {
+                InFlight = false,
+                NextDueUtc = _timeProvider.GetUtcNow() + _interval
+            };
 
             if (result.Divisor is { } divisor)
             {
                 _store.SetDivisor(work.ModelName, divisor);
             }
+        }
+    }
 
+    private bool IsCurrentTarget(CalibrationWork work)
+    {
+        return _targets.TryGetValue(work.ModelName, out var target)
+               && target.Generation == work.Generation
+               && target.BaseAddress == work.BaseAddress;
+    }
+
+    private void ReleaseRejectedWork(CalibrationWork work)
+    {
+        lock (_sync)
+        {
+            if (!IsCurrentTarget(work))
+            {
+                return;
+            }
+
+            var target = _targets[work.ModelName];
             _targets[work.ModelName] = target with
             {
-                InFlight = false,
-                NextDueUtc = DateTimeOffset.UtcNow + _interval
+                InFlight = false
             };
         }
     }
