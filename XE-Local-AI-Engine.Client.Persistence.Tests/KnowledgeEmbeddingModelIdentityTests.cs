@@ -28,6 +28,8 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
 {
     private const string ConfiguredName = "nomic-embed-text";
     private const string ResolvedGgufName = "nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M";
+    private const string ResolvedVectorIdentity =
+        "nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M::layernorm-population-eps1e-5-truncate-l2:v1:512";
     private const int Dimensions = 768;
 
     private readonly INodeSqliteKeyHolder _keyHolder = new NullNodeSqliteKeyHolder();
@@ -61,11 +63,16 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
 
         var stampedDocumentModel = await ReadDocumentModelAsync(databasePath, documentId).ConfigureAwait(false);
         var vectorModels = await ReadVectorModelsAsync(databasePath, documentId).ConfigureAwait(false);
+        var documentIdentity = await ReadDocumentVectorIdentityAsync(databasePath, documentId).ConfigureAwait(false);
+        var vectorIdentities = await ReadVectorIdentitiesAsync(databasePath, documentId).ConfigureAwait(false);
 
         AssertEx.Equal(ResolvedGgufName, stampedDocumentModel);
         AssertEx.True(vectorModels.Count > 0, "Ingestion should have written at least one chunk vector.");
         AssertEx.True(vectorModels.All(model => string.Equals(model, ResolvedGgufName, StringComparison.Ordinal)),
             "Every chunk vector must be keyed by the resolved model name, not the configured name.");
+        AssertEx.Equal((ResolvedVectorIdentity, 512), documentIdentity);
+        AssertEx.True(vectorIdentities.All(identity => identity == (ResolvedVectorIdentity, 512)),
+            "Every vector row must carry the exact canonical transform identity and defensive width.");
     }
 
     [Test]
@@ -127,13 +134,38 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
     }
 
     [Test]
+    public async Task ListAsync_WhenPolicySwitchesToNative_FlagsTheMatryoshkaIndexStale()
+    {
+        var databasePath = GetDatabasePath("catalog-policy-rollback.sqlite");
+        var documentId = Guid.NewGuid();
+        await MigrateAsync(databasePath).ConfigureAwait(false);
+        await SeedDocumentAsync(databasePath, documentId, ResolvedGgufName, KnowledgeDocumentStatus.Indexed).ConfigureAwait(false);
+
+        IReadOnlyList<KnowledgeDocumentSummary> documents;
+        await using (var context = AgentDefinitionTestContextFactory.Create(databasePath, _keyHolder))
+        {
+            await EnsureForeignKeysOffAsync(context.Database.GetDbConnection()).ConfigureAwait(false);
+            documents = await CreateCatalogService(context, KnowledgeEmbeddingVectorMode.Native)
+                              .ListAsync(CancellationToken.None)
+                              .ConfigureAwait(false);
+        }
+
+        AssertEx.True(documents.Single().StaleModel,
+            "Switching to native mode must make a 512-wide Matryoshka identity stale until a full reindex completes.");
+    }
+
+    [Test]
     public async Task SearchAsync_FiltersVectorArmByResolvedModelName()
     {
         var databasePath = GetDatabasePath("search-filter.sqlite");
 
         var vectorSearch = Substitute.For<IVectorSearch>();
         string? capturedModel = null;
+        string? capturedIdentity = null;
+        var capturedDimension = 0;
         vectorSearch.SearchAsync(Arg.Any<ReadOnlyMemory<float>>(), Arg.Do<string>(model => capturedModel = model),
+                        Arg.Do<string>(identity => capturedIdentity = identity),
+                        Arg.Do<int>(dimension => capturedDimension = dimension),
                         Arg.Any<int>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>())
                     .Returns(Task.FromResult<IReadOnlyList<VectorSearchHit>>([]));
 
@@ -143,6 +175,8 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         _ = await service.SearchAsync(new KnowledgeSearchRequest("a query", Limit: 5), CancellationToken.None).ConfigureAwait(false);
 
         AssertEx.Equal(ResolvedGgufName, capturedModel);
+        AssertEx.Equal(ResolvedVectorIdentity, capturedIdentity);
+        AssertEx.Equal(512, capturedDimension);
     }
 
     [Test]
@@ -213,9 +247,14 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
             NullLogger<KnowledgeIngestionService>.Instance);
     }
 
-    private static KnowledgeDocumentCatalogService CreateCatalogService(NodeChatDbContext context)
+    private static KnowledgeDocumentCatalogService CreateCatalogService(
+        NodeChatDbContext context,
+        KnowledgeEmbeddingVectorMode vectorMode = KnowledgeEmbeddingVectorMode.Matryoshka512)
     {
-        var options = Options.Create(new KnowledgeBaseOptions());
+        var options = Options.Create(new KnowledgeBaseOptions
+        {
+            EmbeddingVectorMode = vectorMode
+        });
         return new KnowledgeDocumentCatalogService(context, CreateResolvingProviderResolver(), new EmbeddingModelResolver(options), options, TimeProvider.System);
     }
 
@@ -297,8 +336,9 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         await using var command = connection.CreateCommand();
         command.CommandText =
             """
-            INSERT INTO knowledge_documents (document_id, original_file_name, mime_type, extension, size_bytes, content_hash, storage_path, status, chunk_count, embedding_model, created_at_utc, updated_at_utc)
-            VALUES ($id, $name, 'text/plain', '.txt', 10, $hash, $path, $status, 0, $model, 1, 1);
+            INSERT INTO knowledge_documents (document_id, original_file_name, mime_type, extension, size_bytes, content_hash, storage_path,
+                                             status, chunk_count, embedding_model, vector_identity, vector_dim, created_at_utc, updated_at_utc)
+            VALUES ($id, $name, 'text/plain', '.txt', 10, $hash, $path, $status, 0, $model, $identity, $dim, 1, 1);
             """;
         command.Parameters.AddWithValue("$id", documentId);
         command.Parameters.AddWithValue("$name", encryptedName);
@@ -306,6 +346,12 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         command.Parameters.AddWithValue("$path", documentId.ToString("D") + ".txt");
         command.Parameters.AddWithValue("$status", status.ToString());
         command.Parameters.AddWithValue("$model", embeddingModel);
+        command.Parameters.AddWithValue("$identity",
+            status == KnowledgeDocumentStatus.Indexed && string.Equals(embeddingModel, ResolvedGgufName, StringComparison.Ordinal)
+                ? ResolvedVectorIdentity
+                : KnowledgeEmbeddingVectorPolicy.LegacyIdentity);
+        command.Parameters.AddWithValue("$dim",
+            status == KnowledgeDocumentStatus.Indexed && string.Equals(embeddingModel, ResolvedGgufName, StringComparison.Ordinal) ? 512 : 0);
         _ = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
     }
 
@@ -335,6 +381,35 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         }
 
         return models;
+    }
+
+    private static async Task<(string Identity, int Dimension)> ReadDocumentVectorIdentityAsync(string databasePath, Guid documentId)
+    {
+        await using var connection = new SqliteConnection($"Data Source={databasePath}");
+        await connection.OpenAsync().ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT vector_identity, vector_dim FROM knowledge_documents WHERE document_id = $id;";
+        command.Parameters.AddWithValue("$id", documentId);
+        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+        _ = await reader.ReadAsync().ConfigureAwait(false);
+        return (reader.GetString(0), reader.GetInt32(1));
+    }
+
+    private static async Task<IReadOnlyList<(string Identity, int Dimension)>> ReadVectorIdentitiesAsync(string databasePath, Guid documentId)
+    {
+        await using var connection = new SqliteConnection($"Data Source={databasePath}");
+        await connection.OpenAsync().ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT vector_identity, dim FROM knowledge_chunk_vectors WHERE document_id = $id;";
+        command.Parameters.AddWithValue("$id", documentId);
+        var identities = new List<(string, int)>();
+        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+        while (await reader.ReadAsync().ConfigureAwait(false))
+        {
+            identities.Add((reader.GetString(0), reader.GetInt32(1)));
+        }
+
+        return identities;
     }
 
     private static async Task<string> ReadStatusAsync(string databasePath, Guid documentId)

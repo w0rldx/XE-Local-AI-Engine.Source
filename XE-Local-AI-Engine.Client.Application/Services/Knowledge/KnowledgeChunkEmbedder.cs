@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Knowledge;
 
-using System.Runtime.InteropServices;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 using OllamaSharp.Models.Exceptions;
@@ -55,7 +54,7 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
             // caller (KnowledgeIngestionService) only reaches EmbedAsync with chunking.Chunks, and RunAsync marks a
             // zero-chunk document Failed before it ever calls EmbedAsync — so a document stamped via this branch can
             // never reach Indexed, and this placeholder name is never compared as a vector identity.
-            return new KnowledgeEmbeddingResult([], _options.EmbeddingModelName, Dimension: 0);
+            return new KnowledgeEmbeddingResult([], _options.EmbeddingModelName, KnowledgeEmbeddingVectorPolicy.LegacyIdentity, Dimension: 0);
         }
 
         var provider = ResolveProvider();
@@ -64,7 +63,8 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
         // maps to the installed nomic-embed GGUF on a llama.cpp node). Resolve ONCE and return the resolved name so the
         // ingestion lane can stamp the exact model that produced these vectors as the document row and chunk-vector scope
         // key. The search lane resolves the same way, so chunk vectors and query vectors are built by the identical model.
-        var embeddingModelName = (await _embeddingModelResolver.ResolveAsync(provider, cancellationToken).ConfigureAwait(false)).Name;
+        var resolution = await _embeddingModelResolver.ResolveAsync(provider, cancellationToken).ConfigureAwait(false);
+        var embeddingModelName = resolution.Name;
         using var generator = provider.CreateEmbeddingGenerator(new LocalModelSelection
         {
             ModelName = embeddingModelName,
@@ -78,6 +78,7 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
         // embedding model's native dimension is honored. Every subsequent vector is checked against that first width: a
         // well-behaved model is dimension-stable, so a mismatch is a genuinely broken/mixed model and fails the document.
         var dimension = -1;
+        string? vectorIdentity = null;
 
         for (var offset = 0; offset < chunkContents.Count; offset += batchSize)
         {
@@ -108,22 +109,24 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
 
             foreach (var vector in generated.Select(embedding => embedding.Vector))
             {
+                var transformed = KnowledgeEmbeddingVectorPolicy.Transform(resolution, vector, _options.EmbeddingVectorMode);
                 if (dimension < 0)
                 {
-                    dimension = vector.Length;
+                    dimension = transformed.Dimension;
+                    vectorIdentity = transformed.Identity;
                 }
-                else if (vector.Length != dimension)
+                else if (transformed.Dimension != dimension || !string.Equals(transformed.Identity, vectorIdentity, StringComparison.Ordinal))
                 {
                     // Content-free reason (only integer widths) so it is safe to persist and surface to the operator.
                     throw new KnowledgeIngestionException(
-                        $"The embedding model returned inconsistent vector dimensions (expected {dimension}, got {vector.Length}). Reindex with a single embedding model.");
+                        $"The embedding model returned inconsistent vector dimensions (expected {dimension}, got {transformed.Dimension}). Reindex with a single embedding model.");
                 }
 
-                blobs.Add(MemoryMarshal.AsBytes(vector.Span).ToArray());
+                blobs.Add(KnowledgeEmbeddingVectorPolicy.ToBytes(transformed));
             }
         }
 
-        return new KnowledgeEmbeddingResult(blobs, embeddingModelName, dimension);
+        return new KnowledgeEmbeddingResult(blobs, embeddingModelName, vectorIdentity!, dimension);
     }
 
     public async Task<int?> ResolveEmbeddingContextWindowAsync(CancellationToken cancellationToken)

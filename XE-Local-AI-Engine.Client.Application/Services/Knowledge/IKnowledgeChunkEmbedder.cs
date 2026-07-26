@@ -34,5 +34,10 @@ public interface IKnowledgeChunkEmbedder
 /// </summary>
 /// <param name="Vectors">One little-endian <c>float32</c> embedding blob per input chunk, aligned by index.</param>
 /// <param name="ResolvedModel">The model name the resolver selected on the embedding provider for this operation.</param>
+/// <param name="VectorIdentity">Canonical resolved-model + transform algorithm/version + width identity.</param>
 /// <param name="Dimension">The <c>float32</c> vector width every blob in <see cref="Vectors" /> was produced at; <c>0</c> for empty input.</param>
-public sealed record KnowledgeEmbeddingResult(IReadOnlyList<byte[]> Vectors, string ResolvedModel, int Dimension);
+public sealed record KnowledgeEmbeddingResult(
+    IReadOnlyList<byte[]> Vectors,
+    string ResolvedModel,
+    string VectorIdentity,
+    int Dimension);

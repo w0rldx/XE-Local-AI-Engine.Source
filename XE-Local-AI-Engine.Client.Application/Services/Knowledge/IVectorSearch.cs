@@ -19,6 +19,8 @@ public interface IVectorSearch
     /// <param name="cancellationToken">Cancellation token.</param>
     Task<IReadOnlyList<VectorSearchHit>> SearchAsync(ReadOnlyMemory<float> queryVector,
         string embeddingModel,
+        string vectorIdentity,
+        int vectorDimension,
         int limit,
         Guid? documentId,
         CancellationToken cancellationToken);

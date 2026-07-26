@@ -53,7 +53,8 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
 
         await using var command = connection.CreateCommand();
         command.CommandText = """
-                              SELECT document_id, original_file_name, status, failure_reason, chunk_count, embedding_model, size_bytes, created_at_utc
+                              SELECT document_id, original_file_name, status, failure_reason, chunk_count, embedding_model,
+                                     vector_identity, vector_dim, size_bytes, created_at_utc
                               FROM knowledge_documents
                               ORDER BY created_at_utc DESC;
                               """;
@@ -72,9 +73,9 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
                 await reader.IsDBNullAsync(ordinal: 3, cancellationToken).ConfigureAwait(false) ? null : reader.GetString(3),
                 reader.GetInt32(4),
                 embeddingModel,
-                IsStaleModel(status, embeddingModel, resolution),
-                reader.GetInt64(6),
-                reader.GetInt64(7)));
+                IsStaleModel(status, embeddingModel, reader.GetString(6), reader.GetInt32(7), resolution),
+                reader.GetInt64(8),
+                reader.GetInt64(9)));
         }
 
         return documents;
@@ -91,7 +92,8 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
         await using (var command = connection.CreateCommand())
         {
             command.CommandText = """
-                                  SELECT document_id, original_file_name, status, failure_reason, chunk_count, embedding_model, size_bytes, created_at_utc, updated_at_utc
+                                  SELECT document_id, original_file_name, status, failure_reason, chunk_count, embedding_model,
+                                         vector_identity, vector_dim, size_bytes, created_at_utc, updated_at_utc
                                   FROM knowledge_documents
                                   WHERE document_id = $document_id;
                                   """;
@@ -112,10 +114,10 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
                 await reader.IsDBNullAsync(ordinal: 3, cancellationToken).ConfigureAwait(false) ? null : reader.GetString(3),
                 reader.GetInt32(4),
                 embeddingModel,
-                IsStaleModel(status, embeddingModel, resolution),
-                reader.GetInt64(6),
-                reader.GetInt64(7),
+                IsStaleModel(status, embeddingModel, reader.GetString(6), reader.GetInt32(7), resolution),
                 reader.GetInt64(8),
+                reader.GetInt64(9),
+                reader.GetInt64(10),
                 Chunks: []);
         }
 
@@ -177,36 +179,41 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
         // still holds the upload-time placeholder (the configured name written by the blob store), which is not a
         // vector-identity and must never trigger a reset of an in-flight or pending document.
         var indexedStatus = KnowledgeDocumentStatus.Indexed.ToString();
-        var resolvedModel = resolution.Name;
 
         var staleIds = new List<Guid>();
         await using (var selectCommand = connection.CreateCommand())
         {
             selectCommand.Transaction = transaction;
-            selectCommand.CommandText = "SELECT document_id FROM knowledge_documents WHERE status = $indexed AND embedding_model <> $model;";
+            selectCommand.CommandText = """
+                                        SELECT document_id, embedding_model, vector_identity, vector_dim
+                                        FROM knowledge_documents
+                                        WHERE status = $indexed;
+                                        """;
             AddParameter(selectCommand, "$indexed", indexedStatus);
-            AddParameter(selectCommand, "$model", resolvedModel);
 
             await using var reader = await selectCommand.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
             while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
-                staleIds.Add(Guid.Parse(reader.GetString(0)));
+                if (IsStaleModel(KnowledgeDocumentStatus.Indexed, reader.GetString(1), reader.GetString(2), reader.GetInt32(3), resolution))
+                {
+                    staleIds.Add(Guid.Parse(reader.GetString(0)));
+                }
             }
         }
 
-        if (staleIds.Count > 0)
+        foreach (var staleId in staleIds)
         {
             await using var updateCommand = connection.CreateCommand();
             updateCommand.Transaction = transaction;
             updateCommand.CommandText = """
                                         UPDATE knowledge_documents
                                         SET status = $status, failure_reason = NULL, updated_at_utc = $updated_at_utc
-                                        WHERE status = $indexed AND embedding_model <> $model;
+                                        WHERE status = $indexed AND document_id = $document_id;
                                         """;
             AddParameter(updateCommand, "$status", KnowledgeDocumentStatus.Pending.ToString());
             AddParameter(updateCommand, "$updated_at_utc", _timeProvider.GetUtcNow().ToUnixTimeMilliseconds());
             AddParameter(updateCommand, "$indexed", indexedStatus);
-            AddParameter(updateCommand, "$model", resolvedModel);
+            AddParameter(updateCommand, "$document_id", staleId);
             _ = await updateCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         }
 
@@ -337,11 +344,20 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
     // making the resolver fall back to the plain configured name — on a llama.cpp node the stored name is a resolved
     // GGUF name that never equals that fallback, so comparing against it would flag (and reset) the entire indexed
     // corpus during the outage instead of leaving it untouched.
-    private static bool IsStaleModel(KnowledgeDocumentStatus status, string embeddingModel, EmbeddingModelResolution resolution)
+    private bool IsStaleModel(
+        KnowledgeDocumentStatus status,
+        string embeddingModel,
+        string vectorIdentity,
+        int vectorDimension,
+        EmbeddingModelResolution resolution)
     {
         return status == KnowledgeDocumentStatus.Indexed
                && resolution.IsConfident
-               && !string.Equals(embeddingModel, resolution.Name, StringComparison.Ordinal);
+               && (!string.Equals(embeddingModel, resolution.Name, StringComparison.Ordinal)
+                   || !KnowledgeEmbeddingVectorPolicy.MatchesCurrentPolicy(vectorIdentity,
+                       vectorDimension,
+                       resolution,
+                       _options.EmbeddingVectorMode));
     }
 
     private static KnowledgeDocumentStatus ParseStatus(string status)
