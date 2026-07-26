@@ -1,0 +1,60 @@
+{
+  "baseline": "$CURRENT_REPO/artifacts/performance/raw/e67d6697-cpu.raw.json",
+  "candidate": "$CURRENT_REPO/artifacts/performance/raw/932cad7d-cpu.raw.json",
+  "commands": {
+    "chat-pp-tg": {
+      "generation_tokens_per_second": {
+        "baseline_median": 6.297203,
+        "candidate_median": 6.370508,
+        "delta_percent": 1.1640882467978306
+      },
+      "prompt_tokens_per_second": {
+        "baseline_median": 7204.39735,
+        "candidate_median": 7915.167584,
+        "delta_percent": 9.865783346888822
+      },
+      "wall_elapsed_ms": {
+        "baseline_median": 21307.665,
+        "candidate_median": 21008.623,
+        "delta_percent": -1.4034480080290415
+      }
+    },
+    "embedding-pp": {
+      "embedding_tokens_per_second": {
+        "baseline_median": 22903.467164,
+        "candidate_median": 21457.982755,
+        "delta_percent": -6.311203446402358
+      },
+      "wall_elapsed_ms": {
+        "baseline_median": 501.861,
+        "candidate_median": 653.327,
+        "delta_percent": 30.180866813719337
+      }
+    }
+  },
+  "generated_at_utc": "2026-07-26T20:13:47Z",
+  "identity_equal": true,
+  "kind": "inference-benchmark-comparison",
+  "sanitization": {
+    "replacements": [
+      {
+        "label": "$RUNTIME_ROOT"
+      },
+      {
+        "label": "$MODEL_ROOT"
+      },
+      {
+        "label": "$CURRENT_REPO"
+      },
+      {
+        "label": "$BASELINE_REPO"
+      },
+      {
+        "label": "$MODEL_STORE"
+      }
+    ],
+    "source_sha256": "294b1fb951cf4060e181729c140935670109efc981775943a284d159c845e338"
+  },
+  "sanitized": true,
+  "schema_version": "1.0"
+}

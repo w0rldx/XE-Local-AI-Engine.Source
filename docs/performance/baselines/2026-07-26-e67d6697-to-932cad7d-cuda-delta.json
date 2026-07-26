@@ -1,0 +1,88 @@
+{
+  "baseline": "$CURRENT_REPO/artifacts/performance/raw/e67d6697-cuda.raw.json",
+  "candidate": "$CURRENT_REPO/artifacts/performance/raw/932cad7d-cuda.raw.json",
+  "commands": {
+    "chat-application-harness": {
+      "wall_elapsed_ms": {
+        "baseline_median": 972.615,
+        "candidate_median": 974.591,
+        "delta_percent": 0.20316363617669883
+      }
+    },
+    "chat-pp-tg": {
+      "generation_tokens_per_second": {
+        "baseline_median": 802.832171,
+        "candidate_median": 783.701358,
+        "delta_percent": -2.382915594447446
+      },
+      "prompt_tokens_per_second": {
+        "baseline_median": 35084.189721,
+        "candidate_median": 36202.396853,
+        "delta_percent": 3.1872109371552098
+      },
+      "wall_elapsed_ms": {
+        "baseline_median": 854.926,
+        "candidate_median": 951.754,
+        "delta_percent": 11.325892533388851
+      }
+    },
+    "embedding-pp": {
+      "embedding_tokens_per_second": {
+        "baseline_median": 61177.748124,
+        "candidate_median": 61194.594987,
+        "delta_percent": 0.027537566380920503
+      },
+      "wall_elapsed_ms": {
+        "baseline_median": 668.606,
+        "candidate_median": 653.805,
+        "delta_percent": -2.213710316688759
+      }
+    },
+    "invocation-streaming-token-contract": {
+      "wall_elapsed_ms": {
+        "baseline_median": 973.93,
+        "candidate_median": 1073.208,
+        "delta_percent": 10.193545737373338
+      }
+    },
+    "maf-approval-resume-contract": {
+      "wall_elapsed_ms": {
+        "baseline_median": 868.552,
+        "candidate_median": 973.328,
+        "delta_percent": 12.063296152677093
+      }
+    },
+    "reranker-provider-contract": {
+      "wall_elapsed_ms": {
+        "baseline_median": 970.046,
+        "candidate_median": 974.345,
+        "delta_percent": 0.44317485974891685
+      }
+    }
+  },
+  "generated_at_utc": "2026-07-26T20:13:47Z",
+  "identity_equal": true,
+  "kind": "inference-benchmark-comparison",
+  "sanitization": {
+    "replacements": [
+      {
+        "label": "$RUNTIME_ROOT"
+      },
+      {
+        "label": "$MODEL_ROOT"
+      },
+      {
+        "label": "$CURRENT_REPO"
+      },
+      {
+        "label": "$BASELINE_REPO"
+      },
+      {
+        "label": "$MODEL_STORE"
+      }
+    ],
+    "source_sha256": "8982f7b472419a86869749eed0dfe31bd9dd58dc5c504f02a4915795b7aac437"
+  },
+  "sanitized": true,
+  "schema_version": "1.0"
+}
