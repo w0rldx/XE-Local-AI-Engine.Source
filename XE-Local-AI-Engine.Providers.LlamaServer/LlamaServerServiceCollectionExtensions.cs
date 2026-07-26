@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
+using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 using XE_Local_AI_Engine.Providers.LlamaServer.Configuration;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
@@ -36,6 +37,8 @@ public static class LlamaServerServiceCollectionExtensions
     public static IServiceCollection AddLlamaServerLocalModelProvider(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
+        services.TryAddSingleton<ITokenEstimatorCalibrationStore, TokenEstimatorCalibrationStore>();
+        services.TryAddSingleton<ITokenEstimatorCalibrationScheduler, NullTokenEstimatorCalibrationScheduler>();
 
         services.TryAddSingleton<IGpuVendorProbe, ProcessGpuVendorProbe>();
 
@@ -186,7 +189,8 @@ public static class LlamaServerServiceCollectionExtensions
         services.TryAddSingleton<LlamaServerLocalModelProvider>(static sp =>
             new LlamaServerLocalModelProvider(sp.GetRequiredService<ILlamaServerProcessSupervisor>(),
                 sp.GetRequiredService<IGgufModelStore>(),
-                sp.GetRequiredService<LlamaServerSupervisorOptions>()));
+                sp.GetRequiredService<LlamaServerSupervisorOptions>(),
+                sp.GetRequiredService<ITokenEstimatorCalibrationScheduler>()));
         services.AddSingleton<ILocalModelProvider>(static sp =>
             sp.GetRequiredService<LlamaServerLocalModelProvider>());
 

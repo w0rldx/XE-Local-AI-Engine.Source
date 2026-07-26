@@ -36,9 +36,11 @@ public interface IConversationContextBudgeter
     ///     direction, trimming a touch early rather than rejecting late).
     ///     <see langword="null" />/empty counts as no tools.
     /// </param>
+    /// <param name="modelName">Resolved provider model identity used only to select an existing token calibration.</param>
     ConversationBudgetResult Budget(IReadOnlyList<ChatMessage> messages,
         int contextTokenCapacity,
         int reservedOutputTokens,
         string? systemPrompt = null,
-        IReadOnlyList<string>? toolDefinitions = null);
+        IReadOnlyList<string>? toolDefinitions = null,
+        string? modelName = null);
 }

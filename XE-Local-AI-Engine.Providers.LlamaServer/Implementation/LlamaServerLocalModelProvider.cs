@@ -4,6 +4,7 @@ using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
+using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 
@@ -32,17 +33,22 @@ public sealed class LlamaServerLocalModelProvider : ILocalModelProvider
     private readonly IGgufModelStore _modelStore;
     private readonly TimeSpan _networkTimeout;
     private readonly ILlamaServerProcessSupervisor _supervisor;
+    private readonly ITokenEstimatorCalibrationScheduler _calibrationScheduler;
 
     /// <summary>
     ///     Creates the provider over the process supervisor and the GGUF model store. The supervisor options supply the
     ///     explicit per-call HTTP network timeout (AUD4-18) the deferred chat/embedding clients pin on the built OpenAI
     ///     client; a null options bag falls back to the default policy.
     /// </summary>
-    public LlamaServerLocalModelProvider(ILlamaServerProcessSupervisor supervisor, IGgufModelStore modelStore, LlamaServerSupervisorOptions? options = null)
+    public LlamaServerLocalModelProvider(ILlamaServerProcessSupervisor supervisor,
+        IGgufModelStore modelStore,
+        LlamaServerSupervisorOptions? options = null,
+        ITokenEstimatorCalibrationScheduler? calibrationScheduler = null)
     {
         _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
         _modelStore = modelStore ?? throw new ArgumentNullException(nameof(modelStore));
         _networkTimeout = (options ?? new LlamaServerSupervisorOptions()).HttpNetworkTimeout;
+        _calibrationScheduler = calibrationScheduler ?? new NullTokenEstimatorCalibrationScheduler();
     }
 
     /// <inheritdoc />
@@ -157,7 +163,7 @@ public sealed class LlamaServerLocalModelProvider : ILocalModelProvider
     public IChatClient CreateChatClient(LocalModelSelection selection)
     {
         ValidateSelection(selection);
-        return new DeferredLlamaServerChatClient(_supervisor, selection.ModelName, _networkTimeout);
+        return new DeferredLlamaServerChatClient(_supervisor, selection.ModelName, _networkTimeout, _calibrationScheduler);
     }
 
     /// <inheritdoc />

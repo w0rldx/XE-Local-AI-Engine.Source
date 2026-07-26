@@ -26,6 +26,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\XE-Local-AI-Engine.AI.Agent\XE-Local-AI-Engine.AI.Agent.csproj"/>
+    <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Abstractions\XE-Local-AI-Engine.Providers.Abstractions.csproj"/>
     <Compile Include="..\XE-Local-AI-Engine.Tests\Testing\AssertionException.cs" Link="Testing\AssertionException.cs"/>
     <Compile Include="..\XE-Local-AI-Engine.Tests\Testing\AssertEx.cs" Link="Testing\AssertEx.cs"/>
   </ItemGroup>

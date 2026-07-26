@@ -25,4 +25,8 @@
     <EmbeddedResource Include="Instructions/*.txt"/>
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Abstractions\XE-Local-AI-Engine.Providers.Abstractions.csproj"/>
+  </ItemGroup>
+
 </Project>

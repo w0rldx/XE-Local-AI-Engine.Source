@@ -18,13 +18,14 @@ internal static class ProviderCallBudgeter
     public static ProviderBudgetResult Budget(IReadOnlyList<ChatMessage> messages,
         int instructionsTokens,
         int effectiveWindowTokens,
-        ProviderCallBudgetOptions options)
+        ProviderCallBudgetOptions options,
+        int charsPerToken = 4)
     {
         ArgumentNullException.ThrowIfNull(messages);
         ArgumentNullException.ThrowIfNull(options);
 
         var window = Math.Max(effectiveWindowTokens, 0);
-        var estimatedBefore = instructionsTokens + ProviderMessageTokenEstimator.EstimateTokens(messages);
+        var estimatedBefore = instructionsTokens + ProviderMessageTokenEstimator.EstimateTokens(messages, charsPerToken);
 
         if (messages.Count == 0 || estimatedBefore <= window)
         {
@@ -38,7 +39,7 @@ internal static class ProviderCallBudgeter
         for (var i = 0; i < count; i++)
         {
             working[i] = messages[i];
-            perMessageTokens[i] = ProviderMessageTokenEstimator.EstimateTokens(messages[i]);
+            perMessageTokens[i] = ProviderMessageTokenEstimator.EstimateTokens(messages[i], charsPerToken);
         }
 
         var keepCount = Math.Max(2, options.RecentMessagesToKeep);
@@ -59,7 +60,7 @@ internal static class ProviderCallBudgeter
             }
 
             working[i] = truncated;
-            var newTokens = ProviderMessageTokenEstimator.EstimateTokens(truncated);
+            var newTokens = ProviderMessageTokenEstimator.EstimateTokens(truncated, charsPerToken);
             currentEstimate += newTokens - perMessageTokens[i];
             perMessageTokens[i] = newTokens;
             toolResultsTruncated++;

@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Invocation;
 
 using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
+using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class HeuristicTokenEstimatorTests
@@ -34,6 +35,32 @@ public sealed class HeuristicTokenEstimatorTests
         AssertEx.Equal(expected, estimator.EstimateTokens(message));
         AssertEx.Equal(expected, estimator.EstimateTokens(message));
         AssertEx.Equal(expected, estimator.EstimateTokens(equalContent));
+    }
+
+    [Test]
+    public void EstimateTokens_SameMemoizedMessage_UsesLaterPerModelCalibration()
+    {
+        var calibrations = new TokenEstimatorCalibrationStore();
+        var estimator = new HeuristicTokenEstimator(calibrations);
+        var message = new ChatMessage(ChatRole.User, [new TextContent(new string('x', 48))]);
+
+        AssertEx.Equal(expected: (48 / 4) + OverheadTokens, estimator.EstimateTokens(message, "model-a"));
+
+        calibrations.SetDivisor("model-a", charsPerToken: 6);
+
+        AssertEx.Equal(expected: (48 / 6) + OverheadTokens, estimator.EstimateTokens(message, "model-a"));
+        AssertEx.Equal(expected: (48 / 4) + OverheadTokens, estimator.EstimateTokens(message, "unknown-model"));
+    }
+
+    [Test]
+    public void EstimateTokens_CalibratedDivisor_PreservesCjkOneTokenPerCharacterFloor()
+    {
+        var calibrations = new TokenEstimatorCalibrationStore();
+        calibrations.SetDivisor("model-a", charsPerToken: 8);
+        var estimator = new HeuristicTokenEstimator(calibrations);
+        var message = new ChatMessage(ChatRole.User, [new TextContent(new string('中', 40))]);
+
+        AssertEx.Equal(expected: 40 + OverheadTokens, estimator.EstimateTokens(message, "model-a"));
     }
 
     [Test]

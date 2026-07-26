@@ -6,6 +6,7 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
+using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 
 /// <summary>
 ///     Innermost pipeline hop (below <c>UseFunctionInvocation</c>) that re-budgets EVERY raw provider round against the
@@ -40,11 +41,15 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
     private const string NumCtxKey = "num_ctx";
 
     private readonly ILogger<ProviderCallBudgetChatClient> _logger;
+    private readonly ITokenEstimatorCalibrationStore _calibrationStore;
 
-    public ProviderCallBudgetChatClient(IChatClient innerClient, ILogger<ProviderCallBudgetChatClient> logger)
+    public ProviderCallBudgetChatClient(IChatClient innerClient,
+        ILogger<ProviderCallBudgetChatClient> logger,
+        ITokenEstimatorCalibrationStore? calibrationStore = null)
         : base(innerClient)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _calibrationStore = calibrationStore ?? new TokenEstimatorCalibrationStore();
     }
 
     public override Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
@@ -86,13 +91,14 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
         var window = ResolveContextWindow(options, budgetOptions);
         var reserved = ResolveReservedOutputTokens(options, budgetOptions);
         var effectiveWindow = Math.Max(window - reserved, 0);
+        var charsPerToken = _calibrationStore.ResolveDivisor(options?.ModelId);
         // Instructions AND the tool definitions (name + description + JSON schema) are fixed per-round input the model
         // never sees as a droppable message but which still counts against the window — folding both into the overhead
         // stops a tool-heavy agent from under-estimating and rounding an over-window request through.
-        var instructionsTokens = ProviderMessageTokenEstimator.EstimateTokens(options?.Instructions)
-                                 + ProviderMessageTokenEstimator.EstimateTools(options?.Tools);
+        var instructionsTokens = ProviderMessageTokenEstimator.EstimateTokens(options?.Instructions, charsPerToken)
+                                 + ProviderMessageTokenEstimator.EstimateTools(options?.Tools, charsPerToken);
 
-        var result = ProviderCallBudgeter.Budget(materialized, instructionsTokens, effectiveWindow, budgetOptions);
+        var result = ProviderCallBudgeter.Budget(materialized, instructionsTokens, effectiveWindow, budgetOptions, charsPerToken);
 
         ProviderRoundsCounter.Add(1);
         if (result.Trimmed)

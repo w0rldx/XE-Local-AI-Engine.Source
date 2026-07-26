@@ -15,4 +15,16 @@ public interface ITokenEstimator
 
     /// <summary>Estimates the total token count of an ordered message list.</summary>
     int EstimateTokens(IReadOnlyList<ChatMessage> messages);
+
+    /// <summary>Estimates one message with the named model's calibration when available.</summary>
+    int EstimateTokens(ChatMessage message, string? modelName)
+    {
+        return EstimateTokens(message);
+    }
+
+    /// <summary>Estimates a message list with the named model's calibration when available.</summary>
+    int EstimateTokens(IReadOnlyList<ChatMessage> messages, string? modelName)
+    {
+        return EstimateTokens(messages);
+    }
 }

@@ -752,7 +752,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         // many rounds trim, and throws (see ApplyContextBudgetAsync) the first time truncation still leaves history
         // over budget.
         var budgetGate = new ContextBudgetNoticeGate();
-        var seededMessages = await ApplyContextBudgetAsync(BuildChatMessages(package), package, "initial-assembly", turnPolicy, transport, budgetGate).ConfigureAwait(false);
+        var seededMessages = await ApplyContextBudgetAsync(BuildChatMessages(package), package, resolvedModel, "initial-assembly", turnPolicy, transport, budgetGate).ConfigureAwait(false);
 
         var definition = BuildInvocationDefinition(package, resolvedModel, seededMessages, effectiveContextTokens);
         // Coarse span over the MAF agent build (AUD4-23) — another pre-first-token stage. Disposed right after the
@@ -808,7 +808,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // iteration this is a cheap passthrough (the seed was already budgeted); on an approval resume it bounds the
             // folded tool-call + approval history. The protected recent turns — which carry the in-flight round — are
             // never trimmed, so a budgeted list is still valid to send.
-            var budgetedMessages = await ApplyContextBudgetAsync(currentMessages, package, "tool-loop", turnPolicy, transport, budgetGate).ConfigureAwait(false);
+            var budgetedMessages = await ApplyContextBudgetAsync(currentMessages, package, resolvedModel, "tool-loop", turnPolicy, transport, budgetGate).ConfigureAwait(false);
             if (!ReferenceEquals(budgetedMessages, currentMessages))
             {
                 currentMessages = budgetedMessages as List<ChatMessage> ?? [.. budgetedMessages];
@@ -1031,7 +1031,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         // any participant is launched with. Previously unbudgeted — the workflow ran on the raw seed regardless of
         // length.
         var budgetGate = new ContextBudgetNoticeGate();
-        var seed = await ApplyContextBudgetAsync(BuildChatMessages(package), package, "orchestration-seed", turnPolicy, transport, budgetGate).ConfigureAwait(false);
+        var seed = await ApplyContextBudgetAsync(BuildChatMessages(package), package, resolvedModel, "orchestration-seed", turnPolicy, transport, budgetGate).ConfigureAwait(false);
 
         await using var session = await _orchestrationAgentFactory.CreateAsync(definition, seed, invocationToken).ConfigureAwait(false);
 
