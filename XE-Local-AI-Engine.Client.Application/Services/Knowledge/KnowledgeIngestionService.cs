@@ -145,7 +145,12 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
         // Stamp the RESOLVED model that actually produced the vectors (not the configured name) as both the document row's
         // embedding_model and every chunk-vector scope key, so a later same-dimension model swap makes stored-name differ
         // from the current resolved name → the catalog flags the document stale → the operator reindexes it.
-        var input = new KnowledgeIndexInput(documentId, embeddingResult.ResolvedModel, chunking.Sections, indexChunks);
+        var input = new KnowledgeIndexInput(documentId,
+            embeddingResult.ResolvedModel,
+            embeddingResult.VectorIdentity,
+            embeddingResult.Dimension,
+            chunking.Sections,
+            indexChunks);
 
         // The writer performs the final Indexed transition atomically. A false result means the document was deleted mid
         // flight (the write was skipped) — there is nothing more to do. On success push the Indexed transition, since the

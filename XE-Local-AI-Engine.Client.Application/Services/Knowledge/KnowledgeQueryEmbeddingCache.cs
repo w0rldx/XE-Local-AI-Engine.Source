@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Client.Common.Telemetry;
 ///     Default <see cref="IKnowledgeQueryEmbeddingCache" />. A bounded, TTL'd, approximately-LRU cache following the same
 ///     shape as the Hugging Face <c>TtlCache</c>: a <see cref="ConcurrentDictionary{TKey,TValue}" /> with a monotonic
 ///     access stamp for recency, lazy expiry on read, and an O(n) coldest-first eviction scan that runs only on the
-///     insert path while over capacity. The key is the resolved model name plus a SHA-256 hash of the query, so the raw
+///     insert path while over capacity. The key is the canonical vector identity plus a SHA-256 hash of the query, so the raw
 ///     query text is never retained; values are held only in memory. Registered as a singleton (the search is scoped) so
 ///     one cache serves every request.
 /// </summary>
@@ -31,13 +31,13 @@ public sealed class KnowledgeQueryEmbeddingCache : IKnowledgeQueryEmbeddingCache
         _ttl = TimeSpan.FromSeconds(Math.Max(0, options.Value.QueryEmbeddingCacheTtlSeconds));
     }
 
-    public bool TryGet(string resolvedModel, string query, out ReadOnlyMemory<float> vector)
+    public bool TryGet(string vectorIdentity, string query, out ReadOnlyMemory<float> vector)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(resolvedModel);
+        ArgumentException.ThrowIfNullOrWhiteSpace(vectorIdentity);
         ArgumentNullException.ThrowIfNull(query);
 
         if (_ttl > TimeSpan.Zero
-            && _entries.TryGetValue(BuildKey(resolvedModel, query), out var entry)
+            && _entries.TryGetValue(BuildKey(vectorIdentity, query), out var entry)
             && entry.ExpiresAt > _timeProvider.GetUtcNow())
         {
             Touch(entry);
@@ -51,9 +51,9 @@ public sealed class KnowledgeQueryEmbeddingCache : IKnowledgeQueryEmbeddingCache
         return false;
     }
 
-    public void Store(string resolvedModel, string query, ReadOnlyMemory<float> vector)
+    public void Store(string vectorIdentity, string query, ReadOnlyMemory<float> vector)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(resolvedModel);
+        ArgumentException.ThrowIfNullOrWhiteSpace(vectorIdentity);
         ArgumentNullException.ThrowIfNull(query);
 
         if (_ttl <= TimeSpan.Zero || vector.IsEmpty)
@@ -61,19 +61,19 @@ public sealed class KnowledgeQueryEmbeddingCache : IKnowledgeQueryEmbeddingCache
             return;
         }
 
-        var key = BuildKey(resolvedModel, query);
+        var key = BuildKey(vectorIdentity, query);
         var entry = new Entry(vector, _timeProvider.GetUtcNow() + _ttl);
         Touch(entry);
         _entries[key] = entry;
         EvictIfOverCapacity(key);
     }
 
-    private static string BuildKey(string resolvedModel, string query)
+    private static string BuildKey(string vectorIdentity, string query)
     {
-        // Hash the query so the raw (potentially sensitive) text is never retained as a dictionary key. The model name is
-        // not sensitive and stays in the clear so a model swap yields a different key space.
+        // Hash the query so the raw (potentially sensitive) text is never retained as a dictionary key. The canonical
+        // identity is not sensitive and stays in the clear so model/policy/width changes yield distinct key spaces.
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(query));
-        return string.Concat(resolvedModel, "\n", Convert.ToHexStringLower(hash));
+        return string.Concat(vectorIdentity, "\n", Convert.ToHexStringLower(hash));
     }
 
     private static void RecordLookup(bool hit)

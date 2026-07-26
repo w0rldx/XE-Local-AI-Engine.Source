@@ -39,6 +39,20 @@ public sealed class KnowledgeQueryEmbeddingCacheTests
     }
 
     [Test]
+    public void TryGet_ForSameModelButDifferentTransformIdentity_IsAMiss()
+    {
+        var cache = new KnowledgeQueryEmbeddingCache(Options(maxEntries: 8, ttlSeconds: 300), new MutableTimeProvider(DateTimeOffset.UnixEpoch));
+        const string nativeIdentity = "nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M::native:v1:768";
+        const string matryoshkaIdentity =
+            "nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M::layernorm-population-eps1e-5-truncate-l2:v1:512";
+        cache.Store(nativeIdentity, "same query text", VectorA);
+
+        var hit = cache.TryGet(matryoshkaIdentity, "same query text", out _);
+
+        AssertEx.False(hit, "Native and 512-wide vectors for one resolved model must occupy distinct cache keys.");
+    }
+
+    [Test]
     public void TryGet_AfterTtlElapses_IsAMiss()
     {
         var clock = new MutableTimeProvider(DateTimeOffset.UnixEpoch);

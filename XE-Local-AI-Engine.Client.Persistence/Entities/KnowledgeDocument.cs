@@ -44,6 +44,12 @@ internal sealed record class KnowledgeDocument
     /// <summary>Embedding model id that built the vectors (e.g. <c>nomic-embed-text</c>); the search model-mismatch filter key.</summary>
     public string EmbeddingModel { get; set; } = string.Empty;
 
+    /// <summary>Canonical resolved-model + transform algorithm/version + width identity for the committed vectors.</summary>
+    public string VectorIdentity { get; set; } = "legacy:unversioned";
+
+    /// <summary>Committed vector width; duplicated from the canonical identity for defensive filtering and catalog checks.</summary>
+    public int VectorDim { get; set; }
+
     public long CreatedAtUtc { get; set; }
 
     public long UpdatedAtUtc { get; set; }

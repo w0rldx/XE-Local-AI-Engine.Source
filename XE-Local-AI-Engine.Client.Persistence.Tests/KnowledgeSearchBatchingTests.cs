@@ -109,7 +109,13 @@ public sealed class KnowledgeSearchBatchingTests : IDisposable
         // BM25 is more-negative-for-stronger: the best-first rank order maps to descending (more-negative) scores.
         var ftsHits = ftsRanked.Select((id, index) => new FtsSearchHit(id, documentA, index - ftsRanked.Count)).ToList();
         var vectorSearch = Substitute.For<IVectorSearch>();
-        vectorSearch.SearchAsync(Arg.Any<ReadOnlyMemory<float>>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>())
+        vectorSearch.SearchAsync(Arg.Any<ReadOnlyMemory<float>>(),
+                        Arg.Any<string>(),
+                        Arg.Any<string>(),
+                        Arg.Any<int>(),
+                        Arg.Any<int>(),
+                        Arg.Any<Guid?>(),
+                        Arg.Any<CancellationToken>())
                     .Returns(Task.FromResult<IReadOnlyList<VectorSearchHit>>(vectorRanked.Select((id, index) => new VectorSearchHit(id, documentA, 1.0f - (index * 0.1f))).ToList()));
 
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);

@@ -25,6 +25,15 @@ public sealed class KnowledgeBaseOptions
     public string EmbeddingProviderName { get; set; } = "llamacpp";
 
     /// <summary>
+    ///     Post-provider vector policy for the knowledge index. <see cref="KnowledgeEmbeddingVectorMode.Matryoshka512" />
+    ///     (default) applies the versioned Nomic v1.5 Matryoshka transform only when the resolver confidently identifies
+    ///     <c>nomic-embed-text-v1.5</c>; every other model remains at its native width. Set to
+    ///     <see cref="KnowledgeEmbeddingVectorMode.Native" /> for operational rollback, then fully reindex the corpus so
+    ///     every stored vector receives the corresponding native identity and width.
+    /// </summary>
+    public KnowledgeEmbeddingVectorMode EmbeddingVectorMode { get; set; } = KnowledgeEmbeddingVectorMode.Matryoshka512;
+
+    /// <summary>
     ///     Node-local cross-encoder reranker model that rescores the fused candidate pool at search time. Empty
     ///     (default) turns reranking OFF — the search returns the Reciprocal-Rank-Fusion order unchanged. When set to an
     ///     installed reranker model name (for example <c>bge-reranker-v2-m3</c>), the search hydrates the fused candidate
@@ -82,8 +91,9 @@ public sealed class KnowledgeBaseOptions
 
     /// <summary>
     ///     Hard upper bound on the number of query embeddings held in the RAM-only query-embedding cache. Bounded so a
-    ///     long-lived process cannot grow the cache without limit; keyed by (resolved model, query hash) so a model swap
-    ///     never returns a stale cross-model vector. Default 128; a value of 0 or less still clamps to 1.
+    ///     long-lived process cannot grow the cache without limit; keyed by (canonical vector identity, query hash) so a
+    ///     model, transform-policy, or width change never returns a stale vector. Default 128; a value of 0 or less still
+    ///     clamps to 1.
     /// </summary>
     public int QueryEmbeddingCacheMaxEntries { get; set; } = 128;
 
@@ -143,4 +153,14 @@ public sealed class KnowledgeBaseOptions
     ///     across a chunk boundary stays retrievable. Must be smaller than <see cref="MaxChunkChars" />.
     /// </summary>
     public int ChunkOverlapChars { get; set; } = 200;
+}
+
+/// <summary>Versioned post-provider vector policy used by both knowledge ingestion and query embedding.</summary>
+public enum KnowledgeEmbeddingVectorMode
+{
+    /// <summary>Use provider-native vectors without a dimensionality transform.</summary>
+    Native,
+
+    /// <summary>Apply the Nomic v1.5 layer-normalize, truncate-to-512, then L2-normalize transform when confidently resolved.</summary>
+    Matryoshka512
 }
