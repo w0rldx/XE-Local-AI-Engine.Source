@@ -46,7 +46,11 @@ public sealed class InferenceBenchmarkHarnessTests
         var harness = BuildHarness(modelCallsTool: true);
 
         var metrics = await harness.RunAsync(ProfilingContext(ModelRole.Chat),
-            InferenceBenchmarkSpec.Golden("cuda", ctxSize: 256),
+            InferenceBenchmarkSpec.Golden("cuda", ctxSize: 256) with
+            {
+                WarmupRuns = 0,
+                MeasuredRuns = 1
+            },
             CancellationToken.None);
 
         AssertEx.True(metrics.Success, metrics.FailureReason);
@@ -61,7 +65,11 @@ public sealed class InferenceBenchmarkHarnessTests
         var harness = BuildHarness(modelCallsTool: false);
 
         var metrics = await harness.RunAsync(ProfilingContext(ModelRole.Chat),
-            InferenceBenchmarkSpec.Golden("cuda", ctxSize: 256),
+            InferenceBenchmarkSpec.Golden("cuda", ctxSize: 256) with
+            {
+                WarmupRuns = 0,
+                MeasuredRuns = 1
+            },
             CancellationToken.None);
 
         AssertEx.True(metrics.Success, metrics.FailureReason);
@@ -145,12 +153,37 @@ public sealed class InferenceBenchmarkHarnessTests
         AssertEx.Equal(0, handler.PostPaths.Count);
     }
 
-    private static LlamaServerProfilingContext ProfilingContext(ModelRole role)
+    [Test]
+    public async Task RunAsync_ChatRole_HonorsWarmupsAndRepeatedRuns_WithMedianP95AndResourcePeaks()
+    {
+        var harness = BuildHarness(modelCallsTool: true);
+        var spec = InferenceBenchmarkSpec.Golden("cuda", ctxSize: 256) with
+        {
+            WarmupRuns = 1,
+            MeasuredRuns = 3
+        };
+
+        var metrics = await harness.RunAsync(ProfilingContext(ModelRole.Chat, Environment.ProcessId),
+            spec,
+            CancellationToken.None);
+
+        AssertEx.True(metrics.Success, metrics.FailureReason);
+        AssertEx.Equal(3, metrics.Runs);
+        AssertEx.True(metrics.P50LatencyMs >= 0d);
+        AssertEx.True(metrics.P95LatencyMs >= metrics.P50LatencyMs);
+        AssertEx.True(metrics.PeakProcessRamBytes > 0);
+        AssertEx.Equal<long?>(8 * Gb, metrics.MinimumGlobalFreeVramBytes);
+        AssertEx.Equal<long?>(8 * Gb, metrics.MinimumProcessBudgetVramBytes);
+    }
+
+    private static LlamaServerProfilingContext ProfilingContext(ModelRole role, int? processId = null)
     {
         return new LlamaServerProfilingContext(new LlamaServerEndpoint("bartowski/Model-GGUF:Q4_K_M",
                 role,
                 new Uri("http://127.0.0.1:18100/v1")),
-            []);
+            [],
+            FitParamsOutput: [],
+            processId);
     }
 
     private static InferenceBenchmarkHarness BuildHarness(bool modelCallsTool,

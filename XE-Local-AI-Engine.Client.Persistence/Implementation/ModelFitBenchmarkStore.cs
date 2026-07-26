@@ -44,6 +44,14 @@ public sealed class ModelFitBenchmarkStore(NodeChatDbContext dbContext) : IModel
                            ToolLoopMs = input.ToolLoopMs,
                            VramLoadBytes = input.VramLoadBytes,
                            VramAfterBytes = input.VramAfterBytes,
+                           GlobalFreeVramLoadBytes = input.GlobalFreeVramLoadBytes,
+                           GlobalFreeVramAfterBytes = input.GlobalFreeVramAfterBytes,
+                           ProcessBudgetVramLoadBytes = input.ProcessBudgetVramLoadBytes,
+                           ProcessBudgetVramAfterBytes = input.ProcessBudgetVramAfterBytes,
+                           MinimumGlobalFreeVramBytes = input.MinimumGlobalFreeVramBytes,
+                           MinimumProcessBudgetVramBytes = input.MinimumProcessBudgetVramBytes,
+                           PeakProcessRamBytes = input.PeakProcessRamBytes,
+                           ExternalPressureDetected = input.ExternalPressureDetected,
                            LlamacppBuild = input.LlamacppBuild,
                            Quant = input.Quant,
                            CtxSize = input.CtxSize,
@@ -55,7 +63,9 @@ public sealed class ModelFitBenchmarkStore(NodeChatDbContext dbContext) : IModel
                            OverrideTensor = input.OverrideTensor,
                            KvTypeV = input.KvTypeV,
                            FlashAttn = input.FlashAttn,
-                           ProfileId = input.ProfileId
+                           ProfileId = input.ProfileId,
+                           LaunchPolicyFingerprintVersion = input.LaunchPolicyFingerprintVersion,
+                           LaunchPolicyFingerprint = input.LaunchPolicyFingerprint
                        })
                        .ToArray();
 
@@ -126,7 +136,17 @@ public sealed class ModelFitBenchmarkStore(NodeChatDbContext dbContext) : IModel
             entity.OverrideTensor,
             entity.KvTypeV,
             entity.FlashAttn,
-            entity.ProfileId);
+            entity.ProfileId,
+            entity.LaunchPolicyFingerprintVersion,
+            entity.LaunchPolicyFingerprint,
+            entity.GlobalFreeVramLoadBytes,
+            entity.GlobalFreeVramAfterBytes,
+            entity.ProcessBudgetVramLoadBytes,
+            entity.ProcessBudgetVramAfterBytes,
+            entity.MinimumGlobalFreeVramBytes,
+            entity.MinimumProcessBudgetVramBytes,
+            entity.PeakProcessRamBytes,
+            entity.ExternalPressureDetected);
     }
 
     private static byte[]? EncodeOptional(string? value)

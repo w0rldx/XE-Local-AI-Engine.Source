@@ -16,14 +16,19 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///     The stdout lines emitted by the co-located <c>llama-fit-params</c> capability before the profiling server was
 ///     launched. Empty when the capability is missing or acquisition failed.
 /// </param>
+/// <param name="ProcessId">
+///     OS process id of the transient profiling server. Supplied only for operator benchmark resource sampling; callers
+///     must treat it as ephemeral and never persist or expose it.
+/// </param>
 public sealed record LlamaServerProfilingContext(
     LlamaServerEndpoint Endpoint,
     IReadOnlyList<string> StartupOutput,
-    IReadOnlyList<string> FitParamsOutput)
+    IReadOnlyList<string> FitParamsOutput,
+    int? ProcessId = null)
 {
     /// <summary>Creates a profiling context without machine-readable fit output (replay/benchmark callers).</summary>
     public LlamaServerProfilingContext(LlamaServerEndpoint endpoint, IReadOnlyList<string> startupOutput)
-        : this(endpoint, startupOutput, FitParamsOutput: [])
+        : this(endpoint, startupOutput, FitParamsOutput: [], ProcessId: null)
     {
     }
 }

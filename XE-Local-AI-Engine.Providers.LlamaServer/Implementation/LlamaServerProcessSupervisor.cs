@@ -1133,7 +1133,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                 {
                     var context = new LlamaServerProfilingContext(running.Endpoint,
                         startupOutput.ToArray(),
-                        fitParamsOutput.ToArray());
+                        fitParamsOutput.ToArray(),
+                        running.Handle.ProcessId);
                     return await body(context, ct).ConfigureAwait(false);
                 }
                 finally

@@ -125,7 +125,7 @@ public sealed class InferenceProfileResolverTests
             NParams: 7_000_000_000,
             IsMoe: false,
             ExpertCount: null,
-            FreeVramAtFreezeBytes: null,
+            GlobalFreeVramAtFreezeBytes: null,
             Status: status,
             BenchmarkSnapshotId: status == InferenceProfileStatus.Frozen ? Guid.NewGuid() : null,
             CreatedAtUtc: 0,

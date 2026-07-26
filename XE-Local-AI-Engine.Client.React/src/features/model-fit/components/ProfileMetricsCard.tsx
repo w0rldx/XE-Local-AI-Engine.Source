@@ -159,6 +159,27 @@ export function ProfileMetricsCard({ metrics, testIdSuffix }: ProfileMetricsCard
 			value: formatBytesAsGb(metrics.processBudgetVramAfterBytes),
 		});
 	}
+	if (metrics.minimumGlobalFreeVramBytes !== null) {
+		stats.push({
+			key: "minimumGlobalFreeVram",
+			label: t("pages.modelFit.inferenceProfiles.metrics.minimumGlobalFreeVram", "Minimum global free"),
+			value: formatBytesAsGb(metrics.minimumGlobalFreeVramBytes),
+		});
+	}
+	if (metrics.minimumProcessBudgetVramBytes !== null) {
+		stats.push({
+			key: "minimumProcessBudgetVram",
+			label: t("pages.modelFit.inferenceProfiles.metrics.minimumProcessBudgetVram", "Minimum process budget"),
+			value: formatBytesAsGb(metrics.minimumProcessBudgetVramBytes),
+		});
+	}
+	if (metrics.peakProcessRamBytes !== null) {
+		stats.push({
+			key: "peakProcessRam",
+			label: t("pages.modelFit.inferenceProfiles.metrics.peakProcessRam", "Peak process RAM"),
+			value: formatBytesAsGb(metrics.peakProcessRamBytes),
+		});
+	}
 	if (!hasExplicitVram && metrics.vramLoadBytes !== null) {
 		stats.push({ key: "vramLoad", label: t("pages.modelFit.inferenceProfiles.metrics.vramLoad", "VRAM at load"), value: formatBytesAsGb(metrics.vramLoadBytes) });
 	}

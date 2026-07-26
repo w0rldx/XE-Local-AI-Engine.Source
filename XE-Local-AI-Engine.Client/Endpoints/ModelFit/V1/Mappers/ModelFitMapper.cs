@@ -428,7 +428,10 @@ internal static class ModelFitMapper
             NParams = view.NParams,
             IsMoe = view.IsMoe,
             ExpertCount = view.ExpertCount,
-            FreeVramAtFreezeBytes = view.FreeVramAtFreezeBytes,
+            LaunchPolicyFingerprintVersion = view.LaunchPolicyFingerprintVersion,
+            LaunchPolicyFingerprint = view.LaunchPolicyFingerprint,
+            GlobalFreeVramAtFreezeBytes = view.GlobalFreeVramAtFreezeBytes,
+            ProcessBudgetVramAtFreezeBytes = view.ProcessBudgetVramAtFreezeBytes,
             Status = view.Status,
             BenchmarkSnapshotId = view.BenchmarkSnapshotId,
             CreatedAtUtc = view.CreatedAtUtc,
@@ -468,6 +471,9 @@ internal static class ModelFitMapper
             GlobalFreeVramAfterBytes = metrics.GlobalFreeVramAfterBytes,
             ProcessBudgetVramLoadBytes = metrics.ProcessBudgetVramLoadBytes,
             ProcessBudgetVramAfterBytes = metrics.ProcessBudgetVramAfterBytes,
+            MinimumGlobalFreeVramBytes = metrics.MinimumGlobalFreeVramBytes,
+            MinimumProcessBudgetVramBytes = metrics.MinimumProcessBudgetVramBytes,
+            PeakProcessRamBytes = metrics.PeakProcessRamBytes,
             ExternalPressureDetected = metrics.ExternalPressureDetected,
             Runs = metrics.Runs
         };

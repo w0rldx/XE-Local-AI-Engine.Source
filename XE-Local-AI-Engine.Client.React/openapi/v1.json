@@ -10748,6 +10748,18 @@
             "type": "integer",
             "nullable": true
           },
+          "minimumGlobalFreeVramBytes": {
+            "type": "integer",
+            "nullable": true
+          },
+          "minimumProcessBudgetVramBytes": {
+            "type": "integer",
+            "nullable": true
+          },
+          "peakProcessRamBytes": {
+            "type": "integer",
+            "nullable": true
+          },
           "externalPressureDetected": {
             "type": "boolean"
           },
@@ -10834,8 +10846,13 @@
             "format": "int32",
             "nullable": true
           },
-          "freeVramAtFreezeBytes": {
+          "launchPolicyFingerprintVersion": {
             "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "launchPolicyFingerprint": {
+            "type": "string",
             "nullable": true
           },
           "status": {
@@ -10851,6 +10868,14 @@
           },
           "updatedAtUtc": {
             "type": "integer"
+          },
+          "globalFreeVramAtFreezeBytes": {
+            "type": "integer",
+            "nullable": true
+          },
+          "processBudgetVramAtFreezeBytes": {
+            "type": "integer",
+            "nullable": true
           }
         }
       },

@@ -40,7 +40,8 @@ public sealed class InferenceProfileStore(NodeChatDbContext dbContext, TimeProvi
                 CreatedAtUtc = now,
                 Status = InferenceProfileStatus.Explored,
                 BenchmarkSnapshotId = null,
-                FreeVramAtFreezeBytes = null
+                GlobalFreeVramAtFreezeBytes = null,
+                ProcessBudgetVramAtFreezeBytes = null
             };
 
             ApplyExploredFields(entity, input, now);
@@ -55,7 +56,8 @@ public sealed class InferenceProfileStore(NodeChatDbContext dbContext, TimeProvi
         // stale/frozen profile drops back to a fresh draft that the next benchmark must re-justify.
         existing.Status = InferenceProfileStatus.Explored;
         existing.BenchmarkSnapshotId = null;
-        existing.FreeVramAtFreezeBytes = null;
+        existing.GlobalFreeVramAtFreezeBytes = null;
+        existing.ProcessBudgetVramAtFreezeBytes = null;
         ApplyExploredFields(existing, input, now);
 
         _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
@@ -65,7 +67,8 @@ public sealed class InferenceProfileStore(NodeChatDbContext dbContext, TimeProvi
 
     public async Task<InferenceProfileRecord?> MarkFrozenAsync(Guid id,
         Guid benchmarkSnapshotId,
-        long? freeVramAtFreezeBytes,
+        long? globalFreeVramAtFreezeBytes,
+        long? processBudgetVramAtFreezeBytes,
         CancellationToken cancellationToken = default)
     {
         // Freezing is the meaningful promotion (analogue of a Succeeded snapshot), so it runs inside a single
@@ -84,7 +87,8 @@ public sealed class InferenceProfileStore(NodeChatDbContext dbContext, TimeProvi
 
         entity.Status = InferenceProfileStatus.Frozen;
         entity.BenchmarkSnapshotId = benchmarkSnapshotId;
-        entity.FreeVramAtFreezeBytes = freeVramAtFreezeBytes;
+        entity.GlobalFreeVramAtFreezeBytes = globalFreeVramAtFreezeBytes;
+        entity.ProcessBudgetVramAtFreezeBytes = processBudgetVramAtFreezeBytes;
         entity.UpdatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
 
         _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
@@ -165,6 +169,8 @@ public sealed class InferenceProfileStore(NodeChatDbContext dbContext, TimeProvi
         entity.NParams = input.NParams;
         entity.IsMoe = input.IsMoe;
         entity.ExpertCount = input.ExpertCount;
+        entity.LaunchPolicyFingerprintVersion = input.LaunchPolicyFingerprintVersion;
+        entity.LaunchPolicyFingerprint = input.LaunchPolicyFingerprint;
         entity.UpdatedAtUtc = now;
     }
 
@@ -187,10 +193,13 @@ public sealed class InferenceProfileStore(NodeChatDbContext dbContext, TimeProvi
             entity.NParams,
             entity.IsMoe,
             entity.ExpertCount,
-            entity.FreeVramAtFreezeBytes,
             entity.Status,
             entity.BenchmarkSnapshotId,
             entity.CreatedAtUtc,
-            entity.UpdatedAtUtc);
+            entity.UpdatedAtUtc,
+            entity.LaunchPolicyFingerprintVersion,
+            entity.LaunchPolicyFingerprint,
+            entity.GlobalFreeVramAtFreezeBytes,
+            entity.ProcessBudgetVramAtFreezeBytes);
     }
 }

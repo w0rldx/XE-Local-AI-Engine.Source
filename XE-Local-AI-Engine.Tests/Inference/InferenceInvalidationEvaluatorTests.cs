@@ -6,14 +6,15 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Inference;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     <see cref="InferenceInvalidationEvaluator" /> tests: refreshed NVIDIA global-free VRAM is authoritative, the
-///     llama.cpp process budget is only a fallback when global free is unknown, and unavailable live data degrades to the
-///     build + hardware axes.
+///     llama.cpp process budget remains diagnostic-only, and unavailable global-free data degrades to the build +
+///     hardware axes.
 /// </summary>
 public sealed class InferenceInvalidationEvaluatorTests
 {
@@ -35,31 +36,39 @@ public sealed class InferenceInvalidationEvaluatorTests
     }
 
     [Test]
-    public async Task Invalidation_OnLowerGlobalFreeVram_MarksStale_WithoutProcessProbe()
+    public async Task Invalidation_OnLowerGlobalFreeVram_MarksStale_HighProcessBudgetCannotMaskRegression()
     {
         var evaluator = BuildEvaluator(installedTag: FrozenBuild,
             hardware: NvidiaProfile(24 * Gb, availableVramBytes: 4 * Gb),
             processBudgetVram: 20 * Gb,
             out var processProbe);
 
-        var stale = await evaluator.IsStaleAsync(FrozenRecord(FrozenBuild, freeVramAtFreeze: 8 * Gb), CancellationToken.None);
+        var profile = FrozenRecord(FrozenBuild, freeVramAtFreeze: 8 * Gb) with
+        {
+            ProcessBudgetVramAtFreezeBytes = 20 * Gb
+        };
+        var stale = await evaluator.IsStaleAsync(profile, CancellationToken.None);
 
         AssertEx.True(stale);
-        await processProbe.DidNotReceive()
-                          .TryGetProcessBudgetBytesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+        await processProbe.Received(1)
+                          .TryGetProcessBudgetBytesAsync("cuda", Arg.Any<CancellationToken>());
     }
 
     [Test]
-    public async Task Invalidation_WhenGlobalFreeUnknown_UsesProcessBudgetFallback()
+    public async Task Invalidation_WhenGlobalFreeUnknown_ProcessBudgetIsDiagnosticOnly()
     {
         var evaluator = BuildEvaluator(installedTag: FrozenBuild,
             hardware: NvidiaProfile(24 * Gb, availableVramBytes: null),
             processBudgetVram: 4 * Gb,
             out var processProbe);
 
-        var stale = await evaluator.IsStaleAsync(FrozenRecord(FrozenBuild, freeVramAtFreeze: 8 * Gb), CancellationToken.None);
+        var profile = FrozenRecord(FrozenBuild, freeVramAtFreeze: 8 * Gb) with
+        {
+            ProcessBudgetVramAtFreezeBytes = 8 * Gb
+        };
+        var stale = await evaluator.IsStaleAsync(profile, CancellationToken.None);
 
-        AssertEx.True(stale);
+        AssertEx.False(stale);
         await processProbe.Received(1).TryGetProcessBudgetBytesAsync("cuda", Arg.Any<CancellationToken>());
     }
 
@@ -96,6 +105,24 @@ public sealed class InferenceInvalidationEvaluatorTests
                           .TryGetProcessBudgetBytesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
+    [Test]
+    public async Task Invalidation_LegacyProfileWithoutFingerprint_IsStale()
+    {
+        var evaluator = BuildEvaluator(installedTag: FrozenBuild,
+            hardware: NvidiaProfile(24 * Gb, availableVramBytes: 8 * Gb),
+            processBudgetVram: 8 * Gb,
+            out _);
+        var legacy = FrozenRecord(FrozenBuild, freeVramAtFreeze: 8 * Gb) with
+        {
+            LaunchPolicyFingerprintVersion = null,
+            LaunchPolicyFingerprint = null
+        };
+
+        var stale = await evaluator.IsStaleAsync(legacy, CancellationToken.None);
+
+        AssertEx.True(stale);
+    }
+
     private static InferenceInvalidationEvaluator BuildEvaluator(string installedTag,
         HardwareProfile hardware,
         long? processBudgetVram,
@@ -113,7 +140,19 @@ public sealed class InferenceInvalidationEvaluatorTests
         processProbe.TryGetProcessBudgetBytesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
                     .Returns(Task.FromResult(processBudgetVram));
 
+        var modelStore = Substitute.For<IGgufModelStore>();
+        modelStore.ResolveModelFilePathAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                  .Returns(Task.FromResult<string?>("/models/model.gguf"));
+
+        var fingerprintProvider = Substitute.For<ILaunchPolicyFingerprintProvider>();
+        fingerprintProvider.CaptureAsync(Arg.Any<InferenceProfileRecord>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+                           .Returns(Task.FromResult(new LaunchPolicyFingerprint(
+                               LaunchPolicyFingerprintProvider.CurrentVersion,
+                               "fingerprint")));
+
         return new InferenceInvalidationEvaluator(installedStore,
+            modelStore,
+            fingerprintProvider,
             hardwareProfiler,
             processProbe,
             NullLogger<InferenceInvalidationEvaluator>.Instance);
@@ -154,10 +193,12 @@ public sealed class InferenceInvalidationEvaluatorTests
             NParams: 7_000_000_000,
             IsMoe: false,
             ExpertCount: null,
-            FreeVramAtFreezeBytes: freeVramAtFreeze,
+            GlobalFreeVramAtFreezeBytes: freeVramAtFreeze,
             Status: InferenceProfileStatus.Frozen,
             BenchmarkSnapshotId: Guid.NewGuid(),
             CreatedAtUtc: 0,
-            UpdatedAtUtc: 0);
+            UpdatedAtUtc: 0,
+            LaunchPolicyFingerprintVersion: LaunchPolicyFingerprintProvider.CurrentVersion,
+            LaunchPolicyFingerprint: "fingerprint");
     }
 }

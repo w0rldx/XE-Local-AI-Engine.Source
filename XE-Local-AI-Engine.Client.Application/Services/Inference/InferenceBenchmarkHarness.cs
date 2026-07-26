@@ -63,26 +63,32 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
 
         try
         {
-            var loadVram = await CaptureVramAsync(spec, ct).ConfigureAwait(false);
-            if (loadVram.ExternalPressureDetected)
+            var resources = new ResourceEvidenceCollector();
+            var load = await CaptureResourcesAsync(spec, context.ProcessId, ct).ConfigureAwait(false);
+            resources.Add(load);
+            if (load.Vram.ExternalPressureDetected)
             {
-                return ApplyVramEvidence(InferenceBenchmarkMetrics.Failed(
+                return ApplyResourceEvidence(InferenceBenchmarkMetrics.Failed(
                         "Benchmark invalid: global free VRAM is materially below llama.cpp's process budget; external GPU pressure is present."),
                     role,
-                    loadVram,
-                    loadVram);
+                    resources);
+            }
+
+            async Task CapturePassResourcesAsync(CancellationToken innerCt)
+            {
+                resources.Add(await CaptureResourcesAsync(spec, context.ProcessId, innerCt).ConfigureAwait(false));
             }
 
             var metrics = role switch
             {
-                ModelRole.Chat => await RunChatAsync(context.Endpoint, spec, ct).ConfigureAwait(false),
-                ModelRole.Embedding => await RunEmbeddingAsync(context.Endpoint, spec, ct).ConfigureAwait(false),
-                ModelRole.Reranker => await RunRerankerAsync(context.Endpoint, spec, ct).ConfigureAwait(false),
+                ModelRole.Chat => await RunChatAsync(context.Endpoint, spec, CapturePassResourcesAsync, ct).ConfigureAwait(false),
+                ModelRole.Embedding => await RunEmbeddingAsync(context.Endpoint, spec, CapturePassResourcesAsync, ct).ConfigureAwait(false),
+                ModelRole.Reranker => await RunRerankerAsync(context.Endpoint, spec, CapturePassResourcesAsync, ct).ConfigureAwait(false),
                 _ => InferenceBenchmarkMetrics.Failed($"Benchmark role '{role}' is unsupported.")
             };
 
-            var afterVram = await CaptureVramAsync(spec, ct).ConfigureAwait(false);
-            return ApplyVramEvidence(metrics, role, loadVram, afterVram);
+            resources.Add(await CaptureResourcesAsync(spec, context.ProcessId, ct).ConfigureAwait(false));
+            return ApplyResourceEvidence(metrics, role, resources);
         }
         catch (OperationCanceledException)
         {
@@ -154,6 +160,42 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
 
     private async Task<InferenceBenchmarkMetrics> RunChatAsync(LlamaServerEndpoint endpoint,
         InferenceBenchmarkSpec spec,
+        Func<CancellationToken, Task> captureResources,
+        CancellationToken ct)
+    {
+        for (var warmup = 0; warmup < Math.Max(0, spec.WarmupRuns); warmup++)
+        {
+            _ = await RunChatPassAsync(endpoint, spec, ct).ConfigureAwait(false);
+            await captureResources(ct).ConfigureAwait(false);
+        }
+
+        var measuredRuns = Math.Max(1, spec.MeasuredRuns);
+        var passes = new List<ChatPassMetrics>(measuredRuns);
+        for (var run = 0; run < measuredRuns; run++)
+        {
+            passes.Add(await RunChatPassAsync(endpoint, spec, ct).ConfigureAwait(false));
+            await captureResources(ct).ConfigureAwait(false);
+        }
+
+        return new InferenceBenchmarkMetrics(Success: true,
+            FailureReason: null,
+            TokensPerSecond: MedianNullable(passes.Select(static pass => pass.TokensPerSecond)),
+            PpTokensPerSecond: MedianNullable(passes.Select(static pass => pass.PpTokensPerSecond)),
+            TtftMs: MedianNullable(passes.Select(static pass => (double?)pass.TtftMs)),
+            TotalLatencyMs: Percentile(passes.Select(static pass => pass.TotalLatencyMs).ToArray(), 0.50d),
+            CacheHitRate: MedianNullable(passes.Select(static pass => pass.CacheHitRate)),
+            ToolLoopMs: MedianNullable(passes.Select(static pass => pass.ToolLoopMs)),
+            VramLoadBytes: null,
+            VramAfterBytes: null,
+            Runs: measuredRuns,
+            RawJson: passes[^1].RawMetrics,
+            Role: ModelRole.Chat.ToString(),
+            P50LatencyMs: Percentile(passes.Select(static pass => pass.TotalLatencyMs).ToArray(), 0.50d),
+            P95LatencyMs: Percentile(passes.Select(static pass => pass.TotalLatencyMs).ToArray(), 0.95d));
+    }
+
+    private async Task<ChatPassMetrics> RunChatPassAsync(LlamaServerEndpoint endpoint,
+        InferenceBenchmarkSpec spec,
         CancellationToken ct)
     {
         var metricsUri = new Uri(endpoint.BaseAddress, "/metrics");
@@ -213,23 +255,18 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
         var afterAll = await ScrapeMetricsAsync(metricsUri, ct).ConfigureAwait(false);
         totalStopwatch.Stop();
 
-        return new InferenceBenchmarkMetrics(Success: true,
-            FailureReason: null,
-            TokensPerSecond: DeriveRate(baseline, afterAll, PredictedTokensMetric, PredictedSecondsMetric),
-            PpTokensPerSecond: DeriveRate(baseline, afterAll, PromptTokensMetric, PromptSecondsMetric),
-            TtftMs: ttftMs,
-            TotalLatencyMs: totalStopwatch.Elapsed.TotalMilliseconds,
-            CacheHitRate: DeriveCacheHitRate(baseline, afterCold, afterWarm),
-            ToolLoopMs: toolLoopMs,
-            VramLoadBytes: null,
-            VramAfterBytes: null,
-            Runs: 1,
-            RawJson: afterAll,
-            Role: ModelRole.Chat.ToString());
+        return new ChatPassMetrics(DeriveRate(baseline, afterAll, PredictedTokensMetric, PredictedSecondsMetric),
+            DeriveRate(baseline, afterAll, PromptTokensMetric, PromptSecondsMetric),
+            ttftMs,
+            totalStopwatch.Elapsed.TotalMilliseconds,
+            DeriveCacheHitRate(baseline, afterCold, afterWarm),
+            toolLoopMs,
+            afterAll);
     }
 
     private async Task<InferenceBenchmarkMetrics> RunEmbeddingAsync(LlamaServerEndpoint endpoint,
         InferenceBenchmarkSpec spec,
+        Func<CancellationToken, Task> captureResources,
         CancellationToken ct)
     {
         var inputs = spec.EmbeddingInputs;
@@ -249,6 +286,7 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
         for (var warmup = 0; warmup < Math.Max(0, spec.WarmupRuns); warmup++)
         {
             _ = await PostEmbeddingAsync(client, endpointUri, endpoint.ModelName, inputs, ct).ConfigureAwait(false);
+            await captureResources(ct).ConfigureAwait(false);
         }
 
         var baselineMetrics = await ScrapeMetricsAsync(metricsUri, ct).ConfigureAwait(false);
@@ -264,6 +302,7 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
             var vectors = await PostEmbeddingAsync(client, endpointUri, endpoint.ModelName, inputs, ct).ConfigureAwait(false);
             stopwatch.Stop();
             latencies.Add(stopwatch.Elapsed.TotalMilliseconds);
+            await captureResources(ct).ConfigureAwait(false);
 
             if (vectors.Count != inputs.Count || vectors.Count == 0)
             {
@@ -322,6 +361,7 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
 
     private async Task<InferenceBenchmarkMetrics> RunRerankerAsync(LlamaServerEndpoint endpoint,
         InferenceBenchmarkSpec spec,
+        Func<CancellationToken, Task> captureResources,
         CancellationToken ct)
     {
         var documents = spec.RerankerDocuments;
@@ -341,6 +381,7 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
         for (var warmup = 0; warmup < Math.Max(0, spec.WarmupRuns); warmup++)
         {
             _ = await PostRerankAsync(client, endpointUri, spec.RerankerQuery, documents, ct).ConfigureAwait(false);
+            await captureResources(ct).ConfigureAwait(false);
         }
 
         var baselineMetrics = await ScrapeMetricsAsync(metricsUri, ct).ConfigureAwait(false);
@@ -356,6 +397,7 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
             var scores = await PostRerankAsync(client, endpointUri, spec.RerankerQuery, documents, ct).ConfigureAwait(false);
             stopwatch.Stop();
             latencies.Add(stopwatch.Elapsed.TotalMilliseconds);
+            await captureResources(ct).ConfigureAwait(false);
 
             if (scores.Count != documents.Count)
             {
@@ -410,7 +452,9 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
             DeterministicOutput: deterministic);
     }
 
-    private async Task<VramObservation> CaptureVramAsync(InferenceBenchmarkSpec spec, CancellationToken ct)
+    private async Task<ResourceObservation> CaptureResourcesAsync(InferenceBenchmarkSpec spec,
+        int? processId,
+        CancellationToken ct)
     {
         var hardware = await _hardwareProfiler.GetProfileAsync(forceRefresh: true, ct).ConfigureAwait(false);
         var processBudget = await _processVramBudgetProbe.TryGetProcessBudgetBytesAsync(spec.Backend, ct).ConfigureAwait(false);
@@ -418,18 +462,20 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
             ? null
             : hardware.AvailableVramBytes;
 
-        return VramObservation.Create(globalFree,
-            processBudget,
-            spec.VramDivergenceAbsoluteThresholdBytes,
-            spec.VramDivergenceRatioThreshold);
+        return new ResourceObservation(VramObservation.Create(globalFree,
+                processBudget,
+                spec.VramDivergenceAbsoluteThresholdBytes,
+                spec.VramDivergenceRatioThreshold),
+            TryGetWorkingSetBytes(processId));
     }
 
-    private static InferenceBenchmarkMetrics ApplyVramEvidence(InferenceBenchmarkMetrics metrics,
+    private static InferenceBenchmarkMetrics ApplyResourceEvidence(InferenceBenchmarkMetrics metrics,
         ModelRole role,
-        VramObservation load,
-        VramObservation after)
+        ResourceEvidenceCollector resources)
     {
-        var externalPressure = load.ExternalPressureDetected || after.ExternalPressureDetected;
+        var load = resources.First.Vram;
+        var after = resources.Last.Vram;
+        var externalPressure = resources.Samples.Any(static sample => sample.Vram.ExternalPressureDetected);
         var success = metrics.Success && !externalPressure;
         var failureReason = externalPressure
             ? "Benchmark invalid: global free VRAM is materially below llama.cpp's process budget; external GPU pressure is present."
@@ -453,7 +499,14 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
                 {
                     load,
                     after,
+                    minimumGlobalFreeBytes = resources.MinimumGlobalFreeBytes,
+                    minimumProcessBudgetBytes = resources.MinimumProcessBudgetBytes,
                     externalPressure
+                },
+                process = new
+                {
+                    peakWorkingSetBytes = resources.PeakWorkingSetBytes,
+                    samples = resources.Samples.Count
                 }
             },
             SerializerOptions);
@@ -469,9 +522,35 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
             GlobalFreeVramAfterBytes = after.GlobalFreeBytes,
             ProcessBudgetVramLoadBytes = load.ProcessBudgetBytes,
             ProcessBudgetVramAfterBytes = after.ProcessBudgetBytes,
+            MinimumGlobalFreeVramBytes = resources.MinimumGlobalFreeBytes,
+            MinimumProcessBudgetVramBytes = resources.MinimumProcessBudgetBytes,
+            PeakProcessRamBytes = resources.PeakWorkingSetBytes,
             ExternalPressureDetected = externalPressure,
             DiagnosticsJson = diagnostics
         };
+    }
+
+    private static long? TryGetWorkingSetBytes(int? processId)
+    {
+        if (processId is not { } pid || pid <= 0)
+        {
+            return null;
+        }
+
+        try
+        {
+            using var process = Process.GetProcessById(pid);
+            process.Refresh();
+            return process.HasExited ? null : process.WorkingSet64;
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
     }
 
     private static async Task<IReadOnlyList<IReadOnlyList<double>>> PostEmbeddingAsync(HttpClient client,
@@ -579,6 +658,12 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
         var ordered = values.OrderBy(static value => value).ToArray();
         var index = Math.Clamp((int)Math.Ceiling(percentile * ordered.Length) - 1, 0, ordered.Length - 1);
         return ordered[index];
+    }
+
+    private static double? MedianNullable(IEnumerable<double?> values)
+    {
+        var present = values.Where(static value => value.HasValue).Select(static value => value!.Value).ToArray();
+        return Percentile(present, 0.50d);
     }
 
     private static ChatOptions BuildOptions(string modelId, InferenceBenchmarkSpec spec, IList<AITool>? tools)
@@ -721,4 +806,49 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
             return new VramObservation(globalFreeBytes, processBudgetBytes, excess, ratio, material);
         }
     }
+
+    private sealed record ResourceObservation(VramObservation Vram, long? WorkingSetBytes);
+
+    private sealed class ResourceEvidenceCollector
+    {
+        private readonly List<ResourceObservation> _samples = [];
+
+        public IReadOnlyList<ResourceObservation> Samples => _samples;
+
+        public ResourceObservation First => _samples[0];
+
+        public ResourceObservation Last => _samples[^1];
+
+        public long? PeakWorkingSetBytes => MaxNullable(_samples.Select(static sample => sample.WorkingSetBytes));
+
+        public long? MinimumGlobalFreeBytes => MinNullable(_samples.Select(static sample => sample.Vram.GlobalFreeBytes));
+
+        public long? MinimumProcessBudgetBytes => MinNullable(_samples.Select(static sample => sample.Vram.ProcessBudgetBytes));
+
+        public void Add(ResourceObservation sample)
+        {
+            _samples.Add(sample);
+        }
+
+        private static long? MaxNullable(IEnumerable<long?> values)
+        {
+            var present = values.Where(static value => value.HasValue).Select(static value => value!.Value).ToArray();
+            return present.Length == 0 ? null : present.Max();
+        }
+
+        private static long? MinNullable(IEnumerable<long?> values)
+        {
+            var present = values.Where(static value => value.HasValue).Select(static value => value!.Value).ToArray();
+            return present.Length == 0 ? null : present.Min();
+        }
+    }
+
+    private sealed record ChatPassMetrics(
+        double? TokensPerSecond,
+        double? PpTokensPerSecond,
+        double TtftMs,
+        double TotalLatencyMs,
+        double? CacheHitRate,
+        double? ToolLoopMs,
+        string? RawMetrics);
 }

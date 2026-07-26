@@ -61,7 +61,17 @@ public sealed record ModelFitBenchmarkRecord(
     string? OverrideTensor = null,
     string? KvTypeV = null,
     bool? FlashAttn = null,
-    Guid? ProfileId = null);
+    Guid? ProfileId = null,
+    int? LaunchPolicyFingerprintVersion = null,
+    string? LaunchPolicyFingerprint = null,
+    long? GlobalFreeVramLoadBytes = null,
+    long? GlobalFreeVramAfterBytes = null,
+    long? ProcessBudgetVramLoadBytes = null,
+    long? ProcessBudgetVramAfterBytes = null,
+    long? MinimumGlobalFreeVramBytes = null,
+    long? MinimumProcessBudgetVramBytes = null,
+    long? PeakProcessRamBytes = null,
+    bool ExternalPressureDetected = false);
 
 /// <summary>
 ///     Mutable fields of a benchmark row supplied on replace. <c>RawJson</c> and <c>DiagnosticsJson</c> are passed as
@@ -93,4 +103,14 @@ public sealed record ModelFitBenchmarkInput(
     string? OverrideTensor = null,
     string? KvTypeV = null,
     bool? FlashAttn = null,
-    Guid? ProfileId = null);
+    Guid? ProfileId = null,
+    int? LaunchPolicyFingerprintVersion = null,
+    string? LaunchPolicyFingerprint = null,
+    long? GlobalFreeVramLoadBytes = null,
+    long? GlobalFreeVramAfterBytes = null,
+    long? ProcessBudgetVramLoadBytes = null,
+    long? ProcessBudgetVramAfterBytes = null,
+    long? MinimumGlobalFreeVramBytes = null,
+    long? MinimumProcessBudgetVramBytes = null,
+    long? PeakProcessRamBytes = null,
+    bool ExternalPressureDetected = false);
