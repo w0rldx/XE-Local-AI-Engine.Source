@@ -1,0 +1,124 @@
+{
+  "schemaVersion": 1,
+  "capturedAtUtc": "2026-07-26T22:40:38.021764+00:00",
+  "result": "passed",
+  "deliveryCommit": "16917a2e6cce0abb8261927c32206aaab1012dc1",
+  "baselinePinsCommit": "e67d669709169fefc4cffab444af66654526a8d8",
+  "rollbackSourceCommit": "30ba0768bff550a3423dbff17867e5e788333a45",
+  "proofCommit": "bc546d73a801c0a03a42df624308ffeb515d0786",
+  "scope": {
+    "changedFiles": [
+      "Directory.Packages.props"
+    ],
+    "restoredCentralPins": 14,
+    "baselineDirectoryPackagesSha256": "8c2a73d1262fef64b9bb669e45065fe8e4c744f91348d6731bdb61b725e89729",
+    "proofDirectoryPackagesSha256": "8c2a73d1262fef64b9bb669e45065fe8e4c744f91348d6731bdb61b725e89729",
+    "byteIdenticalToBaseline": true
+  },
+  "pins": {
+    "Microsoft.Extensions.AI": {
+      "delivery": "10.8.1",
+      "rollback": "10.7.0"
+    },
+    "Microsoft.Extensions.AI.Abstractions": {
+      "delivery": "10.8.1",
+      "rollback": "10.7.0"
+    },
+    "Microsoft.Extensions.AI.OpenAI": {
+      "delivery": "10.8.1",
+      "rollback": "10.7.0"
+    },
+    "OpenAI": {
+      "delivery": "2.12.0",
+      "rollback": "2.11.0"
+    },
+    "Microsoft.Extensions.DependencyInjection.Abstractions": {
+      "delivery": "10.0.10",
+      "rollback": "10.0.9"
+    },
+    "Microsoft.Extensions.Logging.Abstractions": {
+      "delivery": "10.0.10",
+      "rollback": "10.0.9"
+    },
+    "Microsoft.Agents.AI": {
+      "delivery": "1.15.0",
+      "rollback": "1.13.0"
+    },
+    "Microsoft.Agents.AI.Abstractions": {
+      "delivery": "1.15.0",
+      "rollback": "1.13.0"
+    },
+    "Microsoft.Agents.AI.Workflows": {
+      "delivery": "1.15.0",
+      "rollback": "1.13.0"
+    },
+    "Microsoft.Agents.AI.Hosting": {
+      "delivery": "1.15.0-preview.260722.1",
+      "rollback": "1.13.0-preview.260703.1"
+    },
+    "Microsoft.Agents.AI.Hosting.OpenAI": {
+      "delivery": "1.15.0-alpha.260722.1",
+      "rollback": "1.13.0-alpha.260703.1"
+    },
+    "Microsoft.Agents.AI.DevUI": {
+      "delivery": "1.15.0-preview.260722.1",
+      "rollback": "1.13.0-preview.260703.1"
+    },
+    "ModelContextProtocol": {
+      "delivery": "1.4.1",
+      "rollback": "1.4.0"
+    },
+    "System.Numerics.Tensors": {
+      "delivery": "10.0.10",
+      "rollback": "10.0.9"
+    }
+  },
+  "validation": {
+    "releaseRestore": "passed",
+    "releaseBuild": {
+      "result": "passed",
+      "warnings": 0,
+      "errors": 0
+    },
+    "debugRestore": "passed",
+    "debugBuild": {
+      "result": "passed",
+      "warnings": 0,
+      "errors": 0
+    },
+    "releaseAgentTests": {
+      "result": "passed",
+      "total": 202,
+      "failed": 0,
+      "succeeded": 202,
+      "skipped": 0,
+      "assemblyGuard": "unchanged"
+    }
+  },
+  "artifacts": [
+    {
+      "path": "release-restore.log",
+      "sha256": "cdef3465d46bb3e0b5df53f4317ddcf3aed6687bc8b015eb30f9ef3a32bf3e1b"
+    },
+    {
+      "path": "release-build.log",
+      "sha256": "266038dd1f7176e675d41606b9ca3504a76e998d9784cea0c8c5b6bed17b9190"
+    },
+    {
+      "path": "debug-restore.log",
+      "sha256": "b04f342ce7143cd1588f3ee146a7a5cc6be9f42e7700ce54d874bb647e93c5a0"
+    },
+    {
+      "path": "debug-build.log",
+      "sha256": "11e7c10b954c8fcef2be8fede81216885d74feecc829abe7b843c187f56ac7dc"
+    },
+    {
+      "path": "release-agent-tests.log",
+      "sha256": "f5c488709488c5604e8dc93b1a007cbcad45ae5581a5421b64db0b7eda7a04b9"
+    },
+    {
+      "path": "restore-prior-pins.patch",
+      "sha256": "739aadf5694cfd7a968240e37e05996459b950358a74159976fcb5bdb0233b07"
+    }
+  ]
+}
