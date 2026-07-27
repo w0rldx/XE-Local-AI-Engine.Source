@@ -18,6 +18,7 @@ import platform
 import re
 import shlex
 import shutil
+import signal
 import statistics
 import subprocess
 import sys
@@ -63,7 +64,6 @@ FIT_HELPER_ARGS_WITH_VALUE = {
     "-fit", "--fit",
     "-fitt", "--fit-target",
     "-fitc", "--fit-ctx",
-    "--pooling",
 }
 FIT_HELPER_VALUELESS_ARGS = {"--mlock", "--mmap", "--no-mmap", "--no-host", "--no-op-offload"}
 FRAMEWORK_COMMAND_PARTITIONS = {"framework-contract", "application-harness", "provider-contract"}
@@ -337,7 +337,7 @@ def capture_ambient() -> dict[str, Any]:
                 memory[key + "KiB"] = int(value.strip().split()[0])
     gpu = capture_text([
         "nvidia-smi",
-        "--query-gpu=index,name,uuid,driver_version,memory.total,memory.free,memory.used,utilization.gpu",
+        "--query-gpu=index,name,driver_version,memory.total,memory.free,memory.used,utilization.gpu",
         "--format=csv,noheader,nounits",
     ])
     return {"captured_at_utc": utc_now(), "load_average_1m_5m_15m": load_average, "memory": memory, "nvidia_smi": gpu}
@@ -355,10 +355,10 @@ def global_gpu_used_mib(ambient: dict[str, Any] | None) -> int | None:
     total = 0
     for line in stdout.splitlines():
         parts = [part.strip() for part in line.split(",")]
-        if len(parts) != 8:
+        if len(parts) != 7:
             return None
         try:
-            total += int(parts[6])
+            total += int(parts[5])
         except ValueError:
             return None
     return total
@@ -376,10 +376,10 @@ def global_gpu_free_mib(ambient: dict[str, Any] | None) -> int | None:
     total = 0
     for line in stdout.splitlines():
         parts = [part.strip() for part in line.split(",")]
-        if len(parts) != 8:
+        if len(parts) != 7:
             return None
         try:
-            total += int(parts[5])
+            total += int(parts[4])
         except ValueError:
             return None
     return total
@@ -408,7 +408,7 @@ def capture_host(runtime_binary: Path) -> dict[str, Any]:
         "python": platform.python_version(),
         "runtime_version": capture_text([str(runtime_binary), "--version"]),
         "runtime_devices": capture_text([str(runtime_binary), "--list-devices"]),
-        "nvidia_smi_driver": capture_text(["nvidia-smi", "--query-gpu=index,name,uuid,driver_version", "--format=csv,noheader"]),
+        "nvidia_smi_driver": capture_text(["nvidia-smi", "--query-gpu=index,name,driver_version", "--format=csv,noheader"]),
         "repository_head": capture_text(["git", "rev-parse", "HEAD"]),
         "repository_status": capture_text(["git", "status", "--short"]),
     }
@@ -473,43 +473,60 @@ def run_once(argv: list[str], timeout_seconds: float, expected_timeout: bool, cw
         process = subprocess.Popen(argv, cwd=cwd, env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
     except OSError as exc:
         raise CaptureError(f"Could not start {argv[0]!r}: {exc}") from exc
-    deadline = start + timeout_seconds
-    peak_rss_bytes = 0
-    ambient_during: dict[str, Any] | None = None
-    while process.poll() is None and time.monotonic() < deadline:
-        status_path = Path(f"/proc/{process.pid}/status")
-        if status_path.exists():
-            for line in status_path.read_text(encoding="utf-8", errors="replace").splitlines():
-                if line.startswith("VmRSS:"):
-                    peak_rss_bytes = max(peak_rss_bytes, int(line.split()[1]) * 1024)
-                    break
-        if ambient_during is None and time.monotonic() - start >= min(0.5, timeout_seconds / 2):
-            ambient_during = capture_ambient()
-        time.sleep(min(0.1, max(0.01, deadline - time.monotonic())))
-    timed_out = process.poll() is None
-    if timed_out:
-        process.terminate()
-        try:
-            stdout, stderr = process.communicate(timeout=5)
-        except subprocess.TimeoutExpired:
-            process.kill()
+    try:
+        deadline = start + timeout_seconds
+        peak_rss_bytes = 0
+        ambient_during: dict[str, Any] | None = None
+        while process.poll() is None and time.monotonic() < deadline:
+            status_path = Path(f"/proc/{process.pid}/status")
+            if status_path.exists():
+                for line in status_path.read_text(encoding="utf-8", errors="replace").splitlines():
+                    if line.startswith("VmRSS:"):
+                        peak_rss_bytes = max(peak_rss_bytes, int(line.split()[1]) * 1024)
+                        break
+            if ambient_during is None and time.monotonic() - start >= min(0.5, timeout_seconds / 2):
+                ambient_during = capture_ambient()
+            time.sleep(min(0.1, max(0.01, deadline - time.monotonic())))
+        timed_out = process.poll() is None
+        if timed_out:
+            signal_process_group(process, signal.SIGTERM)
+            try:
+                stdout, stderr = process.communicate(timeout=5)
+            except subprocess.TimeoutExpired:
+                signal_process_group(process, signal.SIGKILL)
+                stdout, stderr = process.communicate()
+        else:
             stdout, stderr = process.communicate()
-    else:
-        stdout, stderr = process.communicate()
-    elapsed_ms = (time.monotonic() - start) * 1000
-    success = (timed_out and expected_timeout) or (not timed_out and process.returncode == 0)
-    return {
-        "exit_code": process.returncode,
-        "timed_out": timed_out,
-        "expected_timeout": expected_timeout,
-        "success": success,
-        "elapsed_ms": round(elapsed_ms, 3),
-        "peak_rss_bytes": peak_rss_bytes or None,
-        "ambient_during": ambient_during,
-        "stdout": stdout,
-        "stderr": stderr,
-        "metrics": {"wall_elapsed_ms": round(elapsed_ms, 3), **numeric_metrics(stdout)},
-    }
+        elapsed_ms = (time.monotonic() - start) * 1000
+        success = (timed_out and expected_timeout) or (not timed_out and process.returncode == 0)
+        return {
+            "exit_code": process.returncode,
+            "timed_out": timed_out,
+            "expected_timeout": expected_timeout,
+            "success": success,
+            "elapsed_ms": round(elapsed_ms, 3),
+            "peak_rss_bytes": peak_rss_bytes or None,
+            "ambient_during": ambient_during,
+            "stdout": stdout,
+            "stderr": stderr,
+            "metrics": {"wall_elapsed_ms": round(elapsed_ms, 3), **numeric_metrics(stdout)},
+        }
+    finally:
+        signal_process_group(process, signal.SIGKILL)
+
+
+def signal_process_group(process: subprocess.Popen[str], requested_signal: signal.Signals) -> None:
+    try:
+        if os.name == "posix":
+            os.killpg(process.pid, requested_signal)
+        elif process.poll() is None:
+            if requested_signal == signal.SIGTERM:
+                process.terminate()
+            else:
+                process.kill()
+    except (OSError, ProcessLookupError):
+        # The group may already be gone; cleanup is deliberately idempotent.
+        pass
 
 
 def run_command(command: dict[str, Any], context: str) -> dict[str, Any]:
@@ -1077,7 +1094,7 @@ def sanitize_artifact(input_path: Path, output_path: Path, replacements: list[st
 
     sanitized = scrub(artifact)
     serialized = json.dumps(sanitized, sort_keys=True)
-    leaked = re.search(r"(?:/home/[^/\\s]+|[A-Za-z]:\\\\Users\\\\[^\\\\\\s]+)", serialized)
+    leaked = re.search(r"(?:/home/[^/\s]+|[A-Za-z]:\\\\Users\\\\[^\\\\\\s]+)", serialized)
     if leaked:
         raise CaptureError(f"Sanitized artifact still contains a user-home path near {leaked.group(0)!r}; add --replace")
     sanitized["sanitized"] = True

@@ -8,7 +8,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1;
 ///     A node-local inference profile projected for transport (shared by the list, explore, freeze and invalidate
 ///     responses). It carries only the launch-arg facts and lifecycle metadata; the local-only machine key is
 ///     deliberately OMITTED — it must never leave the box. <see cref="Role" /> is the lowercase wire role
-///     (<c>chat|embedding</c>) and <see cref="Status" /> is the lifecycle name (<c>Explored|Frozen|Stale</c>).
+///     (<c>chat|embedding|reranker</c>) and <see cref="Status" /> is the lifecycle name (<c>Explored|Frozen|Stale</c>).
 /// </summary>
 public sealed class InferenceProfileViewDto
 {
@@ -16,7 +16,7 @@ public sealed class InferenceProfileViewDto
 
     public required string ModelName { get; init; }
 
-    /// <summary>Lowercase role the profile targets — <c>chat|embedding</c>.</summary>
+    /// <summary>Lowercase role the profile targets — <c>chat|embedding|reranker</c>.</summary>
     public required string Role { get; init; }
 
     public required string Backend { get; init; }
@@ -48,7 +48,7 @@ public sealed class InferenceProfileViewDto
     /// <summary>Version of the launch-policy fingerprint schema, or null for a legacy profile.</summary>
     public int? LaunchPolicyFingerprintVersion { get; init; }
 
-    /// <summary>SHA-256 launch-policy fingerprint, or null for a legacy profile that is treated as stale.</summary>
+    /// <summary>Versioned strong/validation launch-policy fingerprint, or null for a legacy profile that is treated as stale.</summary>
     public string? LaunchPolicyFingerprint { get; init; }
 
     /// <summary>Global device-free VRAM captured at freeze; the only VRAM invalidation baseline.</summary>
@@ -96,6 +96,12 @@ public sealed class ExploreInferenceProfileRequest
 public sealed class BenchmarkInferenceProfileRequest
 {
     public required Guid ProfileId { get; init; }
+
+    /// <summary>
+    ///     Explicit operator override for material pressure already present before spawn. Defaults to false. Pressure
+    ///     introduced during the benchmark is never bypassed.
+    /// </summary>
+    public bool AllowPreSpawnVramPressure { get; init; }
 }
 
 /// <summary>
@@ -208,7 +214,7 @@ public sealed class InferenceBenchmarkMetricsDto
     public long? PeakProcessRamBytes { get; init; }
 
     /// <summary>Whether material process-budget/global-free divergence invalidated the benchmark as external pressure.</summary>
-    public bool ExternalPressureDetected { get; init; }
+    public required bool ExternalPressureDetected { get; init; }
 
     /// <summary>Number of measured passes.</summary>
     public required int Runs { get; init; }

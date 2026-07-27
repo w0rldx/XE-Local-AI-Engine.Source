@@ -23,6 +23,8 @@ public sealed class ProcessContextAllocationResolver(
 {
     private const int MaximumAutomaticDownTiers = 2;
 
+    private readonly ConcurrentDictionary<string, HardwareAllocationContext> _hardwareAllocationContexts =
+        new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, Lazy<Task<ProcessContextAllocation?>>> _cache = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, ProcessContextAllocation> _oomAdjustedAllocations = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, int> _oomDownTiers = new(StringComparer.Ordinal);
@@ -64,7 +66,24 @@ public sealed class ProcessContextAllocationResolver(
                 LazyThreadSafetyMode.ExecutionAndPublication),
             state);
 
-        var allocation = await lazy.Value.WaitAsync(ct).ConfigureAwait(false);
+        var resolution = lazy.Value;
+        ProcessContextAllocation? allocation;
+        try
+        {
+            allocation = await resolution.WaitAsync(ct).ConfigureAwait(false);
+        }
+        catch
+        {
+            // Caller cancellation only stops this waiter; the shared computation continues and remains cacheable.
+            // A faulted/cancelled shared computation, however, must not poison this key for the process lifetime.
+            if (resolution.IsFaulted || resolution.IsCanceled)
+            {
+                ((ICollection<KeyValuePair<string, Lazy<Task<ProcessContextAllocation?>>>>)_cache)
+                    .Remove(new KeyValuePair<string, Lazy<Task<ProcessContextAllocation?>>>(key, lazy));
+            }
+            throw;
+        }
+
         return allocation is not null && _oomAdjustedAllocations.TryGetValue(key, out var adjusted)
             ? adjusted
             : allocation;
@@ -79,8 +98,7 @@ public sealed class ProcessContextAllocationResolver(
             return false;
         }
 
-        var count = _oomDownTiers.AddOrUpdate(current.CacheKey, 1, static (_, prior) => prior + 1);
-        if (count > MaximumAutomaticDownTiers)
+        if (!_hardwareAllocationContexts.TryGetValue(current.CacheKey, out var context))
         {
             return false;
         }
@@ -99,10 +117,21 @@ public sealed class ProcessContextAllocationResolver(
             return false;
         }
 
-        downTiered = current with
+        var count = _oomDownTiers.AddOrUpdate(current.CacheKey, 1, static (_, prior) => prior + 1);
+        if (count > MaximumAutomaticDownTiers)
         {
-            ProcessContextTokens = next
-        };
+            return false;
+        }
+
+        downTiered = BuildAllocation(current.CacheKey,
+            context.ContentIdentity,
+            next,
+            context.TrainCeiling,
+            ProcessContextAllocationSource.HardwareTier,
+            context.Variant,
+            context.Profile,
+            context.Facts,
+            context.ProcessGpuBudget);
         _oomAdjustedAllocations[current.CacheKey] = downTiered;
         return true;
     }
@@ -143,9 +172,15 @@ public sealed class ProcessContextAllocationResolver(
         }
 
         var processGpuBudget = await ResolveProcessGpuBudgetAsync(variant, profile, ct).ConfigureAwait(false);
+        _hardwareAllocationContexts[key] = new HardwareAllocationContext(contentIdentity,
+            variant,
+            profile,
+            facts,
+            processGpuBudget,
+            trainCeiling);
         var candidates = role == ModelRole.Chat
             ? LlamaServerLaunchPolicyOptions.ChatContextTiers
-            : [2048];
+            : [_options.ContextTokensForRole(role)];
 
         foreach (var candidate in candidates)
         {
@@ -203,7 +238,9 @@ public sealed class ProcessContextAllocationResolver(
         }
         else if (estimate.EstimatedBytes <= gpuBudget)
         {
-            footprint = new ResourceFootprint(estimate.EstimatedBytes, facts.FileSizeBytes);
+            // llama.cpp memory-maps the GGUF; a fully GPU-resident placement does not commit a second file-sized RAM
+            // allocation. Reserving the on-disk size here made admission reject VRAM-fitting models on low-free-RAM hosts.
+            footprint = new ResourceFootprint(estimate.EstimatedBytes, RamBytes: 0);
             placement = ProcessPlacementMode.GpuResident;
         }
         else
@@ -277,14 +314,14 @@ public sealed class ProcessContextAllocationResolver(
         Math.Max(0, total - Math.Max(LlamaServerLaunchPolicyOptions.MinimumRamReserveBytes,
             (long)(total * LlamaServerLaunchPolicyOptions.RamReserveFraction)));
 
-    private static int? ResolveTrainCeiling(long? contextLength)
+    private int? ResolveTrainCeiling(long? contextLength)
     {
         if (contextLength is not > 0)
         {
             return null;
         }
 
-        var ceiling = Math.Max(1, contextLength.Value - 256);
+        var ceiling = Math.Max(1, contextLength.Value - _options.ContextSafetyMarginTokens);
         return (int)Math.Min(ceiling, int.MaxValue);
     }
 
@@ -316,7 +353,16 @@ public sealed class ProcessContextAllocationResolver(
             resolved.FlashAttn,
             LlamaServerLaunchPolicyOptions.ContextAllocationPolicyVersion,
             _options.DeterministicContextTokensOverride,
+            _options.ContextTokensForRole(role),
             _options.ContextSafetyMarginTokens);
         return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));
     }
+
+    private sealed record HardwareAllocationContext(
+        string ContentIdentity,
+        GpuVariant Variant,
+        HardwareProfile Profile,
+        GgufModelFootprintFacts Facts,
+        long? ProcessGpuBudget,
+        int? TrainCeiling);
 }

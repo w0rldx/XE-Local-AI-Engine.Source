@@ -528,7 +528,7 @@ export type XeLocalAiEngineClientEndpointsModelFitV1InferenceBenchmarkMetricsDto
 	minimumGlobalFreeVramBytes?: number | null;
 	minimumProcessBudgetVramBytes?: number | null;
 	peakProcessRamBytes?: number | null;
-	externalPressureDetected?: boolean;
+	externalPressureDetected: boolean;
 	runs: number;
 };
 
@@ -561,6 +561,7 @@ export type XeLocalAiEngineClientEndpointsModelFitV1InferenceProfileViewDto = {
 
 export type XeLocalAiEngineClientEndpointsModelFitV1BenchmarkInferenceProfileRequest = {
 	profileId: string;
+	allowPreSpawnVramPressure?: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsModelFitV1BrowseGgufRepositoriesResponse = {

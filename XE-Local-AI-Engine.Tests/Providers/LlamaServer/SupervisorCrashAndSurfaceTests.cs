@@ -121,6 +121,20 @@ public sealed class SupervisorCrashAndSurfaceTests
     }
 
     [Test]
+    public void ExternalEndpointResolve_RerankerDoesNotFallThroughToChat()
+    {
+        var external = new LlamaServerExternalEndpointOptions
+        {
+            ChatEndpointsByModel = new Dictionary<string, Uri>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["remote-model"] = new("http://127.0.0.1:9999/v1")
+            }
+        };
+
+        AssertEx.Null(external.Resolve("remote-model", ModelRole.Reranker));
+    }
+
+    [Test]
     public async Task CheckHealth_AggregatesPerProcessDiagnostics()
     {
         var launcher = new FakeProcessLauncher();

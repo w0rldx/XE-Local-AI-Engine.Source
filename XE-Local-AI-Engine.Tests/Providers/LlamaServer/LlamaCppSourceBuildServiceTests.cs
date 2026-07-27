@@ -309,6 +309,38 @@ public sealed class LlamaCppSourceBuildServiceTests
     }
 
     [Test]
+    public async Task Recover_ActiveRuntimeWithoutFitHelper_DiscardsTreeRecordAndSignal()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        using var temp = new TempDirectory();
+        using var store = new InstalledRuntimeStore(temp.Path);
+        var (_, server) = await SeedActiveRuntimeAsync(temp.Path, store);
+        var tree = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(server)!, "..", ".."));
+        File.Delete(Path.Combine(Path.GetDirectoryName(server)!, "llama-fit-params"));
+        var signal = new CudaManagedBuildSignal();
+        signal.SetActive(GpuVariant.Cpu);
+        using var service = new LlamaCppSourceBuildService(new AlwaysReadyProbe(),
+            new CapturingBinaryManager(store, signal),
+            store,
+            signal,
+            new LeaseOnlySupervisor(),
+            new LlamaCppSourceBuildActivity(),
+            new NullLlamaCppSourceBuildEventPublisher(),
+            NullLogger<LlamaCppSourceBuildService>.Instance,
+            temp.Path);
+
+        await service.RecoverAsync(CancellationToken.None);
+
+        AssertEx.False(Directory.Exists(tree));
+        AssertEx.Null(await store.ReadAsync(CancellationToken.None));
+        AssertEx.Null(signal.ActiveVariant);
+    }
+
+    [Test]
     public async Task Start_WhenResolvedCommitMismatches_StopsBeforeCmakeAndRecordsNothing()
     {
         if (!OperatingSystem.IsLinux())
@@ -706,6 +738,9 @@ public sealed class LlamaCppSourceBuildServiceTests
         var server = Path.Combine(bin, "llama-server");
         await File.WriteAllTextAsync(server, "#!/bin/sh\nexit 0\n");
         File.SetUnixFileMode(server, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        var helper = Path.Combine(bin, "llama-fit-params");
+        await File.WriteAllTextAsync(helper, "#!/bin/sh\nexit 0\n");
+        File.SetUnixFileMode(helper, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         var sha = Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(server)));
         var state = new InstalledRuntimeState(LlamaCppReleasePins.PinnedTag, "source", sha, GpuVariant.Cpu, DateTimeOffset.UtcNow, bin,
             LlamaCppSourceBuildRequestValidation.OfficialRepository, LlamaCppReleasePins.PinnedSourceCommitSha,

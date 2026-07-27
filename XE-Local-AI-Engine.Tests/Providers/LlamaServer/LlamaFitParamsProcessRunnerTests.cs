@@ -23,6 +23,30 @@ public sealed class LlamaFitParamsProcessRunnerTests
     }
 
     [Test]
+    public async Task RunAsync_WhenHelperFails_ReturnsBoundedSanitizedStandardErrorExcerpt()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var temp = new TestDirectory();
+        var helper = Path.Combine(temp.Path, "llama-fit-params");
+        await File.WriteAllTextAsync(helper,
+            "#!/bin/sh\nprintf '%s' 'fatal detail at /home/sam/private/model.gguf token=super-secret-value' >&2\nexit 17\n");
+        File.SetUnixFileMode(helper, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        var runner = new LlamaFitParamsProcessRunner();
+
+        var result = await runner.RunAsync(CreateSpec(temp.Path), CancellationToken.None);
+
+        AssertEx.Equal(LlamaFitParamsRunStatus.Failed, result.Status);
+        AssertEx.Contains(result.FailureReason!, "fatal detail");
+        AssertEx.False(result.FailureReason!.Contains("/home/sam", StringComparison.Ordinal));
+        AssertEx.False(result.FailureReason.Contains("super-secret-value", StringComparison.Ordinal));
+        AssertEx.True(result.FailureReason.Length <= 320);
+    }
+
+    [Test]
     public void BuildArguments_ProjectsOnlyFitRelevantCommonOptions()
     {
         var spec = CreateSpec("/runtime");
@@ -37,14 +61,16 @@ public sealed class LlamaFitParamsProcessRunnerTests
             "-c", "8192",
             "-fa", "on",
             "-ctk", "q8_0",
-            "-ctv", "q8_0",
-            "--pooling", "rank"
+            "-ctv", "q8_0"
         ]));
         AssertEx.False(arguments.Contains("--host"));
         AssertEx.False(arguments.Contains("--port"));
         AssertEx.False(arguments.Contains("--metrics"));
         AssertEx.False(arguments.Contains("--no-warmup"));
         AssertEx.False(arguments.Contains("--rerank"));
+        AssertEx.False(arguments.Contains("--pooling"),
+            "Pinned b9692 llama-fit-params accepts fit-common options only; pooling stays on the server launch vector.");
+        AssertEx.Contains(spec.Arguments, "--pooling");
     }
 
     private static LlamaServerLaunchSpec CreateSpec(string workingDirectory) =>

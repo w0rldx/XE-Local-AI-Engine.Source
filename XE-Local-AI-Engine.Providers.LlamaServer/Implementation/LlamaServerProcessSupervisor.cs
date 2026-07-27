@@ -1176,9 +1176,35 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             await gate.WaitAsync(ct).ConfigureAwait(false);
             try
             {
-                // Explicitly evict any warm process for this key — admission only auto-evicts an IDLE LRU victim, so a
-                // freshly-used warm process would otherwise survive and the profiling spawn would not be exclusive.
-                await EvictAsync(modelName, role, ct).ConfigureAwait(false);
+                // A sibling-role ensure may already have registered a detached spawn before this profiling operation
+                // acquired the runtime-mutation gate. No NEW ensure can register while this gate is held, so snapshot and
+                // await every same-model spawn that is already in flight before evicting. A failed spawn leaves no live
+                // process to evict and must not block profiling; caller cancellation still aborts the profiling request.
+                var siblingSpawns = _inflightSpawns
+                    .Where(pair => string.Equals(pair.Key.ModelName, modelName, StringComparison.Ordinal))
+                    .Select(static pair => pair.Value)
+                    .ToArray();
+                foreach (var siblingSpawn in siblingSpawns)
+                {
+                    try
+                    {
+                        await siblingSpawn.WaitAsync(ct).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                    {
+                        throw;
+                    }
+                    catch (Exception)
+                    {
+                        // The detached spawn faulted or was cancelled independently; its own cleanup removes the entry.
+                    }
+                }
+
+                // Explicitly evict every warm role for this model before capturing ambient VRAM. Admission only
+                // auto-evicts an IDLE LRU victim, so a freshly-used sibling role would otherwise survive, contaminate
+                // the pre-spawn baseline, and make the profiling spawn non-exclusive. The runtime-mutation gate is
+                // still held here, so no new ensure decision can repopulate any role until after this spawn registers.
+                await EvictAllRolesAsync(modelName, ct).ConfigureAwait(false);
 
                 var preSpawnVram = captureVramBeforeSpawn is null
                     ? null

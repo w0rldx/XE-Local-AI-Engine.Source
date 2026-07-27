@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Inference;
 
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -211,6 +212,28 @@ public sealed class InferenceProfileServiceTests
             Arg.Any<CancellationToken>());
         // A failed benchmark never freezes the profile.
         await fixture.ProfileStore.DidNotReceive().MarkFrozenAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<long?>(), Arg.Any<long?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Benchmark_ExplicitPreSpawnPressureOverride_DisablesOnlyPreSpawnRejection()
+    {
+        var fixture = new ServiceFixture();
+        var profile = ExploredRecord();
+        fixture.WithProfiles(profile);
+        fixture.WithLocalModel();
+        fixture.WithRunningSnapshot(Guid.NewGuid());
+        fixture.WithBenchmarkResult(SuccessMetrics());
+
+        var result = await fixture.CreateService()
+                                  .BenchmarkAsync(profile.Id,
+                                      allowPreSpawnVramPressure: true,
+                                      CancellationToken.None);
+
+        AssertEx.True(result.Success);
+        var spec = AssertEx.NotNull(fixture.CapturedBenchmarkSpec);
+        AssertEx.False(spec.RejectPreSpawnVramPressure);
+        AssertEx.Equal(512L * 1024 * 1024, spec.IncrementalVramDivergenceAbsoluteThresholdBytes);
+        AssertEx.Equal(0.05d, spec.IncrementalVramDivergenceRatioThreshold);
     }
 
     [Test]
@@ -501,6 +524,8 @@ public sealed class InferenceProfileServiceTests
 
         public LlamaServerProfilingContext? CapturedBenchmarkContext { get; private set; }
 
+        public InferenceBenchmarkSpec? CapturedBenchmarkSpec { get; private set; }
+
         public ServiceFixture()
         {
             MachineKeyProvider.GetMachineKeyAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(MachineKey));
@@ -519,6 +544,10 @@ public sealed class InferenceProfileServiceTests
                                            .Returns(Task.FromResult(new LaunchPolicyFingerprint(
                                                XE_Local_AI_Engine.Client.Services.Inference.LaunchPolicyFingerprintProvider.CurrentVersion,
                                                "fingerprint")));
+            LaunchPolicyFingerprintProvider.MatchesAsync(Arg.Any<InferenceProfileRecord>(),
+                                               Arg.Any<string>(),
+                                               Arg.Any<CancellationToken>())
+                                           .Returns(Task.FromResult(true));
         }
 
         public void WithLocalModel()
@@ -586,6 +615,7 @@ public sealed class InferenceProfileServiceTests
                    .Returns(callInfo =>
                    {
                        CapturedBenchmarkContext = callInfo.Arg<LlamaServerProfilingContext>();
+                       CapturedBenchmarkSpec = callInfo.Arg<InferenceBenchmarkSpec>();
                        return Task.FromResult(metrics);
                    });
 
@@ -634,6 +664,7 @@ public sealed class InferenceProfileServiceTests
                 HardwareProfiler,
                 ProcessVramBudgetProbe,
                 LaunchPolicyFingerprintProvider,
+                Options.Create(new InferenceBenchmarkVramAdmissionOptions()),
                 NullLogger<InferenceProfileService>.Instance);
         }
 

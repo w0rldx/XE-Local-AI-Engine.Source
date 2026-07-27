@@ -760,7 +760,7 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1InferenceBenchmarkMetricsD
 	minimumGlobalFreeVramBytes: z.int().nullish(),
 	minimumProcessBudgetVramBytes: z.int().nullish(),
 	peakProcessRamBytes: z.int().nullish(),
-	externalPressureDetected: z.boolean().optional(),
+	externalPressureDetected: z.boolean(),
 	runs: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
@@ -817,6 +817,7 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1BenchmarkInferenceProfileR
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1BenchmarkInferenceProfileRequest = z.object({
 	profileId: z.guid(),
+	allowPreSpawnVramPressure: z.boolean().optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryResponse = z.object({

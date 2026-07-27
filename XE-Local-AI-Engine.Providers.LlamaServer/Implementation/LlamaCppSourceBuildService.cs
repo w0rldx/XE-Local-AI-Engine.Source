@@ -699,8 +699,13 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
         }
 
         var server = Path.Combine(tree, "build", "bin", ManagedServerFileName);
+        var fitHelper = Path.Combine(tree, "build", "bin", ManagedFitParamsFileName);
         var manifestPath = Path.Combine(tree, ManifestFileName);
-        if (!File.Exists(server) || new FileInfo(server).LinkTarget is not null || !File.Exists(manifestPath))
+        if (!File.Exists(server)
+            || new FileInfo(server).LinkTarget is not null
+            || !File.Exists(fitHelper)
+            || new FileInfo(fitHelper).LinkTarget is not null
+            || !File.Exists(manifestPath))
         {
             return false;
         }
@@ -780,7 +785,11 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
     private static async Task<bool> ValidateLegacyRecordAsync(InstalledRuntimeState state, CancellationToken ct)
     {
         var server = Path.Combine(state.SourceBuildPath!, ManagedServerFileName);
-        if (!File.Exists(server) || new FileInfo(server).LinkTarget is not null)
+        var fitHelper = Path.Combine(state.SourceBuildPath!, ManagedFitParamsFileName);
+        if (!File.Exists(server)
+            || new FileInfo(server).LinkTarget is not null
+            || !File.Exists(fitHelper)
+            || new FileInfo(fitHelper).LinkTarget is not null)
         {
             return false;
         }

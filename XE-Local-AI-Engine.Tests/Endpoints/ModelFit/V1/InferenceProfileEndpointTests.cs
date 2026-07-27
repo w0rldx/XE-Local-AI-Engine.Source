@@ -118,7 +118,8 @@ public sealed class InferenceProfileEndpointTests
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
 
-        await service.DidNotReceiveWithAnyArgs().BenchmarkAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        await service.DidNotReceiveWithAnyArgs()
+                     .BenchmarkAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
     }
 
     // ──────────────────────────────────────────────────────────────────────

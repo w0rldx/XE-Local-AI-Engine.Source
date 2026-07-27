@@ -212,6 +212,46 @@ public sealed class CapacityServiceTests
     }
 
     [Test]
+    public async Task Capacity_GpuResidentFootprint_WithNoRamReservation_DoesNotRequireRamTelemetry()
+    {
+        // A fully GPU-resident llama.cpp process memory-maps the GGUF rather than committing a second copy of its
+        // weights in RAM. A zero-RAM footprint must therefore be decided solely against free VRAM even when the platform
+        // cannot provide a useful available-RAM measurement.
+        var harness = new Harness
+        {
+            Profile = GpuProfileWithFreeVram(64 * Gb, availableVramBytes: 20 * Gb) with
+            {
+                AvailableRamBytes = 0
+            },
+            Footprint = GpuFootprint(8 * Gb, ramBytes: 0)
+        };
+        var service = harness.Build();
+
+        var decision = await service.DecideAsync(Model, ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.Equal(CapacityVerdict.Allow, decision.Verdict);
+        AssertEx.Equal(new ResourceFootprint(8 * Gb, 0), harness.Ledger.Reserved);
+    }
+
+    [Test]
+    public async Task Capacity_NvidiaGpu_WhenFreeVramUnknown_Rejects()
+    {
+        // NVIDIA is the one backend where the profiler has an authoritative global-free reader. If that measurement is
+        // absent, falling back to total VRAM would hide resident processes and over-admit, so admission fails closed.
+        var harness = new Harness
+        {
+            Profile = GpuProfileWithFreeVram(64 * Gb, availableVramBytes: null),
+            Footprint = GpuFootprint(8 * Gb)
+        };
+        var service = harness.Build();
+
+        var decision = await service.DecideAsync(Model, ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.Equal(CapacityVerdict.RejectInsufficient, decision.Verdict);
+        AssertEx.Equal(ResourceFootprint.Zero, harness.Ledger.Reserved);
+    }
+
+    [Test]
     public async Task Capacity_NonNvidiaGpu_WhenFreeVramUnknown_FallsBackToTotalVram()
     {
         // Free-VRAM probe unavailable (AvailableVramBytes null) → degraded fallback uses total VRAM minus the ledger.

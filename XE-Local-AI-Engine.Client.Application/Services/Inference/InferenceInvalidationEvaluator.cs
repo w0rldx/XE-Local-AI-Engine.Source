@@ -58,7 +58,7 @@ public sealed class InferenceInvalidationEvaluator : IInferenceInvalidationEvalu
         }
 
         // (c) Hardware delta (vendor / total-VRAM) against the freeze baseline.
-        var hardware = await _hardwareProfiler.GetProfileAsync(forceRefresh: true, ct).ConfigureAwait(false);
+        var hardware = await _hardwareProfiler.GetProfileAsync(forceRefresh: false, ct).ConfigureAwait(false);
         if (HasHardwareDrifted(profile, hardware))
         {
             return true;
@@ -83,9 +83,7 @@ public sealed class InferenceInvalidationEvaluator : IInferenceInvalidationEvalu
 
         try
         {
-            var current = await _launchPolicyFingerprintProvider.CaptureAsync(profile, path, ct).ConfigureAwait(false);
-            return current.Version != profile.LaunchPolicyFingerprintVersion
-                   || !string.Equals(current.Value, profile.LaunchPolicyFingerprint, StringComparison.Ordinal);
+            return !await _launchPolicyFingerprintProvider.MatchesAsync(profile, path, ct).ConfigureAwait(false);
         }
         catch (FileNotFoundException)
         {
