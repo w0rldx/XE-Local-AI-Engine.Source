@@ -6,10 +6,10 @@ plan. It does not broaden the claims made by the machine-readable artifacts in
 
 ## Captured configuration
 
-- Baseline source: `e67d6697` with MAF 1.13.0, MEAI 10.7.0, OpenAI 2.11.0,
-  and MCP 1.4.0.
-- Candidate source: `932cad7d` with MAF 1.15.0, MEAI 10.8.1, OpenAI 2.12.0,
-  and MCP 1.4.1.
+- Baseline source: `e67d669709169fefc4cffab444af66654526a8d8` with
+  MAF 1.13.0, MEAI 10.7.0, OpenAI 2.11.0, and MCP 1.4.0.
+- Candidate source: `932cad7dad8f1c6ee0e715c9eb0de92f5dab9e61` with
+  MAF 1.15.0, MEAI 10.8.1, OpenAI 2.12.0, and MCP 1.4.1.
 - Runtime: managed source build of llama.cpp `b9692`/`f3e1828`, with the
   `llama-server`, `llama-bench`, `llama-fit-params`, and runtime-local dependency
   hashes retained in each artifact.
@@ -17,31 +17,41 @@ plan. It does not broaden the claims made by the machine-readable artifacts in
   `100b6a808653f1a6c0867f5628c6d589b91537a867a7f79535d8192a0371fea5`.
 - Machine: the same WSL2 host and RTX 5090 were used for the comparable baseline
   and candidate captures.
+- Provenance: both historical source trees were restored and built cleanly before
+  recapture. The CUDA artifacts bind each of the four framework, application, and
+  provider commands to its verified Git HEAD, clean worktree, exact
+  `Directory.Packages.props` hash and declared package versions, plus non-empty
+  hashes for every command's relevant product, test, MAF, MEAI, OpenAI, and MCP
+  assemblies. The CPU artifacts contain native-performance commands only, so their
+  verified framework identity correctly records `required: false`. The current
+  fail-closed comparator accepts both CPU and CUDA pairs.
 
 ## Results and gate decision
 
 The CUDA native-performance deltas were:
 
-- chat generation: -2.383%;
-- chat prompt processing: +3.187%;
-- embedding processing: +0.028%.
+- chat generation: +4.290%;
+- chat prompt processing: -19.046%;
+- embedding processing: -22.464%.
 
 The CPU native-performance deltas were:
 
-- chat generation: +1.164%;
-- chat prompt processing: +9.866%;
-- embedding processing: -6.311%.
+- chat generation: +1.039%;
+- chat prompt processing: +3.096%;
+- embedding processing: -10.082%.
 
 These are fixed-system prerequisite-versus-candidate measurements, not
 framework-only attribution. The exact framework and application contract suites
 remained green; their single-run wall-time changes are retained as diagnostic
-evidence, not throughput claims. No result reaches the plan's at-least-20%
-throughput gate, so this prerequisite/framework delta alone authorizes no tuning
-claim. The first Lane 4 capture was invalidated during review and replaced by a
-schema-2 recapture with canonical baseline comparison, actual role preflights,
-explicit context readback, and fail-closed process-memory evidence. The corrected
-grid produced zero qualifying cells, so no production tuning ships. See
-`2026-07-26-lane4-no-change.md`.
+evidence, not throughput claims. The recaptured native values also demonstrate why
+the approved gate must remain fail-closed: the identical llama.cpp binary showed
+material negative variance under this WSL2 host's ambient GPU conditions. No
+positive result reaches the plan's at-least-20% throughput gate, so this
+prerequisite/framework delta authorizes no tuning claim. The first Lane 4 capture
+was invalidated during review and replaced by a schema-2 recapture with canonical
+baseline comparison, actual role preflights, explicit context readback, and
+fail-closed process-memory evidence. The corrected grid produced zero qualifying
+cells, so no production tuning ships. See `2026-07-26-lane4-no-change.md`.
 
 ## Fit/replay and VRAM semantics
 
