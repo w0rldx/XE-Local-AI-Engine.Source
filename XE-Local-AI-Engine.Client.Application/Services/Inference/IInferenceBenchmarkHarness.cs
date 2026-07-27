@@ -21,6 +21,25 @@ public interface IInferenceBenchmarkHarness
 public sealed record InferenceBenchmarkToolDefinition(string Name, string Description, string DeterministicResult);
 
 /// <summary>
+///     Operator-configurable VRAM-admission thresholds for inference benchmarks. Bound from
+///     <c>InferenceBenchmark:VramAdmission</c>; request-level pressure bypass remains explicit and defaults off.
+/// </summary>
+public sealed class InferenceBenchmarkVramAdmissionOptions
+{
+    public const string SectionName = "InferenceBenchmark:VramAdmission";
+
+    public long PreSpawnAmbientBaselineBytes { get; set; } = 1024L * 1024 * 1024;
+
+    public long PreSpawnPressureAbsoluteThresholdBytes { get; set; } = 512L * 1024 * 1024;
+
+    public double PreSpawnPressureRatioThreshold { get; set; } = 0.05d;
+
+    public long IncrementalPressureAbsoluteThresholdBytes { get; set; } = 512L * 1024 * 1024;
+
+    public double IncrementalPressureRatioThreshold { get; set; } = 0.05d;
+}
+
+/// <summary>
 ///     The fixed golden transcript + sampling for a benchmark run. Built per-profile by
 ///     <see cref="Golden" /> so the long-context stage is sized near the profile's context window.
 /// </summary>
@@ -81,20 +100,45 @@ public sealed record InferenceBenchmarkSpec(
     public double DeterminismTolerance { get; init; } = 1e-5;
 
     /// <summary>
-    ///     Minimum absolute process-budget/global-free divergence that can invalidate a benchmark. The relative threshold
-    ///     below must also be exceeded, avoiding false pressure evidence from small driver-reporting jitter.
+    ///     Expected idle process-budget/global-free offset on WDDM. The dev-box clean baseline is approximately 950 MiB;
+    ///     rounding the allowance to 1 GiB keeps that platform offset separate from external-pressure growth.
     /// </summary>
-    public long VramDivergenceAbsoluteThresholdBytes { get; init; } = 512L * 1024 * 1024;
+    public long PreSpawnVramAmbientBaselineBytes { get; init; } = 1024L * 1024 * 1024;
 
-    /// <summary>Minimum process-budget/global-free divergence ratio that can invalidate a benchmark.</summary>
-    public double VramDivergenceRatioThreshold { get; init; } = 0.05d;
+    /// <summary>
+    ///     Minimum absolute divergence above <see cref="PreSpawnVramAmbientBaselineBytes" /> that can reject a benchmark.
+    ///     The relative threshold below must also be exceeded.
+    /// </summary>
+    public long PreSpawnVramPressureAbsoluteThresholdBytes { get; init; } = 512L * 1024 * 1024;
+
+    /// <summary>Minimum pre-spawn divergence-above-baseline ratio that can reject a benchmark.</summary>
+    public double PreSpawnVramPressureRatioThreshold { get; init; } = 0.05d;
+
+    /// <summary>
+    ///     Whether material pre-spawn pressure rejects before workload. Tests and diagnostic callers can disable this
+    ///     explicitly; production profiling keeps the fail-closed default.
+    /// </summary>
+    public bool RejectPreSpawnVramPressure { get; init; } = true;
+
+    /// <summary>
+    ///     Minimum absolute growth beyond the post-load divergence baseline that can invalidate a benchmark. The relative
+    ///     threshold below must also be exceeded, avoiding false pressure evidence from small driver-reporting jitter.
+    /// </summary>
+    public long IncrementalVramDivergenceAbsoluteThresholdBytes { get; init; } = 512L * 1024 * 1024;
+
+    /// <summary>Minimum post-load divergence-growth ratio that can invalidate a benchmark.</summary>
+    public double IncrementalVramDivergenceRatioThreshold { get; init; } = 0.05d;
 
     /// <summary>Builds the canonical golden transcript for <paramref name="backend" />, with the long-context stage sized to ~75% of <paramref name="ctxSize" />.</summary>
-    public static InferenceBenchmarkSpec Golden(string backend, int ctxSize)
+    public static InferenceBenchmarkSpec Golden(
+        string backend,
+        int ctxSize,
+        InferenceBenchmarkVramAdmissionOptions? vramAdmission = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(backend);
 
         var safeCtx = ctxSize > 0 ? ctxSize : 4096;
+        var admission = vramAdmission ?? new InferenceBenchmarkVramAdmissionOptions();
 
         return new InferenceBenchmarkSpec(Backend: backend,
             CtxSize: safeCtx,
@@ -107,7 +151,16 @@ public sealed record InferenceBenchmarkSpec(
                 "{\"status\":\"ok\",\"phase\":\"benchmark\"}"),
             LongContextUserTurn: BuildLongContextTurn(safeCtx),
             Seed: 0,
-            Temperature: 0f);
+            Temperature: 0f)
+        {
+            PreSpawnVramAmbientBaselineBytes = Math.Max(0, admission.PreSpawnAmbientBaselineBytes),
+            PreSpawnVramPressureAbsoluteThresholdBytes =
+                Math.Max(0, admission.PreSpawnPressureAbsoluteThresholdBytes),
+            PreSpawnVramPressureRatioThreshold = Math.Max(0d, admission.PreSpawnPressureRatioThreshold),
+            IncrementalVramDivergenceAbsoluteThresholdBytes =
+                Math.Max(0, admission.IncrementalPressureAbsoluteThresholdBytes),
+            IncrementalVramDivergenceRatioThreshold = Math.Max(0d, admission.IncrementalPressureRatioThreshold)
+        };
     }
 
     // A repeated, deterministic filler sized to roughly 75% of the context window. ~4 characters per token is the usual

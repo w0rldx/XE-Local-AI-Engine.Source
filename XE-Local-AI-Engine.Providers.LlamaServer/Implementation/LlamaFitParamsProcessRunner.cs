@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
 using System.Diagnostics;
+using System.Text.RegularExpressions;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
@@ -9,6 +10,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// </summary>
 internal sealed class LlamaFitParamsProcessRunner : ILlamaFitParamsRunner
 {
+    private const int MaxStandardErrorExcerptLength = 240;
     private static readonly TimeSpan FitTimeout = TimeSpan.FromMinutes(2);
 
     public async Task<LlamaFitParamsRunResult> RunAsync(LlamaServerLaunchSpec serverSpec, CancellationToken ct)
@@ -60,17 +62,21 @@ internal sealed class LlamaFitParamsProcessRunner : ILlamaFitParamsRunner
             var stderrTask = process.StandardError.ReadToEndAsync(timeoutCts.Token);
             await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
             var stdout = await stdoutTask.ConfigureAwait(false);
-            _ = await stderrTask.ConfigureAwait(false);
+            var stderr = await stderrTask.ConfigureAwait(false);
 
             if (process.ExitCode != 0)
             {
-                return LlamaFitParamsRunResult.Failure($"The helper exited with code {process.ExitCode}.");
+                return FailureWithStandardError($"The helper exited with code {process.ExitCode}.",
+                    stderr,
+                    serverSpec.WorkingDirectory);
             }
 
             var output = stdout.Split(['\r', '\n'],
                 StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             return output.Length == 0
-                ? LlamaFitParamsRunResult.Failure("The helper emitted no machine-readable stdout.")
+                ? FailureWithStandardError("The helper emitted no machine-readable stdout.",
+                    stderr,
+                    serverSpec.WorkingDirectory)
                 : LlamaFitParamsRunResult.Success(output);
         }
         catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !ct.IsCancellationRequested)
@@ -85,7 +91,7 @@ internal sealed class LlamaFitParamsProcessRunner : ILlamaFitParamsRunner
 
     /// <summary>
     ///     Projects the server launch vector onto the common llama.cpp options that affect fit estimation. Server-only
-    ///     transport, metrics, warm-up, and template flags are deliberately omitted.
+    ///     transport, metrics, warm-up, template, and role flags are deliberately omitted.
     /// </summary>
     internal static IReadOnlyList<string> BuildArguments(IReadOnlyList<string> serverArguments)
     {
@@ -134,11 +140,54 @@ internal sealed class LlamaFitParamsProcessRunner : ILlamaFitParamsRunner
             or "-mg" or "--main-gpu"
             or "-fit" or "--fit"
             or "-fitt" or "--fit-target"
-            or "-fitc" or "--fit-ctx"
-            or "--pooling";
+            or "-fitc" or "--fit-ctx";
 
     private static bool IsValueLessFitArgument(string argument) =>
         argument is "--mlock" or "--mmap" or "--no-mmap" or "--no-host" or "--no-op-offload";
+
+    private static LlamaFitParamsRunResult FailureWithStandardError(string reason,
+        string standardError,
+        string workingDirectory)
+    {
+        var excerpt = SanitizeStandardError(standardError, workingDirectory);
+        return LlamaFitParamsRunResult.Failure(excerpt.Length == 0 ? reason : $"{reason} {excerpt}");
+    }
+
+    private static string SanitizeStandardError(string standardError, string workingDirectory)
+    {
+        if (string.IsNullOrWhiteSpace(standardError))
+        {
+            return string.Empty;
+        }
+
+        var excerpt = string.Join(' ',
+            standardError.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+        if (!string.IsNullOrWhiteSpace(workingDirectory))
+        {
+            excerpt = excerpt.Replace(workingDirectory, "<runtime>", StringComparison.Ordinal);
+        }
+
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        if (!string.IsNullOrWhiteSpace(home))
+        {
+            excerpt = excerpt.Replace(home, "<home>", StringComparison.Ordinal);
+        }
+
+        excerpt = Regex.Replace(excerpt,
+            @"(?i)\b(?<name>token|api[_-]?key|secret|password)\s*=\s*[^\s]+",
+            "${name}=<redacted>",
+            RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture,
+            TimeSpan.FromMilliseconds(100));
+        excerpt = Regex.Replace(excerpt,
+            @"(?<![\p{L}\p{N}_])(?:[A-Za-z]:[\\/]|/)[^\s""']+",
+            "<path>",
+            RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture,
+            TimeSpan.FromMilliseconds(100));
+        excerpt = new string(excerpt.Where(static character => !char.IsControl(character)).ToArray()).Trim();
+        return excerpt.Length <= MaxStandardErrorExcerptLength
+            ? excerpt
+            : string.Concat(excerpt.AsSpan(0, MaxStandardErrorExcerptLength - 1), "…");
+    }
 
     private static void TryKill(Process process)
     {

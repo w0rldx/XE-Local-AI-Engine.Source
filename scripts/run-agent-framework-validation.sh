@@ -22,8 +22,9 @@ Options:
 This lane is intentionally Linux-safe. It runs:
   * Release restore + build
   * the permanent deterministic Agent Framework compatibility suite
+  * the Release llama-server adapter-policy and architecture dependency tests
   * Debug restore + build
-  * the Debug-only DevUI registration/hosting smoke tests
+  * the Debug-only DevUI registration and route-registration contract tests
   * release-script static analysis (shellcheck + PSScriptAnalyzer + P0_SPIKE compile gate)
   * optionally the real linux-x64 portable packager
 
@@ -41,7 +42,18 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-mkdir -p "${OUTPUT_DIR}"
+FRAMEWORK_DOCS_ROOT="$(realpath -m "${REPO_ROOT}/docs/agent-framework")"
+OUTPUT_DIR="$(realpath -m "${OUTPUT_DIR}")"
+case "${OUTPUT_DIR}" in
+  "${FRAMEWORK_DOCS_ROOT}/"*) ;;
+  *)
+    echo "Evidence output must stay below ${FRAMEWORK_DOCS_ROOT}" >&2
+    exit 2
+    ;;
+esac
+
+rm -rf "${OUTPUT_DIR}"
+mkdir -p "${OUTPUT_DIR}" "${REPO_ROOT}/.tmp"
 RAW_DIR="$(mktemp -d "${REPO_ROOT}/.tmp/framework-validation.XXXXXX")"
 trap 'rm -rf "${RAW_DIR}"' EXIT
 
@@ -79,16 +91,22 @@ run_step release-agent-deterministic-tests scripts/with-build-lock.sh --lock-fil
   dotnet test \
     --project XE-Local-AI-Engine.AI.Agent.Tests/XE-Local-AI-Engine.AI.Agent.Tests.csproj \
     --configuration Release --no-build --max-parallel-test-modules 1
+run_step release-adapter-architecture-tests scripts/with-build-lock.sh --lock-file "${SHARED_BUILD_LOCK}" -- \
+  scripts/assembly-guard.sh guard --test-bins -- \
+  dotnet test \
+    --project XE-Local-AI-Engine.Tests/XE-Local-AI-Engine.Tests.csproj \
+    --configuration Release --no-build --max-parallel-test-modules 1 \
+    --treenode-filter '/*/*/(LlamaServerAdapterIntegrationTests|LayerDependencyTests)/*'
 run_step debug-restore scripts/with-build-lock.sh --lock-file "${SHARED_BUILD_LOCK}" -- \
   dotnet restore XE-Local-AI-Engine.slnx -p:Configuration=Debug
 run_step debug-build scripts/with-build-lock.sh --lock-file "${SHARED_BUILD_LOCK}" -- \
   dotnet build XE-Local-AI-Engine.slnx --configuration Debug --no-restore
-run_step debug-devui-registration-smoke scripts/with-build-lock.sh --lock-file "${SHARED_BUILD_LOCK}" -- \
+run_step debug-devui-registration-contract scripts/with-build-lock.sh --lock-file "${SHARED_BUILD_LOCK}" -- \
   scripts/assembly-guard.sh guard --test-bins -- \
   dotnet test XE-Local-AI-Engine.AI.Agent.Tests/XE-Local-AI-Engine.AI.Agent.Tests.csproj \
     --configuration Debug --no-build --max-parallel-test-modules 1 \
     --treenode-filter '/*/*/AgentDevUiExtensionsTests/*'
-run_step debug-devui-hosting-smoke scripts/with-build-lock.sh --lock-file "${SHARED_BUILD_LOCK}" -- \
+run_step debug-devui-route-contract scripts/with-build-lock.sh --lock-file "${SHARED_BUILD_LOCK}" -- \
   scripts/assembly-guard.sh guard --test-bins -- \
   dotnet test XE-Local-AI-Engine.Tests/XE-Local-AI-Engine.Tests.csproj \
     --configuration Debug --no-build --max-parallel-test-modules 1 \
@@ -123,6 +141,17 @@ manifest = {
     "commit": commit,
     "result": "passed",
     "linuxPortablePackageIncluded": with_package,
+    "releaseTestScopes": {
+        "agentFramework": "All XE-Local-AI-Engine.AI.Agent.Tests in Release.",
+        "adapterAndArchitecture": (
+            "LlamaServerAdapterIntegrationTests and LayerDependencyTests in Release; "
+            "live llama-server adapter round trips remain opt-in when their environment variables are absent."
+        ),
+    },
+    "debugContractChecks": {
+        "registration": "AgentDevUiExtensionsTests proves Debug-only DI registration.",
+        "route": "FrameworkDevUiHostingSmokeTests proves Debug-only endpoint mapping; it is not a live browser or HTTP runtime proof.",
+    },
     "windowsTesterPackage": {
         "status": "gap",
         "reason": "publish/package-tester-win.ps1 requires a native Windows packaging machine",

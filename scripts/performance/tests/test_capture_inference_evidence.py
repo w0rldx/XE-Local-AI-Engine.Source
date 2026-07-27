@@ -4,10 +4,13 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import os
 import subprocess
 import tempfile
+import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 MODULE_PATH = Path(__file__).parents[1] / "capture_inference_evidence.py"
@@ -193,6 +196,26 @@ class CaptureInferenceEvidenceTests(unittest.TestCase):
         self.assertEqual(3, len(result["runs"]))
         self.assertEqual(1, len(result["warmup_results"]))
 
+    def test_run_once_always_kills_spawned_process_group_after_leader_exits(self) -> None:
+        if os.name != "posix" or not Path("/proc").is_dir():
+            self.skipTest("process-group regression requires Linux /proc")
+        with tempfile.TemporaryDirectory() as raw:
+            child_pid_path = Path(raw) / "child.pid"
+            result = capture.run_once(
+                ["/bin/sh", "-c", f"sleep 30 >/dev/null 2>&1 & echo $! > {child_pid_path}"],
+                timeout_seconds=5,
+                expected_timeout=False,
+                cwd=None,
+                env=os.environ.copy(),
+            )
+            child_pid = int(child_pid_path.read_text(encoding="utf-8"))
+            deadline = time.monotonic() + 2
+            while Path(f"/proc/{child_pid}").exists() and time.monotonic() < deadline:
+                time.sleep(0.02)
+
+            self.assertTrue(result["success"])
+            self.assertFalse(Path(f"/proc/{child_pid}").exists(), "spawned child process survived the evidence command")
+
     def test_llama_bench_json_is_projected_to_role_metrics(self) -> None:
         stdout = json.dumps([
             {"n_prompt": 128, "n_gen": 0, "embeddings": False, "avg_ts": 1000.0},
@@ -222,7 +245,7 @@ class CaptureInferenceEvidenceTests(unittest.TestCase):
         )
 
     def test_fit_helper_projection_matches_production_runner_contract(self) -> None:
-        explore = [
+        common = [
             "-m", "model.gguf",
             "--host", "127.0.0.1",
             "--port", "19150",
@@ -234,22 +257,26 @@ class CaptureInferenceEvidenceTests(unittest.TestCase):
             "-fa", "on",
             "-ctk", "q8_0",
             "-ctv", "q8_0",
-            "--jinja",
-            "-v",
         ]
-
-        self.assertEqual(
-            [
-                "-m", "model.gguf",
-                "--parallel", "1",
-                "--fit", "on",
-                "-c", "4096",
-                "-fa", "on",
-                "-ctk", "q8_0",
-                "-ctv", "q8_0",
-            ],
-            capture.project_fit_helper_arguments(explore),
+        expected = [
+            "-m", "model.gguf",
+            "--parallel", "1",
+            "--fit", "on",
+            "-c", "4096",
+            "-fa", "on",
+            "-ctk", "q8_0",
+            "-ctv", "q8_0",
+        ]
+        role_vectors = (
+            ("chat", ["--jinja"]),
+            ("embedding", ["--embeddings", "--pooling", "mean"]),
+            ("reranker", ["--rerank", "--pooling", "rank"]),
         )
+
+        for role, role_args in role_vectors:
+            with self.subTest(role=role):
+                explore = [*common, *role_args, "-v"]
+                self.assertEqual(expected, capture.project_fit_helper_arguments(explore))
 
     def test_fit_capture_requires_exact_fit_on_and_matching_kv_flash_policy(self) -> None:
         self.assertEqual(["on"], capture.option_values(["--fit", "on"], "--fit"))
@@ -302,10 +329,25 @@ class CaptureInferenceEvidenceTests(unittest.TestCase):
                 capture.normalize_fit_flags(fitted, evidence)
 
     def test_vram_readers_parse_global_and_process_budget_separately(self) -> None:
-        ambient = {"nvidia_smi": {"exit_code": 0, "stdout": "0, GPU, UUID, 1.0, 32607, 28496, 3692, 5"}}
+        ambient = {"nvidia_smi": {"exit_code": 0, "stdout": "0, GPU, 1.0, 32607, 28496, 3692, 5"}}
         device = {"stdout": "CUDA0: GPU (32606 MiB, 30927 MiB free)", "stderr": ""}
         self.assertEqual(28496, capture.global_gpu_free_mib(ambient))
         self.assertEqual(30927, capture.process_budget_free_mib(device))
+
+    def test_future_gpu_probes_do_not_request_device_uuid(self) -> None:
+        commands: list[list[str]] = []
+
+        def capture_command(argv: list[str]) -> dict:
+            commands.append(argv)
+            return {"argv": argv, "exit_code": 0, "stdout": "", "stderr": ""}
+
+        with mock.patch.object(capture, "capture_text", side_effect=capture_command):
+            capture.capture_ambient()
+            capture.capture_host(Path("/tmp/llama-server"))
+
+        gpu_queries = [argument for command in commands for argument in command if argument.startswith("--query-gpu=")]
+        self.assertTrue(gpu_queries)
+        self.assertTrue(all("uuid" not in query.lower() for query in gpu_queries))
 
     def test_baseline_captures_framework_identity_and_explicit_gaps(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -606,13 +648,13 @@ class CaptureInferenceEvidenceTests(unittest.TestCase):
             root = Path(raw)
             source = root / "raw.json"
             output = root / "safe.json"
-            source.write_text(json.dumps({"path": "/home/operator/models/model.gguf", "argv": ["/opt/runtime/llama-server"]}), encoding="utf-8")
+            source.write_text(json.dumps({"path": "/home/sam/models/model.gguf", "argv": ["/opt/runtime/llama-server"]}), encoding="utf-8")
             with self.assertRaisesRegex(capture.CaptureError, "user-home path"):
                 capture.sanitize_artifact(source, output, ["/opt/runtime=$RUNTIME_ROOT"])
             capture.sanitize_artifact(
                 source,
                 output,
-                ["/home/operator/models=$MODEL_ROOT", "/opt/runtime=$RUNTIME_ROOT"],
+                ["/home/sam/models=$MODEL_ROOT", "/opt/runtime=$RUNTIME_ROOT"],
             )
             sanitized = json.loads(output.read_text(encoding="utf-8"))
             self.assertEqual("$MODEL_ROOT/model.gguf", sanitized["path"])

@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class InferenceBenchmarkHarnessTests
 {
     private const long Gb = 1024L * 1024 * 1024;
+    private const long Mib = 1024L * 1024;
     private static readonly EmptyMetricsHandler SharedEmptyMetricsHandler = new();
 
     private const string MetricsScrape = """
@@ -133,13 +134,15 @@ public sealed class InferenceBenchmarkHarnessTests
     }
 
     [Test]
-    public async Task RunAsync_CleanPreSpawnState_AllowsExpectedSelfResidencyDivergence()
+    public async Task RunAsync_IdleWddmAmbientOffset_AllowsWorkload()
     {
         using var handler = new RoleBenchmarkHandler();
+        const long globalFree = 28754 * Mib;
+        const long processBudget = 30927 * Mib;
         var harness = BuildHarness(modelCallsTool: false,
             handler,
-            globalFreeVram: 6 * Gb,
-            processBudgetVram: 8 * Gb);
+            globalFreeVram: globalFree,
+            processBudgetVram: processBudget);
         var spec = InferenceBenchmarkSpec.Golden("cuda", ctxSize: 2048) with
         {
             WarmupRuns = 0,
@@ -147,26 +150,28 @@ public sealed class InferenceBenchmarkHarnessTests
         };
 
         var metrics = await harness.RunAsync(ProfilingContext(ModelRole.Embedding,
-                preSpawnVram: new LlamaServerProfilingVramSnapshot(8 * Gb, 8 * Gb)),
+                preSpawnVram: new LlamaServerProfilingVramSnapshot(globalFree, processBudget)),
             spec,
             CancellationToken.None);
 
         AssertEx.True(metrics.Success, metrics.FailureReason);
         AssertEx.False(metrics.ExternalPressureDetected);
-        AssertEx.Equal<long?>(6 * Gb, metrics.GlobalFreeVramLoadBytes);
-        AssertEx.Equal<long?>(8 * Gb, metrics.ProcessBudgetVramLoadBytes);
+        AssertEx.Equal<long?>(globalFree, metrics.GlobalFreeVramLoadBytes);
+        AssertEx.Equal<long?>(processBudget, metrics.ProcessBudgetVramLoadBytes);
         AssertEx.NotNullOrEmpty(metrics.DiagnosticsJson);
         AssertEx.Equal(1, handler.PostPaths.Count(path => path.EndsWith("/v1/embeddings", StringComparison.Ordinal)));
     }
 
     [Test]
-    public async Task RunAsync_PreExistingExternalPressure_RejectsBeforeWorkload()
+    public async Task RunAsync_BallastPressure_RejectsBeforeWorkload()
     {
         using var handler = new RoleBenchmarkHandler();
+        const long globalFree = 6550 * Mib;
+        const long processBudget = 29283 * Mib;
         var harness = BuildHarness(modelCallsTool: false,
             handler,
-            globalFreeVram: 4 * Gb,
-            processBudgetVram: 8 * Gb);
+            globalFreeVram: globalFree,
+            processBudgetVram: processBudget);
         var spec = InferenceBenchmarkSpec.Golden("cuda", ctxSize: 2048) with
         {
             WarmupRuns = 0,
@@ -174,14 +179,42 @@ public sealed class InferenceBenchmarkHarnessTests
         };
 
         var metrics = await harness.RunAsync(ProfilingContext(ModelRole.Embedding,
-                preSpawnVram: new LlamaServerProfilingVramSnapshot(6 * Gb, 8 * Gb)),
+                preSpawnVram: new LlamaServerProfilingVramSnapshot(globalFree, processBudget)),
             spec,
             CancellationToken.None);
 
         AssertEx.False(metrics.Success);
         AssertEx.True(metrics.ExternalPressureDetected);
-        AssertEx.Contains(metrics.FailureReason!, "external GPU pressure");
+        AssertEx.Contains(metrics.FailureReason!, $"global free {globalFree} bytes");
+        AssertEx.Contains(metrics.FailureReason!, "Close other GPU workloads and retry");
         AssertEx.Equal(0, handler.PostPaths.Count);
+    }
+
+    [Test]
+    public async Task RunAsync_BallastPressure_WithExplicitPreSpawnOverride_AllowsWorkload()
+    {
+        using var handler = new RoleBenchmarkHandler();
+        const long globalFree = 6550 * Mib;
+        const long processBudget = 29283 * Mib;
+        var harness = BuildHarness(modelCallsTool: false,
+            handler,
+            globalFreeVram: globalFree,
+            processBudgetVram: processBudget);
+        var spec = InferenceBenchmarkSpec.Golden("cuda", ctxSize: 2048) with
+        {
+            WarmupRuns = 0,
+            MeasuredRuns = 1,
+            RejectPreSpawnVramPressure = false
+        };
+
+        var metrics = await harness.RunAsync(ProfilingContext(ModelRole.Embedding,
+                preSpawnVram: new LlamaServerProfilingVramSnapshot(globalFree, processBudget)),
+            spec,
+            CancellationToken.None);
+
+        AssertEx.True(metrics.Success, metrics.FailureReason);
+        AssertEx.False(metrics.ExternalPressureDetected);
+        AssertEx.Equal(1, handler.PostPaths.Count(path => path.EndsWith("/v1/embeddings", StringComparison.Ordinal)));
     }
 
     [Test]

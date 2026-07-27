@@ -20,6 +20,8 @@ public interface ILaunchPolicyFingerprintProvider
     Task<LaunchPolicyFingerprint> CaptureAsync(InferenceProfileFingerprintInput input, CancellationToken ct);
 
     Task<LaunchPolicyFingerprint> CaptureAsync(InferenceProfileRecord profile, string modelFilePath, CancellationToken ct);
+
+    Task<bool> MatchesAsync(InferenceProfileRecord profile, string modelFilePath, CancellationToken ct);
 }
 
 /// <summary>Inputs needed before an explored profile has been persisted.</summary>
@@ -36,19 +38,25 @@ public sealed record InferenceProfileFingerprintInput(
     string? KvTypeV,
     bool FlashAttn);
 
-/// <summary>Persisted launch-policy identity: schema version plus lowercase SHA-256 of the canonical document.</summary>
+/// <summary>
+///     Persisted launch-policy identity: schema version plus a strong capture hash and a cheap validation hash. The
+///     validation half lets cold-spawn staleness checks avoid streaming multi-gigabyte model/runtime files.
+/// </summary>
 public sealed record LaunchPolicyFingerprint(int Version, string Value);
 
 public sealed class LaunchPolicyFingerprintProvider(
     IInstalledRuntimeStore installedRuntimeStore,
     ILlamaCppBinaryManager binaryManager,
     IGgufModelStore modelStore,
+    IGgufModelRegistry modelRegistry,
     LlamaServerSupervisorOptions supervisorOptions,
-    LlamaServerLaunchPolicyOptions launchPolicyOptions) : ILaunchPolicyFingerprintProvider
+    LlamaServerLaunchPolicyOptions launchPolicyOptions) : ILaunchPolicyFingerprintProvider, IDisposable
 {
-    public const int CurrentVersion = 3;
+    public const int CurrentVersion = 4;
 
+    private const char FingerprintSeparator = '.';
     private const int ParallelSlots = 1;
+    private const int StableCaptureAttempts = 3;
     private const string RuntimeDefaultMode = "llama-runtime-default";
 
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
@@ -59,15 +67,42 @@ public sealed class LaunchPolicyFingerprintProvider(
         binaryManager ?? throw new ArgumentNullException(nameof(binaryManager));
     private readonly LlamaServerLaunchPolicyOptions _launchPolicyOptions =
         launchPolicyOptions ?? throw new ArgumentNullException(nameof(launchPolicyOptions));
+    private readonly LaunchPolicyFileHashCache _fileHashCache = new();
     private readonly IGgufModelStore _modelStore = modelStore ?? throw new ArgumentNullException(nameof(modelStore));
+    private readonly IGgufModelRegistry _modelRegistry =
+        modelRegistry ?? throw new ArgumentNullException(nameof(modelRegistry));
     private readonly LlamaServerSupervisorOptions _supervisorOptions =
         supervisorOptions ?? throw new ArgumentNullException(nameof(supervisorOptions));
+
+    internal long FullFileHashComputationCount => _fileHashCache.FullHashComputationCount;
 
     public Task<LaunchPolicyFingerprint> CaptureAsync(InferenceProfileRecord profile, string modelFilePath, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(profile);
 
-        return CaptureAsync(new InferenceProfileFingerprintInput(profile.ModelName,
+        return CaptureAsync(ToInput(profile, modelFilePath), ct);
+    }
+
+    public async Task<bool> MatchesAsync(InferenceProfileRecord profile, string modelFilePath, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        if (profile.LaunchPolicyFingerprintVersion != CurrentVersion
+            || !TrySplitFingerprint(profile.LaunchPolicyFingerprint, out var expectedStrongHash, out var expectedValidationHash))
+        {
+            return false;
+        }
+
+        var currentValidationDocumentHash = await CaptureValueAsync(ToInput(profile, modelFilePath),
+                includeContentHashes: false,
+                ct)
+            .ConfigureAwait(false);
+        var currentValidationHash = BindValidationHash(expectedStrongHash, currentValidationDocumentHash);
+        return string.Equals(currentValidationHash, expectedValidationHash, StringComparison.Ordinal);
+    }
+
+    private static InferenceProfileFingerprintInput ToInput(InferenceProfileRecord profile, string modelFilePath)
+    {
+        return new InferenceProfileFingerprintInput(profile.ModelName,
                 profile.Role,
                 profile.Backend,
                 modelFilePath,
@@ -77,8 +112,7 @@ public sealed class LaunchPolicyFingerprintProvider(
                 profile.OverrideTensor,
                 profile.KvTypeK,
                 profile.KvTypeV,
-                profile.FlashAttn),
-            ct);
+                profile.FlashAttn);
     }
 
     public async Task<LaunchPolicyFingerprint> CaptureAsync(InferenceProfileFingerprintInput input, CancellationToken ct)
@@ -101,6 +135,28 @@ public sealed class LaunchPolicyFingerprintProvider(
 
         ct.ThrowIfCancellationRequested();
 
+        for (var attempt = 0; attempt < StableCaptureAttempts; attempt++)
+        {
+            var validationBefore = await CaptureValueAsync(input, includeContentHashes: false, ct).ConfigureAwait(false);
+            var strongHash = await CaptureValueAsync(input, includeContentHashes: true, ct).ConfigureAwait(false);
+            var validationAfter = await CaptureValueAsync(input, includeContentHashes: false, ct).ConfigureAwait(false);
+            if (string.Equals(validationBefore, validationAfter, StringComparison.Ordinal))
+            {
+                var boundValidationHash = BindValidationHash(strongHash, validationAfter);
+                return new LaunchPolicyFingerprint(CurrentVersion,
+                    string.Concat(strongHash, FingerprintSeparator, boundValidationHash));
+            }
+        }
+
+        throw new IOException(
+            "The model or selected llama.cpp runtime changed while its launch-policy fingerprint was being captured. Retry after file updates finish.");
+    }
+
+    private async Task<string> CaptureValueAsync(
+        InferenceProfileFingerprintInput input,
+        bool includeContentHashes,
+        CancellationToken ct)
+    {
         var file = new FileInfo(input.ModelFilePath);
         file.Refresh();
         if (!file.Exists)
@@ -108,7 +164,12 @@ public sealed class LaunchPolicyFingerprintProvider(
             throw new FileNotFoundException("The local GGUF file no longer exists.", input.ModelFilePath);
         }
 
-        var modelSha256 = await ComputeFileSha256Async(input.ModelFilePath, ct).ConfigureAwait(false);
+        var modelIdentity = await ResolveModelIdentityAsync(input.ModelName,
+                input.ModelFilePath,
+                file,
+                includeContentHashes,
+                ct)
+            .ConfigureAwait(false);
         var runtime = await _installedRuntimeStore.ReadAsync(ct).ConfigureAwait(false);
         var requestedVariant = input.Backend.ToUpperInvariant() switch
         {
@@ -118,8 +179,13 @@ public sealed class LaunchPolicyFingerprintProvider(
             _ => throw new ArgumentException("Backend is not a supported llama.cpp variant.", nameof(input))
         };
         var binary = await _binaryManager.EnsureBinaryAsync(requestedVariant, ct).ConfigureAwait(false);
-        var executableSha256 = await ComputeFileSha256Async(binary.ServerExecutablePath, ct).ConfigureAwait(false);
-        var runtimeBundle = await ComputeRuntimeBundleIdentityAsync(binary.ServerExecutablePath, ct).ConfigureAwait(false);
+        var executableIdentity = includeContentHashes
+            ? await _fileHashCache.GetSha256Async(binary.ServerExecutablePath, ct).ConfigureAwait(false)
+            : await GetFileValidationIdentityAsync(binary.ServerExecutablePath, ct).ConfigureAwait(false);
+        var runtimeBundle = await ComputeRuntimeBundleIdentityAsync(binary.ServerExecutablePath,
+                includeContentHashes,
+                ct)
+            .ConfigureAwait(false);
         var isOperatorOverride = string.Equals(binary.Version, "override", StringComparison.OrdinalIgnoreCase);
         var isManagedSourceBuild = !isOperatorOverride && runtime?.SourceBuildPath is not null;
         var runtimeProvenance = "prebuilt-or-unavailable";
@@ -137,12 +203,13 @@ public sealed class LaunchPolicyFingerprintProvider(
             : (ModelRole?)null;
         var roleIdentity = role?.ToString() ?? $"unknown:{input.Role}";
         var effectivePerSequenceContext = ResolvePerSequenceContext(input.CtxSize, ParallelSlots, kvUnified: false);
-        var chatLaunch = await ResolveChatLaunchIdentityAsync(role, ct).ConfigureAwait(false);
+        var chatLaunch = await ResolveChatLaunchIdentityAsync(role, includeContentHashes, ct).ConfigureAwait(false);
         var cpuThreadPolicy = ResolveCpuThreadPolicyIdentity(requestedVariant);
 
         var canonical = new
         {
             schemaVersion = CurrentVersion,
+            contentIdentityMode = includeContentHashes ? "strong-sha256" : "validation-stamp-v1",
             runtime = new
             {
                 tag = isOperatorOverride ? "not-applicable" : runtime?.Tag ?? "unavailable",
@@ -156,8 +223,8 @@ public sealed class LaunchPolicyFingerprintProvider(
                 {
                     version = binary.Version,
                     variant = binary.Variant.ToString(),
-                    sha256 = executableSha256,
-                    runtimeBundleSha256 = runtimeBundle.Sha256,
+                    contentIdentity = executableIdentity,
+                    runtimeBundleIdentity = runtimeBundle.Sha256,
                     runtimeBundle.FileCount,
                     binary.IsPinnedFallback
                 }
@@ -165,7 +232,9 @@ public sealed class LaunchPolicyFingerprintProvider(
             model = new
             {
                 identity = input.ModelName,
-                sha256 = modelSha256,
+                identitySource = modelIdentity.Source,
+                contentIdentity = modelIdentity.ContentIdentity,
+                guardSha256 = modelIdentity.GuardSha256,
                 fileLengthBytes = file.Length,
                 fileLastWriteUtcTicks = file.LastWriteTimeUtc.Ticks
             },
@@ -176,8 +245,14 @@ public sealed class LaunchPolicyFingerprintProvider(
                     policyVersion = LlamaServerLaunchPolicyOptions.ContextAllocationPolicyVersion,
                     precedence = "frozen-profile>deterministic-override>hardware-tier",
                     chatTiers = LlamaServerLaunchPolicyOptions.ChatContextTiers,
-                    auxiliaryRoleCapTokens = 2048,
-                    trainCeilingSafetyMarginTokens = 256,
+                    roleDefaults = new
+                    {
+                        providerFallbackChatTokens = _launchPolicyOptions.ChatContextTokens,
+                        embeddingTokens = _launchPolicyOptions.EmbeddingContextTokens,
+                        rerankerTokens = _launchPolicyOptions.RerankerContextTokens
+                    },
+                    deterministicOverrideTokens = _launchPolicyOptions.DeterministicContextTokensOverride,
+                    trainCeilingSafetyMarginTokens = _launchPolicyOptions.ContextSafetyMarginTokens,
                     contextAlignmentTokens = LlamaServerLaunchPolicyOptions.ContextAlignmentTokens,
                     gpuReserve = new
                     {
@@ -219,11 +294,18 @@ public sealed class LaunchPolicyFingerprintProvider(
         };
 
         var json = JsonSerializer.Serialize(canonical, SerializerOptions);
-        var hash = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(json)));
-        return new LaunchPolicyFingerprint(CurrentVersion, hash);
+        return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(json)));
     }
 
-    private async Task<object?> ResolveChatLaunchIdentityAsync(ModelRole? role, CancellationToken ct)
+    public void Dispose()
+    {
+        _fileHashCache.Dispose();
+    }
+
+    private async Task<object?> ResolveChatLaunchIdentityAsync(
+        ModelRole? role,
+        bool includeContentHashes,
+        CancellationToken ct)
     {
         if (role != ModelRole.Chat)
         {
@@ -288,8 +370,13 @@ public sealed class LaunchPolicyFingerprintProvider(
                 draftModel = new
                 {
                     configuredName = _supervisorOptions.SpeculativeDraftModelName,
-                    resolvedPath = Path.GetFullPath(draftModelPath),
-                    sha256 = await ComputeFileSha256Async(draftModelPath, ct).ConfigureAwait(false)
+                    resolvedFileName = Path.GetFileName(draftModelPath),
+                    identity = await ResolveModelIdentityAsync(_supervisorOptions.SpeculativeDraftModelName,
+                            draftModelPath,
+                            new FileInfo(draftModelPath),
+                            includeContentHashes,
+                            ct)
+                        .ConfigureAwait(false)
                 },
                 draftMaxTokens = speculative.DraftMaxTokens > 0 ? speculative.DraftMaxTokens : (int?)null,
                 speculative.DraftGpuLayers
@@ -348,19 +435,52 @@ public sealed class LaunchPolicyFingerprintProvider(
         return checked(((divided + contextAlignment - 1) / contextAlignment) * contextAlignment);
     }
 
-    private static async Task<string> ComputeFileSha256Async(string filePath, CancellationToken ct)
+    private async Task<ModelContentIdentity> ResolveModelIdentityAsync(
+        string? modelName,
+        string filePath,
+        FileInfo file,
+        bool includeContentHashes,
+        CancellationToken ct)
     {
-        await using var stream = new FileStream(filePath,
-            FileMode.Open,
-            FileAccess.Read,
-            FileShare.Read,
-            bufferSize: 128 * 1024,
-            FileOptions.Asynchronous | FileOptions.SequentialScan);
-        return Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, ct).ConfigureAwait(false));
+        file.Refresh();
+        if (!file.Exists)
+        {
+            throw new FileNotFoundException("The local GGUF file no longer exists.", filePath);
+        }
+
+        if (!string.IsNullOrWhiteSpace(modelName))
+        {
+            var entry = await _modelRegistry.FindAsync(modelName, ct).ConfigureAwait(false);
+            if (entry is not null
+                && PathsEqual(entry.LocalPath, file.FullName)
+                && entry.SizeBytes == file.Length
+                && TryNormalizeSha256(entry.Sha256, out var registrySha256))
+            {
+                var guard = await _fileHashCache.GetGuardSha256Async(file.FullName, ct).ConfigureAwait(false);
+                return includeContentHashes
+                    ? new ModelContentIdentity("verified-registry-sha256", registrySha256, guard)
+                    : new ModelContentIdentity("validation-stamp-v1",
+                        BuildValidationIdentity(file, guard, registrySha256),
+                        guard);
+            }
+        }
+
+        if (includeContentHashes)
+        {
+            return new ModelContentIdentity("memoized-local-file-sha256",
+                await _fileHashCache.GetSha256Async(file.FullName, ct).ConfigureAwait(false),
+                GuardSha256: null);
+        }
+
+        var validationGuard = await _fileHashCache.GetGuardSha256Async(file.FullName, ct).ConfigureAwait(false);
+        return new ModelContentIdentity("validation-stamp-v1",
+            BuildValidationIdentity(file, validationGuard, authoritySha256: null),
+            validationGuard);
     }
 
-    private static async Task<RuntimeBundleIdentity> ComputeRuntimeBundleIdentityAsync(
+    private async Task<RuntimeBundleIdentity> ComputeRuntimeBundleIdentityAsync(
         string serverExecutablePath,
+        bool includeContentHashes,
         CancellationToken ct)
     {
         var executablePath = Path.GetFullPath(serverExecutablePath);
@@ -376,7 +496,6 @@ public sealed class LaunchPolicyFingerprintProvider(
         }
 
         using var bundleHash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        var buffer = new byte[128 * 1024];
         foreach (var path in files)
         {
             ct.ThrowIfCancellationRequested();
@@ -384,27 +503,16 @@ public sealed class LaunchPolicyFingerprintProvider(
             var nameLength = new byte[sizeof(int)];
             BinaryPrimitives.WriteInt32LittleEndian(nameLength, nameBytes.Length);
             var fileLength = new byte[sizeof(long)];
-            BinaryPrimitives.WriteInt64LittleEndian(fileLength, new FileInfo(path).Length);
+            var file = new FileInfo(path);
+            file.Refresh();
+            BinaryPrimitives.WriteInt64LittleEndian(fileLength, file.Length);
             bundleHash.AppendData(nameLength);
             bundleHash.AppendData(nameBytes);
             bundleHash.AppendData(fileLength);
-
-            await using var stream = new FileStream(path,
-                FileMode.Open,
-                FileAccess.Read,
-                FileShare.Read,
-                buffer.Length,
-                FileOptions.Asynchronous | FileOptions.SequentialScan);
-            while (true)
-            {
-                var read = await stream.ReadAsync(buffer, ct).ConfigureAwait(false);
-                if (read == 0)
-                {
-                    break;
-                }
-
-                bundleHash.AppendData(buffer, 0, read);
-            }
+            var contentIdentity = includeContentHashes
+                ? await _fileHashCache.GetSha256Async(path, ct).ConfigureAwait(false)
+                : await GetFileValidationIdentityAsync(path, ct).ConfigureAwait(false);
+            bundleHash.AppendData(Convert.FromHexString(contentIdentity));
         }
 
         return new RuntimeBundleIdentity(Convert.ToHexStringLower(bundleHash.GetHashAndReset()), files.Length);
@@ -423,5 +531,76 @@ public sealed class LaunchPolicyFingerprintProvider(
                || name.Contains(".so", StringComparison.OrdinalIgnoreCase);
     }
 
+    private static bool PathsEqual(string left, string right)
+    {
+        return string.Equals(Path.GetFullPath(left),
+            Path.GetFullPath(right),
+            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+    }
+
+    private static bool TryNormalizeSha256(string? value, out string normalized)
+    {
+        if (value is { Length: 64 } && value.All(Uri.IsHexDigit))
+        {
+            normalized = value.ToUpperInvariant();
+            return true;
+        }
+
+        normalized = string.Empty;
+        return false;
+    }
+
+    private async Task<string> GetFileValidationIdentityAsync(string filePath, CancellationToken ct)
+    {
+        var file = new FileInfo(filePath);
+        file.Refresh();
+        if (!file.Exists)
+        {
+            throw new FileNotFoundException("The fingerprinted file no longer exists.", filePath);
+        }
+
+        var guard = await _fileHashCache.GetGuardSha256Async(file.FullName, ct).ConfigureAwait(false);
+        return BuildValidationIdentity(file, guard, authoritySha256: null);
+    }
+
+    private static string BuildValidationIdentity(FileInfo file, string guardSha256, string? authoritySha256)
+    {
+        var canonical = string.Create(System.Globalization.CultureInfo.InvariantCulture,
+            $"{file.Length}:{file.LastWriteTimeUtc.Ticks}:{file.CreationTimeUtc.Ticks}:{guardSha256}:{authoritySha256 ?? "unavailable"}");
+        return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));
+    }
+
+    private static bool TrySplitFingerprint(
+        string? value,
+        out string strongHash,
+        out string validationHash)
+    {
+        strongHash = string.Empty;
+        validationHash = string.Empty;
+        if (value is not { Length: 129 } || value[64] != FingerprintSeparator)
+        {
+            return false;
+        }
+
+        var candidateStrong = value[..64];
+        var candidateValidation = value[65..];
+        if (!candidateStrong.All(Uri.IsHexDigit) || !candidateValidation.All(Uri.IsHexDigit))
+        {
+            return false;
+        }
+
+        strongHash = candidateStrong;
+        validationHash = candidateValidation;
+        return true;
+    }
+
+    private static string BindValidationHash(string strongHash, string validationDocumentHash)
+    {
+        var canonical = string.Concat(strongHash, ":", validationDocumentHash);
+        return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));
+    }
+
     private sealed record RuntimeBundleIdentity(string Sha256, int FileCount);
+
+    private sealed record ModelContentIdentity(string Source, string ContentIdentity, string? GuardSha256);
 }

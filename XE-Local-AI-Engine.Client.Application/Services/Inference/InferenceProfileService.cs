@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Inference;
 
+using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
@@ -26,6 +27,7 @@ public sealed class InferenceProfileService : IInferenceProfileService
     private readonly IGgufModelStore _ggufModelStore;
     private readonly IHardwareProfiler _hardwareProfiler;
     private readonly IInferenceBenchmarkHarness _harness;
+    private readonly InferenceBenchmarkVramAdmissionOptions _benchmarkVramAdmission;
     private readonly ILaunchPolicyFingerprintProvider _launchPolicyFingerprintProvider;
     private readonly ILogger<InferenceProfileService> _logger;
     private readonly IMachineKeyProvider _machineKeyProvider;
@@ -50,6 +52,7 @@ public sealed class InferenceProfileService : IInferenceProfileService
         IHardwareProfiler hardwareProfiler,
         IProcessVramBudgetProbe processVramBudgetProbe,
         ILaunchPolicyFingerprintProvider launchPolicyFingerprintProvider,
+        IOptions<InferenceBenchmarkVramAdmissionOptions> benchmarkVramAdmission,
         ILogger<InferenceProfileService> logger)
     {
         ArgumentNullException.ThrowIfNull(supervisor);
@@ -66,6 +69,7 @@ public sealed class InferenceProfileService : IInferenceProfileService
         ArgumentNullException.ThrowIfNull(hardwareProfiler);
         ArgumentNullException.ThrowIfNull(processVramBudgetProbe);
         ArgumentNullException.ThrowIfNull(launchPolicyFingerprintProvider);
+        ArgumentNullException.ThrowIfNull(benchmarkVramAdmission);
         ArgumentNullException.ThrowIfNull(logger);
 
         _supervisor = supervisor;
@@ -82,6 +86,7 @@ public sealed class InferenceProfileService : IInferenceProfileService
         _hardwareProfiler = hardwareProfiler;
         _processVramBudgetProbe = processVramBudgetProbe;
         _launchPolicyFingerprintProvider = launchPolicyFingerprintProvider;
+        _benchmarkVramAdmission = benchmarkVramAdmission.Value;
         _logger = logger;
     }
 
@@ -144,7 +149,15 @@ public sealed class InferenceProfileService : IInferenceProfileService
     }
 
     /// <inheritdoc />
-    public async Task<BenchmarkResult> BenchmarkAsync(Guid profileId, CancellationToken ct)
+    public Task<BenchmarkResult> BenchmarkAsync(Guid profileId, CancellationToken ct)
+    {
+        return BenchmarkAsync(profileId, allowPreSpawnVramPressure: false, ct);
+    }
+
+    public async Task<BenchmarkResult> BenchmarkAsync(
+        Guid profileId,
+        bool allowPreSpawnVramPressure,
+        CancellationToken ct)
     {
         var profile = await FindProfileByIdAsync(profileId, ct).ConfigureAwait(false);
         if (profile is null)
@@ -190,7 +203,10 @@ public sealed class InferenceProfileService : IInferenceProfileService
                 StartedAtUtc: startedAtUtc),
             ct).ConfigureAwait(false);
 
-        var spec = InferenceBenchmarkSpec.Golden(profile.Backend, profile.CtxSize);
+        var spec = InferenceBenchmarkSpec.Golden(profile.Backend, profile.CtxSize, _benchmarkVramAdmission) with
+        {
+            RejectPreSpawnVramPressure = !allowPreSpawnVramPressure
+        };
         var role = (ModelRole)profile.Role;
 
         InferenceBenchmarkMetrics metrics;
@@ -479,9 +495,7 @@ public sealed class InferenceProfileService : IInferenceProfileService
             return false;
         }
 
-        var current = await _launchPolicyFingerprintProvider.CaptureAsync(profile, modelFilePath, ct).ConfigureAwait(false);
-        return current.Version == profile.LaunchPolicyFingerprintVersion
-               && string.Equals(current.Value, profile.LaunchPolicyFingerprint, StringComparison.Ordinal);
+        return await _launchPolicyFingerprintProvider.MatchesAsync(profile, modelFilePath, ct).ConfigureAwait(false);
     }
 
     private static InferenceProfileView ToView(InferenceProfileRecord record)

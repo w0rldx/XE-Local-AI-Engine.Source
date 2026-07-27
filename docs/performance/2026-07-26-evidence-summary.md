@@ -13,8 +13,12 @@ plan. It does not broaden the claims made by the machine-readable artifacts in
 - Runtime: managed source build of llama.cpp `b9692`/`f3e1828`, with the
   `llama-server`, `llama-bench`, `llama-fit-params`, and runtime-local dependency
   hashes retained in each artifact.
-- Corpus: pinned `golden-v1.json`, SHA-256
-  `100b6a808653f1a6c0867f5628c6d589b91537a867a7f79535d8192a0371fea5`.
+- Workload label: the capture records the SHA-256 of pinned `golden-v1.json`
+  (`100b6a808653f1a6c0867f5628c6d589b91537a867a7f79535d8192a0371fea5`)
+  for provenance, but the native `llama-bench` commands did **not** consume that
+  corpus. They used synthetic `-p 512 -n 128` chat and `-p 512 -n 0 -embd 1`
+  embedding workloads. These artifacts therefore make no corpus-quality or
+  representative-traffic claim.
 - Machine: the same WSL2 host and RTX 5090 were used for the comparable baseline
   and candidate captures.
 - Provenance: both historical source trees were restored and built cleanly before
@@ -28,30 +32,38 @@ plan. It does not broaden the claims made by the machine-readable artifacts in
 
 ## Results and gate decision
 
-The CUDA native-performance deltas were:
+The table below reports median deltas together with the observed
+`(maximum - minimum) / median` spread for each baseline/candidate five-repeat
+pair and the paired wall-time median delta:
 
-- chat generation: +4.290%;
-- chat prompt processing: -19.046%;
-- embedding processing: -22.464%.
-
-The CPU native-performance deltas were:
-
-- chat generation: +1.039%;
-- chat prompt processing: +3.096%;
-- embedding processing: -10.082%.
+| Backend | Workload metric | Throughput delta | Baseline / candidate spread | Wall-time delta |
+| --- | --- | ---: | ---: | ---: |
+| CUDA | chat generation | +4.290% | 4.5% / 2.4% | +0.845% |
+| CUDA | chat prompt processing | -19.046% | 14.2% / 47.7% | +0.845% |
+| CUDA | embedding processing | -22.464% | 6.5% / 33.6% | -0.143% |
+| CPU | chat generation | +1.039% | 9.0% / 1.0% | -0.449% |
+| CPU | chat prompt processing | +3.096% | 43.2% / 16.4% | -0.449% |
+| CPU | embedding processing | -10.082% | 2.6% / 57.3% | +0.054% |
 
 These are fixed-system prerequisite-versus-candidate measurements, not
-framework-only attribution. The exact framework and application contract suites
-remained green; their single-run wall-time changes are retained as diagnostic
-evidence, not throughput claims. The recaptured native values also demonstrate why
-the approved gate must remain fail-closed: the identical llama.cpp binary showed
-material negative variance under this WSL2 host's ambient GPU conditions. No
-positive result reaches the plan's at-least-20% throughput gate, so this
-prerequisite/framework delta authorizes no tuning claim. The first Lane 4 capture
-was invalidated during review and replaced by a schema-2 recapture with canonical
-baseline comparison, actual role preflights, explicit context readback, and
-fail-closed process-memory evidence. The corrected grid produced zero qualifying
-cells, so no production tuning ships. See `2026-07-26-lane4-no-change.md`.
+framework-only attribution. No throughput delta exceeds the larger spread of its
+own baseline/candidate pair, and CUDA embedding's -22.464% throughput observation
+corresponds to only -0.143% wall time. The data is therefore too noisy for a
+directional performance claim. The CPU runs are additionally non-transferable:
+their argv pinned `-t 16` while the artifact records eight logical CPUs, a 2×
+oversubscription that can explain the large spread. They must be recaptured with a
+topology-appropriate thread count before use in a tuning decision.
+
+The exact framework and application contract suites remained green; their
+single-run wall-time changes are retained as diagnostic evidence, not throughput
+claims. The recaptured native values demonstrate why the approved gate remains
+fail-closed. No reliable positive result reaches the plan's at-least-20%
+throughput gate, so this prerequisite/framework comparison authorizes no tuning
+claim. The first Lane 4 capture was invalidated during review and replaced by a
+schema-2 recapture with canonical baseline comparison, actual role preflights,
+explicit context readback, and fail-closed process-memory evidence. The corrected
+grid produced zero qualifying cells, so no production tuning ships. See
+`2026-07-26-lane4-no-change.md`.
 
 ## Fit/replay and VRAM semantics
 
@@ -86,13 +98,21 @@ profiling process was resident, so its stable 2,500 MiB gap cannot prove the hos
 was free of ambient contention. It remains evidence for replay correctness, but
 is superseded as benchmark-admission evidence.
 
-The corrected version-3 path captures both readers after same-key eviction and
-before the profiling spawn. On the final Aspire/Chrome validation run it observed
-30,150,754,304 global-free bytes versus a 32,429,309,952-byte process budget:
-a 2,278,555,648-byte (7.026%) material divergence. The API returned HTTP 400
-before any benchmark workload, the UI kept the version-3 profile `Explored` with
-Freeze disabled, and the operator-facing alert named external GPU pressure. The
-sanitized proof is
+The version-3 path captures both readers after same-key eviction and before the
+profiling spawn. Its first Aspire/Chrome validation observed 30,150,754,304
+global-free bytes versus a 32,429,309,952-byte process budget: a
+2,278,555,648-byte (7.026%) raw divergence. The API returned HTTP 400 before any
+benchmark workload, but external review correctly identified that result as an
+idle WDDM false positive. The classifier had compared the whole platform offset
+to the same 512 MiB/5% thresholds used for incremental post-load growth.
+
+The corrected pre-spawn classifier subtracts a configurable 1 GiB ambient
+baseline first. For the same sample, the pressure-above-baseline is
+1,204,813,824 bytes, or 3.715% of the process budget, so the benchmark is
+admissible. The 22.9 GiB and 30 GiB ballast fixtures remain rejected at 74.135%
+and 94.895% respectively after the allowance. Post-load pressure keeps the
+original strict 512 MiB/5% growth rule. The historical sanitized artifact is
+retained as the regression input at
 `baselines/2026-07-27-e29571c4-ambient-vram-rejection.json`.
 
 ## Explicit hardware and distribution gaps
@@ -107,6 +127,6 @@ sanitized proof is
 - 8 GB/constrained-VRAM behavior needs representative hardware or a proven
   process-budget constraint.
 - MoE placement is outside the fixed dense-model experiment and remains excluded.
-- A clean native-Windows idle capture is still required to produce a new
-  version-3 frozen benchmark; the final WSL2 run correctly rejected the ambient
-  2.12 GiB reader divergence rather than relabelling it as clean.
+- A clean native-Windows idle capture is still required to confirm the default
+  ambient allowance on the primary shipping host. The WSL2 2.12 GiB sample is
+  now correctly retained as idle-regression evidence rather than pressure proof.

@@ -48,18 +48,16 @@ done
 
 BASELINE_COMMIT="$(git rev-parse "${BASELINE_REF}^{commit}")"
 CURRENT_COMMIT="$(git rev-parse "${CURRENT_REF}^{commit}")"
+FRAMEWORK_DOCS_ROOT="$(realpath -m "${REPO_ROOT}/docs/agent-framework")"
 OUTPUT_DIR="$(realpath -m "${OUTPUT_DIR}")"
 case "${OUTPUT_DIR}" in
-  "${REPO_ROOT}/"*) ;;
+  "${FRAMEWORK_DOCS_ROOT}/"*) ;;
   *)
-    echo "Evidence output must stay inside this worktree: ${REPO_ROOT}" >&2
+    echo "Evidence output must stay below ${FRAMEWORK_DOCS_ROOT}" >&2
     exit 2
     ;;
 esac
-[[ "${OUTPUT_DIR}" != "${REPO_ROOT}" && "${OUTPUT_DIR}" != "${REPO_ROOT}/.git"* ]] || {
-  echo "Refusing unsafe evidence output path: ${OUTPUT_DIR}" >&2
-  exit 2
-}
+mkdir -p "${REPO_ROOT}/.tmp"
 RUN_ROOT="$(mktemp -d "${REPO_ROOT}/.tmp/framework-dependencies.XXXXXX")"
 WORKTREES=()
 

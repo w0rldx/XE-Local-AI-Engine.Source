@@ -210,12 +210,21 @@ Each sample records:
 - process-visible budget evidence from that exact binary's
   `llama-server --list-devices`;
 - compute-app output when WDDM/NVML exposes it;
-- binary hash, driver, host, scenario, interval, and raw unparsed output.
+- binary filename/hash, driver, OS/processor, scenario, interval, and raw
+  unparsed output.
 
-A materially higher process-visible budget than global free VRAM is **external
-pressure / WDDM reader divergence**. The sample is useful defect evidence but is
-invalid for throughput comparisons. The global reader governs benchmark
-contention; the process-visible reader describes the launch process's budget.
+Future captures deliberately omit GPU UUIDs, machine names, and absolute user
+paths. Native probes are time-bounded; their exit code, timeout state, and
+sanitized output remain available even when the command fails.
+
+A materially higher process-visible budget than global free VRAM is **WDDM
+reader divergence**, but the raw gap is not by itself proof of external
+pressure: the clean dev-box baseline is approximately 950 MiB and idle WDDM
+samples can be higher. Benchmark admission first subtracts the configured
+ambient baseline, then applies the pre-spawn materiality thresholds; pressure
+introduced after load is judged independently as growth beyond the post-load
+gap. The global reader governs benchmark contention; the process-visible reader
+describes the launch process's budget.
 
 ## 4. Capture validity checklist
 

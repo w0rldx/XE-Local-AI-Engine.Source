@@ -91,15 +91,17 @@ describe("useInferenceProfiles mutations", () => {
 		expect(invalidatedKeys).toContainEqual(LIST_KEY);
 	});
 
-	it("benchmark dispatches { profileId }, maps the metrics, and invalidates the list", async () => {
+	it("benchmark dispatches the profile id and explicit ambient-pressure decision, maps metrics, and invalidates the list", async () => {
 		const { Wrapper } = makeWrapper();
 		const { result } = renderHook(() => useBenchmarkInferenceProfile(), { wrapper: Wrapper });
 
-		result.current.mutate({ profileId: "p1" });
+		result.current.mutate({ profileId: "p1", allowPreSpawnVramPressure: true });
 
 		await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-		expect(benchmarkMock.mutationFn.mock.calls[0]?.[0]).toEqual({ body: { profileId: "p1" } });
+		expect(benchmarkMock.mutationFn.mock.calls[0]?.[0]).toEqual({
+			body: { profileId: "p1", allowPreSpawnVramPressure: true },
+		});
 		// The hook maps the wire response to the domain result shape.
 		expect(result.current.data).toEqual({
 			snapshotId: "snap-1",

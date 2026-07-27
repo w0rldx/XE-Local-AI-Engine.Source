@@ -27,6 +27,12 @@ public interface IInferenceProfileService
     Task<BenchmarkResult> BenchmarkAsync(Guid profileId, CancellationToken ct);
 
     /// <summary>
+    ///     Benchmarks a profile with an explicit operator pressure override. The override affects only the pre-spawn
+    ///     ambient-pressure rejection; incremental pressure detected during the workload still invalidates the run.
+    /// </summary>
+    Task<BenchmarkResult> BenchmarkAsync(Guid profileId, bool allowPreSpawnVramPressure, CancellationToken ct);
+
+    /// <summary>
     ///     Freezes the Explored profile <paramref name="profileId" /> — gated on its most recent successful benchmark.
     ///     Returns a failed result (never throws) when no justifying benchmark exists or the store gate rejects.
     /// </summary>

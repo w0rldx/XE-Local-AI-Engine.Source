@@ -24,8 +24,8 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
     private const string PredictedTokensMetric = "llamacpp:tokens_predicted_total";
     private const string PromptSecondsMetric = "llamacpp:prompt_seconds_total";
     private const string PredictedSecondsMetric = "llamacpp:tokens_predicted_seconds_total";
-    private const string ExternalPressureFailureReason =
-        "Benchmark invalid: material VRAM divergence indicates external GPU pressure before or during measurement.";
+    private const string IncrementalPressureFailureReason =
+        "Benchmark invalid: VRAM divergence grew materially during measurement. Close other GPU workloads and retry.";
 
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
@@ -67,22 +67,27 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
         try
         {
             var resources = new ResourceEvidenceCollector(context.PreSpawnVram,
-                spec.VramDivergenceAbsoluteThresholdBytes,
-                spec.VramDivergenceRatioThreshold);
+                spec.PreSpawnVramAmbientBaselineBytes,
+                spec.PreSpawnVramPressureAbsoluteThresholdBytes,
+                spec.PreSpawnVramPressureRatioThreshold,
+                spec.RejectPreSpawnVramPressure,
+                spec.IncrementalVramDivergenceAbsoluteThresholdBytes,
+                spec.IncrementalVramDivergenceRatioThreshold);
             var load = await CaptureResourcesAsync(spec, context.ProcessId, ct).ConfigureAwait(false);
             resources.Add(load);
 
-            if (resources.ExternalPressureDetected)
+            if (resources.PreSpawnVram?.ExternalPressureDetected == true)
             {
                 var preSpawn = resources.PreSpawnVram;
                 _logger.LogWarning(
-                    "Rejected {Role} inference benchmark before workload because ambient VRAM pressure exceeded the configured thresholds. GlobalFreeBytes={GlobalFreeBytes}, ProcessBudgetBytes={ProcessBudgetBytes}, ExcessBytes={ExcessBytes}, ExcessRatio={ExcessRatio}.",
+                    "Rejected {Role} inference benchmark before workload because VRAM pressure above the WDDM ambient baseline exceeded the configured thresholds. GlobalFreeBytes={GlobalFreeBytes}, ProcessBudgetBytes={ProcessBudgetBytes}, RawExcessBytes={RawExcessBytes}, PressureAboveBaselineBytes={PressureAboveBaselineBytes}, PressureAboveBaselineRatio={PressureAboveBaselineRatio}.",
                     role,
                     preSpawn?.GlobalFreeBytes,
                     preSpawn?.ProcessBudgetBytes,
                     preSpawn?.ProcessBudgetExcessBytes,
-                    preSpawn?.ProcessBudgetExcessRatio);
-                return ApplyResourceEvidence(InferenceBenchmarkMetrics.Failed(ExternalPressureFailureReason), role, resources);
+                    preSpawn?.PressureAboveBaselineBytes,
+                    preSpawn?.PressureAboveBaselineRatio);
+                return ApplyResourceEvidence(InferenceBenchmarkMetrics.Failed(BuildPreSpawnPressureFailureReason(preSpawn)), role, resources);
             }
 
             async Task CapturePassResourcesAsync(CancellationToken innerCt)
@@ -486,9 +491,13 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
         var after = resources.Last.Vram;
         var externalPressure = resources.ExternalPressureDetected;
         var success = metrics.Success && !externalPressure;
-        var failureReason = externalPressure
-            ? ExternalPressureFailureReason
-            : metrics.FailureReason;
+        var failureReason = metrics.FailureReason;
+        if (externalPressure)
+        {
+            failureReason = resources.PreSpawnVram?.ExternalPressureDetected == true
+                ? metrics.FailureReason ?? BuildPreSpawnPressureFailureReason(resources.PreSpawnVram)
+                : IncrementalPressureFailureReason;
+        }
 
         var diagnostics = JsonSerializer.Serialize(new
             {
@@ -561,6 +570,22 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
         {
             return null;
         }
+    }
+
+    private static string BuildPreSpawnPressureFailureReason(VramObservation? observation)
+    {
+        if (observation is not
+            {
+                GlobalFreeBytes: { } globalFree,
+                ProcessBudgetBytes: { } processBudget,
+                PressureAboveBaselineBytes: { } pressureAboveBaseline
+            })
+        {
+            return "Benchmark invalid: pre-spawn VRAM pressure exceeded the configured ambient allowance. Close other GPU workloads and retry.";
+        }
+
+        return string.Create(CultureInfo.InvariantCulture,
+            $"Benchmark invalid: pre-spawn VRAM pressure exceeded the configured ambient allowance (global free {globalFree} bytes, process budget {processBudget} bytes, pressure above baseline {pressureAboveBaseline} bytes). Close other GPU workloads and retry, or use the explicit pre-spawn pressure override.");
     }
 
     private static async Task<IReadOnlyList<IReadOnlyList<double>>> PostEmbeddingAsync(HttpClient client,
@@ -798,6 +823,8 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
         long? ProcessBudgetBytes,
         long? ProcessBudgetExcessBytes,
         double? ProcessBudgetExcessRatio,
+        long? PressureAboveBaselineBytes,
+        double? PressureAboveBaselineRatio,
         bool ExternalPressureDetected)
     {
         public static VramObservation Create(long? globalFreeBytes,
@@ -805,12 +832,24 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
         {
             if (globalFreeBytes is not { } global || processBudgetBytes is not { } process || process <= global)
             {
-                return new VramObservation(globalFreeBytes, processBudgetBytes, null, null, ExternalPressureDetected: false);
+                return new VramObservation(globalFreeBytes,
+                    processBudgetBytes,
+                    ProcessBudgetExcessBytes: null,
+                    ProcessBudgetExcessRatio: null,
+                    PressureAboveBaselineBytes: null,
+                    PressureAboveBaselineRatio: null,
+                    ExternalPressureDetected: false);
             }
 
             var excess = process - global;
             var ratio = process > 0 ? (double)excess / process : 0d;
-            return new VramObservation(globalFreeBytes, processBudgetBytes, excess, ratio, ExternalPressureDetected: false);
+            return new VramObservation(globalFreeBytes,
+                processBudgetBytes,
+                excess,
+                ratio,
+                PressureAboveBaselineBytes: null,
+                PressureAboveBaselineRatio: null,
+                ExternalPressureDetected: false);
         }
     }
 
@@ -818,19 +857,31 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
 
     private sealed class ResourceEvidenceCollector
     {
-        private readonly long _absoluteThresholdBytes;
-        private readonly double _ratioThreshold;
+        private readonly long _incrementalAbsoluteThresholdBytes;
+        private readonly double _incrementalRatioThreshold;
+        private readonly long _preSpawnAmbientBaselineBytes;
+        private readonly long _preSpawnPressureAbsoluteThresholdBytes;
+        private readonly double _preSpawnPressureRatioThreshold;
+        private readonly bool _rejectPreSpawnVramPressure;
         private readonly List<ResourceObservation> _samples = [];
 
         public ResourceEvidenceCollector(LlamaServerProfilingVramSnapshot? preSpawnVram,
-            long absoluteThresholdBytes,
-            double ratioThreshold)
+            long preSpawnAmbientBaselineBytes,
+            long preSpawnPressureAbsoluteThresholdBytes,
+            double preSpawnPressureRatioThreshold,
+            bool rejectPreSpawnVramPressure,
+            long incrementalAbsoluteThresholdBytes,
+            double incrementalRatioThreshold)
         {
-            _absoluteThresholdBytes = Math.Max(0, absoluteThresholdBytes);
-            _ratioThreshold = Math.Max(0d, ratioThreshold);
+            _preSpawnAmbientBaselineBytes = Math.Max(0, preSpawnAmbientBaselineBytes);
+            _preSpawnPressureAbsoluteThresholdBytes = Math.Max(0, preSpawnPressureAbsoluteThresholdBytes);
+            _preSpawnPressureRatioThreshold = Math.Max(0d, preSpawnPressureRatioThreshold);
+            _rejectPreSpawnVramPressure = rejectPreSpawnVramPressure;
+            _incrementalAbsoluteThresholdBytes = Math.Max(0, incrementalAbsoluteThresholdBytes);
+            _incrementalRatioThreshold = Math.Max(0d, incrementalRatioThreshold);
             PreSpawnVram = preSpawnVram is null
                 ? null
-                : MarkMaterialPressure(VramObservation.Create(preSpawnVram.GlobalFreeBytes, preSpawnVram.ProcessBudgetBytes));
+                : ClassifyPreSpawnPressure(VramObservation.Create(preSpawnVram.GlobalFreeBytes, preSpawnVram.ProcessBudgetBytes));
         }
 
         public IReadOnlyList<ResourceObservation> Samples => _samples;
@@ -865,11 +916,14 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
                 var baselineExcess = _samples[0].Vram.ProcessBudgetExcessBytes ?? 0L;
                 var additionalExcess = Math.Max(0L, currentExcess - baselineExcess);
                 var additionalRatio = (double)additionalExcess / sample.Vram.ProcessBudgetBytes.Value;
-                var material = additionalExcess >= _absoluteThresholdBytes && additionalRatio >= _ratioThreshold;
+                var material = additionalExcess >= _incrementalAbsoluteThresholdBytes
+                               && additionalRatio >= _incrementalRatioThreshold;
                 sample = sample with
                 {
                     Vram = sample.Vram with
                     {
+                        PressureAboveBaselineBytes = additionalExcess,
+                        PressureAboveBaselineRatio = additionalRatio,
                         ExternalPressureDetected = material
                     }
                 };
@@ -878,14 +932,23 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
             _samples.Add(sample);
         }
 
-        private VramObservation MarkMaterialPressure(VramObservation observation)
+        private VramObservation ClassifyPreSpawnPressure(VramObservation observation)
         {
-            var material = observation.ProcessBudgetExcessBytes is { } excess
-                           && observation.ProcessBudgetExcessRatio is { } ratio
-                           && excess >= _absoluteThresholdBytes
-                           && ratio >= _ratioThreshold;
+            if (observation.ProcessBudgetExcessBytes is not { } rawExcess
+                || observation.ProcessBudgetBytes is not > 0)
+            {
+                return observation;
+            }
+
+            var pressureAboveBaseline = Math.Max(0L, rawExcess - _preSpawnAmbientBaselineBytes);
+            var pressureAboveBaselineRatio = (double)pressureAboveBaseline / observation.ProcessBudgetBytes.Value;
+            var material = _rejectPreSpawnVramPressure
+                           && pressureAboveBaseline >= _preSpawnPressureAbsoluteThresholdBytes
+                           && pressureAboveBaselineRatio >= _preSpawnPressureRatioThreshold;
             return observation with
             {
+                PressureAboveBaselineBytes = pressureAboveBaseline,
+                PressureAboveBaselineRatio = pressureAboveBaselineRatio,
                 ExternalPressureDetected = material
             };
         }

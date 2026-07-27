@@ -194,7 +194,8 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
     }
 
     /// <summary>
-    ///     Builds the turn's <see cref="ChatClientAgent" />. The agent is built with NO instructions on either path:
+    ///     Builds the turn's <see cref="ChatClientAgent" /> and wraps it with the approval-replay validator. The inner
+    ///     agent is built with NO instructions on either path:
     ///     the system instructions are delivered exactly once per request as the leading <see cref="ChatRole.System" />
     ///     seed message (<see cref="BuildSeedMessages" />, replayed by the invocation runner). Passing them to the
     ///     ctor's <c>instructions</c> parameter (or to <see cref="ChatOptions.Instructions" />) as well would
@@ -210,7 +211,7 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
     ///     (chatClient, instructions, name, description, tools, loggerFactory, services) — verified against
     ///     Microsoft.Agents.AI 1.15.0; named arguments pin it.
     /// </summary>
-    private ChatClientAgent BuildAgent(InvocationAgentDefinition definition, IList<AITool> tools)
+    private AIAgent BuildAgent(InvocationAgentDefinition definition, IList<AITool> tools)
     {
         var agentName = $"{_options.AgentNamePrefix}-{definition.ModelId}";
         const string agentDescription = "XE Local AI Engine worker invocation agent.";
@@ -220,13 +221,14 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
             // No-skills path: instructions are NULL on the agent — they are carried once by the seed system message
             // (see BuildSeedMessages). Named arguments pin the 1.15.0 ctor order so name/description land as identity
             // and the model receives the instructions exactly once.
-            return new ChatClientAgent(_chatClient,
-                instructions: null,
-                name: agentName,
-                description: agentDescription,
-                tools: tools,
-                loggerFactory: _loggerFactory,
-                services: _serviceProvider);
+            return new ApprovalResponseValidatingAgent(
+                new ChatClientAgent(_chatClient,
+                    instructions: null,
+                    name: agentName,
+                    description: agentDescription,
+                    tools: tools,
+                    loggerFactory: _loggerFactory,
+                    services: _serviceProvider));
         }
 
         // MAAI001: Agent Skills (AgentSkillsProvider/AgentInlineSkill) shipped as [Experimental] in Microsoft.Agents.AI
@@ -248,23 +250,24 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
 #pragma warning restore CA2000
 #pragma warning restore MAAI001
 
-        return new ChatClientAgent(_chatClient,
-            new ChatClientAgentOptions
-            {
-                Name = agentName,
-                Description = agentDescription,
-                // Instructions are NOT set here (Instructions null) — they are carried once by the seed system message,
-                // exactly as on the no-skills path, so the two paths deliver instructions identically. Only the agent's
-                // own tools ride these ChatOptions; the per-turn RunOptions.ChatOptions still carries model id / think /
-                // sampling.
-                ChatOptions = new ChatOptions
+        return new ApprovalResponseValidatingAgent(
+            new ChatClientAgent(_chatClient,
+                new ChatClientAgentOptions
                 {
-                    Tools = tools
+                    Name = agentName,
+                    Description = agentDescription,
+                    // Instructions are NOT set here (Instructions null) — they are carried once by the seed system message,
+                    // exactly as on the no-skills path, so the two paths deliver instructions identically. Only the agent's
+                    // own tools ride these ChatOptions; the per-turn RunOptions.ChatOptions still carries model id / think /
+                    // sampling.
+                    ChatOptions = new ChatOptions
+                    {
+                        Tools = tools
+                    },
+                    AIContextProviders = [skillsProvider]
                 },
-                AIContextProviders = [skillsProvider]
-            },
-            _loggerFactory,
-            _serviceProvider);
+                _loggerFactory,
+                _serviceProvider));
     }
 
     /// <summary>

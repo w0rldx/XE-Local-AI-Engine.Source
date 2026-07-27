@@ -23,5 +23,13 @@
     "workloadStarted": false,
     "externalPressureDetected": true,
     "failureReason": "Benchmark invalid: material VRAM divergence indicates external GPU pressure before or during measurement."
+  },
+  "reviewCorrection": {
+    "classification": "historical-idle-wddm-false-positive",
+    "ambientBaselineBytes": 1073741824,
+    "pressureAboveBaselineBytes": 1204813824,
+    "pressureAboveBaselineRatio": 0.03715200310408381,
+    "correctedExternalPressureDetected": false,
+    "note": "The original result applied the incremental 512 MiB / 5% rule to the full WDDM ambient offset. The corrected pre-spawn classifier subtracts the ambient baseline before applying materiality thresholds."
   }
 }

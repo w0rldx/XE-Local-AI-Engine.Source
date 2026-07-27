@@ -145,10 +145,10 @@ public sealed class InferenceInvalidationEvaluatorTests
                   .Returns(Task.FromResult<string?>("/models/model.gguf"));
 
         var fingerprintProvider = Substitute.For<ILaunchPolicyFingerprintProvider>();
-        fingerprintProvider.CaptureAsync(Arg.Any<InferenceProfileRecord>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-                           .Returns(Task.FromResult(new LaunchPolicyFingerprint(
-                               LaunchPolicyFingerprintProvider.CurrentVersion,
-                               "fingerprint")));
+        fingerprintProvider.MatchesAsync(Arg.Any<InferenceProfileRecord>(),
+                               Arg.Any<string>(),
+                               Arg.Any<CancellationToken>())
+                           .Returns(Task.FromResult(true));
 
         return new InferenceInvalidationEvaluator(installedStore,
             modelStore,

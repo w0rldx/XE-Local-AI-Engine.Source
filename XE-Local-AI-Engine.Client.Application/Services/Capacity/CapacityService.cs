@@ -126,17 +126,19 @@ public sealed class CapacityService : ICapacityService
         return new CapacityDecision(CapacityVerdict.Allow, ReasonAllow, ollamaWarning, reservation);
     }
 
-    // The free byte budget. Both modes measure a *free* baseline (which already nets out resident loaded models) and
-    // subtract ONLY the ledger reservations (in-flight-not-yet-resident spawns); subtracting resident footprints again
-    // would double-count. GPU mode uses AvailableVramBytes (nvidia-smi memory.free) as that baseline; CPU mode uses
-    // AvailableRamBytes. See the fallback note for the degraded GPU path when free VRAM could not be measured.
+    // Each non-zero resource axis is checked against its live free baseline, which already nets out resident loaded
+    // models, then reduced only by in-flight ledger reservations. A zero axis needs no measurement: fully GPU-resident
+    // llama.cpp allocations memory-map the GGUF and therefore carry no committed-RAM reservation.
     private bool FitsResourceBudget(HardwareProfile profile, ResourceFootprint footprint)
     {
         var reserved = _ledger.Reserved;
-        var freeRam = profile.AvailableRamBytes - reserved.RamBytes;
-        if (profile.AvailableRamBytes <= 0 || footprint.RamBytes > freeRam)
+        if (footprint.RamBytes > 0)
         {
-            return false;
+            var freeRam = profile.AvailableRamBytes - reserved.RamBytes;
+            if (profile.AvailableRamBytes <= 0 || footprint.RamBytes > freeRam)
+            {
+                return false;
+            }
         }
 
         var useGpu = profile is { GpuAccelAvailable: true, VramKnown: true } && profile.VramBytes is > 0;
@@ -149,13 +151,15 @@ public sealed class CapacityService : ICapacityService
                 return footprint.GpuBytes <= freeVram - reserved.GpuBytes;
             }
 
-            // Fallback (free VRAM unmeasurable — e.g. a transient nvidia-smi partial, or a non-NVIDIA GPU that still
-            // reported a total): total VRAM minus the ledger only. Honest limitation — resident VRAM held outside the
-            // ledger (main chat model, warm sub-agents) is INVISIBLE on this path because the supervisor health rows
-            // carry no per-process byte footprint, so it can over-admit; the process-count cap is the backstop.
-            // follow-up: surface per-process footprints on the health snapshot to subtract them here too.
-            return profile.GpuVendor != GpuVendor.Nvidia
-                   && footprint.GpuBytes <= profile.VramBytes!.Value - reserved.GpuBytes;
+            // NVIDIA has an authoritative global-free reader. If that measurement is absent, fail closed: total VRAM
+            // cannot reveal residents outside the ledger and would over-admit. Other vendors currently expose only total
+            // VRAM, so retain the documented degraded fallback there; the process-count cap remains its backstop.
+            if (profile.GpuVendor == GpuVendor.Nvidia)
+            {
+                return false;
+            }
+
+            return footprint.GpuBytes <= profile.VramBytes!.Value - reserved.GpuBytes;
         }
 
         return footprint.GpuBytes == 0;

@@ -161,9 +161,13 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
         {
             var selection = selections[index];
 
-            // A hit only exists because the document has queryable chunks; when its catalog status is not Indexed
-            // those chunks are the last-known-good projection served during a pending/failed re-index. Disclose it.
-            var servingLastKnownGood = selection.Row.DocumentStatus != KnowledgeDocumentStatus.Indexed;
+            // A hit only exists because the document has queryable chunks. Disclose last-known-good projections both
+            // while a re-index is pending/failed and when an Indexed row still carries an older vector identity (for
+            // example immediately after a vector-policy migration, before the operator-triggered re-index completes).
+            var servingLastKnownGood =
+                selection.Row.DocumentStatus != KnowledgeDocumentStatus.Indexed
+                || (!queryVector.IsEmpty
+                    && !string.Equals(selection.Row.VectorIdentity, vectorIdentity, StringComparison.Ordinal));
 
             hits.Add(new KnowledgeSearchHit(selection.Row.DocumentId,
                 selection.ChunkId,
@@ -423,7 +427,7 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
             }
 
             command.CommandText = $"""
-                                   SELECT c.chunk_id, c.document_id, c.chunk_index, c.content, c.heading_path, d.storage_path, d.status
+                                   SELECT c.chunk_id, c.document_id, c.chunk_index, c.content, c.heading_path, d.storage_path, d.status, d.vector_identity
                                    FROM knowledge_document_chunks c
                                    JOIN knowledge_documents d ON d.document_id = c.document_id
                                    WHERE c.chunk_id IN ({string.Join(", ", placeholders)});
@@ -441,7 +445,8 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
                     reader.GetString(3),
                     headingPath,
                     reader.GetString(5),
-                    ParseDocumentStatus(reader.GetString(6)));
+                    ParseDocumentStatus(reader.GetString(6)),
+                    reader.GetString(7));
             }
         }
 
@@ -472,7 +477,14 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
         return root.Length > 0 ? root[0] : storagePath;
     }
 
-    private sealed record HydratedChunk(Guid DocumentId, int ChunkIndex, string Content, string? HeadingPath, string StoragePath, KnowledgeDocumentStatus DocumentStatus);
+    private sealed record HydratedChunk(
+        Guid DocumentId,
+        int ChunkIndex,
+        string Content,
+        string? HeadingPath,
+        string StoragePath,
+        KnowledgeDocumentStatus DocumentStatus,
+        string VectorIdentity);
 
     // One selected candidate carried from ranking to hit-building: the chunk id, its hydrated row, and the score to
     // stamp on the hit (the RRF score on the fusion/degrade paths, the rerank relevance on the reranked path).

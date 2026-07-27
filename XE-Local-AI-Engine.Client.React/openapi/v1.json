@@ -10649,6 +10649,7 @@
         "type": "object",
         "additionalProperties": false,
         "required": [
+          "externalPressureDetected",
           "runs"
         ],
         "properties": {
@@ -10889,6 +10890,9 @@
           "profileId": {
             "type": "string",
             "format": "guid"
+          },
+          "allowPreSpawnVramPressure": {
+            "type": "boolean"
           }
         }
       },

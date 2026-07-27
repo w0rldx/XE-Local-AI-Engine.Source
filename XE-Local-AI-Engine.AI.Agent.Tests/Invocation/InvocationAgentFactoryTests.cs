@@ -756,8 +756,7 @@ public sealed class InvocationAgentFactoryTests
         // (AIContextProviders is null per MAF when none are configured) — byte-identical to the pre-skills build.
         var noSkills = new InvocationAgentDefinition("qwen3.5:0.8b", "Be helpful.", [], []);
         await using var noSkillsContext = await sut.CreateAsync(noSkills);
-        var noSkillsAgent = noSkillsContext.Agent as ChatClientAgent
-                            ?? throw new AssertionException("Expected a ChatClientAgent.");
+        var noSkillsAgent = ResolveChatClientAgent(noSkillsContext.Agent);
         AssertEx.True(noSkillsAgent.AIContextProviders is null or { Count: 0 },
             "A no-skills agent must attach no context providers.");
 
@@ -775,8 +774,7 @@ public sealed class InvocationAgentFactoryTests
                 new InvocationSkill("log-triage", "Triage logs", "## Logs")
             ]);
         await using var withSkillsContext = await sut.CreateAsync(withSkills);
-        var withSkillsAgent = withSkillsContext.Agent as ChatClientAgent
-                              ?? throw new AssertionException("Expected a ChatClientAgent.");
+        var withSkillsAgent = ResolveChatClientAgent(withSkillsContext.Agent);
         var providers = AssertEx.NotNull(withSkillsAgent.AIContextProviders, "A skills agent must attach a context provider.");
         AssertEx.Equal(expected: 1, providers.Count);
         AssertEx.True(providers[0] is AgentSkillsProvider, "The attached provider must be an AgentSkillsProvider.");
@@ -799,11 +797,11 @@ public sealed class InvocationAgentFactoryTests
         var sut = CreateSut(chatClient);
 
         await using var context = await sut.CreateAsync(definition);
-        var agent = context.Agent as ChatClientAgent ?? throw new AssertionException("Expected a ChatClientAgent.");
+        var chatClientAgent = ResolveChatClientAgent(context.Agent);
 
-        await DriveAsync(agent, context);
+        await DriveAsync(context.Agent, context);
 
-        AssertOutboundInstructionContract(chatClient, instructions, expectedAgentName: "XeInvocation-qwen3.5:0.8b", agent);
+        AssertOutboundInstructionContract(chatClient, instructions, expectedAgentName: "XeInvocation-qwen3.5:0.8b", chatClientAgent);
     }
 
     // MAAI001: the skills definition drives the AgentSkillsProvider options ctor inside the factory; the wire assertion
@@ -826,21 +824,27 @@ public sealed class InvocationAgentFactoryTests
         var sut = CreateSut(chatClient);
 
         await using var context = await sut.CreateAsync(definition);
-        var agent = context.Agent as ChatClientAgent ?? throw new AssertionException("Expected a ChatClientAgent.");
+        var chatClientAgent = ResolveChatClientAgent(context.Agent);
 
-        await DriveAsync(agent, context);
+        await DriveAsync(context.Agent, context);
 
-        AssertOutboundInstructionContract(chatClient, instructions, expectedAgentName: "XeInvocation-qwen3.5:0.8b", agent);
+        AssertOutboundInstructionContract(chatClient, instructions, expectedAgentName: "XeInvocation-qwen3.5:0.8b", chatClientAgent);
     }
 
     // Mirrors the production run loop (InvocationRunner): replay the seed messages through the agent with the per-turn
     // run options, threadless, so the capturing client observes exactly what the model would receive.
-    private static async Task DriveAsync(ChatClientAgent agent, InvocationAgentContext context)
+    private static async Task DriveAsync(AIAgent agent, InvocationAgentContext context)
     {
         await foreach (var _ in agent.RunStreamingAsync(context.SeedMessages, session: null, context.RunOptions, CancellationToken.None))
         {
             // Drain the stream so the inner chat client is actually invoked.
         }
+    }
+
+    private static ChatClientAgent ResolveChatClientAgent(AIAgent agent)
+    {
+        return agent.GetService<ChatClientAgent>()
+               ?? throw new AssertionException("Expected the agent pipeline to expose its inner ChatClientAgent.");
     }
 
     // Verifies the instructions-delivery contract on the ACTUAL outbound GetStreamingResponseAsync call: the system

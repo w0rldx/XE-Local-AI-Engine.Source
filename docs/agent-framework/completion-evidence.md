@@ -114,23 +114,50 @@ Run the Linux-safe evidence lane:
 scripts/run-agent-framework-validation.sh --with-linux-package
 ```
 
-It serializes Release and Debug restore/build, runs the Debug-only registration and
-hosting smoke tests, runs the release-script static-analysis/P0 compile gate, and
-builds the real portable `linux-x64` package. Logs are path-sanitized and hashed in
+It serializes Release and Debug restore/build, runs the permanent Agent Framework
+suite plus the llama-server adapter-policy/architecture scope, runs the Debug-only
+registration and route-registration contract tests, runs the release-script
+static-analysis/P0 compile gate, and can optionally build the real portable
+`linux-x64` package. Logs are path-sanitized and hashed in
 `docs/agent-framework/evidence/validation/manifest.json`.
 
-The refreshed validation manifest tests source commit
-`7ed1f03de49af59456b242324804b1eeee58ad44` and records `result: passed`:
+The refreshed validation manifest was captured on the review-correction worktree
+whose base commit was `3caca836ba2b2c1de58bede477f047b455ec8562`; the tested source also included
+the current uncommitted review corrections. Rerun the lane after the corrections are
+committed to bind the evidence to the final delivery commit. The manifest records
+`result: passed`:
 
 - Release solution restore/build: passed with 0 warnings and 0 errors;
-- permanent Release Agent Framework compatibility gate: 202/202 passed, with
+- permanent Release Agent Framework compatibility gate: 205/205 passed, with
   unchanged test assemblies;
+- Release llama-server adapter-policy and architecture dependency scope: 11 passed,
+  2 live llama-server round trips skipped by their explicit opt-in environment gate,
+  with unchanged test assemblies;
 - Debug solution restore/build: passed with 0 warnings and 0 errors;
-- Debug DevUI registration smoke: 1/1 passed;
-- Debug DevUI hosting/route smoke: 1/1 passed;
+- Debug DevUI DI-registration contract: 1/1 passed;
+- Debug DevUI endpoint-mapping contract: 1/1 passed;
 - release-script static analysis and the `P0_SPIKE` compile gate: clean;
-- real portable `linux-x64` package: built, 86 MiB, SHA-256
-  `77f1ff2ecbefd2535e4bcb91efdbb07faece691b95c4c68d4c77632138d286bc`.
+- the portable `linux-x64` package was not rebuilt in this refresh
+  (`linuxPortablePackageIncluded: false`).
+
+The two Debug checks prove service construction and endpoint mapping only. They are
+not a live browser, live HTTP, or interactive DevUI proof.
+
+### Approval replay hardening
+
+The sessionless invocation runner replays approval history with `session: null`.
+MAF 1.15's session-backed `ApprovalResponseBindingChatClient` therefore becomes a
+no-op on that path, while MEAI's function-invocation client executes the tool call
+carried by an approved `ToolApprovalResponseContent`. A caller that could substitute
+that tool call while retaining the request id could change its name or arguments
+after approval.
+
+`ApprovalResponseValidatingAgent` now validates the caller-provided replay before
+MAF transforms it. It requires every response to match exactly one surfaced request
+and the original call id, tool type/name, and JSON-equivalent arguments. Unmatched,
+duplicate, or substituted responses fail closed before tool execution. The permanent
+suite covers approve, reject, reverse-ordered parallel decisions, cancellation,
+tampered arguments, unmatched ids, and duplicate responses.
 
 ### Native Windows gap
 
@@ -147,16 +174,23 @@ Linux portable ZIP or PowerShell static analysis as a Windows packaging pass.
 
 ## Rollback
 
-A real rollback branch was created from delivery commit `1a809330`:
+The canonical rollback mechanism is the committed portable patch:
 
-- branch: `rollback/framework-prior-pins-1a809330`
-- commit: `30ba0768` (`revert: restore pre-upgrade AI framework pins`)
+```bash
+git apply --check docs/agent-framework/evidence/rollback/restore-prior-pins.patch
+git apply --index docs/agent-framework/evidence/rollback/restore-prior-pins.patch
+git diff --cached -- Directory.Packages.props
+git commit -m "revert: restore pre-upgrade AI framework pins"
+```
 
-It restores exactly the 14 central pins changed since `e67d6697` and nothing else.
-The delivery branch remains upgraded.
+This restores exactly the 14 central pins changed since `e67d6697` and does not
+depend on an out-of-branch Git object. Its SHA-256 is recorded as
+`canonicalReplay.sha256` in
+`docs/agent-framework/evidence/rollback/manifest.json`.
 
-The rollback was also cherry-picked onto the combined six-plan delivery tree at
-`16917a2e` and validated independently:
+Historical validation remains useful proof, but is not the replay dependency. The
+rollback was applied to the combined six-plan delivery tree at `16917a2e` and
+validated independently:
 
 - proof commit: `bc546d73`
 - `Directory.Packages.props` is byte-identical to the `e67d6697` baseline
@@ -169,19 +203,19 @@ The rollback was also cherry-picked onto the combined six-plan delivery tree at
 The sanitized logs, exact pin mapping, hashes, and portable rollback patch are
 under `docs/agent-framework/evidence/rollback/`.
 
-Emergency replay when the local rollback branch/commit is available:
+Before squashing or garbage-collecting the implementation history, preserve the
+historical proof object with an annotated local tag:
 
 ```bash
-git cherry-pick 30ba0768
+git cat-file -e bc546d73^{commit}
+git tag -a agent-framework-rollback-proof-bc546d73 bc546d73 \
+  -m "Preserve validated Agent Framework prior-pin rollback proof"
 ```
 
-Portable replay from the committed evidence, without relying on that
-out-of-branch Git object:
-
-```bash
-git apply --index docs/agent-framework/evidence/rollback/restore-prior-pins.patch
-git commit -m "revert: restore pre-upgrade AI framework pins"
-```
+This only creates a local tag. Push it only after a human chooses the remote tag
+namespace and retention policy. The historical source commit `30ba0768` may still
+be inspected when present, but rollback instructions do not require cherry-picking
+it.
 
 Validate the resulting rollback tree:
 
@@ -200,10 +234,10 @@ scripts/with-build-lock.sh -- \
 ```
 
 To reapply the upgrade after the rollback is no longer needed, revert the new
-cherry-pick commit (not the original hash, if cherry-pick produced a different id):
+rollback commit:
 
 ```bash
-git revert <rollback-commit-created-by-cherry-pick>
+git revert <rollback-commit>
 ```
 
 Then rerun dependency capture and the full validation lane.

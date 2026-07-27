@@ -6,6 +6,16 @@
   "baselinePinsCommit": "e67d669709169fefc4cffab444af66654526a8d8",
   "rollbackSourceCommit": "30ba0768bff550a3423dbff17867e5e788333a45",
   "proofCommit": "bc546d73a801c0a03a42df624308ffeb515d0786",
+  "canonicalReplay": {
+    "artifact": "restore-prior-pins.patch",
+    "sha256": "739aadf5694cfd7a968240e37e05996459b950358a74159976fcb5bdb0233b07",
+    "dependsOnGitObject": false
+  },
+  "historicalProof": {
+    "rollbackSourceCommit": "30ba0768bff550a3423dbff17867e5e788333a45",
+    "proofCommit": "bc546d73a801c0a03a42df624308ffeb515d0786",
+    "preservationTagSuggestion": "agent-framework-rollback-proof-bc546d73"
+  },
   "scope": {
     "changedFiles": [
       "Directory.Packages.props"

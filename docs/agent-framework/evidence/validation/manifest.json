@@ -1,9 +1,17 @@
 {
   "schemaVersion": 1,
-  "capturedAtUtc": "2026-07-26T23:17:52.395825+00:00",
-  "commit": "7ed1f03de49af59456b242324804b1eeee58ad44",
+  "capturedAtUtc": "2026-07-27T01:12:40.203614+00:00",
+  "commit": "3caca836ba2b2c1de58bede477f047b455ec8562",
   "result": "passed",
-  "linuxPortablePackageIncluded": true,
+  "linuxPortablePackageIncluded": false,
+  "releaseTestScopes": {
+    "agentFramework": "All XE-Local-AI-Engine.AI.Agent.Tests in Release.",
+    "adapterAndArchitecture": "LlamaServerAdapterIntegrationTests and LayerDependencyTests in Release; live llama-server adapter round trips remain opt-in when their environment variables are absent."
+  },
+  "debugContractChecks": {
+    "registration": "AgentDevUiExtensionsTests proves Debug-only DI registration.",
+    "route": "FrameworkDevUiHostingSmokeTests proves Debug-only endpoint mapping; it is not a live browser or HTTP runtime proof."
+  },
   "windowsTesterPackage": {
     "status": "gap",
     "reason": "publish/package-tester-win.ps1 requires a native Windows packaging machine",
@@ -12,39 +20,39 @@
   "logs": [
     {
       "step": "debug-build",
-      "sha256": "c85de701e3b8a64ad79e442cbcbe7c97ab604ed60fbb4ef737d03962fc02eb6f"
+      "sha256": "fa26dfe28a22e3caf5fe1faa6618997680f5e9432e9a4a63fc3ea6cb4370749a"
     },
     {
-      "step": "debug-devui-hosting-smoke",
-      "sha256": "49010a4e8e867b394e9b69a11fcd38364051a9a5294be7a30c7e90d6c16058c1"
+      "step": "debug-devui-registration-contract",
+      "sha256": "f3ac94d96588b67cd0db0200dcf2acfff9b5523e05192e193d3bceb5fcb3656b"
     },
     {
-      "step": "debug-devui-registration-smoke",
-      "sha256": "912268e608dd0bc05af4995b1945b3d86b101da30e8bd7f619460027e6005f6b"
+      "step": "debug-devui-route-contract",
+      "sha256": "fef4afe6b7418ad91ca1b99d7fb8cde346b39c8ff67877127106692c656f9689"
     },
     {
       "step": "debug-restore",
-      "sha256": "46a2f2a4f68964385f1602193120f29232f858f7d68e08c56f63bed8fc2afe60"
+      "sha256": "20cf6b4d64e84b9e7755349828ebc6796b42ccdb9e1c8e7367df2f5fa022b1db"
     },
     {
-      "step": "linux-portable-package",
-      "sha256": "9f7540d4ce117910df9574253b8a45bab0693941e618ada50fc9cfe5ab32013c"
+      "step": "release-adapter-architecture-tests",
+      "sha256": "dc29ceb5077d8a1867b1ce18da978e394252dd244f972d3624707ac175993c76"
     },
     {
       "step": "release-agent-deterministic-tests",
-      "sha256": "c005ec78da74497d0ca3d6c79399637e19c57bf1b320f48b278551527eee5fb9"
+      "sha256": "7ab938e2bcd8898108325a2e6ee509831eda121629f6934b650e021c5f22f99c"
     },
     {
       "step": "release-build",
-      "sha256": "cf648d2d5f91bfbdfd780702b636330a5b83e0504ed97814216123958ee3119b"
+      "sha256": "9579932cc8028f707e89075cad27dba5de395df3f5dd3f0542f9fb8156db1de7"
     },
     {
       "step": "release-restore",
-      "sha256": "2aafe91a7b11b9e2a25f2e1612255ff47b34a6a20ab0354f3ee523dc5fd34f1d"
+      "sha256": "042889c348945111845ab684a55b67f50af866c86bc234934941cc8faf246a9d"
     },
     {
       "step": "release-static-analysis",
-      "sha256": "1a24629736b911912c2bbca33ff3f4bab56a4c33a4e640249d9ccd44c018be0a"
+      "sha256": "b94be892e53dec8029e06d825e027d4a0510ec6a09124e1e9e5e798299be8bbc"
     }
   ]
 }

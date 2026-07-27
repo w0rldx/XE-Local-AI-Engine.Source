@@ -56,14 +56,26 @@ export interface InferenceProfileActionVariables {
 	profileId: string;
 }
 
+export interface BenchmarkInferenceProfileVariables extends InferenceProfileActionVariables {
+	allowPreSpawnVramPressure: boolean;
+}
+
 // Benchmark returns the run's metrics; map them so the panel can render the metrics card + enrich the outcome line.
 export function useBenchmarkInferenceProfile() {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		mutationFn: async (variables: InferenceProfileActionVariables): Promise<InferenceBenchmarkResult> => {
+		mutationFn: async (variables: BenchmarkInferenceProfileVariables): Promise<InferenceBenchmarkResult> => {
 			const options = withResponseValidation(benchmarkInferenceProfileMutation());
-			const response = await options.mutationFn?.({ body: { profileId: variables.profileId } }, undefined as never);
+			const response = await options.mutationFn?.(
+				{
+					body: {
+						profileId: variables.profileId,
+						allowPreSpawnVramPressure: variables.allowPreSpawnVramPressure,
+					},
+				},
+				undefined as never,
+			);
 			return toBenchmarkResult(response);
 		},
 		onSuccess: () => queryClient.invalidateQueries({ queryKey: modelFitInvalidationKey(inferenceProfileQueryIds.list) }),

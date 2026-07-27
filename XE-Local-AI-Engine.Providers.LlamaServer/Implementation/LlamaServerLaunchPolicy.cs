@@ -60,8 +60,8 @@ internal sealed class LlamaServerLaunchPolicy : ILlamaServerLaunchPolicy
                 CpuThreadsBatch: null);
         }
 
-        // GPU explore: the role's policy context plus the KV-cache quantization + flash attention optimization, unless
-        // this backend already had the optimized config recorded as unable to reach readiness.
+        // GPU explore: the shared allocation's context plus the KV-cache quantization + flash attention optimization,
+        // unless this backend already had the optimized config recorded as unable to reach readiness.
         var useKvQuant = _options.EnableGpuKvCacheQuantization
                          && !await _fallbackStore.IsOptimizedConfigDisabledAsync(variant, ct).ConfigureAwait(false);
 
@@ -70,29 +70,6 @@ internal sealed class LlamaServerLaunchPolicy : ILlamaServerLaunchPolicy
             _options.KvCacheType,
             CpuThreads: null,
             CpuThreadsBatch: null);
-    }
-
-    // Source-compatible test/provider-host bridge. Normal application launches use the shared allocation overload.
-    internal Task<LlamaServerLaunchPlan> ResolveAsync(ModelRole role,
-        GpuVariant variant,
-        ResolvedLaunchArguments resolved,
-        long? modelTrainContextTokens,
-        CancellationToken ct)
-    {
-        var requested = _options.ContextTokensForRole(role);
-        if (modelTrainContextTokens is > 0 && requested >= modelTrainContextTokens.Value)
-        {
-            requested = (int)Math.Max(1, Math.Min(int.MaxValue, modelTrainContextTokens.Value - _options.ContextSafetyMarginTokens));
-        }
-
-        var allocation = new ProcessContextAllocation(requested,
-            modelTrainContextTokens is > 0 ? (int?)Math.Min(int.MaxValue, modelTrainContextTokens.Value) : null,
-            resolved.ExploreMode ? ProcessContextAllocationSource.HardwareTier : ProcessContextAllocationSource.FrozenProfile,
-            variant == GpuVariant.Cpu ? ProcessPlacementMode.Cpu : ProcessPlacementMode.GpuResident,
-            ResourceFootprint.Zero,
-            ContentIdentity: "legacy",
-            CacheKey: "legacy");
-        return ResolveAsync(role, variant, resolved, allocation, ct);
     }
 
     /// <inheritdoc />

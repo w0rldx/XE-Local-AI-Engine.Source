@@ -116,7 +116,7 @@ describe("InferenceProfilePanel", () => {
 		renderPanel();
 
 		const fingerprint = screen.getByTestId("inference-profile-fingerprint-exp1").textContent ?? "";
-		expect(fingerprint).toContain("policy v1");
+		expect(fingerprint.toLowerCase()).toContain("policy v1");
 		expect(fingerprint).toContain("01234567");
 		expect(fingerprint).not.toContain("89abcdef0123456789abcdef");
 	});
@@ -160,7 +160,24 @@ describe("InferenceProfilePanel", () => {
 		fireEvent.click(screen.getByTestId("inference-profile-benchmark-exp1"));
 
 		expect(benchmark.mutate).toHaveBeenCalledWith(
-			{ profileId: "exp1" },
+			{ profileId: "exp1", allowPreSpawnVramPressure: false },
+			expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) }),
+		);
+	});
+
+	it("requires an explicit operator toggle before bypassing the pre-spawn VRAM-pressure gate", () => {
+		const benchmark = makeMutation();
+		hooksMock.useBenchmarkInferenceProfile.mockReturnValue(benchmark);
+		const explored = makeProfile({ id: "exp1", status: "explored" });
+		hooksMock.useInferenceProfiles.mockReturnValue(makeQuery([explored]));
+
+		renderPanel();
+
+		fireEvent.click(screen.getByTestId("inference-profile-allow-pre-spawn-vram-pressure"));
+		fireEvent.click(screen.getByTestId("inference-profile-benchmark-exp1"));
+
+		expect(benchmark.mutate).toHaveBeenCalledWith(
+			{ profileId: "exp1", allowPreSpawnVramPressure: true },
 			expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) }),
 		);
 	});
@@ -179,6 +196,14 @@ describe("InferenceProfilePanel", () => {
 			{ modelName: "unsloth/Phi-4-GGUF", role: "chat" },
 			expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) }),
 		);
+	});
+
+	it("offers the reranker role accepted by the backend", () => {
+		renderPanel();
+
+		fireEvent.mouseDown(screen.getByTestId("inference-profile-explore-role"));
+
+		expect(screen.getByText("Reranker")).toBeTruthy();
 	});
 
 	it("never renders raw llama.cpp launch flags or a machine key (outcomes only)", () => {
