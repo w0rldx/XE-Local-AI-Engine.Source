@@ -53,7 +53,7 @@
           "available": true,
           "exit_code": 0,
           "stderr": "",
-          "stdout": "0, NVIDIA GeForce RTX 5090, GPU-d753e8bb-b687-daf2-f54f-79c1ed60cae5, 610.74, 32607, 29199, 2989, 17"
+          "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 29199, 2989, 17"
         }
       },
       "ambient_before": {
@@ -78,7 +78,7 @@
           "available": true,
           "exit_code": 0,
           "stderr": "",
-          "stdout": "0, NVIDIA GeForce RTX 5090, GPU-d753e8bb-b687-daf2-f54f-79c1ed60cae5, 610.74, 32607, 25257, 6931, 32"
+          "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 25257, 6931, 32"
         }
       },
       "argv": [
@@ -127,7 +127,7 @@
               "available": true,
               "exit_code": 0,
               "stderr": "",
-              "stdout": "0, NVIDIA GeForce RTX 5090, GPU-d753e8bb-b687-daf2-f54f-79c1ed60cae5, 610.74, 32607, 24762, 7426, 32"
+              "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 24762, 7426, 32"
             }
           },
           "elapsed_ms": 23534.719,
@@ -167,7 +167,7 @@
               "available": true,
               "exit_code": 0,
               "stderr": "",
-              "stdout": "0, NVIDIA GeForce RTX 5090, GPU-d753e8bb-b687-daf2-f54f-79c1ed60cae5, 610.74, 32607, 24652, 7536, 33"
+              "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 24652, 7536, 33"
             }
           },
           "elapsed_ms": 22325.138,
@@ -207,7 +207,7 @@
               "available": true,
               "exit_code": 0,
               "stderr": "",
-              "stdout": "0, NVIDIA GeForce RTX 5090, GPU-d753e8bb-b687-daf2-f54f-79c1ed60cae5, 610.74, 32607, 28189, 3999, 11"
+              "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 28189, 3999, 11"
             }
           },
           "elapsed_ms": 21212.207,
@@ -247,7 +247,7 @@
               "available": true,
               "exit_code": 0,
               "stderr": "",
-              "stdout": "0, NVIDIA GeForce RTX 5090, GPU-d753e8bb-b687-daf2-f54f-79c1ed60cae5, 610.74, 32607, 28126, 4062, 13"
+              "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 28126, 4062, 13"
             }
           },
           "elapsed_ms": 21311.669,
@@ -287,7 +287,7 @@
               "available": true,
               "exit_code": 0,
               "stderr": "",
-              "stdout": "0, NVIDIA GeForce RTX 5090, GPU-d753e8bb-b687-daf2-f54f-79c1ed60cae5, 610.74, 32607, 28073, 4115, 9"
+              "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 28073, 4115, 9"
             }
           },
           "elapsed_ms": 21313.095,
@@ -330,7 +330,7 @@
               "available": true,
               "exit_code": 0,
               "stderr": "",
-              "stdout": "0, NVIDIA GeForce RTX 5090, GPU-d753e8bb-b687-daf2-f54f-79c1ed60cae5, 610.74, 32607, 24937, 7251, 37"
+              "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 24937, 7251, 37"
             }
           },
           "elapsed_ms": 23540.001,
@@ -387,7 +387,7 @@
           "available": true,
           "exit_code": 0,
           "stderr": "",
-          "stdout": "0, NVIDIA GeForce RTX 5090, GPU-d753e8bb-b687-daf2-f54f-79c1ed60cae5, 610.74, 32607, 29203, 2985, 3"
+          "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 29203, 2985, 3"
         }
       },
       "ambient_before": {
@@ -412,7 +412,7 @@
           "available": true,
           "exit_code": 0,
           "stderr": "",
-          "stdout": "0, NVIDIA GeForce RTX 5090, GPU-d753e8bb-b687-daf2-f54f-79c1ed60cae5, 610.74, 32607, 29154, 3034, 7"
+          "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 29154, 3034, 7"
         }
       },
       "argv": [
@@ -463,7 +463,7 @@
               "available": true,
               "exit_code": 0,
               "stderr": "",
-              "stdout": "0, NVIDIA GeForce RTX 5090, GPU-d753e8bb-b687-daf2-f54f-79c1ed60cae5, 610.74, 32607, 29176, 3012, 8"
+              "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 29176, 3012, 8"
             }
           },
           "elapsed_ms": 670.625,
@@ -517,7 +517,7 @@
               "available": true,
               "exit_code": 0,
               "stderr": "",
-              "stdout": "0, NVIDIA GeForce RTX 5090, GPU-d753e8bb-b687-daf2-f54f-79c1ed60cae5, 610.74, 32607, 29197, 2991, 10"
+              "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 29197, 2991, 10"
             }
           },
           "elapsed_ms": 670.599,
@@ -556,7 +556,7 @@
               "available": true,
               "exit_code": 0,
               "stderr": "",
-              "stdout": "0, NVIDIA GeForce RTX 5090, GPU-d753e8bb-b687-daf2-f54f-79c1ed60cae5, 610.74, 32607, 29198, 2990, 10"
+              "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 29198, 2990, 10"
             }
           },
           "elapsed_ms": 676.579,
@@ -595,7 +595,7 @@
               "available": true,
               "exit_code": 0,
               "stderr": "",
-              "stdout": "0, NVIDIA GeForce RTX 5090, GPU-d753e8bb-b687-daf2-f54f-79c1ed60cae5, 610.74, 32607, 29203, 2985, 12"
+              "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 29203, 2985, 12"
             }
           },
           "elapsed_ms": 671.708,
@@ -637,7 +637,7 @@
               "available": true,
               "exit_code": 0,
               "stderr": "",
-              "stdout": "0, NVIDIA GeForce RTX 5090, GPU-d753e8bb-b687-daf2-f54f-79c1ed60cae5, 610.74, 32607, 28660, 3528, 15"
+              "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 28660, 3528, 15"
             }
           },
           "elapsed_ms": 648.595,
@@ -711,7 +711,7 @@
       "available": true,
       "exit_code": 0,
       "stderr": "",
-      "stdout": "0, NVIDIA GeForce RTX 5090, GPU-d753e8bb-b687-daf2-f54f-79c1ed60cae5, 610.74"
+      "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74"
     },
     "os": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.43",
     "python": "3.14.6",

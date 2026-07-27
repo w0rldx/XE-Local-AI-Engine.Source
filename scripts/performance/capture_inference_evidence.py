@@ -22,6 +22,7 @@ import signal
 import statistics
 import subprocess
 import sys
+import threading
 import time
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
@@ -30,6 +31,13 @@ from typing import Any
 
 
 SCHEMA_VERSION = "1.0"
+MAX_CAPTURE_STREAM_BYTES = 256 * 1024
+PROCESS_CLEANUP_TIMEOUT_SECONDS = 5.0
+UUID_CORE_PATTERN = r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}"
+GPU_UUID_PATTERN = re.compile(
+    rf"\b(?:MIG-GPU-{UUID_CORE_PATTERN}/\d+/\d+|MIG-{UUID_CORE_PATTERN}|GPU-{UUID_CORE_PATTERN})\b",
+    re.IGNORECASE,
+)
 FIT_FLAGS_WITH_VALUE = (
     "-c", "--ctx-size",
     "-ngl", "--gpu-layers", "--n-gpu-layers",
@@ -467,12 +475,93 @@ def percentile95(values: list[float]) -> float:
     return ordered[index]
 
 
+class BoundedStreamCapture:
+    def __init__(self) -> None:
+        marker_size = len(f"\n... <truncated; full sha256={'0' * 64}> ...\n".encode())
+        retained_bytes = MAX_CAPTURE_STREAM_BYTES - marker_size
+        self._prefix_capacity = retained_bytes // 2
+        self._suffix_capacity = retained_bytes - self._prefix_capacity
+        self._digest = hashlib.sha256()
+        self._byte_count = 0
+        self._complete = bytearray()
+        self._prefix = b""
+        self._suffix = bytearray()
+        self._truncated = False
+
+    def add(self, value: str) -> None:
+        encoded = value.encode("utf-8")
+        self._digest.update(encoded)
+        self._byte_count += len(encoded)
+        if not self._truncated:
+            combined = self._complete + encoded
+            if len(combined) <= MAX_CAPTURE_STREAM_BYTES:
+                self._complete = combined
+                return
+            self._truncated = True
+            self._prefix = bytes(combined[:self._prefix_capacity])
+            self._suffix = bytearray(combined[-self._suffix_capacity:])
+            self._complete.clear()
+            return
+
+        self._suffix.extend(encoded)
+        if len(self._suffix) > self._suffix_capacity:
+            del self._suffix[:-self._suffix_capacity]
+
+    def finish(self) -> tuple[str, dict[str, Any]]:
+        digest = self._digest.hexdigest()
+        metadata = {"bytes": self._byte_count, "sha256": digest, "truncated": self._truncated}
+        if not self._truncated:
+            return self._complete.decode("utf-8", errors="ignore"), metadata
+        marker = f"\n... <truncated; full sha256={digest}> ...\n"
+        bounded = (
+            self._prefix.decode("utf-8", errors="ignore")
+            + marker
+            + self._suffix.decode("utf-8", errors="ignore")
+        )
+        return bounded, metadata
+
+
+def drain_capture_stream(stream: Any, capture: BoundedStreamCapture, errors: list[BaseException]) -> None:
+    try:
+        while chunk := stream.read(8192):
+            capture.add(chunk)
+    except BaseException as exc:
+        errors.append(exc)
+    finally:
+        stream.close()
+
+
+def cleanup_process_group(process: subprocess.Popen[str],
+        readers: tuple[threading.Thread, threading.Thread],
+        executable: str) -> None:
+    deadline = time.monotonic() + PROCESS_CLEANUP_TIMEOUT_SECONDS
+    signal_process_group(process, signal.SIGKILL)
+    try:
+        process.wait(timeout=max(0.001, deadline - time.monotonic()))
+    except subprocess.TimeoutExpired as exc:
+        raise CaptureError(
+            f"Cleanup failed: process group for {executable!r} did not exit after SIGKILL"
+        ) from exc
+    for reader in readers:
+        reader.join(timeout=max(0.0, deadline - time.monotonic()))
+    if any(reader.is_alive() for reader in readers):
+        raise CaptureError(f"Cleanup failed: output readers for {executable!r} did not finish")
+
+
 def run_once(argv: list[str], timeout_seconds: float, expected_timeout: bool, cwd: str | None, env: dict[str, str]) -> dict[str, Any]:
     start = time.monotonic()
     try:
         process = subprocess.Popen(argv, cwd=cwd, env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
     except OSError as exc:
         raise CaptureError(f"Could not start {argv[0]!r}: {exc}") from exc
+    stdout_capture = BoundedStreamCapture()
+    stderr_capture = BoundedStreamCapture()
+    reader_errors: list[BaseException] = []
+    stdout_reader = threading.Thread(target=drain_capture_stream, args=(process.stdout, stdout_capture, reader_errors), daemon=True)
+    stderr_reader = threading.Thread(target=drain_capture_stream, args=(process.stderr, stderr_capture, reader_errors), daemon=True)
+    stdout_reader.start()
+    stderr_reader.start()
+    cleanup_finished = False
     try:
         deadline = start + timeout_seconds
         peak_rss_bytes = 0
@@ -491,14 +580,19 @@ def run_once(argv: list[str], timeout_seconds: float, expected_timeout: bool, cw
         if timed_out:
             signal_process_group(process, signal.SIGTERM)
             try:
-                stdout, stderr = process.communicate(timeout=5)
+                process.wait(timeout=PROCESS_CLEANUP_TIMEOUT_SECONDS)
             except subprocess.TimeoutExpired:
-                signal_process_group(process, signal.SIGKILL)
-                stdout, stderr = process.communicate()
-        else:
-            stdout, stderr = process.communicate()
+                pass
+        cleanup_process_group(process, (stdout_reader, stderr_reader), argv[0])
+        cleanup_finished = True
+        if reader_errors:
+            raise CaptureError(f"Could not read captured output from {argv[0]!r}: {reader_errors[0]}")
+        stdout, stdout_metadata = stdout_capture.finish()
+        stderr, stderr_metadata = stderr_capture.finish()
         elapsed_ms = (time.monotonic() - start) * 1000
         success = (timed_out and expected_timeout) or (not timed_out and process.returncode == 0)
+        parsed_metrics = {} if stdout_metadata["truncated"] else numeric_metrics(stdout)
+        metrics = {"wall_elapsed_ms": round(elapsed_ms, 3), **parsed_metrics}
         return {
             "exit_code": process.returncode,
             "timed_out": timed_out,
@@ -508,11 +602,18 @@ def run_once(argv: list[str], timeout_seconds: float, expected_timeout: bool, cw
             "peak_rss_bytes": peak_rss_bytes or None,
             "ambient_during": ambient_during,
             "stdout": stdout,
+            "stdout_bytes": stdout_metadata["bytes"],
+            "stdout_sha256": stdout_metadata["sha256"],
+            "stdout_truncated": stdout_metadata["truncated"],
             "stderr": stderr,
-            "metrics": {"wall_elapsed_ms": round(elapsed_ms, 3), **numeric_metrics(stdout)},
+            "stderr_bytes": stderr_metadata["bytes"],
+            "stderr_sha256": stderr_metadata["sha256"],
+            "stderr_truncated": stderr_metadata["truncated"],
+            "metrics": metrics,
         }
     finally:
-        signal_process_group(process, signal.SIGKILL)
+        if not cleanup_finished:
+            cleanup_process_group(process, (stdout_reader, stderr_reader), argv[0])
 
 
 def signal_process_group(process: subprocess.Popen[str], requested_signal: signal.Signals) -> None:
@@ -1089,7 +1190,7 @@ def sanitize_artifact(input_path: Path, output_path: Path, replacements: list[st
             result = value
             for source, label in parsed:
                 result = result.replace(source, label)
-            return result
+            return GPU_UUID_PATTERN.sub("<gpu-uuid>", result)
         return value
 
     sanitized = scrub(artifact)
@@ -1097,6 +1198,9 @@ def sanitize_artifact(input_path: Path, output_path: Path, replacements: list[st
     leaked = re.search(r"(?:/home/[^/\s]+|[A-Za-z]:\\\\Users\\\\[^\\\\\\s]+)", serialized)
     if leaked:
         raise CaptureError(f"Sanitized artifact still contains a user-home path near {leaked.group(0)!r}; add --replace")
+    leaked_gpu_uuid = GPU_UUID_PATTERN.search(serialized)
+    if leaked_gpu_uuid:
+        raise CaptureError("Sanitized artifact still contains a GPU UUID")
     sanitized["sanitized"] = True
     sanitized["sanitization"] = {"replacements": [{"label": label} for _, label in parsed], "source_sha256": sha256_file(input_path)}
     write_json(output_path, sanitized)

@@ -216,6 +216,134 @@ public sealed class FrameworkApprovalGateTests
     }
 
     [Test]
+    public async Task ApprovalRequiredTool_StreamingTamperedRequestAndResponse_FailsClosedAgainstSurfacedSnapshot()
+    {
+        var executed = 0;
+        string? reasonSeen = null;
+        var tool = BuildApprovalTool(reason =>
+        {
+            executed++;
+            reasonSeen = reason;
+        });
+
+        using var scripted = new ScriptedApprovalChatClient(ToolName);
+        var chatClient = BuildFunctionInvokingChatClient(scripted);
+        var sp = new ServiceCollection().BuildServiceProvider();
+        var agent = BuildAgent(chatClient, tool, sp);
+        var seed = BuildSeed();
+        var (first, request) = await RunFirstStreamingApprovalAsync(agent, seed);
+        var originalCall = AssertEx.NotNull(request.ToolCall as FunctionCallContent);
+        var tamperedCall = new FunctionCallContent(originalCall.CallId,
+            originalCall.Name,
+            new Dictionary<string, object?>
+            {
+                ["reason"] = "tampered-in-request-and-response"
+            });
+        var tamperedRequest = new ToolApprovalRequestContent(request.RequestId, tamperedCall);
+        var tamperedResponse = new ToolApprovalResponseContent(request.RequestId, approved: true, tamperedCall);
+
+        var resume = new List<ChatMessage>(seed);
+        resume.AddRange(first.Messages.Select(message => new ChatMessage(message.Role,
+            message.Contents
+                   .Select(content => ReferenceEquals(content, request) ? (AIContent)tamperedRequest : content)
+                   .ToList())));
+        resume.Add(new ChatMessage(ChatRole.User, [tamperedResponse]));
+
+        _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() => agent
+                                                                          .RunStreamingAsync(resume,
+                                                                              session: null,
+                                                                              options: null,
+                                                                              CancellationToken.None)
+                                                                          .ToAgentResponseAsync(CancellationToken.None));
+
+        AssertEx.Equal(expected: 0, executed, "altering both replay request and response must not replace the surfaced tool call");
+        AssertEx.True(reasonSeen is null, "jointly tampered arguments must never reach the approval-required tool");
+    }
+
+    [Test]
+    public async Task ApprovalRequiredTool_StreamingSequentialExactReplay_ExecutesAtMostOnce()
+    {
+        var executed = 0;
+        var tool = BuildApprovalTool(_ => executed++);
+
+        using var scripted = new ScriptedApprovalChatClient(ToolName);
+        var chatClient = BuildFunctionInvokingChatClient(scripted);
+        var sp = new ServiceCollection().BuildServiceProvider();
+        var agent = BuildAgent(chatClient, tool, sp);
+        var seed = BuildSeed();
+        var (first, request) = await RunFirstStreamingApprovalAsync(agent, seed);
+        var resume = BuildResume(seed, first, request.CreateResponse(true));
+
+        _ = await agent
+                  .RunStreamingAsync(resume, session: null, options: null, CancellationToken.None)
+                  .ToAgentResponseAsync(CancellationToken.None);
+        AssertEx.Equal(expected: 1, executed, "the first approved replay must execute the tool exactly once");
+
+        _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() => agent
+                                                                          .RunStreamingAsync(resume,
+                                                                              session: null,
+                                                                              options: null,
+                                                                              CancellationToken.None)
+                                                                          .ToAgentResponseAsync(CancellationToken.None));
+
+        AssertEx.Equal(expected: 1, executed, "an exact sequential replay of a consumed approval must not execute again");
+    }
+
+    [Test]
+    public async Task ApprovalRequiredTool_StreamingConcurrentExactReplay_ReservesBeforeExecutionAndExecutesAtMostOnce()
+    {
+        var executed = 0;
+        using var toolEntered = new ManualResetEventSlim();
+        using var releaseTool = new ManualResetEventSlim();
+        var tool = BuildApprovalTool(_ =>
+        {
+            Interlocked.Increment(ref executed);
+            toolEntered.Set();
+            releaseTool.Wait(TimeSpan.FromSeconds(10));
+        });
+
+        using var scripted = new ScriptedApprovalChatClient(ToolName);
+        var chatClient = BuildFunctionInvokingChatClient(scripted);
+        var sp = new ServiceCollection().BuildServiceProvider();
+        var agent = BuildAgent(chatClient, tool, sp);
+        var seed = BuildSeed();
+        var (first, request) = await RunFirstStreamingApprovalAsync(agent, seed);
+        var resume = BuildResume(seed, first, request.CreateResponse(true));
+        Task<AgentResponse>? firstResume = null;
+
+        try
+        {
+            firstResume = Task.Run(() => agent
+                                              .RunStreamingAsync(resume,
+                                                  session: null,
+                                                  options: null,
+                                                  CancellationToken.None)
+                                              .ToAgentResponseAsync(CancellationToken.None));
+            AssertEx.True(toolEntered.Wait(TimeSpan.FromSeconds(5)),
+                "the first resume must reserve the approval and enter the tool before the concurrent replay");
+
+            _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() => agent
+                                                                              .RunStreamingAsync(resume,
+                                                                                  session: null,
+                                                                                  options: null,
+                                                                                  CancellationToken.None)
+                                                                              .ToAgentResponseAsync(CancellationToken.None));
+
+            AssertEx.Equal(expected: 1, executed, "a concurrent replay must fail before a second tool execution");
+        }
+        finally
+        {
+            releaseTool.Set();
+            if (firstResume is not null)
+            {
+                _ = await firstResume;
+            }
+        }
+
+        AssertEx.Equal(expected: 1, executed, "the barrier-controlled concurrent resumes must execute the tool at most once");
+    }
+
+    [Test]
     public async Task ApprovalRequiredTool_StreamingUnmatchedResponse_DoesNotExecute()
     {
         var executed = 0;

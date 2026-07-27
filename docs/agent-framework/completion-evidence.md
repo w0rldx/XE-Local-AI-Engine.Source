@@ -121,14 +121,15 @@ static-analysis/P0 compile gate, and can optionally build the real portable
 `linux-x64` package. Logs are path-sanitized and hashed in
 `docs/agent-framework/evidence/validation/manifest.json`.
 
-The refreshed validation manifest was captured on the review-correction worktree
-whose base commit was `3caca836ba2b2c1de58bede477f047b455ec8562`; the tested source also included
-the current uncommitted review corrections. Rerun the lane after the corrections are
-committed to bind the evidence to the final delivery commit. The manifest records
-`result: passed`:
+The refreshed validation manifest records both the worktree's current `HEAD` and a Git
+tree identity for the exact tracked source under test. The generated validation-evidence
+directory is excluded from that tree to avoid a self-referential hash, so an uncommitted
+review-correction worktree remains reproducibly bound to its tested source. Nonignored
+untracked files outside that evidence directory and `.tmp` fail the lane with exit 75
+instead of being silently omitted from the identity. The manifest records `result: passed`:
 
 - Release solution restore/build: passed with 0 warnings and 0 errors;
-- permanent Release Agent Framework compatibility gate: 205/205 passed, with
+- permanent Release Agent Framework compatibility gate: 208/208 passed, with
   unchanged test assemblies;
 - Release llama-server adapter-policy and architecture dependency scope: 11 passed,
   2 live llama-server round trips skipped by their explicit opt-in environment gate,
@@ -152,12 +153,20 @@ carried by an approved `ToolApprovalResponseContent`. A caller that could substi
 that tool call while retaining the request id could change its name or arguments
 after approval.
 
-`ApprovalResponseValidatingAgent` now validates the caller-provided replay before
-MAF transforms it. It requires every response to match exactly one surfaced request
-and the original call id, tool type/name, and JSON-equivalent arguments. Unmatched,
-duplicate, or substituted responses fail closed before tool execution. The permanent
-suite covers approve, reject, reverse-ordered parallel decisions, cancellation,
-tampered arguments, unmatched ids, and duplicate responses.
+`ApprovalResponseValidatingAgent` now snapshots each request as the inner agent
+surfaces it, before returning it to the caller. On resume it validates both the
+replayed request and response against that trusted per-invocation snapshot before
+MAF transforms the history. The original call id, tool type/name, and JSON-equivalent
+arguments must all match. The validator atomically reserves each pending response before
+calling the inner agent. A concurrent resume therefore loses the reservation race and
+fails before tool execution; a sequential exact replay sees a consumed response and also
+fails. Cancellation, exceptions, or abandoned streaming enumeration leave the reservation
+consumed because the tool outcome is uncertain. Caller replay is transport, not authority:
+unmatched, duplicate, substituted-response, or jointly substituted request-and-response
+payloads fail closed before tool execution. The permanent suite covers approve, reject,
+reverse-ordered parallel decisions, cancellation, response-only tampering, joint
+request/response tampering, sequential replay, barrier-controlled concurrent replay,
+unmatched ids, and duplicate responses.
 
 ### Native Windows gap
 

@@ -1,7 +1,9 @@
 {
   "schemaVersion": 1,
-  "capturedAtUtc": "2026-07-27T01:12:40.203614+00:00",
-  "commit": "3caca836ba2b2c1de58bede477f047b455ec8562",
+  "capturedAtUtc": "2026-07-27T02:21:26.179137+00:00",
+  "commit": "6841fb659e08e33875b284d1a2e4be32c3935add",
+  "sourceTree": "3a622a51dd8115ca218bdfffd7526bfdba73baf4",
+  "sourceTreeScope": "tracked worktree excluding docs/agent-framework/evidence/validation; nonignored untracked files rejected except .tmp",
   "result": "passed",
   "linuxPortablePackageIncluded": false,
   "releaseTestScopes": {
@@ -20,35 +22,35 @@
   "logs": [
     {
       "step": "debug-build",
-      "sha256": "fa26dfe28a22e3caf5fe1faa6618997680f5e9432e9a4a63fc3ea6cb4370749a"
+      "sha256": "acc98cd16ba7f5437ba214ba73662dbb417101a7b36e9525aeb04358578421fb"
     },
     {
       "step": "debug-devui-registration-contract",
-      "sha256": "f3ac94d96588b67cd0db0200dcf2acfff9b5523e05192e193d3bceb5fcb3656b"
+      "sha256": "bd68b21a89e01942d27edfd1e51718b4c765fa2fb2edc45bd90eed4775346928"
     },
     {
       "step": "debug-devui-route-contract",
-      "sha256": "fef4afe6b7418ad91ca1b99d7fb8cde346b39c8ff67877127106692c656f9689"
+      "sha256": "aedc67b8ae1daf7a28ca076ec4d5e6050d2ae5519ca87585a4daf9f37d448741"
     },
     {
       "step": "debug-restore",
-      "sha256": "20cf6b4d64e84b9e7755349828ebc6796b42ccdb9e1c8e7367df2f5fa022b1db"
+      "sha256": "a4ce3408b277aed9b9f2ce8b9a4621d9c93a2643d7a608b54abd540ab725140b"
     },
     {
       "step": "release-adapter-architecture-tests",
-      "sha256": "dc29ceb5077d8a1867b1ce18da978e394252dd244f972d3624707ac175993c76"
+      "sha256": "0a061dede20d2483237ed034bf54f1b6f56c1734c27636250ab767874fb54c5d"
     },
     {
       "step": "release-agent-deterministic-tests",
-      "sha256": "7ab938e2bcd8898108325a2e6ee509831eda121629f6934b650e021c5f22f99c"
+      "sha256": "7155e46526688a39afd217dd43fe5c12fa62812818b642e1173e261d0566f418"
     },
     {
       "step": "release-build",
-      "sha256": "9579932cc8028f707e89075cad27dba5de395df3f5dd3f0542f9fb8156db1de7"
+      "sha256": "74bd5af404f37da0e68413f4ccf1d5d208a2d73ad27920480e7ec5121dcd64f0"
     },
     {
       "step": "release-restore",
-      "sha256": "042889c348945111845ab684a55b67f50af866c86bc234934941cc8faf246a9d"
+      "sha256": "a4cbdcd67a48048442c3e77a3aca254e3e72a03d2a33709c0d1b673e255d01ac"
     },
     {
       "step": "release-static-analysis",
