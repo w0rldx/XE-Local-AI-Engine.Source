@@ -22,12 +22,14 @@ To create a reviewable committed artifact, sanitize the raw capture with explici
 path labels. The command fails while any Linux or Windows user-home path remains:
 
 ```bash
+BASELINE_WORKTREE=/absolute/path/to/a/clean/e67d6697-worktree
+
 python3 scripts/performance/capture_inference_evidence.py sanitize \
   --input artifacts/performance/baseline-cuda.raw.json \
   --output docs/performance/baselines/2026-07-26-e67d6697-cuda.json \
   --replace "$PWD/.tmp/perf-models=\$MODEL_ROOT" \
   --replace "$PWD/.tmp/llama.cpp-b9692=\$RUNTIME_ROOT" \
-  --replace "/home/w0rldx/projects/XE-Local-AI-Engine/.tmp/worktrees/perf-baseline-e67d=\$BASELINE_REPO"
+  --replace "$BASELINE_WORKTREE=\$BASELINE_REPO"
 ```
 
 ## 1. Fixed capture contract
