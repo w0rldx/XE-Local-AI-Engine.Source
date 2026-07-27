@@ -47,33 +47,66 @@ function Invoke-NativeCapture {
 
     $process = [System.Diagnostics.Process]::new()
     $process.StartInfo = $startInfo
+    $started = $false
+    $result = $null
+    $failure = $null
+    $cleanupFailure = $null
     try {
         if (-not $process.Start()) {
             throw "Could not start native command '$FilePath'."
         }
+        $started = $true
 
         $stdoutTask = $process.StandardOutput.ReadToEndAsync()
         $stderrTask = $process.StandardError.ReadToEndAsync()
         $timedOut = -not $process.WaitForExit($TimeoutMilliseconds)
         if ($timedOut) {
             $process.Kill($true)
-            $process.WaitForExit()
+            if (-not $process.WaitForExit(5000)) {
+                throw "Cleanup failed: native process tree for '$FilePath' did not exit after termination."
+            }
+        }
+        if (-not [System.Threading.Tasks.Task]::WaitAll(
+                [System.Threading.Tasks.Task[]]@($stdoutTask, $stderrTask),
+                5000)) {
+            throw "Cleanup failed: redirected output readers for '$FilePath' did not finish."
         }
 
-        $stdout = $stdoutTask.GetAwaiter().GetResult()
-        $stderr = $stderrTask.GetAwaiter().GetResult()
+        $stdout = $stdoutTask.Result
+        $stderr = $stderrTask.Result
         $outputLines = @($stdout, $stderr) |
             ForEach-Object { $_ -split '\r?\n' } |
             Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
-        [pscustomobject]@{
+        $result = [pscustomobject]@{
             Output = @($outputLines)
             ExitCode = $process.ExitCode
             TimedOut = $timedOut
         }
     }
+    catch {
+        $failure = $_
+    }
     finally {
+        if ($started -and -not $process.HasExited) {
+            try {
+                $process.Kill($true)
+                if (-not $process.WaitForExit(5000)) {
+                    $cleanupFailure = "Cleanup failed: native process tree for '$FilePath' remained alive."
+                }
+            }
+            catch {
+                $cleanupFailure = "Cleanup failed for native process tree '$FilePath': $($_.Exception.Message)"
+            }
+        }
         $process.Dispose()
     }
+    if ($null -ne $cleanupFailure) {
+        throw $cleanupFailure
+    }
+    if ($null -ne $failure) {
+        throw $failure
+    }
+    $result
 }
 
 function Protect-CaptureText {
@@ -91,7 +124,66 @@ function Protect-CaptureText {
         }
     }
 
-    [regex]::Replace($text, '(?i)[A-Z]:\\Users\\[^,\r\n]+', '<redacted-user-path>')
+    $text = [regex]::Replace($text, '(?i)[A-Z]:\\Users\\[^,\r\n]+', '<redacted-user-path>')
+    $uuidCore = '[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}'
+    [regex]::Replace(
+        $text,
+        "(?i)\b(?:MIG-GPU-$uuidCore/\d+/\d+|MIG-$uuidCore|GPU-$uuidCore)\b",
+        '<redacted-gpu-uuid>')
+}
+
+function ConvertFrom-NvidiaGlobalOutput {
+    [CmdletBinding()]
+    param(
+        [AllowEmptyCollection()][object[]]$Output
+    )
+
+    $records = [System.Collections.Generic.List[object]]::new()
+    $malformed = [System.Collections.Generic.List[string]]::new()
+    foreach ($line in $Output) {
+        if ([string]::IsNullOrWhiteSpace([string]$line)) {
+            continue
+        }
+        $parts = @([string]$line -split ',' | ForEach-Object { $_.Trim() })
+        if ($parts.Count -ne 7) {
+            $malformed.Add([string]$line)
+            continue
+        }
+
+        $index = 0
+        $totalMiB = 0L
+        $freeMiB = 0L
+        $usedMiB = 0L
+        $utilizationPercent = 0
+        if (-not [int]::TryParse($parts[0], [ref]$index) -or
+            -not [long]::TryParse($parts[3], [ref]$totalMiB) -or
+            -not [long]::TryParse($parts[4], [ref]$freeMiB) -or
+            -not [long]::TryParse($parts[5], [ref]$usedMiB) -or
+            -not [int]::TryParse($parts[6], [ref]$utilizationPercent)) {
+            $malformed.Add([string]$line)
+            continue
+        }
+
+        $records.Add([ordered]@{
+            index = $index
+            name = $parts[1]
+            driver_version = $parts[2]
+            total_mib = $totalMiB
+            free_mib = $freeMiB
+            used_mib = $usedMiB
+            utilization_percent = $utilizationPercent
+        })
+    }
+    if ($malformed.Count -gt 0 -or $records.Count -eq 0) {
+        $diagnosticSource = if ($malformed.Count -gt 0) { $malformed } else { $Output }
+        $diagnostic = Protect-CaptureText -Output $diagnosticSource
+        if ([string]::IsNullOrWhiteSpace($diagnostic)) {
+            $diagnostic = '<no output>'
+        }
+        throw "nvidia-smi global query contained missing or malformed GPU rows. Sanitized output: $diagnostic"
+    }
+
+    $records.ToArray()
 }
 
 if (-not (Get-Command nvidia-smi.exe -ErrorAction SilentlyContinue)) {
@@ -121,17 +213,7 @@ while ([DateTimeOffset]::UtcNow -lt $deadline) {
         '--format=csv,noheader,nounits'
     )
 
-    $global = @(
-        foreach ($line in $globalProbe.Output) {
-            $parts = @($line -split ',' | ForEach-Object { $_.Trim() })
-            if ($parts.Count -eq 7) {
-                [ordered]@{
-                    index = [int]$parts[0]; name = $parts[1]; driver_version = $parts[2]
-                    total_mib = [long]$parts[3]; free_mib = [long]$parts[4]; used_mib = [long]$parts[5]; utilization_percent = [int]$parts[6]
-                }
-            }
-        }
-    )
+    $global = @(ConvertFrom-NvidiaGlobalOutput -Output $globalProbe.Output)
 
     $samples.Add([ordered]@{
         captured_at_utc = $capturedAt.ToString('o')
@@ -167,7 +249,7 @@ $artifact = [ordered]@{
     interpretation = [ordered]@{
         global_reader = 'nvidia-smi memory.free/memory.used'
         process_budget_reader = 'llama-server --list-devices (same-process CUDA/WDDM view; raw output retained)'
-        divergence_rule = 'A materially higher process-visible budget than global free VRAM is external pressure/WDDM divergence. Do not use that sample for throughput claims.'
+        divergence_rule = 'Raw process-budget/global-free divergence is not proof of external pressure. Compare paired idle/workload captures and subtract the expected ambient baseline before applying materiality thresholds.'
     }
     samples = $samples
 }

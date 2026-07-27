@@ -21,6 +21,8 @@ plan. It does not broaden the claims made by the machine-readable artifacts in
   representative-traffic claim.
 - Machine: the same WSL2 host and RTX 5090 were used for the comparable baseline
   and candidate captures.
+- Privacy: committed artifacts redact the stable NVIDIA GPU UUID; device model,
+  driver, memory readings, and the numerical evidence remain unchanged.
 - Provenance: both historical source trees were restored and built cleanly before
   recapture. The CUDA artifacts bind each of the four framework, application, and
   provider commands to its verified Git HEAD, clean worktree, exact

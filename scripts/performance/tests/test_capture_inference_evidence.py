@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import inspect
 import json
 import os
 import subprocess
@@ -215,6 +216,45 @@ class CaptureInferenceEvidenceTests(unittest.TestCase):
 
             self.assertTrue(result["success"])
             self.assertFalse(Path(f"/proc/{child_pid}").exists(), "spawned child process survived the evidence command")
+
+    def test_run_once_bounds_streams_and_records_full_hashes(self) -> None:
+        stdout = "x" * (capture.MAX_CAPTURE_STREAM_BYTES + 257)
+        stderr = "y" * (capture.MAX_CAPTURE_STREAM_BYTES + 513)
+
+        result = capture.run_once(
+            [
+                os.fspath(Path(os.sys.executable)),
+                "-c",
+                "import sys; sys.stdout.write('x' * int(sys.argv[1])); sys.stderr.write('y' * int(sys.argv[2]))",
+                str(len(stdout)),
+                str(len(stderr)),
+            ],
+            timeout_seconds=5,
+            expected_timeout=False,
+            cwd=None,
+            env=os.environ.copy(),
+        )
+
+        self.assertTrue(result["success"])
+        self.assertTrue(result["stdout_truncated"])
+        self.assertTrue(result["stderr_truncated"])
+        self.assertLessEqual(len(result["stdout"].encode()), capture.MAX_CAPTURE_STREAM_BYTES)
+        self.assertLessEqual(len(result["stderr"].encode()), capture.MAX_CAPTURE_STREAM_BYTES)
+        self.assertEqual(hashlib.sha256(stdout.encode()).hexdigest(), result["stdout_sha256"])
+        self.assertEqual(hashlib.sha256(stderr.encode()).hexdigest(), result["stderr_sha256"])
+        self.assertEqual(len(stdout), result["stdout_bytes"])
+        self.assertEqual(len(stderr), result["stderr_bytes"])
+
+    def test_run_once_uses_only_bounded_post_kill_waits(self) -> None:
+        source = "\n".join((
+            inspect.getsource(capture.run_once),
+            inspect.getsource(capture.cleanup_process_group),
+        ))
+
+        self.assertNotRegex(source, r"process\.wait\(\)")
+        self.assertRegex(source, r"process\.wait\(timeout=")
+        self.assertNotRegex(source, r"\.join\(\)")
+        self.assertRegex(source, r"\.join\(timeout=")
 
     def test_llama_bench_json_is_projected_to_role_metrics(self) -> None:
         stdout = json.dumps([
@@ -660,6 +700,28 @@ class CaptureInferenceEvidenceTests(unittest.TestCase):
             self.assertEqual("$MODEL_ROOT/model.gguf", sanitized["path"])
             self.assertEqual("$RUNTIME_ROOT/llama-server", sanitized["argv"][0])
             self.assertTrue(sanitized["sanitized"])
+
+    def test_sanitize_redacts_gpu_uuid_and_rejects_identifier_leakage(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            source = root / "raw.json"
+            output = root / "safe.json"
+            source.write_text(
+                json.dumps({
+                    "gpu": "GPU-d753e8bb-b687-daf2-f54f-79c1ed60cae5",
+                    "mig_legacy": "MIG-GPU-d753e8bb-b687-daf2-f54f-79c1ed60cae5/7/3",
+                    "mig_current": "MIG-3f3f2b11-0f24-4f10-a2d8-65d7bd9a4c99",
+                }),
+                encoding="utf-8",
+            )
+
+            capture.sanitize_artifact(source, output, [])
+
+            sanitized = json.loads(output.read_text(encoding="utf-8"))
+            self.assertEqual("<gpu-uuid>", sanitized["gpu"])
+            self.assertEqual("<gpu-uuid>", sanitized["mig_legacy"])
+            self.assertEqual("<gpu-uuid>", sanitized["mig_current"])
+            self.assertNotRegex(json.dumps(sanitized), r"(?:GPU|MIG)-[0-9a-f]")
 
 
 if __name__ == "__main__":

@@ -8,8 +8,8 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// <summary>
 ///     Default <see cref="IInferenceInvalidationEvaluator" />. Runs three cheap checks against the freeze baseline —
 ///     active build tag, GPU vendor/VRAM delta, and live global-free VRAM. NVIDIA's refreshed global figure is preferred
-    ///     because llama.cpp's process budget can ignore external WDDM pressure. Process-budget evidence remains
-    ///     diagnostic and is never substituted for a global-free invalidation baseline.
+///     because llama.cpp's process budget can ignore external WDDM pressure. Cold validation deliberately does not
+///     launch a process-budget probe; global-free VRAM is the only live invalidation baseline.
 /// </summary>
 public sealed class InferenceInvalidationEvaluator : IInferenceInvalidationEvaluator
 {
@@ -21,13 +21,11 @@ public sealed class InferenceInvalidationEvaluator : IInferenceInvalidationEvalu
     private readonly IInstalledRuntimeStore _installedRuntimeStore;
     private readonly ILaunchPolicyFingerprintProvider _launchPolicyFingerprintProvider;
     private readonly ILogger<InferenceInvalidationEvaluator> _logger;
-    private readonly IProcessVramBudgetProbe _processVramBudgetProbe;
 
     public InferenceInvalidationEvaluator(IInstalledRuntimeStore installedRuntimeStore,
         IGgufModelStore ggufModelStore,
         ILaunchPolicyFingerprintProvider launchPolicyFingerprintProvider,
         IHardwareProfiler hardwareProfiler,
-        IProcessVramBudgetProbe processVramBudgetProbe,
         ILogger<InferenceInvalidationEvaluator> logger)
     {
         _installedRuntimeStore = installedRuntimeStore ?? throw new ArgumentNullException(nameof(installedRuntimeStore));
@@ -35,7 +33,6 @@ public sealed class InferenceInvalidationEvaluator : IInferenceInvalidationEvalu
         _launchPolicyFingerprintProvider =
             launchPolicyFingerprintProvider ?? throw new ArgumentNullException(nameof(launchPolicyFingerprintProvider));
         _hardwareProfiler = hardwareProfiler ?? throw new ArgumentNullException(nameof(hardwareProfiler));
-        _processVramBudgetProbe = processVramBudgetProbe ?? throw new ArgumentNullException(nameof(processVramBudgetProbe));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -57,15 +54,16 @@ public sealed class InferenceInvalidationEvaluator : IInferenceInvalidationEvalu
             return true;
         }
 
-        // (c) Hardware delta (vendor / total-VRAM) against the freeze baseline.
-        var hardware = await _hardwareProfiler.GetProfileAsync(forceRefresh: false, ct).ConfigureAwait(false);
+        // (c) Re-probe under HardwareProfiler's bounded timeout so the global-free verdict cannot reuse an earlier
+        // cached idle snapshot. The same refreshed profile supplies both hardware drift and live global-free VRAM.
+        var hardware = await _hardwareProfiler.GetProfileAsync(forceRefresh: true, ct).ConfigureAwait(false);
         if (HasHardwareDrifted(profile, hardware))
         {
             return true;
         }
 
-        // (d) Live global-free VRAM below the frozen global-free baseline. Process budget is never substituted.
-        return await HasLiveFreeVramRegressedAsync(profile, hardware, ct).ConfigureAwait(false);
+        // (d) Live global-free VRAM below the frozen global-free baseline. Process budget is never launched or substituted.
+        return HasLiveFreeVramRegressed(profile, hardware);
     }
 
     private async Task<bool> HasLaunchPolicyDriftedAsync(InferenceProfileRecord profile, CancellationToken ct)
@@ -126,9 +124,7 @@ public sealed class InferenceInvalidationEvaluator : IInferenceInvalidationEvalu
                && totalVram < freezeBaseline;
     }
 
-    private async Task<bool> HasLiveFreeVramRegressedAsync(InferenceProfileRecord profile,
-        HardwareProfile hardware,
-        CancellationToken ct)
+    private bool HasLiveFreeVramRegressed(InferenceProfileRecord profile, HardwareProfile hardware)
     {
         if (string.Equals(profile.Backend, InferenceBackends.Cpu, StringComparison.OrdinalIgnoreCase)
             || profile.GlobalFreeVramAtFreezeBytes is not { } freezeBaseline)
@@ -137,18 +133,6 @@ public sealed class InferenceInvalidationEvaluator : IInferenceInvalidationEvalu
         }
 
         var freeNow = hardware.AvailableVramBytes;
-        var processBudgetNow =
-            await _processVramBudgetProbe.TryGetProcessBudgetBytesAsync(profile.Backend, ct).ConfigureAwait(false);
-        if (freeNow is { } globalFree && processBudgetNow is { } processBudget
-            && Math.Abs(processBudget - globalFree) >= MaterialFreeVramRegressionBytes)
-        {
-            _logger.LogInformation(
-                "Inference profile {ProfileId} observed divergent VRAM evidence: global-free {GlobalFreeBytes} bytes, process budget {ProcessBudgetBytes} bytes.",
-                profile.Id,
-                globalFree,
-                processBudget);
-        }
-
         if (freeNow is not { } currentFree)
         {
             return false;

@@ -216,6 +216,12 @@ Each sample records:
 Future captures deliberately omit GPU UUIDs, machine names, and absolute user
 paths. Native probes are time-bounded; their exit code, timeout state, and
 sanitized output remain available even when the command fails.
+The Windows capture fails closed when no global GPU row can be parsed; an empty
+global sample is never valid VRAM evidence.
+The Python runner starts every command in a dedicated process group and kills
+that entire group during bounded cleanup. The Windows runner likewise terminates
+the native process tree; both report cleanup failure instead of waiting
+indefinitely.
 
 A materially higher process-visible budget than global free VRAM is **WDDM
 reader divergence**, but the raw gap is not by itself proof of external
@@ -234,6 +240,8 @@ describes the launch process's budget.
 - Runtime tag, binary provenance, backend, driver, and device list are present.
 - Cache preparation is performed exactly as declared.
 - Warmups are excluded; all repeats succeed; median and p95 are retained.
+- Retained stdout/stderr are bounded and carry the byte count plus SHA-256 of
+  the complete stream whenever truncation is required.
 - Free global VRAM is stable and process/global divergence is not material.
 - Chat, embedding, reranker, provider tests, and deterministic suites use separate
   named commands so failures cannot be averaged away.
