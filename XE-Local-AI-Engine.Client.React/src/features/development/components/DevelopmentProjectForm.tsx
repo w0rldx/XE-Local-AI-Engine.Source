@@ -142,6 +142,12 @@ export function DevelopmentProjectForm({
 		try {
 			const created = await onRegister(registration);
 			setValues((current) => ({ ...current, selectedFolderId: created.id }));
+
+			// Registering auto-selects the new repository, so the owner has to be told as well — this is the same
+			// notification the Select's onChange fires. Without it the page's profileFolderId stays null on the
+			// register-then-create path, detection never runs, and the command-profile confirmation step never
+			// appears at all. That is the FIRST-RUN path, so the operator would simply never be shown the profile.
+			onRepositoryChange?.(created.id);
 			setRegistration({ alias: "", hostPath: "" });
 			setRegistrationOpened(false);
 		} catch (registrationFailure) {

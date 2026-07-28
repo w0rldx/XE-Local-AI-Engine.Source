@@ -74,6 +74,27 @@ public sealed class DevelopmentWorkflowE2ETests : XEE2ETestBase
             // "I trust the selected repository to execute Development commands with my host-user permissions."),
             // and a label-text locator turns every such rewording into a 30 s timeout with no useful message.
             await Page.GetByTestId("development-trust-acknowledgement").CheckAsync().ConfigureAwait(false);
+
+            // Wait for the command-profile confirmation and go through it, rather than racing it.
+            //
+            // Create is gated on "(!detection || profileConfirmed)", so clicking before the detection query resolves
+            // takes the !detection branch and succeeds without ever touching this panel. That is how this test passed
+            // when it was first written against the profile work, and it made the pass timing-dependent: on a run
+            // where detection lands first, Create is disabled and the click times out instead.
+            //
+            // Waiting on the panel also turns the fixture's expected profile into a positive assertion. This repository
+            // is a README and nothing else, so detection must resolve it to the code-owned "generic-git" profile, whose
+            // validation list is the whitespace check alone. If that ever silently became a dotnet profile, the run
+            // below would fail against a repository that cannot build — but it would fail deep in validation with a
+            // confusing message, rather than here with the actual reason.
+            var profileConfirmation = Page.GetByTestId("development-profile-confirmation");
+            await Expect(profileConfirmation).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
+            {
+                Timeout = 30_000
+            }).ConfigureAwait(false);
+            await Expect(Page.GetByTestId("development-profile-id")).ToContainTextAsync("generic-git").ConfigureAwait(false);
+            await Page.GetByTestId("development-profile-confirm").CheckAsync().ConfigureAwait(false);
+
             await Page.GetByTestId("development-create-project").ClickAsync().ConfigureAwait(false);
 
             var detail = Page.GetByTestId("development-project-detail");
