@@ -107,15 +107,34 @@ public sealed class LlamaServerProviderContractTests
     }
 
     [Test]
-    public async Task UnloadModelAsync_EvictsBothRoles()
+    public async Task UnloadModelAsync_EvictsAllRoles()
     {
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
         var provider = CreateProvider(supervisor);
 
         await provider.UnloadModelAsync(Model, CancellationToken.None);
 
-        await supervisor.Received(1).EvictAsync(Model, ModelRole.Chat, Arg.Any<CancellationToken>());
-        await supervisor.Received(1).EvictAsync(Model, ModelRole.Embedding, Arg.Any<CancellationToken>());
+        await supervisor.Received(1).EvictAllRolesAsync(Model, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task EvictAllRolesAsync_EvictsEveryDefinedModelRole()
+    {
+        var launcher = new FakeProcessLauncher();
+        await using var supervisor = SupervisorFactory.Create(launcher);
+        var roles = Enum.GetValues<ModelRole>();
+
+        foreach (var role in roles)
+        {
+            await supervisor.EnsureRunningAsync(Model, role, CancellationToken.None);
+        }
+
+        await supervisor.EvictAllRolesAsync(Model, CancellationToken.None);
+
+        AssertEx.Equal(expected: roles.Length, launcher.Handles.Count);
+        AssertEx.True(launcher.Handles.All(static handle => handle.WasTreeKilled),
+            "Every process created for a defined model role must be evicted.");
+        AssertEx.Equal(expected: 0, supervisor.CountRunningProcesses());
     }
 
     [Test]

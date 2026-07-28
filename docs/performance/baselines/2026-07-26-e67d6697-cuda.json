@@ -1,0 +1,2871 @@
+{
+  "benchmark": {
+    "acceptance_rule": "median and nearest-rank p95; future tuning ships only at >=20% throughput improvement and <=5% RAM/VRAM regression",
+    "ambient_load_policy": "no concurrent build/test/model/game; reject global/process VRAM divergence",
+    "cache_preparation": "one excluded outer warmup invocation; llama-bench internal warmup retained",
+    "cache_state": "warm",
+    "memory_maximum_regression_percent": 5,
+    "statistics": "median-and-nearest-rank-p95",
+    "throughput_minimum_improvement_percent": 20
+  },
+  "capture_id": "e67d6697-b9692-cuda",
+  "commands": [
+    {
+      "aggregates": {
+        "generation_tokens_per_second": {
+          "maximum": 802.288,
+          "median": 773.09471,
+          "minimum": 767.758256,
+          "p95": 802.288
+        },
+        "prompt_tokens_per_second": {
+          "maximum": 37002.756489,
+          "median": 33788.748914,
+          "minimum": 32209.924154,
+          "p95": 37002.756489
+        },
+        "wall_elapsed_ms": {
+          "maximum": 945.545,
+          "median": 854.434,
+          "minimum": 847.305,
+          "p95": 945.545
+        }
+      },
+      "ambient_after": {
+        "captured_at_utc": "2026-07-26T23:57:17Z",
+        "load_average_1m_5m_15m": [
+          2.54052734375,
+          3.6552734375,
+          3.72265625
+        ],
+        "memory": {
+          "MemAvailableKiB": 24947052,
+          "MemTotalKiB": 32867940,
+          "SwapFreeKiB": 8382792,
+          "SwapTotalKiB": 8388608
+        },
+        "nvidia_smi": {
+          "argv": [
+            "nvidia-smi",
+            "--query-gpu=index,name,uuid,driver_version,memory.total,memory.free,memory.used,utilization.gpu",
+            "--format=csv,noheader,nounits"
+          ],
+          "available": true,
+          "exit_code": 0,
+          "stderr": "",
+          "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 29174, 3014, 8"
+        }
+      },
+      "ambient_before": {
+        "captured_at_utc": "2026-07-26T23:57:12Z",
+        "load_average_1m_5m_15m": [
+          2.6748046875,
+          3.7001953125,
+          3.73779296875
+        ],
+        "memory": {
+          "MemAvailableKiB": 25254684,
+          "MemTotalKiB": 32867940,
+          "SwapFreeKiB": 8382792,
+          "SwapTotalKiB": 8388608
+        },
+        "nvidia_smi": {
+          "argv": [
+            "nvidia-smi",
+            "--query-gpu=index,name,uuid,driver_version,memory.total,memory.free,memory.used,utilization.gpu",
+            "--format=csv,noheader,nounits"
+          ],
+          "available": true,
+          "exit_code": 0,
+          "stderr": "",
+          "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 29183, 3005, 70"
+        }
+      },
+      "argv": [
+        "$RUNTIME_ROOT/build-cuda/bin/llama-bench",
+        "-r",
+        "1",
+        "-o",
+        "json",
+        "-ngl",
+        "99",
+        "-t",
+        "4",
+        "-m",
+        "$MODEL_STORE/Qwen2.5-0.5B-Instruct-Q4_K_M.gguf",
+        "-p",
+        "512",
+        "-n",
+        "128"
+      ],
+      "argv_sha256": "11b5a44fff615d25c407e5f53a8166b2943d38b7bf7039c771f04cdf3a9e506c",
+      "comparability": "identical llama-bench argv/runtime/model/corpus/machine",
+      "name": "chat-pp-tg",
+      "partition": "native-performance",
+      "repeats": 5,
+      "runs": [
+        {
+          "ambient_during": {
+            "captured_at_utc": "2026-07-26T23:57:13Z",
+            "load_average_1m_5m_15m": [
+              2.6748046875,
+              3.7001953125,
+              3.73779296875
+            ],
+            "memory": {
+              "MemAvailableKiB": 24955200,
+              "MemTotalKiB": 32867940,
+              "SwapFreeKiB": 8382792,
+              "SwapTotalKiB": 8388608
+            },
+            "nvidia_smi": {
+              "argv": [
+                "nvidia-smi",
+                "--query-gpu=index,name,uuid,driver_version,memory.total,memory.free,memory.used,utilization.gpu",
+                "--format=csv,noheader,nounits"
+              ],
+              "available": true,
+              "exit_code": 0,
+              "stderr": "",
+              "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 28246, 3942, 8"
+            }
+          },
+          "elapsed_ms": 864.918,
+          "exit_code": 0,
+          "expected_timeout": false,
+          "metrics": {
+            "generation_tokens_per_second": 768.601246,
+            "prompt_tokens_per_second": 32388.909835,
+            "wall_elapsed_ms": 864.918
+          },
+          "peak_rss_bytes": 623489024,
+          "stderr": "ggml_cuda_init: found 1 CUDA devices (Total VRAM: 32606 MiB):\n  Device 0: NVIDIA GeForce RTX 5090, compute capability 12.0, VMM: yes, VRAM: 32606 MiB\n",
+          "stdout": "[\n  {\n    \"build_commit\": \"f3e1828\",\n    \"build_number\": 1,\n    \"cpu_info\": \"AMD Ryzen 9 9950X3D 16-Core Processor\",\n    \"gpu_info\": \"NVIDIA GeForce RTX 5090\",\n    \"backends\": \"CUDA\",\n    \"model_filename\": \"$MODEL_STORE/Qwen2.5-0.5B-Instruct-Q4_K_M.gguf\",\n    \"model_type\": \"qwen2 1B Q4_K - Medium\",\n    \"model_size\": 391859712,\n    \"model_n_params\": 494032768,\n    \"n_batch\": 2048,\n    \"n_ubatch\": 512,\n    \"n_threads\": 4,\n    \"cpu_mask\": \"0x0\",\n    \"cpu_strict\": false,\n    \"poll\": 50,\n    \"type_k\": \"f16\",\n    \"type_v\": \"f16\",\n    \"n_gpu_layers\": 99,\n    \"n_cpu_moe\": 0,\n    \"split_mode\": \"layer\",\n    \"main_gpu\": 0,\n    \"no_kv_offload\": false,\n    \"flash_attn\": -1,\n    \"devices\": \"auto\",\n    \"tensor_split\": \"0.00\",\n    \"tensor_buft_overrides\": \"none\",\n    \"use_mmap\": true,\n    \"use_direct_io\": false,\n    \"embeddings\": false,\n    \"no_op_offload\": 0,\n    \"no_host\": false,\n    \"fit_target\": 0,\n    \"fit_min_ctx\": 0,\n    \"n_prompt\": 512,\n    \"n_gen\": 0,\n    \"n_depth\": 0,\n    \"test_time\": \"2026-07-26T23:57:13Z\",\n    \"avg_ns\": 15807880,\n    \"stddev_ns\": 0,\n    \"avg_ts\": 32388.909835,\n    \"stddev_ts\": 0.000000,\n    \"samples_ns\": [ 15807880 ],\n    \"samples_ts\": [ 32388.9 ]\n  },\n  {\n    \"build_commit\": \"f3e1828\",\n    \"build_number\": 1,\n    \"cpu_info\": \"AMD Ryzen 9 9950X3D 16-Core Processor\",\n    \"gpu_info\": \"NVIDIA GeForce RTX 5090\",\n    \"backends\": \"CUDA\",\n    \"model_filename\": \"$MODEL_STORE/Qwen2.5-0.5B-Instruct-Q4_K_M.gguf\",\n    \"model_type\": \"qwen2 1B Q4_K - Medium\",\n    \"model_size\": 391859712,\n    \"model_n_params\": 494032768,\n    \"n_batch\": 2048,\n    \"n_ubatch\": 512,\n    \"n_threads\": 4,\n    \"cpu_mask\": \"0x0\",\n    \"cpu_strict\": false,\n    \"poll\": 50,\n    \"type_k\": \"f16\",\n    \"type_v\": \"f16\",\n    \"n_gpu_layers\": 99,\n    \"n_cpu_moe\": 0,\n    \"split_mode\": \"layer\",\n    \"main_gpu\": 0,\n    \"no_kv_offload\": false,\n    \"flash_attn\": -1,\n    \"devices\": \"auto\",\n    \"tensor_split\": \"0.00\",\n    \"tensor_buft_overrides\": \"none\",\n    \"use_mmap\": true,\n    \"use_direct_io\": false,\n    \"embeddings\": false,\n    \"no_op_offload\": 0,\n    \"no_host\": false,\n    \"fit_target\": 0,\n    \"fit_min_ctx\": 0,\n    \"n_prompt\": 0,\n    \"n_gen\": 128,\n    \"n_depth\": 0,\n    \"test_time\": \"2026-07-26T23:57:13Z\",\n    \"avg_ns\": 166536290,\n    \"stddev_ns\": 0,\n    \"avg_ts\": 768.601246,\n    \"stddev_ts\": 0.000000,\n    \"samples_ns\": [ 166536290 ],\n    \"samples_ts\": [ 768.601 ]\n  }\n]\n",
+          "success": true,
+          "timed_out": false
+        },
+        {
+          "ambient_during": {
+            "captured_at_utc": "2026-07-26T23:57:14Z",
+            "load_average_1m_5m_15m": [
+              2.54052734375,
+              3.6552734375,
+              3.72265625
+            ],
+            "memory": {
+              "MemAvailableKiB": 24860404,
+              "MemTotalKiB": 32867940,
+              "SwapFreeKiB": 8382792,
+              "SwapTotalKiB": 8388608
+            },
+            "nvidia_smi": {
+              "argv": [
+                "nvidia-smi",
+                "--query-gpu=index,name,uuid,driver_version,memory.total,memory.free,memory.used,utilization.gpu",
+                "--format=csv,noheader,nounits"
+              ],
+              "available": true,
+              "exit_code": 0,
+              "stderr": "",
+              "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 27890, 4298, 19"
+            }
+          },
+          "elapsed_ms": 848.807,
+          "exit_code": 0,
+          "expected_timeout": false,
+          "metrics": {
+            "generation_tokens_per_second": 787.627683,
+            "prompt_tokens_per_second": 32209.924154,
+            "wall_elapsed_ms": 848.807
+          },
+          "peak_rss_bytes": 623431680,
+          "stderr": "ggml_cuda_init: found 1 CUDA devices (Total VRAM: 32606 MiB):\n  Device 0: NVIDIA GeForce RTX 5090, compute capability 12.0, VMM: yes, VRAM: 32606 MiB\n",
+          "stdout": "[\n  {\n    \"build_commit\": \"f3e1828\",\n    \"build_number\": 1,\n    \"cpu_info\": \"AMD Ryzen 9 9950X3D 16-Core Processor\",\n    \"gpu_info\": \"NVIDIA GeForce RTX 5090\",\n    \"backends\": \"CUDA\",\n    \"model_filename\": \"$MODEL_STORE/Qwen2.5-0.5B-Instruct-Q4_K_M.gguf\",\n    \"model_type\": \"qwen2 1B Q4_K - Medium\",\n    \"model_size\": 391859712,\n    \"model_n_params\": 494032768,\n    \"n_batch\": 2048,\n    \"n_ubatch\": 512,\n    \"n_threads\": 4,\n    \"cpu_mask\": \"0x0\",\n    \"cpu_strict\": false,\n    \"poll\": 50,\n    \"type_k\": \"f16\",\n    \"type_v\": \"f16\",\n    \"n_gpu_layers\": 99,\n    \"n_cpu_moe\": 0,\n    \"split_mode\": \"layer\",\n    \"main_gpu\": 0,\n    \"no_kv_offload\": false,\n    \"flash_attn\": -1,\n    \"devices\": \"auto\",\n    \"tensor_split\": \"0.00\",\n    \"tensor_buft_overrides\": \"none\",\n    \"use_mmap\": true,\n    \"use_direct_io\": false,\n    \"embeddings\": false,\n    \"no_op_offload\": 0,\n    \"no_host\": false,\n    \"fit_target\": 0,\n    \"fit_min_ctx\": 0,\n    \"n_prompt\": 512,\n    \"n_gen\": 0,\n    \"n_depth\": 0,\n    \"test_time\": \"2026-07-26T23:57:13Z\",\n    \"avg_ns\": 15895722,\n    \"stddev_ns\": 0,\n    \"avg_ts\": 32209.924154,\n    \"stddev_ts\": 0.000000,\n    \"samples_ns\": [ 15895722 ],\n    \"samples_ts\": [ 32209.9 ]\n  },\n  {\n    \"build_commit\": \"f3e1828\",\n    \"build_number\": 1,\n    \"cpu_info\": \"AMD Ryzen 9 9950X3D 16-Core Processor\",\n    \"gpu_info\": \"NVIDIA GeForce RTX 5090\",\n    \"backends\": \"CUDA\",\n    \"model_filename\": \"$MODEL_STORE/Qwen2.5-0.5B-Instruct-Q4_K_M.gguf\",\n    \"model_type\": \"qwen2 1B Q4_K - Medium\",\n    \"model_size\": 391859712,\n    \"model_n_params\": 494032768,\n    \"n_batch\": 2048,\n    \"n_ubatch\": 512,\n    \"n_threads\": 4,\n    \"cpu_mask\": \"0x0\",\n    \"cpu_strict\": false,\n    \"poll\": 50,\n    \"type_k\": \"f16\",\n    \"type_v\": \"f16\",\n    \"n_gpu_layers\": 99,\n    \"n_cpu_moe\": 0,\n    \"split_mode\": \"layer\",\n    \"main_gpu\": 0,\n    \"no_kv_offload\": false,\n    \"flash_attn\": -1,\n    \"devices\": \"auto\",\n    \"tensor_split\": \"0.00\",\n    \"tensor_buft_overrides\": \"none\",\n    \"use_mmap\": true,\n    \"use_direct_io\": false,\n    \"embeddings\": false,\n    \"no_op_offload\": 0,\n    \"no_host\": false,\n    \"fit_target\": 0,\n    \"fit_min_ctx\": 0,\n    \"n_prompt\": 0,\n    \"n_gen\": 128,\n    \"n_depth\": 0,\n    \"test_time\": \"2026-07-26T23:57:14Z\",\n    \"avg_ns\": 162513333,\n    \"stddev_ns\": 0,\n    \"avg_ts\": 787.627683,\n    \"stddev_ts\": 0.000000,\n    \"samples_ns\": [ 162513333 ],\n    \"samples_ts\": [ 787.628 ]\n  }\n]\n",
+          "success": true,
+          "timed_out": false
+        },
+        {
+          "ambient_during": {
+            "captured_at_utc": "2026-07-26T23:57:14Z",
+            "load_average_1m_5m_15m": [
+              2.54052734375,
+              3.6552734375,
+              3.72265625
+            ],
+            "memory": {
+              "MemAvailableKiB": 24610224,
+              "MemTotalKiB": 32867940,
+              "SwapFreeKiB": 8382792,
+              "SwapTotalKiB": 8388608
+            },
+            "nvidia_smi": {
+              "argv": [
+                "nvidia-smi",
+                "--query-gpu=index,name,uuid,driver_version,memory.total,memory.free,memory.used,utilization.gpu",
+                "--format=csv,noheader,nounits"
+              ],
+              "available": true,
+              "exit_code": 0,
+              "stderr": "",
+              "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 27891, 4297, 12"
+            }
+          },
+          "elapsed_ms": 945.545,
+          "exit_code": 0,
+          "expected_timeout": false,
+          "metrics": {
+            "generation_tokens_per_second": 767.758256,
+            "prompt_tokens_per_second": 33788.748914,
+            "wall_elapsed_ms": 945.545
+          },
+          "peak_rss_bytes": 623484928,
+          "stderr": "ggml_cuda_init: found 1 CUDA devices (Total VRAM: 32606 MiB):\n  Device 0: NVIDIA GeForce RTX 5090, compute capability 12.0, VMM: yes, VRAM: 32606 MiB\n",
+          "stdout": "[\n  {\n    \"build_commit\": \"f3e1828\",\n    \"build_number\": 1,\n    \"cpu_info\": \"AMD Ryzen 9 9950X3D 16-Core Processor\",\n    \"gpu_info\": \"NVIDIA GeForce RTX 5090\",\n    \"backends\": \"CUDA\",\n    \"model_filename\": \"$MODEL_STORE/Qwen2.5-0.5B-Instruct-Q4_K_M.gguf\",\n    \"model_type\": \"qwen2 1B Q4_K - Medium\",\n    \"model_size\": 391859712,\n    \"model_n_params\": 494032768,\n    \"n_batch\": 2048,\n    \"n_ubatch\": 512,\n    \"n_threads\": 4,\n    \"cpu_mask\": \"0x0\",\n    \"cpu_strict\": false,\n    \"poll\": 50,\n    \"type_k\": \"f16\",\n    \"type_v\": \"f16\",\n    \"n_gpu_layers\": 99,\n    \"n_cpu_moe\": 0,\n    \"split_mode\": \"layer\",\n    \"main_gpu\": 0,\n    \"no_kv_offload\": false,\n    \"flash_attn\": -1,\n    \"devices\": \"auto\",\n    \"tensor_split\": \"0.00\",\n    \"tensor_buft_overrides\": \"none\",\n    \"use_mmap\": true,\n    \"use_direct_io\": false,\n    \"embeddings\": false,\n    \"no_op_offload\": 0,\n    \"no_host\": false,\n    \"fit_target\": 0,\n    \"fit_min_ctx\": 0,\n    \"n_prompt\": 512,\n    \"n_gen\": 0,\n    \"n_depth\": 0,\n    \"test_time\": \"2026-07-26T23:57:14Z\",\n    \"avg_ns\": 15152973,\n    \"stddev_ns\": 0,\n    \"avg_ts\": 33788.748914,\n    \"stddev_ts\": 0.000000,\n    \"samples_ns\": [ 15152973 ],\n    \"samples_ts\": [ 33788.7 ]\n  },\n  {\n    \"build_commit\": \"f3e1828\",\n    \"build_number\": 1,\n    \"cpu_info\": \"AMD Ryzen 9 9950X3D 16-Core Processor\",\n    \"gpu_info\": \"NVIDIA GeForce RTX 5090\",\n    \"backends\": \"CUDA\",\n    \"model_filename\": \"$MODEL_STORE/Qwen2.5-0.5B-Instruct-Q4_K_M.gguf\",\n    \"model_type\": \"qwen2 1B Q4_K - Medium\",\n    \"model_size\": 391859712,\n    \"model_n_params\": 494032768,\n    \"n_batch\": 2048,\n    \"n_ubatch\": 512,\n    \"n_threads\": 4,\n    \"cpu_mask\": \"0x0\",\n    \"cpu_strict\": false,\n    \"poll\": 50,\n    \"type_k\": \"f16\",\n    \"type_v\": \"f16\",\n    \"n_gpu_layers\": 99,\n    \"n_cpu_moe\": 0,\n    \"split_mode\": \"layer\",\n    \"main_gpu\": 0,\n    \"no_kv_offload\": false,\n    \"flash_attn\": -1,\n    \"devices\": \"auto\",\n    \"tensor_split\": \"0.00\",\n    \"tensor_buft_overrides\": \"none\",\n    \"use_mmap\": true,\n    \"use_direct_io\": false,\n    \"embeddings\": false,\n    \"no_op_offload\": 0,\n    \"no_host\": false,\n    \"fit_target\": 0,\n    \"fit_min_ctx\": 0,\n    \"n_prompt\": 0,\n    \"n_gen\": 128,\n    \"n_depth\": 0,\n    \"test_time\": \"2026-07-26T23:57:15Z\",\n    \"avg_ns\": 166719145,\n    \"stddev_ns\": 0,\n    \"avg_ts\": 767.758256,\n    \"stddev_ts\": 0.000000,\n    \"samples_ns\": [ 166719145 ],\n    \"samples_ts\": [ 767.758 ]\n  }\n]\n",
+          "success": true,
+          "timed_out": false
+        },
+        {
+          "ambient_during": {
+            "captured_at_utc": "2026-07-26T23:57:15Z",
+            "load_average_1m_5m_15m": [
+              2.54052734375,
+              3.6552734375,
+              3.72265625
+            ],
+            "memory": {
+              "MemAvailableKiB": 24591048,
+              "MemTotalKiB": 32867940,
+              "SwapFreeKiB": 8382792,
+              "SwapTotalKiB": 8388608
+            },
+            "nvidia_smi": {
+              "argv": [
+                "nvidia-smi",
+                "--query-gpu=index,name,uuid,driver_version,memory.total,memory.free,memory.used,utilization.gpu",
+                "--format=csv,noheader,nounits"
+              ],
+              "available": true,
+              "exit_code": 0,
+              "stderr": "",
+              "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 28155, 4033, 8"
+            }
+          },
+          "elapsed_ms": 847.305,
+          "exit_code": 0,
+          "expected_timeout": false,
+          "metrics": {
+            "generation_tokens_per_second": 773.09471,
+            "prompt_tokens_per_second": 36487.190074,
+            "wall_elapsed_ms": 847.305
+          },
+          "peak_rss_bytes": 788877312,
+          "stderr": "ggml_cuda_init: found 1 CUDA devices (Total VRAM: 32606 MiB):\n  Device 0: NVIDIA GeForce RTX 5090, compute capability 12.0, VMM: yes, VRAM: 32606 MiB\n",
+          "stdout": "[\n  {\n    \"build_commit\": \"f3e1828\",\n    \"build_number\": 1,\n    \"cpu_info\": \"AMD Ryzen 9 9950X3D 16-Core Processor\",\n    \"gpu_info\": \"NVIDIA GeForce RTX 5090\",\n    \"backends\": \"CUDA\",\n    \"model_filename\": \"$MODEL_STORE/Qwen2.5-0.5B-Instruct-Q4_K_M.gguf\",\n    \"model_type\": \"qwen2 1B Q4_K - Medium\",\n    \"model_size\": 391859712,\n    \"model_n_params\": 494032768,\n    \"n_batch\": 2048,\n    \"n_ubatch\": 512,\n    \"n_threads\": 4,\n    \"cpu_mask\": \"0x0\",\n    \"cpu_strict\": false,\n    \"poll\": 50,\n    \"type_k\": \"f16\",\n    \"type_v\": \"f16\",\n    \"n_gpu_layers\": 99,\n    \"n_cpu_moe\": 0,\n    \"split_mode\": \"layer\",\n    \"main_gpu\": 0,\n    \"no_kv_offload\": false,\n    \"flash_attn\": -1,\n    \"devices\": \"auto\",\n    \"tensor_split\": \"0.00\",\n    \"tensor_buft_overrides\": \"none\",\n    \"use_mmap\": true,\n    \"use_direct_io\": false,\n    \"embeddings\": false,\n    \"no_op_offload\": 0,\n    \"no_host\": false,\n    \"fit_target\": 0,\n    \"fit_min_ctx\": 0,\n    \"n_prompt\": 512,\n    \"n_gen\": 0,\n    \"n_depth\": 0,\n    \"test_time\": \"2026-07-26T23:57:15Z\",\n    \"avg_ns\": 14032322,\n    \"stddev_ns\": 0,\n    \"avg_ts\": 36487.190074,\n    \"stddev_ts\": 0.000000,\n    \"samples_ns\": [ 14032322 ],\n    \"samples_ts\": [ 36487.2 ]\n  },\n  {\n    \"build_commit\": \"f3e1828\",\n    \"build_number\": 1,\n    \"cpu_info\": \"AMD Ryzen 9 9950X3D 16-Core Processor\",\n    \"gpu_info\": \"NVIDIA GeForce RTX 5090\",\n    \"backends\": \"CUDA\",\n    \"model_filename\": \"$MODEL_STORE/Qwen2.5-0.5B-Instruct-Q4_K_M.gguf\",\n    \"model_type\": \"qwen2 1B Q4_K - Medium\",\n    \"model_size\": 391859712,\n    \"model_n_params\": 494032768,\n    \"n_batch\": 2048,\n    \"n_ubatch\": 512,\n    \"n_threads\": 4,\n    \"cpu_mask\": \"0x0\",\n    \"cpu_strict\": false,\n    \"poll\": 50,\n    \"type_k\": \"f16\",\n    \"type_v\": \"f16\",\n    \"n_gpu_layers\": 99,\n    \"n_cpu_moe\": 0,\n    \"split_mode\": \"layer\",\n    \"main_gpu\": 0,\n    \"no_kv_offload\": false,\n    \"flash_attn\": -1,\n    \"devices\": \"auto\",\n    \"tensor_split\": \"0.00\",\n    \"tensor_buft_overrides\": \"none\",\n    \"use_mmap\": true,\n    \"use_direct_io\": false,\n    \"embeddings\": false,\n    \"no_op_offload\": 0,\n    \"no_host\": false,\n    \"fit_target\": 0,\n    \"fit_min_ctx\": 0,\n    \"n_prompt\": 0,\n    \"n_gen\": 128,\n    \"n_depth\": 0,\n    \"test_time\": \"2026-07-26T23:57:15Z\",\n    \"avg_ns\": 165568330,\n    \"stddev_ns\": 0,\n    \"avg_ts\": 773.094710,\n    \"stddev_ts\": 0.000000,\n    \"samples_ns\": [ 165568330 ],\n    \"samples_ts\": [ 773.095 ]\n  }\n]\n",
+          "success": true,
+          "timed_out": false
+        },
+        {
+          "ambient_during": {
+            "captured_at_utc": "2026-07-26T23:57:16Z",
+            "load_average_1m_5m_15m": [
+              2.54052734375,
+              3.6552734375,
+              3.72265625
+            ],
+            "memory": {
+              "MemAvailableKiB": 24638292,
+              "MemTotalKiB": 32867940,
+              "SwapFreeKiB": 8382792,
+              "SwapTotalKiB": 8388608
+            },
+            "nvidia_smi": {
+              "argv": [
+                "nvidia-smi",
+                "--query-gpu=index,name,uuid,driver_version,memory.total,memory.free,memory.used,utilization.gpu",
+                "--format=csv,noheader,nounits"
+              ],
+              "available": true,
+              "exit_code": 0,
+              "stderr": "",
+              "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 28162, 4026, 14"
+            }
+          },
+          "elapsed_ms": 854.434,
+          "exit_code": 0,
+          "expected_timeout": false,
+          "metrics": {
+            "generation_tokens_per_second": 802.288,
+            "prompt_tokens_per_second": 37002.756489,
+            "wall_elapsed_ms": 854.434
+          },
+          "peak_rss_bytes": 788643840,
+          "stderr": "ggml_cuda_init: found 1 CUDA devices (Total VRAM: 32606 MiB):\n  Device 0: NVIDIA GeForce RTX 5090, compute capability 12.0, VMM: yes, VRAM: 32606 MiB\n",
+          "stdout": "[\n  {\n    \"build_commit\": \"f3e1828\",\n    \"build_number\": 1,\n    \"cpu_info\": \"AMD Ryzen 9 9950X3D 16-Core Processor\",\n    \"gpu_info\": \"NVIDIA GeForce RTX 5090\",\n    \"backends\": \"CUDA\",\n    \"model_filename\": \"$MODEL_STORE/Qwen2.5-0.5B-Instruct-Q4_K_M.gguf\",\n    \"model_type\": \"qwen2 1B Q4_K - Medium\",\n    \"model_size\": 391859712,\n    \"model_n_params\": 494032768,\n    \"n_batch\": 2048,\n    \"n_ubatch\": 512,\n    \"n_threads\": 4,\n    \"cpu_mask\": \"0x0\",\n    \"cpu_strict\": false,\n    \"poll\": 50,\n    \"type_k\": \"f16\",\n    \"type_v\": \"f16\",\n    \"n_gpu_layers\": 99,\n    \"n_cpu_moe\": 0,\n    \"split_mode\": \"layer\",\n    \"main_gpu\": 0,\n    \"no_kv_offload\": false,\n    \"flash_attn\": -1,\n    \"devices\": \"auto\",\n    \"tensor_split\": \"0.00\",\n    \"tensor_buft_overrides\": \"none\",\n    \"use_mmap\": true,\n    \"use_direct_io\": false,\n    \"embeddings\": false,\n    \"no_op_offload\": 0,\n    \"no_host\": false,\n    \"fit_target\": 0,\n    \"fit_min_ctx\": 0,\n    \"n_prompt\": 512,\n    \"n_gen\": 0,\n    \"n_depth\": 0,\n    \"test_time\": \"2026-07-26T23:57:16Z\",\n    \"avg_ns\": 13836807,\n    \"stddev_ns\": 0,\n    \"avg_ts\": 37002.756489,\n    \"stddev_ts\": 0.000000,\n    \"samples_ns\": [ 13836807 ],\n    \"samples_ts\": [ 37002.8 ]\n  },\n  {\n    \"build_commit\": \"f3e1828\",\n    \"build_number\": 1,\n    \"cpu_info\": \"AMD Ryzen 9 9950X3D 16-Core Processor\",\n    \"gpu_info\": \"NVIDIA GeForce RTX 5090\",\n    \"backends\": \"CUDA\",\n    \"model_filename\": \"$MODEL_STORE/Qwen2.5-0.5B-Instruct-Q4_K_M.gguf\",\n    \"model_type\": \"qwen2 1B Q4_K - Medium\",\n    \"model_size\": 391859712,\n    \"model_n_params\": 494032768,\n    \"n_batch\": 2048,\n    \"n_ubatch\": 512,\n    \"n_threads\": 4,\n    \"cpu_mask\": \"0x0\",\n    \"cpu_strict\": false,\n    \"poll\": 50,\n    \"type_k\": \"f16\",\n    \"type_v\": \"f16\",\n    \"n_gpu_layers\": 99,\n    \"n_cpu_moe\": 0,\n    \"split_mode\": \"layer\",\n    \"main_gpu\": 0,\n    \"no_kv_offload\": false,\n    \"flash_attn\": -1,\n    \"devices\": \"auto\",\n    \"tensor_split\": \"0.00\",\n    \"tensor_buft_overrides\": \"none\",\n    \"use_mmap\": true,\n    \"use_direct_io\": false,\n    \"embeddings\": false,\n    \"no_op_offload\": 0,\n    \"no_host\": false,\n    \"fit_target\": 0,\n    \"fit_min_ctx\": 0,\n    \"n_prompt\": 0,\n    \"n_gen\": 128,\n    \"n_depth\": 0,\n    \"test_time\": \"2026-07-26T23:57:16Z\",\n    \"avg_ns\": 159543705,\n    \"stddev_ns\": 0,\n    \"avg_ts\": 802.288000,\n    \"stddev_ts\": 0.000000,\n    \"samples_ns\": [ 159543705 ],\n    \"samples_ts\": [ 802.288 ]\n  }\n]\n",
+          "success": true,
+          "timed_out": false
+        }
+      ],
+      "timeout_seconds": 120,
+      "warmup_results": [
+        {
+          "ambient_during": {
+            "captured_at_utc": "2026-07-26T23:57:12Z",
+            "load_average_1m_5m_15m": [
+              2.6748046875,
+              3.7001953125,
+              3.73779296875
+            ],
+            "memory": {
+              "MemAvailableKiB": 24911344,
+              "MemTotalKiB": 32867940,
+              "SwapFreeKiB": 8382792,
+              "SwapTotalKiB": 8388608
+            },
+            "nvidia_smi": {
+              "argv": [
+                "nvidia-smi",
+                "--query-gpu=index,name,uuid,driver_version,memory.total,memory.free,memory.used,utilization.gpu",
+                "--format=csv,noheader,nounits"
+              ],
+              "available": true,
+              "exit_code": 0,
+              "stderr": "",
+              "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 27917, 4271, 17"
+            }
+          },
+          "elapsed_ms": 851.085,
+          "exit_code": 0,
+          "expected_timeout": false,
+          "metrics": {
+            "generation_tokens_per_second": 761.97167,
+            "prompt_tokens_per_second": 35115.376989,
+            "wall_elapsed_ms": 851.085
+          },
+          "peak_rss_bytes": 623480832,
+          "stderr": "ggml_cuda_init: found 1 CUDA devices (Total VRAM: 32606 MiB):\n  Device 0: NVIDIA GeForce RTX 5090, compute capability 12.0, VMM: yes, VRAM: 32606 MiB\n",
+          "stdout": "[\n  {\n    \"build_commit\": \"f3e1828\",\n    \"build_number\": 1,\n    \"cpu_info\": \"AMD Ryzen 9 9950X3D 16-Core Processor\",\n    \"gpu_info\": \"NVIDIA GeForce RTX 5090\",\n    \"backends\": \"CUDA\",\n    \"model_filename\": \"$MODEL_STORE/Qwen2.5-0.5B-Instruct-Q4_K_M.gguf\",\n    \"model_type\": \"qwen2 1B Q4_K - Medium\",\n    \"model_size\": 391859712,\n    \"model_n_params\": 494032768,\n    \"n_batch\": 2048,\n    \"n_ubatch\": 512,\n    \"n_threads\": 4,\n    \"cpu_mask\": \"0x0\",\n    \"cpu_strict\": false,\n    \"poll\": 50,\n    \"type_k\": \"f16\",\n    \"type_v\": \"f16\",\n    \"n_gpu_layers\": 99,\n    \"n_cpu_moe\": 0,\n    \"split_mode\": \"layer\",\n    \"main_gpu\": 0,\n    \"no_kv_offload\": false,\n    \"flash_attn\": -1,\n    \"devices\": \"auto\",\n    \"tensor_split\": \"0.00\",\n    \"tensor_buft_overrides\": \"none\",\n    \"use_mmap\": true,\n    \"use_direct_io\": false,\n    \"embeddings\": false,\n    \"no_op_offload\": 0,\n    \"no_host\": false,\n    \"fit_target\": 0,\n    \"fit_min_ctx\": 0,\n    \"n_prompt\": 512,\n    \"n_gen\": 0,\n    \"n_depth\": 0,\n    \"test_time\": \"2026-07-26T23:57:12Z\",\n    \"avg_ns\": 14580507,\n    \"stddev_ns\": 0,\n    \"avg_ts\": 35115.376989,\n    \"stddev_ts\": 0.000000,\n    \"samples_ns\": [ 14580507 ],\n    \"samples_ts\": [ 35115.4 ]\n  },\n  {\n    \"build_commit\": \"f3e1828\",\n    \"build_number\": 1,\n    \"cpu_info\": \"AMD Ryzen 9 9950X3D 16-Core Processor\",\n    \"gpu_info\": \"NVIDIA GeForce RTX 5090\",\n    \"backends\": \"CUDA\",\n    \"model_filename\": \"$MODEL_STORE/Qwen2.5-0.5B-Instruct-Q4_K_M.gguf\",\n    \"model_type\": \"qwen2 1B Q4_K - Medium\",\n    \"model_size\": 391859712,\n    \"model_n_params\": 494032768,\n    \"n_batch\": 2048,\n    \"n_ubatch\": 512,\n    \"n_threads\": 4,\n    \"cpu_mask\": \"0x0\",\n    \"cpu_strict\": false,\n    \"poll\": 50,\n    \"type_k\": \"f16\",\n    \"type_v\": \"f16\",\n    \"n_gpu_layers\": 99,\n    \"n_cpu_moe\": 0,\n    \"split_mode\": \"layer\",\n    \"main_gpu\": 0,\n    \"no_kv_offload\": false,\n    \"flash_attn\": -1,\n    \"devices\": \"auto\",\n    \"tensor_split\": \"0.00\",\n    \"tensor_buft_overrides\": \"none\",\n    \"use_mmap\": true,\n    \"use_direct_io\": false,\n    \"embeddings\": false,\n    \"no_op_offload\": 0,\n    \"no_host\": false,\n    \"fit_target\": 0,\n    \"fit_min_ctx\": 0,\n    \"n_prompt\": 0,\n    \"n_gen\": 128,\n    \"n_depth\": 0,\n    \"test_time\": \"2026-07-26T23:57:12Z\",\n    \"avg_ns\": 167985248,\n    \"stddev_ns\": 0,\n    \"avg_ts\": 761.971670,\n    \"stddev_ts\": 0.000000,\n    \"samples_ns\": [ 167985248 ],\n    \"samples_ts\": [ 761.972 ]\n  }\n]\n",
+          "success": true,
+          "timed_out": false
+        }
+      ],
+      "warmups": 1
+    },
+    {
+      "aggregates": {
+        "embedding_tokens_per_second": {
+          "maximum": 65122.815015,
+          "median": 64007.336841,
+          "minimum": 60974.781926,
+          "p95": 65122.815015
+        },
+        "wall_elapsed_ms": {
+          "maximum": 670.397,
+          "median": 659.993,
+          "minimum": 653.139,
+          "p95": 670.397
+        }
+      },
+      "ambient_after": {
+        "captured_at_utc": "2026-07-26T23:57:21Z",
+        "load_average_1m_5m_15m": [
+          2.4169921875,
+          3.61083984375,
+          3.7080078125
+        ],
+        "memory": {
+          "MemAvailableKiB": 24442736,
+          "MemTotalKiB": 32867940,
+          "SwapFreeKiB": 8382792,
+          "SwapTotalKiB": 8388608
+        },
+        "nvidia_smi": {
+          "argv": [
+            "nvidia-smi",
+            "--query-gpu=index,name,uuid,driver_version,memory.total,memory.free,memory.used,utilization.gpu",
+            "--format=csv,noheader,nounits"
+          ],
+          "available": true,
+          "exit_code": 0,
+          "stderr": "",
+          "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 29088, 3100, 7"
+        }
+      },
+      "ambient_before": {
+        "captured_at_utc": "2026-07-26T23:57:17Z",
+        "load_average_1m_5m_15m": [
+          2.54052734375,
+          3.6552734375,
+          3.72265625
+        ],
+        "memory": {
+          "MemAvailableKiB": 24885664,
+          "MemTotalKiB": 32867940,
+          "SwapFreeKiB": 8382792,
+          "SwapTotalKiB": 8388608
+        },
+        "nvidia_smi": {
+          "argv": [
+            "nvidia-smi",
+            "--query-gpu=index,name,uuid,driver_version,memory.total,memory.free,memory.used,utilization.gpu",
+            "--format=csv,noheader,nounits"
+          ],
+          "available": true,
+          "exit_code": 0,
+          "stderr": "",
+          "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 29194, 2994, 8"
+        }
+      },
+      "argv": [
+        "$RUNTIME_ROOT/build-cuda/bin/llama-bench",
+        "-r",
+        "1",
+        "-o",
+        "json",
+        "-ngl",
+        "99",
+        "-t",
+        "4",
+        "-m",
+        "$MODEL_ROOT/nomic-embed-text-v1.5.Q4_K_M.gguf",
+        "-p",
+        "512",
+        "-n",
+        "0",
+        "-embd",
+        "1"
+      ],
+      "argv_sha256": "04ccab6072badca59b22345f06456ea0907f627ddf03442094f8090bc20c39fe",
+      "comparability": "identical llama-bench argv/runtime/model/corpus/machine",
+      "name": "embedding-pp",
+      "partition": "native-performance",
+      "repeats": 5,
+      "runs": [
+        {
+          "ambient_during": {
+            "captured_at_utc": "2026-07-26T23:57:18Z",
+            "load_average_1m_5m_15m": [
+              2.54052734375,
+              3.6552734375,
+              3.72265625
+            ],
+            "memory": {
+              "MemAvailableKiB": 24573764,
+              "MemTotalKiB": 32867940,
+              "SwapFreeKiB": 8382792,
+              "SwapTotalKiB": 8388608
+            },
+            "nvidia_smi": {
+              "argv": [
+                "nvidia-smi",
+                "--query-gpu=index,name,uuid,driver_version,memory.total,memory.free,memory.used,utilization.gpu",
+                "--format=csv,noheader,nounits"
+              ],
+              "available": true,
+              "exit_code": 0,
+              "stderr": "",
+              "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 29186, 3002, 13"
+            }
+          },
+          "elapsed_ms": 653.139,
+          "exit_code": 0,
+          "expected_timeout": false,
+          "metrics": {
+            "embedding_tokens_per_second": 60974.781926,
+            "wall_elapsed_ms": 653.139
+          },
+          "peak_rss_bytes": 441823232,
+          "stderr": "ggml_cuda_init: found 1 CUDA devices (Total VRAM: 32606 MiB):\n  Device 0: NVIDIA GeForce RTX 5090, compute capability 12.0, VMM: yes, VRAM: 32606 MiB\n",
+          "stdout": "[\n  {\n    \"build_commit\": \"f3e1828\",\n    \"build_number\": 1,\n    \"cpu_info\": \"AMD Ryzen 9 9950X3D 16-Core Processor\",\n    \"gpu_info\": \"NVIDIA GeForce RTX 5090\",\n    \"backends\": \"CUDA\",\n    \"model_filename\": \"$MODEL_ROOT/nomic-embed-text-v1.5.Q4_K_M.gguf\",\n    \"model_type\": \"nomic-bert 137M Q4_K - Medium\",\n    \"model_size\": 83349984,\n    \"model_n_params\": 136727040,\n    \"n_batch\": 2048,\n    \"n_ubatch\": 512,\n    \"n_threads\": 4,\n    \"cpu_mask\": \"0x0\",\n    \"cpu_strict\": false,\n    \"poll\": 50,\n    \"type_k\": \"f16\",\n    \"type_v\": \"f16\",\n    \"n_gpu_layers\": 99,\n    \"n_cpu_moe\": 0,\n    \"split_mode\": \"layer\",\n    \"main_gpu\": 0,\n    \"no_kv_offload\": false,\n    \"flash_attn\": -1,\n    \"devices\": \"auto\",\n    \"tensor_split\": \"0.00\",\n    \"tensor_buft_overrides\": \"none\",\n    \"use_mmap\": true,\n    \"use_direct_io\": false,\n    \"embeddings\": true,\n    \"no_op_offload\": 0,\n    \"no_host\": false,\n    \"fit_target\": 0,\n    \"fit_min_ctx\": 0,\n    \"n_prompt\": 512,\n    \"n_gen\": 0,\n    \"n_depth\": 0,\n    \"test_time\": \"2026-07-26T23:57:18Z\",\n    \"avg_ns\": 8396914,\n    \"stddev_ns\": 0,\n    \"avg_ts\": 60974.781926,\n    \"stddev_ts\": 0.000000,\n    \"samples_ns\": [ 8396914 ],\n    \"samples_ts\": [ 60974.8 ]\n  }\n]\n",
+          "success": true,
+          "timed_out": false
+        },
+        {
+          "ambient_during": {
+            "captured_at_utc": "2026-07-26T23:57:19Z",
+            "load_average_1m_5m_15m": [
+              2.4169921875,
+              3.61083984375,
+              3.7080078125
+            ],
+            "memory": {
+              "MemAvailableKiB": 24252604,
+              "MemTotalKiB": 32867940,
+              "SwapFreeKiB": 8382792,
+              "SwapTotalKiB": 8388608
+            },
+            "nvidia_smi": {
+              "argv": [
+                "nvidia-smi",
+                "--query-gpu=index,name,uuid,driver_version,memory.total,memory.free,memory.used,utilization.gpu",
+                "--format=csv,noheader,nounits"
+              ],
+              "available": true,
+              "exit_code": 0,
+              "stderr": "",
+              "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 28659, 3529, 7"
+            }
+          },
+          "elapsed_ms": 662.499,
+          "exit_code": 0,
+          "expected_timeout": false,
+          "metrics": {
+            "embedding_tokens_per_second": 64007.336841,
+            "wall_elapsed_ms": 662.499
+          },
+          "peak_rss_bytes": 443838464,
+          "stderr": "ggml_cuda_init: found 1 CUDA devices (Total VRAM: 32606 MiB):\n  Device 0: NVIDIA GeForce RTX 5090, compute capability 12.0, VMM: yes, VRAM: 32606 MiB\n",
+          "stdout": "[\n  {\n    \"build_commit\": \"f3e1828\",\n    \"build_number\": 1,\n    \"cpu_info\": \"AMD Ryzen 9 9950X3D 16-Core Processor\",\n    \"gpu_info\": \"NVIDIA GeForce RTX 5090\",\n    \"backends\": \"CUDA\",\n    \"model_filename\": \"$MODEL_ROOT/nomic-embed-text-v1.5.Q4_K_M.gguf\",\n    \"model_type\": \"nomic-bert 137M Q4_K - Medium\",\n    \"model_size\": 83349984,\n    \"model_n_params\": 136727040,\n    \"n_batch\": 2048,\n    \"n_ubatch\": 512,\n    \"n_threads\": 4,\n    \"cpu_mask\": \"0x0\",\n    \"cpu_strict\": false,\n    \"poll\": 50,\n    \"type_k\": \"f16\",\n    \"type_v\": \"f16\",\n    \"n_gpu_layers\": 99,\n    \"n_cpu_moe\": 0,\n    \"split_mode\": \"layer\",\n    \"main_gpu\": 0,\n    \"no_kv_offload\": false,\n    \"flash_attn\": -1,\n    \"devices\": \"auto\",\n    \"tensor_split\": \"0.00\",\n    \"tensor_buft_overrides\": \"none\",\n    \"use_mmap\": true,\n    \"use_direct_io\": false,\n    \"embeddings\": true,\n    \"no_op_offload\": 0,\n    \"no_host\": false,\n    \"fit_target\": 0,\n    \"fit_min_ctx\": 0,\n    \"n_prompt\": 512,\n    \"n_gen\": 0,\n    \"n_depth\": 0,\n    \"test_time\": \"2026-07-26T23:57:18Z\",\n    \"avg_ns\": 7999083,\n    \"stddev_ns\": 0,\n    \"avg_ts\": 64007.336841,\n    \"stddev_ts\": 0.000000,\n    \"samples_ns\": [ 7999083 ],\n    \"samples_ts\": [ 64007.3 ]\n  }\n]\n",
+          "success": true,
+          "timed_out": false
+        },
+        {
+          "ambient_during": {
+            "captured_at_utc": "2026-07-26T23:57:19Z",
+            "load_average_1m_5m_15m": [
+              2.4169921875,
+              3.61083984375,
+              3.7080078125
+            ],
+            "memory": {
+              "MemAvailableKiB": 24319144,
+              "MemTotalKiB": 32867940,
+              "SwapFreeKiB": 8382792,
+              "SwapTotalKiB": 8388608
+            },
+            "nvidia_smi": {
+              "argv": [
+                "nvidia-smi",
+                "--query-gpu=index,name,uuid,driver_version,memory.total,memory.free,memory.used,utilization.gpu",
+                "--format=csv,noheader,nounits"
+              ],
+              "available": true,
+              "exit_code": 0,
+              "stderr": "",
+              "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 29071, 3117, 11"
+            }
+          },
+          "elapsed_ms": 659.993,
+          "exit_code": 0,
+          "expected_timeout": false,
+          "metrics": {
+            "embedding_tokens_per_second": 65122.815015,
+            "wall_elapsed_ms": 659.993
+          },
+          "peak_rss_bytes": 441765888,
+          "stderr": "ggml_cuda_init: found 1 CUDA devices (Total VRAM: 32606 MiB):\n  Device 0: NVIDIA GeForce RTX 5090, compute capability 12.0, VMM: yes, VRAM: 32606 MiB\n",
+          "stdout": "[\n  {\n    \"build_commit\": \"f3e1828\",\n    \"build_number\": 1,\n    \"cpu_info\": \"AMD Ryzen 9 9950X3D 16-Core Processor\",\n    \"gpu_info\": \"NVIDIA GeForce RTX 5090\",\n    \"backends\": \"CUDA\",\n    \"model_filename\": \"$MODEL_ROOT/nomic-embed-text-v1.5.Q4_K_M.gguf\",\n    \"model_type\": \"nomic-bert 137M Q4_K - Medium\",\n    \"model_size\": 83349984,\n    \"model_n_params\": 136727040,\n    \"n_batch\": 2048,\n    \"n_ubatch\": 512,\n    \"n_threads\": 4,\n    \"cpu_mask\": \"0x0\",\n    \"cpu_strict\": false,\n    \"poll\": 50,\n    \"type_k\": \"f16\",\n    \"type_v\": \"f16\",\n    \"n_gpu_layers\": 99,\n    \"n_cpu_moe\": 0,\n    \"split_mode\": \"layer\",\n    \"main_gpu\": 0,\n    \"no_kv_offload\": false,\n    \"flash_attn\": -1,\n    \"devices\": \"auto\",\n    \"tensor_split\": \"0.00\",\n    \"tensor_buft_overrides\": \"none\",\n    \"use_mmap\": true,\n    \"use_direct_io\": false,\n    \"embeddings\": true,\n    \"no_op_offload\": 0,\n    \"no_host\": false,\n    \"fit_target\": 0,\n    \"fit_min_ctx\": 0,\n    \"n_prompt\": 512,\n    \"n_gen\": 0,\n    \"n_depth\": 0,\n    \"test_time\": \"2026-07-26T23:57:19Z\",\n    \"avg_ns\": 7862068,\n    \"stddev_ns\": 0,\n    \"avg_ts\": 65122.815015,\n    \"stddev_ts\": 0.000000,\n    \"samples_ns\": [ 7862068 ],\n    \"samples_ts\": [ 65122.8 ]\n  }\n]\n",
+          "success": true,
+          "timed_out": false
+        },
+        {
+          "ambient_during": {
+            "captured_at_utc": "2026-07-26T23:57:20Z",
+            "load_average_1m_5m_15m": [
+              2.4169921875,
+              3.61083984375,
+              3.7080078125
+            ],
+            "memory": {
+              "MemAvailableKiB": 24472040,
+              "MemTotalKiB": 32867940,
+              "SwapFreeKiB": 8382792,
+              "SwapTotalKiB": 8388608
+            },
+            "nvidia_smi": {
+              "argv": [
+                "nvidia-smi",
+                "--query-gpu=index,name,uuid,driver_version,memory.total,memory.free,memory.used,utilization.gpu",
+                "--format=csv,noheader,nounits"
+              ],
+              "available": true,
+              "exit_code": 0,
+              "stderr": "",
+              "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 29090, 3098, 12"
+            }
+          },
+          "elapsed_ms": 670.397,
+          "exit_code": 0,
+          "expected_timeout": false,
+          "metrics": {
+            "embedding_tokens_per_second": 65070.581882,
+            "wall_elapsed_ms": 670.397
+          },
+          "peak_rss_bytes": 464826368,
+          "stderr": "ggml_cuda_init: found 1 CUDA devices (Total VRAM: 32606 MiB):\n  Device 0: NVIDIA GeForce RTX 5090, compute capability 12.0, VMM: yes, VRAM: 32606 MiB\n",
+          "stdout": "[\n  {\n    \"build_commit\": \"f3e1828\",\n    \"build_number\": 1,\n    \"cpu_info\": \"AMD Ryzen 9 9950X3D 16-Core Processor\",\n    \"gpu_info\": \"NVIDIA GeForce RTX 5090\",\n    \"backends\": \"CUDA\",\n    \"model_filename\": \"$MODEL_ROOT/nomic-embed-text-v1.5.Q4_K_M.gguf\",\n    \"model_type\": \"nomic-bert 137M Q4_K - Medium\",\n    \"model_size\": 83349984,\n    \"model_n_params\": 136727040,\n    \"n_batch\": 2048,\n    \"n_ubatch\": 512,\n    \"n_threads\": 4,\n    \"cpu_mask\": \"0x0\",\n    \"cpu_strict\": false,\n    \"poll\": 50,\n    \"type_k\": \"f16\",\n    \"type_v\": \"f16\",\n    \"n_gpu_layers\": 99,\n    \"n_cpu_moe\": 0,\n    \"split_mode\": \"layer\",\n    \"main_gpu\": 0,\n    \"no_kv_offload\": false,\n    \"flash_attn\": -1,\n    \"devices\": \"auto\",\n    \"tensor_split\": \"0.00\",\n    \"tensor_buft_overrides\": \"none\",\n    \"use_mmap\": true,\n    \"use_direct_io\": false,\n    \"embeddings\": true,\n    \"no_op_offload\": 0,\n    \"no_host\": false,\n    \"fit_target\": 0,\n    \"fit_min_ctx\": 0,\n    \"n_prompt\": 512,\n    \"n_gen\": 0,\n    \"n_depth\": 0,\n    \"test_time\": \"2026-07-26T23:57:20Z\",\n    \"avg_ns\": 7868379,\n    \"stddev_ns\": 0,\n    \"avg_ts\": 65070.581882,\n    \"stddev_ts\": 0.000000,\n    \"samples_ns\": [ 7868379 ],\n    \"samples_ts\": [ 65070.6 ]\n  }\n]\n",
+          "success": true,
+          "timed_out": false
+        },
+        {
+          "ambient_during": {
+            "captured_at_utc": "2026-07-26T23:57:21Z",
+            "load_average_1m_5m_15m": [
+              2.4169921875,
+              3.61083984375,
+              3.7080078125
+            ],
+            "memory": {
+              "MemAvailableKiB": 24451296,
+              "MemTotalKiB": 32867940,
+              "SwapFreeKiB": 8382792,
+              "SwapTotalKiB": 8388608
+            },
+            "nvidia_smi": {
+              "argv": [
+                "nvidia-smi",
+                "--query-gpu=index,name,uuid,driver_version,memory.total,memory.free,memory.used,utilization.gpu",
+                "--format=csv,noheader,nounits"
+              ],
+              "available": true,
+              "exit_code": 0,
+              "stderr": "",
+              "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 29088, 3100, 11"
+            }
+          },
+          "elapsed_ms": 653.298,
+          "exit_code": 0,
+          "expected_timeout": false,
+          "metrics": {
+            "embedding_tokens_per_second": 63476.997151,
+            "wall_elapsed_ms": 653.298
+          },
+          "peak_rss_bytes": 441876480,
+          "stderr": "ggml_cuda_init: found 1 CUDA devices (Total VRAM: 32606 MiB):\n  Device 0: NVIDIA GeForce RTX 5090, compute capability 12.0, VMM: yes, VRAM: 32606 MiB\n",
+          "stdout": "[\n  {\n    \"build_commit\": \"f3e1828\",\n    \"build_number\": 1,\n    \"cpu_info\": \"AMD Ryzen 9 9950X3D 16-Core Processor\",\n    \"gpu_info\": \"NVIDIA GeForce RTX 5090\",\n    \"backends\": \"CUDA\",\n    \"model_filename\": \"$MODEL_ROOT/nomic-embed-text-v1.5.Q4_K_M.gguf\",\n    \"model_type\": \"nomic-bert 137M Q4_K - Medium\",\n    \"model_size\": 83349984,\n    \"model_n_params\": 136727040,\n    \"n_batch\": 2048,\n    \"n_ubatch\": 512,\n    \"n_threads\": 4,\n    \"cpu_mask\": \"0x0\",\n    \"cpu_strict\": false,\n    \"poll\": 50,\n    \"type_k\": \"f16\",\n    \"type_v\": \"f16\",\n    \"n_gpu_layers\": 99,\n    \"n_cpu_moe\": 0,\n    \"split_mode\": \"layer\",\n    \"main_gpu\": 0,\n    \"no_kv_offload\": false,\n    \"flash_attn\": -1,\n    \"devices\": \"auto\",\n    \"tensor_split\": \"0.00\",\n    \"tensor_buft_overrides\": \"none\",\n    \"use_mmap\": true,\n    \"use_direct_io\": false,\n    \"embeddings\": true,\n    \"no_op_offload\": 0,\n    \"no_host\": false,\n    \"fit_target\": 0,\n    \"fit_min_ctx\": 0,\n    \"n_prompt\": 512,\n    \"n_gen\": 0,\n    \"n_depth\": 0,\n    \"test_time\": \"2026-07-26T23:57:20Z\",\n    \"avg_ns\": 8065914,\n    \"stddev_ns\": 0,\n    \"avg_ts\": 63476.997151,\n    \"stddev_ts\": 0.000000,\n    \"samples_ns\": [ 8065914 ],\n    \"samples_ts\": [ 63477 ]\n  }\n]\n",
+          "success": true,
+          "timed_out": false
+        }
+      ],
+      "timeout_seconds": 120,
+      "warmup_results": [
+        {
+          "ambient_during": {
+            "captured_at_utc": "2026-07-26T23:57:17Z",
+            "load_average_1m_5m_15m": [
+              2.54052734375,
+              3.6552734375,
+              3.72265625
+            ],
+            "memory": {
+              "MemAvailableKiB": 24829388,
+              "MemTotalKiB": 32867940,
+              "SwapFreeKiB": 8382792,
+              "SwapTotalKiB": 8388608
+            },
+            "nvidia_smi": {
+              "argv": [
+                "nvidia-smi",
+                "--query-gpu=index,name,uuid,driver_version,memory.total,memory.free,memory.used,utilization.gpu",
+                "--format=csv,noheader,nounits"
+              ],
+              "available": true,
+              "exit_code": 0,
+              "stderr": "",
+              "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 29194, 2994, 7"
+            }
+          },
+          "elapsed_ms": 651.373,
+          "exit_code": 0,
+          "expected_timeout": false,
+          "metrics": {
+            "embedding_tokens_per_second": 62589.491053,
+            "wall_elapsed_ms": 651.373
+          },
+          "peak_rss_bytes": 446906368,
+          "stderr": "ggml_cuda_init: found 1 CUDA devices (Total VRAM: 32606 MiB):\n  Device 0: NVIDIA GeForce RTX 5090, compute capability 12.0, VMM: yes, VRAM: 32606 MiB\n",
+          "stdout": "[\n  {\n    \"build_commit\": \"f3e1828\",\n    \"build_number\": 1,\n    \"cpu_info\": \"AMD Ryzen 9 9950X3D 16-Core Processor\",\n    \"gpu_info\": \"NVIDIA GeForce RTX 5090\",\n    \"backends\": \"CUDA\",\n    \"model_filename\": \"$MODEL_ROOT/nomic-embed-text-v1.5.Q4_K_M.gguf\",\n    \"model_type\": \"nomic-bert 137M Q4_K - Medium\",\n    \"model_size\": 83349984,\n    \"model_n_params\": 136727040,\n    \"n_batch\": 2048,\n    \"n_ubatch\": 512,\n    \"n_threads\": 4,\n    \"cpu_mask\": \"0x0\",\n    \"cpu_strict\": false,\n    \"poll\": 50,\n    \"type_k\": \"f16\",\n    \"type_v\": \"f16\",\n    \"n_gpu_layers\": 99,\n    \"n_cpu_moe\": 0,\n    \"split_mode\": \"layer\",\n    \"main_gpu\": 0,\n    \"no_kv_offload\": false,\n    \"flash_attn\": -1,\n    \"devices\": \"auto\",\n    \"tensor_split\": \"0.00\",\n    \"tensor_buft_overrides\": \"none\",\n    \"use_mmap\": true,\n    \"use_direct_io\": false,\n    \"embeddings\": true,\n    \"no_op_offload\": 0,\n    \"no_host\": false,\n    \"fit_target\": 0,\n    \"fit_min_ctx\": 0,\n    \"n_prompt\": 512,\n    \"n_gen\": 0,\n    \"n_depth\": 0,\n    \"test_time\": \"2026-07-26T23:57:17Z\",\n    \"avg_ns\": 8180287,\n    \"stddev_ns\": 0,\n    \"avg_ts\": 62589.491053,\n    \"stddev_ts\": 0.000000,\n    \"samples_ns\": [ 8180287 ],\n    \"samples_ts\": [ 62589.5 ]\n  }\n]\n",
+          "success": true,
+          "timed_out": false
+        }
+      ],
+      "warmups": 1
+    },
+    {
+      "aggregates": {
+        "wall_elapsed_ms": {
+          "maximum": 871.646,
+          "median": 871.646,
+          "minimum": 871.646,
+          "p95": 871.646
+        }
+      },
+      "ambient_after": {
+        "captured_at_utc": "2026-07-26T23:57:22Z",
+        "load_average_1m_5m_15m": [
+          2.4169921875,
+          3.61083984375,
+          3.7080078125
+        ],
+        "memory": {
+          "MemAvailableKiB": 24458992,
+          "MemTotalKiB": 32867940,
+          "SwapFreeKiB": 8382792,
+          "SwapTotalKiB": 8388608
+        },
+        "nvidia_smi": {
+          "argv": [
+            "nvidia-smi",
+            "--query-gpu=index,name,uuid,driver_version,memory.total,memory.free,memory.used,utilization.gpu",
+            "--format=csv,noheader,nounits"
+          ],
+          "available": true,
+          "exit_code": 0,
+          "stderr": "",
+          "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 29110, 3078, 3"
+        }
+      },
+      "ambient_before": {
+        "captured_at_utc": "2026-07-26T23:57:21Z",
+        "load_average_1m_5m_15m": [
+          2.4169921875,
+          3.61083984375,
+          3.7080078125
+        ],
+        "memory": {
+          "MemAvailableKiB": 24442736,
+          "MemTotalKiB": 32867940,
+          "SwapFreeKiB": 8382792,
+          "SwapTotalKiB": 8388608
+        },
+        "nvidia_smi": {
+          "argv": [
+            "nvidia-smi",
+            "--query-gpu=index,name,uuid,driver_version,memory.total,memory.free,memory.used,utilization.gpu",
+            "--format=csv,noheader,nounits"
+          ],
+          "available": true,
+          "exit_code": 0,
+          "stderr": "",
+          "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 29088, 3100, 7"
+        }
+      },
+      "argv": [
+        "/bin/bash",
+        "-lc",
+        "scripts/with-build-lock.sh -- scripts/assembly-guard.sh guard --test-bins -- dotnet test --project XE-Local-AI-Engine.AI.Agent.Tests/XE-Local-AI-Engine.AI.Agent.Tests.csproj --configuration Release --no-build --max-parallel-test-modules 1 --treenode-filter '/*/*/FrameworkApprovalGateTests/(ApprovalRequiredTool_ThreadlessApprove_ExecutesExactlyOnceAfterApproval|ApprovalRequiredTool_ThreadlessReject_DoesNotExecute)'"
+      ],
+      "argv_sha256": "924ce45770d47989d7136d27ebb53b5c2c47a2d9656c62755c43c95f5a0a72c6",
+      "comparability": "exact stable test-method set; product/framework binary differs only by captured source/package identity",
+      "name": "maf-approval-resume-contract",
+      "partition": "framework-contract",
+      "repeats": 1,
+      "runs": [
+        {
+          "ambient_during": {
+            "captured_at_utc": "2026-07-26T23:57:21Z",
+            "load_average_1m_5m_15m": [
+              2.4169921875,
+              3.61083984375,
+              3.7080078125
+            ],
+            "memory": {
+              "MemAvailableKiB": 24445960,
+              "MemTotalKiB": 32867940,
+              "SwapFreeKiB": 8382792,
+              "SwapTotalKiB": 8388608
+            },
+            "nvidia_smi": {
+              "argv": [
+                "nvidia-smi",
+                "--query-gpu=index,name,uuid,driver_version,memory.total,memory.free,memory.used,utilization.gpu",
+                "--format=csv,noheader,nounits"
+              ],
+              "available": true,
+              "exit_code": 0,
+              "stderr": "",
+              "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 29110, 3078, 3"
+            }
+          },
+          "elapsed_ms": 871.646,
+          "exit_code": 0,
+          "expected_timeout": false,
+          "metrics": {
+            "wall_elapsed_ms": 871.646
+          },
+          "peak_rss_bytes": 3956736,
+          "stderr": "[guard] snapshot: 1442 assemblies across 4 root(s) -> $BASELINE_REPO/.tmp/assembly-guard-fRosMz.state\n[guard] verify: build output unchanged during the run \u2014 result is trustworthy.\n",
+          "stdout": "Running tests from $BASELINE_REPO/XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/XE_Local_AI_Engine.AI.Agent.Tests.dll (net10.0|x64)\n$BASELINE_REPO/XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/XE_Local_AI_Engine.AI.Agent.Tests.dll (net10.0|x64) passed (295ms)\n\n  In process file artifacts produced:\n    - $BASELINE_REPO/XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/TestResults/XE_Local_AI_Engine.AI.Agent.Tests-linux-net10.0-report.html\n\nTest run summary: Passed!\n  total: 2\n  failed: 0\n  succeeded: 2\n  skipped: 0\n  duration: 428ms\n",
+          "success": true,
+          "timed_out": false
+        }
+      ],
+      "timeout_seconds": 300,
+      "warmup_results": [],
+      "warmups": 0
+    },
+    {
+      "aggregates": {
+        "wall_elapsed_ms": {
+          "maximum": 1076.08,
+          "median": 1076.08,
+          "minimum": 1076.08,
+          "p95": 1076.08
+        }
+      },
+      "ambient_after": {
+        "captured_at_utc": "2026-07-26T23:57:23Z",
+        "load_average_1m_5m_15m": [
+          2.4169921875,
+          3.61083984375,
+          3.7080078125
+        ],
+        "memory": {
+          "MemAvailableKiB": 24436416,
+          "MemTotalKiB": 32867940,
+          "SwapFreeKiB": 8382792,
+          "SwapTotalKiB": 8388608
+        },
+        "nvidia_smi": {
+          "argv": [
+            "nvidia-smi",
+            "--query-gpu=index,name,uuid,driver_version,memory.total,memory.free,memory.used,utilization.gpu",
+            "--format=csv,noheader,nounits"
+          ],
+          "available": true,
+          "exit_code": 0,
+          "stderr": "",
+          "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 29099, 3089, 8"
+        }
+      },
+      "ambient_before": {
+        "captured_at_utc": "2026-07-26T23:57:22Z",
+        "load_average_1m_5m_15m": [
+          2.4169921875,
+          3.61083984375,
+          3.7080078125
+        ],
+        "memory": {
+          "MemAvailableKiB": 24457876,
+          "MemTotalKiB": 32867940,
+          "SwapFreeKiB": 8382792,
+          "SwapTotalKiB": 8388608
+        },
+        "nvidia_smi": {
+          "argv": [
+            "nvidia-smi",
+            "--query-gpu=index,name,uuid,driver_version,memory.total,memory.free,memory.used,utilization.gpu",
+            "--format=csv,noheader,nounits"
+          ],
+          "available": true,
+          "exit_code": 0,
+          "stderr": "",
+          "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 29110, 3078, 3"
+        }
+      },
+      "argv": [
+        "/bin/bash",
+        "-lc",
+        "scripts/with-build-lock.sh -- scripts/assembly-guard.sh guard --test-bins -- dotnet test --project XE-Local-AI-Engine.Tests/XE-Local-AI-Engine.Tests.csproj --configuration Release --no-build --max-parallel-test-modules 1 --treenode-filter '/*/*/InvocationRunnerTests/(RunAsync_ValidPackage_StreamsChunks|RunAsync_WhenPlainContextReceivesUsageContent_SendsAuthoritativeTokenCounts|RunAsync_WhenToolApprovalRequested_SendsApprovalThenResumesAfterDecision)'"
+      ],
+      "argv_sha256": "2bac86b6e8962b56ba438b66b2275118117f86b082e13474eef76e3482558fa3",
+      "comparability": "exact stable test-method set; product/framework binary differs only by captured source/package identity",
+      "name": "invocation-streaming-token-contract",
+      "partition": "framework-contract",
+      "repeats": 1,
+      "runs": [
+        {
+          "ambient_during": {
+            "captured_at_utc": "2026-07-26T23:57:22Z",
+            "load_average_1m_5m_15m": [
+              2.4169921875,
+              3.61083984375,
+              3.7080078125
+            ],
+            "memory": {
+              "MemAvailableKiB": 24416128,
+              "MemTotalKiB": 32867940,
+              "SwapFreeKiB": 8382792,
+              "SwapTotalKiB": 8388608
+            },
+            "nvidia_smi": {
+              "argv": [
+                "nvidia-smi",
+                "--query-gpu=index,name,uuid,driver_version,memory.total,memory.free,memory.used,utilization.gpu",
+                "--format=csv,noheader,nounits"
+              ],
+              "available": true,
+              "exit_code": 0,
+              "stderr": "",
+              "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 29101, 3087, 6"
+            }
+          },
+          "elapsed_ms": 1076.08,
+          "exit_code": 0,
+          "expected_timeout": false,
+          "metrics": {
+            "wall_elapsed_ms": 1076.08
+          },
+          "peak_rss_bytes": 3977216,
+          "stderr": "[guard] snapshot: 1442 assemblies across 4 root(s) -> $BASELINE_REPO/.tmp/assembly-guard-9dByeS.state\n[guard] verify: build output unchanged during the run \u2014 result is trustworthy.\n",
+          "stdout": "Running tests from $BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.Tests.dll (net10.0|x64)\n$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.Tests.dll (net10.0|x64) passed (402ms)\n\n  In process file artifacts produced:\n    - $BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/TestResults/XE-Local-AI-Engine.Tests-linux-net10.0-report.html\n\nTest run summary: Passed!\n  total: 3\n  failed: 0\n  succeeded: 3\n  skipped: 0\n  duration: 557ms\n",
+          "success": true,
+          "timed_out": false
+        }
+      ],
+      "timeout_seconds": 300,
+      "warmup_results": [],
+      "warmups": 0
+    },
+    {
+      "aggregates": {
+        "wall_elapsed_ms": {
+          "maximum": 974.778,
+          "median": 974.778,
+          "minimum": 974.778,
+          "p95": 974.778
+        }
+      },
+      "ambient_after": {
+        "captured_at_utc": "2026-07-26T23:57:24Z",
+        "load_average_1m_5m_15m": [
+          2.22314453125,
+          3.55078125,
+          3.68798828125
+        ],
+        "memory": {
+          "MemAvailableKiB": 24460208,
+          "MemTotalKiB": 32867940,
+          "SwapFreeKiB": 8382792,
+          "SwapTotalKiB": 8388608
+        },
+        "nvidia_smi": {
+          "argv": [
+            "nvidia-smi",
+            "--query-gpu=index,name,uuid,driver_version,memory.total,memory.free,memory.used,utilization.gpu",
+            "--format=csv,noheader,nounits"
+          ],
+          "available": true,
+          "exit_code": 0,
+          "stderr": "",
+          "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 29123, 3065, 6"
+        }
+      },
+      "ambient_before": {
+        "captured_at_utc": "2026-07-26T23:57:23Z",
+        "load_average_1m_5m_15m": [
+          2.4169921875,
+          3.61083984375,
+          3.7080078125
+        ],
+        "memory": {
+          "MemAvailableKiB": 24443888,
+          "MemTotalKiB": 32867940,
+          "SwapFreeKiB": 8382792,
+          "SwapTotalKiB": 8388608
+        },
+        "nvidia_smi": {
+          "argv": [
+            "nvidia-smi",
+            "--query-gpu=index,name,uuid,driver_version,memory.total,memory.free,memory.used,utilization.gpu",
+            "--format=csv,noheader,nounits"
+          ],
+          "available": true,
+          "exit_code": 0,
+          "stderr": "",
+          "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 29099, 3089, 8"
+        }
+      },
+      "argv": [
+        "/bin/bash",
+        "-lc",
+        "scripts/with-build-lock.sh -- scripts/assembly-guard.sh guard --test-bins -- dotnet test --project XE-Local-AI-Engine.Tests/XE-Local-AI-Engine.Tests.csproj --configuration Release --no-build --max-parallel-test-modules 1 --treenode-filter '/*/*/InferenceBenchmarkHarnessTests/(PromMetricParser_ExtractsGauge|PromMetricParser_ReturnsNull_WhenAbsent|RunAsync_ToolStage_RecordsToolLoop_WhenModelInvokesTool|RunAsync_ToolStage_RecordsNull_WhenModelNeverInvokesTool)'"
+      ],
+      "argv_sha256": "dce5b5ead6651c6b891b4b58e3119a742d44dfbb474a27de15b3d5b5a7608a80",
+      "comparability": "exact stable test-method set; product/framework binary differs only by captured source/package identity",
+      "name": "chat-application-harness",
+      "partition": "application-harness",
+      "repeats": 1,
+      "runs": [
+        {
+          "ambient_during": {
+            "captured_at_utc": "2026-07-26T23:57:24Z",
+            "load_average_1m_5m_15m": [
+              2.22314453125,
+              3.55078125,
+              3.68798828125
+            ],
+            "memory": {
+              "MemAvailableKiB": 24446804,
+              "MemTotalKiB": 32867940,
+              "SwapFreeKiB": 8382792,
+              "SwapTotalKiB": 8388608
+            },
+            "nvidia_smi": {
+              "argv": [
+                "nvidia-smi",
+                "--query-gpu=index,name,uuid,driver_version,memory.total,memory.free,memory.used,utilization.gpu",
+                "--format=csv,noheader,nounits"
+              ],
+              "available": true,
+              "exit_code": 0,
+              "stderr": "",
+              "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 29123, 3065, 4"
+            }
+          },
+          "elapsed_ms": 974.778,
+          "exit_code": 0,
+          "expected_timeout": false,
+          "metrics": {
+            "wall_elapsed_ms": 974.778
+          },
+          "peak_rss_bytes": 3960832,
+          "stderr": "[guard] snapshot: 1442 assemblies across 4 root(s) -> $BASELINE_REPO/.tmp/assembly-guard-DXD886.state\n[guard] verify: build output unchanged during the run \u2014 result is trustworthy.\n",
+          "stdout": "Running tests from $BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.Tests.dll (net10.0|x64)\n$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.Tests.dll (net10.0|x64) passed (388ms)\n\n  In process file artifacts produced:\n    - $BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/TestResults/XE-Local-AI-Engine.Tests-linux-net10.0-report.html\n\nTest run summary: Passed!\n  total: 4\n  failed: 0\n  succeeded: 4\n  skipped: 0\n  duration: 522ms\n",
+          "success": true,
+          "timed_out": false
+        }
+      ],
+      "timeout_seconds": 300,
+      "warmup_results": [],
+      "warmups": 0
+    },
+    {
+      "aggregates": {
+        "wall_elapsed_ms": {
+          "maximum": 1076.539,
+          "median": 1076.539,
+          "minimum": 1076.539,
+          "p95": 1076.539
+        }
+      },
+      "ambient_after": {
+        "captured_at_utc": "2026-07-26T23:57:25Z",
+        "load_average_1m_5m_15m": [
+          2.22314453125,
+          3.55078125,
+          3.68798828125
+        ],
+        "memory": {
+          "MemAvailableKiB": 24530660,
+          "MemTotalKiB": 32867940,
+          "SwapFreeKiB": 8382792,
+          "SwapTotalKiB": 8388608
+        },
+        "nvidia_smi": {
+          "argv": [
+            "nvidia-smi",
+            "--query-gpu=index,name,uuid,driver_version,memory.total,memory.free,memory.used,utilization.gpu",
+            "--format=csv,noheader,nounits"
+          ],
+          "available": true,
+          "exit_code": 0,
+          "stderr": "",
+          "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 29182, 3006, 8"
+        }
+      },
+      "ambient_before": {
+        "captured_at_utc": "2026-07-26T23:57:24Z",
+        "load_average_1m_5m_15m": [
+          2.22314453125,
+          3.55078125,
+          3.68798828125
+        ],
+        "memory": {
+          "MemAvailableKiB": 24487496,
+          "MemTotalKiB": 32867940,
+          "SwapFreeKiB": 8382792,
+          "SwapTotalKiB": 8388608
+        },
+        "nvidia_smi": {
+          "argv": [
+            "nvidia-smi",
+            "--query-gpu=index,name,uuid,driver_version,memory.total,memory.free,memory.used,utilization.gpu",
+            "--format=csv,noheader,nounits"
+          ],
+          "available": true,
+          "exit_code": 0,
+          "stderr": "",
+          "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 29124, 3064, 6"
+        }
+      },
+      "argv": [
+        "/bin/bash",
+        "-lc",
+        "scripts/with-build-lock.sh -- scripts/assembly-guard.sh guard --test-bins -- dotnet test --project XE-Local-AI-Engine.Tests/XE-Local-AI-Engine.Tests.csproj --configuration Release --no-build --max-parallel-test-modules 1 --treenode-filter '/*/*/LlamaServerRerankerClientTests/(RerankAsync_ProjectsScoreSortedResultsBackIntoInputOrder_AndTargetsRerankRoute|RerankAsync_ServerDown_ReturnsNullToDegrade|RerankAsync_NonSuccessStatus_ReturnsNullToDegrade|RerankAsync_ResultCountMismatch_ReturnsNullToDegrade|RerankAsync_EmptyDocuments_ReturnsNullWithoutSpawning)'"
+      ],
+      "argv_sha256": "f03a251f692b11e3b5554685680c30e77f33aeae2d368765d9bd9949e744e5b2",
+      "comparability": "exact stable test-method set; product/framework binary differs only by captured source/package identity",
+      "name": "reranker-provider-contract",
+      "partition": "provider-contract",
+      "repeats": 1,
+      "runs": [
+        {
+          "ambient_during": {
+            "captured_at_utc": "2026-07-26T23:57:25Z",
+            "load_average_1m_5m_15m": [
+              2.22314453125,
+              3.55078125,
+              3.68798828125
+            ],
+            "memory": {
+              "MemAvailableKiB": 24470416,
+              "MemTotalKiB": 32867940,
+              "SwapFreeKiB": 8382792,
+              "SwapTotalKiB": 8388608
+            },
+            "nvidia_smi": {
+              "argv": [
+                "nvidia-smi",
+                "--query-gpu=index,name,uuid,driver_version,memory.total,memory.free,memory.used,utilization.gpu",
+                "--format=csv,noheader,nounits"
+              ],
+              "available": true,
+              "exit_code": 0,
+              "stderr": "",
+              "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 29196, 2992, 5"
+            }
+          },
+          "elapsed_ms": 1076.539,
+          "exit_code": 0,
+          "expected_timeout": false,
+          "metrics": {
+            "wall_elapsed_ms": 1076.539
+          },
+          "peak_rss_bytes": 3985408,
+          "stderr": "[guard] snapshot: 1442 assemblies across 4 root(s) -> $BASELINE_REPO/.tmp/assembly-guard-g76QzJ.state\n[guard] verify: build output unchanged during the run \u2014 result is trustworthy.\n",
+          "stdout": "Running tests from $BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.Tests.dll (net10.0|x64)\n$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.Tests.dll (net10.0|x64) passed (357ms)\n\n  In process file artifacts produced:\n    - $BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/TestResults/XE-Local-AI-Engine.Tests-linux-net10.0-report.html\n\nTest run summary: Passed!\n  total: 5\n  failed: 0\n  succeeded: 5\n  skipped: 0\n  duration: 516ms\n",
+          "success": true,
+          "timed_out": false
+        }
+      ],
+      "timeout_seconds": 300,
+      "warmup_results": [],
+      "warmups": 0
+    }
+  ],
+  "completed_at_utc": "2026-07-26T23:57:25Z",
+  "coverage": {
+    "unvalidated": [
+      {
+        "reason": "manual capture required on native Windows",
+        "target": "native Windows NVIDIA/WDDM"
+      },
+      {
+        "reason": "no NVIDIA Vulkan ICD; runtime enumerates zero Vulkan devices",
+        "target": "Linux NVIDIA Vulkan"
+      },
+      {
+        "reason": "host is WSL2/WDDM, not native Linux",
+        "target": "native Linux CUDA and hard-OOM recovery"
+      },
+      {
+        "reason": "available ballast does not alter the process-budget reader consumed by fit",
+        "target": "8 GB or constrained VRAM"
+      },
+      {
+        "reason": "MoE deliberately excluded from the fixed model set",
+        "target": "MoE placement"
+      },
+      {
+        "reason": "pre-change application benchmark harness is chat-only; role-correct reranker evidence begins after Lane 3",
+        "target": "reranker throughput baseline"
+      }
+    ]
+  },
+  "framework": {
+    "central_package_pins": {
+      "path": "Directory.Packages.props",
+      "sha256": "8c2a73d1262fef64b9bb669e45065fe8e4c744f91348d6731bdb61b725e89729"
+    },
+    "maf_version": "1.13.0",
+    "mcp_version": "1.4.0",
+    "meai_version": "10.7.0",
+    "openai_version": "2.11.0",
+    "source_commit": "e67d669709169fefc4cffab444af66654526a8d8"
+  },
+  "host": {
+    "architecture": "x86_64",
+    "cpu": "AMD Ryzen 9 9950X3D 16-Core Processor",
+    "kernel": "6.18.33.2-microsoft-standard-WSL2",
+    "logical_cpu_count": 8,
+    "nvidia_smi_driver": {
+      "argv": [
+        "nvidia-smi",
+        "--query-gpu=index,name,uuid,driver_version",
+        "--format=csv,noheader"
+      ],
+      "available": true,
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74"
+    },
+    "os": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.43",
+    "python": "3.14.6",
+    "repository_head": {
+      "argv": [
+        "git",
+        "rev-parse",
+        "HEAD"
+      ],
+      "available": true,
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "be64a367c8de55e9d3d121cc6460eaee37ea93cf"
+    },
+    "repository_status": {
+      "argv": [
+        "git",
+        "status",
+        "--short"
+      ],
+      "available": true,
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": ""
+    },
+    "runtime_devices": {
+      "argv": [
+        "$RUNTIME_ROOT/build-cuda/bin/llama-server",
+        "--list-devices"
+      ],
+      "available": true,
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "Available devices:\n  CUDA0: NVIDIA GeForce RTX 5090 (32606 MiB, 30927 MiB free)"
+    },
+    "runtime_version": {
+      "argv": [
+        "$RUNTIME_ROOT/build-cuda/bin/llama-server",
+        "--version"
+      ],
+      "available": true,
+      "exit_code": 0,
+      "stderr": "version: 1 (f3e1828)\nbuilt with GNU 15.2.0 for Linux x86_64",
+      "stdout": ""
+    }
+  },
+  "kind": "inference-benchmark-evidence",
+  "phase": "baseline",
+  "sanitization": {
+    "replacements": [
+      {
+        "label": "$RUNTIME_ROOT"
+      },
+      {
+        "label": "$MODEL_ROOT"
+      },
+      {
+        "label": "$REPO"
+      },
+      {
+        "label": "$CANDIDATE_REPO"
+      },
+      {
+        "label": "$BASELINE_REPO"
+      },
+      {
+        "label": "$MODEL_STORE"
+      }
+    ],
+    "source_sha256": "3d610738c71d078f521a412920e934d34e9a852860b6e95ce59ee6262ca3b094"
+  },
+  "sanitized": true,
+  "schema_version": "1.0",
+  "source_spec": {
+    "benchmark": {
+      "acceptance_rule": "median and nearest-rank p95; future tuning ships only at >=20% throughput improvement and <=5% RAM/VRAM regression",
+      "ambient_load_policy": "no concurrent build/test/model/game; reject global/process VRAM divergence",
+      "cache_preparation": "one excluded outer warmup invocation; llama-bench internal warmup retained",
+      "cache_state": "warm",
+      "memory_maximum_regression_percent": 5,
+      "statistics": "median-and-nearest-rank-p95",
+      "throughput_minimum_improvement_percent": 20
+    },
+    "capture_id": "e67d6697-b9692-cuda",
+    "commands": [
+      {
+        "argv": [
+          "$RUNTIME_ROOT/build-cuda/bin/llama-bench",
+          "-r",
+          "1",
+          "-o",
+          "json",
+          "-ngl",
+          "99",
+          "-t",
+          "4",
+          "-m",
+          "$MODEL_STORE/Qwen2.5-0.5B-Instruct-Q4_K_M.gguf",
+          "-p",
+          "512",
+          "-n",
+          "128"
+        ],
+        "comparability": "identical llama-bench argv/runtime/model/corpus/machine",
+        "name": "chat-pp-tg",
+        "partition": "native-performance",
+        "repeats": 5,
+        "timeout_seconds": 120,
+        "warmups": 1
+      },
+      {
+        "argv": [
+          "$RUNTIME_ROOT/build-cuda/bin/llama-bench",
+          "-r",
+          "1",
+          "-o",
+          "json",
+          "-ngl",
+          "99",
+          "-t",
+          "4",
+          "-m",
+          "$MODEL_ROOT/nomic-embed-text-v1.5.Q4_K_M.gguf",
+          "-p",
+          "512",
+          "-n",
+          "0",
+          "-embd",
+          "1"
+        ],
+        "comparability": "identical llama-bench argv/runtime/model/corpus/machine",
+        "name": "embedding-pp",
+        "partition": "native-performance",
+        "repeats": 5,
+        "timeout_seconds": 120,
+        "warmups": 1
+      },
+      {
+        "argv": [
+          "/bin/bash",
+          "-lc",
+          "scripts/with-build-lock.sh -- scripts/assembly-guard.sh guard --test-bins -- dotnet test --project XE-Local-AI-Engine.AI.Agent.Tests/XE-Local-AI-Engine.AI.Agent.Tests.csproj --configuration Release --no-build --max-parallel-test-modules 1 --treenode-filter '/*/*/FrameworkApprovalGateTests/(ApprovalRequiredTool_ThreadlessApprove_ExecutesExactlyOnceAfterApproval|ApprovalRequiredTool_ThreadlessReject_DoesNotExecute)'"
+        ],
+        "comparability": "exact stable test-method set; product/framework binary differs only by captured source/package identity",
+        "cwd": "$BASELINE_REPO",
+        "framework_assemblies": [
+          {
+            "name": "XE_Local_AI_Engine.AI.Agent.Tests.dll",
+            "path": "XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/XE_Local_AI_Engine.AI.Agent.Tests.dll",
+            "sha256": "f3f82280db80fea51f95edc10d3fa127ed4e5cd4ada6e5931940e8815212b600"
+          },
+          {
+            "name": "XE-Local-AI-Engine.AI.Agent.dll",
+            "path": "XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/XE-Local-AI-Engine.AI.Agent.dll",
+            "sha256": "fdeb22eaa6e23fb2d58a338b12b4f4941b7a164147e96e6486b28e2e12173994"
+          },
+          {
+            "name": "Microsoft.Agents.AI.Abstractions.dll",
+            "path": "XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Abstractions.dll",
+            "sha256": "feb8f2b8d8dbf42bb7358693278b4775d7dd57dd01c8a882c56f4bb153c3c291"
+          },
+          {
+            "name": "Microsoft.Agents.AI.Workflows.dll",
+            "path": "XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Workflows.dll",
+            "sha256": "3c7795d00f957ea2819dab5e7532de8f029257b0a0a75bbd9b77f1ba038853a8"
+          },
+          {
+            "name": "Microsoft.Agents.AI.dll",
+            "path": "XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/Microsoft.Agents.AI.dll",
+            "sha256": "0cbd391feeca90dac5d8f67ab1911f81ea053040597711b3dd688257fa847456"
+          },
+          {
+            "name": "Microsoft.Extensions.AI.Abstractions.dll",
+            "path": "XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Abstractions.dll",
+            "sha256": "f72bbbbeae7f959b336fa27b489d12a8432e0ce97311d49e1c97a7ee7c3706be"
+          },
+          {
+            "name": "Microsoft.Extensions.AI.Evaluation.dll",
+            "path": "XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Evaluation.dll",
+            "sha256": "663a352e9f883aa229df0ad38a81ccb13512f0deccd6172d4a7c2c19c6aeccad"
+          },
+          {
+            "name": "Microsoft.Extensions.AI.dll",
+            "path": "XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.dll",
+            "sha256": "96c5cf1455ee537453282b747abf0651b2076a0faddb7110bd19c2bfb4fa6ceb"
+          }
+        ],
+        "name": "maf-approval-resume-contract",
+        "partition": "framework-contract",
+        "repeats": 1,
+        "timeout_seconds": 300,
+        "warmups": 0
+      },
+      {
+        "argv": [
+          "/bin/bash",
+          "-lc",
+          "scripts/with-build-lock.sh -- scripts/assembly-guard.sh guard --test-bins -- dotnet test --project XE-Local-AI-Engine.Tests/XE-Local-AI-Engine.Tests.csproj --configuration Release --no-build --max-parallel-test-modules 1 --treenode-filter '/*/*/InvocationRunnerTests/(RunAsync_ValidPackage_StreamsChunks|RunAsync_WhenPlainContextReceivesUsageContent_SendsAuthoritativeTokenCounts|RunAsync_WhenToolApprovalRequested_SendsApprovalThenResumesAfterDecision)'"
+        ],
+        "comparability": "exact stable test-method set; product/framework binary differs only by captured source/package identity",
+        "cwd": "$BASELINE_REPO",
+        "framework_assemblies": [
+          {
+            "name": "XE-Local-AI-Engine.Tests.dll",
+            "path": "XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.Tests.dll",
+            "sha256": "aed8231c99b3135401ba43fe7f0107c37de59860fbd3ee8e6e5481638c5bfb47"
+          },
+          {
+            "name": "XE-Local-AI-Engine.Client.Application.dll",
+            "path": "XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.Client.Application.dll",
+            "sha256": "1d83d301a6ccce1e199da15349374dfacdb492676a3beb3763650c118b1a67c3"
+          },
+          {
+            "name": "XE-Local-AI-Engine.Providers.LlamaServer.dll",
+            "path": "XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.Providers.LlamaServer.dll",
+            "sha256": "b59880481f2258c96caeb7a49155a5457e0303883ae9668afdfde12f34e5e756"
+          },
+          {
+            "name": "XE-Local-AI-Engine.AI.Agent.dll",
+            "path": "XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.AI.Agent.dll",
+            "sha256": "fdeb22eaa6e23fb2d58a338b12b4f4941b7a164147e96e6486b28e2e12173994"
+          },
+          {
+            "name": "Microsoft.Agents.AI.Abstractions.dll",
+            "path": "XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Abstractions.dll",
+            "sha256": "feb8f2b8d8dbf42bb7358693278b4775d7dd57dd01c8a882c56f4bb153c3c291"
+          },
+          {
+            "name": "Microsoft.Agents.AI.Workflows.dll",
+            "path": "XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Workflows.dll",
+            "sha256": "3c7795d00f957ea2819dab5e7532de8f029257b0a0a75bbd9b77f1ba038853a8"
+          },
+          {
+            "name": "Microsoft.Agents.AI.dll",
+            "path": "XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.dll",
+            "sha256": "0cbd391feeca90dac5d8f67ab1911f81ea053040597711b3dd688257fa847456"
+          },
+          {
+            "name": "Microsoft.Extensions.AI.Abstractions.dll",
+            "path": "XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Abstractions.dll",
+            "sha256": "f72bbbbeae7f959b336fa27b489d12a8432e0ce97311d49e1c97a7ee7c3706be"
+          },
+          {
+            "name": "Microsoft.Extensions.AI.Evaluation.dll",
+            "path": "XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Evaluation.dll",
+            "sha256": "663a352e9f883aa229df0ad38a81ccb13512f0deccd6172d4a7c2c19c6aeccad"
+          },
+          {
+            "name": "Microsoft.Extensions.AI.OpenAI.dll",
+            "path": "XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.OpenAI.dll",
+            "sha256": "25e55312e27d859955d0a114a45d167e73632df72f4bbff56790e96224650022"
+          },
+          {
+            "name": "Microsoft.Extensions.AI.dll",
+            "path": "XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.dll",
+            "sha256": "96c5cf1455ee537453282b747abf0651b2076a0faddb7110bd19c2bfb4fa6ceb"
+          },
+          {
+            "name": "ModelContextProtocol.Core.dll",
+            "path": "XE-Local-AI-Engine.Tests/bin/Release/net10.0/ModelContextProtocol.Core.dll",
+            "sha256": "dbe8cfae0e4b95a5a859f6ad7077078e99fda382a13262f4e50c3c61fd49f7a1"
+          },
+          {
+            "name": "ModelContextProtocol.dll",
+            "path": "XE-Local-AI-Engine.Tests/bin/Release/net10.0/ModelContextProtocol.dll",
+            "sha256": "f7ab502d3307c721a62f8eb31f0a436595a01081d55db8940c3c5eca052d9bf4"
+          },
+          {
+            "name": "OpenAI.dll",
+            "path": "XE-Local-AI-Engine.Tests/bin/Release/net10.0/OpenAI.dll",
+            "sha256": "094d701bb2f70c02aa10ff44850c901ad364d7d38dd583f0832f3740eb6ea896"
+          }
+        ],
+        "name": "invocation-streaming-token-contract",
+        "partition": "framework-contract",
+        "repeats": 1,
+        "timeout_seconds": 300,
+        "warmups": 0
+      },
+      {
+        "argv": [
+          "/bin/bash",
+          "-lc",
+          "scripts/with-build-lock.sh -- scripts/assembly-guard.sh guard --test-bins -- dotnet test --project XE-Local-AI-Engine.Tests/XE-Local-AI-Engine.Tests.csproj --configuration Release --no-build --max-parallel-test-modules 1 --treenode-filter '/*/*/InferenceBenchmarkHarnessTests/(PromMetricParser_ExtractsGauge|PromMetricParser_ReturnsNull_WhenAbsent|RunAsync_ToolStage_RecordsToolLoop_WhenModelInvokesTool|RunAsync_ToolStage_RecordsNull_WhenModelNeverInvokesTool)'"
+        ],
+        "comparability": "exact stable test-method set; product/framework binary differs only by captured source/package identity",
+        "cwd": "$BASELINE_REPO",
+        "framework_assemblies": [
+          {
+            "name": "XE-Local-AI-Engine.Tests.dll",
+            "path": "XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.Tests.dll",
+            "sha256": "aed8231c99b3135401ba43fe7f0107c37de59860fbd3ee8e6e5481638c5bfb47"
+          },
+          {
+            "name": "XE-Local-AI-Engine.Client.Application.dll",
+            "path": "XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.Client.Application.dll",
+            "sha256": "1d83d301a6ccce1e199da15349374dfacdb492676a3beb3763650c118b1a67c3"
+          },
+          {
+            "name": "XE-Local-AI-Engine.Providers.LlamaServer.dll",
+            "path": "XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.Providers.LlamaServer.dll",
+            "sha256": "b59880481f2258c96caeb7a49155a5457e0303883ae9668afdfde12f34e5e756"
+          },
+          {
+            "name": "XE-Local-AI-Engine.AI.Agent.dll",
+            "path": "XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.AI.Agent.dll",
+            "sha256": "fdeb22eaa6e23fb2d58a338b12b4f4941b7a164147e96e6486b28e2e12173994"
+          },
+          {
+            "name": "Microsoft.Agents.AI.Abstractions.dll",
+            "path": "XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Abstractions.dll",
+            "sha256": "feb8f2b8d8dbf42bb7358693278b4775d7dd57dd01c8a882c56f4bb153c3c291"
+          },
+          {
+            "name": "Microsoft.Agents.AI.Workflows.dll",
+            "path": "XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Workflows.dll",
+            "sha256": "3c7795d00f957ea2819dab5e7532de8f029257b0a0a75bbd9b77f1ba038853a8"
+          },
+          {
+            "name": "Microsoft.Agents.AI.dll",
+            "path": "XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.dll",
+            "sha256": "0cbd391feeca90dac5d8f67ab1911f81ea053040597711b3dd688257fa847456"
+          },
+          {
+            "name": "Microsoft.Extensions.AI.Abstractions.dll",
+            "path": "XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Abstractions.dll",
+            "sha256": "f72bbbbeae7f959b336fa27b489d12a8432e0ce97311d49e1c97a7ee7c3706be"
+          },
+          {
+            "name": "Microsoft.Extensions.AI.Evaluation.dll",
+            "path": "XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Evaluation.dll",
+            "sha256": "663a352e9f883aa229df0ad38a81ccb13512f0deccd6172d4a7c2c19c6aeccad"
+          },
+          {
+            "name": "Microsoft.Extensions.AI.OpenAI.dll",
+            "path": "XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.OpenAI.dll",
+            "sha256": "25e55312e27d859955d0a114a45d167e73632df72f4bbff56790e96224650022"
+          },
+          {
+            "name": "Microsoft.Extensions.AI.dll",
+            "path": "XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.dll",
+            "sha256": "96c5cf1455ee537453282b747abf0651b2076a0faddb7110bd19c2bfb4fa6ceb"
+          },
+          {
+            "name": "ModelContextProtocol.Core.dll",
+            "path": "XE-Local-AI-Engine.Tests/bin/Release/net10.0/ModelContextProtocol.Core.dll",
+            "sha256": "dbe8cfae0e4b95a5a859f6ad7077078e99fda382a13262f4e50c3c61fd49f7a1"
+          },
+          {
+            "name": "ModelContextProtocol.dll",
+            "path": "XE-Local-AI-Engine.Tests/bin/Release/net10.0/ModelContextProtocol.dll",
+            "sha256": "f7ab502d3307c721a62f8eb31f0a436595a01081d55db8940c3c5eca052d9bf4"
+          },
+          {
+            "name": "OpenAI.dll",
+            "path": "XE-Local-AI-Engine.Tests/bin/Release/net10.0/OpenAI.dll",
+            "sha256": "094d701bb2f70c02aa10ff44850c901ad364d7d38dd583f0832f3740eb6ea896"
+          }
+        ],
+        "name": "chat-application-harness",
+        "partition": "application-harness",
+        "repeats": 1,
+        "timeout_seconds": 300,
+        "warmups": 0
+      },
+      {
+        "argv": [
+          "/bin/bash",
+          "-lc",
+          "scripts/with-build-lock.sh -- scripts/assembly-guard.sh guard --test-bins -- dotnet test --project XE-Local-AI-Engine.Tests/XE-Local-AI-Engine.Tests.csproj --configuration Release --no-build --max-parallel-test-modules 1 --treenode-filter '/*/*/LlamaServerRerankerClientTests/(RerankAsync_ProjectsScoreSortedResultsBackIntoInputOrder_AndTargetsRerankRoute|RerankAsync_ServerDown_ReturnsNullToDegrade|RerankAsync_NonSuccessStatus_ReturnsNullToDegrade|RerankAsync_ResultCountMismatch_ReturnsNullToDegrade|RerankAsync_EmptyDocuments_ReturnsNullWithoutSpawning)'"
+        ],
+        "comparability": "exact stable test-method set; product/framework binary differs only by captured source/package identity",
+        "cwd": "$BASELINE_REPO",
+        "framework_assemblies": [
+          {
+            "name": "XE-Local-AI-Engine.Tests.dll",
+            "path": "XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.Tests.dll",
+            "sha256": "aed8231c99b3135401ba43fe7f0107c37de59860fbd3ee8e6e5481638c5bfb47"
+          },
+          {
+            "name": "XE-Local-AI-Engine.Client.Application.dll",
+            "path": "XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.Client.Application.dll",
+            "sha256": "1d83d301a6ccce1e199da15349374dfacdb492676a3beb3763650c118b1a67c3"
+          },
+          {
+            "name": "XE-Local-AI-Engine.Providers.LlamaServer.dll",
+            "path": "XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.Providers.LlamaServer.dll",
+            "sha256": "b59880481f2258c96caeb7a49155a5457e0303883ae9668afdfde12f34e5e756"
+          },
+          {
+            "name": "XE-Local-AI-Engine.AI.Agent.dll",
+            "path": "XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.AI.Agent.dll",
+            "sha256": "fdeb22eaa6e23fb2d58a338b12b4f4941b7a164147e96e6486b28e2e12173994"
+          },
+          {
+            "name": "Microsoft.Agents.AI.Abstractions.dll",
+            "path": "XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Abstractions.dll",
+            "sha256": "feb8f2b8d8dbf42bb7358693278b4775d7dd57dd01c8a882c56f4bb153c3c291"
+          },
+          {
+            "name": "Microsoft.Agents.AI.Workflows.dll",
+            "path": "XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Workflows.dll",
+            "sha256": "3c7795d00f957ea2819dab5e7532de8f029257b0a0a75bbd9b77f1ba038853a8"
+          },
+          {
+            "name": "Microsoft.Agents.AI.dll",
+            "path": "XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.dll",
+            "sha256": "0cbd391feeca90dac5d8f67ab1911f81ea053040597711b3dd688257fa847456"
+          },
+          {
+            "name": "Microsoft.Extensions.AI.Abstractions.dll",
+            "path": "XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Abstractions.dll",
+            "sha256": "f72bbbbeae7f959b336fa27b489d12a8432e0ce97311d49e1c97a7ee7c3706be"
+          },
+          {
+            "name": "Microsoft.Extensions.AI.Evaluation.dll",
+            "path": "XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Evaluation.dll",
+            "sha256": "663a352e9f883aa229df0ad38a81ccb13512f0deccd6172d4a7c2c19c6aeccad"
+          },
+          {
+            "name": "Microsoft.Extensions.AI.OpenAI.dll",
+            "path": "XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.OpenAI.dll",
+            "sha256": "25e55312e27d859955d0a114a45d167e73632df72f4bbff56790e96224650022"
+          },
+          {
+            "name": "Microsoft.Extensions.AI.dll",
+            "path": "XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.dll",
+            "sha256": "96c5cf1455ee537453282b747abf0651b2076a0faddb7110bd19c2bfb4fa6ceb"
+          },
+          {
+            "name": "ModelContextProtocol.Core.dll",
+            "path": "XE-Local-AI-Engine.Tests/bin/Release/net10.0/ModelContextProtocol.Core.dll",
+            "sha256": "dbe8cfae0e4b95a5a859f6ad7077078e99fda382a13262f4e50c3c61fd49f7a1"
+          },
+          {
+            "name": "ModelContextProtocol.dll",
+            "path": "XE-Local-AI-Engine.Tests/bin/Release/net10.0/ModelContextProtocol.dll",
+            "sha256": "f7ab502d3307c721a62f8eb31f0a436595a01081d55db8940c3c5eca052d9bf4"
+          },
+          {
+            "name": "OpenAI.dll",
+            "path": "XE-Local-AI-Engine.Tests/bin/Release/net10.0/OpenAI.dll",
+            "sha256": "094d701bb2f70c02aa10ff44850c901ad364d7d38dd583f0832f3740eb6ea896"
+          }
+        ],
+        "name": "reranker-provider-contract",
+        "partition": "provider-contract",
+        "repeats": 1,
+        "timeout_seconds": 300,
+        "warmups": 0
+      }
+    ],
+    "corpus": {
+      "name": "xe-local-inference-golden-v1",
+      "path": "$REPO/docs/performance/corpora/golden-v1.json",
+      "revision": "v1",
+      "sha256": "100b6a808653f1a6c0867f5628c6d589b91537a867a7f79535d8192a0371fea5"
+    },
+    "coverage": {
+      "unvalidated": [
+        {
+          "reason": "manual capture required on native Windows",
+          "target": "native Windows NVIDIA/WDDM"
+        },
+        {
+          "reason": "no NVIDIA Vulkan ICD; runtime enumerates zero Vulkan devices",
+          "target": "Linux NVIDIA Vulkan"
+        },
+        {
+          "reason": "host is WSL2/WDDM, not native Linux",
+          "target": "native Linux CUDA and hard-OOM recovery"
+        },
+        {
+          "reason": "available ballast does not alter the process-budget reader consumed by fit",
+          "target": "8 GB or constrained VRAM"
+        },
+        {
+          "reason": "MoE deliberately excluded from the fixed model set",
+          "target": "MoE placement"
+        },
+        {
+          "reason": "pre-change application benchmark harness is chat-only; role-correct reranker evidence begins after Lane 3",
+          "target": "reranker throughput baseline"
+        }
+      ]
+    },
+    "framework": {
+      "central_package_pins": {
+        "path": "Directory.Packages.props",
+        "sha256": "8c2a73d1262fef64b9bb669e45065fe8e4c744f91348d6731bdb61b725e89729"
+      },
+      "maf_version": "1.13.0",
+      "mcp_version": "1.4.0",
+      "meai_version": "10.7.0",
+      "openai_version": "2.11.0",
+      "source_commit": "e67d669709169fefc4cffab444af66654526a8d8"
+    },
+    "kind": "inference-benchmark-capture",
+    "models": [
+      {
+        "name": "Qwen2.5-0.5B-Instruct",
+        "path": "$MODEL_STORE/Qwen2.5-0.5B-Instruct-Q4_K_M.gguf",
+        "quant": "Q4_K_M",
+        "repository": "Qwen/Qwen2.5-0.5B-Instruct-GGUF",
+        "revision": "fixed-local-file",
+        "role": "chat",
+        "sha256": "6eb923e7d26e9cea28811e1a8e852009b21242fb157b26149d3b188f3a8c8653"
+      },
+      {
+        "name": "nomic-embed-text-v1.5",
+        "path": "$MODEL_ROOT/nomic-embed-text-v1.5.Q4_K_M.gguf",
+        "quant": "Q4_K_M",
+        "role": "embedding",
+        "sha256": "d4e388894e09cf3816e8b0896d81d265b55e7a9fff9ab03fe8bf4ef5e11295ac"
+      },
+      {
+        "name": "bge-reranker-v2-m3",
+        "path": "$MODEL_ROOT/bge-reranker-v2-m3-Q4_K_M.gguf",
+        "quant": "Q4_K_M",
+        "repository": "gpustack/bge-reranker-v2-m3-GGUF",
+        "role": "reranker",
+        "sha256": "e186a244ed455b4ab66ec64339ce7427a6ae13f5c0b5e544de96e50f0f8b3673"
+      }
+    ],
+    "phase": "baseline",
+    "runtime": {
+      "auxiliary_binaries": [
+        {
+          "name": "llama-fit-params",
+          "path": "$RUNTIME_ROOT/build-cuda/bin/llama-fit-params",
+          "sha256": "52b6f27e501f5af4effcf9d00afae59c074aa97aecf46d4c20ecf1966277e596"
+        },
+        {
+          "name": "llama-bench",
+          "path": "$RUNTIME_ROOT/build-cuda/bin/llama-bench",
+          "sha256": "d0a326c25e067f8cc1554b6ab28dd35d14ffe20572c8f456b865ad751b029ff7"
+        }
+      ],
+      "backend": "cuda",
+      "build_options": [
+        "GGML_CUDA=ON",
+        "CMAKE_CUDA_ARCHITECTURES=120a"
+      ],
+      "path": "$RUNTIME_ROOT/build-cuda/bin/llama-server",
+      "provenance": "managed-source-build",
+      "sha256": "78cd370e18a911b284c0f732e40ada20a1b3c8fc8ba40f2aabb0e8d7d800a3cc",
+      "tag": "b9692/f3e1828"
+    },
+    "schema_version": "1.0"
+  },
+  "spec_sha256": "30bcb730d1c48c846b8379c3d9b65e12dcffd94e12bbe3b4c35985122f9e8fae",
+  "started_at_utc": "2026-07-26T23:57:11Z",
+  "verified_identity": {
+    "corpus": {
+      "name": "xe-local-inference-golden-v1",
+      "path": "$REPO/docs/performance/corpora/golden-v1.json",
+      "revision": "v1",
+      "runtime_local_dependencies": null,
+      "sha256": "100b6a808653f1a6c0867f5628c6d589b91537a867a7f79535d8192a0371fea5",
+      "sha256_verified": true
+    },
+    "framework": {
+      "command_trees": [
+        {
+          "assemblies": [
+            {
+              "name": "XE_Local_AI_Engine.AI.Agent.Tests.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/XE_Local_AI_Engine.AI.Agent.Tests.dll",
+              "runtime_local_dependencies": null,
+              "sha256": "f3f82280db80fea51f95edc10d3fa127ed4e5cd4ada6e5931940e8815212b600",
+              "sha256_verified": true
+            },
+            {
+              "name": "XE-Local-AI-Engine.AI.Agent.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/XE-Local-AI-Engine.AI.Agent.dll",
+              "runtime_local_dependencies": null,
+              "sha256": "fdeb22eaa6e23fb2d58a338b12b4f4941b7a164147e96e6486b28e2e12173994",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Agents.AI.Abstractions.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Abstractions.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Abstractions.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "feb8f2b8d8dbf42bb7358693278b4775d7dd57dd01c8a882c56f4bb153c3c291",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Agents.AI.Workflows.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Workflows.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Workflows.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "3c7795d00f957ea2819dab5e7532de8f029257b0a0a75bbd9b77f1ba038853a8",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Agents.AI.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/Microsoft.Agents.AI.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/Microsoft.Agents.AI.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "0cbd391feeca90dac5d8f67ab1911f81ea053040597711b3dd688257fa847456",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Extensions.AI.Abstractions.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Abstractions.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Abstractions.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "f72bbbbeae7f959b336fa27b489d12a8432e0ce97311d49e1c97a7ee7c3706be",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Extensions.AI.Evaluation.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Evaluation.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Evaluation.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "663a352e9f883aa229df0ad38a81ccb13512f0deccd6172d4a7c2c19c6aeccad",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Extensions.AI.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "96c5cf1455ee537453282b747abf0651b2076a0faddb7110bd19c2bfb4fa6ceb",
+              "sha256_verified": true
+            }
+          ],
+          "central_package_pins": {
+            "path": "$BASELINE_REPO/Directory.Packages.props",
+            "runtime_local_dependencies": null,
+            "sha256": "8c2a73d1262fef64b9bb669e45065fe8e4c744f91348d6731bdb61b725e89729",
+            "sha256_verified": true
+          },
+          "command": "maf-approval-resume-contract",
+          "cwd": "$BASELINE_REPO",
+          "declared_versions_verified": true,
+          "git_clean": true,
+          "git_head": "e67d669709169fefc4cffab444af66654526a8d8",
+          "git_head_verified": true,
+          "git_root": "$BASELINE_REPO",
+          "partition": "framework-contract",
+          "resolved_package_versions": {
+            "Microsoft.Agents.AI": "1.13.0",
+            "Microsoft.Extensions.AI": "10.7.0",
+            "ModelContextProtocol": "1.4.0",
+            "OpenAI": "2.11.0"
+          }
+        },
+        {
+          "assemblies": [
+            {
+              "name": "XE-Local-AI-Engine.Tests.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.Tests.dll",
+              "runtime_local_dependencies": null,
+              "sha256": "aed8231c99b3135401ba43fe7f0107c37de59860fbd3ee8e6e5481638c5bfb47",
+              "sha256_verified": true
+            },
+            {
+              "name": "XE-Local-AI-Engine.Client.Application.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.Client.Application.dll",
+              "runtime_local_dependencies": null,
+              "sha256": "1d83d301a6ccce1e199da15349374dfacdb492676a3beb3763650c118b1a67c3",
+              "sha256_verified": true
+            },
+            {
+              "name": "XE-Local-AI-Engine.Providers.LlamaServer.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.Providers.LlamaServer.dll",
+              "runtime_local_dependencies": null,
+              "sha256": "b59880481f2258c96caeb7a49155a5457e0303883ae9668afdfde12f34e5e756",
+              "sha256_verified": true
+            },
+            {
+              "name": "XE-Local-AI-Engine.AI.Agent.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.AI.Agent.dll",
+              "runtime_local_dependencies": null,
+              "sha256": "fdeb22eaa6e23fb2d58a338b12b4f4941b7a164147e96e6486b28e2e12173994",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Agents.AI.Abstractions.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Abstractions.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Abstractions.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "feb8f2b8d8dbf42bb7358693278b4775d7dd57dd01c8a882c56f4bb153c3c291",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Agents.AI.Workflows.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Workflows.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Workflows.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "3c7795d00f957ea2819dab5e7532de8f029257b0a0a75bbd9b77f1ba038853a8",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Agents.AI.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "0cbd391feeca90dac5d8f67ab1911f81ea053040597711b3dd688257fa847456",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Extensions.AI.Abstractions.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Abstractions.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Abstractions.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "f72bbbbeae7f959b336fa27b489d12a8432e0ce97311d49e1c97a7ee7c3706be",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Extensions.AI.Evaluation.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Evaluation.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Evaluation.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "663a352e9f883aa229df0ad38a81ccb13512f0deccd6172d4a7c2c19c6aeccad",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Extensions.AI.OpenAI.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.OpenAI.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.OpenAI.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "25e55312e27d859955d0a114a45d167e73632df72f4bbff56790e96224650022",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Extensions.AI.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "96c5cf1455ee537453282b747abf0651b2076a0faddb7110bd19c2bfb4fa6ceb",
+              "sha256_verified": true
+            },
+            {
+              "name": "ModelContextProtocol.Core.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/ModelContextProtocol.Core.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/ModelContextProtocol.Core.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "dbe8cfae0e4b95a5a859f6ad7077078e99fda382a13262f4e50c3c61fd49f7a1",
+              "sha256_verified": true
+            },
+            {
+              "name": "ModelContextProtocol.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/ModelContextProtocol.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/ModelContextProtocol.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "f7ab502d3307c721a62f8eb31f0a436595a01081d55db8940c3c5eca052d9bf4",
+              "sha256_verified": true
+            },
+            {
+              "name": "OpenAI.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/OpenAI.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/OpenAI.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "094d701bb2f70c02aa10ff44850c901ad364d7d38dd583f0832f3740eb6ea896",
+              "sha256_verified": true
+            }
+          ],
+          "central_package_pins": {
+            "path": "$BASELINE_REPO/Directory.Packages.props",
+            "runtime_local_dependencies": null,
+            "sha256": "8c2a73d1262fef64b9bb669e45065fe8e4c744f91348d6731bdb61b725e89729",
+            "sha256_verified": true
+          },
+          "command": "invocation-streaming-token-contract",
+          "cwd": "$BASELINE_REPO",
+          "declared_versions_verified": true,
+          "git_clean": true,
+          "git_head": "e67d669709169fefc4cffab444af66654526a8d8",
+          "git_head_verified": true,
+          "git_root": "$BASELINE_REPO",
+          "partition": "framework-contract",
+          "resolved_package_versions": {
+            "Microsoft.Agents.AI": "1.13.0",
+            "Microsoft.Extensions.AI": "10.7.0",
+            "ModelContextProtocol": "1.4.0",
+            "OpenAI": "2.11.0"
+          }
+        },
+        {
+          "assemblies": [
+            {
+              "name": "XE-Local-AI-Engine.Tests.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.Tests.dll",
+              "runtime_local_dependencies": null,
+              "sha256": "aed8231c99b3135401ba43fe7f0107c37de59860fbd3ee8e6e5481638c5bfb47",
+              "sha256_verified": true
+            },
+            {
+              "name": "XE-Local-AI-Engine.Client.Application.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.Client.Application.dll",
+              "runtime_local_dependencies": null,
+              "sha256": "1d83d301a6ccce1e199da15349374dfacdb492676a3beb3763650c118b1a67c3",
+              "sha256_verified": true
+            },
+            {
+              "name": "XE-Local-AI-Engine.Providers.LlamaServer.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.Providers.LlamaServer.dll",
+              "runtime_local_dependencies": null,
+              "sha256": "b59880481f2258c96caeb7a49155a5457e0303883ae9668afdfde12f34e5e756",
+              "sha256_verified": true
+            },
+            {
+              "name": "XE-Local-AI-Engine.AI.Agent.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.AI.Agent.dll",
+              "runtime_local_dependencies": null,
+              "sha256": "fdeb22eaa6e23fb2d58a338b12b4f4941b7a164147e96e6486b28e2e12173994",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Agents.AI.Abstractions.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Abstractions.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Abstractions.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "feb8f2b8d8dbf42bb7358693278b4775d7dd57dd01c8a882c56f4bb153c3c291",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Agents.AI.Workflows.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Workflows.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Workflows.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "3c7795d00f957ea2819dab5e7532de8f029257b0a0a75bbd9b77f1ba038853a8",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Agents.AI.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "0cbd391feeca90dac5d8f67ab1911f81ea053040597711b3dd688257fa847456",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Extensions.AI.Abstractions.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Abstractions.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Abstractions.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "f72bbbbeae7f959b336fa27b489d12a8432e0ce97311d49e1c97a7ee7c3706be",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Extensions.AI.Evaluation.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Evaluation.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Evaluation.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "663a352e9f883aa229df0ad38a81ccb13512f0deccd6172d4a7c2c19c6aeccad",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Extensions.AI.OpenAI.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.OpenAI.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.OpenAI.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "25e55312e27d859955d0a114a45d167e73632df72f4bbff56790e96224650022",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Extensions.AI.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "96c5cf1455ee537453282b747abf0651b2076a0faddb7110bd19c2bfb4fa6ceb",
+              "sha256_verified": true
+            },
+            {
+              "name": "ModelContextProtocol.Core.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/ModelContextProtocol.Core.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/ModelContextProtocol.Core.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "dbe8cfae0e4b95a5a859f6ad7077078e99fda382a13262f4e50c3c61fd49f7a1",
+              "sha256_verified": true
+            },
+            {
+              "name": "ModelContextProtocol.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/ModelContextProtocol.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/ModelContextProtocol.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "f7ab502d3307c721a62f8eb31f0a436595a01081d55db8940c3c5eca052d9bf4",
+              "sha256_verified": true
+            },
+            {
+              "name": "OpenAI.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/OpenAI.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/OpenAI.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "094d701bb2f70c02aa10ff44850c901ad364d7d38dd583f0832f3740eb6ea896",
+              "sha256_verified": true
+            }
+          ],
+          "central_package_pins": {
+            "path": "$BASELINE_REPO/Directory.Packages.props",
+            "runtime_local_dependencies": null,
+            "sha256": "8c2a73d1262fef64b9bb669e45065fe8e4c744f91348d6731bdb61b725e89729",
+            "sha256_verified": true
+          },
+          "command": "chat-application-harness",
+          "cwd": "$BASELINE_REPO",
+          "declared_versions_verified": true,
+          "git_clean": true,
+          "git_head": "e67d669709169fefc4cffab444af66654526a8d8",
+          "git_head_verified": true,
+          "git_root": "$BASELINE_REPO",
+          "partition": "application-harness",
+          "resolved_package_versions": {
+            "Microsoft.Agents.AI": "1.13.0",
+            "Microsoft.Extensions.AI": "10.7.0",
+            "ModelContextProtocol": "1.4.0",
+            "OpenAI": "2.11.0"
+          }
+        },
+        {
+          "assemblies": [
+            {
+              "name": "XE-Local-AI-Engine.Tests.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.Tests.dll",
+              "runtime_local_dependencies": null,
+              "sha256": "aed8231c99b3135401ba43fe7f0107c37de59860fbd3ee8e6e5481638c5bfb47",
+              "sha256_verified": true
+            },
+            {
+              "name": "XE-Local-AI-Engine.Client.Application.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.Client.Application.dll",
+              "runtime_local_dependencies": null,
+              "sha256": "1d83d301a6ccce1e199da15349374dfacdb492676a3beb3763650c118b1a67c3",
+              "sha256_verified": true
+            },
+            {
+              "name": "XE-Local-AI-Engine.Providers.LlamaServer.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.Providers.LlamaServer.dll",
+              "runtime_local_dependencies": null,
+              "sha256": "b59880481f2258c96caeb7a49155a5457e0303883ae9668afdfde12f34e5e756",
+              "sha256_verified": true
+            },
+            {
+              "name": "XE-Local-AI-Engine.AI.Agent.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.AI.Agent.dll",
+              "runtime_local_dependencies": null,
+              "sha256": "fdeb22eaa6e23fb2d58a338b12b4f4941b7a164147e96e6486b28e2e12173994",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Agents.AI.Abstractions.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Abstractions.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Abstractions.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "feb8f2b8d8dbf42bb7358693278b4775d7dd57dd01c8a882c56f4bb153c3c291",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Agents.AI.Workflows.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Workflows.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Workflows.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "3c7795d00f957ea2819dab5e7532de8f029257b0a0a75bbd9b77f1ba038853a8",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Agents.AI.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "0cbd391feeca90dac5d8f67ab1911f81ea053040597711b3dd688257fa847456",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Extensions.AI.Abstractions.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Abstractions.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Abstractions.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "f72bbbbeae7f959b336fa27b489d12a8432e0ce97311d49e1c97a7ee7c3706be",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Extensions.AI.Evaluation.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Evaluation.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Evaluation.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "663a352e9f883aa229df0ad38a81ccb13512f0deccd6172d4a7c2c19c6aeccad",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Extensions.AI.OpenAI.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.OpenAI.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.OpenAI.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "25e55312e27d859955d0a114a45d167e73632df72f4bbff56790e96224650022",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Extensions.AI.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "96c5cf1455ee537453282b747abf0651b2076a0faddb7110bd19c2bfb4fa6ceb",
+              "sha256_verified": true
+            },
+            {
+              "name": "ModelContextProtocol.Core.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/ModelContextProtocol.Core.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/ModelContextProtocol.Core.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "dbe8cfae0e4b95a5a859f6ad7077078e99fda382a13262f4e50c3c61fd49f7a1",
+              "sha256_verified": true
+            },
+            {
+              "name": "ModelContextProtocol.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/ModelContextProtocol.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/ModelContextProtocol.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "f7ab502d3307c721a62f8eb31f0a436595a01081d55db8940c3c5eca052d9bf4",
+              "sha256_verified": true
+            },
+            {
+              "name": "OpenAI.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/OpenAI.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/OpenAI.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "094d701bb2f70c02aa10ff44850c901ad364d7d38dd583f0832f3740eb6ea896",
+              "sha256_verified": true
+            }
+          ],
+          "central_package_pins": {
+            "path": "$BASELINE_REPO/Directory.Packages.props",
+            "runtime_local_dependencies": null,
+            "sha256": "8c2a73d1262fef64b9bb669e45065fe8e4c744f91348d6731bdb61b725e89729",
+            "sha256_verified": true
+          },
+          "command": "reranker-provider-contract",
+          "cwd": "$BASELINE_REPO",
+          "declared_versions_verified": true,
+          "git_clean": true,
+          "git_head": "e67d669709169fefc4cffab444af66654526a8d8",
+          "git_head_verified": true,
+          "git_root": "$BASELINE_REPO",
+          "partition": "provider-contract",
+          "resolved_package_versions": {
+            "Microsoft.Agents.AI": "1.13.0",
+            "Microsoft.Extensions.AI": "10.7.0",
+            "ModelContextProtocol": "1.4.0",
+            "OpenAI": "2.11.0"
+          }
+        }
+      ],
+      "declaration": {
+        "maf_version": "1.13.0",
+        "mcp_version": "1.4.0",
+        "meai_version": "10.7.0",
+        "openai_version": "2.11.0",
+        "source_commit": "e67d669709169fefc4cffab444af66654526a8d8"
+      },
+      "required": true,
+      "verified": true
+    },
+    "models": [
+      {
+        "name": "Qwen2.5-0.5B-Instruct",
+        "path": "$MODEL_STORE/Qwen2.5-0.5B-Instruct-Q4_K_M.gguf",
+        "quant": "Q4_K_M",
+        "repository": "Qwen/Qwen2.5-0.5B-Instruct-GGUF",
+        "revision": "fixed-local-file",
+        "role": "chat",
+        "runtime_local_dependencies": null,
+        "sha256": "6eb923e7d26e9cea28811e1a8e852009b21242fb157b26149d3b188f3a8c8653",
+        "sha256_verified": true
+      },
+      {
+        "name": "nomic-embed-text-v1.5",
+        "path": "$MODEL_ROOT/nomic-embed-text-v1.5.Q4_K_M.gguf",
+        "quant": "Q4_K_M",
+        "role": "embedding",
+        "runtime_local_dependencies": null,
+        "sha256": "d4e388894e09cf3816e8b0896d81d265b55e7a9fff9ab03fe8bf4ef5e11295ac",
+        "sha256_verified": true
+      },
+      {
+        "name": "bge-reranker-v2-m3",
+        "path": "$MODEL_ROOT/bge-reranker-v2-m3-Q4_K_M.gguf",
+        "quant": "Q4_K_M",
+        "repository": "gpustack/bge-reranker-v2-m3-GGUF",
+        "role": "reranker",
+        "runtime_local_dependencies": null,
+        "sha256": "e186a244ed455b4ab66ec64339ce7427a6ae13f5c0b5e544de96e50f0f8b3673",
+        "sha256_verified": true
+      }
+    ],
+    "runtime": {
+      "auxiliary_binaries": [
+        {
+          "name": "llama-fit-params",
+          "path": "$RUNTIME_ROOT/build-cuda/bin/llama-fit-params",
+          "runtime_local_dependencies": {
+            "files": [
+              {
+                "name": "libggml-base.so.0.15.1",
+                "sha256": "348063e7aa06890ef9c8ff9edf762374ba33d9d342a3b7a351781b91a7685cf0"
+              },
+              {
+                "name": "libggml-cpu.so.0.15.1",
+                "sha256": "27be8d81b651261e2b0019db3a0d0ec82973004fcb61edb9762674982b95b273"
+              },
+              {
+                "name": "libggml-cuda.so.0.15.1",
+                "sha256": "96587086a72b84b884ea882092f91f97e9842629db57f65a1cc9d1bd8e0cc077"
+              },
+              {
+                "name": "libggml.so.0.15.1",
+                "sha256": "1905d7fb62a9b5d1964ef0f7718be6dcf1155c097b2af09e454da8fed5c3e13f"
+              },
+              {
+                "name": "libllama-common.so.0.0.1",
+                "sha256": "265ba38b3510ecb0cef477ecbd8ddc9211710c2a1b33f8d05910bd7df39d4d91"
+              },
+              {
+                "name": "libllama-fit-params-impl.so",
+                "sha256": "3aa046c82b2a8b222754ce010499078b0c66d9ec8e8d0d2ea27d265996d27a44"
+              },
+              {
+                "name": "libllama.so.0.0.1",
+                "sha256": "46ca8d00c3a00e57aef73d0f92322eb08fc74125c52d81b447e3e88f6f0bd24c"
+              }
+            ],
+            "ldd": {
+              "argv": [
+                "ldd",
+                "$RUNTIME_ROOT/build-cuda/bin/llama-fit-params"
+              ],
+              "available": true,
+              "exit_code": 0,
+              "stderr": "",
+              "stdout": "linux-vdso.so.1 (0x000072c5c7cac000)\n\tlibllama-fit-params-impl.so => $RUNTIME_ROOT/build-cuda/bin/libllama-fit-params-impl.so (0x000072c5c7c96000)\n\tlibc.so.6 => /usr/lib/x86_64-linux-gnu/libc.so.6 (0x000072c5c7a00000)\n\tlibllama-common.so.0 => $RUNTIME_ROOT/build-cuda/bin/libllama-common.so.0 (0x000072c5c7400000)\n\tlibllama.so.0 => $RUNTIME_ROOT/build-cuda/bin/libllama.so.0 (0x000072c5c7000000)\n\tlibggml-base.so.0 => $RUNTIME_ROOT/build-cuda/bin/libggml-base.so.0 (0x000072c5c792c000)\n\tlibstdc++.so.6 => /usr/lib/x86_64-linux-gnu/libstdc++.so.6 (0x000072c5c6c00000)\n\tlibgcc_s.so.1 => /usr/lib/x86_64-linux-gnu/libgcc_s.so.1 (0x000072c5c7c5d000)\n\t/lib64/ld-linux-x86-64.so.2 (0x000072c5c7cae000)\n\tlibssl.so.3 => /usr/lib/x86_64-linux-gnu/libssl.so.3 (0x000072c5c6ef2000)\n\tlibcrypto.so.3 => /usr/lib/x86_64-linux-gnu/libcrypto.so.3 (0x000072c5c6400000)\n\tlibggml.so.0 => $RUNTIME_ROOT/build-cuda/bin/libggml.so.0 (0x000072c5c7c4e000)\n\tlibm.so.6 => /usr/lib/x86_64-linux-gnu/libm.so.6 (0x000072c5c6ada000)\n\tlibgomp.so.1 => /usr/lib/x86_64-linux-gnu/libgomp.so.1 (0x000072c5c78cd000)\n\tlibz.so.1 => /usr/lib/x86_64-linux-gnu/libz.so.1 (0x000072c5c7c30000)\n\tlibzstd.so.1 => /usr/lib/x86_64-linux-gnu/libzstd.so.1 (0x000072c5c733d000)\n\tlibggml-cpu.so.0 => $RUNTIME_ROOT/build-cuda/bin/libggml-cpu.so.0 (0x000072c5c623b000)\n\tlibggml-cuda.so.0 => $RUNTIME_ROOT/build-cuda/bin/libggml-cuda.so.0 (0x000072c5c2600000)\n\tlibcudart.so.13 => /usr/local/cuda/lib64/libcudart.so.13 (0x000072c5c2200000)\n\tlibcublas.so.13 => /usr/local/cuda/lib64/libcublas.so.13 (0x000072c5bea00000)\n\tlibcuda.so.1 => /usr/lib/wsl/lib/libcuda.so.1 (0x000072c5c789e000)\n\tlibdl.so.2 => /usr/lib/x86_64-linux-gnu/libdl.so.2 (0x000072c5c7c27000)\n\tlibpthread.so.0 => /usr/lib/x86_64-linux-gnu/libpthread.so.0 (0x000072c5c7c22000)\n\tlibrt.so.1 => /usr/lib/x86_64-linux-gnu/librt.so.1 (0x000072c5c7899000)\n\tlibcublasLt.so.13 => /usr/local/cuda/lib64/libcublasLt.so.13 (0x000072c599400000)"
+            },
+            "manifest_sha256": "34c0c46ab8e76d8f446d699e16181a1c6fe867ebcc3db37a3ab200e4ff7bdbb2"
+          },
+          "sha256": "52b6f27e501f5af4effcf9d00afae59c074aa97aecf46d4c20ecf1966277e596",
+          "sha256_verified": true
+        },
+        {
+          "name": "llama-bench",
+          "path": "$RUNTIME_ROOT/build-cuda/bin/llama-bench",
+          "runtime_local_dependencies": {
+            "files": [
+              {
+                "name": "libggml-base.so.0.15.1",
+                "sha256": "348063e7aa06890ef9c8ff9edf762374ba33d9d342a3b7a351781b91a7685cf0"
+              },
+              {
+                "name": "libggml-cpu.so.0.15.1",
+                "sha256": "27be8d81b651261e2b0019db3a0d0ec82973004fcb61edb9762674982b95b273"
+              },
+              {
+                "name": "libggml-cuda.so.0.15.1",
+                "sha256": "96587086a72b84b884ea882092f91f97e9842629db57f65a1cc9d1bd8e0cc077"
+              },
+              {
+                "name": "libggml.so.0.15.1",
+                "sha256": "1905d7fb62a9b5d1964ef0f7718be6dcf1155c097b2af09e454da8fed5c3e13f"
+              },
+              {
+                "name": "libllama-bench-impl.so",
+                "sha256": "42db866c483183218961616000995f884f7dc73f1aa3d4888529070b30d50075"
+              },
+              {
+                "name": "libllama-common.so.0.0.1",
+                "sha256": "265ba38b3510ecb0cef477ecbd8ddc9211710c2a1b33f8d05910bd7df39d4d91"
+              },
+              {
+                "name": "libllama.so.0.0.1",
+                "sha256": "46ca8d00c3a00e57aef73d0f92322eb08fc74125c52d81b447e3e88f6f0bd24c"
+              }
+            ],
+            "ldd": {
+              "argv": [
+                "ldd",
+                "$RUNTIME_ROOT/build-cuda/bin/llama-bench"
+              ],
+              "available": true,
+              "exit_code": 0,
+              "stderr": "",
+              "stdout": "linux-vdso.so.1 (0x00007df6e026f000)\n\tlibllama-bench-impl.so => $RUNTIME_ROOT/build-cuda/bin/libllama-bench-impl.so (0x00007df6e0201000)\n\tlibstdc++.so.6 => /usr/lib/x86_64-linux-gnu/libstdc++.so.6 (0x00007df6dfe00000)\n\tlibgcc_s.so.1 => /usr/lib/x86_64-linux-gnu/libgcc_s.so.1 (0x00007df6e01ca000)\n\tlibc.so.6 => /usr/lib/x86_64-linux-gnu/libc.so.6 (0x00007df6dfa00000)\n\tlibllama-common.so.0 => $RUNTIME_ROOT/build-cuda/bin/libllama-common.so.0 (0x00007df6df400000)\n\tlibllama.so.0 => $RUNTIME_ROOT/build-cuda/bin/libllama.so.0 (0x00007df6df000000)\n\tlibggml.so.0 => $RUNTIME_ROOT/build-cuda/bin/libggml.so.0 (0x00007df6e01bb000)\n\tlibggml-base.so.0 => $RUNTIME_ROOT/build-cuda/bin/libggml-base.so.0 (0x00007df6e00e7000)\n\tlibm.so.6 => /usr/lib/x86_64-linux-gnu/libm.so.6 (0x00007df6dfcda000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007df6e0271000)\n\tlibssl.so.3 => /usr/lib/x86_64-linux-gnu/libssl.so.3 (0x00007df6df8f2000)\n\tlibcrypto.so.3 => /usr/lib/x86_64-linux-gnu/libcrypto.so.3 (0x00007df6de800000)\n\tlibggml-cpu.so.0 => $RUNTIME_ROOT/build-cuda/bin/libggml-cpu.so.0 (0x00007df6dee3b000)\n\tlibggml-cuda.so.0 => $RUNTIME_ROOT/build-cuda/bin/libggml-cuda.so.0 (0x00007df6dac00000)\n\tlibgomp.so.1 => /usr/lib/x86_64-linux-gnu/libgomp.so.1 (0x00007df6dfc7b000)\n\tlibz.so.1 => /usr/lib/x86_64-linux-gnu/libz.so.1 (0x00007df6e00c5000)\n\tlibzstd.so.1 => /usr/lib/x86_64-linux-gnu/libzstd.so.1 (0x00007df6df33d000)\n\tlibcudart.so.13 => /usr/local/cuda/lib64/libcudart.so.13 (0x00007df6da800000)\n\tlibcublas.so.13 => /usr/local/cuda/lib64/libcublas.so.13 (0x00007df6d7000000)\n\tlibcuda.so.1 => /usr/lib/wsl/lib/libcuda.so.1 (0x00007df6dfc4c000)\n\tlibdl.so.2 => /usr/lib/x86_64-linux-gnu/libdl.so.2 (0x00007df6e00be000)\n\tlibpthread.so.0 => /usr/lib/x86_64-linux-gnu/libpthread.so.0 (0x00007df6e00b9000)\n\tlibrt.so.1 => /usr/lib/x86_64-linux-gnu/librt.so.1 (0x00007df6e00b4000)\n\tlibcublasLt.so.13 => /usr/local/cuda/lib64/libcublasLt.so.13 (0x00007df6b1a00000)"
+            },
+            "manifest_sha256": "bcfb926deefab22eb15e57bd9ec24c3b90826162378788b7d7a966f029df0836"
+          },
+          "sha256": "d0a326c25e067f8cc1554b6ab28dd35d14ffe20572c8f456b865ad751b029ff7",
+          "sha256_verified": true
+        }
+      ],
+      "backend": "cuda",
+      "build_options": [
+        "GGML_CUDA=ON",
+        "CMAKE_CUDA_ARCHITECTURES=120a"
+      ],
+      "path": "$RUNTIME_ROOT/build-cuda/bin/llama-server",
+      "provenance": "managed-source-build",
+      "runtime_local_dependencies": {
+        "files": [
+          {
+            "name": "libggml-base.so.0.15.1",
+            "sha256": "348063e7aa06890ef9c8ff9edf762374ba33d9d342a3b7a351781b91a7685cf0"
+          },
+          {
+            "name": "libggml-cpu.so.0.15.1",
+            "sha256": "27be8d81b651261e2b0019db3a0d0ec82973004fcb61edb9762674982b95b273"
+          },
+          {
+            "name": "libggml-cuda.so.0.15.1",
+            "sha256": "96587086a72b84b884ea882092f91f97e9842629db57f65a1cc9d1bd8e0cc077"
+          },
+          {
+            "name": "libggml.so.0.15.1",
+            "sha256": "1905d7fb62a9b5d1964ef0f7718be6dcf1155c097b2af09e454da8fed5c3e13f"
+          },
+          {
+            "name": "libllama-common.so.0.0.1",
+            "sha256": "265ba38b3510ecb0cef477ecbd8ddc9211710c2a1b33f8d05910bd7df39d4d91"
+          },
+          {
+            "name": "libllama-server-impl.so",
+            "sha256": "34d635f1509c82dd7657300aeaee32838e2cb88e4d608fc479aa81370a3a275e"
+          },
+          {
+            "name": "libllama.so.0.0.1",
+            "sha256": "46ca8d00c3a00e57aef73d0f92322eb08fc74125c52d81b447e3e88f6f0bd24c"
+          },
+          {
+            "name": "libmtmd.so.0.0.1",
+            "sha256": "20d4d6cbbd31c14f6a8ee9037c97e60c566e9c15039b4e786d39d46f0be17aeb"
+          }
+        ],
+        "ldd": {
+          "argv": [
+            "ldd",
+            "$RUNTIME_ROOT/build-cuda/bin/llama-server"
+          ],
+          "available": true,
+          "exit_code": 0,
+          "stderr": "",
+          "stdout": "linux-vdso.so.1 (0x000070243aff7000)\n\tlibllama-server-impl.so => $RUNTIME_ROOT/build-cuda/bin/libllama-server-impl.so (0x000070243aa00000)\n\tlibstdc++.so.6 => /usr/lib/x86_64-linux-gnu/libstdc++.so.6 (0x000070243a600000)\n\tlibgcc_s.so.1 => /usr/lib/x86_64-linux-gnu/libgcc_s.so.1 (0x000070243a9d2000)\n\tlibc.so.6 => /usr/lib/x86_64-linux-gnu/libc.so.6 (0x000070243a200000)\n\tlibllama-common.so.0 => $RUNTIME_ROOT/build-cuda/bin/libllama-common.so.0 (0x0000702439c00000)\n\tlibmtmd.so.0 => $RUNTIME_ROOT/build-cuda/bin/libmtmd.so.0 (0x000070243a4b9000)\n\tlibllama.so.0 => $RUNTIME_ROOT/build-cuda/bin/libllama.so.0 (0x0000702439800000)\n\tlibggml.so.0 => $RUNTIME_ROOT/build-cuda/bin/libggml.so.0 (0x000070243afd2000)\n\tlibggml-base.so.0 => $RUNTIME_ROOT/build-cuda/bin/libggml-base.so.0 (0x000070243a8fe000)\n\tlibssl.so.3 => /usr/lib/x86_64-linux-gnu/libssl.so.3 (0x000070243a0f2000)\n\tlibcrypto.so.3 => /usr/lib/x86_64-linux-gnu/libcrypto.so.3 (0x0000702439000000)\n\tlibm.so.6 => /usr/lib/x86_64-linux-gnu/libm.so.6 (0x00007024396da000)\n\t/lib64/ld-linux-x86-64.so.2 (0x000070243aff9000)\n\tlibggml-cpu.so.0 => $RUNTIME_ROOT/build-cuda/bin/libggml-cpu.so.0 (0x0000702438e3b000)\n\tlibggml-cuda.so.0 => $RUNTIME_ROOT/build-cuda/bin/libggml-cuda.so.0 (0x0000702435200000)\n\tlibgomp.so.1 => /usr/lib/x86_64-linux-gnu/libgomp.so.1 (0x000070243a45a000)\n\tlibz.so.1 => /usr/lib/x86_64-linux-gnu/libz.so.1 (0x000070243a8e0000)\n\tlibzstd.so.1 => /usr/lib/x86_64-linux-gnu/libzstd.so.1 (0x0000702439b3d000)\n\tlibcudart.so.13 => /usr/local/cuda/lib64/libcudart.so.13 (0x0000702434e00000)\n\tlibcublas.so.13 => /usr/local/cuda/lib64/libcublas.so.13 (0x0000702431600000)\n\tlibcuda.so.1 => /usr/lib/wsl/lib/libcuda.so.1 (0x000070243a8b1000)\n\tlibdl.so.2 => /usr/lib/x86_64-linux-gnu/libdl.so.2 (0x000070243afc7000)\n\tlibpthread.so.0 => /usr/lib/x86_64-linux-gnu/libpthread.so.0 (0x000070243a8ac000)\n\tlibrt.so.1 => /usr/lib/x86_64-linux-gnu/librt.so.1 (0x000070243a8a7000)\n\tlibcublasLt.so.13 => /usr/local/cuda/lib64/libcublasLt.so.13 (0x000070240c000000)"
+        },
+        "manifest_sha256": "8b00bfa8aedcff486c94da311ab2db55f905a62c9ccf36ef235f33884e4e7b6c"
+      },
+      "sha256": "78cd370e18a911b284c0f732e40ada20a1b3c8fc8ba40f2aabb0e8d7d800a3cc",
+      "sha256_verified": true,
+      "tag": "b9692/f3e1828"
+    }
+  }
+}

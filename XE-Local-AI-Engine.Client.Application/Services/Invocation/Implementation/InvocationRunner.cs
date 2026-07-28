@@ -296,7 +296,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // budgeter sizes history against the real window. The per-send num_ctx override still wins; an unknown
             // window (cloud/Ollama/not-yet-started) keeps the configured default. The same value is threaded into the
             // agent definition below so the INNER provider-round budgeter (num_ctx side channel) agrees.
-            turnPolicy = ApplyEffectiveContext(turnPolicy, package, effectiveContextTokens);
+            turnPolicy = ApplyEffectiveContext(turnPolicy, effectiveContextTokens);
 
             // Branch: a package carrying a compiled orchestration spec drives the handoff workflow; everything else is
             // the unchanged single-agent loop. Both accumulate into `stream`, then share the completion block below.
@@ -714,16 +714,17 @@ public sealed partial class InvocationRunner : IInvocationRunner
     ///     wins and is left untouched; otherwise a known effective window replaces the configured default so the outer
     ///     conversation budgeter sizes against the real window. An unknown window leaves the policy unchanged.
     /// </summary>
-    private static TurnPolicy ApplyEffectiveContext(TurnPolicy turnPolicy, RuntimePackage package, int? effectiveContextTokens)
+    private static TurnPolicy ApplyEffectiveContext(TurnPolicy turnPolicy, int? effectiveContextTokens)
     {
-        if (package.SamplingOptions?.NumCtx is > 0 || effectiveContextTokens is not > 0)
+        if (effectiveContextTokens is not > 0)
         {
             return turnPolicy;
         }
 
         return turnPolicy with
         {
-            ContextCapacityTokens = effectiveContextTokens.Value
+            ContextCapacityTokens = Math.Min(turnPolicy.ContextCapacityTokens, effectiveContextTokens.Value),
+            ReservedOutputTokens = Math.Min(turnPolicy.ReservedOutputTokens, effectiveContextTokens.Value)
         };
     }
 
@@ -752,7 +753,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         // many rounds trim, and throws (see ApplyContextBudgetAsync) the first time truncation still leaves history
         // over budget.
         var budgetGate = new ContextBudgetNoticeGate();
-        var seededMessages = await ApplyContextBudgetAsync(BuildChatMessages(package), package, "initial-assembly", turnPolicy, transport, budgetGate).ConfigureAwait(false);
+        var seededMessages = await ApplyContextBudgetAsync(BuildChatMessages(package), package, resolvedModel, "initial-assembly", turnPolicy, transport, budgetGate).ConfigureAwait(false);
 
         var definition = BuildInvocationDefinition(package, resolvedModel, seededMessages, effectiveContextTokens);
         // Coarse span over the MAF agent build (AUD4-23) — another pre-first-token stage. Disposed right after the
@@ -808,7 +809,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // iteration this is a cheap passthrough (the seed was already budgeted); on an approval resume it bounds the
             // folded tool-call + approval history. The protected recent turns — which carry the in-flight round — are
             // never trimmed, so a budgeted list is still valid to send.
-            var budgetedMessages = await ApplyContextBudgetAsync(currentMessages, package, "tool-loop", turnPolicy, transport, budgetGate).ConfigureAwait(false);
+            var budgetedMessages = await ApplyContextBudgetAsync(currentMessages, package, resolvedModel, "tool-loop", turnPolicy, transport, budgetGate).ConfigureAwait(false);
             if (!ReferenceEquals(budgetedMessages, currentMessages))
             {
                 currentMessages = budgetedMessages as List<ChatMessage> ?? [.. budgetedMessages];
@@ -1031,7 +1032,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         // any participant is launched with. Previously unbudgeted — the workflow ran on the raw seed regardless of
         // length.
         var budgetGate = new ContextBudgetNoticeGate();
-        var seed = await ApplyContextBudgetAsync(BuildChatMessages(package), package, "orchestration-seed", turnPolicy, transport, budgetGate).ConfigureAwait(false);
+        var seed = await ApplyContextBudgetAsync(BuildChatMessages(package), package, resolvedModel, "orchestration-seed", turnPolicy, transport, budgetGate).ConfigureAwait(false);
 
         await using var session = await _orchestrationAgentFactory.CreateAsync(definition, seed, invocationToken).ConfigureAwait(false);
 

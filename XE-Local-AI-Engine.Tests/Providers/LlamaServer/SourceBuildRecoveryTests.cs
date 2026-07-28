@@ -322,9 +322,12 @@ public sealed class SourceBuildRecoveryTests
         }
 
         File.WriteAllText(path, $"#!/bin/sh\n{workingDirectoryCheck}case \"$1\" in --version) exit 0;; --list-devices) echo '{device} test'; exit 0;; esac\n");
+        var fitHelperPath = Path.Combine(bin, "llama-fit-params");
+        File.WriteAllText(fitHelperPath, "#!/bin/sh\nexit 0\n");
         if (!OperatingSystem.IsWindows())
         {
             File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            File.SetUnixFileMode(fitHelperPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         }
 
         return path;
@@ -370,7 +373,8 @@ public sealed class SourceBuildRecoveryTests
             throw new NotSupportedException();
 
         public Task<T> RunExclusiveProfilingAsync<T>(string modelName, ModelRole role, ResolvedLaunchArguments launchArgs, bool enableMetrics,
-            Func<LlamaServerProfilingContext, CancellationToken, Task<T>> body, CancellationToken ct) =>
+            Func<LlamaServerProfilingContext, CancellationToken, Task<T>> body, CancellationToken ct,
+            Func<CancellationToken, Task<LlamaServerProfilingVramSnapshot>>? captureVramBeforeSpawn = null) =>
             throw new NotSupportedException();
 
         public Task<IReadOnlyList<LlamaServerProcessHealth>> CheckHealthAsync(CancellationToken ct) =>

@@ -93,6 +93,9 @@ StyleCopReport.xml
 *.tmp
 *.tmp_proj
 *.log
+!docs/agent-framework/evidence/validation/debug-devui-registration-contract.log
+!docs/agent-framework/evidence/validation/debug-devui-route-contract.log
+!docs/agent-framework/evidence/validation/release-adapter-architecture-tests.log
 *.vspscc
 *.vssscc
 .builds

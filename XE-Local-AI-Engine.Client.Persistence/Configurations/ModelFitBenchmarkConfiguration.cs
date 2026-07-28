@@ -60,6 +60,30 @@ internal sealed class ModelFitBenchmarkConfiguration : IEntityTypeConfiguration<
         builder.Property(entity => entity.VramAfterBytes)
                .HasColumnName("vram_after_bytes");
 
+        builder.Property(entity => entity.GlobalFreeVramLoadBytes)
+               .HasColumnName("global_free_vram_load_bytes");
+
+        builder.Property(entity => entity.GlobalFreeVramAfterBytes)
+               .HasColumnName("global_free_vram_after_bytes");
+
+        builder.Property(entity => entity.ProcessBudgetVramLoadBytes)
+               .HasColumnName("process_budget_vram_load_bytes");
+
+        builder.Property(entity => entity.ProcessBudgetVramAfterBytes)
+               .HasColumnName("process_budget_vram_after_bytes");
+
+        builder.Property(entity => entity.MinimumGlobalFreeVramBytes)
+               .HasColumnName("minimum_global_free_vram_bytes");
+
+        builder.Property(entity => entity.MinimumProcessBudgetVramBytes)
+               .HasColumnName("minimum_process_budget_vram_bytes");
+
+        builder.Property(entity => entity.PeakProcessRamBytes)
+               .HasColumnName("peak_process_ram_bytes");
+
+        builder.Property(entity => entity.ExternalPressureDetected)
+               .HasColumnName("external_pressure_detected");
+
         // Reproducibility key.
         builder.Property(entity => entity.LlamacppBuild)
                .HasColumnName("llamacpp_build");
@@ -98,6 +122,12 @@ internal sealed class ModelFitBenchmarkConfiguration : IEntityTypeConfiguration<
         // Profile revision binding (additive, nullable — legacy rows predate it).
         builder.Property(entity => entity.ProfileId)
                .HasColumnName("profile_id");
+
+        builder.Property(entity => entity.LaunchPolicyFingerprintVersion)
+               .HasColumnName("launch_policy_fingerprint_version");
+
+        builder.Property(entity => entity.LaunchPolicyFingerprint)
+               .HasColumnName("launch_policy_fingerprint");
 
         builder.HasIndex(entity => entity.SnapshotId);
 

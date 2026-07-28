@@ -151,6 +151,7 @@ Migrations live in `Migrations/` and upgrade an existing encrypted database in p
 | `20260626104651_AddConversationUploadedFiles` | `conversation_uploaded_files` (chat upload attachments; encrypted display name, cascade FK) |
 | `20260626234754_AddInferenceProfilesAndBenchmarkMetrics` | `inference_profiles` table (per-machine launch profiles) + benchmark metric columns on the model-fit snapshot (`pp_tokens_per_second`, `tool_loop_ms`, `cache_hit_rate`, `vram_load_bytes`, `vram_after_bytes`, …) |
 | `20260701175538_AddKnowledgeBaseTables` | Knowledge-base / RAG tables: `knowledge_documents`, `knowledge_document_sections`, `knowledge_document_chunks`, `knowledge_chunk_vectors` (encrypted document store + chunk embedding vectors) |
+| `20260726203016_AddKnowledgeVectorIdentity` | Canonical knowledge vector identity (`resolved model + transform/version + width`) on documents/vectors; all pre-existing projections are explicitly tagged `legacy:unversioned` so they remain source-preserved but stale until reindexed |
 | `20260701191341_AddImageRuntimeTables` | Local image-runtime tables: `image_jobs`, `image_model_profiles`, `generated_images` |
 | `20260710163634_AddAgentDefinitionBaseScaffoldOptOut` | `disable_base_scaffold` flag on `agent_definitions` (per-agent opt-out of the base scaffold prompt) |
 | `20260711002326_AddBenchmarkProfileRevisionBinding` | Bind `model_fit_benchmarks` to an inference-profile revision: `profile_id` (+ index) plus captured launch flags (`flash_attn`, `kv_type_v`) |

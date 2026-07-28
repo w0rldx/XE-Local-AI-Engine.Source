@@ -7,20 +7,22 @@ using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     Real <see cref="IAvailableVramProbe" /> backed by <c>llama-server --list-devices</c>. Resolves (or reuses) the
+///     Real <see cref="IProcessVramBudgetProbe" /> backed by <c>llama-server --list-devices</c>. Resolves (or reuses) the
 ///     hash-verified llama.cpp binary for the requested backend, runs a short-lived <c>--list-devices</c> process, and
-///     parses the per-device "<c>(&lt;total&gt; MiB, &lt;free&gt; MiB free)</c>" column, returning the LARGEST free
-///     figure across devices in bytes. Vendor-agnostic — it reads llama.cpp's own device report (CUDA / Vulkan / SYCL),
-///     never <c>nvidia-smi</c>, so a single code path serves every GPU backend llama.cpp supports.
+///     parses the per-device "<c>(&lt;total&gt; MiB, &lt;free&gt; MiB free)</c>" column, returning the LARGEST reported
+///     process budget across devices in bytes. Vendor-agnostic — it reads llama.cpp's own device report (CUDA / Vulkan /
+///     SYCL), never <c>nvidia-smi</c>, so a single code path serves every GPU backend llama.cpp supports. On WDDM the
+///     value is deliberately NOT described as global free VRAM; that separate semantic comes from
+///     <see cref="HardwareProfile.AvailableVramBytes" />.
 /// </summary>
 /// <remarks>
 ///     <para>
-///         <b>Degrade, never throw.</b> The live free-VRAM figure feeds inference-profile invalidation and benchmark
-///         metrics on a hot path that must keep working when no GPU is present (WSL, CPU-only, headless CI). Every
+///         <b>Degrade, never throw.</b> The process-budget figure feeds placement decisions and benchmark provenance on a
+///         hot path that must keep working when no GPU is present (WSL, CPU-only, headless CI). Every
 ///         failure mode — a <c>cpu</c>/unknown/blank backend token (no process is even spawned), an empty device list,
 ///         a non-zero exit with no parseable devices, the per-probe timeout, or any unexpected exception — degrades to
 ///         <see langword="null" /> ("unknown") rather than throwing or reporting a misleading zero. Only genuine caller
-///         cancellation is surfaced (the token is honored), per the <see cref="IAvailableVramProbe" /> contract.
+///         cancellation is surfaced (the token is honored), per the <see cref="IProcessVramBudgetProbe" /> contract.
 ///     </para>
 ///     <para>
 ///         <b>Process model.</b> Unlike the supervised server, <c>--list-devices</c> is a run-to-exit probe, so the
@@ -28,16 +30,16 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///         probe) launches it with both pipes drained and a bounded wait — no Job Object / setsid containment.
 ///     </para>
 /// </remarks>
-public sealed partial class LlamaListDevicesVramProbe : IAvailableVramProbe
+public sealed partial class LlamaListDevicesProcessVramBudgetProbe : IProcessVramBudgetProbe
 {
     // Hard cap for the short-lived --list-devices probe. A wedged GPU driver could otherwise stall the invalidation hot
     // path; on overrun the child is killed (entire tree) and the figure degrades to "unknown".
     private static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(15);
 
     private readonly ILlamaCppBinaryManager _binaryManager;
-    private readonly ILogger<LlamaListDevicesVramProbe> _logger;
+    private readonly ILogger<LlamaListDevicesProcessVramBudgetProbe> _logger;
 
-    public LlamaListDevicesVramProbe(ILlamaCppBinaryManager binaryManager, ILogger<LlamaListDevicesVramProbe> logger)
+    public LlamaListDevicesProcessVramBudgetProbe(ILlamaCppBinaryManager binaryManager, ILogger<LlamaListDevicesProcessVramBudgetProbe> logger)
     {
         ArgumentNullException.ThrowIfNull(binaryManager);
         ArgumentNullException.ThrowIfNull(logger);
@@ -46,7 +48,7 @@ public sealed partial class LlamaListDevicesVramProbe : IAvailableVramProbe
     }
 
     /// <inheritdoc />
-    public async Task<long?> TryGetFreeVramBytesAsync(string backend, CancellationToken ct)
+    public async Task<long?> TryGetProcessBudgetBytesAsync(string backend, CancellationToken ct)
     {
         var variant = MapBackendToVariant(backend);
         if (variant is null)
@@ -70,7 +72,7 @@ public sealed partial class LlamaListDevicesVramProbe : IAvailableVramProbe
         catch (Exception ex)
         {
             // Binary acquisition, process launch, or any unexpected failure must never break the invalidation hot path.
-            _logger.LogDebug(ex, "Available-VRAM probe failed for backend {Backend}; degrading to unknown free VRAM.", backend);
+            _logger.LogDebug(ex, "Process-VRAM-budget probe failed for backend {Backend}; degrading to unknown.", backend);
             return null;
         }
     }

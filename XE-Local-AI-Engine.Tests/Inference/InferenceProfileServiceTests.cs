@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Inference;
 
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -13,11 +14,11 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     <see cref="InferenceProfileService" /> orchestration tests over substituted seams: explore persists the parsed (or
-///     conservative) Explored draft and rejects a non-local model without spawning; benchmark runs the harness and
-///     persists the snapshot + repro-keyed row, marking the snapshot Succeeded/Failed; and the freeze gate only freezes a
-///     benchmark-justified Explored profile, never throwing. The supervisor fake actually invokes the passed profiling
-///     body so the explore/benchmark logic runs end to end. No DB, no process.
+///     <see cref="InferenceProfileService" /> orchestration tests over substituted seams: explore persists only a concrete
+///     parsed GPU draft (with a CPU-only context fallback) and rejects a non-local model without spawning; benchmark runs
+///     the harness and persists the snapshot + repro-keyed row, marking the snapshot Succeeded/Failed; and the freeze gate
+///     only freezes a benchmark-justified Explored profile, never throwing. The supervisor fake actually invokes the
+///     passed profiling body so the explore/benchmark logic runs end to end. No DB, no process.
 /// </summary>
 public sealed class InferenceProfileServiceTests
 {
@@ -32,7 +33,7 @@ public sealed class InferenceProfileServiceTests
         var fixture = new ServiceFixture();
         fixture.WithLocalModel();
         fixture.WithMetadata(new GgufModelMetadata(ParamCount: 7_000_000_000, QuantType: "15", ContextLength: 8192, ExpertCount: null, IsMoe: false));
-        fixture.WithExploreStartupOutput("n_ctx = 8192", "n_gpu_layers = 33");
+        fixture.WithExploreFitParamsOutput("-c 8192 -ngl 33");
         fixture.EchoExploredUpsert();
 
         var result = await fixture.CreateService().ExploreAsync(Model, ModelRole.Chat, CancellationToken.None);
@@ -48,23 +49,83 @@ public sealed class InferenceProfileServiceTests
     }
 
     [Test]
-    public async Task Explore_WhenFitUnparseable_PersistsConservativeExplored()
+    public async Task Explore_WhenFitReturnsUnresolvedDefaults_ReturnsFailureWithoutPersistingPartialPlacement()
     {
         var fixture = new ServiceFixture();
         fixture.WithLocalModel();
         fixture.WithMetadata(new GgufModelMetadata(ParamCount: 7_000_000_000, QuantType: "15", ContextLength: 8192, ExpertCount: null, IsMoe: false));
-        // No fitted context size in the banner → the parser returns null → conservative fallback.
-        fixture.WithExploreStartupOutput("loading model", "warming up");
+        // Automatic GPU placement without authoritative full-offload startup evidence is not replayable.
+        fixture.WithExploreFitParamsOutput(["load_tensors: offloaded 24/25 layers to GPU"], "-c 8192 -ngl -1");
+
+        var result = await fixture.CreateService().ExploreAsync(Model, ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.False(result.Success);
+        AssertEx.True(result.FailureReason!.Contains("concrete", StringComparison.OrdinalIgnoreCase));
+        AssertEx.Null(result.Profile);
+        await fixture.ProfileStore.DidNotReceive()
+                     .CreateOrUpdateExploredAsync(Arg.Any<InferenceProfileInput>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Explore_WhenAutomaticLayersHaveFullOffloadEvidence_PersistsExplicitAllLayersReplay()
+    {
+        var fixture = new ServiceFixture();
+        fixture.WithLocalModel();
+        fixture.WithMetadata(new GgufModelMetadata(ParamCount: 7_000_000_000, QuantType: "15", ContextLength: 8192, ExpertCount: null, IsMoe: false));
+        fixture.WithExploreFitParamsOutput(["load_tensors: offloaded 25/25 layers to GPU"], "-c 8192 -ngl -1");
         fixture.EchoExploredUpsert();
 
         var result = await fixture.CreateService().ExploreAsync(Model, ModelRole.Chat, CancellationToken.None);
 
         AssertEx.True(result.Success);
         var profile = AssertEx.NotNull(result.Profile);
-        AssertEx.Equal(8192, profile.CtxSize);
-        AssertEx.Null(profile.NGpuLayers);
-        await fixture.ProfileStore.Received(1).CreateOrUpdateExploredAsync(Arg.Is<InferenceProfileInput>(input => input.CtxSize == 8192 && input.NGpuLayers == null),
-            Arg.Any<CancellationToken>());
+        AssertEx.Equal<int?>(-2, profile.NGpuLayers);
+        await fixture.ProfileStore.Received(1)
+                     .CreateOrUpdateExploredAsync(
+                         Arg.Is<InferenceProfileInput>(input => input.CtxSize == 8192 && input.NGpuLayers == -2),
+                         Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Explore_WhenOptimizedCandidateSucceeds_PersistsItsKvAndFlashAttentionPolicy()
+    {
+        var fixture = new ServiceFixture();
+        fixture.WithLocalModel();
+        fixture.WithMetadata(new GgufModelMetadata(ParamCount: 7_000_000_000, QuantType: "15", ContextLength: 8192, ExpertCount: null, IsMoe: false));
+        fixture.WithExploreFitParamsOutput(
+            startupOutput: [],
+            successfulLaunchArguments: ["-fa", "on", "-ctk", "q8_0", "-ctv", "q8_0"],
+            "-c 8192 -ngl 33");
+        fixture.EchoExploredUpsert();
+
+        var result = await fixture.CreateService().ExploreAsync(Model, ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.True(result.Success);
+        var profile = AssertEx.NotNull(result.Profile);
+        AssertEx.Equal("q8_0", profile.KvTypeK);
+        AssertEx.Equal("q8_0", profile.KvTypeV);
+        AssertEx.True(profile.FlashAttn);
+    }
+
+    [Test]
+    public async Task Explore_WhenSafeCandidateSucceeds_PersistsKvAndFlashAttentionAsAbsent()
+    {
+        var fixture = new ServiceFixture();
+        fixture.WithLocalModel();
+        fixture.WithMetadata(new GgufModelMetadata(ParamCount: 7_000_000_000, QuantType: "15", ContextLength: 8192, ExpertCount: null, IsMoe: false));
+        fixture.WithExploreFitParamsOutput(
+            startupOutput: [],
+            successfulLaunchArguments: ["--fit", "on", "-c", "8192"],
+            "-c 8192 -ngl 33");
+        fixture.EchoExploredUpsert();
+
+        var result = await fixture.CreateService().ExploreAsync(Model, ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.True(result.Success);
+        var profile = AssertEx.NotNull(result.Profile);
+        AssertEx.Null(profile.KvTypeK);
+        AssertEx.Null(profile.KvTypeV);
+        AssertEx.False(profile.FlashAttn);
     }
 
     [Test]
@@ -93,6 +154,10 @@ public sealed class InferenceProfileServiceTests
         var snapshotId = Guid.NewGuid();
         fixture.WithRunningSnapshot(snapshotId);
         var metrics = SuccessMetrics();
+        fixture.HardwareProfiler.GetProfileAsync(forceRefresh: true, Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult(NvidiaProfile(availableVramBytes: 6000)));
+        fixture.ProcessVramBudgetProbe.TryGetProcessBudgetBytesAsync(profile.Backend, Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult<long?>(8000));
         fixture.WithBenchmarkResult(metrics);
 
         var result = await fixture.CreateService().BenchmarkAsync(profile.Id, CancellationToken.None);
@@ -100,13 +165,16 @@ public sealed class InferenceProfileServiceTests
         AssertEx.True(result.Success);
         AssertEx.Equal<Guid?>(snapshotId, result.SnapshotId);
         AssertEx.Equal<double?>(42d, AssertEx.NotNull(result.Metrics).TokensPerSecond);
+        AssertEx.Equal(new LlamaServerProfilingVramSnapshot(6000, 8000),
+            AssertEx.NotNull(fixture.CapturedBenchmarkContext).PreSpawnVram);
         await fixture.BenchmarkStore.Received(1).ReplaceForSnapshotAsync(snapshotId,
             Arg.Is<IReadOnlyList<ModelFitBenchmarkInput>>(rows => rows.Count == 1
                                                                   && Math.Abs((rows[0].TokensPerSecond ?? 0d) - 42d) < 0.0001
                                                                   && rows[0].Backend == "cuda"
                                                                   && rows[0].MachineKey == MachineKey
                                                                   && rows[0].CtxSize == 8192
-                                                                  && rows[0].LlamacppBuild == Build),
+                                                                  && rows[0].LlamacppBuild == Build
+                                                                  && rows[0].DiagnosticsJson == """{"vram":{"globalFreeBytes":1000,"processBudgetBytes":1200}}"""),
             Arg.Any<CancellationToken>());
         await fixture.SnapshotStore.Received(1).MarkTerminalAsync(snapshotId,
             ModelFitRunStatus.Succeeded,
@@ -143,7 +211,29 @@ public sealed class InferenceProfileServiceTests
             Arg.Any<long>(),
             Arg.Any<CancellationToken>());
         // A failed benchmark never freezes the profile.
-        await fixture.ProfileStore.DidNotReceive().MarkFrozenAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<long?>(), Arg.Any<CancellationToken>());
+        await fixture.ProfileStore.DidNotReceive().MarkFrozenAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<long?>(), Arg.Any<long?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Benchmark_ExplicitPreSpawnPressureOverride_DisablesOnlyPreSpawnRejection()
+    {
+        var fixture = new ServiceFixture();
+        var profile = ExploredRecord();
+        fixture.WithProfiles(profile);
+        fixture.WithLocalModel();
+        fixture.WithRunningSnapshot(Guid.NewGuid());
+        fixture.WithBenchmarkResult(SuccessMetrics());
+
+        var result = await fixture.CreateService()
+                                  .BenchmarkAsync(profile.Id,
+                                      allowPreSpawnVramPressure: true,
+                                      CancellationToken.None);
+
+        AssertEx.True(result.Success);
+        var spec = AssertEx.NotNull(fixture.CapturedBenchmarkSpec);
+        AssertEx.False(spec.RejectPreSpawnVramPressure);
+        AssertEx.Equal(512L * 1024 * 1024, spec.IncrementalVramDivergenceAbsoluteThresholdBytes);
+        AssertEx.Equal(0.05d, spec.IncrementalVramDivergenceRatioThreshold);
     }
 
     [Test]
@@ -152,16 +242,20 @@ public sealed class InferenceProfileServiceTests
         var fixture = new ServiceFixture();
         var profile = ExploredRecord();
         fixture.WithProfiles(profile);
+        fixture.WithLocalModel();
         var snapshotId = Guid.NewGuid();
         fixture.BenchmarkStore.GetLatestSuccessfulForProfileAsync(profile.Id, Arg.Any<CancellationToken>())
                .Returns(Task.FromResult<ModelFitBenchmarkRecord?>(BenchmarkRowFor(profile, snapshotId)));
-        fixture.VramProbe.TryGetFreeVramBytesAsync("cuda", Arg.Any<CancellationToken>()).Returns(Task.FromResult<long?>(2000));
-        fixture.ProfileStore.MarkFrozenAsync(profile.Id, snapshotId, 2000, Arg.Any<CancellationToken>())
+        fixture.HardwareProfiler.GetProfileAsync(forceRefresh: true, Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult(NvidiaProfile(availableVramBytes: 2000)));
+        fixture.ProcessVramBudgetProbe.TryGetProcessBudgetBytesAsync(profile.Backend, Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult<long?>(2400));
+        fixture.ProfileStore.MarkFrozenAsync(profile.Id, snapshotId, 2000, 2400, Arg.Any<CancellationToken>())
                .Returns(Task.FromResult<InferenceProfileRecord?>(profile with
                {
                    Status = InferenceProfileStatus.Frozen,
                    BenchmarkSnapshotId = snapshotId,
-                   FreeVramAtFreezeBytes = 2000
+                   GlobalFreeVramAtFreezeBytes = 2000
                }));
 
         var result = await fixture.CreateService().FreezeAsync(profile.Id, CancellationToken.None);
@@ -170,7 +264,40 @@ public sealed class InferenceProfileServiceTests
         var view = AssertEx.NotNull(result.Profile);
         AssertEx.Equal("Frozen", view.Status);
         AssertEx.Equal<Guid?>(snapshotId, view.BenchmarkSnapshotId);
-        await fixture.ProfileStore.Received(1).MarkFrozenAsync(profile.Id, snapshotId, 2000, Arg.Any<CancellationToken>());
+        await fixture.ProfileStore.Received(1).MarkFrozenAsync(profile.Id, snapshotId, 2000, 2400, Arg.Any<CancellationToken>());
+        await fixture.ProcessVramBudgetProbe.Received(1)
+                     .TryGetProcessBudgetBytesAsync(profile.Backend, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Freeze_CpuProfile_DoesNotCaptureUnrelatedGpuVram()
+    {
+        var fixture = new ServiceFixture();
+        var profile = ExploredRecord() with
+        {
+            Backend = InferenceBackends.Cpu
+        };
+        fixture.WithProfiles(profile);
+        fixture.WithLocalModel();
+        var snapshotId = Guid.NewGuid();
+        fixture.BenchmarkStore.GetLatestSuccessfulForProfileAsync(profile.Id, Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult<ModelFitBenchmarkRecord?>(BenchmarkRowFor(profile, snapshotId)));
+        fixture.HardwareProfiler.GetProfileAsync(forceRefresh: true, Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult(NvidiaProfile(availableVramBytes: 2000)));
+        fixture.ProfileStore.MarkFrozenAsync(profile.Id, snapshotId, globalFreeVramAtFreezeBytes: null, processBudgetVramAtFreezeBytes: null, Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult<InferenceProfileRecord?>(profile with
+               {
+                   Status = InferenceProfileStatus.Frozen,
+                   BenchmarkSnapshotId = snapshotId
+               }));
+
+        var result = await fixture.CreateService().FreezeAsync(profile.Id, CancellationToken.None);
+
+        AssertEx.True(result.Success);
+        await fixture.ProfileStore.Received(1)
+                     .MarkFrozenAsync(profile.Id, snapshotId, globalFreeVramAtFreezeBytes: null, processBudgetVramAtFreezeBytes: null, Arg.Any<CancellationToken>());
+        await fixture.ProcessVramBudgetProbe.DidNotReceive()
+                     .TryGetProcessBudgetBytesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -179,6 +306,7 @@ public sealed class InferenceProfileServiceTests
         var fixture = new ServiceFixture();
         var profile = ExploredRecord();
         fixture.WithProfiles(profile);
+        fixture.WithLocalModel();
         fixture.BenchmarkStore.GetLatestSuccessfulForProfileAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
                .Returns(Task.FromResult<ModelFitBenchmarkRecord?>(null));
 
@@ -187,7 +315,7 @@ public sealed class InferenceProfileServiceTests
         AssertEx.False(result.Success);
         AssertEx.NotNullOrEmpty(result.FailureReason);
         // The Explored profile is never transitioned.
-        await fixture.ProfileStore.DidNotReceive().MarkFrozenAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<long?>(), Arg.Any<CancellationToken>());
+        await fixture.ProfileStore.DidNotReceive().MarkFrozenAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<long?>(), Arg.Any<long?>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -196,6 +324,7 @@ public sealed class InferenceProfileServiceTests
         var fixture = new ServiceFixture();
         var profile = ExploredRecord(); // current ctx = 8192
         fixture.WithProfiles(profile);
+        fixture.WithLocalModel();
         var snapshotId = Guid.NewGuid();
         // The profile's latest successful benchmark was taken at a different ctx (a prior explore); a re-explore then
         // overwrote the profile's args in place (same id, new args), so the benchmark no longer matches the current
@@ -211,7 +340,47 @@ public sealed class InferenceProfileServiceTests
 
         AssertEx.False(result.Success);
         AssertEx.NotNullOrEmpty(result.FailureReason);
-        await fixture.ProfileStore.DidNotReceive().MarkFrozenAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<long?>(), Arg.Any<CancellationToken>());
+        await fixture.ProfileStore.DidNotReceive().MarkFrozenAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<long?>(), Arg.Any<long?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Benchmark_GpuProfileWithoutMachineReadablePlacement_IsRejectedBeforeSpawn()
+    {
+        var fixture = new ServiceFixture();
+        fixture.WithLocalModel();
+        var profile = ExploredRecord() with
+        {
+            NGpuLayers = null
+        };
+        fixture.WithProfiles(profile);
+
+        var result = await fixture.CreateService().BenchmarkAsync(profile.Id, CancellationToken.None);
+
+        AssertEx.False(result.Success);
+        AssertEx.True(result.FailureReason!.Contains("machine-readable GPU placement", StringComparison.Ordinal));
+        await fixture.Supervisor.DidNotReceiveWithAnyArgs()
+                     .RunExclusiveProfilingAsync(default!, default, default!, default,
+                         default(Func<LlamaServerProfilingContext, CancellationToken, Task<InferenceBenchmarkMetrics>>)!,
+                         default);
+    }
+
+    [Test]
+    public async Task Freeze_GpuProfileWithoutMachineReadablePlacement_IsRejectedBeforeBenchmarkLookup()
+    {
+        var fixture = new ServiceFixture();
+        var profile = ExploredRecord() with
+        {
+            NGpuLayers = null
+        };
+        fixture.WithProfiles(profile);
+
+        var result = await fixture.CreateService().FreezeAsync(profile.Id, CancellationToken.None);
+
+        AssertEx.False(result.Success);
+        await fixture.BenchmarkStore.DidNotReceive()
+                     .GetLatestSuccessfulForProfileAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        await fixture.ProfileStore.DidNotReceive()
+                     .MarkFrozenAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<long?>(), Arg.Any<long?>(), Arg.Any<CancellationToken>());
     }
 
     private static InferenceProfileRecord ExploredRecord()
@@ -233,11 +402,13 @@ public sealed class InferenceProfileServiceTests
             NParams: 7_000_000_000,
             IsMoe: false,
             ExpertCount: null,
-            FreeVramAtFreezeBytes: null,
+            GlobalFreeVramAtFreezeBytes: null,
             Status: InferenceProfileStatus.Explored,
             BenchmarkSnapshotId: null,
             CreatedAtUtc: 0,
-            UpdatedAtUtc: 0);
+            UpdatedAtUtc: 0,
+            LaunchPolicyFingerprintVersion: LaunchPolicyFingerprintProvider.CurrentVersion,
+            LaunchPolicyFingerprint: "fingerprint");
     }
 
     private static InferenceBenchmarkMetrics SuccessMetrics()
@@ -253,7 +424,24 @@ public sealed class InferenceProfileServiceTests
             VramLoadBytes: 1000,
             VramAfterBytes: 900,
             Runs: 1,
-            RawJson: "raw-metrics");
+            RawJson: "raw-metrics",
+            DiagnosticsJson: """{"vram":{"globalFreeBytes":1000,"processBudgetBytes":1200}}""");
+    }
+
+    private static HardwareProfile NvidiaProfile(long? availableVramBytes)
+    {
+        return new HardwareProfile
+        {
+            TotalRamBytes = 64L * 1024 * 1024 * 1024,
+            AvailableRamBytes = 48L * 1024 * 1024 * 1024,
+            VramBytes = 24L * 1024 * 1024 * 1024,
+            AvailableVramBytes = availableVramBytes,
+            VramKnown = true,
+            GpuVendor = GpuVendor.Nvidia,
+            GpuAccelAvailable = true,
+            CpuCores = 16,
+            FreeDiskBytes = 500L * 1024 * 1024 * 1024
+        };
     }
 
     // A benchmark row whose recorded launch args match the profile exactly, bound to the profile's id — the shape the
@@ -281,7 +469,9 @@ public sealed class InferenceProfileServiceTests
             OverrideTensor: profile.OverrideTensor,
             KvTypeV: profile.KvTypeV,
             FlashAttn: profile.FlashAttn,
-            ProfileId: profile.Id);
+            ProfileId: profile.Id,
+            LaunchPolicyFingerprintVersion: profile.LaunchPolicyFingerprintVersion,
+            LaunchPolicyFingerprint: profile.LaunchPolicyFingerprint);
     }
 
     // Wires the substituted seams the orchestrator composes, with safe defaults, and exposes the doubles the tests assert on.
@@ -325,7 +515,16 @@ public sealed class InferenceProfileServiceTests
 
         public IInstalledRuntimeStore RuntimeStore { get; } = Substitute.For<IInstalledRuntimeStore>();
 
-        public IAvailableVramProbe VramProbe { get; } = Substitute.For<IAvailableVramProbe>();
+        public IHardwareProfiler HardwareProfiler { get; } = Substitute.For<IHardwareProfiler>();
+
+        public IProcessVramBudgetProbe ProcessVramBudgetProbe { get; } = Substitute.For<IProcessVramBudgetProbe>();
+
+        public ILaunchPolicyFingerprintProvider LaunchPolicyFingerprintProvider { get; } =
+            Substitute.For<ILaunchPolicyFingerprintProvider>();
+
+        public LlamaServerProfilingContext? CapturedBenchmarkContext { get; private set; }
+
+        public InferenceBenchmarkSpec? CapturedBenchmarkSpec { get; private set; }
 
         public ServiceFixture()
         {
@@ -333,8 +532,22 @@ public sealed class InferenceProfileServiceTests
             VariantSelector.SelectVariantAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(GpuVariant.Cuda));
             RuntimeStore.ReadAsync(Arg.Any<CancellationToken>())
                         .Returns(Task.FromResult<InstalledRuntimeState?>(new InstalledRuntimeState(Build, "asset.zip", "sha", GpuVariant.Cuda, DateTimeOffset.UnixEpoch)));
+            HardwareProfiler.GetProfileAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                            .Returns(Task.FromResult(NvidiaProfile(availableVramBytes: null)));
             ProfileStore.ListAsync(Arg.Any<CancellationToken>())
                         .Returns(Task.FromResult<IReadOnlyList<InferenceProfileRecord>>([]));
+            LaunchPolicyFingerprintProvider.CaptureAsync(Arg.Any<InferenceProfileFingerprintInput>(), Arg.Any<CancellationToken>())
+                                           .Returns(Task.FromResult(new LaunchPolicyFingerprint(
+                                               XE_Local_AI_Engine.Client.Services.Inference.LaunchPolicyFingerprintProvider.CurrentVersion,
+                                               "fingerprint")));
+            LaunchPolicyFingerprintProvider.CaptureAsync(Arg.Any<InferenceProfileRecord>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+                                           .Returns(Task.FromResult(new LaunchPolicyFingerprint(
+                                               XE_Local_AI_Engine.Client.Services.Inference.LaunchPolicyFingerprintProvider.CurrentVersion,
+                                               "fingerprint")));
+            LaunchPolicyFingerprintProvider.MatchesAsync(Arg.Any<InferenceProfileRecord>(),
+                                               Arg.Any<string>(),
+                                               Arg.Any<CancellationToken>())
+                                           .Returns(Task.FromResult(true));
         }
 
         public void WithLocalModel()
@@ -360,11 +573,28 @@ public sealed class InferenceProfileServiceTests
                          .Returns(Task.FromResult(Summary(snapshotId, ModelFitRunStatus.Running)));
         }
 
-        // Drives the explore profiling body: invokes it with a canned startup-output context so the real fit parser runs.
-        public void WithExploreStartupOutput(params string[] startupOutput)
+        // Drives the explore profiling body with machine-readable helper stdout so the real fit parser runs.
+        public void WithExploreFitParamsOutput(params string[] fitParamsOutput)
+        {
+            WithExploreFitParamsOutput([], fitParamsOutput);
+        }
+
+        public void WithExploreFitParamsOutput(IReadOnlyList<string> startupOutput, params string[] fitParamsOutput)
+        {
+            WithExploreFitParamsOutput(startupOutput, successfulLaunchArguments: [], fitParamsOutput);
+        }
+
+        public void WithExploreFitParamsOutput(
+            IReadOnlyList<string> startupOutput,
+            IReadOnlyList<string> successfulLaunchArguments,
+            params string[] fitParamsOutput)
         {
             var context = new LlamaServerProfilingContext(new LlamaServerEndpoint(Model, ModelRole.Chat, new Uri("http://127.0.0.1:18100/v1")),
-                startupOutput);
+                startupOutput,
+                FitParamsOutput: fitParamsOutput)
+            {
+                SuccessfulLaunchArguments = successfulLaunchArguments
+            };
             Supervisor.RunExclusiveProfilingAsync(Arg.Any<string>(),
                           Arg.Any<ModelRole>(),
                           Arg.Any<ResolvedLaunchArguments>(),
@@ -382,20 +612,33 @@ public sealed class InferenceProfileServiceTests
         public void WithBenchmarkResult(InferenceBenchmarkMetrics metrics)
         {
             Harness.RunAsync(Arg.Any<LlamaServerProfilingContext>(), Arg.Any<InferenceBenchmarkSpec>(), Arg.Any<CancellationToken>())
-                   .Returns(Task.FromResult(metrics));
+                   .Returns(callInfo =>
+                   {
+                       CapturedBenchmarkContext = callInfo.Arg<LlamaServerProfilingContext>();
+                       CapturedBenchmarkSpec = callInfo.Arg<InferenceBenchmarkSpec>();
+                       return Task.FromResult(metrics);
+                   });
 
-            var context = new LlamaServerProfilingContext(new LlamaServerEndpoint(Model, ModelRole.Chat, new Uri("http://127.0.0.1:18100/v1")),
-                []);
             Supervisor.RunExclusiveProfilingAsync(Arg.Any<string>(),
                           Arg.Any<ModelRole>(),
                           Arg.Any<ResolvedLaunchArguments>(),
                           Arg.Any<bool>(),
                           Arg.Any<Func<LlamaServerProfilingContext, CancellationToken, Task<InferenceBenchmarkMetrics>>>(),
-                          Arg.Any<CancellationToken>())
-                      .Returns(callInfo =>
+                          Arg.Any<CancellationToken>(),
+                          Arg.Any<Func<CancellationToken, Task<LlamaServerProfilingVramSnapshot>>>())
+                      .Returns(async callInfo =>
                       {
+                          var captureVram =
+                              callInfo.Arg<Func<CancellationToken, Task<LlamaServerProfilingVramSnapshot>>>();
+                          var preSpawnVram = await captureVram(CancellationToken.None);
+                          var context = new LlamaServerProfilingContext(
+                              new LlamaServerEndpoint(Model, ModelRole.Chat, new Uri("http://127.0.0.1:18100/v1")),
+                              [])
+                          {
+                              PreSpawnVram = preSpawnVram
+                          };
                           var body = callInfo.Arg<Func<LlamaServerProfilingContext, CancellationToken, Task<InferenceBenchmarkMetrics>>>();
-                          return body(context, CancellationToken.None);
+                          return await body(context, CancellationToken.None);
                       });
         }
 
@@ -418,7 +661,10 @@ public sealed class InferenceProfileServiceTests
                 MachineKeyProvider,
                 VariantSelector,
                 RuntimeStore,
-                VramProbe,
+                HardwareProfiler,
+                ProcessVramBudgetProbe,
+                LaunchPolicyFingerprintProvider,
+                Options.Create(new InferenceBenchmarkVramAdmissionOptions()),
                 NullLogger<InferenceProfileService>.Instance);
         }
 
@@ -441,11 +687,13 @@ public sealed class InferenceProfileServiceTests
                 input.NParams,
                 input.IsMoe,
                 input.ExpertCount,
-                FreeVramAtFreezeBytes: null,
                 Status: InferenceProfileStatus.Explored,
                 BenchmarkSnapshotId: null,
                 CreatedAtUtc: 0,
-                UpdatedAtUtc: 0);
+                UpdatedAtUtc: 0,
+                input.LaunchPolicyFingerprintVersion,
+                input.LaunchPolicyFingerprint,
+                GlobalFreeVramAtFreezeBytes: null);
         }
     }
 }

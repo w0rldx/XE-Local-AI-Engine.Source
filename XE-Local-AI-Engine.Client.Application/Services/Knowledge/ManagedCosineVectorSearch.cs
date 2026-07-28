@@ -38,12 +38,20 @@ public sealed class ManagedCosineVectorSearch : IVectorSearch
 
     public async Task<IReadOnlyList<VectorSearchHit>> SearchAsync(ReadOnlyMemory<float> queryVector,
         string embeddingModel,
+        string vectorIdentity,
+        int vectorDimension,
         int limit,
         Guid? documentId,
         CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(embeddingModel);
+        ArgumentException.ThrowIfNullOrWhiteSpace(vectorIdentity);
         if (queryVector.IsEmpty || limit <= 0)
+        {
+            return [];
+        }
+
+        if (queryVector.Length != vectorDimension || vectorDimension <= 0)
         {
             return [];
         }
@@ -70,7 +78,7 @@ public sealed class ManagedCosineVectorSearch : IVectorSearch
 
         try
         {
-            return await ScanAsync(scoringQuery, useDot, embeddingModel, limit, documentId, cancellationToken).ConfigureAwait(false);
+            return await ScanAsync(scoringQuery, useDot, embeddingModel, vectorIdentity, vectorDimension, limit, documentId, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -84,6 +92,8 @@ public sealed class ManagedCosineVectorSearch : IVectorSearch
     private async Task<IReadOnlyList<VectorSearchHit>> ScanAsync(ReadOnlyMemory<float> scoringQuery,
         bool useDot,
         string embeddingModel,
+        string vectorIdentity,
+        int vectorDimension,
         int limit,
         Guid? documentId,
         CancellationToken cancellationToken)
@@ -97,7 +107,9 @@ public sealed class ManagedCosineVectorSearch : IVectorSearch
             command.CommandText = """
                                   SELECT chunk_id, document_id, embedding
                                   FROM knowledge_chunk_vectors
-                                  WHERE embedding_model = $embedding_model;
+                                  WHERE embedding_model = $embedding_model
+                                    AND vector_identity = $vector_identity
+                                    AND dim = $vector_dimension;
                                   """;
         }
         else
@@ -105,11 +117,16 @@ public sealed class ManagedCosineVectorSearch : IVectorSearch
             command.CommandText = """
                                   SELECT chunk_id, document_id, embedding
                                   FROM knowledge_chunk_vectors
-                                  WHERE embedding_model = $embedding_model AND document_id = $document_id;
+                                  WHERE embedding_model = $embedding_model
+                                    AND vector_identity = $vector_identity
+                                    AND dim = $vector_dimension
+                                    AND document_id = $document_id;
                                   """;
         }
 
         AddParameter(command, "$embedding_model", embeddingModel);
+        AddParameter(command, "$vector_identity", vectorIdentity);
+        AddParameter(command, "$vector_dimension", vectorDimension);
         if (documentId is not null)
         {
             AddParameter(command, "$document_id", documentId.Value);

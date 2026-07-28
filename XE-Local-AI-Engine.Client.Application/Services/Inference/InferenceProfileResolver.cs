@@ -68,6 +68,11 @@ public sealed class InferenceProfileResolver : IInferenceProfileResolver
         switch (record.Status)
         {
             case InferenceProfileStatus.Explored:
+                if (!HasReplayMetadata(record))
+                {
+                    return ResolvedLaunchArguments.Explore();
+                }
+
                 return BuildReplayOrExplore(record);
 
             case InferenceProfileStatus.Frozen:
@@ -83,6 +88,13 @@ public sealed class InferenceProfileResolver : IInferenceProfileResolver
                 // Stale (or any future status): re-exploration is the only path back to auto-fit.
                 return ResolvedLaunchArguments.Explore();
         }
+    }
+
+    private static bool HasReplayMetadata(InferenceProfileRecord record)
+    {
+        return record.NGpuLayers is not null
+               && record.LaunchPolicyFingerprintVersion is not null
+               && !string.IsNullOrWhiteSpace(record.LaunchPolicyFingerprint);
     }
 
     // Replay enforces the KV/flash-attn invariants and throws on a corrupt persisted combo. On the cold spawn hot path a

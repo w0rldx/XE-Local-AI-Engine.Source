@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 
+using System.Diagnostics.Metrics;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 
@@ -19,6 +20,12 @@ using Microsoft.Extensions.AI;
 /// </summary>
 internal sealed class ToolArgumentRepairAIFunction : DelegatingAIFunction
 {
+    private static readonly Meter Meter = new("XE.LocalAiEngine.AI.Agent", "1.0.0");
+
+    private static readonly Counter<long> RepairCounter = Meter.CreateCounter<long>(
+        "xe.agent.tool_argument_repair",
+        description: "Tool calls intercepted for model-actionable argument repair. Tag: source.");
+
     private readonly int _maxConsecutiveInvalidCalls;
     private readonly bool _rejectUnknownProperties;
 
@@ -45,7 +52,13 @@ internal sealed class ToolArgumentRepairAIFunction : DelegatingAIFunction
         var validation = ToolArgumentValidator.CoerceAndValidate(JsonSchema, arguments, _rejectUnknownProperties);
         if (!validation.IsValid)
         {
+            RecordRepair("validation");
             return RecordInvalidAndBuildResult(scope, validation.Reason!);
+        }
+
+        if (validation.WasCoerced)
+        {
+            RecordRepair("coercion");
         }
 
         try
@@ -59,8 +72,15 @@ internal sealed class ToolArgumentRepairAIFunction : DelegatingAIFunction
             // The arguments passed structural validation but the handler could not deserialize them into the shape it
             // needs. Surface it as a model-actionable repair (without echoing the raw payload) rather than letting the
             // throw become an opaque framework error that counts toward the run's abort threshold.
+            RecordRepair("handler_json");
             return RecordInvalidAndBuildResult(scope, "The tool could not parse the supplied arguments; they do not match the expected shape.");
         }
+    }
+
+    private static void RecordRepair(string source)
+    {
+        // Deliberately content-free: no tool name, argument key/value, schema, model, request, or user dimension.
+        RepairCounter.Add(1, new KeyValuePair<string, object?>("source", source));
     }
 
     private object RecordInvalidAndBuildResult(ToolArgumentRepairScope? scope, string reason)

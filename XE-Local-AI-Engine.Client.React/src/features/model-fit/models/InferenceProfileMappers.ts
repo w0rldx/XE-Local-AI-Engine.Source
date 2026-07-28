@@ -28,9 +28,12 @@ function toInferenceProfileView(dto: XeLocalAiEngineClientEndpointsModelFitV1Inf
 		ctxSize: dto.ctxSize ?? null,
 		isMoe: dto.isMoe ?? false,
 		expertCount: dto.expertCount ?? null,
+		launchPolicyFingerprintVersion: dto.launchPolicyFingerprintVersion ?? null,
+		launchPolicyFingerprint: dto.launchPolicyFingerprint ?? null,
 		// A frozen profile records the snapshot id it was benchmarked against; its presence gates the Freeze action.
 		hasBenchmark: (dto.benchmarkSnapshotId ?? null) !== null,
-		frozenVramBytes: dto.freeVramAtFreezeBytes ?? null,
+		frozenGlobalFreeVramBytes: dto.globalFreeVramAtFreezeBytes ?? null,
+		frozenProcessBudgetVramBytes: dto.processBudgetVramAtFreezeBytes ?? null,
 	};
 }
 
@@ -44,14 +47,31 @@ function toInferenceBenchmarkMetrics(
 	dto: XeLocalAiEngineClientEndpointsModelFitV1InferenceBenchmarkMetricsDto,
 ): InferenceBenchmarkMetrics {
 	return {
+		role: dto.role ?? null,
 		tokensPerSecond: dto.tokensPerSecond ?? null,
 		ppTokensPerSecond: dto.ppTokensPerSecond ?? null,
 		ttftMs: dto.ttftMs ?? null,
 		totalLatencyMs: dto.totalLatencyMs ?? null,
 		cacheHitRate: dto.cacheHitRate ?? null,
 		toolLoopMs: dto.toolLoopMs ?? null,
+		itemsPerSecond: dto.itemsPerSecond ?? null,
+		inputTokensPerSecond: dto.inputTokensPerSecond ?? null,
+		p50LatencyMs: dto.p50LatencyMs ?? null,
+		p95LatencyMs: dto.p95LatencyMs ?? null,
+		batchSize: dto.batchSize ?? null,
+		outputDimension: dto.outputDimension ?? null,
+		valuesFinite: dto.valuesFinite ?? null,
+		deterministicOutput: dto.deterministicOutput ?? null,
 		vramLoadBytes: dto.vramLoadBytes ?? null,
 		vramAfterBytes: dto.vramAfterBytes ?? null,
+		globalFreeVramLoadBytes: dto.globalFreeVramLoadBytes ?? null,
+		globalFreeVramAfterBytes: dto.globalFreeVramAfterBytes ?? null,
+		processBudgetVramLoadBytes: dto.processBudgetVramLoadBytes ?? null,
+		processBudgetVramAfterBytes: dto.processBudgetVramAfterBytes ?? null,
+		minimumGlobalFreeVramBytes: dto.minimumGlobalFreeVramBytes ?? null,
+		minimumProcessBudgetVramBytes: dto.minimumProcessBudgetVramBytes ?? null,
+		peakProcessRamBytes: dto.peakProcessRamBytes ?? null,
+		externalPressureDetected: dto.externalPressureDetected ?? false,
 		runs: dto.runs ?? null,
 	};
 }

@@ -8,7 +8,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1;
 ///     A node-local inference profile projected for transport (shared by the list, explore, freeze and invalidate
 ///     responses). It carries only the launch-arg facts and lifecycle metadata; the local-only machine key is
 ///     deliberately OMITTED — it must never leave the box. <see cref="Role" /> is the lowercase wire role
-///     (<c>chat|embedding</c>) and <see cref="Status" /> is the lifecycle name (<c>Explored|Frozen|Stale</c>).
+///     (<c>chat|embedding|reranker</c>) and <see cref="Status" /> is the lifecycle name (<c>Explored|Frozen|Stale</c>).
 /// </summary>
 public sealed class InferenceProfileViewDto
 {
@@ -16,7 +16,7 @@ public sealed class InferenceProfileViewDto
 
     public required string ModelName { get; init; }
 
-    /// <summary>Lowercase role the profile targets — <c>chat|embedding</c>.</summary>
+    /// <summary>Lowercase role the profile targets — <c>chat|embedding|reranker</c>.</summary>
     public required string Role { get; init; }
 
     public required string Backend { get; init; }
@@ -45,8 +45,17 @@ public sealed class InferenceProfileViewDto
 
     public int? ExpertCount { get; init; }
 
-    /// <summary>Free VRAM (bytes) observed when the profile was frozen; null until a freeze records it.</summary>
-    public long? FreeVramAtFreezeBytes { get; init; }
+    /// <summary>Version of the launch-policy fingerprint schema, or null for a legacy profile.</summary>
+    public int? LaunchPolicyFingerprintVersion { get; init; }
+
+    /// <summary>Versioned strong/validation launch-policy fingerprint, or null for a legacy profile that is treated as stale.</summary>
+    public string? LaunchPolicyFingerprint { get; init; }
+
+    /// <summary>Global device-free VRAM captured at freeze; the only VRAM invalidation baseline.</summary>
+    public long? GlobalFreeVramAtFreezeBytes { get; init; }
+
+    /// <summary>Calling-process VRAM budget captured at freeze; diagnostic only.</summary>
+    public long? ProcessBudgetVramAtFreezeBytes { get; init; }
 
     /// <summary>The lifecycle status name — <c>Explored|Frozen|Stale</c>.</summary>
     public required string Status { get; init; }
@@ -68,14 +77,14 @@ public sealed class ListInferenceProfilesResponse
 /// <summary>
 ///     Body for <c>POST model-fit/profiles/explore</c>. Explores a node-local GGUF model to draft its launch args.
 ///     <see cref="ModelName" /> must be non-blank and resolve to a local GGUF (a cloud or missing model is rejected with a
-///     400). <see cref="Role" /> is <c>chat|embedding</c> (case-insensitive; defaults to <c>chat</c> when omitted); an
-///     unknown role is rejected with a 400.
+///     400). <see cref="Role" /> is <c>chat|embedding|reranker</c> (case-insensitive; defaults to <c>chat</c> when
+///     omitted); an unknown role is rejected with a 400.
 /// </summary>
 public sealed class ExploreInferenceProfileRequest
 {
     public required string ModelName { get; init; }
 
-    /// <summary>Role to explore — <c>chat|embedding</c>. Defaults to <c>chat</c> when omitted.</summary>
+    /// <summary>Role to explore — <c>chat|embedding|reranker</c>. Defaults to <c>chat</c> when omitted.</summary>
     public string? Role { get; init; }
 }
 
@@ -87,6 +96,12 @@ public sealed class ExploreInferenceProfileRequest
 public sealed class BenchmarkInferenceProfileRequest
 {
     public required Guid ProfileId { get; init; }
+
+    /// <summary>
+    ///     Explicit operator override for material pressure already present before spawn. Defaults to false. Pressure
+    ///     introduced during the benchmark is never bypassed.
+    /// </summary>
+    public bool AllowPreSpawnVramPressure { get; init; }
 }
 
 /// <summary>
@@ -126,6 +141,9 @@ public sealed class InferenceProfileActionResponse
 /// </summary>
 public sealed class InferenceBenchmarkMetricsDto
 {
+    /// <summary>Role-specific harness that produced the metrics (<c>Chat</c>, <c>Embedding</c>, or <c>Reranker</c>).</summary>
+    public string? Role { get; init; }
+
     /// <summary>Generation throughput in tokens/second; null when not measured.</summary>
     public double? TokensPerSecond { get; init; }
 
@@ -144,13 +162,61 @@ public sealed class InferenceBenchmarkMetricsDto
     /// <summary>Wall-clock of the tool-call round in milliseconds; null when not measured.</summary>
     public double? ToolLoopMs { get; init; }
 
-    /// <summary>Free VRAM (bytes) observed at load; null when not measured.</summary>
+    /// <summary>Role items processed per second (texts for embedding, pairs for reranker); null for chat.</summary>
+    public double? ItemsPerSecond { get; init; }
+
+    /// <summary>Input tokens processed per wall-clock second; null when the server counters were unavailable.</summary>
+    public double? InputTokensPerSecond { get; init; }
+
+    /// <summary>Median request latency across repeated role-specific runs.</summary>
+    public double? P50LatencyMs { get; init; }
+
+    /// <summary>95th percentile request latency across repeated role-specific runs.</summary>
+    public double? P95LatencyMs { get; init; }
+
+    /// <summary>Number of texts/pairs in each role-specific request batch.</summary>
+    public int? BatchSize { get; init; }
+
+    /// <summary>Embedding vector dimension; null for chat and reranker.</summary>
+    public int? OutputDimension { get; init; }
+
+    /// <summary>Whether all embedding values/reranker scores were finite.</summary>
+    public bool? ValuesFinite { get; init; }
+
+    /// <summary>Whether repeated vectors or reranker scores/order stayed within the deterministic tolerance.</summary>
+    public bool? DeterministicOutput { get; init; }
+
+    /// <summary>Effective free VRAM (global-free when available, otherwise process budget) observed at load.</summary>
     public long? VramLoadBytes { get; init; }
 
-    /// <summary>Free VRAM (bytes) observed after the loop; null when not measured.</summary>
+    /// <summary>Effective free VRAM (global-free when available, otherwise process budget) observed after the loop.</summary>
     public long? VramAfterBytes { get; init; }
 
-    /// <summary>Number of transcript passes measured (one golden pass = 1).</summary>
+    /// <summary>System-wide NVIDIA free VRAM observed at load.</summary>
+    public long? GlobalFreeVramLoadBytes { get; init; }
+
+    /// <summary>System-wide NVIDIA free VRAM observed after the workload.</summary>
+    public long? GlobalFreeVramAfterBytes { get; init; }
+
+    /// <summary>llama.cpp process-local VRAM budget observed at load.</summary>
+    public long? ProcessBudgetVramLoadBytes { get; init; }
+
+    /// <summary>llama.cpp process-local VRAM budget observed after the workload.</summary>
+    public long? ProcessBudgetVramAfterBytes { get; init; }
+
+    /// <summary>Lowest globally-free VRAM sampled across warmups and measured passes.</summary>
+    public long? MinimumGlobalFreeVramBytes { get; init; }
+
+    /// <summary>Lowest llama.cpp process budget sampled across warmups and measured passes.</summary>
+    public long? MinimumProcessBudgetVramBytes { get; init; }
+
+    /// <summary>Highest sampled working set of the transient llama-server process.</summary>
+    public long? PeakProcessRamBytes { get; init; }
+
+    /// <summary>Whether material process-budget/global-free divergence invalidated the benchmark as external pressure.</summary>
+    public required bool ExternalPressureDetected { get; init; }
+
+    /// <summary>Number of measured passes.</summary>
     public required int Runs { get; init; }
 }
 

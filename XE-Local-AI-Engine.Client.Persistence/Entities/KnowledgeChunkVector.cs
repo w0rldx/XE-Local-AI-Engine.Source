@@ -24,4 +24,7 @@ internal sealed record class KnowledgeChunkVector
 
     /// <summary>Embedding model id that produced this vector; the search compares only rows where this equals the current model.</summary>
     public string EmbeddingModel { get; set; } = string.Empty;
+
+    /// <summary>Canonical resolved-model + transform algorithm/version + width identity for this vector.</summary>
+    public string VectorIdentity { get; set; } = "legacy:unversioned";
 }

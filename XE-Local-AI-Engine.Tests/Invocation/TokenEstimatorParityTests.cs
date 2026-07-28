@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Invocation;
 using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.AI.Agent.Chat;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
+using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -37,6 +38,24 @@ public sealed class TokenEstimatorParityTests
         AssertEx.True(heuristic.EstimateTokens(cjk) > heuristic.EstimateTokens(accent), "Application estimator must weight CJK above Latin accents.");
         AssertEx.True(ProviderMessageTokenEstimator.EstimateTokens(cjk) > ProviderMessageTokenEstimator.EstimateTokens(accent),
             "AI.Agent estimator must weight CJK above Latin accents.");
+    }
+
+    [Test]
+    public void BothEstimators_ProduceIdenticalCalibratedEstimates_WithoutWeakeningCjkWeight()
+    {
+        var calibrations = new TokenEstimatorCalibrationStore();
+        calibrations.SetDivisor("model-a", charsPerToken: 7);
+        var heuristic = new HeuristicTokenEstimator(calibrations);
+
+        foreach (var text in Samples())
+        {
+            var message = new ChatMessage(ChatRole.User, [new TextContent(text)]);
+            AssertEx.Equal(ProviderMessageTokenEstimator.EstimateTokens(message, charsPerToken: 7),
+                heuristic.EstimateTokens(message, "model-a"));
+        }
+
+        var cjk = new ChatMessage(ChatRole.User, [new TextContent(new string('中', 32))]);
+        AssertEx.Equal(expected: 36, heuristic.EstimateTokens(cjk, "model-a"));
     }
 
     [Test]

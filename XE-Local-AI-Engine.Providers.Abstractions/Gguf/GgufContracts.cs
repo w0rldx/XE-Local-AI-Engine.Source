@@ -198,4 +198,8 @@ public sealed record GgufModelFootprintFacts(
     long? AttentionKeyLength = null,
     long? AttentionValueLength = null,
     long? SlidingWindow = null,
-    long? SlidingWindowPattern = null);
+    long? SlidingWindowPattern = null,
+    string? ContentIdentity = null,
+    string? Architecture = null,
+    long? ExpertCount = null,
+    long? ExpertUsedCount = null);

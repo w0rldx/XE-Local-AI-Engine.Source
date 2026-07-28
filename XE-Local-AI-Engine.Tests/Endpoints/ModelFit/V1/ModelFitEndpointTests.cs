@@ -372,8 +372,9 @@ public sealed class ModelFitEndpointTests
             factory.AddNodeBearerToken(setRequest);
             using var setResponse = await client.SendAsync(setRequest).ConfigureAwait(false);
 
-            AssertEx.Equal(HttpStatusCode.OK, setResponse.StatusCode);
             var setJson = await setResponse.Content.ReadAsStringAsync().ConfigureAwait(false);
+            var diagnosticJson = setJson.Replace(secret, "[REDACTED]", StringComparison.Ordinal);
+            AssertEx.Equal(HttpStatusCode.OK, setResponse.StatusCode, $"Unexpected set-token response: {diagnosticJson}");
             AssertEx.False(setJson.Contains(secret, StringComparison.Ordinal), "Set-token response must NEVER echo the token value.");
             using var setDoc = JsonDocument.Parse(setJson);
             AssertEx.True(setDoc.RootElement.GetProperty("hasToken").GetBoolean(), "After setting a token, hasToken must be true.");

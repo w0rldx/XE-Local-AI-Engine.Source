@@ -8,8 +8,9 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// <remarks>
 ///     A frozen-profile replay owns its own <c>-c</c>/KV/FA verbatim, so for a replay <see cref="RequestedContextTokens" />
 ///     is <see langword="null" /> and <see cref="UseKvCacheQuantization" /> is <see langword="false" /> — the plan then
-///     carries only the (variant-appropriate) CPU thread counts. Operator profiling spawns bypass the policy entirely and
-///     are built with no plan.
+///     carries only the (variant-appropriate) CPU thread counts. Replay profiling bypasses the policy and is built with no
+///     plan; explore profiling deliberately uses the production plan so helper/server placement evidence is equivalent to
+///     normal serving.
 /// </remarks>
 /// <param name="RequestedContextTokens">
 ///     The <c>-c</c> value to emit (already capped to the model's train context), or <see langword="null" /> to leave the

@@ -1,0 +1,1162 @@
+{
+  "benchmark": {
+    "acceptance_rule": "median and nearest-rank p95; future tuning ships only at >=20% throughput improvement and <=5% RAM/VRAM regression",
+    "ambient_load_policy": "no concurrent build/test/model/game; reject global/process VRAM divergence",
+    "cache_preparation": "one excluded outer warmup invocation; llama-bench internal warmup retained",
+    "cache_state": "warm",
+    "memory_maximum_regression_percent": 5,
+    "statistics": "median-and-nearest-rank-p95",
+    "throughput_minimum_improvement_percent": 20
+  },
+  "capture_id": "e67d6697-b9692-cpu",
+  "commands": [
+    {
+      "aggregates": {
+        "generation_tokens_per_second": {
+          "maximum": 6.312754,
+          "median": 6.26745,
+          "minimum": 5.746551,
+          "p95": 6.312754
+        },
+        "prompt_tokens_per_second": {
+          "maximum": 7528.020188,
+          "median": 6971.612154,
+          "minimum": 4515.48673,
+          "p95": 7528.020188
+        },
+        "wall_elapsed_ms": {
+          "maximum": 23534.719,
+          "median": 21313.095,
+          "minimum": 21212.207,
+          "p95": 23534.719
+        }
+      },
+      "ambient_after": {
+        "captured_at_utc": "2026-07-26T23:54:38Z",
+        "load_average_1m_5m_15m": [
+          3.748046875,
+          4.09228515625,
+          3.83740234375
+        ],
+        "memory": {
+          "MemAvailableKiB": 25221032,
+          "MemTotalKiB": 32867940,
+          "SwapFreeKiB": 8382792,
+          "SwapTotalKiB": 8388608
+        },
+        "nvidia_smi": {
+          "argv": [
+            "nvidia-smi",
+            "--query-gpu=index,name,uuid,driver_version,memory.total,memory.free,memory.used,utilization.gpu",
+            "--format=csv,noheader,nounits"
+          ],
+          "available": true,
+          "exit_code": 0,
+          "stderr": "",
+          "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 29199, 2989, 17"
+        }
+      },
+      "ambient_before": {
+        "captured_at_utc": "2026-07-26T23:52:48Z",
+        "load_average_1m_5m_15m": [
+          3.13720703125,
+          4.22119140625,
+          3.84814453125
+        ],
+        "memory": {
+          "MemAvailableKiB": 25275032,
+          "MemTotalKiB": 32867940,
+          "SwapFreeKiB": 8382792,
+          "SwapTotalKiB": 8388608
+        },
+        "nvidia_smi": {
+          "argv": [
+            "nvidia-smi",
+            "--query-gpu=index,name,uuid,driver_version,memory.total,memory.free,memory.used,utilization.gpu",
+            "--format=csv,noheader,nounits"
+          ],
+          "available": true,
+          "exit_code": 0,
+          "stderr": "",
+          "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 25257, 6931, 32"
+        }
+      },
+      "argv": [
+        "$RUNTIME_ROOT/build-cuda/bin/llama-bench",
+        "-r",
+        "1",
+        "-o",
+        "json",
+        "-ngl",
+        "0",
+        "-t",
+        "16",
+        "-m",
+        "$MODEL_STORE/Qwen2.5-0.5B-Instruct-Q4_K_M.gguf",
+        "-p",
+        "512",
+        "-n",
+        "128"
+      ],
+      "argv_sha256": "76a4475713f6c2b81b07d9acdcd2ec6f7171aa5088c32f9a13e29f7ff63ec899",
+      "comparability": "exact-argv-and-identity",
+      "name": "chat-pp-tg",
+      "partition": "native-performance",
+      "repeats": 5,
+      "runs": [
+        {
+          "ambient_during": {
+            "captured_at_utc": "2026-07-26T23:52:49Z",
+            "load_average_1m_5m_15m": [
+              3.13720703125,
+              4.22119140625,
+              3.84814453125
+            ],
+            "memory": {
+              "MemAvailableKiB": 24985712,
+              "MemTotalKiB": 32867940,
+              "SwapFreeKiB": 8382792,
+              "SwapTotalKiB": 8388608
+            },
+            "nvidia_smi": {
+              "argv": [
+                "nvidia-smi",
+                "--query-gpu=index,name,uuid,driver_version,memory.total,memory.free,memory.used,utilization.gpu",
+                "--format=csv,noheader,nounits"
+              ],
+              "available": true,
+              "exit_code": 0,
+              "stderr": "",
+              "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 24762, 7426, 32"
+            }
+          },
+          "elapsed_ms": 23534.719,
+          "exit_code": 0,
+          "expected_timeout": false,
+          "metrics": {
+            "generation_tokens_per_second": 5.746551,
+            "prompt_tokens_per_second": 4652.107496,
+            "wall_elapsed_ms": 23534.719
+          },
+          "peak_rss_bytes": 871108608,
+          "stderr": "ggml_cuda_init: found 1 CUDA devices (Total VRAM: 32606 MiB):\n  Device 0: NVIDIA GeForce RTX 5090, compute capability 12.0, VMM: yes, VRAM: 32606 MiB\n",
+          "stdout": "[\n  {\n    \"build_commit\": \"f3e1828\",\n    \"build_number\": 1,\n    \"cpu_info\": \"AMD Ryzen 9 9950X3D 16-Core Processor\",\n    \"gpu_info\": \"NVIDIA GeForce RTX 5090\",\n    \"backends\": \"CUDA\",\n    \"model_filename\": \"$MODEL_STORE/Qwen2.5-0.5B-Instruct-Q4_K_M.gguf\",\n    \"model_type\": \"qwen2 1B Q4_K - Medium\",\n    \"model_size\": 391859712,\n    \"model_n_params\": 494032768,\n    \"n_batch\": 2048,\n    \"n_ubatch\": 512,\n    \"n_threads\": 16,\n    \"cpu_mask\": \"0x0\",\n    \"cpu_strict\": false,\n    \"poll\": 50,\n    \"type_k\": \"f16\",\n    \"type_v\": \"f16\",\n    \"n_gpu_layers\": 0,\n    \"n_cpu_moe\": 0,\n    \"split_mode\": \"layer\",\n    \"main_gpu\": 0,\n    \"no_kv_offload\": false,\n    \"flash_attn\": -1,\n    \"devices\": \"auto\",\n    \"tensor_split\": \"0.00\",\n    \"tensor_buft_overrides\": \"none\",\n    \"use_mmap\": true,\n    \"use_direct_io\": false,\n    \"embeddings\": false,\n    \"no_op_offload\": 0,\n    \"no_host\": false,\n    \"fit_target\": 0,\n    \"fit_min_ctx\": 0,\n    \"n_prompt\": 512,\n    \"n_gen\": 0,\n    \"n_depth\": 0,\n    \"test_time\": \"2026-07-26T23:52:49Z\",\n    \"avg_ns\": 110057646,\n    \"stddev_ns\": 0,\n    \"avg_ts\": 4652.107496,\n    \"stddev_ts\": 0.000000,\n    \"samples_ns\": [ 110057646 ],\n    \"samples_ts\": [ 4652.11 ]\n  },\n  {\n    \"build_commit\": \"f3e1828\",\n    \"build_number\": 1,\n    \"cpu_info\": \"AMD Ryzen 9 9950X3D 16-Core Processor\",\n    \"gpu_info\": \"NVIDIA GeForce RTX 5090\",\n    \"backends\": \"CUDA\",\n    \"model_filename\": \"$MODEL_STORE/Qwen2.5-0.5B-Instruct-Q4_K_M.gguf\",\n    \"model_type\": \"qwen2 1B Q4_K - Medium\",\n    \"model_size\": 391859712,\n    \"model_n_params\": 494032768,\n    \"n_batch\": 2048,\n    \"n_ubatch\": 512,\n    \"n_threads\": 16,\n    \"cpu_mask\": \"0x0\",\n    \"cpu_strict\": false,\n    \"poll\": 50,\n    \"type_k\": \"f16\",\n    \"type_v\": \"f16\",\n    \"n_gpu_layers\": 0,\n    \"n_cpu_moe\": 0,\n    \"split_mode\": \"layer\",\n    \"main_gpu\": 0,\n    \"no_kv_offload\": false,\n    \"flash_attn\": -1,\n    \"devices\": \"auto\",\n    \"tensor_split\": \"0.00\",\n    \"tensor_buft_overrides\": \"none\",\n    \"use_mmap\": true,\n    \"use_direct_io\": false,\n    \"embeddings\": false,\n    \"no_op_offload\": 0,\n    \"no_host\": false,\n    \"fit_target\": 0,\n    \"fit_min_ctx\": 0,\n    \"n_prompt\": 0,\n    \"n_gen\": 128,\n    \"n_depth\": 0,\n    \"test_time\": \"2026-07-26T23:52:49Z\",\n    \"avg_ns\": 22274231034,\n    \"stddev_ns\": 0,\n    \"avg_ts\": 5.746551,\n    \"stddev_ts\": 0.000000,\n    \"samples_ns\": [ 22274231034 ],\n    \"samples_ts\": [ 5.74655 ]\n  }\n]\n",
+          "success": true,
+          "timed_out": false
+        },
+        {
+          "ambient_during": {
+            "captured_at_utc": "2026-07-26T23:53:12Z",
+            "load_average_1m_5m_15m": [
+              3.0,
+              4.12353515625,
+              3.82373046875
+            ],
+            "memory": {
+              "MemAvailableKiB": 25075220,
+              "MemTotalKiB": 32867940,
+              "SwapFreeKiB": 8382792,
+              "SwapTotalKiB": 8388608
+            },
+            "nvidia_smi": {
+              "argv": [
+                "nvidia-smi",
+                "--query-gpu=index,name,uuid,driver_version,memory.total,memory.free,memory.used,utilization.gpu",
+                "--format=csv,noheader,nounits"
+              ],
+              "available": true,
+              "exit_code": 0,
+              "stderr": "",
+              "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 24652, 7536, 33"
+            }
+          },
+          "elapsed_ms": 22325.138,
+          "exit_code": 0,
+          "expected_timeout": false,
+          "metrics": {
+            "generation_tokens_per_second": 6.051624,
+            "prompt_tokens_per_second": 4515.48673,
+            "wall_elapsed_ms": 22325.138
+          },
+          "peak_rss_bytes": 865173504,
+          "stderr": "ggml_cuda_init: found 1 CUDA devices (Total VRAM: 32606 MiB):\n  Device 0: NVIDIA GeForce RTX 5090, compute capability 12.0, VMM: yes, VRAM: 32606 MiB\n",
+          "stdout": "[\n  {\n    \"build_commit\": \"f3e1828\",\n    \"build_number\": 1,\n    \"cpu_info\": \"AMD Ryzen 9 9950X3D 16-Core Processor\",\n    \"gpu_info\": \"NVIDIA GeForce RTX 5090\",\n    \"backends\": \"CUDA\",\n    \"model_filename\": \"$MODEL_STORE/Qwen2.5-0.5B-Instruct-Q4_K_M.gguf\",\n    \"model_type\": \"qwen2 1B Q4_K - Medium\",\n    \"model_size\": 391859712,\n    \"model_n_params\": 494032768,\n    \"n_batch\": 2048,\n    \"n_ubatch\": 512,\n    \"n_threads\": 16,\n    \"cpu_mask\": \"0x0\",\n    \"cpu_strict\": false,\n    \"poll\": 50,\n    \"type_k\": \"f16\",\n    \"type_v\": \"f16\",\n    \"n_gpu_layers\": 0,\n    \"n_cpu_moe\": 0,\n    \"split_mode\": \"layer\",\n    \"main_gpu\": 0,\n    \"no_kv_offload\": false,\n    \"flash_attn\": -1,\n    \"devices\": \"auto\",\n    \"tensor_split\": \"0.00\",\n    \"tensor_buft_overrides\": \"none\",\n    \"use_mmap\": true,\n    \"use_direct_io\": false,\n    \"embeddings\": false,\n    \"no_op_offload\": 0,\n    \"no_host\": false,\n    \"fit_target\": 0,\n    \"fit_min_ctx\": 0,\n    \"n_prompt\": 512,\n    \"n_gen\": 0,\n    \"n_depth\": 0,\n    \"test_time\": \"2026-07-26T23:53:12Z\",\n    \"avg_ns\": 113387555,\n    \"stddev_ns\": 0,\n    \"avg_ts\": 4515.486730,\n    \"stddev_ts\": 0.000000,\n    \"samples_ns\": [ 113387555 ],\n    \"samples_ts\": [ 4515.49 ]\n  },\n  {\n    \"build_commit\": \"f3e1828\",\n    \"build_number\": 1,\n    \"cpu_info\": \"AMD Ryzen 9 9950X3D 16-Core Processor\",\n    \"gpu_info\": \"NVIDIA GeForce RTX 5090\",\n    \"backends\": \"CUDA\",\n    \"model_filename\": \"$MODEL_STORE/Qwen2.5-0.5B-Instruct-Q4_K_M.gguf\",\n    \"model_type\": \"qwen2 1B Q4_K - Medium\",\n    \"model_size\": 391859712,\n    \"model_n_params\": 494032768,\n    \"n_batch\": 2048,\n    \"n_ubatch\": 512,\n    \"n_threads\": 16,\n    \"cpu_mask\": \"0x0\",\n    \"cpu_strict\": false,\n    \"poll\": 50,\n    \"type_k\": \"f16\",\n    \"type_v\": \"f16\",\n    \"n_gpu_layers\": 0,\n    \"n_cpu_moe\": 0,\n    \"split_mode\": \"layer\",\n    \"main_gpu\": 0,\n    \"no_kv_offload\": false,\n    \"flash_attn\": -1,\n    \"devices\": \"auto\",\n    \"tensor_split\": \"0.00\",\n    \"tensor_buft_overrides\": \"none\",\n    \"use_mmap\": true,\n    \"use_direct_io\": false,\n    \"embeddings\": false,\n    \"no_op_offload\": 0,\n    \"no_host\": false,\n    \"fit_target\": 0,\n    \"fit_min_ctx\": 0,\n    \"n_prompt\": 0,\n    \"n_gen\": 128,\n    \"n_depth\": 0,\n    \"test_time\": \"2026-07-26T23:53:13Z\",\n    \"avg_ns\": 21151347467,\n    \"stddev_ns\": 0,\n    \"avg_ts\": 6.051624,\n    \"stddev_ts\": 0.000000,\n    \"samples_ns\": [ 21151347467 ],\n    \"samples_ts\": [ 6.05162 ]\n  }\n]\n",
+          "success": true,
+          "timed_out": false
+        },
+        {
+          "ambient_during": {
+            "captured_at_utc": "2026-07-26T23:53:35Z",
+            "load_average_1m_5m_15m": [
+              2.765625,
+              3.98291015625,
+              3.78515625
+            ],
+            "memory": {
+              "MemAvailableKiB": 24968580,
+              "MemTotalKiB": 32867940,
+              "SwapFreeKiB": 8382792,
+              "SwapTotalKiB": 8388608
+            },
+            "nvidia_smi": {
+              "argv": [
+                "nvidia-smi",
+                "--query-gpu=index,name,uuid,driver_version,memory.total,memory.free,memory.used,utilization.gpu",
+                "--format=csv,noheader,nounits"
+              ],
+              "available": true,
+              "exit_code": 0,
+              "stderr": "",
+              "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 28189, 3999, 11"
+            }
+          },
+          "elapsed_ms": 21212.207,
+          "exit_code": 0,
+          "expected_timeout": false,
+          "metrics": {
+            "generation_tokens_per_second": 6.312754,
+            "prompt_tokens_per_second": 7007.514451,
+            "wall_elapsed_ms": 21212.207
+          },
+          "peak_rss_bytes": 864210944,
+          "stderr": "ggml_cuda_init: found 1 CUDA devices (Total VRAM: 32606 MiB):\n  Device 0: NVIDIA GeForce RTX 5090, compute capability 12.0, VMM: yes, VRAM: 32606 MiB\n",
+          "stdout": "[\n  {\n    \"build_commit\": \"f3e1828\",\n    \"build_number\": 1,\n    \"cpu_info\": \"AMD Ryzen 9 9950X3D 16-Core Processor\",\n    \"gpu_info\": \"NVIDIA GeForce RTX 5090\",\n    \"backends\": \"CUDA\",\n    \"model_filename\": \"$MODEL_STORE/Qwen2.5-0.5B-Instruct-Q4_K_M.gguf\",\n    \"model_type\": \"qwen2 1B Q4_K - Medium\",\n    \"model_size\": 391859712,\n    \"model_n_params\": 494032768,\n    \"n_batch\": 2048,\n    \"n_ubatch\": 512,\n    \"n_threads\": 16,\n    \"cpu_mask\": \"0x0\",\n    \"cpu_strict\": false,\n    \"poll\": 50,\n    \"type_k\": \"f16\",\n    \"type_v\": \"f16\",\n    \"n_gpu_layers\": 0,\n    \"n_cpu_moe\": 0,\n    \"split_mode\": \"layer\",\n    \"main_gpu\": 0,\n    \"no_kv_offload\": false,\n    \"flash_attn\": -1,\n    \"devices\": \"auto\",\n    \"tensor_split\": \"0.00\",\n    \"tensor_buft_overrides\": \"none\",\n    \"use_mmap\": true,\n    \"use_direct_io\": false,\n    \"embeddings\": false,\n    \"no_op_offload\": 0,\n    \"no_host\": false,\n    \"fit_target\": 0,\n    \"fit_min_ctx\": 0,\n    \"n_prompt\": 512,\n    \"n_gen\": 0,\n    \"n_depth\": 0,\n    \"test_time\": \"2026-07-26T23:53:35Z\",\n    \"avg_ns\": 73064423,\n    \"stddev_ns\": 0,\n    \"avg_ts\": 7007.514451,\n    \"stddev_ts\": 0.000000,\n    \"samples_ns\": [ 73064423 ],\n    \"samples_ts\": [ 7007.51 ]\n  },\n  {\n    \"build_commit\": \"f3e1828\",\n    \"build_number\": 1,\n    \"cpu_info\": \"AMD Ryzen 9 9950X3D 16-Core Processor\",\n    \"gpu_info\": \"NVIDIA GeForce RTX 5090\",\n    \"backends\": \"CUDA\",\n    \"model_filename\": \"$MODEL_STORE/Qwen2.5-0.5B-Instruct-Q4_K_M.gguf\",\n    \"model_type\": \"qwen2 1B Q4_K - Medium\",\n    \"model_size\": 391859712,\n    \"model_n_params\": 494032768,\n    \"n_batch\": 2048,\n    \"n_ubatch\": 512,\n    \"n_threads\": 16,\n    \"cpu_mask\": \"0x0\",\n    \"cpu_strict\": false,\n    \"poll\": 50,\n    \"type_k\": \"f16\",\n    \"type_v\": \"f16\",\n    \"n_gpu_layers\": 0,\n    \"n_cpu_moe\": 0,\n    \"split_mode\": \"layer\",\n    \"main_gpu\": 0,\n    \"no_kv_offload\": false,\n    \"flash_attn\": -1,\n    \"devices\": \"auto\",\n    \"tensor_split\": \"0.00\",\n    \"tensor_buft_overrides\": \"none\",\n    \"use_mmap\": true,\n    \"use_direct_io\": false,\n    \"embeddings\": false,\n    \"no_op_offload\": 0,\n    \"no_host\": false,\n    \"fit_target\": 0,\n    \"fit_min_ctx\": 0,\n    \"n_prompt\": 0,\n    \"n_gen\": 128,\n    \"n_depth\": 0,\n    \"test_time\": \"2026-07-26T23:53:35Z\",\n    \"avg_ns\": 20276410494,\n    \"stddev_ns\": 0,\n    \"avg_ts\": 6.312754,\n    \"stddev_ts\": 0.000000,\n    \"samples_ns\": [ 20276410494 ],\n    \"samples_ts\": [ 6.31275 ]\n  }\n]\n",
+          "success": true,
+          "timed_out": false
+        },
+        {
+          "ambient_during": {
+            "captured_at_utc": "2026-07-26T23:53:56Z",
+            "load_average_1m_5m_15m": [
+              3.826171875,
+              4.15869140625,
+              3.84814453125
+            ],
+            "memory": {
+              "MemAvailableKiB": 24951444,
+              "MemTotalKiB": 32867940,
+              "SwapFreeKiB": 8382792,
+              "SwapTotalKiB": 8388608
+            },
+            "nvidia_smi": {
+              "argv": [
+                "nvidia-smi",
+                "--query-gpu=index,name,uuid,driver_version,memory.total,memory.free,memory.used,utilization.gpu",
+                "--format=csv,noheader,nounits"
+              ],
+              "available": true,
+              "exit_code": 0,
+              "stderr": "",
+              "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 28126, 4062, 13"
+            }
+          },
+          "elapsed_ms": 21311.669,
+          "exit_code": 0,
+          "expected_timeout": false,
+          "metrics": {
+            "generation_tokens_per_second": 6.302782,
+            "prompt_tokens_per_second": 6971.612154,
+            "wall_elapsed_ms": 21311.669
+          },
+          "peak_rss_bytes": 864116736,
+          "stderr": "ggml_cuda_init: found 1 CUDA devices (Total VRAM: 32606 MiB):\n  Device 0: NVIDIA GeForce RTX 5090, compute capability 12.0, VMM: yes, VRAM: 32606 MiB\n",
+          "stdout": "[\n  {\n    \"build_commit\": \"f3e1828\",\n    \"build_number\": 1,\n    \"cpu_info\": \"AMD Ryzen 9 9950X3D 16-Core Processor\",\n    \"gpu_info\": \"NVIDIA GeForce RTX 5090\",\n    \"backends\": \"CUDA\",\n    \"model_filename\": \"$MODEL_STORE/Qwen2.5-0.5B-Instruct-Q4_K_M.gguf\",\n    \"model_type\": \"qwen2 1B Q4_K - Medium\",\n    \"model_size\": 391859712,\n    \"model_n_params\": 494032768,\n    \"n_batch\": 2048,\n    \"n_ubatch\": 512,\n    \"n_threads\": 16,\n    \"cpu_mask\": \"0x0\",\n    \"cpu_strict\": false,\n    \"poll\": 50,\n    \"type_k\": \"f16\",\n    \"type_v\": \"f16\",\n    \"n_gpu_layers\": 0,\n    \"n_cpu_moe\": 0,\n    \"split_mode\": \"layer\",\n    \"main_gpu\": 0,\n    \"no_kv_offload\": false,\n    \"flash_attn\": -1,\n    \"devices\": \"auto\",\n    \"tensor_split\": \"0.00\",\n    \"tensor_buft_overrides\": \"none\",\n    \"use_mmap\": true,\n    \"use_direct_io\": false,\n    \"embeddings\": false,\n    \"no_op_offload\": 0,\n    \"no_host\": false,\n    \"fit_target\": 0,\n    \"fit_min_ctx\": 0,\n    \"n_prompt\": 512,\n    \"n_gen\": 0,\n    \"n_depth\": 0,\n    \"test_time\": \"2026-07-26T23:53:56Z\",\n    \"avg_ns\": 73440689,\n    \"stddev_ns\": 0,\n    \"avg_ts\": 6971.612154,\n    \"stddev_ts\": 0.000000,\n    \"samples_ns\": [ 73440689 ],\n    \"samples_ts\": [ 6971.61 ]\n  },\n  {\n    \"build_commit\": \"f3e1828\",\n    \"build_number\": 1,\n    \"cpu_info\": \"AMD Ryzen 9 9950X3D 16-Core Processor\",\n    \"gpu_info\": \"NVIDIA GeForce RTX 5090\",\n    \"backends\": \"CUDA\",\n    \"model_filename\": \"$MODEL_STORE/Qwen2.5-0.5B-Instruct-Q4_K_M.gguf\",\n    \"model_type\": \"qwen2 1B Q4_K - Medium\",\n    \"model_size\": 391859712,\n    \"model_n_params\": 494032768,\n    \"n_batch\": 2048,\n    \"n_ubatch\": 512,\n    \"n_threads\": 16,\n    \"cpu_mask\": \"0x0\",\n    \"cpu_strict\": false,\n    \"poll\": 50,\n    \"type_k\": \"f16\",\n    \"type_v\": \"f16\",\n    \"n_gpu_layers\": 0,\n    \"n_cpu_moe\": 0,\n    \"split_mode\": \"layer\",\n    \"main_gpu\": 0,\n    \"no_kv_offload\": false,\n    \"flash_attn\": -1,\n    \"devices\": \"auto\",\n    \"tensor_split\": \"0.00\",\n    \"tensor_buft_overrides\": \"none\",\n    \"use_mmap\": true,\n    \"use_direct_io\": false,\n    \"embeddings\": false,\n    \"no_op_offload\": 0,\n    \"no_host\": false,\n    \"fit_target\": 0,\n    \"fit_min_ctx\": 0,\n    \"n_prompt\": 0,\n    \"n_gen\": 128,\n    \"n_depth\": 0,\n    \"test_time\": \"2026-07-26T23:53:56Z\",\n    \"avg_ns\": 20308491289,\n    \"stddev_ns\": 0,\n    \"avg_ts\": 6.302782,\n    \"stddev_ts\": 0.000000,\n    \"samples_ns\": [ 20308491289 ],\n    \"samples_ts\": [ 6.30278 ]\n  }\n]\n",
+          "success": true,
+          "timed_out": false
+        },
+        {
+          "ambient_during": {
+            "captured_at_utc": "2026-07-26T23:54:17Z",
+            "load_average_1m_5m_15m": [
+              3.73876953125,
+              4.11572265625,
+              3.84033203125
+            ],
+            "memory": {
+              "MemAvailableKiB": 24881964,
+              "MemTotalKiB": 32867940,
+              "SwapFreeKiB": 8382792,
+              "SwapTotalKiB": 8388608
+            },
+            "nvidia_smi": {
+              "argv": [
+                "nvidia-smi",
+                "--query-gpu=index,name,uuid,driver_version,memory.total,memory.free,memory.used,utilization.gpu",
+                "--format=csv,noheader,nounits"
+              ],
+              "available": true,
+              "exit_code": 0,
+              "stderr": "",
+              "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 28073, 4115, 9"
+            }
+          },
+          "elapsed_ms": 21313.095,
+          "exit_code": 0,
+          "expected_timeout": false,
+          "metrics": {
+            "generation_tokens_per_second": 6.26745,
+            "prompt_tokens_per_second": 7528.020188,
+            "wall_elapsed_ms": 21313.095
+          },
+          "peak_rss_bytes": 864198656,
+          "stderr": "ggml_cuda_init: found 1 CUDA devices (Total VRAM: 32606 MiB):\n  Device 0: NVIDIA GeForce RTX 5090, compute capability 12.0, VMM: yes, VRAM: 32606 MiB\n",
+          "stdout": "[\n  {\n    \"build_commit\": \"f3e1828\",\n    \"build_number\": 1,\n    \"cpu_info\": \"AMD Ryzen 9 9950X3D 16-Core Processor\",\n    \"gpu_info\": \"NVIDIA GeForce RTX 5090\",\n    \"backends\": \"CUDA\",\n    \"model_filename\": \"$MODEL_STORE/Qwen2.5-0.5B-Instruct-Q4_K_M.gguf\",\n    \"model_type\": \"qwen2 1B Q4_K - Medium\",\n    \"model_size\": 391859712,\n    \"model_n_params\": 494032768,\n    \"n_batch\": 2048,\n    \"n_ubatch\": 512,\n    \"n_threads\": 16,\n    \"cpu_mask\": \"0x0\",\n    \"cpu_strict\": false,\n    \"poll\": 50,\n    \"type_k\": \"f16\",\n    \"type_v\": \"f16\",\n    \"n_gpu_layers\": 0,\n    \"n_cpu_moe\": 0,\n    \"split_mode\": \"layer\",\n    \"main_gpu\": 0,\n    \"no_kv_offload\": false,\n    \"flash_attn\": -1,\n    \"devices\": \"auto\",\n    \"tensor_split\": \"0.00\",\n    \"tensor_buft_overrides\": \"none\",\n    \"use_mmap\": true,\n    \"use_direct_io\": false,\n    \"embeddings\": false,\n    \"no_op_offload\": 0,\n    \"no_host\": false,\n    \"fit_target\": 0,\n    \"fit_min_ctx\": 0,\n    \"n_prompt\": 512,\n    \"n_gen\": 0,\n    \"n_depth\": 0,\n    \"test_time\": \"2026-07-26T23:54:17Z\",\n    \"avg_ns\": 68012570,\n    \"stddev_ns\": 0,\n    \"avg_ts\": 7528.020188,\n    \"stddev_ts\": 0.000000,\n    \"samples_ns\": [ 68012570 ],\n    \"samples_ts\": [ 7528.02 ]\n  },\n  {\n    \"build_commit\": \"f3e1828\",\n    \"build_number\": 1,\n    \"cpu_info\": \"AMD Ryzen 9 9950X3D 16-Core Processor\",\n    \"gpu_info\": \"NVIDIA GeForce RTX 5090\",\n    \"backends\": \"CUDA\",\n    \"model_filename\": \"$MODEL_STORE/Qwen2.5-0.5B-Instruct-Q4_K_M.gguf\",\n    \"model_type\": \"qwen2 1B Q4_K - Medium\",\n    \"model_size\": 391859712,\n    \"model_n_params\": 494032768,\n    \"n_batch\": 2048,\n    \"n_ubatch\": 512,\n    \"n_threads\": 16,\n    \"cpu_mask\": \"0x0\",\n    \"cpu_strict\": false,\n    \"poll\": 50,\n    \"type_k\": \"f16\",\n    \"type_v\": \"f16\",\n    \"n_gpu_layers\": 0,\n    \"n_cpu_moe\": 0,\n    \"split_mode\": \"layer\",\n    \"main_gpu\": 0,\n    \"no_kv_offload\": false,\n    \"flash_attn\": -1,\n    \"devices\": \"auto\",\n    \"tensor_split\": \"0.00\",\n    \"tensor_buft_overrides\": \"none\",\n    \"use_mmap\": true,\n    \"use_direct_io\": false,\n    \"embeddings\": false,\n    \"no_op_offload\": 0,\n    \"no_host\": false,\n    \"fit_target\": 0,\n    \"fit_min_ctx\": 0,\n    \"n_prompt\": 0,\n    \"n_gen\": 128,\n    \"n_depth\": 0,\n    \"test_time\": \"2026-07-26T23:54:17Z\",\n    \"avg_ns\": 20422979495,\n    \"stddev_ns\": 0,\n    \"avg_ts\": 6.267450,\n    \"stddev_ts\": 0.000000,\n    \"samples_ns\": [ 20422979495 ],\n    \"samples_ts\": [ 6.26745 ]\n  }\n]\n",
+          "success": true,
+          "timed_out": false
+        }
+      ],
+      "timeout_seconds": 120,
+      "warmup_results": [
+        {
+          "ambient_during": {
+            "captured_at_utc": "2026-07-26T23:52:25Z",
+            "load_average_1m_5m_15m": [
+              2.36572265625,
+              4.18798828125,
+              3.828125
+            ],
+            "memory": {
+              "MemAvailableKiB": 25017116,
+              "MemTotalKiB": 32867940,
+              "SwapFreeKiB": 8382792,
+              "SwapTotalKiB": 8388608
+            },
+            "nvidia_smi": {
+              "argv": [
+                "nvidia-smi",
+                "--query-gpu=index,name,uuid,driver_version,memory.total,memory.free,memory.used,utilization.gpu",
+                "--format=csv,noheader,nounits"
+              ],
+              "available": true,
+              "exit_code": 0,
+              "stderr": "",
+              "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 24937, 7251, 37"
+            }
+          },
+          "elapsed_ms": 23540.001,
+          "exit_code": 0,
+          "expected_timeout": false,
+          "metrics": {
+            "generation_tokens_per_second": 5.727208,
+            "prompt_tokens_per_second": 4012.874996,
+            "wall_elapsed_ms": 23540.001
+          },
+          "peak_rss_bytes": 869781504,
+          "stderr": "ggml_cuda_init: found 1 CUDA devices (Total VRAM: 32606 MiB):\n  Device 0: NVIDIA GeForce RTX 5090, compute capability 12.0, VMM: yes, VRAM: 32606 MiB\n",
+          "stdout": "[\n  {\n    \"build_commit\": \"f3e1828\",\n    \"build_number\": 1,\n    \"cpu_info\": \"AMD Ryzen 9 9950X3D 16-Core Processor\",\n    \"gpu_info\": \"NVIDIA GeForce RTX 5090\",\n    \"backends\": \"CUDA\",\n    \"model_filename\": \"$MODEL_STORE/Qwen2.5-0.5B-Instruct-Q4_K_M.gguf\",\n    \"model_type\": \"qwen2 1B Q4_K - Medium\",\n    \"model_size\": 391859712,\n    \"model_n_params\": 494032768,\n    \"n_batch\": 2048,\n    \"n_ubatch\": 512,\n    \"n_threads\": 16,\n    \"cpu_mask\": \"0x0\",\n    \"cpu_strict\": false,\n    \"poll\": 50,\n    \"type_k\": \"f16\",\n    \"type_v\": \"f16\",\n    \"n_gpu_layers\": 0,\n    \"n_cpu_moe\": 0,\n    \"split_mode\": \"layer\",\n    \"main_gpu\": 0,\n    \"no_kv_offload\": false,\n    \"flash_attn\": -1,\n    \"devices\": \"auto\",\n    \"tensor_split\": \"0.00\",\n    \"tensor_buft_overrides\": \"none\",\n    \"use_mmap\": true,\n    \"use_direct_io\": false,\n    \"embeddings\": false,\n    \"no_op_offload\": 0,\n    \"no_host\": false,\n    \"fit_target\": 0,\n    \"fit_min_ctx\": 0,\n    \"n_prompt\": 512,\n    \"n_gen\": 0,\n    \"n_depth\": 0,\n    \"test_time\": \"2026-07-26T23:52:25Z\",\n    \"avg_ns\": 127589322,\n    \"stddev_ns\": 0,\n    \"avg_ts\": 4012.874996,\n    \"stddev_ts\": 0.000000,\n    \"samples_ns\": [ 127589322 ],\n    \"samples_ts\": [ 4012.87 ]\n  },\n  {\n    \"build_commit\": \"f3e1828\",\n    \"build_number\": 1,\n    \"cpu_info\": \"AMD Ryzen 9 9950X3D 16-Core Processor\",\n    \"gpu_info\": \"NVIDIA GeForce RTX 5090\",\n    \"backends\": \"CUDA\",\n    \"model_filename\": \"$MODEL_STORE/Qwen2.5-0.5B-Instruct-Q4_K_M.gguf\",\n    \"model_type\": \"qwen2 1B Q4_K - Medium\",\n    \"model_size\": 391859712,\n    \"model_n_params\": 494032768,\n    \"n_batch\": 2048,\n    \"n_ubatch\": 512,\n    \"n_threads\": 16,\n    \"cpu_mask\": \"0x0\",\n    \"cpu_strict\": false,\n    \"poll\": 50,\n    \"type_k\": \"f16\",\n    \"type_v\": \"f16\",\n    \"n_gpu_layers\": 0,\n    \"n_cpu_moe\": 0,\n    \"split_mode\": \"layer\",\n    \"main_gpu\": 0,\n    \"no_kv_offload\": false,\n    \"flash_attn\": -1,\n    \"devices\": \"auto\",\n    \"tensor_split\": \"0.00\",\n    \"tensor_buft_overrides\": \"none\",\n    \"use_mmap\": true,\n    \"use_direct_io\": false,\n    \"embeddings\": false,\n    \"no_op_offload\": 0,\n    \"no_host\": false,\n    \"fit_target\": 0,\n    \"fit_min_ctx\": 0,\n    \"n_prompt\": 0,\n    \"n_gen\": 128,\n    \"n_depth\": 0,\n    \"test_time\": \"2026-07-26T23:52:26Z\",\n    \"avg_ns\": 22349458803,\n    \"stddev_ns\": 0,\n    \"avg_ts\": 5.727208,\n    \"stddev_ts\": 0.000000,\n    \"samples_ns\": [ 22349458803 ],\n    \"samples_ts\": [ 5.72721 ]\n  }\n]\n",
+          "success": true,
+          "timed_out": false
+        }
+      ],
+      "warmups": 1
+    },
+    {
+      "aggregates": {
+        "embedding_tokens_per_second": {
+          "maximum": 22546.004969,
+          "median": 22283.671574,
+          "minimum": 21969.979396,
+          "p95": 22546.004969
+        },
+        "wall_elapsed_ms": {
+          "maximum": 676.579,
+          "median": 670.625,
+          "minimum": 501.903,
+          "p95": 676.579
+        }
+      },
+      "ambient_after": {
+        "captured_at_utc": "2026-07-26T23:54:42Z",
+        "load_average_1m_5m_15m": [
+          3.52783203125,
+          4.04052734375,
+          3.82177734375
+        ],
+        "memory": {
+          "MemAvailableKiB": 24678908,
+          "MemTotalKiB": 32867940,
+          "SwapFreeKiB": 8382792,
+          "SwapTotalKiB": 8388608
+        },
+        "nvidia_smi": {
+          "argv": [
+            "nvidia-smi",
+            "--query-gpu=index,name,uuid,driver_version,memory.total,memory.free,memory.used,utilization.gpu",
+            "--format=csv,noheader,nounits"
+          ],
+          "available": true,
+          "exit_code": 0,
+          "stderr": "",
+          "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 29203, 2985, 3"
+        }
+      },
+      "ambient_before": {
+        "captured_at_utc": "2026-07-26T23:54:39Z",
+        "load_average_1m_5m_15m": [
+          3.52783203125,
+          4.04052734375,
+          3.82177734375
+        ],
+        "memory": {
+          "MemAvailableKiB": 25070920,
+          "MemTotalKiB": 32867940,
+          "SwapFreeKiB": 8382792,
+          "SwapTotalKiB": 8388608
+        },
+        "nvidia_smi": {
+          "argv": [
+            "nvidia-smi",
+            "--query-gpu=index,name,uuid,driver_version,memory.total,memory.free,memory.used,utilization.gpu",
+            "--format=csv,noheader,nounits"
+          ],
+          "available": true,
+          "exit_code": 0,
+          "stderr": "",
+          "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 29154, 3034, 7"
+        }
+      },
+      "argv": [
+        "$RUNTIME_ROOT/build-cuda/bin/llama-bench",
+        "-r",
+        "1",
+        "-o",
+        "json",
+        "-ngl",
+        "0",
+        "-t",
+        "16",
+        "-m",
+        "$MODEL_ROOT/nomic-embed-text-v1.5.Q4_K_M.gguf",
+        "-p",
+        "512",
+        "-n",
+        "0",
+        "-embd",
+        "1"
+      ],
+      "argv_sha256": "4272358dd011a0ba952cf081eec29bf841669916875a634267555842045efc79",
+      "comparability": "exact-argv-and-identity",
+      "name": "embedding-pp",
+      "partition": "native-performance",
+      "repeats": 5,
+      "runs": [
+        {
+          "ambient_during": {
+            "captured_at_utc": "2026-07-26T23:54:39Z",
+            "load_average_1m_5m_15m": [
+              3.52783203125,
+              4.04052734375,
+              3.82177734375
+            ],
+            "memory": {
+              "MemAvailableKiB": 24966800,
+              "MemTotalKiB": 32867940,
+              "SwapFreeKiB": 8382792,
+              "SwapTotalKiB": 8388608
+            },
+            "nvidia_smi": {
+              "argv": [
+                "nvidia-smi",
+                "--query-gpu=index,name,uuid,driver_version,memory.total,memory.free,memory.used,utilization.gpu",
+                "--format=csv,noheader,nounits"
+              ],
+              "available": true,
+              "exit_code": 0,
+              "stderr": "",
+              "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 29176, 3012, 8"
+            }
+          },
+          "elapsed_ms": 670.625,
+          "exit_code": 0,
+          "expected_timeout": false,
+          "metrics": {
+            "embedding_tokens_per_second": 22387.723272,
+            "wall_elapsed_ms": 670.625
+          },
+          "peak_rss_bytes": 565067776,
+          "stderr": "ggml_cuda_init: found 1 CUDA devices (Total VRAM: 32606 MiB):\n  Device 0: NVIDIA GeForce RTX 5090, compute capability 12.0, VMM: yes, VRAM: 32606 MiB\n",
+          "stdout": "[\n  {\n    \"build_commit\": \"f3e1828\",\n    \"build_number\": 1,\n    \"cpu_info\": \"AMD Ryzen 9 9950X3D 16-Core Processor\",\n    \"gpu_info\": \"NVIDIA GeForce RTX 5090\",\n    \"backends\": \"CUDA\",\n    \"model_filename\": \"$MODEL_ROOT/nomic-embed-text-v1.5.Q4_K_M.gguf\",\n    \"model_type\": \"nomic-bert 137M Q4_K - Medium\",\n    \"model_size\": 83349984,\n    \"model_n_params\": 136727040,\n    \"n_batch\": 2048,\n    \"n_ubatch\": 512,\n    \"n_threads\": 16,\n    \"cpu_mask\": \"0x0\",\n    \"cpu_strict\": false,\n    \"poll\": 50,\n    \"type_k\": \"f16\",\n    \"type_v\": \"f16\",\n    \"n_gpu_layers\": 0,\n    \"n_cpu_moe\": 0,\n    \"split_mode\": \"layer\",\n    \"main_gpu\": 0,\n    \"no_kv_offload\": false,\n    \"flash_attn\": -1,\n    \"devices\": \"auto\",\n    \"tensor_split\": \"0.00\",\n    \"tensor_buft_overrides\": \"none\",\n    \"use_mmap\": true,\n    \"use_direct_io\": false,\n    \"embeddings\": true,\n    \"no_op_offload\": 0,\n    \"no_host\": false,\n    \"fit_target\": 0,\n    \"fit_min_ctx\": 0,\n    \"n_prompt\": 512,\n    \"n_gen\": 0,\n    \"n_depth\": 0,\n    \"test_time\": \"2026-07-26T23:54:39Z\",\n    \"avg_ns\": 22869677,\n    \"stddev_ns\": 0,\n    \"avg_ts\": 22387.723272,\n    \"stddev_ts\": 0.000000,\n    \"samples_ns\": [ 22869677 ],\n    \"samples_ts\": [ 22387.7 ]\n  }\n]\n",
+          "success": true,
+          "timed_out": false
+        },
+        {
+          "ambient_during": null,
+          "elapsed_ms": 501.903,
+          "exit_code": 0,
+          "expected_timeout": false,
+          "metrics": {
+            "embedding_tokens_per_second": 22546.004969,
+            "wall_elapsed_ms": 501.903
+          },
+          "peak_rss_bytes": 569872384,
+          "stderr": "ggml_cuda_init: found 1 CUDA devices (Total VRAM: 32606 MiB):\n  Device 0: NVIDIA GeForce RTX 5090, compute capability 12.0, VMM: yes, VRAM: 32606 MiB\n",
+          "stdout": "[\n  {\n    \"build_commit\": \"f3e1828\",\n    \"build_number\": 1,\n    \"cpu_info\": \"AMD Ryzen 9 9950X3D 16-Core Processor\",\n    \"gpu_info\": \"NVIDIA GeForce RTX 5090\",\n    \"backends\": \"CUDA\",\n    \"model_filename\": \"$MODEL_ROOT/nomic-embed-text-v1.5.Q4_K_M.gguf\",\n    \"model_type\": \"nomic-bert 137M Q4_K - Medium\",\n    \"model_size\": 83349984,\n    \"model_n_params\": 136727040,\n    \"n_batch\": 2048,\n    \"n_ubatch\": 512,\n    \"n_threads\": 16,\n    \"cpu_mask\": \"0x0\",\n    \"cpu_strict\": false,\n    \"poll\": 50,\n    \"type_k\": \"f16\",\n    \"type_v\": \"f16\",\n    \"n_gpu_layers\": 0,\n    \"n_cpu_moe\": 0,\n    \"split_mode\": \"layer\",\n    \"main_gpu\": 0,\n    \"no_kv_offload\": false,\n    \"flash_attn\": -1,\n    \"devices\": \"auto\",\n    \"tensor_split\": \"0.00\",\n    \"tensor_buft_overrides\": \"none\",\n    \"use_mmap\": true,\n    \"use_direct_io\": false,\n    \"embeddings\": true,\n    \"no_op_offload\": 0,\n    \"no_host\": false,\n    \"fit_target\": 0,\n    \"fit_min_ctx\": 0,\n    \"n_prompt\": 512,\n    \"n_gen\": 0,\n    \"n_depth\": 0,\n    \"test_time\": \"2026-07-26T23:54:40Z\",\n    \"avg_ns\": 22709123,\n    \"stddev_ns\": 0,\n    \"avg_ts\": 22546.004969,\n    \"stddev_ts\": 0.000000,\n    \"samples_ns\": [ 22709123 ],\n    \"samples_ts\": [ 22546 ]\n  }\n]\n",
+          "success": true,
+          "timed_out": false
+        },
+        {
+          "ambient_during": {
+            "captured_at_utc": "2026-07-26T23:54:41Z",
+            "load_average_1m_5m_15m": [
+              3.52783203125,
+              4.04052734375,
+              3.82177734375
+            ],
+            "memory": {
+              "MemAvailableKiB": 24883964,
+              "MemTotalKiB": 32867940,
+              "SwapFreeKiB": 8382792,
+              "SwapTotalKiB": 8388608
+            },
+            "nvidia_smi": {
+              "argv": [
+                "nvidia-smi",
+                "--query-gpu=index,name,uuid,driver_version,memory.total,memory.free,memory.used,utilization.gpu",
+                "--format=csv,noheader,nounits"
+              ],
+              "available": true,
+              "exit_code": 0,
+              "stderr": "",
+              "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 29197, 2991, 10"
+            }
+          },
+          "elapsed_ms": 670.599,
+          "exit_code": 0,
+          "expected_timeout": false,
+          "metrics": {
+            "embedding_tokens_per_second": 22283.671574,
+            "wall_elapsed_ms": 670.599
+          },
+          "peak_rss_bytes": 567615488,
+          "stderr": "ggml_cuda_init: found 1 CUDA devices (Total VRAM: 32606 MiB):\n  Device 0: NVIDIA GeForce RTX 5090, compute capability 12.0, VMM: yes, VRAM: 32606 MiB\n",
+          "stdout": "[\n  {\n    \"build_commit\": \"f3e1828\",\n    \"build_number\": 1,\n    \"cpu_info\": \"AMD Ryzen 9 9950X3D 16-Core Processor\",\n    \"gpu_info\": \"NVIDIA GeForce RTX 5090\",\n    \"backends\": \"CUDA\",\n    \"model_filename\": \"$MODEL_ROOT/nomic-embed-text-v1.5.Q4_K_M.gguf\",\n    \"model_type\": \"nomic-bert 137M Q4_K - Medium\",\n    \"model_size\": 83349984,\n    \"model_n_params\": 136727040,\n    \"n_batch\": 2048,\n    \"n_ubatch\": 512,\n    \"n_threads\": 16,\n    \"cpu_mask\": \"0x0\",\n    \"cpu_strict\": false,\n    \"poll\": 50,\n    \"type_k\": \"f16\",\n    \"type_v\": \"f16\",\n    \"n_gpu_layers\": 0,\n    \"n_cpu_moe\": 0,\n    \"split_mode\": \"layer\",\n    \"main_gpu\": 0,\n    \"no_kv_offload\": false,\n    \"flash_attn\": -1,\n    \"devices\": \"auto\",\n    \"tensor_split\": \"0.00\",\n    \"tensor_buft_overrides\": \"none\",\n    \"use_mmap\": true,\n    \"use_direct_io\": false,\n    \"embeddings\": true,\n    \"no_op_offload\": 0,\n    \"no_host\": false,\n    \"fit_target\": 0,\n    \"fit_min_ctx\": 0,\n    \"n_prompt\": 512,\n    \"n_gen\": 0,\n    \"n_depth\": 0,\n    \"test_time\": \"2026-07-26T23:54:40Z\",\n    \"avg_ns\": 22976465,\n    \"stddev_ns\": 0,\n    \"avg_ts\": 22283.671574,\n    \"stddev_ts\": 0.000000,\n    \"samples_ns\": [ 22976465 ],\n    \"samples_ts\": [ 22283.7 ]\n  }\n]\n",
+          "success": true,
+          "timed_out": false
+        },
+        {
+          "ambient_during": {
+            "captured_at_utc": "2026-07-26T23:54:41Z",
+            "load_average_1m_5m_15m": [
+              3.52783203125,
+              4.04052734375,
+              3.82177734375
+            ],
+            "memory": {
+              "MemAvailableKiB": 24910472,
+              "MemTotalKiB": 32867940,
+              "SwapFreeKiB": 8382792,
+              "SwapTotalKiB": 8388608
+            },
+            "nvidia_smi": {
+              "argv": [
+                "nvidia-smi",
+                "--query-gpu=index,name,uuid,driver_version,memory.total,memory.free,memory.used,utilization.gpu",
+                "--format=csv,noheader,nounits"
+              ],
+              "available": true,
+              "exit_code": 0,
+              "stderr": "",
+              "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 29198, 2990, 10"
+            }
+          },
+          "elapsed_ms": 676.579,
+          "exit_code": 0,
+          "expected_timeout": false,
+          "metrics": {
+            "embedding_tokens_per_second": 21969.979396,
+            "wall_elapsed_ms": 676.579
+          },
+          "peak_rss_bytes": 560832512,
+          "stderr": "ggml_cuda_init: found 1 CUDA devices (Total VRAM: 32606 MiB):\n  Device 0: NVIDIA GeForce RTX 5090, compute capability 12.0, VMM: yes, VRAM: 32606 MiB\n",
+          "stdout": "[\n  {\n    \"build_commit\": \"f3e1828\",\n    \"build_number\": 1,\n    \"cpu_info\": \"AMD Ryzen 9 9950X3D 16-Core Processor\",\n    \"gpu_info\": \"NVIDIA GeForce RTX 5090\",\n    \"backends\": \"CUDA\",\n    \"model_filename\": \"$MODEL_ROOT/nomic-embed-text-v1.5.Q4_K_M.gguf\",\n    \"model_type\": \"nomic-bert 137M Q4_K - Medium\",\n    \"model_size\": 83349984,\n    \"model_n_params\": 136727040,\n    \"n_batch\": 2048,\n    \"n_ubatch\": 512,\n    \"n_threads\": 16,\n    \"cpu_mask\": \"0x0\",\n    \"cpu_strict\": false,\n    \"poll\": 50,\n    \"type_k\": \"f16\",\n    \"type_v\": \"f16\",\n    \"n_gpu_layers\": 0,\n    \"n_cpu_moe\": 0,\n    \"split_mode\": \"layer\",\n    \"main_gpu\": 0,\n    \"no_kv_offload\": false,\n    \"flash_attn\": -1,\n    \"devices\": \"auto\",\n    \"tensor_split\": \"0.00\",\n    \"tensor_buft_overrides\": \"none\",\n    \"use_mmap\": true,\n    \"use_direct_io\": false,\n    \"embeddings\": true,\n    \"no_op_offload\": 0,\n    \"no_host\": false,\n    \"fit_target\": 0,\n    \"fit_min_ctx\": 0,\n    \"n_prompt\": 512,\n    \"n_gen\": 0,\n    \"n_depth\": 0,\n    \"test_time\": \"2026-07-26T23:54:41Z\",\n    \"avg_ns\": 23304528,\n    \"stddev_ns\": 0,\n    \"avg_ts\": 21969.979396,\n    \"stddev_ts\": 0.000000,\n    \"samples_ns\": [ 23304528 ],\n    \"samples_ts\": [ 21970 ]\n  }\n]\n",
+          "success": true,
+          "timed_out": false
+        },
+        {
+          "ambient_during": {
+            "captured_at_utc": "2026-07-26T23:54:42Z",
+            "load_average_1m_5m_15m": [
+              3.52783203125,
+              4.04052734375,
+              3.82177734375
+            ],
+            "memory": {
+              "MemAvailableKiB": 24679064,
+              "MemTotalKiB": 32867940,
+              "SwapFreeKiB": 8382792,
+              "SwapTotalKiB": 8388608
+            },
+            "nvidia_smi": {
+              "argv": [
+                "nvidia-smi",
+                "--query-gpu=index,name,uuid,driver_version,memory.total,memory.free,memory.used,utilization.gpu",
+                "--format=csv,noheader,nounits"
+              ],
+              "available": true,
+              "exit_code": 0,
+              "stderr": "",
+              "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 29203, 2985, 12"
+            }
+          },
+          "elapsed_ms": 671.708,
+          "exit_code": 0,
+          "expected_timeout": false,
+          "metrics": {
+            "embedding_tokens_per_second": 21989.794674,
+            "wall_elapsed_ms": 671.708
+          },
+          "peak_rss_bytes": 562626560,
+          "stderr": "ggml_cuda_init: found 1 CUDA devices (Total VRAM: 32606 MiB):\n  Device 0: NVIDIA GeForce RTX 5090, compute capability 12.0, VMM: yes, VRAM: 32606 MiB\n",
+          "stdout": "[\n  {\n    \"build_commit\": \"f3e1828\",\n    \"build_number\": 1,\n    \"cpu_info\": \"AMD Ryzen 9 9950X3D 16-Core Processor\",\n    \"gpu_info\": \"NVIDIA GeForce RTX 5090\",\n    \"backends\": \"CUDA\",\n    \"model_filename\": \"$MODEL_ROOT/nomic-embed-text-v1.5.Q4_K_M.gguf\",\n    \"model_type\": \"nomic-bert 137M Q4_K - Medium\",\n    \"model_size\": 83349984,\n    \"model_n_params\": 136727040,\n    \"n_batch\": 2048,\n    \"n_ubatch\": 512,\n    \"n_threads\": 16,\n    \"cpu_mask\": \"0x0\",\n    \"cpu_strict\": false,\n    \"poll\": 50,\n    \"type_k\": \"f16\",\n    \"type_v\": \"f16\",\n    \"n_gpu_layers\": 0,\n    \"n_cpu_moe\": 0,\n    \"split_mode\": \"layer\",\n    \"main_gpu\": 0,\n    \"no_kv_offload\": false,\n    \"flash_attn\": -1,\n    \"devices\": \"auto\",\n    \"tensor_split\": \"0.00\",\n    \"tensor_buft_overrides\": \"none\",\n    \"use_mmap\": true,\n    \"use_direct_io\": false,\n    \"embeddings\": true,\n    \"no_op_offload\": 0,\n    \"no_host\": false,\n    \"fit_target\": 0,\n    \"fit_min_ctx\": 0,\n    \"n_prompt\": 512,\n    \"n_gen\": 0,\n    \"n_depth\": 0,\n    \"test_time\": \"2026-07-26T23:54:42Z\",\n    \"avg_ns\": 23283528,\n    \"stddev_ns\": 0,\n    \"avg_ts\": 21989.794674,\n    \"stddev_ts\": 0.000000,\n    \"samples_ns\": [ 23283528 ],\n    \"samples_ts\": [ 21989.8 ]\n  }\n]\n",
+          "success": true,
+          "timed_out": false
+        }
+      ],
+      "timeout_seconds": 120,
+      "warmup_results": [
+        {
+          "ambient_during": {
+            "captured_at_utc": "2026-07-26T23:54:39Z",
+            "load_average_1m_5m_15m": [
+              3.52783203125,
+              4.04052734375,
+              3.82177734375
+            ],
+            "memory": {
+              "MemAvailableKiB": 24855984,
+              "MemTotalKiB": 32867940,
+              "SwapFreeKiB": 8382792,
+              "SwapTotalKiB": 8388608
+            },
+            "nvidia_smi": {
+              "argv": [
+                "nvidia-smi",
+                "--query-gpu=index,name,uuid,driver_version,memory.total,memory.free,memory.used,utilization.gpu",
+                "--format=csv,noheader,nounits"
+              ],
+              "available": true,
+              "exit_code": 0,
+              "stderr": "",
+              "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74, 32607, 28660, 3528, 15"
+            }
+          },
+          "elapsed_ms": 648.595,
+          "exit_code": 0,
+          "expected_timeout": false,
+          "metrics": {
+            "embedding_tokens_per_second": 19398.604611,
+            "wall_elapsed_ms": 648.595
+          },
+          "peak_rss_bytes": 564375552,
+          "stderr": "ggml_cuda_init: found 1 CUDA devices (Total VRAM: 32606 MiB):\n  Device 0: NVIDIA GeForce RTX 5090, compute capability 12.0, VMM: yes, VRAM: 32606 MiB\n",
+          "stdout": "[\n  {\n    \"build_commit\": \"f3e1828\",\n    \"build_number\": 1,\n    \"cpu_info\": \"AMD Ryzen 9 9950X3D 16-Core Processor\",\n    \"gpu_info\": \"NVIDIA GeForce RTX 5090\",\n    \"backends\": \"CUDA\",\n    \"model_filename\": \"$MODEL_ROOT/nomic-embed-text-v1.5.Q4_K_M.gguf\",\n    \"model_type\": \"nomic-bert 137M Q4_K - Medium\",\n    \"model_size\": 83349984,\n    \"model_n_params\": 136727040,\n    \"n_batch\": 2048,\n    \"n_ubatch\": 512,\n    \"n_threads\": 16,\n    \"cpu_mask\": \"0x0\",\n    \"cpu_strict\": false,\n    \"poll\": 50,\n    \"type_k\": \"f16\",\n    \"type_v\": \"f16\",\n    \"n_gpu_layers\": 0,\n    \"n_cpu_moe\": 0,\n    \"split_mode\": \"layer\",\n    \"main_gpu\": 0,\n    \"no_kv_offload\": false,\n    \"flash_attn\": -1,\n    \"devices\": \"auto\",\n    \"tensor_split\": \"0.00\",\n    \"tensor_buft_overrides\": \"none\",\n    \"use_mmap\": true,\n    \"use_direct_io\": false,\n    \"embeddings\": true,\n    \"no_op_offload\": 0,\n    \"no_host\": false,\n    \"fit_target\": 0,\n    \"fit_min_ctx\": 0,\n    \"n_prompt\": 512,\n    \"n_gen\": 0,\n    \"n_depth\": 0,\n    \"test_time\": \"2026-07-26T23:54:38Z\",\n    \"avg_ns\": 26393651,\n    \"stddev_ns\": 0,\n    \"avg_ts\": 19398.604611,\n    \"stddev_ts\": 0.000000,\n    \"samples_ns\": [ 26393651 ],\n    \"samples_ts\": [ 19398.6 ]\n  }\n]\n",
+          "success": true,
+          "timed_out": false
+        }
+      ],
+      "warmups": 1
+    }
+  ],
+  "completed_at_utc": "2026-07-26T23:54:42Z",
+  "coverage": {
+    "unvalidated": [
+      {
+        "reason": "manual capture required on native Windows",
+        "target": "native Windows NVIDIA/WDDM"
+      },
+      {
+        "reason": "no NVIDIA Vulkan ICD; runtime enumerates zero Vulkan devices",
+        "target": "Linux NVIDIA Vulkan"
+      },
+      {
+        "reason": "host is WSL2/WDDM, not native Linux",
+        "target": "native Linux CUDA and hard-OOM recovery"
+      },
+      {
+        "reason": "available ballast does not alter the process-budget reader consumed by fit",
+        "target": "8 GB or constrained VRAM"
+      },
+      {
+        "reason": "MoE deliberately excluded from the fixed model set",
+        "target": "MoE placement"
+      },
+      {
+        "reason": "pre-change application benchmark harness is chat-only; role-correct reranker evidence begins after Lane 3",
+        "target": "reranker throughput baseline"
+      }
+    ]
+  },
+  "framework": {
+    "central_package_pins": {
+      "path": "Directory.Packages.props",
+      "sha256": "8c2a73d1262fef64b9bb669e45065fe8e4c744f91348d6731bdb61b725e89729"
+    },
+    "maf_version": "1.13.0",
+    "mcp_version": "1.4.0",
+    "meai_version": "10.7.0",
+    "openai_version": "2.11.0",
+    "source_commit": "e67d669709169fefc4cffab444af66654526a8d8"
+  },
+  "host": {
+    "architecture": "x86_64",
+    "cpu": "AMD Ryzen 9 9950X3D 16-Core Processor",
+    "kernel": "6.18.33.2-microsoft-standard-WSL2",
+    "logical_cpu_count": 8,
+    "nvidia_smi_driver": {
+      "argv": [
+        "nvidia-smi",
+        "--query-gpu=index,name,uuid,driver_version",
+        "--format=csv,noheader"
+      ],
+      "available": true,
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "0, NVIDIA GeForce RTX 5090, <gpu-uuid>, 610.74"
+    },
+    "os": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.43",
+    "python": "3.14.6",
+    "repository_head": {
+      "argv": [
+        "git",
+        "rev-parse",
+        "HEAD"
+      ],
+      "available": true,
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "be64a367c8de55e9d3d121cc6460eaee37ea93cf"
+    },
+    "repository_status": {
+      "argv": [
+        "git",
+        "status",
+        "--short"
+      ],
+      "available": true,
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": ""
+    },
+    "runtime_devices": {
+      "argv": [
+        "$RUNTIME_ROOT/build-cuda/bin/llama-server",
+        "--list-devices"
+      ],
+      "available": true,
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "Available devices:\n  CUDA0: NVIDIA GeForce RTX 5090 (32606 MiB, 30927 MiB free)"
+    },
+    "runtime_version": {
+      "argv": [
+        "$RUNTIME_ROOT/build-cuda/bin/llama-server",
+        "--version"
+      ],
+      "available": true,
+      "exit_code": 0,
+      "stderr": "version: 1 (f3e1828)\nbuilt with GNU 15.2.0 for Linux x86_64",
+      "stdout": ""
+    }
+  },
+  "kind": "inference-benchmark-evidence",
+  "phase": "baseline",
+  "sanitization": {
+    "replacements": [
+      {
+        "label": "$RUNTIME_ROOT"
+      },
+      {
+        "label": "$MODEL_ROOT"
+      },
+      {
+        "label": "$REPO"
+      },
+      {
+        "label": "$CANDIDATE_REPO"
+      },
+      {
+        "label": "$BASELINE_REPO"
+      },
+      {
+        "label": "$MODEL_STORE"
+      }
+    ],
+    "source_sha256": "64f066ee09a1512f08cf3e8e15adf979377dcb2300d39e784d7c64ff45742ef7"
+  },
+  "sanitized": true,
+  "schema_version": "1.0",
+  "source_spec": {
+    "benchmark": {
+      "acceptance_rule": "median and nearest-rank p95; future tuning ships only at >=20% throughput improvement and <=5% RAM/VRAM regression",
+      "ambient_load_policy": "no concurrent build/test/model/game; reject global/process VRAM divergence",
+      "cache_preparation": "one excluded outer warmup invocation; llama-bench internal warmup retained",
+      "cache_state": "warm",
+      "memory_maximum_regression_percent": 5,
+      "statistics": "median-and-nearest-rank-p95",
+      "throughput_minimum_improvement_percent": 20
+    },
+    "capture_id": "e67d6697-b9692-cpu",
+    "commands": [
+      {
+        "argv": [
+          "$RUNTIME_ROOT/build-cuda/bin/llama-bench",
+          "-r",
+          "1",
+          "-o",
+          "json",
+          "-ngl",
+          "0",
+          "-t",
+          "16",
+          "-m",
+          "$MODEL_STORE/Qwen2.5-0.5B-Instruct-Q4_K_M.gguf",
+          "-p",
+          "512",
+          "-n",
+          "128"
+        ],
+        "name": "chat-pp-tg",
+        "repeats": 5,
+        "timeout_seconds": 120,
+        "warmups": 1
+      },
+      {
+        "argv": [
+          "$RUNTIME_ROOT/build-cuda/bin/llama-bench",
+          "-r",
+          "1",
+          "-o",
+          "json",
+          "-ngl",
+          "0",
+          "-t",
+          "16",
+          "-m",
+          "$MODEL_ROOT/nomic-embed-text-v1.5.Q4_K_M.gguf",
+          "-p",
+          "512",
+          "-n",
+          "0",
+          "-embd",
+          "1"
+        ],
+        "name": "embedding-pp",
+        "repeats": 5,
+        "timeout_seconds": 120,
+        "warmups": 1
+      }
+    ],
+    "corpus": {
+      "name": "xe-local-inference-golden-v1",
+      "path": "$REPO/docs/performance/corpora/golden-v1.json",
+      "revision": "v1",
+      "sha256": "100b6a808653f1a6c0867f5628c6d589b91537a867a7f79535d8192a0371fea5"
+    },
+    "coverage": {
+      "unvalidated": [
+        {
+          "reason": "manual capture required on native Windows",
+          "target": "native Windows NVIDIA/WDDM"
+        },
+        {
+          "reason": "no NVIDIA Vulkan ICD; runtime enumerates zero Vulkan devices",
+          "target": "Linux NVIDIA Vulkan"
+        },
+        {
+          "reason": "host is WSL2/WDDM, not native Linux",
+          "target": "native Linux CUDA and hard-OOM recovery"
+        },
+        {
+          "reason": "available ballast does not alter the process-budget reader consumed by fit",
+          "target": "8 GB or constrained VRAM"
+        },
+        {
+          "reason": "MoE deliberately excluded from the fixed model set",
+          "target": "MoE placement"
+        },
+        {
+          "reason": "pre-change application benchmark harness is chat-only; role-correct reranker evidence begins after Lane 3",
+          "target": "reranker throughput baseline"
+        }
+      ]
+    },
+    "framework": {
+      "central_package_pins": {
+        "path": "Directory.Packages.props",
+        "sha256": "8c2a73d1262fef64b9bb669e45065fe8e4c744f91348d6731bdb61b725e89729"
+      },
+      "maf_version": "1.13.0",
+      "mcp_version": "1.4.0",
+      "meai_version": "10.7.0",
+      "openai_version": "2.11.0",
+      "source_commit": "e67d669709169fefc4cffab444af66654526a8d8"
+    },
+    "kind": "inference-benchmark-capture",
+    "models": [
+      {
+        "name": "Qwen2.5-0.5B-Instruct",
+        "path": "$MODEL_STORE/Qwen2.5-0.5B-Instruct-Q4_K_M.gguf",
+        "quant": "Q4_K_M",
+        "repository": "Qwen/Qwen2.5-0.5B-Instruct-GGUF",
+        "revision": "fixed-local-file",
+        "role": "chat",
+        "sha256": "6eb923e7d26e9cea28811e1a8e852009b21242fb157b26149d3b188f3a8c8653"
+      },
+      {
+        "name": "nomic-embed-text-v1.5",
+        "path": "$MODEL_ROOT/nomic-embed-text-v1.5.Q4_K_M.gguf",
+        "quant": "Q4_K_M",
+        "role": "embedding",
+        "sha256": "d4e388894e09cf3816e8b0896d81d265b55e7a9fff9ab03fe8bf4ef5e11295ac"
+      },
+      {
+        "name": "bge-reranker-v2-m3",
+        "path": "$MODEL_ROOT/bge-reranker-v2-m3-Q4_K_M.gguf",
+        "quant": "Q4_K_M",
+        "repository": "gpustack/bge-reranker-v2-m3-GGUF",
+        "role": "reranker",
+        "sha256": "e186a244ed455b4ab66ec64339ce7427a6ae13f5c0b5e544de96e50f0f8b3673"
+      }
+    ],
+    "phase": "baseline",
+    "runtime": {
+      "auxiliary_binaries": [
+        {
+          "name": "llama-fit-params",
+          "path": "$RUNTIME_ROOT/build-cuda/bin/llama-fit-params",
+          "sha256": "52b6f27e501f5af4effcf9d00afae59c074aa97aecf46d4c20ecf1966277e596"
+        },
+        {
+          "name": "llama-bench",
+          "path": "$RUNTIME_ROOT/build-cuda/bin/llama-bench",
+          "sha256": "d0a326c25e067f8cc1554b6ab28dd35d14ffe20572c8f456b865ad751b029ff7"
+        }
+      ],
+      "backend": "cpu",
+      "build_options": [
+        "GGML_CUDA=ON",
+        "CMAKE_CUDA_ARCHITECTURES=120a"
+      ],
+      "path": "$RUNTIME_ROOT/build-cuda/bin/llama-server",
+      "provenance": "managed-source-build",
+      "sha256": "78cd370e18a911b284c0f732e40ada20a1b3c8fc8ba40f2aabb0e8d7d800a3cc",
+      "tag": "b9692/f3e1828"
+    },
+    "schema_version": "1.0"
+  },
+  "spec_sha256": "6b13fcc0fbf4918f632644aa40ac79d2b5d2c7dccda1dafc0b62282cc00a7846",
+  "started_at_utc": "2026-07-26T23:52:25Z",
+  "verified_identity": {
+    "corpus": {
+      "name": "xe-local-inference-golden-v1",
+      "path": "$REPO/docs/performance/corpora/golden-v1.json",
+      "revision": "v1",
+      "runtime_local_dependencies": null,
+      "sha256": "100b6a808653f1a6c0867f5628c6d589b91537a867a7f79535d8192a0371fea5",
+      "sha256_verified": true
+    },
+    "framework": {
+      "command_trees": [],
+      "declaration": {
+        "maf_version": "1.13.0",
+        "mcp_version": "1.4.0",
+        "meai_version": "10.7.0",
+        "openai_version": "2.11.0",
+        "source_commit": "e67d669709169fefc4cffab444af66654526a8d8"
+      },
+      "required": false,
+      "verified": true
+    },
+    "models": [
+      {
+        "name": "Qwen2.5-0.5B-Instruct",
+        "path": "$MODEL_STORE/Qwen2.5-0.5B-Instruct-Q4_K_M.gguf",
+        "quant": "Q4_K_M",
+        "repository": "Qwen/Qwen2.5-0.5B-Instruct-GGUF",
+        "revision": "fixed-local-file",
+        "role": "chat",
+        "runtime_local_dependencies": null,
+        "sha256": "6eb923e7d26e9cea28811e1a8e852009b21242fb157b26149d3b188f3a8c8653",
+        "sha256_verified": true
+      },
+      {
+        "name": "nomic-embed-text-v1.5",
+        "path": "$MODEL_ROOT/nomic-embed-text-v1.5.Q4_K_M.gguf",
+        "quant": "Q4_K_M",
+        "role": "embedding",
+        "runtime_local_dependencies": null,
+        "sha256": "d4e388894e09cf3816e8b0896d81d265b55e7a9fff9ab03fe8bf4ef5e11295ac",
+        "sha256_verified": true
+      },
+      {
+        "name": "bge-reranker-v2-m3",
+        "path": "$MODEL_ROOT/bge-reranker-v2-m3-Q4_K_M.gguf",
+        "quant": "Q4_K_M",
+        "repository": "gpustack/bge-reranker-v2-m3-GGUF",
+        "role": "reranker",
+        "runtime_local_dependencies": null,
+        "sha256": "e186a244ed455b4ab66ec64339ce7427a6ae13f5c0b5e544de96e50f0f8b3673",
+        "sha256_verified": true
+      }
+    ],
+    "runtime": {
+      "auxiliary_binaries": [
+        {
+          "name": "llama-fit-params",
+          "path": "$RUNTIME_ROOT/build-cuda/bin/llama-fit-params",
+          "runtime_local_dependencies": {
+            "files": [
+              {
+                "name": "libggml-base.so.0.15.1",
+                "sha256": "348063e7aa06890ef9c8ff9edf762374ba33d9d342a3b7a351781b91a7685cf0"
+              },
+              {
+                "name": "libggml-cpu.so.0.15.1",
+                "sha256": "27be8d81b651261e2b0019db3a0d0ec82973004fcb61edb9762674982b95b273"
+              },
+              {
+                "name": "libggml-cuda.so.0.15.1",
+                "sha256": "96587086a72b84b884ea882092f91f97e9842629db57f65a1cc9d1bd8e0cc077"
+              },
+              {
+                "name": "libggml.so.0.15.1",
+                "sha256": "1905d7fb62a9b5d1964ef0f7718be6dcf1155c097b2af09e454da8fed5c3e13f"
+              },
+              {
+                "name": "libllama-common.so.0.0.1",
+                "sha256": "265ba38b3510ecb0cef477ecbd8ddc9211710c2a1b33f8d05910bd7df39d4d91"
+              },
+              {
+                "name": "libllama-fit-params-impl.so",
+                "sha256": "3aa046c82b2a8b222754ce010499078b0c66d9ec8e8d0d2ea27d265996d27a44"
+              },
+              {
+                "name": "libllama.so.0.0.1",
+                "sha256": "46ca8d00c3a00e57aef73d0f92322eb08fc74125c52d81b447e3e88f6f0bd24c"
+              }
+            ],
+            "ldd": {
+              "argv": [
+                "ldd",
+                "$RUNTIME_ROOT/build-cuda/bin/llama-fit-params"
+              ],
+              "available": true,
+              "exit_code": 0,
+              "stderr": "",
+              "stdout": "linux-vdso.so.1 (0x00007791094c4000)\n\tlibllama-fit-params-impl.so => $RUNTIME_ROOT/build-cuda/bin/libllama-fit-params-impl.so (0x00007791094ae000)\n\tlibc.so.6 => /usr/lib/x86_64-linux-gnu/libc.so.6 (0x0000779109200000)\n\tlibllama-common.so.0 => $RUNTIME_ROOT/build-cuda/bin/libllama-common.so.0 (0x0000779108c00000)\n\tlibllama.so.0 => $RUNTIME_ROOT/build-cuda/bin/libllama.so.0 (0x0000779108800000)\n\tlibggml-base.so.0 => $RUNTIME_ROOT/build-cuda/bin/libggml-base.so.0 (0x000077910912c000)\n\tlibstdc++.so.6 => /usr/lib/x86_64-linux-gnu/libstdc++.so.6 (0x0000779108400000)\n\tlibgcc_s.so.1 => /usr/lib/x86_64-linux-gnu/libgcc_s.so.1 (0x0000779109475000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007791094c6000)\n\tlibssl.so.3 => /usr/lib/x86_64-linux-gnu/libssl.so.3 (0x00007791086f2000)\n\tlibcrypto.so.3 => /usr/lib/x86_64-linux-gnu/libcrypto.so.3 (0x0000779107c00000)\n\tlibggml.so.0 => $RUNTIME_ROOT/build-cuda/bin/libggml.so.0 (0x0000779109466000)\n\tlibm.so.6 => /usr/lib/x86_64-linux-gnu/libm.so.6 (0x00007791082da000)\n\tlibgomp.so.1 => /usr/lib/x86_64-linux-gnu/libgomp.so.1 (0x00007791090cd000)\n\tlibz.so.1 => /usr/lib/x86_64-linux-gnu/libz.so.1 (0x0000779109448000)\n\tlibzstd.so.1 => /usr/lib/x86_64-linux-gnu/libzstd.so.1 (0x0000779108b3d000)\n\tlibggml-cpu.so.0 => $RUNTIME_ROOT/build-cuda/bin/libggml-cpu.so.0 (0x0000779107a3b000)\n\tlibggml-cuda.so.0 => $RUNTIME_ROOT/build-cuda/bin/libggml-cuda.so.0 (0x0000779103e00000)\n\tlibcudart.so.13 => /usr/local/cuda/lib64/libcudart.so.13 (0x0000779103a00000)\n\tlibcublas.so.13 => /usr/local/cuda/lib64/libcublas.so.13 (0x0000779100200000)\n\tlibcuda.so.1 => /usr/lib/wsl/lib/libcuda.so.1 (0x000077910909e000)\n\tlibdl.so.2 => /usr/lib/x86_64-linux-gnu/libdl.so.2 (0x000077910943f000)\n\tlibpthread.so.0 => /usr/lib/x86_64-linux-gnu/libpthread.so.0 (0x000077910943a000)\n\tlibrt.so.1 => /usr/lib/x86_64-linux-gnu/librt.so.1 (0x0000779109435000)\n\tlibcublasLt.so.13 => /usr/local/cuda/lib64/libcublasLt.so.13 (0x00007790dac00000)"
+            },
+            "manifest_sha256": "34c0c46ab8e76d8f446d699e16181a1c6fe867ebcc3db37a3ab200e4ff7bdbb2"
+          },
+          "sha256": "52b6f27e501f5af4effcf9d00afae59c074aa97aecf46d4c20ecf1966277e596",
+          "sha256_verified": true
+        },
+        {
+          "name": "llama-bench",
+          "path": "$RUNTIME_ROOT/build-cuda/bin/llama-bench",
+          "runtime_local_dependencies": {
+            "files": [
+              {
+                "name": "libggml-base.so.0.15.1",
+                "sha256": "348063e7aa06890ef9c8ff9edf762374ba33d9d342a3b7a351781b91a7685cf0"
+              },
+              {
+                "name": "libggml-cpu.so.0.15.1",
+                "sha256": "27be8d81b651261e2b0019db3a0d0ec82973004fcb61edb9762674982b95b273"
+              },
+              {
+                "name": "libggml-cuda.so.0.15.1",
+                "sha256": "96587086a72b84b884ea882092f91f97e9842629db57f65a1cc9d1bd8e0cc077"
+              },
+              {
+                "name": "libggml.so.0.15.1",
+                "sha256": "1905d7fb62a9b5d1964ef0f7718be6dcf1155c097b2af09e454da8fed5c3e13f"
+              },
+              {
+                "name": "libllama-bench-impl.so",
+                "sha256": "42db866c483183218961616000995f884f7dc73f1aa3d4888529070b30d50075"
+              },
+              {
+                "name": "libllama-common.so.0.0.1",
+                "sha256": "265ba38b3510ecb0cef477ecbd8ddc9211710c2a1b33f8d05910bd7df39d4d91"
+              },
+              {
+                "name": "libllama.so.0.0.1",
+                "sha256": "46ca8d00c3a00e57aef73d0f92322eb08fc74125c52d81b447e3e88f6f0bd24c"
+              }
+            ],
+            "ldd": {
+              "argv": [
+                "ldd",
+                "$RUNTIME_ROOT/build-cuda/bin/llama-bench"
+              ],
+              "available": true,
+              "exit_code": 0,
+              "stderr": "",
+              "stdout": "linux-vdso.so.1 (0x00007273f800d000)\n\tlibllama-bench-impl.so => $RUNTIME_ROOT/build-cuda/bin/libllama-bench-impl.so (0x00007273f7f9f000)\n\tlibstdc++.so.6 => /usr/lib/x86_64-linux-gnu/libstdc++.so.6 (0x00007273f7c00000)\n\tlibgcc_s.so.1 => /usr/lib/x86_64-linux-gnu/libgcc_s.so.1 (0x00007273f7f68000)\n\tlibc.so.6 => /usr/lib/x86_64-linux-gnu/libc.so.6 (0x00007273f7800000)\n\tlibllama-common.so.0 => $RUNTIME_ROOT/build-cuda/bin/libllama-common.so.0 (0x00007273f7200000)\n\tlibllama.so.0 => $RUNTIME_ROOT/build-cuda/bin/libllama.so.0 (0x00007273f6e00000)\n\tlibggml.so.0 => $RUNTIME_ROOT/build-cuda/bin/libggml.so.0 (0x00007273f7f59000)\n\tlibggml-base.so.0 => $RUNTIME_ROOT/build-cuda/bin/libggml-base.so.0 (0x00007273f7b2c000)\n\tlibm.so.6 => /usr/lib/x86_64-linux-gnu/libm.so.6 (0x00007273f76da000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007273f800f000)\n\tlibssl.so.3 => /usr/lib/x86_64-linux-gnu/libssl.so.3 (0x00007273f6cf2000)\n\tlibcrypto.so.3 => /usr/lib/x86_64-linux-gnu/libcrypto.so.3 (0x00007273f6600000)\n\tlibggml-cpu.so.0 => $RUNTIME_ROOT/build-cuda/bin/libggml-cpu.so.0 (0x00007273f643b000)\n\tlibggml-cuda.so.0 => $RUNTIME_ROOT/build-cuda/bin/libggml-cuda.so.0 (0x00007273f2800000)\n\tlibgomp.so.1 => /usr/lib/x86_64-linux-gnu/libgomp.so.1 (0x00007273f7ef6000)\n\tlibz.so.1 => /usr/lib/x86_64-linux-gnu/libz.so.1 (0x00007273f7ed8000)\n\tlibzstd.so.1 => /usr/lib/x86_64-linux-gnu/libzstd.so.1 (0x00007273f7a69000)\n\tlibcudart.so.13 => /usr/local/cuda/lib64/libcudart.so.13 (0x00007273f2400000)\n\tlibcublas.so.13 => /usr/local/cuda/lib64/libcublas.so.13 (0x00007273eec00000)\n\tlibcuda.so.1 => /usr/lib/wsl/lib/libcuda.so.1 (0x00007273f7ea7000)\n\tlibdl.so.2 => /usr/lib/x86_64-linux-gnu/libdl.so.2 (0x00007273f7ea2000)\n\tlibpthread.so.0 => /usr/lib/x86_64-linux-gnu/libpthread.so.0 (0x00007273f7a64000)\n\tlibrt.so.1 => /usr/lib/x86_64-linux-gnu/librt.so.1 (0x00007273f7a5f000)\n\tlibcublasLt.so.13 => /usr/local/cuda/lib64/libcublasLt.so.13 (0x00007273c9600000)"
+            },
+            "manifest_sha256": "bcfb926deefab22eb15e57bd9ec24c3b90826162378788b7d7a966f029df0836"
+          },
+          "sha256": "d0a326c25e067f8cc1554b6ab28dd35d14ffe20572c8f456b865ad751b029ff7",
+          "sha256_verified": true
+        }
+      ],
+      "backend": "cpu",
+      "build_options": [
+        "GGML_CUDA=ON",
+        "CMAKE_CUDA_ARCHITECTURES=120a"
+      ],
+      "path": "$RUNTIME_ROOT/build-cuda/bin/llama-server",
+      "provenance": "managed-source-build",
+      "runtime_local_dependencies": {
+        "files": [
+          {
+            "name": "libggml-base.so.0.15.1",
+            "sha256": "348063e7aa06890ef9c8ff9edf762374ba33d9d342a3b7a351781b91a7685cf0"
+          },
+          {
+            "name": "libggml-cpu.so.0.15.1",
+            "sha256": "27be8d81b651261e2b0019db3a0d0ec82973004fcb61edb9762674982b95b273"
+          },
+          {
+            "name": "libggml-cuda.so.0.15.1",
+            "sha256": "96587086a72b84b884ea882092f91f97e9842629db57f65a1cc9d1bd8e0cc077"
+          },
+          {
+            "name": "libggml.so.0.15.1",
+            "sha256": "1905d7fb62a9b5d1964ef0f7718be6dcf1155c097b2af09e454da8fed5c3e13f"
+          },
+          {
+            "name": "libllama-common.so.0.0.1",
+            "sha256": "265ba38b3510ecb0cef477ecbd8ddc9211710c2a1b33f8d05910bd7df39d4d91"
+          },
+          {
+            "name": "libllama-server-impl.so",
+            "sha256": "34d635f1509c82dd7657300aeaee32838e2cb88e4d608fc479aa81370a3a275e"
+          },
+          {
+            "name": "libllama.so.0.0.1",
+            "sha256": "46ca8d00c3a00e57aef73d0f92322eb08fc74125c52d81b447e3e88f6f0bd24c"
+          },
+          {
+            "name": "libmtmd.so.0.0.1",
+            "sha256": "20d4d6cbbd31c14f6a8ee9037c97e60c566e9c15039b4e786d39d46f0be17aeb"
+          }
+        ],
+        "ldd": {
+          "argv": [
+            "ldd",
+            "$RUNTIME_ROOT/build-cuda/bin/llama-server"
+          ],
+          "available": true,
+          "exit_code": 0,
+          "stderr": "",
+          "stdout": "linux-vdso.so.1 (0x0000734eb0931000)\n\tlibllama-server-impl.so => $RUNTIME_ROOT/build-cuda/bin/libllama-server-impl.so (0x0000734eb0200000)\n\tlibstdc++.so.6 => /usr/lib/x86_64-linux-gnu/libstdc++.so.6 (0x0000734eafe00000)\n\tlibgcc_s.so.1 => /usr/lib/x86_64-linux-gnu/libgcc_s.so.1 (0x0000734eb08ed000)\n\tlibc.so.6 => /usr/lib/x86_64-linux-gnu/libc.so.6 (0x0000734eafa00000)\n\tlibllama-common.so.0 => $RUNTIME_ROOT/build-cuda/bin/libllama-common.so.0 (0x0000734eaf400000)\n\tlibmtmd.so.0 => $RUNTIME_ROOT/build-cuda/bin/libmtmd.so.0 (0x0000734eb00b9000)\n\tlibllama.so.0 => $RUNTIME_ROOT/build-cuda/bin/libllama.so.0 (0x0000734eaf000000)\n\tlibggml.so.0 => $RUNTIME_ROOT/build-cuda/bin/libggml.so.0 (0x0000734eb08de000)\n\tlibggml-base.so.0 => $RUNTIME_ROOT/build-cuda/bin/libggml-base.so.0 (0x0000734eb0808000)\n\tlibssl.so.3 => /usr/lib/x86_64-linux-gnu/libssl.so.3 (0x0000734eafcf2000)\n\tlibcrypto.so.3 => /usr/lib/x86_64-linux-gnu/libcrypto.so.3 (0x0000734eae800000)\n\tlibm.so.6 => /usr/lib/x86_64-linux-gnu/libm.so.6 (0x0000734eaf8da000)\n\t/lib64/ld-linux-x86-64.so.2 (0x0000734eb0933000)\n\tlibggml-cpu.so.0 => $RUNTIME_ROOT/build-cuda/bin/libggml-cpu.so.0 (0x0000734eaee3b000)\n\tlibggml-cuda.so.0 => $RUNTIME_ROOT/build-cuda/bin/libggml-cuda.so.0 (0x0000734eaac00000)\n\tlibgomp.so.1 => /usr/lib/x86_64-linux-gnu/libgomp.so.1 (0x0000734eafc93000)\n\tlibz.so.1 => /usr/lib/x86_64-linux-gnu/libz.so.1 (0x0000734eb07e8000)\n\tlibzstd.so.1 => /usr/lib/x86_64-linux-gnu/libzstd.so.1 (0x0000734eaf33d000)\n\tlibcudart.so.13 => /usr/local/cuda/lib64/libcudart.so.13 (0x0000734eaa800000)\n\tlibcublas.so.13 => /usr/local/cuda/lib64/libcublas.so.13 (0x0000734ea7000000)\n\tlibcuda.so.1 => /usr/lib/wsl/lib/libcuda.so.1 (0x0000734eafc64000)\n\tlibdl.so.2 => /usr/lib/x86_64-linux-gnu/libdl.so.2 (0x0000734eb07e1000)\n\tlibpthread.so.0 => /usr/lib/x86_64-linux-gnu/libpthread.so.0 (0x0000734eb07dc000)\n\tlibrt.so.1 => /usr/lib/x86_64-linux-gnu/librt.so.1 (0x0000734eb07d7000)\n\tlibcublasLt.so.13 => /usr/local/cuda/lib64/libcublasLt.so.13 (0x0000734e81a00000)"
+        },
+        "manifest_sha256": "8b00bfa8aedcff486c94da311ab2db55f905a62c9ccf36ef235f33884e4e7b6c"
+      },
+      "sha256": "78cd370e18a911b284c0f732e40ada20a1b3c8fc8ba40f2aabb0e8d7d800a3cc",
+      "sha256_verified": true,
+      "tag": "b9692/f3e1828"
+    }
+  }
+}

@@ -2,6 +2,8 @@ namespace XE_Local_AI_Engine.Tests.Inference;
 
 using System.Net;
 using System.Runtime.CompilerServices;
+using System.Text;
+using System.Globalization;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
@@ -11,28 +13,24 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
-/// <summary>
-///     <see cref="InferenceBenchmarkHarness.TryParsePromMetric" /> tests: the pure Prometheus-text parser pulls a named
-///     counter out of a <c>/metrics</c> scrape (including a label set) and returns <see langword="null" /> when the
-///     metric is absent — so throughput derivation is unit-testable without a live llama-server.
-/// </summary>
 public sealed class InferenceBenchmarkHarnessTests
 {
+    private const long Gb = 1024L * 1024 * 1024;
+    private const long Mib = 1024L * 1024;
+    private static readonly EmptyMetricsHandler SharedEmptyMetricsHandler = new();
+
     private const string MetricsScrape = """
-                                         # HELP llamacpp:prompt_tokens_total Number of prompt tokens processed.
-                                         # TYPE llamacpp:prompt_tokens_total counter
-                                         llamacpp:prompt_tokens_total 1234
-                                         # TYPE llamacpp:tokens_predicted_total counter
-                                         llamacpp:tokens_predicted_total{slot="0"} 567.5
-                                         """;
+                                                 # HELP llamacpp:prompt_tokens_total Number of prompt tokens processed.
+                                                 # TYPE llamacpp:prompt_tokens_total counter
+                                                 llamacpp:prompt_tokens_total 1234
+                                                 # TYPE llamacpp:tokens_predicted_total counter
+                                                 llamacpp:tokens_predicted_total{slot="0"} 567.5
+                                                 """;
 
     [Test]
     public void PromMetricParser_ExtractsGauge()
     {
-        // A bare counter line.
         AssertEx.Equal<double?>(1234d, InferenceBenchmarkHarness.TryParsePromMetric(MetricsScrape, "llamacpp:prompt_tokens_total"));
-
-        // A counter carrying a label set is still extracted (the value follows the closing brace).
         AssertEx.Equal<double?>(567.5d, InferenceBenchmarkHarness.TryParsePromMetric(MetricsScrape, "llamacpp:tokens_predicted_total"));
     }
 
@@ -43,22 +41,23 @@ public sealed class InferenceBenchmarkHarnessTests
         AssertEx.Null(InferenceBenchmarkHarness.TryParsePromMetric(text: null, "llamacpp:prompt_tokens_total"));
     }
 
-    // ──────────────────────────────────────────────────────────────────────
-    // Tool-loop stage — the client is decorated with function invocation, so the tool delegate runs and a second model
-    // turn completes. The measurement is real only when the model actually invoked the tool.
-    // ──────────────────────────────────────────────────────────────────────
-
     [Test]
     public async Task RunAsync_ToolStage_RecordsToolLoop_WhenModelInvokesTool()
     {
         var harness = BuildHarness(modelCallsTool: true);
 
-        var metrics = await harness.RunAsync(ProfilingContext(), InferenceBenchmarkSpec.Golden("cuda", ctxSize: 256), CancellationToken.None);
+        var metrics = await harness.RunAsync(ProfilingContext(ModelRole.Chat),
+            InferenceBenchmarkSpec.Golden("cuda", ctxSize: 256) with
+            {
+                WarmupRuns = 0,
+                MeasuredRuns = 1
+            },
+            CancellationToken.None);
 
         AssertEx.True(metrics.Success, metrics.FailureReason);
-        // FICC drove the tool delegate and the second model turn completed, so the tool-loop measurement is valid.
         AssertEx.True(metrics.ToolLoopMs.HasValue, "ToolLoopMs must be recorded when the model invoked the tool");
         AssertEx.True(metrics.ToolLoopMs >= 0);
+        AssertEx.Equal(ModelRole.Chat.ToString(), metrics.Role);
     }
 
     [Test]
@@ -66,44 +65,288 @@ public sealed class InferenceBenchmarkHarnessTests
     {
         var harness = BuildHarness(modelCallsTool: false);
 
-        var metrics = await harness.RunAsync(ProfilingContext(), InferenceBenchmarkSpec.Golden("cuda", ctxSize: 256), CancellationToken.None);
+        var metrics = await harness.RunAsync(ProfilingContext(ModelRole.Chat),
+            InferenceBenchmarkSpec.Golden("cuda", ctxSize: 256) with
+            {
+                WarmupRuns = 0,
+                MeasuredRuns = 1
+            },
+            CancellationToken.None);
 
         AssertEx.True(metrics.Success, metrics.FailureReason);
-        // The model returned text without calling the tool: a single plain completion is NOT a tool loop, so the harness
-        // records null rather than a bogus single-turn timing.
         AssertEx.Null(metrics.ToolLoopMs);
     }
 
-    private static LlamaServerProfilingContext ProfilingContext()
+    [Test]
+    public async Task RunAsync_EmbeddingRole_UsesEmbeddingsEndpoint_AndReportsCorrectnessStatistics()
     {
-        return new LlamaServerProfilingContext(new LlamaServerEndpoint("bartowski/Model-GGUF:Q4_K_M", ModelRole.Chat, new Uri("http://127.0.0.1:18100/v1")),
-            []);
+        using var handler = new RoleBenchmarkHandler();
+        var chatFactory = Substitute.For<IInferenceChatClientFactory>();
+        var harness = BuildHarness(modelCallsTool: false, handler, chatFactory: chatFactory);
+        var spec = InferenceBenchmarkSpec.Golden("cuda", ctxSize: 2048) with
+        {
+            WarmupRuns = 1,
+            MeasuredRuns = 3
+        };
+
+        var metrics = await harness.RunAsync(ProfilingContext(ModelRole.Embedding), spec, CancellationToken.None);
+
+        AssertEx.True(metrics.Success, metrics.FailureReason);
+        AssertEx.Equal(ModelRole.Embedding.ToString(), metrics.Role);
+        AssertEx.Equal(3, metrics.Runs);
+        AssertEx.Equal<int?>(spec.EmbeddingInputs.Count, metrics.BatchSize);
+        AssertEx.Equal<int?>(3, metrics.OutputDimension);
+        AssertEx.True(metrics.ValuesFinite == true);
+        AssertEx.True(metrics.DeterministicOutput == true);
+        AssertEx.True(metrics.ItemsPerSecond > 0d);
+        AssertEx.True(metrics.P50LatencyMs >= 0d);
+        AssertEx.True(metrics.P95LatencyMs >= metrics.P50LatencyMs);
+        AssertEx.Equal(4, handler.PostPaths.Count(path => path.EndsWith("/v1/embeddings", StringComparison.Ordinal)));
+        AssertEx.False(handler.PostPaths.Any(path => path.Contains("chat/completions", StringComparison.Ordinal)));
+        chatFactory.DidNotReceiveWithAnyArgs().CreateChatClient(default!, default!);
     }
 
-    private static InferenceBenchmarkHarness BuildHarness(bool modelCallsTool)
+    [Test]
+    public async Task RunAsync_RerankerRole_UsesRerankEndpoint_AndReportsStableOrderStatistics()
     {
-        var chatClientFactory = Substitute.For<IInferenceChatClientFactory>();
-        chatClientFactory.CreateChatClient(Arg.Any<Uri>(), Arg.Any<string>())
-                         .Returns(_ => new FakeBenchmarkChatClient(modelCallsTool));
+        using var handler = new RoleBenchmarkHandler();
+        var chatFactory = Substitute.For<IInferenceChatClientFactory>();
+        var harness = BuildHarness(modelCallsTool: false, handler, chatFactory: chatFactory);
+        var spec = InferenceBenchmarkSpec.Golden("cuda", ctxSize: 2048) with
+        {
+            WarmupRuns = 1,
+            MeasuredRuns = 3
+        };
 
+        var metrics = await harness.RunAsync(ProfilingContext(ModelRole.Reranker), spec, CancellationToken.None);
+
+        AssertEx.True(metrics.Success, metrics.FailureReason);
+        AssertEx.Equal(ModelRole.Reranker.ToString(), metrics.Role);
+        AssertEx.Equal(3, metrics.Runs);
+        AssertEx.Equal<int?>(spec.RerankerDocuments.Count, metrics.BatchSize);
+        AssertEx.Null(metrics.OutputDimension);
+        AssertEx.True(metrics.ValuesFinite == true);
+        AssertEx.True(metrics.DeterministicOutput == true);
+        AssertEx.True(metrics.ItemsPerSecond > 0d);
+        AssertEx.Equal(4, handler.PostPaths.Count(path => path.EndsWith("/v1/rerank", StringComparison.Ordinal)));
+        AssertEx.False(handler.PostPaths.Any(path => path.Contains("chat/completions", StringComparison.Ordinal)));
+        chatFactory.DidNotReceiveWithAnyArgs().CreateChatClient(default!, default!);
+    }
+
+    [Test]
+    public async Task RunAsync_IdleWddmAmbientOffset_AllowsWorkload()
+    {
+        using var handler = new RoleBenchmarkHandler();
+        const long globalFree = 28754 * Mib;
+        const long processBudget = 30927 * Mib;
+        var harness = BuildHarness(modelCallsTool: false,
+            handler,
+            globalFreeVram: globalFree,
+            processBudgetVram: processBudget);
+        var spec = InferenceBenchmarkSpec.Golden("cuda", ctxSize: 2048) with
+        {
+            WarmupRuns = 0,
+            MeasuredRuns = 1
+        };
+
+        var metrics = await harness.RunAsync(ProfilingContext(ModelRole.Embedding,
+                preSpawnVram: new LlamaServerProfilingVramSnapshot(globalFree, processBudget)),
+            spec,
+            CancellationToken.None);
+
+        AssertEx.True(metrics.Success, metrics.FailureReason);
+        AssertEx.False(metrics.ExternalPressureDetected);
+        AssertEx.Equal<long?>(globalFree, metrics.GlobalFreeVramLoadBytes);
+        AssertEx.Equal<long?>(processBudget, metrics.ProcessBudgetVramLoadBytes);
+        AssertEx.NotNullOrEmpty(metrics.DiagnosticsJson);
+        AssertEx.Equal(1, handler.PostPaths.Count(path => path.EndsWith("/v1/embeddings", StringComparison.Ordinal)));
+    }
+
+    [Test]
+    public async Task RunAsync_BallastPressure_RejectsBeforeWorkload()
+    {
+        using var handler = new RoleBenchmarkHandler();
+        const long globalFree = 6550 * Mib;
+        const long processBudget = 29283 * Mib;
+        var harness = BuildHarness(modelCallsTool: false,
+            handler,
+            globalFreeVram: globalFree,
+            processBudgetVram: processBudget);
+        var spec = InferenceBenchmarkSpec.Golden("cuda", ctxSize: 2048) with
+        {
+            WarmupRuns = 0,
+            MeasuredRuns = 1
+        };
+
+        var metrics = await harness.RunAsync(ProfilingContext(ModelRole.Embedding,
+                preSpawnVram: new LlamaServerProfilingVramSnapshot(globalFree, processBudget)),
+            spec,
+            CancellationToken.None);
+
+        AssertEx.False(metrics.Success);
+        AssertEx.True(metrics.ExternalPressureDetected);
+        AssertEx.Contains(metrics.FailureReason!, $"global free {globalFree} bytes");
+        AssertEx.Contains(metrics.FailureReason!, "Close other GPU workloads and retry");
+        AssertEx.Equal(0, handler.PostPaths.Count);
+    }
+
+    [Test]
+    public async Task RunAsync_BallastPressure_WithExplicitPreSpawnOverride_AllowsWorkload()
+    {
+        using var handler = new RoleBenchmarkHandler();
+        const long globalFree = 6550 * Mib;
+        const long processBudget = 29283 * Mib;
+        var harness = BuildHarness(modelCallsTool: false,
+            handler,
+            globalFreeVram: globalFree,
+            processBudgetVram: processBudget);
+        var spec = InferenceBenchmarkSpec.Golden("cuda", ctxSize: 2048) with
+        {
+            WarmupRuns = 0,
+            MeasuredRuns = 1,
+            RejectPreSpawnVramPressure = false
+        };
+
+        var metrics = await harness.RunAsync(ProfilingContext(ModelRole.Embedding,
+                preSpawnVram: new LlamaServerProfilingVramSnapshot(globalFree, processBudget)),
+            spec,
+            CancellationToken.None);
+
+        AssertEx.True(metrics.Success, metrics.FailureReason);
+        AssertEx.False(metrics.ExternalPressureDetected);
+        AssertEx.Equal(1, handler.PostPaths.Count(path => path.EndsWith("/v1/embeddings", StringComparison.Ordinal)));
+    }
+
+    [Test]
+    public async Task RunAsync_PressureIntroducedDuringBenchmark_RejectsAsExternalPressure()
+    {
+        using var handler = new RoleBenchmarkHandler();
+        var harness = BuildHarness(modelCallsTool: false,
+            handler,
+            globalFreeVram: 6 * Gb,
+            processBudgetVram: 8 * Gb,
+            globalFreeVramSamples: [6 * Gb, 4 * Gb, 4 * Gb]);
+        var spec = InferenceBenchmarkSpec.Golden("cuda", ctxSize: 2048) with
+        {
+            WarmupRuns = 0,
+            MeasuredRuns = 1
+        };
+
+        var metrics = await harness.RunAsync(ProfilingContext(ModelRole.Embedding,
+                preSpawnVram: new LlamaServerProfilingVramSnapshot(8 * Gb, 8 * Gb)),
+            spec,
+            CancellationToken.None);
+
+        AssertEx.False(metrics.Success);
+        AssertEx.True(metrics.ExternalPressureDetected);
+        AssertEx.Equal<long?>(6 * Gb, metrics.GlobalFreeVramLoadBytes);
+        AssertEx.Equal<long?>(4 * Gb, metrics.GlobalFreeVramAfterBytes);
+        AssertEx.Equal<long?>(8 * Gb, metrics.ProcessBudgetVramLoadBytes);
+        AssertEx.Equal<long?>(8 * Gb, metrics.ProcessBudgetVramAfterBytes);
+        AssertEx.Equal(1, handler.PostPaths.Count(path => path.EndsWith("/v1/embeddings", StringComparison.Ordinal)));
+    }
+
+    [Test]
+    public async Task RunAsync_ChatRole_HonorsWarmupsAndRepeatedRuns_WithMedianP95AndResourcePeaks()
+    {
+        var harness = BuildHarness(modelCallsTool: true);
+        var spec = InferenceBenchmarkSpec.Golden("cuda", ctxSize: 256) with
+        {
+            WarmupRuns = 1,
+            MeasuredRuns = 3
+        };
+
+        var metrics = await harness.RunAsync(ProfilingContext(ModelRole.Chat, Environment.ProcessId),
+            spec,
+            CancellationToken.None);
+
+        AssertEx.True(metrics.Success, metrics.FailureReason);
+        AssertEx.Equal(3, metrics.Runs);
+        AssertEx.True(metrics.P50LatencyMs >= 0d);
+        AssertEx.True(metrics.P95LatencyMs >= metrics.P50LatencyMs);
+        AssertEx.True(metrics.PeakProcessRamBytes > 0);
+        AssertEx.Equal<long?>(8 * Gb, metrics.MinimumGlobalFreeVramBytes);
+        AssertEx.Equal<long?>(8 * Gb, metrics.MinimumProcessBudgetVramBytes);
+    }
+
+    private static LlamaServerProfilingContext ProfilingContext(ModelRole role,
+        int? processId = null,
+        LlamaServerProfilingVramSnapshot? preSpawnVram = null)
+    {
+        return new LlamaServerProfilingContext(new LlamaServerEndpoint("bartowski/Model-GGUF:Q4_K_M",
+                role,
+                new Uri("http://127.0.0.1:18100/v1")),
+            [],
+            FitParamsOutput: [],
+            processId)
+        {
+            PreSpawnVram = preSpawnVram
+        };
+    }
+
+    private static InferenceBenchmarkHarness BuildHarness(bool modelCallsTool,
+        HttpMessageHandler? handler = null,
+        long? globalFreeVram = 8 * Gb,
+        long? processBudgetVram = 8 * Gb,
+        IInferenceChatClientFactory? chatFactory = null,
+        IReadOnlyList<long?>? globalFreeVramSamples = null)
+    {
+        chatFactory ??= Substitute.For<IInferenceChatClientFactory>();
+        chatFactory.CreateChatClient(Arg.Any<Uri>(), Arg.Any<string>())
+                   .Returns(_ => new FakeBenchmarkChatClient(modelCallsTool));
+
+        handler ??= SharedEmptyMetricsHandler;
         var httpClientFactory = Substitute.For<IHttpClientFactory>();
-        httpClientFactory.CreateClient(Arg.Any<string>()).Returns(_ => new HttpClient(new EmptyMetricsHandler()));
+        httpClientFactory.CreateClient(Arg.Any<string>())
+                         .Returns(_ => new HttpClient(handler, disposeHandler: false));
 
-        var vramProbe = Substitute.For<IAvailableVramProbe>();
+        var remainingGlobalFreeSamples = new Queue<long?>(globalFreeVramSamples ?? [globalFreeVram]);
+        var lastGlobalFreeSample = globalFreeVram;
+        var hardwareProfiler = Substitute.For<IHardwareProfiler>();
+        hardwareProfiler.GetProfileAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                        .Returns(_ =>
+                        {
+                            if (remainingGlobalFreeSamples.Count > 0)
+                            {
+                                lastGlobalFreeSample = remainingGlobalFreeSamples.Dequeue();
+                            }
 
-        return new InferenceBenchmarkHarness(chatClientFactory, httpClientFactory, vramProbe, NullLogger<InferenceBenchmarkHarness>.Instance);
+                            return Task.FromResult(NvidiaProfile(lastGlobalFreeSample));
+                        });
+
+        var processBudgetProbe = Substitute.For<IProcessVramBudgetProbe>();
+        processBudgetProbe.TryGetProcessBudgetBytesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                          .Returns(Task.FromResult(processBudgetVram));
+
+        return new InferenceBenchmarkHarness(chatFactory,
+            httpClientFactory,
+            hardwareProfiler,
+            processBudgetProbe,
+            NullLogger<InferenceBenchmarkHarness>.Instance);
     }
 
-    // A fake chat client that streams a fixed reply for the throughput stages and, for the tool stage, either scripts a
-    // tool-call → text round (first turn calls the offered tool, second turn answers) or answers directly without ever
-    // calling the tool. A fresh instance is handed out per factory call, so disposing the tool stage's inner client
-    // never tears down the streaming client the other stages use.
+    private static HardwareProfile NvidiaProfile(long? availableVramBytes)
+    {
+        return new HardwareProfile
+        {
+            TotalRamBytes = 64 * Gb,
+            AvailableRamBytes = 48 * Gb,
+            VramBytes = 24 * Gb,
+            AvailableVramBytes = availableVramBytes,
+            VramKnown = true,
+            GpuVendor = GpuVendor.Nvidia,
+            GpuAccelAvailable = true,
+            CpuCores = 16,
+            FreeDiskBytes = 500 * Gb
+        };
+    }
+
     private sealed class FakeBenchmarkChatClient(bool callsTool) : IChatClient
     {
-        public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
+        public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages,
+            ChatOptions? options = null,
+            CancellationToken cancellationToken = default)
         {
-            // Only the tool stage offers tools; every other GetResponseAsync stage (e.g. the long-context injection)
-            // runs tool-less and gets a plain completion.
             var toolHasRun = messages.SelectMany(message => message.Contents).OfType<FunctionResultContent>().Any();
             var tool = options?.Tools?.OfType<AIFunction>().FirstOrDefault();
             if (!callsTool || toolHasRun || tool is null)
@@ -139,16 +382,74 @@ public sealed class InferenceBenchmarkHarnessTests
         }
     }
 
-    // Returns an empty 200 for every /metrics scrape so throughput derivation sees no counters (rates fall to null)
-    // without any network — the tool-loop assertions do not depend on throughput.
     private sealed class EmptyMetricsHandler : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
-            {
-                Content = new StringContent(string.Empty)
-            });
+            return Task.FromResult(JsonOrText(HttpStatusCode.OK, string.Empty, "text/plain"));
         }
+    }
+
+    private sealed class RoleBenchmarkHandler : HttpMessageHandler
+    {
+        private int _workloadCalls;
+
+        public List<string> PostPaths { get; } = [];
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var path = request.RequestUri?.AbsolutePath ?? string.Empty;
+            if (request.Method == HttpMethod.Get && path.EndsWith("/metrics", StringComparison.Ordinal))
+            {
+                var calls = Volatile.Read(ref _workloadCalls);
+                var metrics = $"""
+                               llamacpp:prompt_tokens_total {calls * 100}
+                               llamacpp:prompt_seconds_total {(calls * 0.1d).ToString(CultureInfo.InvariantCulture)}
+                               """;
+                return Task.FromResult(JsonOrText(HttpStatusCode.OK, metrics, "text/plain"));
+            }
+
+            PostPaths.Add(path);
+            _ = Interlocked.Increment(ref _workloadCalls);
+            if (path.EndsWith("/v1/embeddings", StringComparison.Ordinal))
+            {
+                const string json = """
+                                    {"data":[
+                                      {"index":0,"embedding":[0.1,0.2,0.3]},
+                                      {"index":1,"embedding":[0.2,0.3,0.4]},
+                                      {"index":2,"embedding":[0.3,0.4,0.5]},
+                                      {"index":3,"embedding":[0.4,0.5,0.6]},
+                                      {"index":4,"embedding":[0.5,0.6,0.7]},
+                                      {"index":5,"embedding":[0.6,0.7,0.8]},
+                                      {"index":6,"embedding":[0.7,0.8,0.9]},
+                                      {"index":7,"embedding":[0.8,0.9,1.0]}
+                                    ]}
+                                    """;
+                return Task.FromResult(JsonOrText(HttpStatusCode.OK, json, "application/json"));
+            }
+
+            if (path.EndsWith("/v1/rerank", StringComparison.Ordinal))
+            {
+                const string json = """
+                                    {"results":[
+                                      {"index":2,"relevance_score":0.9},
+                                      {"index":0,"relevance_score":0.8},
+                                      {"index":3,"relevance_score":0.2},
+                                      {"index":1,"relevance_score":0.1}
+                                    ]}
+                                    """;
+                return Task.FromResult(JsonOrText(HttpStatusCode.OK, json, "application/json"));
+            }
+
+            return Task.FromResult(JsonOrText(HttpStatusCode.NotFound, string.Empty, "text/plain"));
+        }
+    }
+
+    private static HttpResponseMessage JsonOrText(HttpStatusCode status, string content, string mediaType)
+    {
+        return new HttpResponseMessage(status)
+        {
+            Content = new StringContent(content, Encoding.UTF8, mediaType)
+        };
     }
 }

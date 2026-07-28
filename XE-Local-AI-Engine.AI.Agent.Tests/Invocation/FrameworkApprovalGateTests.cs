@@ -4,6 +4,8 @@ using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using System.Runtime.CompilerServices;
+using XE_Local_AI_Engine.AI.Agent.Invocation.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -32,7 +34,7 @@ public sealed class FrameworkApprovalGateTests
         });
 
         using var scripted = new ScriptedApprovalChatClient(ToolName);
-        var chatClient = scripted.AsBuilder().UseFunctionInvocation(NullLoggerFactory.Instance).Build();
+        var chatClient = BuildFunctionInvokingChatClient(scripted);
         var sp = new ServiceCollection().BuildServiceProvider();
         var agent = BuildAgent(chatClient, tool, sp);
         var seed = BuildSeed();
@@ -60,7 +62,7 @@ public sealed class FrameworkApprovalGateTests
         var tool = BuildApprovalTool(_ => executed++);
 
         using var scripted = new ScriptedApprovalChatClient(ToolName);
-        var chatClient = scripted.AsBuilder().UseFunctionInvocation(NullLoggerFactory.Instance).Build();
+        var chatClient = BuildFunctionInvokingChatClient(scripted);
         var sp = new ServiceCollection().BuildServiceProvider();
         var agent = BuildAgent(chatClient, tool, sp);
         var seed = BuildSeed();
@@ -77,30 +79,416 @@ public sealed class FrameworkApprovalGateTests
         AssertEx.Equal(expected: 0, executed, "rejected tool must never execute");
     }
 
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task ApprovalRequiredTool_StreamingThreadlessDecision_PreservesPauseResumeAndExactlyOnce(bool approved)
+    {
+        var executed = 0;
+        string? reasonSeen = null;
+        var tool = BuildApprovalTool(ToolName, reason =>
+        {
+            executed++;
+            reasonSeen = reason;
+        });
+
+        using var scripted = new ScriptedApprovalChatClient(ToolName);
+        var chatClient = BuildFunctionInvokingChatClient(scripted);
+        var sp = new ServiceCollection().BuildServiceProvider();
+        var agent = BuildAgent(chatClient, tool, sp);
+        var seed = BuildSeed();
+
+        var first = await agent
+                          .RunStreamingAsync(seed, session: null, options: null, CancellationToken.None)
+                          .ToAgentResponseAsync(CancellationToken.None);
+        var requests = first.Messages.SelectMany(static message => message.Contents).OfType<ToolApprovalRequestContent>().ToList();
+        AssertEx.Equal(expected: 1, requests.Count, "streaming run#1 must surface exactly one approval request");
+        AssertEx.Equal(expected: 0, executed, "streaming run#1 must pause before executing the tool");
+
+        var resume = new List<ChatMessage>(seed);
+        resume.AddRange(first.Messages);
+        resume.Add(new ChatMessage(ChatRole.User,
+            requests.Select(request => (AIContent)request.CreateResponse(approved)).ToList()));
+
+        var final = await agent
+                          .RunStreamingAsync(resume, session: null, options: null, CancellationToken.None)
+                          .ToAgentResponseAsync(CancellationToken.None);
+
+        AssertEx.Equal(expected: approved ? 1 : 0,
+            executed,
+            approved
+                ? "the approved streaming resume must execute the tool exactly once"
+                : "the rejected streaming resume must never execute the tool");
+        AssertEx.Equal(expected: 2, scripted.CallCount, "pause and resume must each invoke the scripted model exactly once");
+        AssertEx.Equal("cleanup complete", final.Text, "the resumed streaming run must preserve the final response");
+        if (approved)
+        {
+            AssertEx.Equal("ci-regression", reasonSeen, "the approved streaming tool call must preserve its arguments");
+        }
+    }
+
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task ApprovalRequiredTools_StreamingParallelRequests_CorrelatesReverseOrderedMixedResponsesAndExecutesEachOnce(bool approveArchive)
+    {
+        const string secondToolName = "destructive_archive";
+        var cleanupExecutions = 0;
+        var archiveExecutions = 0;
+        var cleanupTool = BuildApprovalTool(ToolName, _ => cleanupExecutions++);
+        var archiveTool = BuildApprovalTool(secondToolName, _ => archiveExecutions++);
+
+        using var scripted = new ScriptedApprovalChatClient(ToolName, secondToolName);
+        var chatClient = BuildFunctionInvokingChatClient(scripted);
+        var sp = new ServiceCollection().BuildServiceProvider();
+        var agent = BuildAgent(chatClient,
+            [
+                cleanupTool,
+                archiveTool
+            ],
+            sp);
+        var seed = BuildSeed();
+
+        var first = await agent
+                          .RunStreamingAsync(seed, session: null, options: null, CancellationToken.None)
+                          .ToAgentResponseAsync(CancellationToken.None);
+        var requests = first.Messages.SelectMany(static message => message.Contents).OfType<ToolApprovalRequestContent>().ToList();
+        AssertEx.Equal(expected: 2, requests.Count, "parallel tool calls must surface two independent approval requests");
+        AssertEx.Equal(expected: 0, cleanupExecutions, "the cleanup tool must pause before approval");
+        AssertEx.Equal(expected: 0, archiveExecutions, "the archive tool must pause before approval");
+
+        var resume = new List<ChatMessage>(seed);
+        resume.AddRange(first.Messages);
+        resume.Add(new ChatMessage(ChatRole.User,
+            requests.Select((request, index) => (AIContent)request.CreateResponse(index == 0 || approveArchive))
+                    .Reverse()
+                    .ToList()));
+
+        _ = await agent
+                  .RunStreamingAsync(resume, session: null, options: null, CancellationToken.None)
+                  .ToAgentResponseAsync(CancellationToken.None);
+
+        AssertEx.Equal(expected: 1, cleanupExecutions, "the first approved parallel tool must execute exactly once");
+        AssertEx.Equal(expected: approveArchive ? 1 : 0,
+            archiveExecutions,
+            approveArchive
+                ? "the second approved parallel tool must execute exactly once"
+                : "the rejected parallel tool must never execute");
+        AssertEx.Equal(expected: 2, scripted.CallCount, "parallel approvals must resume in one model round after all decisions arrive");
+    }
+
+    [Test]
+    public async Task ApprovalRequiredTool_StreamingTamperedResponse_FailsClosedWithoutExecution()
+    {
+        var executed = 0;
+        string? reasonSeen = null;
+        var tool = BuildApprovalTool(reason =>
+        {
+            executed++;
+            reasonSeen = reason;
+        });
+
+        using var scripted = new ScriptedApprovalChatClient(ToolName);
+        var chatClient = BuildFunctionInvokingChatClient(scripted);
+        var sp = new ServiceCollection().BuildServiceProvider();
+        var agent = BuildAgent(chatClient, tool, sp);
+        var seed = BuildSeed();
+        var (first, request) = await RunFirstStreamingApprovalAsync(agent, seed);
+        var originalCall = AssertEx.NotNull(request.ToolCall as FunctionCallContent);
+        var tamperedCall = new FunctionCallContent(originalCall.CallId,
+            originalCall.Name,
+            new Dictionary<string, object?>
+            {
+                ["reason"] = "tampered-after-approval"
+            });
+        var tamperedResponse = new ToolApprovalResponseContent(request.RequestId, approved: true, tamperedCall);
+
+        var resume = BuildResume(seed, first, tamperedResponse);
+        _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() => agent
+                                                                          .RunStreamingAsync(resume,
+                                                                              session: null,
+                                                                              options: null,
+                                                                              CancellationToken.None)
+                                                                          .ToAgentResponseAsync(CancellationToken.None));
+
+        AssertEx.Equal(expected: 0, executed, "an altered tool call must not execute under an approval granted for different arguments");
+        AssertEx.True(reasonSeen is null, "tampered arguments must never reach the approval-required tool");
+    }
+
+    [Test]
+    public async Task ApprovalRequiredTool_StreamingTamperedRequestAndResponse_FailsClosedAgainstSurfacedSnapshot()
+    {
+        var executed = 0;
+        string? reasonSeen = null;
+        var tool = BuildApprovalTool(reason =>
+        {
+            executed++;
+            reasonSeen = reason;
+        });
+
+        using var scripted = new ScriptedApprovalChatClient(ToolName);
+        var chatClient = BuildFunctionInvokingChatClient(scripted);
+        var sp = new ServiceCollection().BuildServiceProvider();
+        var agent = BuildAgent(chatClient, tool, sp);
+        var seed = BuildSeed();
+        var (first, request) = await RunFirstStreamingApprovalAsync(agent, seed);
+        var originalCall = AssertEx.NotNull(request.ToolCall as FunctionCallContent);
+        var tamperedCall = new FunctionCallContent(originalCall.CallId,
+            originalCall.Name,
+            new Dictionary<string, object?>
+            {
+                ["reason"] = "tampered-in-request-and-response"
+            });
+        var tamperedRequest = new ToolApprovalRequestContent(request.RequestId, tamperedCall);
+        var tamperedResponse = new ToolApprovalResponseContent(request.RequestId, approved: true, tamperedCall);
+
+        var resume = new List<ChatMessage>(seed);
+        resume.AddRange(first.Messages.Select(message => new ChatMessage(message.Role,
+            message.Contents
+                   .Select(content => ReferenceEquals(content, request) ? (AIContent)tamperedRequest : content)
+                   .ToList())));
+        resume.Add(new ChatMessage(ChatRole.User, [tamperedResponse]));
+
+        _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() => agent
+                                                                          .RunStreamingAsync(resume,
+                                                                              session: null,
+                                                                              options: null,
+                                                                              CancellationToken.None)
+                                                                          .ToAgentResponseAsync(CancellationToken.None));
+
+        AssertEx.Equal(expected: 0, executed, "altering both replay request and response must not replace the surfaced tool call");
+        AssertEx.True(reasonSeen is null, "jointly tampered arguments must never reach the approval-required tool");
+    }
+
+    [Test]
+    public async Task ApprovalRequiredTool_StreamingSequentialExactReplay_ExecutesAtMostOnce()
+    {
+        var executed = 0;
+        var tool = BuildApprovalTool(_ => executed++);
+
+        using var scripted = new ScriptedApprovalChatClient(ToolName);
+        var chatClient = BuildFunctionInvokingChatClient(scripted);
+        var sp = new ServiceCollection().BuildServiceProvider();
+        var agent = BuildAgent(chatClient, tool, sp);
+        var seed = BuildSeed();
+        var (first, request) = await RunFirstStreamingApprovalAsync(agent, seed);
+        var resume = BuildResume(seed, first, request.CreateResponse(true));
+
+        _ = await agent
+                  .RunStreamingAsync(resume, session: null, options: null, CancellationToken.None)
+                  .ToAgentResponseAsync(CancellationToken.None);
+        AssertEx.Equal(expected: 1, executed, "the first approved replay must execute the tool exactly once");
+
+        _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() => agent
+                                                                          .RunStreamingAsync(resume,
+                                                                              session: null,
+                                                                              options: null,
+                                                                              CancellationToken.None)
+                                                                          .ToAgentResponseAsync(CancellationToken.None));
+
+        AssertEx.Equal(expected: 1, executed, "an exact sequential replay of a consumed approval must not execute again");
+    }
+
+    [Test]
+    public async Task ApprovalRequiredTool_StreamingConcurrentExactReplay_ReservesBeforeExecutionAndExecutesAtMostOnce()
+    {
+        var executed = 0;
+        using var toolEntered = new ManualResetEventSlim();
+        using var releaseTool = new ManualResetEventSlim();
+        var tool = BuildApprovalTool(_ =>
+        {
+            Interlocked.Increment(ref executed);
+            toolEntered.Set();
+            releaseTool.Wait(TimeSpan.FromSeconds(10));
+        });
+
+        using var scripted = new ScriptedApprovalChatClient(ToolName);
+        var chatClient = BuildFunctionInvokingChatClient(scripted);
+        var sp = new ServiceCollection().BuildServiceProvider();
+        var agent = BuildAgent(chatClient, tool, sp);
+        var seed = BuildSeed();
+        var (first, request) = await RunFirstStreamingApprovalAsync(agent, seed);
+        var resume = BuildResume(seed, first, request.CreateResponse(true));
+        Task<AgentResponse>? firstResume = null;
+
+        try
+        {
+            firstResume = Task.Run(() => agent
+                                              .RunStreamingAsync(resume,
+                                                  session: null,
+                                                  options: null,
+                                                  CancellationToken.None)
+                                              .ToAgentResponseAsync(CancellationToken.None));
+            AssertEx.True(toolEntered.Wait(TimeSpan.FromSeconds(5)),
+                "the first resume must reserve the approval and enter the tool before the concurrent replay");
+
+            _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() => agent
+                                                                              .RunStreamingAsync(resume,
+                                                                                  session: null,
+                                                                                  options: null,
+                                                                                  CancellationToken.None)
+                                                                              .ToAgentResponseAsync(CancellationToken.None));
+
+            AssertEx.Equal(expected: 1, executed, "a concurrent replay must fail before a second tool execution");
+        }
+        finally
+        {
+            releaseTool.Set();
+            if (firstResume is not null)
+            {
+                _ = await firstResume;
+            }
+        }
+
+        AssertEx.Equal(expected: 1, executed, "the barrier-controlled concurrent resumes must execute the tool at most once");
+    }
+
+    [Test]
+    public async Task ApprovalRequiredTool_StreamingUnmatchedResponse_DoesNotExecute()
+    {
+        var executed = 0;
+        var tool = BuildApprovalTool(_ => executed++);
+
+        using var scripted = new ScriptedApprovalChatClient(ToolName);
+        var chatClient = BuildFunctionInvokingChatClient(scripted);
+        var sp = new ServiceCollection().BuildServiceProvider();
+        var agent = BuildAgent(chatClient, tool, sp);
+        var seed = BuildSeed();
+        var (first, request) = await RunFirstStreamingApprovalAsync(agent, seed);
+        var unmatchedResponse = new ToolApprovalResponseContent($"unmatched-{request.RequestId}",
+            approved: true,
+            request.ToolCall);
+
+        var resume = BuildResume(seed, first, unmatchedResponse);
+        _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() => agent
+                                                                          .RunStreamingAsync(resume,
+                                                                              session: null,
+                                                                              options: null,
+                                                                              CancellationToken.None)
+                                                                          .ToAgentResponseAsync(CancellationToken.None));
+
+        AssertEx.Equal(expected: 0, executed, "an approval response without a surfaced request id must not execute a tool");
+    }
+
+    [Test]
+    public async Task ApprovalRequiredTool_StreamingDuplicateResponse_FailsClosedWithoutExecution()
+    {
+        var executed = 0;
+        var tool = BuildApprovalTool(_ => executed++);
+
+        using var scripted = new ScriptedApprovalChatClient(ToolName);
+        var chatClient = BuildFunctionInvokingChatClient(scripted);
+        var sp = new ServiceCollection().BuildServiceProvider();
+        var agent = BuildAgent(chatClient, tool, sp);
+        var seed = BuildSeed();
+        var (first, request) = await RunFirstStreamingApprovalAsync(agent, seed);
+        var approved = request.CreateResponse(true);
+
+        var resume = BuildResume(seed, first, approved, approved);
+        _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() => agent
+                                                                          .RunStreamingAsync(resume,
+                                                                              session: null,
+                                                                              options: null,
+                                                                              CancellationToken.None)
+                                                                          .ToAgentResponseAsync(CancellationToken.None));
+
+        AssertEx.Equal(expected: 0, executed, "duplicate approval responses must fail closed before the tool executes");
+    }
+
+    [Test]
+    public async Task ApprovalRequiredTool_StreamingCancelledBeforeFirstUpdate_DoesNotExecute()
+    {
+        var executed = 0;
+        var tool = BuildApprovalTool(_ => executed++);
+
+        using var scripted = new ScriptedApprovalChatClient(ToolName);
+        var chatClient = BuildFunctionInvokingChatClient(scripted);
+        var sp = new ServiceCollection().BuildServiceProvider();
+        var agent = BuildAgent(chatClient, tool, sp);
+        using var cancellationTokenSource = new CancellationTokenSource();
+        await cancellationTokenSource.CancelAsync();
+
+        _ = await AssertEx.ThrowsAsync<OperationCanceledException>(() => agent
+                                                                          .RunStreamingAsync(BuildSeed(),
+                                                                              session: null,
+                                                                              options: null,
+                                                                              cancellationTokenSource.Token)
+                                                                          .ToAgentResponseAsync(cancellationTokenSource.Token));
+
+        AssertEx.Equal(expected: 0, executed, "a cancelled streaming run must not execute an approval-required tool");
+    }
+
+    private static async Task<(AgentResponse Response, ToolApprovalRequestContent Request)> RunFirstStreamingApprovalAsync(
+        AIAgent agent,
+        IReadOnlyList<ChatMessage> seed)
+    {
+        var first = await agent
+                          .RunStreamingAsync(seed, session: null, options: null, CancellationToken.None)
+                          .ToAgentResponseAsync(CancellationToken.None);
+        var requests = first.Messages.SelectMany(static message => message.Contents).OfType<ToolApprovalRequestContent>().ToList();
+        AssertEx.Equal(expected: 1, requests.Count, "the first streaming run must surface exactly one approval request");
+        return (first, requests[0]);
+    }
+
+    private static List<ChatMessage> BuildResume(IReadOnlyCollection<ChatMessage> seed,
+        AgentResponse first,
+        params ToolApprovalResponseContent[] responses)
+    {
+        var resume = new List<ChatMessage>(seed);
+        resume.AddRange(first.Messages);
+        resume.Add(new ChatMessage(ChatRole.User, responses.Select(static response => (AIContent)response).ToList()));
+        return resume;
+    }
+
     private static ApprovalRequiredAIFunction BuildApprovalTool(Action<string> onExecute)
+    {
+        return BuildApprovalTool(ToolName, onExecute);
+    }
+
+    private static IChatClient BuildFunctionInvokingChatClient(IChatClient innerClient)
+    {
+        return innerClient.AsBuilder()
+                          .UseFunctionInvocation(NullLoggerFactory.Instance)
+                          .Build();
+    }
+
+    private static ApprovalRequiredAIFunction BuildApprovalTool(string toolName, Action<string> onExecute)
     {
         var inner = AIFunctionFactory.Create((string reason) =>
             {
                 onExecute(reason);
                 return "cleanup performed";
             },
-            ToolName,
+            toolName,
             "Performs the destructive cleanup. Side-effecting and irreversible.");
         return new ApprovalRequiredAIFunction(inner);
     }
 
-    private static ChatClientAgent BuildAgent(IChatClient chatClient, AITool tool, IServiceProvider sp)
+    private static AIAgent BuildAgent(IChatClient chatClient, AITool tool, IServiceProvider sp)
     {
-        return new ChatClientAgent(chatClient,
-            "ci-approval-gate",
-            "Call the destructive_cleanup tool when asked to perform a cleanup.",
-            "Deterministic approval-gate CI guard.",
-            new List<AITool>
-            {
-                tool
-            },
-            NullLoggerFactory.Instance,
-            sp);
+        return new ApprovalResponseValidatingAgent(
+            new ChatClientAgent(chatClient,
+                "ci-approval-gate",
+                "Call the destructive_cleanup tool when asked to perform a cleanup.",
+                "Deterministic approval-gate CI guard.",
+                new List<AITool>
+                {
+                    tool
+                },
+                NullLoggerFactory.Instance,
+                sp));
+    }
+
+    private static AIAgent BuildAgent(IChatClient chatClient, IList<AITool> tools, IServiceProvider sp)
+    {
+        return new ApprovalResponseValidatingAgent(
+            new ChatClientAgent(chatClient,
+                "ci-approval-gate",
+                "Call the destructive tools when asked to perform cleanup.",
+                "Deterministic approval-gate CI guard.",
+                tools,
+                NullLoggerFactory.Instance,
+                sp));
     }
 
     private static List<ChatMessage> BuildSeed()
@@ -120,11 +508,17 @@ public sealed class FrameworkApprovalGateTests
     /// </summary>
     private sealed class ScriptedApprovalChatClient : IChatClient
     {
-        private readonly string _toolName;
+        private readonly IReadOnlyList<string> _toolNames;
 
-        public ScriptedApprovalChatClient(string toolName)
+        public ScriptedApprovalChatClient(params string[] toolNames)
         {
-            _toolName = toolName ?? throw new ArgumentNullException(nameof(toolName));
+            ArgumentNullException.ThrowIfNull(toolNames);
+            if (toolNames.Length == 0)
+            {
+                throw new ArgumentException("At least one tool name is required.", nameof(toolNames));
+            }
+
+            _toolNames = toolNames;
         }
 
         public int CallCount { get; private set; }
@@ -138,19 +532,19 @@ public sealed class FrameworkApprovalGateTests
                 return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, "cleanup complete")));
             }
 
-            var call = new FunctionCallContent($"call-{_toolName}", _toolName, new Dictionary<string, object?>
-            {
-                ["reason"] = "ci-regression"
-            });
-            return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, new List<AIContent>
-            {
-                call
-            })));
+            var calls = _toolNames.Select(toolName => (AIContent)new FunctionCallContent($"call-{toolName}",
+                    toolName,
+                    new Dictionary<string, object?>
+                    {
+                        ["reason"] = "ci-regression"
+                    }))
+                                  .ToList();
+            return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, calls)));
         }
 
         public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
         {
-            throw new NotSupportedException("Approval-gate CI guard exercises the non-streaming RunAsync path only.");
+            return ToUpdates(GetResponseAsync(messages, options, cancellationToken), cancellationToken);
         }
 
         public object? GetService(Type serviceType, object? serviceKey = null)
@@ -161,6 +555,17 @@ public sealed class FrameworkApprovalGateTests
         public void Dispose()
         {
             GC.SuppressFinalize(this);
+        }
+
+        private static async IAsyncEnumerable<ChatResponseUpdate> ToUpdates(Task<ChatResponse> responseTask,
+            [EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            var response = await responseTask.ConfigureAwait(false);
+            foreach (var message in response.Messages)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                yield return new ChatResponseUpdate(message.Role, message.Contents);
+            }
         }
     }
 }

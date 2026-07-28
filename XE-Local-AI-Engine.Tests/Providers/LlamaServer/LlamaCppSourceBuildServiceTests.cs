@@ -309,6 +309,38 @@ public sealed class LlamaCppSourceBuildServiceTests
     }
 
     [Test]
+    public async Task Recover_ActiveRuntimeWithoutFitHelper_DiscardsTreeRecordAndSignal()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        using var temp = new TempDirectory();
+        using var store = new InstalledRuntimeStore(temp.Path);
+        var (_, server) = await SeedActiveRuntimeAsync(temp.Path, store);
+        var tree = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(server)!, "..", ".."));
+        File.Delete(Path.Combine(Path.GetDirectoryName(server)!, "llama-fit-params"));
+        var signal = new CudaManagedBuildSignal();
+        signal.SetActive(GpuVariant.Cpu);
+        using var service = new LlamaCppSourceBuildService(new AlwaysReadyProbe(),
+            new CapturingBinaryManager(store, signal),
+            store,
+            signal,
+            new LeaseOnlySupervisor(),
+            new LlamaCppSourceBuildActivity(),
+            new NullLlamaCppSourceBuildEventPublisher(),
+            NullLogger<LlamaCppSourceBuildService>.Instance,
+            temp.Path);
+
+        await service.RecoverAsync(CancellationToken.None);
+
+        AssertEx.False(Directory.Exists(tree));
+        AssertEx.Null(await store.ReadAsync(CancellationToken.None));
+        AssertEx.Null(signal.ActiveVariant);
+    }
+
+    [Test]
     public async Task Start_WhenResolvedCommitMismatches_StopsBeforeCmakeAndRecordsNothing()
     {
         if (!OperatingSystem.IsLinux())
@@ -352,7 +384,7 @@ public sealed class LlamaCppSourceBuildServiceTests
         WriteScript(Path.Combine(stubs, "git"),
             $"#!/bin/sh\nif [ \"$1\" = \"clone\" ]; then for last; do :; done; mkdir -p \"$last\"; exit 0; fi\nif [ \"$1\" = \"-C\" ]; then echo '{LlamaCppReleasePins.PinnedSourceCommitSha}'; exit 0; fi\n");
         WriteScript(Path.Combine(stubs, "cmake"),
-            "#!/bin/sh\nif [ \"$1\" = \"-B\" ]; then mkdir -p \"$2\"; exit 0; fi\nif [ \"$1\" = \"--build\" ]; then mkdir -p \"$2/bin\"; printf '#!/bin/sh\\nexit 0\\n' > \"$2/bin/llama-server\"; chmod 755 \"$2/bin/llama-server\"; exit 0; fi\n");
+            "#!/bin/sh\nif [ \"$1\" = \"-B\" ]; then mkdir -p \"$2\"; exit 0; fi\nif [ \"$1\" = \"--build\" ]; then mkdir -p \"$2/bin\"; printf '#!/bin/sh\\nexit 0\\n' > \"$2/bin/llama-server\"; chmod 755 \"$2/bin/llama-server\"; printf '#!/bin/sh\\nexit 0\\n' > \"$2/bin/llama-fit-params\"; chmod 755 \"$2/bin/llama-fit-params\"; exit 0; fi\n");
         using var path = new PathScope(stubs);
         using var store = new InstalledRuntimeStore(temp.Path);
         var signal = new CudaManagedBuildSignal();
@@ -395,7 +427,7 @@ public sealed class LlamaCppSourceBuildServiceTests
         WriteScript(Path.Combine(stubs, "git"),
             $"#!/bin/sh\nif [ \"$1\" = \"clone\" ]; then env > '{envDump}'; for last; do :; done; mkdir -p \"$last\"; exit 0; fi\nif [ \"$1\" = \"-C\" ]; then echo '{LlamaCppReleasePins.PinnedSourceCommitSha}'; exit 0; fi\nexit 0\n");
         WriteScript(Path.Combine(stubs, "cmake"),
-            $"#!/bin/sh\necho \"$@\" >> '{cmakeArgs}'\nif [ \"$1\" = \"-B\" ]; then mkdir -p \"$2\"; exit 0; fi\nif [ \"$1\" = \"--build\" ]; then mkdir -p \"$2/bin\"; printf '#!/bin/sh\\nexit 0\\n' > \"$2/bin/llama-server\"; chmod 755 \"$2/bin/llama-server\"; exit 0; fi\nexit 0\n");
+            $"#!/bin/sh\necho \"$@\" >> '{cmakeArgs}'\nif [ \"$1\" = \"-B\" ]; then mkdir -p \"$2\"; exit 0; fi\nif [ \"$1\" = \"--build\" ]; then mkdir -p \"$2/bin\"; printf '#!/bin/sh\\nexit 0\\n' > \"$2/bin/llama-server\"; chmod 755 \"$2/bin/llama-server\"; printf '#!/bin/sh\\nexit 0\\n' > \"$2/bin/llama-fit-params\"; chmod 755 \"$2/bin/llama-fit-params\"; exit 0; fi\nexit 0\n");
         using var path = new PathScope(stubs);
         Environment.SetEnvironmentVariable("XE_NODE_SQLITE_KEY", "must-not-leak");
         try
@@ -425,6 +457,14 @@ public sealed class LlamaCppSourceBuildServiceTests
             AssertEx.True(args.Contains("-DGGML_CUDA=OFF", StringComparison.Ordinal));
             AssertEx.True(args.Contains("-DGGML_VULKAN=OFF", StringComparison.Ordinal));
             AssertEx.False(args.Contains("CMAKE_CUDA_ARCHITECTURES", StringComparison.Ordinal));
+            AssertEx.True(args.Contains("--target llama-server llama-fit-params", StringComparison.Ordinal));
+            AssertEx.True(File.Exists(Path.Combine(temp.Path,
+                "llama.cpp",
+                "source-build",
+                "active",
+                "build",
+                "bin",
+                "llama-fit-params")));
             var environment = await File.ReadAllTextAsync(envDump);
             AssertEx.False(environment.Contains("must-not-leak", StringComparison.Ordinal));
             AssertEx.True(environment.Contains("GIT_CONFIG_NOSYSTEM=1", StringComparison.Ordinal));
@@ -562,7 +602,8 @@ public sealed class LlamaCppSourceBuildServiceTests
             throw new NotSupportedException();
 
         public Task<T> RunExclusiveProfilingAsync<T>(string modelName, ModelRole role, ResolvedLaunchArguments launchArgs, bool enableMetrics,
-            Func<LlamaServerProfilingContext, CancellationToken, Task<T>> body, CancellationToken ct) =>
+            Func<LlamaServerProfilingContext, CancellationToken, Task<T>> body, CancellationToken ct,
+            Func<CancellationToken, Task<LlamaServerProfilingVramSnapshot>>? captureVramBeforeSpawn = null) =>
             throw new NotSupportedException();
 
         public Task<IReadOnlyList<LlamaServerProcessHealth>> CheckHealthAsync(CancellationToken ct) =>
@@ -599,7 +640,8 @@ public sealed class LlamaCppSourceBuildServiceTests
             throw new NotSupportedException();
 
         public Task<T> RunExclusiveProfilingAsync<T>(string modelName, ModelRole role, ResolvedLaunchArguments launchArgs, bool enableMetrics,
-            Func<LlamaServerProfilingContext, CancellationToken, Task<T>> body, CancellationToken ct) =>
+            Func<LlamaServerProfilingContext, CancellationToken, Task<T>> body, CancellationToken ct,
+            Func<CancellationToken, Task<LlamaServerProfilingVramSnapshot>>? captureVramBeforeSpawn = null) =>
             throw new NotSupportedException();
 
         public Task<IReadOnlyList<LlamaServerProcessHealth>> CheckHealthAsync(CancellationToken ct) =>
@@ -696,6 +738,9 @@ public sealed class LlamaCppSourceBuildServiceTests
         var server = Path.Combine(bin, "llama-server");
         await File.WriteAllTextAsync(server, "#!/bin/sh\nexit 0\n");
         File.SetUnixFileMode(server, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        var helper = Path.Combine(bin, "llama-fit-params");
+        await File.WriteAllTextAsync(helper, "#!/bin/sh\nexit 0\n");
+        File.SetUnixFileMode(helper, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         var sha = Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(server)));
         var state = new InstalledRuntimeState(LlamaCppReleasePins.PinnedTag, "source", sha, GpuVariant.Cpu, DateTimeOffset.UtcNow, bin,
             LlamaCppSourceBuildRequestValidation.OfficialRepository, LlamaCppReleasePins.PinnedSourceCommitSha,

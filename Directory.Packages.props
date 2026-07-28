@@ -50,31 +50,31 @@
     <PackageVersion Include="Microsoft.Playwright" Version="1.61.0" />
     <PackageVersion Include="OllamaSharp" Version="5.4.25" />
     <PackageVersion Include="TUnit.Playwright" Version="1.58.0" />
-    <PackageVersion Include="Microsoft.Extensions.AI" Version="10.7.0" />
-    <PackageVersion Include="Microsoft.Extensions.AI.Abstractions" Version="10.7.0" />
-    <PackageVersion Include="Microsoft.Extensions.AI.OpenAI" Version="10.7.0" />
+    <PackageVersion Include="Microsoft.Extensions.AI" Version="10.8.1" />
+    <PackageVersion Include="Microsoft.Extensions.AI.Abstractions" Version="10.8.1" />
+    <PackageVersion Include="Microsoft.Extensions.AI.OpenAI" Version="10.8.1" />
     <!-- Transitive only (pulled in by Microsoft.Extensions.AI.OpenAI / Microsoft.Agents.AI.Hosting.OpenAI): pinned
          explicitly, matching the version CentralPackageTransitivePinningEnabled currently resolves, so the plain
          OpenAI SDK's OPENAI001-experimental OpenAIClient(AuthenticationPolicy, OpenAIClientOptions) ctor that
          AzureFoundryChatClientFactory's v1-surface builders depend on is a visible, greppable dependency, and a
          future Microsoft.Extensions.AI.OpenAI bump becomes a conscious version change here rather than a silent
          transitive drift. -->
-    <PackageVersion Include="OpenAI" Version="2.11.0" />
+    <PackageVersion Include="OpenAI" Version="2.12.0" />
     <PackageVersion Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.9" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.9" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.9" />
-    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.10" />
     <PackageVersion Include="Microsoft.Extensions.Options.DataAnnotations" Version="10.0.9" />
     <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.9" />
     <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.7.0" />
-    <PackageVersion Include="Microsoft.Agents.AI" Version="1.13.0" />
-    <PackageVersion Include="Microsoft.Agents.AI.Abstractions" Version="1.13.0" />
-    <PackageVersion Include="Microsoft.Agents.AI.Workflows" Version="1.13.0" />
-    <PackageVersion Include="Microsoft.Agents.AI.Hosting" Version="1.13.0-preview.260703.1" />
-    <PackageVersion Include="Microsoft.Agents.AI.Hosting.OpenAI" Version="1.13.0-alpha.260703.1" />
-    <PackageVersion Include="Microsoft.Agents.AI.DevUI" Version="1.13.0-preview.260703.1" />
+    <PackageVersion Include="Microsoft.Agents.AI" Version="1.15.0" />
+    <PackageVersion Include="Microsoft.Agents.AI.Abstractions" Version="1.15.0" />
+    <PackageVersion Include="Microsoft.Agents.AI.Workflows" Version="1.15.0" />
+    <PackageVersion Include="Microsoft.Agents.AI.Hosting" Version="1.15.0-preview.260722.1" />
+    <PackageVersion Include="Microsoft.Agents.AI.Hosting.OpenAI" Version="1.15.0-alpha.260722.1" />
+    <PackageVersion Include="Microsoft.Agents.AI.DevUI" Version="1.15.0-preview.260722.1" />
     <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery" Version="10.7.0" />
-    <PackageVersion Include="ModelContextProtocol" Version="1.4.0" />
+    <PackageVersion Include="ModelContextProtocol" Version="1.4.1" />
     <PackageVersion Include="NSubstitute" Version="5.3.0" />
     <PackageVersion Include="NSec.Cryptography" Version="26.4.0" />
     <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.16.0" />
@@ -108,7 +108,7 @@
          (dotnet/efcore PR 38402, milestone 11.0-preview6). Tracked by:
          https://github.com/microsoft/EventLogExpert/issues/604 -->
     <PackageVersion Include="SQLitePCLRaw.lib.e_sqlite3" Version="3.50.3" />
-    <PackageVersion Include="System.Numerics.Tensors" Version="10.0.9" />
+    <PackageVersion Include="System.Numerics.Tensors" Version="10.0.10" />
     <PackageVersion Include="System.Security.Cryptography.ProtectedData" Version="10.0.9" />
     <PackageVersion Include="TUnit" Version="1.58.0" />
     <PackageVersion Include="Velopack" Version="1.2.0" />

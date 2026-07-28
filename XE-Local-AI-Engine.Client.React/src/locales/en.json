@@ -2551,14 +2551,21 @@
 				"loading": "Loading inference profiles…",
 				"error": "Could not load inference profiles.",
 				"empty": "No inference profiles yet. Explore a model to create one.",
-				"moe": "MoE",
-				"moeExperts": "MoE · {{count}} experts",
-				"explore": {
+				"allowPreSpawnVramPressure": {
+					"label": "Allow benchmarks despite existing VRAM pressure",
+					"description": "Operator override: bypasses only the pre-spawn ambient-pressure gate. New pressure caused during the benchmark still invalidates the run."
+				},
+    "moe": "MoE",
+    "moeExperts": "MoE · {{count}} experts",
+    "policyFingerprint": "Policy v{{version}} · {{fingerprint}}",
+    "freezeVramSummary": "Global free {{globalFree}} · process budget {{processBudget}}",
+    "explore": {
 					"modelLabel": "Model name",
 					"modelPlaceholder": "e.g. unsloth/Qwen3-4B-GGUF",
-					"roleLabel": "Role",
-					"roleChat": "Chat",
-					"roleEmbedding": "Embedding",
+      "roleLabel": "Role",
+      "roleChat": "Chat",
+      "roleEmbedding": "Embedding",
+      "roleReranker": "Reranker",
 					"button": "Explore",
 					"success": "Exploring a tuned profile for {{model}}.",
 					"error": "Could not start exploration."
@@ -2594,9 +2601,29 @@
 					"genTps": "Generation tok/s",
 					"cacheHit": "Cache hit",
 					"toolLoop": "Tool loop",
-					"vramLoad": "VRAM at load",
-					"vramAfter": "VRAM after"
-				}
+      "vramLoad": "VRAM at load",
+      "vramAfter": "VRAM after",
+      "role": "Role",
+      "itemsPerSecond": "Items/s",
+      "inputTokensPerSecond": "Input tok/s",
+      "p50Latency": "P50 latency",
+      "p95Latency": "P95 latency",
+      "batchSize": "Batch size",
+      "outputDimension": "Output dimension",
+      "valuesFinite": "Finite values",
+      "deterministicOutput": "Stable output",
+      "yes": "Yes",
+      "no": "No",
+      "unknown": "Unknown",
+      "globalFreeVramLoad": "Global free at load",
+      "globalFreeVramAfter": "Global free after",
+      "processBudgetVramLoad": "Process budget at load",
+      "processBudgetVramAfter": "Process budget after",
+      "minimumGlobalFreeVram": "Minimum global free",
+      "minimumProcessBudgetVram": "Minimum process budget",
+      "peakProcessRam": "Peak process RAM",
+      "externalPressure": "External VRAM pressure detected; this benchmark is invalid."
+    }
 			}
 		},
 		"loadedModels": {

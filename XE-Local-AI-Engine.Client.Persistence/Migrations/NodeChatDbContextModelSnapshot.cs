@@ -1127,9 +1127,9 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("INTEGER")
                         .HasColumnName("flash_attn");
 
-                    b.Property<long?>("FreeVramAtFreezeBytes")
+                    b.Property<long?>("GlobalFreeVramAtFreezeBytes")
                         .HasColumnType("INTEGER")
-                        .HasColumnName("free_vram_at_freeze_bytes");
+                        .HasColumnName("global_free_vram_at_freeze_bytes");
 
                     b.Property<bool>("IsMoe")
                         .HasColumnType("INTEGER")
@@ -1142,6 +1142,14 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.Property<string>("KvTypeV")
                         .HasColumnType("TEXT")
                         .HasColumnName("kv_type_v");
+
+                    b.Property<string>("LaunchPolicyFingerprint")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("launch_policy_fingerprint");
+
+                    b.Property<int?>("LaunchPolicyFingerprintVersion")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("launch_policy_fingerprint_version");
 
                     b.Property<string>("LlamacppBuild")
                         .IsRequired()
@@ -1169,6 +1177,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.Property<string>("OverrideTensor")
                         .HasColumnType("TEXT")
                         .HasColumnName("override_tensor");
+
+                    b.Property<long?>("ProcessBudgetVramAtFreezeBytes")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("process_budget_vram_at_freeze_bytes");
 
                     b.Property<string>("Quant")
                         .IsRequired()
@@ -1225,11 +1237,20 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("TEXT")
                         .HasColumnName("embedding_model");
 
+                    b.Property<string>("VectorIdentity")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("legacy:unversioned")
+                        .HasColumnName("vector_identity");
+
                     b.HasKey("ChunkId");
 
                     b.HasIndex("DocumentId");
 
                     b.HasIndex("EmbeddingModel");
+
+                    b.HasIndex("EmbeddingModel", "VectorIdentity", "Dim");
 
                     b.ToTable("knowledge_chunk_vectors", (string)null);
                 });
@@ -1295,6 +1316,19 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.Property<long>("UpdatedAtUtc")
                         .HasColumnType("INTEGER")
                         .HasColumnName("updated_at_utc");
+
+                    b.Property<int>("VectorDim")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(0)
+                        .HasColumnName("vector_dim");
+
+                    b.Property<string>("VectorIdentity")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("legacy:unversioned")
+                        .HasColumnName("vector_identity");
 
                     b.HasKey("DocumentId");
 
@@ -1507,9 +1541,21 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("BLOB")
                         .HasColumnName("diagnostics_json");
 
+                    b.Property<bool>("ExternalPressureDetected")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("external_pressure_detected");
+
                     b.Property<bool?>("FlashAttn")
                         .HasColumnType("INTEGER")
                         .HasColumnName("flash_attn");
+
+                    b.Property<long?>("GlobalFreeVramAfterBytes")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("global_free_vram_after_bytes");
+
+                    b.Property<long?>("GlobalFreeVramLoadBytes")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("global_free_vram_load_bytes");
 
                     b.Property<string>("KvType")
                         .HasColumnType("TEXT")
@@ -1519,6 +1565,14 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("TEXT")
                         .HasColumnName("kv_type_v");
 
+                    b.Property<string>("LaunchPolicyFingerprint")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("launch_policy_fingerprint");
+
+                    b.Property<int?>("LaunchPolicyFingerprintVersion")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("launch_policy_fingerprint_version");
+
                     b.Property<string>("LlamacppBuild")
                         .HasColumnType("TEXT")
                         .HasColumnName("llamacpp_build");
@@ -1526,6 +1580,14 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.Property<string>("MachineKey")
                         .HasColumnType("TEXT")
                         .HasColumnName("machine_key");
+
+                    b.Property<long?>("MinimumGlobalFreeVramBytes")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("minimum_global_free_vram_bytes");
+
+                    b.Property<long?>("MinimumProcessBudgetVramBytes")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("minimum_process_budget_vram_bytes");
 
                     b.Property<string>("ModelName")
                         .IsRequired()
@@ -1540,9 +1602,21 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("TEXT")
                         .HasColumnName("override_tensor");
 
+                    b.Property<long?>("PeakProcessRamBytes")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("peak_process_ram_bytes");
+
                     b.Property<double?>("PpTokensPerSecond")
                         .HasColumnType("REAL")
                         .HasColumnName("pp_tokens_per_second");
+
+                    b.Property<long?>("ProcessBudgetVramAfterBytes")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("process_budget_vram_after_bytes");
+
+                    b.Property<long?>("ProcessBudgetVramLoadBytes")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("process_budget_vram_load_bytes");
 
                     b.Property<Guid?>("ProfileId")
                         .HasColumnType("TEXT")

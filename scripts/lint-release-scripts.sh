@@ -58,6 +58,8 @@ SHELL_TARGETS=(
   "scripts/dev-stop.sh"
   "scripts/run-tests-memory-safe.sh"
   "scripts/run-e2e-local.sh"
+  "scripts/run-agent-framework-validation.sh"
+  "scripts/capture-agent-framework-dependencies.sh"
   "scripts/lint-release-scripts.sh"
   # Not release-path, but they gate the trustworthiness of every test result the release leans on —
   # a bug in the contamination guard reads as a phantom regression or, worse, hides a real one.

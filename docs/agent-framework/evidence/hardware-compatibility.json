@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "capturedAtUtc": "2026-07-26T22:47:43.7944884+00:00",
+  "sourceCommit": "0.1.0-rc.4.2\u002B0a39b49363d6d89547410b5f9b547b25c5cf3bcc",
+  "result": "passed",
+  "backend": "cuda",
+  "model": {
+    "sha256": "6eb923e7d26e9cea28811e1a8e852009b21242fb157b26149d3b188f3a8c8653",
+    "sizeBytes": 397808192
+  },
+  "llamaServer": {
+    "sha256": "78cd370e18a911b284c0f732e40ada20a1b3c8fc8ba40f2aabb0e8d7d800a3cc"
+  },
+  "path": {
+    "resolver": "XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation.LocalModelProviderResolver",
+    "provider": "XE_Local_AI_Engine.Providers.LlamaServer.Implementation.LlamaServerLocalModelProvider",
+    "meaiAdapter": "OpenAI.Chat.ChatClient.AsIChatClient",
+    "mafFactory": "XE_Local_AI_Engine.AI.Agent.Invocation.Implementation.InvocationAgentFactory",
+    "runner": "XE_Local_AI_Engine.Client.Services.Invocation.Implementation.InvocationRunner"
+  },
+  "response": {
+    "utf8Bytes": 19,
+    "sha256": "880fbd373fe82ceeeca676e9a7c43b76f0bc5017e80644754263f4efa4e9528f"
+  }
+}

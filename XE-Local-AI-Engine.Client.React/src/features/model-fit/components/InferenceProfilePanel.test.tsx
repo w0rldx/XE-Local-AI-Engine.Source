@@ -50,8 +50,11 @@ function makeProfile(overrides: Partial<InferenceProfileView> = {}): InferencePr
 		ctxSize: 8192,
 		isMoe: false,
 		expertCount: null,
+		launchPolicyFingerprintVersion: null,
+		launchPolicyFingerprint: null,
 		hasBenchmark: false,
-		frozenVramBytes: null,
+		frozenGlobalFreeVramBytes: null,
+		frozenProcessBudgetVramBytes: null,
 		...overrides,
 	};
 }
@@ -102,6 +105,22 @@ describe("InferenceProfilePanel", () => {
 		hooksMock.useInvalidateInferenceProfile.mockReturnValue(makeMutation());
 	});
 
+	it("shows the versioned launch-policy fingerprint without exposing the full hash", () => {
+		const explored = makeProfile({
+			id: "exp1",
+			launchPolicyFingerprintVersion: 1,
+			launchPolicyFingerprint: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+		});
+		hooksMock.useInferenceProfiles.mockReturnValue(makeQuery([explored]));
+
+		renderPanel();
+
+		const fingerprint = screen.getByTestId("inference-profile-fingerprint-exp1").textContent ?? "";
+		expect(fingerprint.toLowerCase()).toContain("policy v1");
+		expect(fingerprint).toContain("01234567");
+		expect(fingerprint).not.toContain("89abcdef0123456789abcdef");
+	});
+
 	afterEach(() => {
 		cleanup();
 		vi.clearAllMocks();
@@ -109,7 +128,7 @@ describe("InferenceProfilePanel", () => {
 
 	it("renders a status chip per profile reflecting its terminal status", () => {
 		const explored = makeProfile({ id: "exp1", status: "explored" });
-		const frozen = makeProfile({ id: "fro1", status: "frozen", hasBenchmark: true, frozenVramBytes: 6_656_000_000 });
+		const frozen = makeProfile({ id: "fro1", status: "frozen", hasBenchmark: true, frozenGlobalFreeVramBytes: 6_656_000_000 });
 		hooksMock.useInferenceProfiles.mockReturnValue(makeQuery([explored, frozen]));
 
 		renderPanel();
@@ -121,7 +140,7 @@ describe("InferenceProfilePanel", () => {
 	});
 
 	it("shows the frozen outcome summary (VRAM) for a frozen profile", () => {
-		const frozen = makeProfile({ id: "fro1", status: "frozen", hasBenchmark: true, frozenVramBytes: 6_656_000_000 });
+		const frozen = makeProfile({ id: "fro1", status: "frozen", hasBenchmark: true, frozenGlobalFreeVramBytes: 6_656_000_000 });
 		hooksMock.useInferenceProfiles.mockReturnValue(makeQuery([frozen]));
 
 		renderPanel();
@@ -141,7 +160,24 @@ describe("InferenceProfilePanel", () => {
 		fireEvent.click(screen.getByTestId("inference-profile-benchmark-exp1"));
 
 		expect(benchmark.mutate).toHaveBeenCalledWith(
-			{ profileId: "exp1" },
+			{ profileId: "exp1", allowPreSpawnVramPressure: false },
+			expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) }),
+		);
+	});
+
+	it("requires an explicit operator toggle before bypassing the pre-spawn VRAM-pressure gate", () => {
+		const benchmark = makeMutation();
+		hooksMock.useBenchmarkInferenceProfile.mockReturnValue(benchmark);
+		const explored = makeProfile({ id: "exp1", status: "explored" });
+		hooksMock.useInferenceProfiles.mockReturnValue(makeQuery([explored]));
+
+		renderPanel();
+
+		fireEvent.click(screen.getByTestId("inference-profile-allow-pre-spawn-vram-pressure"));
+		fireEvent.click(screen.getByTestId("inference-profile-benchmark-exp1"));
+
+		expect(benchmark.mutate).toHaveBeenCalledWith(
+			{ profileId: "exp1", allowPreSpawnVramPressure: true },
 			expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) }),
 		);
 	});
@@ -162,8 +198,16 @@ describe("InferenceProfilePanel", () => {
 		);
 	});
 
+	it("offers the reranker role accepted by the backend", () => {
+		renderPanel();
+
+		fireEvent.mouseDown(screen.getByTestId("inference-profile-explore-role"));
+
+		expect(screen.getByText("Reranker")).toBeTruthy();
+	});
+
 	it("never renders raw llama.cpp launch flags or a machine key (outcomes only)", () => {
-		const frozen = makeProfile({ id: "fro1", status: "frozen", hasBenchmark: true, frozenVramBytes: 6_656_000_000 });
+		const frozen = makeProfile({ id: "fro1", status: "frozen", hasBenchmark: true, frozenGlobalFreeVramBytes: 6_656_000_000 });
 		const explored = makeProfile({ id: "exp1", status: "explored", isMoe: true, expertCount: 8 });
 		hooksMock.useInferenceProfiles.mockReturnValue(makeQuery([frozen, explored]));
 

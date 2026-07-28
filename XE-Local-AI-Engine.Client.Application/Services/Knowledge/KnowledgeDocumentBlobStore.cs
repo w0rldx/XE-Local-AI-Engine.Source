@@ -68,8 +68,8 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
         await using (var command = connection.CreateCommand())
         {
             command.CommandText = """
-                                  INSERT INTO knowledge_documents (document_id, original_file_name, mime_type, extension, size_bytes, content_hash, storage_path, status, failure_reason, chunk_count, embedding_model, created_at_utc, updated_at_utc)
-                                  VALUES ($document_id, $original_file_name, $mime_type, $extension, $size_bytes, $content_hash, $storage_path, $status, $failure_reason, $chunk_count, $embedding_model, $created_at_utc, $updated_at_utc)
+                                  INSERT INTO knowledge_documents (document_id, original_file_name, mime_type, extension, size_bytes, content_hash, storage_path, status, failure_reason, chunk_count, embedding_model, vector_identity, vector_dim, created_at_utc, updated_at_utc)
+                                  VALUES ($document_id, $original_file_name, $mime_type, $extension, $size_bytes, $content_hash, $storage_path, $status, $failure_reason, $chunk_count, $embedding_model, $vector_identity, $vector_dim, $created_at_utc, $updated_at_utc)
                                   ON CONFLICT(content_hash) DO NOTHING;
                                   """;
             AddParameter(command, "$document_id", input.DocumentId);
@@ -83,6 +83,8 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
             AddParameter(command, "$failure_reason", value: null);
             AddParameter(command, "$chunk_count", value: 0);
             AddParameter(command, "$embedding_model", input.EmbeddingModel);
+            AddParameter(command, "$vector_identity", KnowledgeEmbeddingVectorPolicy.LegacyIdentity);
+            AddParameter(command, "$vector_dim", value: 0);
             AddParameter(command, "$created_at_utc", now);
             AddParameter(command, "$updated_at_utc", now);
             inserted = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);

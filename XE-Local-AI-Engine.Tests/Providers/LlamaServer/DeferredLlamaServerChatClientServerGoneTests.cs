@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
 using System.Net.Sockets;
 using Microsoft.Extensions.AI;
+using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
@@ -71,16 +72,26 @@ public sealed class DeferredLlamaServerChatClientServerGoneTests
     [Test]
     public async Task GetResponse_WhileEjectDraining_FailsAsOperatorEjected()
     {
-        using var client = new DeferredLlamaServerChatClient(EvictingSupervisor(), "model-a", TimeSpan.FromSeconds(5));
+        var scheduler = new RecordingCalibrationScheduler();
+        using var client = new DeferredLlamaServerChatClient(EvictingSupervisor(),
+            "model-a",
+            TimeSpan.FromSeconds(5),
+            scheduler);
 
         await AssertEx.ThrowsAsync<LlamaServerModelEjectedException>(() =>
             client.GetResponseAsync([new ChatMessage(ChatRole.User, "hello")]));
+
+        AssertEx.Equal(0, scheduler.Scheduled);
     }
 
     [Test]
     public async Task GetStreamingResponse_WhileEjectDraining_FailsAsOperatorEjected_BeforeAnyChunk()
     {
-        using var client = new DeferredLlamaServerChatClient(EvictingSupervisor(), "model-a", TimeSpan.FromSeconds(5));
+        var scheduler = new RecordingCalibrationScheduler();
+        using var client = new DeferredLlamaServerChatClient(EvictingSupervisor(),
+            "model-a",
+            TimeSpan.FromSeconds(5),
+            scheduler);
 
         var yielded = 0;
         await AssertEx.ThrowsAsync<LlamaServerModelEjectedException>(async () =>
@@ -92,6 +103,7 @@ public sealed class DeferredLlamaServerChatClientServerGoneTests
         });
 
         AssertEx.Equal(expected: 0, yielded); // the typed failure fired before any chunk was produced.
+        AssertEx.Equal(0, scheduler.Scheduled);
     }
 
     /// <summary>A supervisor whose (never-contacted) endpoint resolves but whose lease is refused as eject-in-progress.</summary>
@@ -102,5 +114,19 @@ public sealed class DeferredLlamaServerChatClientServerGoneTests
             EnsureEndpoint = new Uri("http://127.0.0.1:9/"),
             LeaseAcquisition = LlamaServerLeaseAcquisition.Evicting
         };
+    }
+
+    private sealed class RecordingCalibrationScheduler : ITokenEstimatorCalibrationScheduler
+    {
+        public int Scheduled { get; private set; }
+
+        public void Schedule(string modelName, Uri llamaServerBaseAddress)
+        {
+            Scheduled++;
+        }
+
+        public void Invalidate(string modelName)
+        {
+        }
     }
 }

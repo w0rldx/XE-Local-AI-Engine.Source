@@ -86,6 +86,33 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
     }
 
     [Test]
+    public async Task SearchAsync_WhenStoredVectorIdentityDiffersAtTheSameWidth_ExcludesIt()
+    {
+        var databasePath = GetDatabasePath("cosine-identity-mismatch.sqlite");
+        await MigrateAsync(databasePath).ConfigureAwait(false);
+
+        await using (var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false))
+        {
+            var chunkId = Guid.NewGuid();
+            await InsertVectorAsync(connection, chunkId, Guid.NewGuid(), FloatBytes(1f, 0f, 0f, 0f)).ConfigureAwait(false);
+            await using var update = connection.CreateCommand();
+            update.CommandText = "UPDATE knowledge_chunk_vectors SET vector_identity = 'legacy:unversioned' WHERE chunk_id = $id;";
+            update.Parameters.AddWithValue("$id", chunkId);
+            _ = await update.ExecuteNonQueryAsync().ConfigureAwait(false);
+        }
+
+        var hits = await RunSearchAsync(databasePath, normalized: false, new[]
+        {
+            1f,
+            0f,
+            0f,
+            0f
+        }, limit: 10).ConfigureAwait(false);
+
+        AssertEx.Empty(hits, "Exact canonical identity filtering must exclude same-model, same-width legacy vectors.");
+    }
+
+    [Test]
     public async Task SearchAsync_CosinePath_MatchesNaiveReferenceRankingOnDeterministicCorpus()
     {
         var databasePath = GetDatabasePath("cosine-equivalence.sqlite");
@@ -248,7 +275,13 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
         var threw = false;
         try
         {
-            await search.SearchAsync(DeterministicVector(new Random(1), 8), EmbeddingModel, limit: 10, documentId: null, cts.Token).ConfigureAwait(false);
+            await search.SearchAsync(DeterministicVector(new Random(1), 8),
+                EmbeddingModel,
+                NativeIdentity(dimension: 8),
+                vectorDimension: 8,
+                limit: 10,
+                documentId: null,
+                cts.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -265,7 +298,13 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
         await EnsureForeignKeysOffAsync(context.Database.GetDbConnection()).ConfigureAwait(false);
         var search = new ManagedCosineVectorSearch(context, normalized ? CompleteState() : new KnowledgeVectorNormalizationState());
-        return await search.SearchAsync(query, EmbeddingModel, limit, documentId: null, CancellationToken.None).ConfigureAwait(false);
+        return await search.SearchAsync(query,
+            EmbeddingModel,
+            NativeIdentity(query.Length),
+            query.Length,
+            limit,
+            documentId: null,
+            CancellationToken.None).ConfigureAwait(false);
     }
 
     private static IKnowledgeVectorNormalizationState CompleteState()
@@ -383,13 +422,22 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
         }
 
         command.CommandText =
-            "INSERT INTO knowledge_chunk_vectors (chunk_id, document_id, dim, embedding, embedding_model) VALUES ($cid, $did, $dim, $blob, $model);";
+            """
+            INSERT INTO knowledge_chunk_vectors (chunk_id, document_id, dim, embedding, embedding_model, vector_identity)
+            VALUES ($cid, $did, $dim, $blob, $model, $identity);
+            """;
         command.Parameters.AddWithValue("$cid", chunkId);
         command.Parameters.AddWithValue("$did", documentId);
         command.Parameters.AddWithValue("$dim", embedding.Length / sizeof(float));
         command.Parameters.AddWithValue("$blob", embedding);
         command.Parameters.AddWithValue("$model", EmbeddingModel);
+        command.Parameters.AddWithValue("$identity", NativeIdentity(embedding.Length / sizeof(float)));
         _ = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+    }
+
+    private static string NativeIdentity(int dimension)
+    {
+        return $"{EmbeddingModel}::native:v1:{dimension}";
     }
 
     private static async Task<SqliteConnection> OpenConnectionAsync(string databasePath)

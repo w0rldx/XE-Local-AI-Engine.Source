@@ -147,14 +147,15 @@ public sealed class KnowledgeIndexWriter : IKnowledgeIndexWriter
             {
                 vectorCommand.Transaction = transaction;
                 vectorCommand.CommandText = """
-                                            INSERT INTO knowledge_chunk_vectors (chunk_id, document_id, dim, embedding, embedding_model)
-                                            VALUES ($chunk_id, $document_id, $dim, $embedding, $embedding_model);
+                                            INSERT INTO knowledge_chunk_vectors (chunk_id, document_id, dim, embedding, embedding_model, vector_identity)
+                                            VALUES ($chunk_id, $document_id, $dim, $embedding, $embedding_model, $vector_identity);
                                             """;
                 AddParameter(vectorCommand, "$chunk_id", chunkId);
                 AddParameter(vectorCommand, "$document_id", input.DocumentId);
                 AddParameter(vectorCommand, "$dim", chunk.Dim);
                 AddParameter(vectorCommand, "$embedding", embeddingBytes);
                 AddParameter(vectorCommand, "$embedding_model", input.EmbeddingModel);
+                AddParameter(vectorCommand, "$vector_identity", input.VectorIdentity);
                 _ = await vectorCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             }
         }
@@ -167,12 +168,20 @@ public sealed class KnowledgeIndexWriter : IKnowledgeIndexWriter
         command.Transaction = transaction;
         command.CommandText = """
                               UPDATE knowledge_documents
-                              SET status = $status, failure_reason = NULL, chunk_count = $chunk_count, embedding_model = $embedding_model, updated_at_utc = $updated_at_utc
+                              SET status = $status,
+                                  failure_reason = NULL,
+                                  chunk_count = $chunk_count,
+                                  embedding_model = $embedding_model,
+                                  vector_identity = $vector_identity,
+                                  vector_dim = $vector_dim,
+                                  updated_at_utc = $updated_at_utc
                               WHERE document_id = $document_id;
                               """;
         AddParameter(command, "$status", KnowledgeDocumentStatus.Indexed.ToString());
         AddParameter(command, "$chunk_count", input.Chunks.Count);
         AddParameter(command, "$embedding_model", input.EmbeddingModel);
+        AddParameter(command, "$vector_identity", input.VectorIdentity);
+        AddParameter(command, "$vector_dim", input.VectorDimension);
         AddParameter(command, "$updated_at_utc", now);
         AddParameter(command, "$document_id", input.DocumentId);
         _ = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);

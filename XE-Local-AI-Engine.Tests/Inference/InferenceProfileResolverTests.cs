@@ -38,7 +38,11 @@ public sealed class InferenceProfileResolverTests
     {
         var store = Substitute.For<IInferenceProfileStore>();
         store.GetByKeyAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-             .Returns(Task.FromResult<InferenceProfileRecord?>(Record(InferenceProfileStatus.Explored, ctxSize: 8192, nGpuLayers: 33)));
+             .Returns(Task.FromResult<InferenceProfileRecord?>(Record(InferenceProfileStatus.Explored,
+                 ctxSize: 8192,
+                 nGpuLayers: 33,
+                 launchPolicyFingerprintVersion: 3,
+                 launchPolicyFingerprint: "current-fingerprint")));
         var resolver = BuildResolver(store, out _);
 
         var result = await resolver.ResolveAsync(Model, ModelRole.Chat, GpuVariant.Vulkan, CancellationToken.None);
@@ -46,6 +50,40 @@ public sealed class InferenceProfileResolverTests
         AssertEx.False(result.ExploreMode);
         AssertEx.Equal(8192, result.CtxSize);
         AssertEx.Equal(33, result.NGpuLayers);
+    }
+
+    [Test]
+    public async Task Resolver_ExploredStatusWithoutLaunchPolicyFingerprint_ReturnsExplore()
+    {
+        var store = Substitute.For<IInferenceProfileStore>();
+        store.GetByKeyAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+             .Returns(Task.FromResult<InferenceProfileRecord?>(Record(InferenceProfileStatus.Explored,
+                 ctxSize: 8192,
+                 nGpuLayers: 33,
+                 launchPolicyFingerprintVersion: null,
+                 launchPolicyFingerprint: null)));
+        var resolver = BuildResolver(store, out _);
+
+        var result = await resolver.ResolveAsync(Model, ModelRole.Chat, GpuVariant.Cuda, CancellationToken.None);
+
+        AssertEx.True(result.ExploreMode);
+    }
+
+    [Test]
+    public async Task Resolver_ExploredGpuStatusWithoutPlacement_ReturnsExplore()
+    {
+        var store = Substitute.For<IInferenceProfileStore>();
+        store.GetByKeyAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+             .Returns(Task.FromResult<InferenceProfileRecord?>(Record(InferenceProfileStatus.Explored,
+                 ctxSize: 8192,
+                 nGpuLayers: null,
+                 launchPolicyFingerprintVersion: 3,
+                 launchPolicyFingerprint: "current-fingerprint")));
+        var resolver = BuildResolver(store, out _);
+
+        var result = await resolver.ResolveAsync(Model, ModelRole.Chat, GpuVariant.Vulkan, CancellationToken.None);
+
+        AssertEx.True(result.ExploreMode);
     }
 
     [Test]
@@ -106,7 +144,11 @@ public sealed class InferenceProfileResolverTests
         return services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
     }
 
-    private static InferenceProfileRecord Record(InferenceProfileStatus status, int ctxSize, int? nGpuLayers)
+    private static InferenceProfileRecord Record(InferenceProfileStatus status,
+        int ctxSize,
+        int? nGpuLayers,
+        int? launchPolicyFingerprintVersion = 3,
+        string? launchPolicyFingerprint = "current-fingerprint")
     {
         return new InferenceProfileRecord(Id: Guid.NewGuid(),
             MachineKey: MachineKey,
@@ -125,10 +167,12 @@ public sealed class InferenceProfileResolverTests
             NParams: 7_000_000_000,
             IsMoe: false,
             ExpertCount: null,
-            FreeVramAtFreezeBytes: null,
+            GlobalFreeVramAtFreezeBytes: null,
             Status: status,
             BenchmarkSnapshotId: status == InferenceProfileStatus.Frozen ? Guid.NewGuid() : null,
             CreatedAtUtc: 0,
-            UpdatedAtUtc: 0);
+            UpdatedAtUtc: 0,
+            LaunchPolicyFingerprintVersion: launchPolicyFingerprintVersion,
+            LaunchPolicyFingerprint: launchPolicyFingerprint);
     }
 }

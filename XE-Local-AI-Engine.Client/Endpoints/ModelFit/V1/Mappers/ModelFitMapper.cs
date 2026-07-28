@@ -428,7 +428,10 @@ internal static class ModelFitMapper
             NParams = view.NParams,
             IsMoe = view.IsMoe,
             ExpertCount = view.ExpertCount,
-            FreeVramAtFreezeBytes = view.FreeVramAtFreezeBytes,
+            LaunchPolicyFingerprintVersion = view.LaunchPolicyFingerprintVersion,
+            LaunchPolicyFingerprint = view.LaunchPolicyFingerprint,
+            GlobalFreeVramAtFreezeBytes = view.GlobalFreeVramAtFreezeBytes,
+            ProcessBudgetVramAtFreezeBytes = view.ProcessBudgetVramAtFreezeBytes,
             Status = view.Status,
             BenchmarkSnapshotId = view.BenchmarkSnapshotId,
             CreatedAtUtc = view.CreatedAtUtc,
@@ -447,14 +450,31 @@ internal static class ModelFitMapper
 
         return new InferenceBenchmarkMetricsDto
         {
+            Role = metrics.Role,
             TokensPerSecond = metrics.TokensPerSecond,
             PpTokensPerSecond = metrics.PpTokensPerSecond,
             TtftMs = metrics.TtftMs,
             TotalLatencyMs = metrics.TotalLatencyMs,
             CacheHitRate = metrics.CacheHitRate,
             ToolLoopMs = metrics.ToolLoopMs,
+            ItemsPerSecond = metrics.ItemsPerSecond,
+            InputTokensPerSecond = metrics.InputTokensPerSecond,
+            P50LatencyMs = metrics.P50LatencyMs,
+            P95LatencyMs = metrics.P95LatencyMs,
+            BatchSize = metrics.BatchSize,
+            OutputDimension = metrics.OutputDimension,
+            ValuesFinite = metrics.ValuesFinite,
+            DeterministicOutput = metrics.DeterministicOutput,
             VramLoadBytes = metrics.VramLoadBytes,
             VramAfterBytes = metrics.VramAfterBytes,
+            GlobalFreeVramLoadBytes = metrics.GlobalFreeVramLoadBytes,
+            GlobalFreeVramAfterBytes = metrics.GlobalFreeVramAfterBytes,
+            ProcessBudgetVramLoadBytes = metrics.ProcessBudgetVramLoadBytes,
+            ProcessBudgetVramAfterBytes = metrics.ProcessBudgetVramAfterBytes,
+            MinimumGlobalFreeVramBytes = metrics.MinimumGlobalFreeVramBytes,
+            MinimumProcessBudgetVramBytes = metrics.MinimumProcessBudgetVramBytes,
+            PeakProcessRamBytes = metrics.PeakProcessRamBytes,
+            ExternalPressureDetected = metrics.ExternalPressureDetected,
             Runs = metrics.Runs
         };
     }
@@ -463,7 +483,7 @@ internal static class ModelFitMapper
     // Wire-string → enum parsing (case-insensitive; null/unknown handled by the caller)
     // -----------------------------------------------------------------------
 
-    /// <summary>Parses a wire role string (<c>chat|embedding</c>) into <see cref="ModelRole" />; null/empty defaults to chat. Unknown → null.</summary>
+    /// <summary>Parses a wire role string (<c>chat|embedding|reranker</c>) into <see cref="ModelRole" />; null/empty defaults to chat. Unknown → null.</summary>
     public static ModelRole? TryParseRole(string? role)
     {
         // Upper-invariant (CA1308: upper-casing round-trips safely) for case-insensitive matching of the wire tokens.
@@ -471,6 +491,7 @@ internal static class ModelFitMapper
         {
             null or "" or "CHAT" => ModelRole.Chat,
             "EMBEDDING" => ModelRole.Embedding,
+            "RERANKER" => ModelRole.Reranker,
             _ => null
         };
     }
@@ -508,6 +529,7 @@ internal static class ModelFitMapper
         return role switch
         {
             ModelRole.Embedding => "embedding",
+            ModelRole.Reranker => "reranker",
             _ => "chat"
         };
     }

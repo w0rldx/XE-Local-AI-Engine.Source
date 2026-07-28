@@ -5,6 +5,7 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Configuration.Validation;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Capacity.Tools.Implementation;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 internal static class AddNodeCapacityExtensions
 {
@@ -21,6 +22,7 @@ internal static class AddNodeCapacityExtensions
         // mirroring how the model-routing path consumes the scoped resolver. MemoryFitEstimator is registered by
         // AddNodeModelFit; this module runs after it.
         builder.Services.AddSingleton<IModelFootprintProvider, ModelFootprintProvider>();
+        builder.Services.AddSingleton<IProcessContextAllocationResolver, ProcessContextAllocationResolver>();
         builder.Services.AddSingleton<IPendingFootprintLedger, PendingFootprintLedger>();
         builder.Services.AddScoped<ICapacityService, CapacityService>();
 

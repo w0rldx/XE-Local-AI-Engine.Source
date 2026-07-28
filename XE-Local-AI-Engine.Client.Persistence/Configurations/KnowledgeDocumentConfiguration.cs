@@ -46,6 +46,14 @@ internal sealed class KnowledgeDocumentConfiguration : IEntityTypeConfiguration<
         builder.Property(entity => entity.EmbeddingModel)
                .HasColumnName("embedding_model");
 
+        builder.Property(entity => entity.VectorIdentity)
+               .HasColumnName("vector_identity")
+               .HasDefaultValue("legacy:unversioned");
+
+        builder.Property(entity => entity.VectorDim)
+               .HasColumnName("vector_dim")
+               .HasDefaultValue(0);
+
         builder.Property(entity => entity.CreatedAtUtc)
                .HasColumnName("created_at_utc");
 

@@ -33,7 +33,9 @@ public sealed class BenchmarkInferenceProfileEndpoint(IInferenceProfileService i
             return;
         }
 
-        var result = await _inferenceProfileService.BenchmarkAsync(req.ProfileId, ct).ConfigureAwait(false);
+        var result = await _inferenceProfileService
+            .BenchmarkAsync(req.ProfileId, req.AllowPreSpawnVramPressure, ct)
+            .ConfigureAwait(false);
 
         if (!result.Success || result.Profile is null)
         {

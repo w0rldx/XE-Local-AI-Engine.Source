@@ -62,7 +62,9 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     private readonly ConcurrentDictionary<ProcessKey, Task<RunningProcess>> _inflightSpawns = new();
     private readonly LlamaServerExternalEndpointOptions _externalEndpoints;
     private readonly ILlamaServerHealthProbe _healthProbe;
+    private readonly ILlamaFitParamsRunner _fitParamsRunner;
     private readonly ILlamaServerLaunchPolicy _launchPolicy;
+    private readonly IProcessContextAllocationResolver _allocationResolver;
     private readonly ILogger<LlamaServerProcessSupervisor> _logger;
     private readonly ILlamaServerProcessLauncher _launcher;
     private readonly ILlamaCppSourceBuildActivity _sourceBuildActivity;
@@ -100,7 +102,9 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         TimeProvider? timeProvider = null,
         ILogger<LlamaServerProcessSupervisor>? logger = null,
         IGpuModelLoadAdmission? loadAdmission = null,
-        ILlamaCppSourceBuildActivity? sourceBuildActivity = null)
+        ILlamaCppSourceBuildActivity? sourceBuildActivity = null,
+        ILlamaFitParamsRunner? fitParamsRunner = null,
+        IProcessContextAllocationResolver? allocationResolver = null)
     {
         _binaryManager = binaryManager ?? throw new ArgumentNullException(nameof(binaryManager));
         _variantSelector = variantSelector ?? throw new ArgumentNullException(nameof(variantSelector));
@@ -111,6 +115,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         _options.Validate();
         _profileResolver = profileResolver ?? throw new ArgumentNullException(nameof(profileResolver));
         _launchPolicy = launchPolicy ?? throw new ArgumentNullException(nameof(launchPolicy));
+        _allocationResolver = allocationResolver ?? new DefaultProcessContextAllocationResolver(new LlamaServerLaunchPolicyOptions());
         _externalEndpoints = externalEndpoints ?? new LlamaServerExternalEndpointOptions();
         _timeProvider = timeProvider ?? TimeProvider.System;
         _logger = logger ?? NullLogger<LlamaServerProcessSupervisor>.Instance;
@@ -119,6 +124,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         // simply off — the composition root injects the real, metric-emitting singleton shared with the image supervisor.
         _loadAdmission = loadAdmission ?? new NoOpGpuModelLoadAdmission();
         _sourceBuildActivity = sourceBuildActivity ?? new LlamaCppSourceBuildActivity();
+        _fitParamsRunner = fitParamsRunner ?? new LlamaFitParamsProcessRunner();
 
         _reaperLoop = Task.Run(() => ReapIdleLoopAsync(_shutdownCts.Token));
     }
@@ -432,6 +438,16 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     }
 
     /// <inheritdoc />
+    public async Task EvictAllRolesAsync(string modelName, CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
+        foreach (var role in Enum.GetValues<ModelRole>())
+        {
+            await EvictAsync(modelName, role, ct).ConfigureAwait(false);
+        }
+    }
+
+    /// <inheritdoc />
     public async Task<LlamaServerEjectOutcome> EjectAsync(string modelName, ModelRole role, bool force, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
@@ -707,6 +723,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         return SpawnCoreAsync(key,
             (variant, c) => _profileResolver.ResolveAsync(key.ModelName, key.Role, variant, c),
             startupCapture: null,
+            fitParamsCapture: null,
             ensureMetrics: false,
             applyLaunchPolicy: true,
             ct);
@@ -720,12 +737,14 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     /// <remarks>
     ///     The <paramref name="resolveArgs" /> delegate is awaited at the same point the profile resolver used to be, so
     ///     admission ordering and the "a slow profile read never stalls admission" invariant are unchanged. When
-    ///     <paramref name="startupCapture" /> and <paramref name="ensureMetrics" /> are both their normal-path defaults
-    ///     (<see langword="null" /> / <see langword="false" />) the built spec is identical to the legacy spawn.
+    ///     <paramref name="startupCapture" />, <paramref name="fitParamsCapture" />, and
+    ///     <paramref name="ensureMetrics" /> are their normal-path defaults (<see langword="null" />,
+    ///     <see langword="null" />, <see langword="false" />), the built spec is identical to the legacy spawn.
     /// </remarks>
     private async Task<RunningProcess> SpawnCoreAsync(ProcessKey key,
         Func<GpuVariant, CancellationToken, Task<ResolvedLaunchArguments>> resolveArgs,
         Action<string>? startupCapture,
+        Action<string>? fitParamsCapture,
         bool ensureMetrics,
         bool applyLaunchPolicy,
         CancellationToken ct)
@@ -790,8 +809,11 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
 
         // AUD4-02/05/17: the central launch policy fills in the deterministic context (-c), the GPU KV-cache
         // quantization + flash-attention optimization, and the CPU thread policy the audited launch defaults omitted.
-        // Operator profiling spawns bypass it (applyLaunchPolicy: false) so the supplied args ARE the experiment.
-        var planCandidates = await BuildLaunchPlanCandidatesAsync(key, variant, resolved, applyLaunchPolicy, ct).ConfigureAwait(false);
+        // Replay profiling bypasses it so the supplied frozen args ARE the experiment. Explore profiling applies the
+        // production policy because the helper and server must observe the same concrete context/KV/FA vector as normal
+        // serving; otherwise b9692 can report unchanged `-c 0 -ngl -1` defaults that are not replayable placement.
+        var planSet = await BuildLaunchPlanCandidatesAsync(key, variant, resolved, applyLaunchPolicy, ct).ConfigureAwait(false);
+        var planCandidates = planSet.Candidates;
 
         Exception? optimizedFailure = null;
         for (var attempt = 0; attempt < planCandidates.Count; attempt++)
@@ -801,6 +823,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             var port = await AdmitAndAllocatePortAsync(ct).ConfigureAwait(false);
 
             ILlamaServerProcessHandle? handle = null;
+            var automaticCapture = applyLaunchPolicy ? new BoundedStartupCapture() : null;
             try
             {
                 var spec = BuildLaunchSpec(key, binary.ServerExecutablePath, modelFilePath, port, variant, resolved,
@@ -816,12 +839,49 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                 }
 
                 // Operator profiling spawns capture both pipes; the normal path leaves the sink null (spec unchanged).
-                if (startupCapture is not null)
+                if (startupCapture is not null || automaticCapture is not null)
                 {
                     spec = spec with
                     {
-                        StartupCapture = startupCapture
+                        StartupCapture = line =>
+                        {
+                            startupCapture?.Invoke(line);
+                            automaticCapture?.Add(line);
+                        }
                     };
+                }
+
+                IReadOnlyList<string>? fittedArgsForSuccessfulAttempt = null;
+                if (fitParamsCapture is not null && resolved.ExploreMode && variant != GpuVariant.Cpu)
+                {
+                    // b9692 leaves -ngl at its automatic sentinel when the initial placement already fits. Verbose
+                    // load_tensors output is the authoritative proof that automatic placement meant every layer was
+                    // offloaded; the fit parser uses that proof to normalize replay to explicit all-layers (-2).
+                    if (!spec.Arguments.Contains("-v", StringComparer.Ordinal)
+                        && !spec.Arguments.Contains("--verbose", StringComparer.Ordinal))
+                    {
+                        spec = spec with
+                        {
+                            Arguments = [.. spec.Arguments, "-v"]
+                        };
+                    }
+
+                    var fitResult = await _fitParamsRunner.RunAsync(spec, ct).ConfigureAwait(false);
+                    if (fitResult.Status == LlamaFitParamsRunStatus.Succeeded)
+                    {
+                        fittedArgsForSuccessfulAttempt = fitResult.StandardOutput;
+                    }
+                    else if (fitResult.Status == LlamaFitParamsRunStatus.MissingCapability)
+                    {
+                        _logger.LogWarning(
+                            "The resolved llama.cpp runtime does not expose the sibling llama-fit-params capability; the live explore spawn will remain auto-fit, but no placement profile will be drafted.");
+                    }
+                    else
+                    {
+                        _logger.LogWarning(
+                            "llama-fit-params acquisition failed ({Reason}); the live explore spawn will remain auto-fit, but no placement profile will be drafted.",
+                            fitResult.FailureReason ?? "unknown failure");
+                    }
                 }
 
                 handle = _launcher.Launch(spec);
@@ -833,6 +893,16 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                 _logger.LogInformation("llama-server ready for model {ModelName} role {Role} (pid {ProcessId}) after {ElapsedMs:F0} ms (readiness budget {BudgetSeconds:F0}s).",
                     key.ModelName, key.Role, handle.ProcessId, (_timeProvider.GetUtcNow() - readyStartedUtc).TotalMilliseconds, readinessTimeout.TotalSeconds);
 
+                // Publish helper output only for the candidate that actually reached readiness. If the optimized
+                // production policy failed and the safe plan retried, output from the failed candidate must not be frozen.
+                if (fittedArgsForSuccessfulAttempt is not null)
+                {
+                    foreach (var line in fittedArgsForSuccessfulAttempt)
+                    {
+                        fitParamsCapture!(line);
+                    }
+                }
+
                 // AUD4-02: read the effective per-slot context the server actually loaded (best-effort) so both app-side
                 // budgeters and the UI meter size against the REAL window rather than the requested/advertised one.
                 var effectiveContext = await TryReadEffectiveContextAsync(spec.BaseAddress, ct).ConfigureAwait(false);
@@ -840,7 +910,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                 var endpoint = new LlamaServerEndpoint(key.ModelName, key.Role, spec.BaseAddress);
                 var running = new RunningProcess(handle, endpoint, port, _timeProvider.GetUtcNow())
                 {
-                    EffectiveContextTokens = effectiveContext
+                    EffectiveContextTokens = effectiveContext,
+                    SuccessfulLaunchArguments = fitParamsCapture is null ? [] : [.. spec.Arguments]
                 };
                 _processes[key] = running;
 
@@ -881,6 +952,25 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                     continue;
                 }
 
+                if (automaticCapture is not null
+                    && LlamaStartupFailureClassifier.Classify(automaticCapture.Snapshot()) == LlamaStartupFailureKind.OutOfMemory
+                    && planSet.Allocation is not null
+                    && _allocationResolver.TryDownTierAfterOutOfMemory(planSet.Allocation, out var downTiered))
+                {
+                    planSet = planSet with
+                    {
+                        Allocation = downTiered
+                    };
+                    var downTierPlan = await _launchPolicy.ResolveAsync(key.Role, variant, resolved, downTiered, ct).ConfigureAwait(false);
+                    planCandidates.Add(candidate is { UseKvCacheQuantization: false }
+                        ? downTierPlan.WithoutKvCacheQuantization()
+                        : downTierPlan);
+                    _logger.LogWarning(
+                        "llama-server automatic context allocation encountered a classified startup OOM; retrying at context tier {ContextTokens}.",
+                        downTiered.ProcessContextTokens);
+                    continue;
+                }
+
                 throw;
             }
         }
@@ -892,10 +982,10 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     /// <summary>
     ///     Builds the ordered launch-plan candidates for a spawn. The normal path (<paramref name="applyLaunchPolicy" />)
     ///     resolves the policy plan and, when it enables the GPU KV-quant + flash-attention optimization, appends a safe
-    ///     (KV/FA off) fallback candidate to try once if the optimized one cannot reach readiness. Operator profiling and
-    ///     replay-without-optimization spawns get a single <see langword="null" /> plan (today's byte-for-byte behavior).
+    ///     (KV/FA off) fallback candidate to try once if the optimized one cannot reach readiness. Replay profiling and
+    ///     any other caller that disables policy application get a single <see langword="null" /> plan.
     /// </summary>
-    private async Task<IReadOnlyList<LlamaServerLaunchPlan?>> BuildLaunchPlanCandidatesAsync(ProcessKey key,
+    private async Task<LaunchPlanSet> BuildLaunchPlanCandidatesAsync(ProcessKey key,
         GpuVariant variant,
         ResolvedLaunchArguments resolved,
         bool applyLaunchPolicy,
@@ -903,29 +993,51 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     {
         if (!applyLaunchPolicy)
         {
-            return [null];
+            return new LaunchPlanSet(null, [null]);
         }
 
-        var trainContext = await TryResolveTrainContextAsync(key.ModelName, ct).ConfigureAwait(false);
-        var plan = await _launchPolicy.ResolveAsync(key.Role, variant, resolved, trainContext, ct).ConfigureAwait(false);
+        var allocation = await _allocationResolver.ResolveAsync(key.ModelName, key.Role, variant, resolved, ct).ConfigureAwait(false)
+                         ?? throw NonRetryable("The requested model's process context could not be allocated.");
+        var plan = await _launchPolicy.ResolveAsync(key.Role, variant, resolved, allocation, ct).ConfigureAwait(false);
 
-        return plan.UseKvCacheQuantization
-            ? [plan, plan.WithoutKvCacheQuantization()]
-            : [plan];
+        return new LaunchPlanSet(allocation,
+            plan.UseKvCacheQuantization
+                ? [plan, plan.WithoutKvCacheQuantization()]
+                : [plan]);
     }
 
-    /// <summary>Reads the model's advertised train context (GGUF header), returning null when unknown — never fatal.</summary>
-    private async Task<long?> TryResolveTrainContextAsync(string modelName, CancellationToken ct)
+    private sealed record LaunchPlanSet(ProcessContextAllocation? Allocation, List<LlamaServerLaunchPlan?> Candidates);
+
+    private sealed class BoundedStartupCapture
     {
-        try
+        private const int MaximumCharacters = 16 * 1024;
+        private const int MaximumLines = 64;
+        private readonly Lock _gate = new();
+        private readonly List<string> _lines = [];
+        private int _characters;
+
+        public void Add(string line)
         {
-            var facts = await _modelStore.ResolveModelFootprintFactsAsync(modelName, ct).ConfigureAwait(false);
-            return facts?.ContextLength;
+            lock (_gate)
+            {
+                if (_lines.Count >= MaximumLines || _characters >= MaximumCharacters)
+                {
+                    return;
+                }
+
+                var remaining = MaximumCharacters - _characters;
+                var captured = line.Length <= remaining ? line : line[..remaining];
+                _lines.Add(captured);
+                _characters += captured.Length;
+            }
         }
-        catch (Exception exception) when (exception is not OperationCanceledException)
+
+        public IReadOnlyList<string> Snapshot()
         {
-            _logger.LogDebug(exception, "Resolving the train context for model {ModelName} failed; the requested context will not be capped.", modelName);
-            return null;
+            lock (_gate)
+            {
+                return [.. _lines];
+            }
         }
     }
 
@@ -1044,7 +1156,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         ResolvedLaunchArguments launchArgs,
         bool enableMetrics,
         Func<LlamaServerProfilingContext, CancellationToken, Task<T>> body,
-        CancellationToken ct)
+        CancellationToken ct,
+        Func<CancellationToken, Task<LlamaServerProfilingVramSnapshot>>? captureVramBeforeSpawn = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
         ArgumentNullException.ThrowIfNull(launchArgs);
@@ -1063,20 +1176,53 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             await gate.WaitAsync(ct).ConfigureAwait(false);
             try
             {
-                // Explicitly evict any warm process for this key — admission only auto-evicts an IDLE LRU victim, so a
-                // freshly-used warm process would otherwise survive and the profiling spawn would not be exclusive.
-                await EvictAsync(modelName, role, ct).ConfigureAwait(false);
+                // A sibling-role ensure may already have registered a detached spawn before this profiling operation
+                // acquired the runtime-mutation gate. No NEW ensure can register while this gate is held, so snapshot and
+                // await every same-model spawn that is already in flight before evicting. A failed spawn leaves no live
+                // process to evict and must not block profiling; caller cancellation still aborts the profiling request.
+                var siblingSpawns = _inflightSpawns
+                    .Where(pair => string.Equals(pair.Key.ModelName, modelName, StringComparison.Ordinal))
+                    .Select(static pair => pair.Value)
+                    .ToArray();
+                foreach (var siblingSpawn in siblingSpawns)
+                {
+                    try
+                    {
+                        await siblingSpawn.WaitAsync(ct).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                    {
+                        throw;
+                    }
+                    catch (Exception)
+                    {
+                        // The detached spawn faulted or was cancelled independently; its own cleanup removes the entry.
+                    }
+                }
+
+                // Explicitly evict every warm role for this model before capturing ambient VRAM. Admission only
+                // auto-evicts an IDLE LRU victim, so a freshly-used sibling role would otherwise survive, contaminate
+                // the pre-spawn baseline, and make the profiling spawn non-exclusive. The runtime-mutation gate is
+                // still held here, so no new ensure decision can repopulate any role until after this spawn registers.
+                await EvictAllRolesAsync(modelName, ct).ConfigureAwait(false);
+
+                var preSpawnVram = captureVramBeforeSpawn is null
+                    ? null
+                    : await captureVramBeforeSpawn(ct).ConfigureAwait(false);
 
                 // Thread-safe per-line sink backing the StartupCapture callback (both server pipes Enqueue concurrently).
                 var startupOutput = new ConcurrentQueue<string>();
+                var fitParamsOutput = new ConcurrentQueue<string>();
 
-                // Spawn exactly one process with the operator-supplied args verbatim (bypass BOTH the profile resolver and
-                // the launch policy — the supplied args ARE the experiment being measured).
+                // Replay profiling uses the supplied frozen args verbatim. Explore profiling bypasses only the profile
+                // resolver and applies the same launch policy as normal serving so helper/server placement evidence is
+                // production-equivalent rather than derived from unset llama.cpp defaults.
                 var running = await SpawnCoreAsync(key,
                         (_, _) => Task.FromResult(launchArgs),
                         startupOutput.Enqueue,
+                        fitParamsOutput.Enqueue,
                         ensureMetrics: enableMetrics,
-                        applyLaunchPolicy: false,
+                        applyLaunchPolicy: launchArgs.ExploreMode,
                         ct)
                     .ConfigureAwait(false);
 
@@ -1090,7 +1236,14 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                 running.Pin();
                 try
                 {
-                    var context = new LlamaServerProfilingContext(running.Endpoint, startupOutput.ToArray());
+                    var context = new LlamaServerProfilingContext(running.Endpoint,
+                        startupOutput.ToArray(),
+                        fitParamsOutput.ToArray(),
+                        running.Handle.ProcessId)
+                    {
+                        PreSpawnVram = preSpawnVram,
+                        SuccessfulLaunchArguments = running.SuccessfulLaunchArguments
+                    };
                     return await body(context, ct).ConfigureAwait(false);
                 }
                 finally
@@ -1192,7 +1345,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         //    -c and the KV-quant + flash-attention optimization; GPU replay: the frozen profile args verbatim.
         //  - CPU: the policy -c (explore) or the frozen -c (replay), plus the CPU thread policy; NO --fit/--metrics/-ngl,
         //    KV stays f16 and flash-attention stays auto.
-        // A null plan (operator profiling) reproduces the pre-policy behavior byte-for-byte.
+        // A null plan (replay profiling) reproduces the supplied replay vector byte-for-byte.
         AppendContextPlacementAndThreadArgs(args, variant, resolved, plan);
 
         if (key.Role == ModelRole.Chat)
@@ -1707,6 +1860,9 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         ///     actually loaded, captured once after readiness. <see langword="null" /> when <c>/props</c> was unavailable.
         /// </summary>
         public int? EffectiveContextTokens { get; init; }
+
+        /// <summary>Immutable snapshot of the exact argv for the candidate that reached readiness.</summary>
+        public IReadOnlyList<string> SuccessfulLaunchArguments { get; init; } = [];
 
         public DateTimeOffset LastUsedUtc => new(Interlocked.Read(ref _lastUsedTicks), TimeSpan.Zero);
 

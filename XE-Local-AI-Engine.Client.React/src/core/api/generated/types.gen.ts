@@ -504,14 +504,31 @@ export type XeLocalAiEngineClientEndpointsModelFitV1BenchmarkInferenceProfileRes
 };
 
 export type XeLocalAiEngineClientEndpointsModelFitV1InferenceBenchmarkMetricsDto = {
+	role?: string | null;
 	tokensPerSecond?: number | null;
 	ppTokensPerSecond?: number | null;
 	ttftMs?: number | null;
 	totalLatencyMs?: number | null;
 	cacheHitRate?: number | null;
 	toolLoopMs?: number | null;
+	itemsPerSecond?: number | null;
+	inputTokensPerSecond?: number | null;
+	p50LatencyMs?: number | null;
+	p95LatencyMs?: number | null;
+	batchSize?: number | null;
+	outputDimension?: number | null;
+	valuesFinite?: boolean | null;
+	deterministicOutput?: boolean | null;
 	vramLoadBytes?: number | null;
 	vramAfterBytes?: number | null;
+	globalFreeVramLoadBytes?: number | null;
+	globalFreeVramAfterBytes?: number | null;
+	processBudgetVramLoadBytes?: number | null;
+	processBudgetVramAfterBytes?: number | null;
+	minimumGlobalFreeVramBytes?: number | null;
+	minimumProcessBudgetVramBytes?: number | null;
+	peakProcessRamBytes?: number | null;
+	externalPressureDetected: boolean;
 	runs: number;
 };
 
@@ -532,15 +549,19 @@ export type XeLocalAiEngineClientEndpointsModelFitV1InferenceProfileViewDto = {
 	nParams?: number | null;
 	isMoe: boolean;
 	expertCount?: number | null;
-	freeVramAtFreezeBytes?: number | null;
+	launchPolicyFingerprintVersion?: number | null;
+	launchPolicyFingerprint?: string | null;
 	status: string;
 	benchmarkSnapshotId?: string | null;
 	createdAtUtc: number;
 	updatedAtUtc: number;
+	globalFreeVramAtFreezeBytes?: number | null;
+	processBudgetVramAtFreezeBytes?: number | null;
 };
 
 export type XeLocalAiEngineClientEndpointsModelFitV1BenchmarkInferenceProfileRequest = {
 	profileId: string;
+	allowPreSpawnVramPressure?: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsModelFitV1BrowseGgufRepositoriesResponse = {

@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
+using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 using XE_Local_AI_Engine.Providers.LlamaServer.Configuration;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
@@ -36,6 +37,8 @@ public static class LlamaServerServiceCollectionExtensions
     public static IServiceCollection AddLlamaServerLocalModelProvider(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
+        services.TryAddSingleton<ITokenEstimatorCalibrationStore, TokenEstimatorCalibrationStore>();
+        services.TryAddSingleton<ITokenEstimatorCalibrationScheduler, NullTokenEstimatorCalibrationScheduler>();
 
         services.TryAddSingleton<IGpuVendorProbe, ProcessGpuVendorProbe>();
 
@@ -88,10 +91,10 @@ public static class LlamaServerServiceCollectionExtensions
         services.TryAddSingleton<ILlamaCppSourceBuildEventPublisher, NullLlamaCppSourceBuildEventPublisher>();
         services.TryAddSingleton<ILlamaCppSourceBuildActivity, LlamaCppSourceBuildActivity>();
 
-        // Real available-VRAM probe: parses `llama-server --list-devices`. PLAIN AddSingleton (not TryAdd) so
-        // it WINS over the Application-layer TryAddSingleton<IAvailableVramProbe, UnknownAvailableVramProbe>() floor
+        // Real llama.cpp process-VRAM-budget probe: parses `llama-server --list-devices`. PLAIN AddSingleton (not TryAdd) so
+        // it WINS over the Application-layer TryAddSingleton<IProcessVramBudgetProbe, UnknownProcessVramBudgetProbe>() floor
         // regardless of registration order — TryAdd no-ops once a registration exists, and last-wins resolves to this one.
-        services.AddSingleton<IAvailableVramProbe, LlamaListDevicesVramProbe>();
+        services.AddSingleton<IProcessVramBudgetProbe, LlamaListDevicesProcessVramBudgetProbe>();
 
         // AUD4-03 device-inventory probe: parses `llama-server --list-devices` into a structured {variant, devices[]}
         // (sharing the process runner with the VRAM probe), cached per resolved binary. The Application-layer runtime
@@ -110,6 +113,8 @@ public static class LlamaServerServiceCollectionExtensions
         // AUD4-02/05/17: the central launch policy (deterministic -c per role, GPU KV-cache quant + flash attention,
         // CPU threads) plus its persistent safe-fallback store. Options default here; the host overrides from node config.
         services.TryAddSingleton(new LlamaServerLaunchPolicyOptions());
+        services.TryAddSingleton<IProcessContextAllocationResolver>(static sp =>
+            new DefaultProcessContextAllocationResolver(sp.GetRequiredService<LlamaServerLaunchPolicyOptions>()));
         services.TryAddSingleton<ILlamaServerLaunchFallbackStore>(static _ => new LlamaServerLaunchFallbackStore());
         services.TryAddSingleton<ILlamaServerLaunchPolicy>(static sp =>
             new LlamaServerLaunchPolicy(sp.GetRequiredService<LlamaServerLaunchPolicyOptions>(),
@@ -150,7 +155,8 @@ public static class LlamaServerServiceCollectionExtensions
             sp.GetService<TimeProvider>(),
             sp.GetRequiredService<ILogger<LlamaServerProcessSupervisor>>(),
             sp.GetRequiredService<IGpuModelLoadAdmission>(),
-            sp.GetRequiredService<ILlamaCppSourceBuildActivity>()));
+            sp.GetRequiredService<ILlamaCppSourceBuildActivity>(),
+            allocationResolver: sp.GetRequiredService<IProcessContextAllocationResolver>()));
         services.TryAddSingleton<ILlamaServerProcessSupervisor>(static sp =>
             sp.GetRequiredService<LlamaServerProcessSupervisor>());
 
@@ -186,7 +192,8 @@ public static class LlamaServerServiceCollectionExtensions
         services.TryAddSingleton<LlamaServerLocalModelProvider>(static sp =>
             new LlamaServerLocalModelProvider(sp.GetRequiredService<ILlamaServerProcessSupervisor>(),
                 sp.GetRequiredService<IGgufModelStore>(),
-                sp.GetRequiredService<LlamaServerSupervisorOptions>()));
+                sp.GetRequiredService<LlamaServerSupervisorOptions>(),
+                sp.GetRequiredService<ITokenEstimatorCalibrationScheduler>()));
         services.AddSingleton<ILocalModelProvider>(static sp =>
             sp.GetRequiredService<LlamaServerLocalModelProvider>());
 
