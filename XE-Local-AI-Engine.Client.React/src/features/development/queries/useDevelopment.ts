@@ -94,10 +94,17 @@ export function useRegisterDevelopmentRepository() {
 	const queryClient = useQueryClient();
 	return useMutation({
 		...withResponseValidation(registerDevelopmentRepositoryMutation()),
+		// Detection is keyed by selected folder, so it goes with the repository list: re-registering an existing path
+		// returns the same folder id, and a cached proposal for it can predate whatever the repository looks like now.
 		onSuccess: () =>
-			queryClient.invalidateQueries({
-				queryKey: developmentInvalidationKey(developmentQueryIds.listRepositories),
-			}),
+			Promise.all([
+				queryClient.invalidateQueries({
+					queryKey: developmentInvalidationKey(developmentQueryIds.listRepositories),
+				}),
+				queryClient.invalidateQueries({
+					queryKey: developmentInvalidationKey(developmentQueryIds.detectRepositoryProfile),
+				}),
+			]),
 	});
 }
 

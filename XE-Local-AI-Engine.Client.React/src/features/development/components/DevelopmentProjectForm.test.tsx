@@ -99,6 +99,37 @@ describe("DevelopmentProjectForm", () => {
 		await waitFor(() => expect(register).toHaveBeenCalledWith({ alias: "Engine", hostPath: "/home/operator/projects/engine" }));
 	});
 
+	it("tells its owner about the repository it auto-selects after registering", async () => {
+		// Registering auto-selects the new repository, and the owner drives profile detection off that id. This was a
+		// real bug: the notification fired only from the Select's onChange, so on the register-then-create path —
+		// which is the first-run path — detection never ran and the command-profile confirmation step never appeared
+		// at all. Only the browser E2E caught it, and only once it stopped racing the detection query.
+		const register = vi.fn().mockResolvedValue({ id: "repository-2", alias: "Engine", availability: "Available" });
+		const repositoryChanged = vi.fn();
+		render(
+			<MantineProvider>
+				<DevelopmentProjectForm
+					repositories={[]}
+					repositoriesLoading={false}
+					isRegistering={false}
+					isSubmitting={false}
+					onRegister={register}
+					onRepositoryChange={repositoryChanged}
+					onSubmit={vi.fn()}
+				/>
+			</MantineProvider>,
+		);
+
+		fireEvent.click(screen.getByTestId("development-open-register-repository"));
+		fireEvent.change(await screen.findByTestId("development-register-alias"), { target: { value: "Engine" } });
+		fireEvent.change(screen.getByTestId("development-register-path"), {
+			target: { value: "/home/operator/projects/engine" },
+		});
+		fireEvent.click(screen.getByTestId("development-register-repository"));
+
+		await waitFor(() => expect(repositoryChanged).toHaveBeenCalledWith("repository-2"));
+	});
+
 	it("blocks creation until the detected command profile is explicitly confirmed", async () => {
 		const submit = vi.fn();
 		render(
