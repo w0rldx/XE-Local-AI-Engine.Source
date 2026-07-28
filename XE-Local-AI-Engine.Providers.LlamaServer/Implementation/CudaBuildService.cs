@@ -269,10 +269,14 @@ public sealed partial class CudaBuildService : ICudaBuildService, IDisposable
             var architectures = await ResolveCudaArchitecturesAsync(environment, workDir, ct).ConfigureAwait(false);
             AppendLog($"Building for CUDA architectures: {architectures}.");
 
-            // 4. cmake configure.
+            // 4. cmake configure. CMAKE_BUILD_RPATH_USE_ORIGIN is load-bearing: the build tree is produced under a work
+            // directory and then PLACED at its final managed path, so an absolute build RUNPATH would point at a
+            // directory that no longer exists and llama-server would die at startup with "libllama-server-impl.so:
+            // cannot open shared object file" even though the .so sits right beside it. $ORIGIN keeps the placed tree
+            // self-referential. Mirrors LlamaCppSourceBuildService, which owns the live path today.
             SetPhase(CudaBuildPhase.Configuring);
             var configureExit = await RunStreamingStepAsync("cmake",
-                ["-B", buildDir, "-S", cloneDir, "-DGGML_CUDA=ON", "-DCMAKE_BUILD_TYPE=Release", "-DLLAMA_CURL=OFF", $"-DCMAKE_CUDA_ARCHITECTURES={architectures}"],
+                ["-B", buildDir, "-S", cloneDir, "-DGGML_CUDA=ON", "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_BUILD_RPATH_USE_ORIGIN=ON", "-DLLAMA_CURL=OFF", $"-DCMAKE_CUDA_ARCHITECTURES={architectures}"],
                 environment,
                 cloneDir,
                 ConfigureTimeout,

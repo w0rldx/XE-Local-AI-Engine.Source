@@ -197,6 +197,12 @@ public sealed class CudaBuildServiceTests
             "build",
             "bin",
             "llama-fit-params")));
+        // The build tree is produced under a work directory and then PLACED at its managed path, so an absolute build
+        // RUNPATH would point at a directory that no longer exists — llama-server then dies at startup with
+        // "libllama-server-impl.so: cannot open shared object file" even though the .so sits beside it. Observed on a
+        // real tree built before this flag existed. $ORIGIN keeps the placed tree self-referential.
+        AssertEx.True(allCapturedArgs.Contains("-DCMAKE_BUILD_RPATH_USE_ORIGIN=ON", StringComparison.Ordinal),
+            "Configure must emit an $ORIGIN-relative build RUNPATH so the placed runtime stays loadable after relocation.");
     }
 
     [Test]
