@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Development;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.AI;
@@ -24,6 +25,17 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
 {
     private static readonly Guid SelectedFolderId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+
+    /// <summary>The shipped production validation profile, joined so order-sensitive comparison reads clearly.</summary>
+    private static readonly string ExpectedDefaultProfile = string.Join(',',
+        DevelopmentCommandIds.GitDiffCheck,
+        DevelopmentCommandIds.DotnetRestore,
+        DevelopmentCommandIds.DotnetBuildRelease,
+        DevelopmentCommandIds.DotnetTestRelease);
+
+    /// <summary>Reused because CA1869 forbids minting serializer options per operation.</summary>
+    private static readonly JsonSerializerOptions ReportJsonOptions = new(JsonSerializerDefaults.Web);
+
     private readonly string _root = Path.Combine(Path.GetTempPath(), "xe-development-validation-review-" + Guid.NewGuid().ToString("N"));
 
     public void Dispose()
@@ -299,6 +311,66 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
                       .ConfigureAwait(false);
     }
 
+    /// <summary>
+    ///     Command evidence is machine-generated build/test output, so it redacts rather than rejecting. Both inputs
+    ///     here are shapes that ordinary `dotnet build` / `dotnet test` output really produces: an absolute output
+    ///     path, and a long descriptive test-method name. Each on its own used to clear the secret scanner's
+    ///     keyword-free entropy fallback and make the whole validation report unpersistable — which meant the gate
+    ///     could neither pass nor cleanly fail on this repository once the real command profile was enabled.
+    /// </summary>
+    [Test]
+    public async Task ArtifactSanitizer_ForCommandEvidence_RedactsInsteadOfRejectingOrdinaryBuildOutput()
+    {
+        await Task.CompletedTask.ConfigureAwait(false);
+        var evidence = new DevelopmentCommandEvidence(DevelopmentCommandIds.DotnetTestRelease,
+            ExitCode: 1,
+            Completed: true,
+            OutputTruncated: false,
+            DurationMilliseconds: 1234,
+            "  /home/operator/projects/engine/tests/Probe/bin/Release/net10\n"
+            + "failed ApplyThinkingSwitch_MarkerAbsent_BodyHasNoChatTemplateKwargs (12ms)\n",
+            "AccountKey=abcdefghijklmnopqrstuvwxyz012345\n");
+
+        // The point of the test: this returns evidence at all. Before, it threw and the whole validation report was
+        // unpersistable, so the run had no outcome — neither a pass nor an honest failure.
+        var sanitized = DevelopmentArtifactSanitizer.Sanitize(evidence, "/home/operator/projects/engine");
+
+        // The exit code and the surrounding structure survive, which is what the gate's verdict rests on.
+        AssertEx.Equal(expected: 1, sanitized.ExitCode);
+        AssertEx.Contains(sanitized.StandardOutput, "[REDACTED:development-path]");
+        AssertEx.Contains(sanitized.StandardOutput, "failed ");
+        AssertEx.Contains(sanitized.StandardOutput, "(12ms)");
+
+        // Known cost of the redact-don't-reject policy, pinned deliberately rather than left to be rediscovered:
+        // the failing test's NAME is itself high-entropy enough to be redacted, so the operator sees that a test
+        // failed but not which one. That is a diagnostic loss; it is not a correctness loss, and it is strictly
+        // better than the whole report being rejected. Narrowing the fallback so ordinary identifiers survive is
+        // follow-up work on the shared scanner.
+        AssertEx.Contains(sanitized.StandardOutput, "[REDACTED:high-entropy-token]");
+
+        // A genuine credential is still removed — redacted rather than leaked.
+        AssertEx.Contains(sanitized.StandardError, "[REDACTED:");
+        AssertEx.False(sanitized.StandardError.Contains("abcdefghijklmnopqrstuvwxyz012345", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    ///     The structurally unredactable cases still reject the artifact outright, for command evidence too.
+    /// </summary>
+    [Test]
+    public async Task ArtifactSanitizer_ForCommandEvidence_StillRejectsAPrivateKeyBlock()
+    {
+        var evidence = new DevelopmentCommandEvidence(DevelopmentCommandIds.DotnetBuildRelease,
+            ExitCode: 0,
+            Completed: true,
+            OutputTruncated: false,
+            DurationMilliseconds: 10,
+            "-----BEGIN RSA PRIVATE KEY-----\nMIIEow==\n-----END RSA PRIVATE KEY-----\n",
+            string.Empty);
+
+        await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => Task.Run(() => DevelopmentArtifactSanitizer.Sanitize(evidence)))
+                      .ConfigureAwait(false);
+    }
+
     [Test]
     public async Task TransitionTaskAsync_WhenFourthReviewRoundWouldStart_Rejects()
     {
@@ -398,6 +470,145 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
                       .ConfigureAwait(false);
     }
 
+    /// <summary>
+    ///     The shipped default is what the gate actually runs — <c>appsettings.json</c> sets only
+    ///     <c>Development:Enabled</c>, and <c>ValidationCommandIds</c> cannot be overridden from configuration at all
+    ///     (an init-only <c>IReadOnlyList&lt;string&gt;</c> with a non-empty default is silently ignored by
+    ///     <c>ConfigurationBinder</c>). So this default IS the production profile on every install, and it regressing
+    ///     to a whitespace check is exactly the defect the tests below exist to keep fixed.
+    /// </summary>
+    [Test]
+    public async Task DefaultValidationProfile_RunsWhitespaceRestoreBuildAndTestInDependencyOrder()
+    {
+        await Task.CompletedTask.ConfigureAwait(false);
+        AssertEx.Equal(ExpectedDefaultProfile, string.Join(',', new DevelopmentOptions().ValidationCommandIds));
+    }
+
+    [Test]
+    public async Task Validation_UnderTheDefaultProfile_WhenPatchCompilesAndPasses_ReachesInReviewWithEveryCommandRecorded()
+    {
+        var (validation, task, commands) = await RunDefaultProfileValidationAsync(DevelopmentSyntheticSolutionRepository.PassingLibrarySource)
+            .ConfigureAwait(false);
+
+        AssertEx.True(validation.Passed);
+        AssertEx.Equal(DevelopmentTaskStatus.InReview, validation.TaskStatus);
+        AssertEx.Equal(DevelopmentTaskStatus.InReview, task.Status);
+        AssertEx.Equal(ExpectedDefaultProfile, string.Join(',', commands.Select(static command => command.CommandId)));
+        AssertEx.True(commands.All(static command => command.Completed && command.ExitCode == 0));
+    }
+
+    /// <summary>
+    ///     The first of the two outcomes the shipped one-command profile silently accepted: a patch that does not
+    ///     compile. Under the old default this reached <c>InReview</c> and could be applied to the trusted repository.
+    /// </summary>
+    [Test]
+    public async Task Validation_UnderTheDefaultProfile_WhenPatchBreaksTheBuild_DoesNotReachInReview()
+    {
+        var (validation, task, commands) = await RunDefaultProfileValidationAsync(DevelopmentSyntheticSolutionRepository.BuildBreakingLibrarySource)
+            .ConfigureAwait(false);
+
+        AssertEx.False(validation.Passed);
+        AssertEx.Equal(DevelopmentTaskStatus.InProgress, validation.TaskStatus);
+        AssertEx.Equal(DevelopmentTaskStatus.InProgress, task.Status);
+
+        // The build is what rejected it: the whitespace check and the restore ahead of it both succeeded, and the
+        // test command never ran because the runner stops at the first failure.
+        AssertEx.Equal(expected: 0, CommandExitCode(commands, DevelopmentCommandIds.GitDiffCheck));
+        AssertEx.Equal(expected: 0, CommandExitCode(commands, DevelopmentCommandIds.DotnetRestore));
+        AssertEx.NotEqual(notExpected: 0, CommandExitCode(commands,DevelopmentCommandIds.DotnetBuildRelease));
+    }
+
+    /// <summary>
+    ///     The second outcome the shipped one-command profile silently accepted: a patch that compiles cleanly and
+    ///     fails its test. This one is invisible to every check the old default performed.
+    /// </summary>
+    [Test]
+    public async Task Validation_UnderTheDefaultProfile_WhenPatchFailsATest_DoesNotReachInReview()
+    {
+        var (validation, task, commands) = await RunDefaultProfileValidationAsync(DevelopmentSyntheticSolutionRepository.TestFailingLibrarySource)
+            .ConfigureAwait(false);
+
+        AssertEx.False(validation.Passed);
+        AssertEx.Equal(DevelopmentTaskStatus.InProgress, validation.TaskStatus);
+        AssertEx.Equal(DevelopmentTaskStatus.InProgress, task.Status);
+
+        // The change compiles — only the test rejected it, which is the signal the old default could not see at all.
+        AssertEx.Equal(expected: 0, CommandExitCode(commands, DevelopmentCommandIds.GitDiffCheck));
+        AssertEx.Equal(expected: 0, CommandExitCode(commands, DevelopmentCommandIds.DotnetRestore));
+        AssertEx.Equal(expected: 0, CommandExitCode(commands, DevelopmentCommandIds.DotnetBuildRelease));
+        AssertEx.NotEqual(notExpected: 0, CommandExitCode(commands,DevelopmentCommandIds.DotnetTestRelease));
+    }
+
+    /// <summary>
+    ///     Drives a coder attempt that rewrites the synthetic solution's library source with
+    ///     <paramref name="librarySource" />, then runs deterministic validation under the shipped production command
+    ///     profile and returns the outcome together with the command evidence the validation report recorded.
+    /// </summary>
+    private async Task<(DevelopmentValidationResult Validation, DevelopmentTaskSnapshot Task, IReadOnlyList<DevelopmentCommandEvidence> Commands)> RunDefaultProfileValidationAsync(string librarySource)
+    {
+        Directory.CreateDirectory(_root);
+        var repository = Path.Combine(_root, "solution-" + Guid.NewGuid().ToString("N"));
+        await DevelopmentSyntheticSolutionRepository.CreateAsync(repository).ConfigureAwait(false);
+
+        // 10 minutes because MaxAttemptDurationSeconds is the PER-COMMAND timeout as well as the attempt cap, and
+        // this profile now spends four commands against it. The synthetic solution restores, builds and tests in a
+        // couple of seconds; the headroom is for a cold NuGet fallback resolve on a loaded machine.
+        await using var provider = await BuildProviderAsync(new WritingCoderModel(librarySource, DevelopmentSyntheticSolutionRepository.LibrarySourcePath),
+                                       new ApprovingReviewerModel(),
+                                       new DevelopmentOptions().ValidationCommandIds,
+                                       maxAttemptDurationSeconds: 600)
+                                   .ConfigureAwait(false);
+        await using var scope = provider.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
+        var coordinator = scope.ServiceProvider.GetRequiredService<IDevelopmentCoordinator>();
+        var seed = Seed(repository);
+        var repositoryBinding = Binding(seed, repository);
+
+        _ = await coordinator.CreateProjectAsync(seed).ConfigureAwait(false);
+        var ready = await coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
+                                         Guid.NewGuid(),
+                                         DevelopmentTaskStatus.Ready,
+                                         ExpectedTaskVersion: 1))
+                                     .ConfigureAwait(false);
+        var coderAttemptId = Guid.NewGuid();
+        _ = await coordinator.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
+                                 coderAttemptId,
+                                 Guid.NewGuid(),
+                                 DevelopmentAttemptRole.Coder,
+                                 "coder-local",
+                                 "local",
+                                 ready.Version))
+                             .ConfigureAwait(false);
+        _ = await scope.ServiceProvider.GetRequiredService<IDevelopmentCoderAttemptRunner>()
+                       .RunAsync(coderAttemptId, repositoryBinding)
+                       .ConfigureAwait(false);
+
+        var validation = await scope.ServiceProvider.GetRequiredService<IDevelopmentValidationRunner>()
+                                    .RunAsync(seed.TaskId, repositoryBinding)
+                                    .ConfigureAwait(false);
+        var task = await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false);
+        var commands = await ReadValidationCommandsAsync(scope.ServiceProvider, validation.ArtifactId, seed.TaskId).ConfigureAwait(false);
+        return (validation, task, commands);
+    }
+
+    /// <summary>Reads back the command evidence the validation runner persisted into its report artifact.</summary>
+    private static async Task<IReadOnlyList<DevelopmentCommandEvidence>> ReadValidationCommandsAsync(IServiceProvider services,
+        Guid artifactId,
+        Guid taskId)
+    {
+        var artifact = (await services.GetRequiredService<IDevelopmentStore>().ListArtifactsAsync(taskId).ConfigureAwait(false))
+            .Single(item => item.Id == artifactId);
+        var payload = await services.GetRequiredService<IDevelopmentArtifactBlobStore>()
+                                    .ReadAsync(artifact.ProjectId, artifact.Id, artifact.ContentHash, artifact.ByteCount)
+                                    .ConfigureAwait(false);
+        AssertEx.Equal(DevelopmentArtifactReadStatus.Found, payload.Status);
+        var report = JsonSerializer.Deserialize<DevelopmentValidationReport>(payload.Content.Span, ReportJsonOptions);
+        return AssertEx.NotNull(report).Commands;
+    }
+
+    private static int CommandExitCode(IReadOnlyList<DevelopmentCommandEvidence> commands, string commandId) =>
+        AssertEx.NotNull(commands.SingleOrDefault(command => string.Equals(command.CommandId, commandId, StringComparison.Ordinal))).ExitCode;
+
     private static async Task<(DevelopmentCreateProjectCommand Seed, Guid ReviewerAttemptId, DevelopmentReviewerAttemptResult Review)> RunThroughReviewAsync(IServiceProvider services,
         string repository)
     {
@@ -443,8 +654,19 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         return (seed, reviewerAttemptId, review);
     }
 
+    /// <param name="validationCommandIds">
+    ///     The deterministic validation profile for this fixture. It defaults to the whitespace check alone so the
+    ///     workflow tests stay fast on a repository that is not a .NET solution; the tests that exercise the gate
+    ///     itself pass the shipped production default and bind to a synthetic buildable solution instead.
+    /// </param>
+    /// <param name="maxAttemptDurationSeconds">
+    ///     The per-command timeout, which is also the attempt cap — they are the same knob today. Restore, build and
+    ///     test on the synthetic solution need more headroom than a lone `git diff --check` does.
+    /// </param>
     private async Task<ServiceProvider> BuildProviderAsync(IDevelopmentCoderModel coderModel,
-        IDevelopmentReviewerModel reviewerModel)
+        IDevelopmentReviewerModel reviewerModel,
+        IReadOnlyList<string>? validationCommandIds = null,
+        int maxAttemptDurationSeconds = 60)
     {
         Directory.CreateDirectory(_root);
         var dataRoot = Path.Combine(_root, "data-" + Guid.NewGuid().ToString("N"));
@@ -454,14 +676,14 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         {
             Enabled = true,
             MaxArtifactBytes = 2 * 1024 * 1024,
-            MaxAttemptDurationSeconds = 60,
+            MaxAttemptDurationSeconds = maxAttemptDurationSeconds,
             MaxToolCalls = 16,
             MaxChangedFiles = 32,
             MaxFileWriteBytes = 1024 * 1024,
             MaxPatchBytes = 1024 * 1024,
             MaxCommandOutputBytes = 256 * 1024,
             MaxOutputTokens = 2048,
-            ValidationCommandIds = [DevelopmentCommandIds.GitDiffCheck]
+            ValidationCommandIds = validationCommandIds ?? [DevelopmentCommandIds.GitDiffCheck]
         });
         var services = new ServiceCollection();
         services.AddSingleton<INodeSqliteKeyHolder, NullNodeSqliteKeyHolder>();
@@ -595,7 +817,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
             throw new InvalidOperationException("The local-only workflow fixture must not build a cloud context.");
     }
 
-    private sealed class WritingCoderModel(string content) : IDevelopmentCoderModel
+    private sealed class WritingCoderModel(string content, string path = "feature.txt") : IDevelopmentCoderModel
     {
         public async Task<DevelopmentCoderModelResult> RunAsync(string modelId,
             string prompt,
@@ -606,9 +828,9 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
             DevelopmentCloudRoleRoute? cloudRoute = null,
             CancellationToken cancellationToken = default)
         {
-            _ = await tools.WriteFileAsync("feature.txt", content, cancellationToken).ConfigureAwait(false);
+            _ = await tools.WriteFileAsync(path, content, cancellationToken).ConfigureAwait(false);
             return new DevelopmentCoderModelResult(new DevelopmentCoderSubmission("Implemented feature file.",
-                    ["feature.txt"],
+                    [path],
                     [],
                     Notes: null),
                 InputTokens: 10,
