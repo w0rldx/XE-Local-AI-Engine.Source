@@ -113,6 +113,7 @@ internal sealed class DevelopmentManagementService(
     IActiveCloudChatClientFactory cloudFactory,
     IDevelopmentCommandProfileDetector profileDetector,
     IDevelopmentProfileBackfillService profileBackfill,
+    IDevelopmentTemplateStore templateStore,
     TimeProvider timeProvider) : IDevelopmentManagementService
 {
     private const string ReviewRoundLimitReason = "The configured maximum review rounds has been reached.";
@@ -126,6 +127,7 @@ internal sealed class DevelopmentManagementService(
     private readonly IDevelopmentRepositoryBindingService _repositoryBindings = repositoryBindings ?? throw new ArgumentNullException(nameof(repositoryBindings));
     private readonly IDevelopmentStore _store = store ?? throw new ArgumentNullException(nameof(store));
     private readonly IDevelopmentAttemptExecutionSupervisor _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
+    private readonly IDevelopmentTemplateStore _templateStore = templateStore ?? throw new ArgumentNullException(nameof(templateStore));
     private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
     public Task<DevelopmentRepositoryReference> RegisterRepositoryAsync(string displayAlias,
@@ -172,7 +174,10 @@ internal sealed class DevelopmentManagementService(
         // The profile is snapshotted here, once, and is the only source of truth for the life of the project. It is
         // never re-read from the worktree during an attempt: the agent can write to the worktree, so a live read would
         // let it rewrite its own test command.
-        var profile = ResolveCommandProfile(input, repository.RepositoryRoot);
+        // Template provenance is read from the materialization record rather than taken from the request: the client
+        // must not be able to assert which template a repository came from.
+        var materialization = await _templateStore.FindMaterializationAsync(input.SelectedFolderId, cancellationToken).ConfigureAwait(false);
+        var profile = ResolveCommandProfile(input, repository.RepositoryRoot, materialization?.TemplateId.ToString());
         var projectId = DerivedOperationId(input.OperationId, "project");
         var taskId = DerivedOperationId(input.OperationId, "task");
         _ = await _coordinator.CreateProjectAsync(new DevelopmentCreateProjectCommand(projectId,
@@ -203,7 +208,9 @@ internal sealed class DevelopmentManagementService(
     ///     Resolves the profile to snapshot. An explicitly supplied id is the operator's confirmed choice and wins;
     ///     otherwise detection proposes one from the repository contents.
     /// </summary>
-    private DevelopmentCommandProfile ResolveCommandProfile(DevelopmentCreateProjectInput input, string repositoryRoot)
+    private DevelopmentCommandProfile ResolveCommandProfile(DevelopmentCreateProjectInput input,
+        string repositoryRoot,
+        string? templateId)
     {
         // Read once, here, on the trusted host path. The digest of these exact bytes rides on the profile so the
         // workspace invariant can detect a command rewriting the file mid-attempt.
@@ -227,7 +234,7 @@ internal sealed class DevelopmentManagementService(
             buildTarget = detected.BuildTarget;
         }
 
-        return DevelopmentCommandProfileCatalog.Materialize(profileId, buildTarget, templateId: null, importDigest);
+        return DevelopmentCommandProfileCatalog.Materialize(profileId, buildTarget, templateId, importDigest);
     }
 
     public async Task<DevelopmentProjectAggregate> GetProjectAsync(Guid projectId, CancellationToken cancellationToken = default)
