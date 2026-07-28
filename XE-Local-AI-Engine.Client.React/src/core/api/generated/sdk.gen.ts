@@ -146,6 +146,9 @@ import type {
 	DeleteSkillData,
 	DeleteSkillErrors,
 	DeleteSkillResponses,
+	DetectDevelopmentRepositoryProfileData,
+	DetectDevelopmentRepositoryProfileErrors,
+	DetectDevelopmentRepositoryProfileResponses,
 	DisableAutoConnectData,
 	DisableAutoConnectErrors,
 	DisableAutoConnectResponses,
@@ -687,6 +690,8 @@ import {
 	zDeleteScheduledJobResponse,
 	zDeleteSkillPath,
 	zDeleteSkillResponse,
+	zDetectDevelopmentRepositoryProfilePath,
+	zDetectDevelopmentRepositoryProfileResponse,
 	zDisableAutoConnectResponse,
 	zDisableScheduledJobPath,
 	zDisableScheduledJobResponse,
@@ -3901,6 +3906,32 @@ export const registerDevelopmentRepository = <ThrowOnError extends boolean = fal
 			"Content-Type": "application/json",
 			...options.headers,
 		},
+	});
+
+export const detectDevelopmentRepositoryProfile = <ThrowOnError extends boolean = false>(
+	options: Options<DetectDevelopmentRepositoryProfileData, ThrowOnError>,
+) =>
+	(options.client ?? client).get<
+		DetectDevelopmentRepositoryProfileResponses,
+		DetectDevelopmentRepositoryProfileErrors,
+		ThrowOnError
+	>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zDetectDevelopmentRepositoryProfilePath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zDetectDevelopmentRepositoryProfileResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/development/repositories/{selectedFolderId}/profile-detection",
+		...options,
 	});
 
 export const listDevelopmentProjects = <ThrowOnError extends boolean = false>(

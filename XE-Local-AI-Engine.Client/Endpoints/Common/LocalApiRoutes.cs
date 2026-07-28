@@ -278,6 +278,10 @@ public static class LocalApiRoutes
         public const string Root = "development";
         public const string Capability = "development/capability";
         public const string Repositories = "development/repositories";
+
+        // A GET with the folder id in the route: detection is a read of the repository, it takes no body, and a
+        // body-less POST would land on this repo's 415 trap.
+        public const string RepositoryProfileDetection = "development/repositories/{selectedFolderId}/profile-detection";
         public const string Projects = "development/projects";
         public const string ProjectById = "development/projects/{projectId}";
         public const string RepositoryConnection = "development/projects/{projectId}/repository-connection";

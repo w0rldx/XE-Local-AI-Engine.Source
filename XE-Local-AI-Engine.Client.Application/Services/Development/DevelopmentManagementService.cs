@@ -19,7 +19,9 @@ public sealed record DevelopmentCreateProjectInput(
     string ReviewerModelId,
     bool TrustedRepositoryAcknowledged,
     int? MaxTokens = null,
-    int? MaxDurationSeconds = null);
+    int? MaxDurationSeconds = null,
+    string? CommandProfileId = null,
+    string? BuildTarget = null);
 
 public sealed record DevelopmentProjectAggregate(
     DevelopmentProjectSnapshot Project,
@@ -60,6 +62,13 @@ public interface IDevelopmentManagementService
         CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<DevelopmentRepositoryReference>> ListRepositoriesAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Proposes a command profile for a registered repository so the operator can confirm or override it before a
+    ///     project is created. Read-only and non-authoritative — the confirmed choice is what gets snapshotted.
+    /// </summary>
+    Task<DevelopmentProfileDetectionResult> DetectRepositoryProfileAsync(Guid selectedFolderId, CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<DevelopmentProjectSnapshot>> ListProjectsAsync(CancellationToken cancellationToken = default);
     Task<DevelopmentProjectAggregate> CreateProjectAsync(DevelopmentCreateProjectInput input, CancellationToken cancellationToken = default);
     Task<DevelopmentProjectAggregate> GetProjectAsync(Guid projectId, CancellationToken cancellationToken = default);
@@ -102,6 +111,8 @@ internal sealed class DevelopmentManagementService(
     IDevelopmentApplyService applyService,
     IDevelopmentRepositoryBindingService repositoryBindings,
     IActiveCloudChatClientFactory cloudFactory,
+    IDevelopmentCommandProfileDetector profileDetector,
+    IDevelopmentProfileBackfillService profileBackfill,
     TimeProvider timeProvider) : IDevelopmentManagementService
 {
     private const string ReviewRoundLimitReason = "The configured maximum review rounds has been reached.";
@@ -110,6 +121,8 @@ internal sealed class DevelopmentManagementService(
     private readonly IDevelopmentArtifactBlobStore _blobStore = blobStore ?? throw new ArgumentNullException(nameof(blobStore));
     private readonly IDevelopmentCoordinator _coordinator = coordinator ?? throw new ArgumentNullException(nameof(coordinator));
     private readonly IActiveCloudChatClientFactory _cloudFactory = cloudFactory ?? throw new ArgumentNullException(nameof(cloudFactory));
+    private readonly IDevelopmentProfileBackfillService _profileBackfill = profileBackfill ?? throw new ArgumentNullException(nameof(profileBackfill));
+    private readonly IDevelopmentCommandProfileDetector _profileDetector = profileDetector ?? throw new ArgumentNullException(nameof(profileDetector));
     private readonly IDevelopmentRepositoryBindingService _repositoryBindings = repositoryBindings ?? throw new ArgumentNullException(nameof(repositoryBindings));
     private readonly IDevelopmentStore _store = store ?? throw new ArgumentNullException(nameof(store));
     private readonly IDevelopmentAttemptExecutionSupervisor _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
@@ -122,6 +135,14 @@ internal sealed class DevelopmentManagementService(
 
     public Task<IReadOnlyList<DevelopmentRepositoryReference>> ListRepositoriesAsync(CancellationToken cancellationToken = default) =>
         _repositoryBindings.ListAsync(cancellationToken);
+
+    public async Task<DevelopmentProfileDetectionResult> DetectRepositoryProfileAsync(Guid selectedFolderId,
+        CancellationToken cancellationToken = default)
+    {
+        var repository = await _repositoryBindings.ResolveFolderAsync(selectedFolderId, cancellationToken).ConfigureAwait(false);
+        var detected = _profileDetector.Detect(repository.RepositoryRoot);
+        return new DevelopmentProfileDetectionResult(detected.ProfileId, detected.BuildTarget, detected.Candidates);
+    }
 
     public Task<IReadOnlyList<DevelopmentProjectSnapshot>> ListProjectsAsync(CancellationToken cancellationToken = default) =>
         _store.ListProjectsAsync(cancellationToken);
@@ -147,6 +168,11 @@ internal sealed class DevelopmentManagementService(
         }
 
         var repository = await _repositoryBindings.ResolveFolderAsync(input.SelectedFolderId, cancellationToken).ConfigureAwait(false);
+
+        // The profile is snapshotted here, once, and is the only source of truth for the life of the project. It is
+        // never re-read from the worktree during an attempt: the agent can write to the worktree, so a live read would
+        // let it rewrite its own test command.
+        var profile = ResolveCommandProfile(input, repository.RepositoryRoot);
         var projectId = DerivedOperationId(input.OperationId, "project");
         var taskId = DerivedOperationId(input.OperationId, "task");
         _ = await _coordinator.CreateProjectAsync(new DevelopmentCreateProjectCommand(projectId,
@@ -166,15 +192,51 @@ internal sealed class DevelopmentManagementService(
                                       TrustedRepositoryPolicyVersion: DevelopmentTrustPolicy.CurrentVersion,
                                       TrustedRepositoryAcknowledgedAtUtc: _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
                                       MaxTokens: input.MaxTokens,
-                                      MaxDurationSeconds: input.MaxDurationSeconds),
+                                      MaxDurationSeconds: input.MaxDurationSeconds,
+                                      CommandProfileJson: Encoding.UTF8.GetString(profile.ToCanonicalUtf8())),
                                   cancellationToken)
                               .ConfigureAwait(false);
         return await GetProjectAsync(projectId, cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>
+    ///     Resolves the profile to snapshot. An explicitly supplied id is the operator's confirmed choice and wins;
+    ///     otherwise detection proposes one from the repository contents.
+    /// </summary>
+    private DevelopmentCommandProfile ResolveCommandProfile(DevelopmentCreateProjectInput input, string repositoryRoot)
+    {
+        // Read once, here, on the trusted host path. The digest of these exact bytes rides on the profile so the
+        // workspace invariant can detect a command rewriting the file mid-attempt.
+        var import = DevelopmentCommandProfileImport.TryRead(repositoryRoot);
+        var importDigest = import?.Digest;
+
+        // Precedence: the operator's explicit confirmation, then what the repository asked for, then detection. The
+        // repository's request is only ever a choice among code-owned profiles — Materialize rejects anything else —
+        // so a repository can select a profile but never define one.
+        var profileId = !string.IsNullOrWhiteSpace(input.CommandProfileId)
+            ? input.CommandProfileId
+            : import?.Document.ProfileId;
+        var buildTarget = !string.IsNullOrWhiteSpace(input.CommandProfileId)
+            ? input.BuildTarget
+            : import?.Document.BuildTarget;
+
+        if (string.IsNullOrWhiteSpace(profileId))
+        {
+            var detected = _profileDetector.Detect(repositoryRoot);
+            profileId = detected.ProfileId;
+            buildTarget = detected.BuildTarget;
+        }
+
+        return DevelopmentCommandProfileCatalog.Materialize(profileId, buildTarget, templateId: null, importDigest);
+    }
+
     public async Task<DevelopmentProjectAggregate> GetProjectAsync(Guid projectId, CancellationToken cancellationToken = default)
     {
         var project = await _store.GetProjectAsync(projectId, cancellationToken).ConfigureAwait(false);
+
+        // Legacy projects predate the profile column. Filling it here, rather than only at startup, means a repository
+        // that was offline at boot becomes usable as soon as it is back — no restart. A no-op once the profile exists.
+        project = await _profileBackfill.EnsureAsync(project, cancellationToken).ConfigureAwait(false);
         var tasks = await _store.ListTasksAsync(projectId, cancellationToken).ConfigureAwait(false);
         var aggregates = new List<DevelopmentTaskAggregate>(tasks.Count);
         foreach (var task in tasks)

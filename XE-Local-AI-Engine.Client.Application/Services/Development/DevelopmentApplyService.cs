@@ -62,8 +62,9 @@ internal sealed class DevelopmentApplyService(
         try
         {
             current = await _evidence.ResolveCurrentAsync(taskId, session, cancellationToken).ConfigureAwait(false);
-            var (validationArtifact, _) = await ReadValidationAsync(taskId, current, cancellationToken).ConfigureAwait(false);
-            var (reviewArtifact, reviewReport) = await ReadReviewAsync(taskId, current, validationArtifact.Id, cancellationToken).ConfigureAwait(false);
+            var expectedProfileDigest = DevelopmentCommandProfileCatalog.ResolveStored(project.CommandProfileJson).ComputeDigest();
+            var (validationArtifact, _) = await ReadValidationAsync(taskId, current, expectedProfileDigest, cancellationToken).ConfigureAwait(false);
+            var (reviewArtifact, reviewReport) = await ReadReviewAsync(taskId, current, validationArtifact.Id, expectedProfileDigest, cancellationToken).ConfigureAwait(false);
 
             if (!string.Equals(task.ApprovedSubjectHash, current.Current.SubjectHash, StringComparison.OrdinalIgnoreCase)
                 || reviewReport.Disposition != DevelopmentReviewDisposition.Approved
@@ -147,8 +148,10 @@ internal sealed class DevelopmentApplyService(
 
     private async Task<(DevelopmentArtifactSnapshot Artifact, DevelopmentValidationReport Report)> ReadValidationAsync(Guid taskId,
         DevelopmentEvidenceSet current,
+        string expectedProfileDigest,
         CancellationToken cancellationToken)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(expectedProfileDigest);
         var (artifact, content) = await _evidence.ReadLatestAsync(taskId,
             DevelopmentArtifactKind.ValidationReport,
             cancellationToken).ConfigureAwait(false);
@@ -159,8 +162,14 @@ internal sealed class DevelopmentApplyService(
             .LastOrDefault(attempt => attempt.Role == DevelopmentAttemptRole.Coder
                                       && attempt.Status == DevelopmentAttemptStatus.Succeeded);
         if (!report.Passed
+
+            // Artifact protocol version, unchanged — it gates report shape compatibility.
             || !string.Equals(report.CommandProfileVersion, DevelopmentValidationRunner.ProfileVersion, StringComparison.Ordinal)
             || !string.Equals(artifact.CommandProfileVersion, DevelopmentValidationRunner.ProfileVersion, StringComparison.Ordinal)
+
+            // Command-profile digest — an independent dimension gating which commands produced the approval.
+            || !string.Equals(report.CommandProfileDigest, expectedProfileDigest, StringComparison.Ordinal)
+            || !string.Equals(artifact.CommandProfileDigest, expectedProfileDigest, StringComparison.Ordinal)
             || !string.Equals(report.ExpectedResultHash, current.Current.ExpectedResultHash, StringComparison.OrdinalIgnoreCase)
             || artifact.AttemptId != current.PatchArtifact.AttemptId
             || artifact.AttemptId != current.ManifestArtifact.AttemptId
@@ -177,8 +186,10 @@ internal sealed class DevelopmentApplyService(
     private async Task<(DevelopmentArtifactSnapshot Artifact, DevelopmentReviewReport Report)> ReadReviewAsync(Guid taskId,
         DevelopmentEvidenceSet current,
         Guid validationArtifactId,
+        string expectedProfileDigest,
         CancellationToken cancellationToken)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(expectedProfileDigest);
         var (artifact, content) = await _evidence.ReadLatestAsync(taskId,
             DevelopmentArtifactKind.ReviewReport,
             cancellationToken).ConfigureAwait(false);
@@ -188,7 +199,8 @@ internal sealed class DevelopmentApplyService(
         if (report.Disposition != DevelopmentReviewDisposition.Approved
             || report.ValidationArtifactId != validationArtifactId
             || !string.Equals(report.ExpectedResultHash, current.Current.ExpectedResultHash, StringComparison.OrdinalIgnoreCase)
-            || !string.Equals(artifact.CommandProfileVersion, DevelopmentReviewerAttemptRunner.ProfileVersion, StringComparison.Ordinal))
+            || !string.Equals(artifact.CommandProfileVersion, DevelopmentReviewerAttemptRunner.ProfileVersion, StringComparison.Ordinal)
+            || !string.Equals(artifact.CommandProfileDigest, expectedProfileDigest, StringComparison.Ordinal))
         {
             throw new DevelopmentInvalidTransitionException("The review report does not independently approve the exact current result.");
         }

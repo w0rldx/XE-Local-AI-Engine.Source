@@ -63,27 +63,16 @@ public sealed class DevelopmentOptions
     public int PlanningWithoutProgressWarningThreshold { get; init; } = 3;
 
     /// <summary>
-    ///     The deterministic validation command profile, in dependency order. Every id must be in the code-owned
-    ///     catalog (<see cref="DevelopmentCommandIds" />), and validation passes only when all of them complete with
-    ///     exit code 0.
+    ///     The wall-clock budget for one of the engine's own fixed helper commands inside the sandbox — directory
+    ///     listing, text search, patch check and apply, diff export, and the workspace-invariant probes that run after
+    ///     every catalog command.
     ///     <para>
-    ///         This default shipped as <c>[GitDiffCheck]</c> alone, which made the gate a whitespace check: an
-    ///         attempt could reach <c>InReview</c> having never compiled the code and never run a test. Restore,
-    ///         build and test are what make the gate mean anything — do not shrink this back to keep a fixture fast.
-    ///         A fixture that cannot afford the full profile overrides it explicitly instead.
-    ///     </para>
-    ///     <para>
-    ///         The dotnet commands name <c>XE-Local-AI-Engine.slnx</c> exactly (the Solution constant in
-    ///         <c>DevelopmentWorkspaceTools</c>), so on a foreign registered repository they fail because that
-    ///         solution is not there. That loud failure is intended and is strictly better than the silent false
-    ///         pass it replaces; making the profile repo-agnostic is tracked separately.
+    ///         Build and test budgets do <em>not</em> come from here. Those are per-command values carried by the
+    ///         project's command profile, because a restore and a full test run have nothing in common and neither has
+    ///         anything in common with a <c>grep</c>. Previously all three shared
+    ///         <see cref="MaxAttemptDurationSeconds" />, so any single command could consume the entire attempt budget.
     ///     </para>
     /// </summary>
-    public IReadOnlyList<string> ValidationCommandIds { get; init; } =
-    [
-        DevelopmentCommandIds.GitDiffCheck,
-        DevelopmentCommandIds.DotnetRestore,
-        DevelopmentCommandIds.DotnetBuildRelease,
-        DevelopmentCommandIds.DotnetTestRelease
-    ];
+    [Range(1, 86400)]
+    public int ToolCommandTimeoutSeconds { get; init; } = 300;
 }

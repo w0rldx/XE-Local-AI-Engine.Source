@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Development;
 
+using System.Text;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -152,7 +153,18 @@ public sealed class DevelopmentManagementServiceTests
             new UnusedApplyService(),
             repositoryBindings ?? RepositoryBindings(selectedFolderId ?? Guid.NewGuid()),
             Substitute.For<IActiveCloudChatClientFactory>(),
+            new GenericGitDetector(),
+            ProfileBackfill(),
             TimeProvider.System);
+
+    /// <summary>Backfill is a no-op here: every project these tests build already carries a profile.</summary>
+    private static IDevelopmentProfileBackfillService ProfileBackfill()
+    {
+        var backfill = Substitute.For<IDevelopmentProfileBackfillService>();
+        backfill.EnsureAsync(Arg.Any<DevelopmentProjectSnapshot>(), Arg.Any<CancellationToken>())
+                .Returns(call => call.Arg<DevelopmentProjectSnapshot>());
+        return backfill;
+    }
 
     private static IDevelopmentRepositoryBindingService RepositoryBindings(Guid selectedFolderId)
     {
@@ -186,7 +198,10 @@ public sealed class DevelopmentManagementServiceTests
             1,
             1,
             1,
-            1);
+            1,
+            Encoding.UTF8.GetString(DevelopmentCommandProfileCatalog
+                                    .Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null)
+                                    .ToCanonicalUtf8()));
 
     private static DevelopmentTaskSnapshot TaskSnapshot(Guid projectId, Guid taskId) =>
         new(taskId,
@@ -203,6 +218,23 @@ public sealed class DevelopmentManagementServiceTests
             CreatedAtUtc: 1,
             UpdatedAtUtc: 1,
             Version: 7);
+
+    /// <summary>
+    ///     Detection is stubbed rather than run for real: these tests bind the test host's own working directory as
+    ///     the repository, so a real detector's answer would depend on what happens to sit in the build output.
+    ///     <c>generic-git</c> is the honest stand-in — it is what detection returns for a directory with no .NET build
+    ///     system, and it needs no build target.
+    ///     <para>
+    ///         Hand-written rather than an NSubstitute proxy because <c>IDevelopmentCommandProfileDetector</c> is
+    ///         internal and Castle DynamicProxy cannot proxy it: <c>Client.Application</c> exposes its internals to
+    ///         this assembly but not to <c>DynamicProxyGenAssembly2</c>.
+    ///     </para>
+    /// </summary>
+    private sealed class GenericGitDetector : IDevelopmentCommandProfileDetector
+    {
+        public DevelopmentProfileDetection Detect(string repositoryRoot) =>
+            new(DevelopmentCommandProfileCatalog.GenericGit, BuildTarget: null, []);
+    }
 
     private sealed class UnusedApplyService : IDevelopmentApplyService
     {

@@ -1,10 +1,15 @@
-import { Alert, Button, Checkbox, Grid, NumberInput, Select, Stack, Text, Textarea, TextInput } from "@mantine/core";
+import { Alert, Button, Checkbox, Grid, Loader, NumberInput, Select, Stack, Text, Textarea, TextInput } from "@mantine/core";
 import { IconAlertTriangle, IconFolderPlus, IconPlus, IconX } from "@tabler/icons-react";
 import { type FormEvent, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
-import type { DevelopmentRepository } from "@/features/development/models/DevelopmentModels";
+import {
+	type DevelopmentProfileDetection,
+	developmentProfileIdForBuildTarget,
+	type DevelopmentRepository,
+	isDevelopmentWhitespaceOnlyProfile,
+} from "@/features/development/models/DevelopmentModels";
 
 export interface RegisterDevelopmentRepositoryValues {
 	readonly alias: string;
@@ -24,6 +29,9 @@ export interface DevelopmentProjectFormValues {
 	readonly trustedRepositoryAcknowledged: boolean;
 	readonly maxTokens?: number;
 	readonly maxDurationSeconds?: number;
+	/** The profile the operator confirmed. Omitted when detection never loaded, which asks the server to detect. */
+	readonly commandProfileId?: string;
+	readonly buildTarget?: string;
 }
 
 interface DevelopmentProjectFormProps {
@@ -33,6 +41,10 @@ interface DevelopmentProjectFormProps {
 	readonly isRegistering: boolean;
 	readonly isSubmitting: boolean;
 	readonly error?: string;
+	readonly detection?: DevelopmentProfileDetection | null;
+	readonly detectionLoading?: boolean;
+	readonly detectionError?: string;
+	readonly onRepositoryChange?: (selectedFolderId: string) => void;
 	readonly onRegister: (values: RegisterDevelopmentRepositoryValues) => Promise<DevelopmentRepository>;
 	readonly onSubmit: (values: DevelopmentProjectFormValues) => void;
 }
@@ -57,11 +69,17 @@ export function DevelopmentProjectForm({
 	isRegistering,
 	isSubmitting,
 	error,
+	detection,
+	detectionLoading = false,
+	detectionError,
+	onRepositoryChange,
 	onRegister,
 	onSubmit,
 }: DevelopmentProjectFormProps) {
 	const { t } = useTranslation();
 	const [values, setValues] = useState(initialValues);
+	const [profileConfirmed, setProfileConfirmed] = useState(false);
+	const [confirmedDetectionIdentity, setConfirmedDetectionIdentity] = useState<string | null>(null);
 	const [registrationOpened, setRegistrationOpened] = useState(false);
 	const [registration, setRegistration] = useState<RegisterDevelopmentRepositoryValues>({ alias: "", hostPath: "" });
 	const [registrationAttemptError, setRegistrationAttemptError] = useState<string>();
@@ -79,12 +97,44 @@ export function DevelopmentProjectForm({
 	);
 
 	const selectedRepository = repositories.find((repository) => repository.id === values.selectedFolderId);
+
+	const detectedProfileId = detection?.profileId ?? null;
+	const candidates = useMemo(() => detection?.candidates ?? [], [detection]);
+	// The chosen target defaults to what detection proposed and moves the profile with it, because the backend pairs
+	// the two strictly.
+	const chosenBuildTarget = values.buildTarget ?? detection?.buildTarget ?? null;
+	const chosenProfileId = detection
+		? chosenBuildTarget
+			? developmentProfileIdForBuildTarget(chosenBuildTarget)
+			: detectedProfileId
+		: null;
+	const whitespaceOnly = Boolean(detection) && isDevelopmentWhitespaceOnlyProfile(chosenProfileId);
+
+	// A new detection is a new proposal, so neither a previous confirmation nor a previous override can carry over to
+	// it. Adjusted during render rather than in an effect: an effect would let a stale confirmation be visible — and
+	// therefore submittable — for one paint after the proposal changed.
+	const detectionIdentity = detection ? `${detection.profileId ?? ""}:${detection.buildTarget ?? ""}` : null;
+	if (detectionIdentity !== confirmedDetectionIdentity) {
+		setConfirmedDetectionIdentity(detectionIdentity);
+		setProfileConfirmed(false);
+		setValues((current) => ({ ...current, commandProfileId: undefined, buildTarget: undefined }));
+	}
+
+	// Detection is advisory: when it has not loaded (or failed) the server runs its own detection at creation, so the
+	// confirmation gate only applies once there is something concrete to confirm.
 	const canCreate =
-		values.trustedRepositoryAcknowledged && selectedRepository?.availability === "Available" && !repositoriesLoading;
+		values.trustedRepositoryAcknowledged &&
+		selectedRepository?.availability === "Available" &&
+		!repositoriesLoading &&
+		(!detection || profileConfirmed);
 
 	const submit = (event: FormEvent<HTMLFormElement>): void => {
 		event.preventDefault();
-		onSubmit(values);
+		onSubmit(
+			chosenProfileId
+				? { ...values, commandProfileId: chosenProfileId, buildTarget: chosenBuildTarget ?? undefined }
+				: values,
+		);
 	};
 
 	const register = async (): Promise<void> => {
@@ -118,7 +168,10 @@ export function DevelopmentProjectForm({
 								placeholder={t("pages.development.form.repositoryPlaceholder", "Select a repository")}
 								data={repositoryOptions}
 								value={values.selectedFolderId || null}
-								onChange={(value) => setValues((current) => ({ ...current, selectedFolderId: value ?? "" }))}
+								onChange={(value) => {
+									setValues((current) => ({ ...current, selectedFolderId: value ?? "" }));
+									onRepositoryChange?.(value ?? "");
+								}}
 								loading={repositoriesLoading}
 								disabled={repositoriesLoading || Boolean(repositoriesError)}
 								required={true}
@@ -144,6 +197,66 @@ export function DevelopmentProjectForm({
 						<Alert color="red" icon={<IconAlertTriangle size={16} />}>
 							{repositoriesError}
 						</Alert>
+					) : null}
+					{detectionLoading ? (
+						<Stack gap="xs" data-testid="development-profile-detecting">
+							<Loader size="sm" aria-label="Detecting build system" />
+							<Text size="sm" c="dimmed">
+								{t("pages.development.profile.detecting", "Inspecting the repository for a build system…")}
+							</Text>
+						</Stack>
+					) : null}
+					{detectionError ? (
+						<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="development-profile-error">
+							{detectionError}
+						</Alert>
+					) : null}
+					{detection ? (
+						<Stack gap="xs" data-testid="development-profile-confirmation">
+							<Text size="sm" fw={600}>
+								{t("pages.development.profile.title", "Confirm the command profile")}
+							</Text>
+							<Text size="sm" data-testid="development-profile-id">
+								{t("pages.development.profile.detected", "Detected profile")}: {chosenProfileId}
+							</Text>
+							{candidates.length > 0 ? (
+								<Select
+									label={t("pages.development.profile.buildTarget", "Build target")}
+									description={t(
+										"pages.development.profile.buildTargetDescription",
+										"The solution or project the validation gate restores, builds and tests.",
+									)}
+									data={candidates.map((candidate) => ({ value: candidate, label: candidate }))}
+									value={chosenBuildTarget}
+									onChange={(value) =>
+										setValues((current) => ({ ...current, buildTarget: value ?? undefined }))
+									}
+									data-testid="development-profile-build-target"
+								/>
+							) : null}
+							{whitespaceOnly ? (
+								<Alert color="orange" icon={<IconAlertTriangle size={16} />} data-testid="development-profile-whitespace-warning">
+									<Text size="sm">
+										{t(
+											"pages.development.profile.whitespaceOnly",
+											"No build system detected — validation will only check whitespace. Nothing will be restored, built or tested, so a passing validation does not mean the change compiles.",
+										)}
+									</Text>
+								</Alert>
+							) : null}
+							<Checkbox
+								checked={profileConfirmed}
+								onChange={(event) => {
+									const checked = event.currentTarget.checked;
+									setProfileConfirmed(checked);
+								}}
+								label={t(
+									"pages.development.profile.confirm",
+									"I confirm this command profile for the life of this project.",
+								)}
+								data-testid="development-profile-confirm"
+							/>
+						</Stack>
 					) : null}
 					<Grid>
 						<Grid.Col span={{ base: 12, md: 8 }}>

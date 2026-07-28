@@ -6,6 +6,17 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 
+/// <summary>
+///     The persisted validation report.
+///     <para>
+///         <see cref="CommandProfileVersion" /> is the artifact protocol version and keeps its exact former meaning —
+///         the apply and reviewer gates still compare it against
+///         <see cref="DevelopmentValidationRunner.ProfileVersion" />. <see cref="CommandProfileId" /> and
+///         <see cref="CommandProfileDigest" /> are an additional, independent dimension recording which commands the
+///         gate actually ran. Adding them does not weaken the protocol check; replacing the protocol check with them
+///         would have.
+///     </para>
+/// </summary>
 internal sealed record DevelopmentValidationReport(
     bool Passed,
     string BaseCommit,
@@ -13,6 +24,8 @@ internal sealed record DevelopmentValidationReport(
     string ManifestHash,
     string ExpectedResultHash,
     string CommandProfileVersion,
+    string CommandProfileId,
+    string CommandProfileDigest,
     IReadOnlyList<DevelopmentCommandEvidence> Commands,
     long CompletedAtUtc);
 
@@ -76,17 +89,21 @@ internal sealed class DevelopmentValidationRunner : IDevelopmentValidationRunner
         try
         {
             var snapshot = await _store.GetExecutionSnapshotAsync(coderAttempt.Id, cancellationToken).ConfigureAwait(false);
+            var profile = DevelopmentCommandProfileCatalog.ResolveStored(snapshot.CommandProfileJson);
             var session = await _workspaceProvider.PrepareAsync(snapshot, repository, cancellationToken).ConfigureAwait(false);
             var evidence = await _evidence.ResolveCurrentAsync(taskId, session, cancellationToken).ConfigureAwait(false);
-            var tools = new DevelopmentWorkspaceTools(_sandbox, session, Options.Create(_options));
-            if (_options.ValidationCommandIds.Count == 0)
-            {
-                throw new InvalidOperationException("The deterministic Development validation command profile is empty.");
-            }
+            var tools = new DevelopmentWorkspaceTools(_sandbox, session, Options.Create(_options), profile);
 
-            foreach (var commandId in _options.ValidationCommandIds)
+            // The validation run had no overall deadline of its own: it was bounded only by each command's timeout,
+            // which before per-command budgets existed was the whole attempt cap per command. A four-command profile
+            // could therefore run for four times the cap it was supposed to respect.
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeout.CancelAfter(TimeSpan.FromSeconds(Math.Min(snapshot.MaxDurationSeconds ?? _options.MaxAttemptDurationSeconds,
+                _options.MaxAttemptDurationSeconds)));
+
+            foreach (var commandId in profile.ValidationCommandIds)
             {
-                _ = await tools.RunCommandAsync(commandId, cancellationToken).ConfigureAwait(false);
+                _ = await tools.RunCommandAsync(commandId, timeout.Token).ConfigureAwait(false);
             }
 
             var commands = tools.CommandEvidence
@@ -95,14 +112,17 @@ internal sealed class DevelopmentValidationRunner : IDevelopmentValidationRunner
                                     session.HostWorktreePath,
                                     session.RuntimePath))
                                 .ToArray();
-            var passed = commands.Length == _options.ValidationCommandIds.Count
+            var passed = commands.Length == profile.ValidationCommandIds.Count
                          && commands.All(static command => command.Completed && command.ExitCode == 0);
+            var profileDigest = profile.ComputeDigest();
             var report = new DevelopmentValidationReport(passed,
                 evidence.Current.BaseCommit,
                 evidence.Current.SubjectHash,
                 evidence.Current.ManifestHash,
                 evidence.Current.ExpectedResultHash,
                 ProfileVersion,
+                profile.ProfileId,
+                profileDigest,
                 commands,
                 _timeProvider.GetUtcNow().ToUnixTimeMilliseconds());
             var prepared = await _evidence.PrepareAsync(snapshot,
@@ -111,6 +131,7 @@ internal sealed class DevelopmentValidationRunner : IDevelopmentValidationRunner
                 evidence.Current,
                 [evidence.PatchArtifact.Id, evidence.ManifestArtifact.Id],
                 ProfileVersion,
+                profileDigest,
                 cancellationToken).ConfigureAwait(false);
 
             var target = passed ? DevelopmentTaskStatus.InReview : DevelopmentTaskStatus.InProgress;

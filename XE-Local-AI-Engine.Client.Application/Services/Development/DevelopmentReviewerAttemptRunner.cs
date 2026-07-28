@@ -78,6 +78,7 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
         ArgumentNullException.ThrowIfNull(repository);
         var snapshot = await _store.GetExecutionSnapshotAsync(attemptId, cancellationToken).ConfigureAwait(false);
         EnsureRunnable(snapshot);
+        var profile = DevelopmentCommandProfileCatalog.ResolveStored(snapshot.CommandProfileJson);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(Math.Min(snapshot.MaxDurationSeconds ?? _options.MaxAttemptDurationSeconds,
             _options.MaxAttemptDurationSeconds)));
@@ -90,7 +91,7 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
             (DevelopmentArtifactSnapshot validationArtifact, DevelopmentValidationReport validationReport) validation;
             try
             {
-                validation = await ReadValidationAsync(snapshot.TaskId, evidence, timeout.Token).ConfigureAwait(false);
+                validation = await ReadValidationAsync(snapshot.TaskId, evidence, profile.ComputeDigest(), timeout.Token).ConfigureAwait(false);
             }
             catch (DevelopmentInvalidTransitionException)
             {
@@ -110,7 +111,7 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
                     _timeProvider,
                     maxOutputTokens,
                     _options.MaxToolCalls);
-            var tools = new DevelopmentWorkspaceTools(_sandbox, session, Options.Create(_options), liveProgress);
+            var tools = new DevelopmentWorkspaceTools(_sandbox, session, Options.Create(_options), profile, liveProgress);
             var cloudContext = await CreateCloudContextAsync(snapshot,
                 evidence,
                 validationArtifact,
@@ -155,6 +156,7 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
                 evidence.Current,
                 reviewInputArtifactIds,
                 ProfileVersion,
+                profile.ComputeDigest(),
                 timeout.Token).ConfigureAwait(false);
 
             var target = submission.Disposition == DevelopmentReviewDisposition.Approved
@@ -204,11 +206,13 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
 
     private async Task<(DevelopmentArtifactSnapshot Artifact, DevelopmentValidationReport Report)> ReadValidationAsync(Guid taskId,
         DevelopmentEvidenceSet evidence,
+        string expectedProfileDigest,
         CancellationToken cancellationToken)
     {
         var (validationArtifact, validationContent) = await _evidence.ReadLatestAsync(taskId,
             DevelopmentArtifactKind.ValidationReport,
             cancellationToken).ConfigureAwait(false);
+        ArgumentException.ThrowIfNullOrWhiteSpace(expectedProfileDigest);
         var report = JsonSerializer.Deserialize<DevelopmentValidationReport>(validationContent.Span, JsonOptions)
                      ?? throw new DevelopmentInvalidTransitionException("The validation report artifact is invalid.");
         var inputIds = validationArtifact.InputArtifactIdsJson is { } json
@@ -218,8 +222,18 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
             .LastOrDefault(attempt => attempt.Role == DevelopmentAttemptRole.Coder
                                       && attempt.Status == DevelopmentAttemptStatus.Succeeded);
         if (!report.Passed
+
+            // The two artifact PROTOCOL checks, unchanged. They prove the report has the shape this reviewer
+            // understands. The profile-digest checks that follow are an additional dimension, not a replacement:
+            // a digest says which commands ran, and says nothing about whether the artifact can be parsed.
             || !string.Equals(report.CommandProfileVersion, DevelopmentValidationRunner.ProfileVersion, StringComparison.Ordinal)
             || !string.Equals(validationArtifact.CommandProfileVersion, DevelopmentValidationRunner.ProfileVersion, StringComparison.Ordinal)
+
+            // The report must have been produced by the same command profile this project runs under now, recorded
+            // both in the report body and on the artifact row, so a profile change invalidates stale approval
+            // evidence instead of letting a review approve commands that are no longer the ones that would run.
+            || !string.Equals(report.CommandProfileDigest, expectedProfileDigest, StringComparison.Ordinal)
+            || !string.Equals(validationArtifact.CommandProfileDigest, expectedProfileDigest, StringComparison.Ordinal)
             || !string.Equals(report.BaseCommit, evidence.Current.BaseCommit, StringComparison.OrdinalIgnoreCase)
             || !string.Equals(report.SubjectHash, evidence.Current.SubjectHash, StringComparison.OrdinalIgnoreCase)
             || !string.Equals(report.ManifestHash, evidence.Current.ManifestHash, StringComparison.OrdinalIgnoreCase)

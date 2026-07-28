@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Development;
 
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Text;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 using NSubstitute;
@@ -18,6 +19,15 @@ using PersistenceDevelopmentAttemptStatus = XE_Local_AI_Engine.Client.Persistenc
 
 public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 {
+    /// <summary>
+    ///     The profile these fixtures bind. Their repositories are a single <c>README.md</c>, so the generic profile
+    ///     is the one that honestly describes them; the tests here exercise path confinement, patch guards and
+    ///     evidence export, none of which depend on which build commands the profile carries. The gate's actual
+    ///     build/test behaviour is covered in <c>DevelopmentValidationReviewAndApplyTests</c> against a real solution.
+    /// </summary>
+    private static readonly DevelopmentCommandProfile GenericProfile =
+        DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null);
+
     private readonly string _root = Path.Combine(Path.GetTempPath(), "xe-development-workspace-coder-" + Guid.NewGuid().ToString("N"));
 
     public void Dispose()
@@ -67,7 +77,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         using var sandbox = CreateSandbox();
         var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System);
         var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
-        var tools = new DevelopmentWorkspaceTools(sandbox, session, options);
+        var tools = new DevelopmentWorkspaceTools(sandbox, session, options, GenericProfile);
         const string patch = """
                              diff --git a/README.md b/README.md
                              similarity index 100%
@@ -92,7 +102,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         using var sandbox = CreateSandbox();
         var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System);
         var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
-        var tools = new DevelopmentWorkspaceTools(sandbox, session, options);
+        var tools = new DevelopmentWorkspaceTools(sandbox, session, options, GenericProfile);
         string[] patches =
         [
             "diff --git a/README.md b/README.md\nsimilarity index 100%\nrename from .git/config\nrename to README.md\n",
@@ -121,7 +131,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         using var sandbox = CreateSandbox();
         var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System);
         var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
-        var tools = new DevelopmentWorkspaceTools(sandbox, session, options);
+        var tools = new DevelopmentWorkspaceTools(sandbox, session, options, GenericProfile);
         const string patch = """
                              diff --git a/large.txt b/large.txt
                              new file mode 100644
@@ -148,7 +158,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         using var sandbox = CreateSandbox();
         var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System);
         var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
-        var tools = new DevelopmentWorkspaceTools(sandbox, session, options);
+        var tools = new DevelopmentWorkspaceTools(sandbox, session, options, GenericProfile);
         _ = await tools.WriteFileAsync("large.txt", "0123456789abcdefg").ConfigureAwait(false);
 
         await AssertEx.ThrowsAsync<InvalidDataException>(() => tools.ReadFileAsync("large.txt"));
@@ -279,7 +289,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         {
             var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System);
             first = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
-            var tools = new DevelopmentWorkspaceTools(sandbox, first, options);
+            var tools = new DevelopmentWorkspaceTools(sandbox, first, options, GenericProfile);
 
             _ = await tools.WriteFileAsync("src/feature.txt", "bounded change\n").ConfigureAwait(false);
             AssertEx.Equal("bounded change\n", await tools.ReadFileAsync("src/feature.txt").ConfigureAwait(false));
@@ -309,7 +319,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         var replacementProvider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), replacementSandbox, options, TimeProvider.System);
         var replacement = await replacementProvider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
         AssertEx.Equal(first.HostWorktreePath, replacement.HostWorktreePath);
-        var replacementTools = new DevelopmentWorkspaceTools(replacementSandbox, replacement, options);
+        var replacementTools = new DevelopmentWorkspaceTools(replacementSandbox, replacement, options, GenericProfile);
         AssertEx.Equal("bounded change\n", await replacementTools.ReadFileAsync("src/feature.txt").ConfigureAwait(false));
 
         var symbolic = await RunProcessAsync(replacement.HostWorktreePath, "git", "symbolic-ref", "--quiet", "HEAD").ConfigureAwait(false);
@@ -354,7 +364,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         using var sandbox = CreateSandbox();
         var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System);
         var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
-        var tools = new DevelopmentWorkspaceTools(sandbox, session, options);
+        var tools = new DevelopmentWorkspaceTools(sandbox, session, options, GenericProfile);
         _ = await tools.WriteFileAsync("large.txt", new string('x', 1024)).ConfigureAwait(false);
 
         var evidence = new DevelopmentPatchEvidenceService(sandbox, options);
@@ -452,7 +462,8 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
             PersistenceDevelopmentAttemptStatus.Running,
             "local-model",
             "local",
-            AttemptVersion: 1);
+            AttemptVersion: 1,
+            Encoding.UTF8.GetString(GenericProfile.ToCanonicalUtf8()));
     }
 
     private static DevelopmentRepositoryBinding Binding(DevelopmentExecutionSnapshot snapshot, string repository) =>
@@ -606,6 +617,13 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     private sealed class NullWorkspaceTools : IDevelopmentWorkspaceTools
     {
         public IReadOnlyList<DevelopmentCommandEvidence> CommandEvidence => [];
+
+        /// <summary>
+        ///     The coder-model tests never run a catalog command through this stub, so the generic profile — the one
+        ///     code-owned profile that needs no build target — is the honest stub value.
+        /// </summary>
+        public DevelopmentCommandProfile Profile { get; } =
+            DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null);
 
         public Task<string> ListFilesAsync(string? path, CancellationToken cancellationToken = default) =>
             Task.FromResult(string.Empty);

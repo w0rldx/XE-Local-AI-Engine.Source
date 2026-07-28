@@ -232,7 +232,11 @@ internal sealed class DevelopmentCoderModel(
             return InvokeAsync("get_diff", null, () => _tools.GetDiffAsync(cancellationToken));
         }
 
-        public Task<string> RunCommandAsync([Description("One of: git_status, git_diff_check, dotnet_restore, dotnet_build_release_no_restore, dotnet_test_release_no_build.")] string commandId,
+        // Deliberately generic: the set of valid ids is per-project now and comes from the command profile, which is
+        // listed in the system prompt. An attribute cannot interpolate it (it must be a compile-time constant), and
+        // hardcoding one repository's ids here is what this change exists to remove. The closed-enum contract is
+        // enforced by DevelopmentCommandProfile.ResolveCommand, not by this description.
+        public Task<string> RunCommandAsync([Description("The id of one command from the project's command profile, exactly as listed in the prompt.")] string commandId,
             CancellationToken cancellationToken)
         {
             return InvokeAsync("run_command", commandId, () => _tools.RunCommandAsync(commandId, cancellationToken));

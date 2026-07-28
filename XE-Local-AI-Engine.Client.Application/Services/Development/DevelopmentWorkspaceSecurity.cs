@@ -6,7 +6,12 @@ using System.Text;
 internal static class DevelopmentWorkspaceSecurity
 {
     private const char SandboxSeparator = '/';
-    private static readonly string[] ProtectedPrefixes = [".git", ".omx/ultragoal"];
+    // ".xe-dev" holds the command-profile import source. Adding it here stops the agent naming it as a path argument
+    // to a workspace tool, which is necessary but NOT sufficient: a build or test command can still write the file as
+    // a side effect, entirely outside this check. The property is actually carried by the digest re-check in
+    // DevelopmentWorkspaceTools.EnsureWorkspaceInvariantAsync plus the fact that the database, not the worktree, is
+    // the source of truth for the profile. Do not treat this deny-list entry as the guard.
+    private static readonly string[] ProtectedPrefixes = [".git", ".omx/ultragoal", ".xe-dev"];
 
     public static string CanonicalRepositoryRoot(string repositoryRoot)
     {

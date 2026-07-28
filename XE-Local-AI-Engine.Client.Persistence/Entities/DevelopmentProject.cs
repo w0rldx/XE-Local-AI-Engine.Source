@@ -13,6 +13,12 @@ internal sealed class DevelopmentProject
     public string? ReviewerModelId { get; set; }
     public int? MaxTokens { get; set; }
     public int? MaxDurationSeconds { get; set; }
+
+    /// <summary>
+    /// Operator-confirmed Dev Mode command profile, serialized as JSON. Stored as plaintext by design — see
+    /// <c>DevelopmentProjectConfiguration</c> for the rationale.
+    /// </summary>
+    public string? CommandProfileJson { get; set; }
     public int ConfigurationVersion { get; set; }
     public bool TrustedRepositoryAcknowledged { get; set; }
     public int? TrustedRepositoryPolicyVersion { get; set; }

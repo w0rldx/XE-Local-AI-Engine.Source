@@ -221,7 +221,8 @@ public sealed class DevelopmentEndpointTests
                 1,
                 1,
                 1,
-                1),
+                1,
+                CommandProfileJson: null),
             [],
             []);
 

@@ -4,13 +4,20 @@ using System.Diagnostics;
 using System.Reflection;
 
 /// <summary>
-///     Builds a throwaway Git repository that is a real, buildable .NET solution named exactly
-///     <c>XE-Local-AI-Engine.slnx</c> — the file name the code-owned Development command catalog hardcodes
-///     (the Solution constant in <c>DevelopmentWorkspaceTools</c>).
+///     Builds a throwaway Git repository that is a real, buildable .NET solution.
 ///     <para>
-///         It exists so the deterministic validation gate can be exercised under its PRODUCTION command profile
-///         (git_diff_check + dotnet restore/build/test) without running the gate against this repository's own
-///         solution, which takes minutes. The fixture solution restores, builds and tests in roughly two seconds.
+///         It exists so the deterministic validation gate can be exercised under a PRODUCTION command profile
+///         (<c>dotnet-slnx</c>: git_diff_check + dotnet restore/build/test) without running the gate against this
+///         repository's own solution, which takes minutes. The fixture solution restores, builds and tests in roughly
+///         two seconds.
+///     </para>
+///     <para>
+///         The solution used to be named <c>XE-Local-AI-Engine.slnx</c> exactly, because the command catalog hardcoded
+///         that literal file name in a <c>Solution</c> constant and would not build anything else. That constraint is
+///         gone: the build target is now carried by the project's <c>DevelopmentCommandProfile</c>, so a test binds
+///         <see cref="SolutionPath" /> into a <c>dotnet-slnx</c> profile via
+///         <c>DevelopmentCommandProfileCatalog.Materialize</c>. The name is deliberately synthetic now, so a fixture
+///         that only passes because it impersonates this repository cannot go unnoticed.
 ///     </para>
 ///     <para>
 ///         The layout is deliberately minimal and offline: a class library whose single method returns a known
@@ -21,6 +28,20 @@ using System.Reflection;
 /// </summary>
 internal static class DevelopmentSyntheticSolutionRepository
 {
+    /// <summary>
+    ///     The repository-relative solution file. Pass it as the build target when materializing the
+    ///     <c>dotnet-slnx</c> profile this fixture is meant to be validated under.
+    /// </summary>
+    public const string SolutionPath = "SyntheticFixture.slnx";
+
+    /// <summary>
+    ///     The repository-relative test project, and the build target for the <c>dotnet-csproj</c> profile. It is a
+    ///     genuine target for that profile rather than a convenient stand-in: it is an <c>OutputType=Exe</c> TUnit
+    ///     project with a <c>ProjectReference</c> to the library, so restoring, building and testing it pulls in
+    ///     <see cref="LibrarySourcePath" /> and produces the same three outcomes the solution profile does.
+    /// </summary>
+    public const string ProbeProjectPath = "tests/Probe/Probe.csproj";
+
     /// <summary>The library source file a coder attempt overwrites to steer the outcome of the gate.</summary>
     public const string LibrarySourcePath = "src/Lib/Feature.cs";
 
@@ -64,7 +85,7 @@ internal static class DevelopmentSyntheticSolutionRepository
         var (packagesRoot, testFrameworkVersion) = ResolveTestFrameworkPackage();
 
         // Pin the same SDK band and MTP test runner this repository uses, so `dotnet test` speaks Microsoft.Testing
-        // .Platform here too and accepts the catalog's --max-parallel-test-modules argument (a VSTest-mode run
+        // .Platform here too and accepts the profile's --max-parallel-test-modules argument (a VSTest-mode run
         // rejects it outright).
         await WriteAsync(repositoryRoot,
             "global.json",
@@ -119,7 +140,7 @@ internal static class DevelopmentSyntheticSolutionRepository
             cancellationToken).ConfigureAwait(false);
 
         await WriteAsync(repositoryRoot,
-            "XE-Local-AI-Engine.slnx",
+            SolutionPath,
             """
             <Solution>
                 <Project Path="src/Lib/Lib.csproj"/>
@@ -146,7 +167,7 @@ internal static class DevelopmentSyntheticSolutionRepository
         await WriteAsync(repositoryRoot, LibrarySourcePath, BaselineLibrarySource, cancellationToken).ConfigureAwait(false);
 
         await WriteAsync(repositoryRoot,
-            "tests/Probe/Probe.csproj",
+            ProbeProjectPath,
             $"""
              <Project Sdk="Microsoft.NET.Sdk">
                <PropertyGroup>

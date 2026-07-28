@@ -345,33 +345,28 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
             services.RemoveAll<IDevelopmentReviewerModel>();
             services.AddSingleton<IDevelopmentReviewerModel, DevelopmentE2EReviewerModel>();
 
-            // Narrow the deterministic validation profile to the whitespace check, for the BROWSER suite only.
+            // There is deliberately NO IOptions<DevelopmentOptions> override here any more, and re-adding one would be
+            // a regression rather than a fix.
             //
-            // The production default is git_diff_check + dotnet restore/build/test against XE-Local-AI-Engine.slnx
-            // (DevelopmentOptions.ValidationCommandIds). DevelopmentWorkflowE2ETests drives a synthetic temp git
-            // repository holding a README and nothing else, so those three dotnet commands cannot succeed there:
-            // with the real default the workflow could never reach InReview, and the suite would prove only that a
-            // non-.NET directory fails to build.
+            // This suite used to register a closed-generic IOptions<DevelopmentOptions> narrowing
+            // DevelopmentOptions.ValidationCommandIds to [git_diff_check], because DevelopmentWorkflowE2ETests drives
+            // a synthetic temp git repository holding a README and nothing else, and the global production default
+            // (git_diff_check + dotnet restore/build/test against a hardcoded XE-Local-AI-Engine.slnx) could never
+            // succeed there. That override existed to work around a global default that assumed one specific
+            // repository.
             //
-            // This narrows what the browser test covers, NOT what the gate is. This test owns the UI state machine
-            // (register -> create -> code -> validate -> review -> hash-bound apply); the content of the gate is
-            // owned by DevelopmentValidationReviewAndApplyTests, which drives DevelopmentValidationRunner against a
-            // real buildable solution under the production default and proves that a patch which breaks the build
-            // and a patch which fails a test each keep the attempt out of InReview.
+            // The validation command list now lives on the project's own command profile, so there is no global
+            // default left to narrow. The README fixture has no .NET build system, so profile detection resolves it to
+            // the code-owned "generic-git" profile whose validation list is exactly [git_diff_check] — the same
+            // coverage this override used to force, now reached honestly and recorded on every artifact the gate
+            // produces instead of being hidden in test DI.
             //
-            // It has to be done here in DI rather than as a "Development:ValidationCommandIds:0" configuration
-            // entry: ValidationCommandIds is an init-only IReadOnlyList<string> with a non-empty default, and
-            // ConfigurationBinder silently ignores that shape entirely — a config override would look like it
-            // worked and change nothing. Registering a closed-generic IOptions<DevelopmentOptions> last wins over
-            // the open-generic OptionsManager from AddOptions, and every other DevelopmentOptions value here is its
-            // production default (which is what the configuration above supplies anyway).
-            //
-            // Do NOT "fix" a red Development E2E by shrinking the production default instead of this override.
-            services.AddSingleton<IOptions<DevelopmentOptions>>(Options.Create(new DevelopmentOptions
-            {
-                Enabled = true,
-                ValidationCommandIds = [DevelopmentCommandIds.GitDiffCheck]
-            }));
+            // The original warning still stands in its new form: do NOT "fix" a red Development E2E by weakening a
+            // shared profile in DevelopmentCommandProfileCatalog. This test owns the UI state machine (register ->
+            // create -> code -> validate -> review -> hash-bound apply); the content of the gate is owned by
+            // DevelopmentValidationReviewAndApplyTests, which drives DevelopmentValidationRunner against a real
+            // buildable solution under a real dotnet profile and proves that a patch which breaks the build and a
+            // patch which fails a test each keep the attempt out of InReview.
 
             // The REAL WorkerEventDispatcher from the app's DI stands here (in-memory, no hosted
             // service) so it raises InvocationStateChanged and processes ReportInvocationCompletedAsync —

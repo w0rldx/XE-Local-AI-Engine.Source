@@ -18,5 +18,11 @@ internal sealed class DevelopmentArtifact
     public string? ChangedFilesManifestHash { get; set; }
     public byte[]? InputArtifactIdsJson { get; set; }
     public string? CommandProfileVersion { get; set; }
+
+    /// <summary>
+    /// Hex digest of the command profile that produced this artifact. A separate dimension from
+    /// <see cref="CommandProfileVersion"/>, which carries the artifact protocol version.
+    /// </summary>
+    public string? CommandProfileDigest { get; set; }
     public bool IsValid { get; set; }
 }

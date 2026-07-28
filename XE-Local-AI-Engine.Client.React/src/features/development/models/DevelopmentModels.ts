@@ -3,6 +3,7 @@ import type {
 	XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentAttemptResponse,
 	XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentEventResponse,
 	XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentPatchPreviewResponse,
+	XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProfileDetectionResponse,
 	XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectDetailResponse,
 	XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectResponse,
 	XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTaskDetailResponse,
@@ -15,6 +16,42 @@ export type DevelopmentAttempt = XeLocalAiEngineClientEndpointsDevelopmentV1Deve
 export type DevelopmentArtifact = XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentArtifactResponse;
 export type DevelopmentEvent = XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentEventResponse;
 export type DevelopmentPatchPreview = XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentPatchPreviewResponse;
+export type DevelopmentProfileDetection = XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProfileDetectionResponse;
+
+/**
+ * The code-owned command profiles. These ids are a backend contract — the server rejects anything else — so they are
+ * literals here rather than something derived from a response.
+ */
+export const developmentCommandProfileIds = {
+	dotnetSlnx: "dotnet-slnx",
+	dotnetCsproj: "dotnet-csproj",
+	genericGit: "generic-git",
+} as const;
+
+/**
+ * Derives the profile an operator-chosen build target implies. The backend pairs profile and target strictly — a
+ * `.csproj` under `dotnet-slnx` is rejected — so picking a different candidate has to move the profile with it, not
+ * just swap the path.
+ */
+export function developmentProfileIdForBuildTarget(buildTarget?: string | null): string {
+	const target = buildTarget?.toLowerCase() ?? "";
+	if (target.endsWith(".slnx") || target.endsWith(".sln")) {
+		return developmentCommandProfileIds.dotnetSlnx;
+	}
+	if (target.endsWith(".csproj")) {
+		return developmentCommandProfileIds.dotnetCsproj;
+	}
+
+	return developmentCommandProfileIds.genericGit;
+}
+
+/**
+ * True when the profile runs no build system at all. Its validation gate is the whitespace check alone, so this must be
+ * surfaced as an explicit, visible reduction in what a green validation proves — never as an unremarkable default.
+ */
+export function isDevelopmentWhitespaceOnlyProfile(profileId?: string | null): boolean {
+	return (profileId ?? developmentCommandProfileIds.genericGit) === developmentCommandProfileIds.genericGit;
+}
 
 export interface DevelopmentRepository {
 	readonly id: string;

@@ -30,7 +30,8 @@ public sealed record DevelopmentCreateProjectCommand(
     int? TrustedRepositoryPolicyVersion = null,
     long? TrustedRepositoryAcknowledgedAtUtc = null,
     int? MaxTokens = null,
-    int? MaxDurationSeconds = null);
+    int? MaxDurationSeconds = null,
+    string? CommandProfileJson = null);
 
 public sealed record DevelopmentStartAttemptCommand(
     Guid TaskId,
@@ -104,7 +105,8 @@ public sealed record DevelopmentAttachArtifactCommand(
     string? SubjectHash = null,
     string? ChangedFilesManifestHash = null,
     ReadOnlyMemory<byte>? InputArtifactIdsJson = null,
-    string? CommandProfileVersion = null);
+    string? CommandProfileVersion = null,
+    string? CommandProfileDigest = null);
 
 public sealed record DevelopmentApprovedApplySubject(
     Guid ProjectId,
@@ -171,7 +173,8 @@ public sealed record DevelopmentExecutionSnapshot(
     DevelopmentAttemptStatus AttemptStatus,
     string ModelId,
     string Provider,
-    long AttemptVersion);
+    long AttemptVersion,
+    string? CommandProfileJson);
 
 public sealed record DevelopmentProjectSnapshot(
     Guid Id,
@@ -191,7 +194,8 @@ public sealed record DevelopmentProjectSnapshot(
     long? TrustedRepositoryAcknowledgedAtUtc,
     long CreatedAtUtc,
     long UpdatedAtUtc,
-    long Version);
+    long Version,
+    string? CommandProfileJson);
 
 public sealed record DevelopmentTaskSnapshot(
     Guid Id,
@@ -240,7 +244,8 @@ public sealed record DevelopmentArtifactSnapshot(
     string? ChangedFilesManifestHash,
     ReadOnlyMemory<byte>? InputArtifactIdsJson,
     string? CommandProfileVersion,
-    bool IsValid);
+    bool IsValid,
+    string? CommandProfileDigest);
 
 public interface IDevelopmentStore
 {
@@ -267,6 +272,19 @@ public interface IDevelopmentStore
     Task<DevelopmentProjectSnapshot> ReconnectProjectRepositoryAsync(Guid projectId,
         Guid selectedFolderId,
         long expectedVersion,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Writes a command profile onto a project created before the profile column existed, and bumps its configuration
+    ///     version so the change is visible to anything tracking project configuration.
+    ///     <para>
+    ///         Only ever fills a null. A project that already carries a profile is returned untouched, because that
+    ///         profile is the operator-confirmed agreement for the life of the project and a backfill must never be able
+    ///         to replace it — including when two backfill passes race.
+    ///     </para>
+    /// </summary>
+    Task<DevelopmentProjectSnapshot> BackfillCommandProfileAsync(Guid projectId,
+        string commandProfileJson,
         CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<DevelopmentTaskSnapshot>> ListTasksAsync(Guid projectId, CancellationToken cancellationToken = default);

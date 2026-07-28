@@ -801,12 +801,12 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1InferenceProfileViewDto = 
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullish(),
 	launchPolicyFingerprint: z.string().nullish(),
+	globalFreeVramAtFreezeBytes: z.int().nullish(),
+	processBudgetVramAtFreezeBytes: z.int().nullish(),
 	status: z.string(),
 	benchmarkSnapshotId: z.guid().nullish(),
 	createdAtUtc: z.int(),
 	updatedAtUtc: z.int(),
-	globalFreeVramAtFreezeBytes: z.int().nullish(),
-	processBudgetVramAtFreezeBytes: z.int().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1BenchmarkInferenceProfileResponse = z.object({
@@ -2048,6 +2048,14 @@ export const zXeLocalAiEngineClientEndpointsDevelopmentV1RegisterDevelopmentRepo
 	hostPath: z.string().optional(),
 });
 
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProfileDetectionResponse = z.object({
+	profileId: z.string().optional(),
+	buildTarget: z.string().nullish(),
+	candidates: z.array(z.string()).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProfileDetectionRequest = z.record(z.string(), z.never());
+
 export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectResponse = z.object({
 	id: z.guid().optional(),
 	objective: z.string().optional(),
@@ -2071,6 +2079,9 @@ export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectRespo
 	createdAtUtc: z.int().optional(),
 	updatedAtUtc: z.int().optional(),
 	version: z.int().optional(),
+	commandProfileId: z.string().nullish(),
+	commandProfileBuildTarget: z.string().nullish(),
+	commandProfileDigest: z.string().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentProjectsResponse = z.object({
@@ -2128,6 +2139,7 @@ export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentArtifactResp
 	subjectHash: z.string().nullish(),
 	changedFilesManifestHash: z.string().nullish(),
 	commandProfileVersion: z.string().nullish(),
+	commandProfileDigest: z.string().nullish(),
 	isValid: z.boolean().optional(),
 });
 
@@ -2178,6 +2190,8 @@ export const zXeLocalAiEngineClientEndpointsDevelopmentV1CreateDevelopmentProjec
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullish(),
+	commandProfileId: z.string().nullish(),
+	buildTarget: z.string().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectRequest = z.record(z.string(), z.never());
@@ -3974,6 +3988,16 @@ export const zRegisterDevelopmentRepositoryBody =
  * Success
  */
 export const zRegisterDevelopmentRepositoryResponse = zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentRepositoryResponse;
+
+export const zDetectDevelopmentRepositoryProfilePath = z.object({
+	selectedFolderId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zDetectDevelopmentRepositoryProfileResponse =
+	zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProfileDetectionResponse;
 
 /**
  * Success

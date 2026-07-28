@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Development;
 
 using System.Diagnostics;
+using System.Text;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence;
@@ -13,6 +14,15 @@ using PersistenceDevelopmentAttemptStatus = XE_Local_AI_Engine.Client.Persistenc
 
 public sealed class DevelopmentRepositoryBindingServiceTests : IDisposable
 {
+    /// <summary>
+    ///     The snapshotted profile these fixtures carry. Binding resolution never runs a command, so the generic
+    ///     profile — the one code-owned profile that needs no build target — is the honest value here.
+    /// </summary>
+    private static readonly string GenericProfileJson =
+        Encoding.UTF8.GetString(DevelopmentCommandProfileCatalog
+                                .Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null)
+                                .ToCanonicalUtf8());
+
     private readonly string _root = Path.Combine(Path.GetTempPath(), "xe-development-repository-binding-" + Guid.NewGuid().ToString("N"));
 
     public void Dispose()
@@ -253,7 +263,8 @@ public sealed class DevelopmentRepositoryBindingServiceTests : IDisposable
             PersistenceDevelopmentAttemptStatus.Running,
             "model",
             "local",
-            AttemptVersion: 1);
+            AttemptVersion: 1,
+            GenericProfileJson);
 
     private static DevelopmentProjectSnapshot ProjectSnapshot(Guid projectId,
         Guid? selectedFolderId,
@@ -276,7 +287,8 @@ public sealed class DevelopmentRepositoryBindingServiceTests : IDisposable
             TrustedRepositoryAcknowledgedAtUtc: 1,
             CreatedAtUtc: 1,
             UpdatedAtUtc: 1,
-            version);
+            version,
+            GenericProfileJson);
 
     private sealed record CommandResult(int ExitCode, string StandardOutput, string StandardError);
 }

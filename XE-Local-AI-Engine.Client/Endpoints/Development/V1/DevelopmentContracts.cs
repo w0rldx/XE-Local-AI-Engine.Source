@@ -19,6 +19,15 @@ public sealed class CreateDevelopmentProjectRequest
     public bool TrustedRepositoryAcknowledged { get; init; }
     public int? MaxTokens { get; init; }
     public int? MaxDurationSeconds { get; init; }
+
+    /// <summary>
+    ///     The profile the operator confirmed at the detection step. Null means "run detection", which is what the
+    ///     confirmation step proposed in the first place.
+    /// </summary>
+    public string? CommandProfileId { get; init; }
+
+    /// <summary>The repository-relative solution or project file the confirmed profile builds. Null for generic-git.</summary>
+    public string? BuildTarget { get; init; }
 }
 
 public sealed class DevelopmentProjectRequest
@@ -84,7 +93,10 @@ public sealed record DevelopmentProjectResponse(
     int? MaxDurationSeconds,
     long CreatedAtUtc,
     long UpdatedAtUtc,
-    long Version);
+    long Version,
+    string? CommandProfileId,
+    string? CommandProfileBuildTarget,
+    string? CommandProfileDigest);
 
 public sealed record DevelopmentTaskResponse(
     Guid Id,
@@ -127,6 +139,7 @@ public sealed record DevelopmentArtifactResponse(
     string? SubjectHash,
     string? ChangedFilesManifestHash,
     string? CommandProfileVersion,
+    string? CommandProfileDigest,
     bool IsValid);
 
 public sealed record DevelopmentEventResponse(
@@ -173,10 +186,31 @@ public sealed record DevelopmentPatchPreviewResponse(
 
 public sealed record DevelopmentApplyResponse(Guid OperationId, string Phase, string Outcome, string Status, long Version, long Sequence);
 
+public sealed class DevelopmentProfileDetectionRequest
+{
+    public Guid SelectedFolderId { get; init; }
+}
+
+/// <summary>
+///     A detection proposal for a registered repository. Nothing here is authoritative — the operator confirms or
+///     overrides it, and the confirmed choice is what gets snapshotted onto the project.
+/// </summary>
+public sealed record DevelopmentProfileDetectionResponse(
+    string ProfileId,
+    string? BuildTarget,
+    IReadOnlyList<string> Candidates);
+
 internal static class DevelopmentContractMapper
 {
-    public static DevelopmentProjectResponse ToResponse(this DevelopmentProjectSnapshot value) =>
-        new(value.Id,
+    /// <summary>
+    ///     Projects the profile as its id, build target and digest rather than the stored blob. The build target is
+    ///     repository-relative by construction, so nothing host-identifying crosses the boundary; the full profile's
+    ///     argument vectors would, and buy the operator nothing.
+    /// </summary>
+    public static DevelopmentProjectResponse ToResponse(this DevelopmentProjectSnapshot value)
+    {
+        var profile = DevelopmentProfileSummary.TryFrom(value.CommandProfileJson);
+        return new DevelopmentProjectResponse(value.Id,
             value.Objective,
             value.SelectedFolderId,
             value.SelectedFolderId is null,
@@ -189,7 +223,11 @@ internal static class DevelopmentContractMapper
             value.MaxDurationSeconds,
             value.CreatedAtUtc,
             value.UpdatedAtUtc,
-            value.Version);
+            value.Version,
+            profile?.ProfileId,
+            profile?.BuildTarget,
+            profile?.Digest);
+    }
 
     public static DevelopmentRepositoryResponse ToResponse(this DevelopmentRepositoryReference value) =>
         new(value.Id, value.Alias, value.Availability);
@@ -235,6 +273,7 @@ internal static class DevelopmentContractMapper
             value.SubjectHash,
             value.ChangedFilesManifestHash,
             value.CommandProfileVersion,
+            value.CommandProfileDigest,
             value.IsValid);
 
     public static DevelopmentEventResponse ToResponse(this DevelopmentEventSnapshot value) =>

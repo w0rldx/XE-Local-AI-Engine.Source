@@ -26,6 +26,7 @@ internal sealed record DevelopmentCommandEvidence(
 internal interface IDevelopmentWorkspaceTools
 {
     IReadOnlyList<DevelopmentCommandEvidence> CommandEvidence { get; }
+    DevelopmentCommandProfile Profile { get; }
     Task<string> ListFilesAsync(string? path, CancellationToken cancellationToken = default);
     Task<string> ReadFileAsync(string path, CancellationToken cancellationToken = default);
     Task<string> SearchTextAsync(string pattern, string? path, CancellationToken cancellationToken = default);
@@ -38,29 +39,58 @@ internal interface IDevelopmentWorkspaceTools
 
 internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
 {
-    private const string Solution = "XE-Local-AI-Engine.slnx";
+    /// <summary>
+    ///     The artifact <em>protocol</em> version for coder-produced evidence. This is not the command-profile version:
+    ///     it describes the shape of the artifacts this class's caller writes, and the apply and reviewer gates compare
+    ///     their own protocol constants against it. Keep it, and keep it separate from
+    ///     <see cref="DevelopmentCommandProfile.ComputeDigest" />.
+    /// </summary>
     private const string CommandProfileVersion = "development-workspace-v1";
 
     private readonly List<DevelopmentCommandEvidence> _commandEvidence = [];
+
+    /// <summary>
+    ///     The import file's digest as the worktree presented it before this attempt ran anything, or null if absent.
+    ///     <para>
+    ///         Captured here rather than taken from <see cref="DevelopmentCommandProfile.ImportDigest" /> on purpose.
+    ///         That digest was recorded at project creation from the operator's live repository working tree, whereas
+    ///         the managed worktree is checked out at the attempt's base commit — so for a repository carrying an
+    ///         uncommitted edit to <c>.xe-dev/profile.json</c> the two legitimately differ, and comparing against the
+    ///         stored value would fail every attempt on its very first command. What the invariant needs to prove is
+    ///         narrower and is exactly what this captures: that nothing THIS attempt ran changed the file.
+    ///     </para>
+    ///     <para>
+    ///         Taken in the constructor, which runs immediately after the workspace is prepared and validated and
+    ///         before any command executes, so no agent-influenced code has run yet.
+    ///     </para>
+    /// </summary>
+    private readonly string? _importBaselineDigest;
+
     private readonly DevelopmentAttemptLiveProgress? _liveProgress;
     private readonly DevelopmentOptions _options;
+    private readonly DevelopmentCommandProfile _profile;
     private readonly ISandboxRuntimeProvider _sandbox;
     private readonly DevelopmentWorkspaceSession _session;
 
     public DevelopmentWorkspaceTools(ISandboxRuntimeProvider sandbox,
         DevelopmentWorkspaceSession session,
         IOptions<DevelopmentOptions> options,
+        DevelopmentCommandProfile profile,
         DevelopmentAttemptLiveProgress? liveProgress = null)
     {
         _sandbox = sandbox ?? throw new ArgumentNullException(nameof(sandbox));
         _session = session ?? throw new ArgumentNullException(nameof(session));
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
+        _profile = profile ?? throw new ArgumentNullException(nameof(profile));
         _liveProgress = liveProgress;
+        _importBaselineDigest = DevelopmentCommandProfileImport.TryComputeDigest(session.HostWorktreePath);
         EnsureRuntimeDirectories();
     }
 
     public IReadOnlyList<DevelopmentCommandEvidence> CommandEvidence => _commandEvidence;
+
+    public DevelopmentCommandProfile Profile => _profile;
 
     public async Task<string> ListFilesAsync(string? path, CancellationToken cancellationToken = default)
     {
@@ -219,18 +249,16 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
 
     private async Task<SandboxCommandResult> ExecuteCatalogAsync(string commandId, CancellationToken cancellationToken)
     {
-        var command = commandId switch
-        {
-            DevelopmentCommandIds.GitStatus => (AgentHomeGit.Executable, AgentHomeGit.Arguments("status", "--short", "--branch", "--untracked-files=all", "--", ".")),
-            DevelopmentCommandIds.GitDiffCheck => (AgentHomeGit.Executable, AgentHomeGit.Arguments("diff", "--check", "HEAD", "--", ".")),
-            DevelopmentCommandIds.DotnetRestore => ("dotnet", (IReadOnlyList<string>)["restore", Solution]),
-            DevelopmentCommandIds.DotnetBuildRelease => ("dotnet", (IReadOnlyList<string>)["build", Solution, "--configuration", "Release", "--no-restore"]),
-            DevelopmentCommandIds.DotnetTestRelease => ("dotnet", (IReadOnlyList<string>)["test", Solution, "--configuration", "Release", "--no-build", "--max-parallel-test-modules", "1"]),
-            _ => throw new DevelopmentWorkspaceSecurityException("The requested command id is not in the code-owned Development command catalog.")
-        };
+        var command = _profile.ResolveCommand(commandId);
 
         _liveProgress?.CommandStarted(commandId);
-        var result = await ExecuteAsync(commandId, command.Item1, command.Item2, "/", standardInput: null, cancellationToken).ConfigureAwait(false);
+        var result = await ExecuteAsync(commandId,
+            command.Executable,
+            command.Arguments,
+            "/",
+            standardInput: null,
+            ResolveTimeout(command.TimeoutSeconds),
+            cancellationToken).ConfigureAwait(false);
         await EnsureWorkspaceInvariantAsync(cancellationToken).ConfigureAwait(false);
         var evidence = new DevelopmentCommandEvidence(commandId,
             result.ExitCode,
@@ -273,13 +301,62 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
         {
             throw new DevelopmentWorkspaceSecurityException("A fixed command attached the managed Development worktree to a protected branch.");
         }
+
+        EnsureCommandProfileImportUnchanged();
     }
+
+    /// <summary>
+    ///     Re-checks the repository's <c>.xe-dev/profile.json</c> against the digest recorded when the profile was
+    ///     imported, after every catalog command.
+    ///     <para>
+    ///         Adding <c>.xe-dev</c> to <see cref="DevelopmentWorkspaceSecurity" />'s deny list only stops the agent
+    ///         naming that path as an argument to a workspace tool. It does nothing about a build or test command that
+    ///         writes the file as a side effect — an MSBuild target, a post-install script, or simply a test that writes
+    ///         where it should not. This check is what closes that, and it is why the deny-list entry must not be
+    ///         mistaken for the guard.
+    ///     </para>
+    ///     <para>
+    ///         Read from the host worktree rather than through the sandbox: the engine is verifying its own invariant,
+    ///         so routing the read through the surface being verified would be circular.
+    ///     </para>
+    /// </summary>
+    private void EnsureCommandProfileImportUnchanged()
+    {
+        var actual = DevelopmentCommandProfileImport.TryComputeDigest(_session.HostWorktreePath);
+        if (!string.Equals(actual, _importBaselineDigest, StringComparison.Ordinal))
+        {
+            throw new DevelopmentWorkspaceSecurityException(
+                "A fixed command changed the repository command-profile import file in the managed Development worktree.");
+        }
+    }
+
+    /// <summary>
+    ///     Runs one of the engine's own fixed helper commands (directory listing, text search, patch application, diff,
+    ///     and the post-command workspace invariant probes). These are bounded by
+    ///     <see cref="DevelopmentOptions.ToolCommandTimeoutSeconds" /> rather than by the attempt cap: before per-command
+    ///     timeouts existed, every one of them could individually consume the whole 30-minute attempt budget, so a hung
+    ///     <c>grep</c> was indistinguishable from a legitimately long build.
+    /// </summary>
+    private Task<SandboxCommandResult> ExecuteAsync(string executionPrefix,
+        string executable,
+        IReadOnlyList<string> arguments,
+        string workingDirectory,
+        string? standardInput,
+        CancellationToken cancellationToken) =>
+        ExecuteAsync(executionPrefix,
+            executable,
+            arguments,
+            workingDirectory,
+            standardInput,
+            ResolveTimeout(_options.ToolCommandTimeoutSeconds),
+            cancellationToken);
 
     private async Task<SandboxCommandResult> ExecuteAsync(string executionPrefix,
         string executable,
         IReadOnlyList<string> arguments,
         string workingDirectory,
         string? standardInput,
+        TimeSpan timeout,
         CancellationToken cancellationToken)
     {
         var result = await _sandbox.ExecuteAsync(_session.SandboxHandle, new SandboxCommandRequest
@@ -290,7 +367,7 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
             WorkingDirectory = workingDirectory,
             StandardInput = standardInput,
             Environment = BuildEnvironment(),
-            Timeout = TimeSpan.FromSeconds(_options.MaxAttemptDurationSeconds)
+            Timeout = timeout
         }, cancellationToken).ConfigureAwait(false);
         var outputTruncated = Encoding.UTF8.GetByteCount(result.StandardOutput) > _options.MaxCommandOutputBytes;
         var errorTruncated = Encoding.UTF8.GetByteCount(result.StandardError) > _options.MaxCommandOutputBytes;
@@ -302,6 +379,13 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
             StandardErrorTruncated = result.StandardErrorTruncated || errorTruncated
         };
     }
+
+    /// <summary>
+    ///     Clamps a per-command budget to the attempt cap. A profile can ask for less than the attempt allows but never
+    ///     for more, so <see cref="DevelopmentOptions.MaxAttemptDurationSeconds" /> stays the outer bound it claims to be.
+    /// </summary>
+    private TimeSpan ResolveTimeout(int requestedSeconds) =>
+        TimeSpan.FromSeconds(Math.Min(Math.Max(requestedSeconds, 1), _options.MaxAttemptDurationSeconds));
 
     private IReadOnlyDictionary<string, string> BuildEnvironment()
     {
