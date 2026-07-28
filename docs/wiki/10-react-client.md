@@ -1,6 +1,6 @@
 # React Client (Frontend)
 
-> Last reviewed: 2026-07-24 · Code-grounded.
+> Baseline: `7e64ed589e14eecc0e522e807d2e531a1095d19a` · Reviewed: 2026-07-28 · Code-grounded.
 
 The React management UI lives in `XE-Local-AI-Engine.Client.React` and is the operator console for a single node: chat, agent mode, model management/advisor, scheduler, MCP, skills, settings, and dashboards. It is a Vite + React 19 + Mantine SPA, served same-origin from the Node Web Server's `wwwroot`. All server state flows through TanStack Query over a **generated hey-api SDK** that is the single source of truth for REST; SignalR drives the streaming/live surfaces. This page maps the directory layout, the state strategy, the transport plumbing, the shared UI primitives, i18n, and how the bundle is hosted.
 
@@ -22,7 +22,7 @@ Source: `XE-Local-AI-Engine.Client.React/package.json`.
 | UI/session state | `zustand` 5 | Auth token, theme, sidebar, language, dev mode, pagination prefs. |
 | HTTP | `axios` 1 | One shared instance behind the generated client. |
 | Validation | `zod` 4 | Boundary parsing of API responses + form schemas. |
-| Realtime | `@microsoft/signalr` 10 | Nine hubs (chat, scheduler, preview, GGUF download, CUDA build, source build, knowledge base, image jobs, development attempts) behind one refcounted shared connection per hub path. |
+| Realtime | `@microsoft/signalr` 10 | Shared connections for 10 possible hub paths: 9 unconditional (chat, scheduler, preview, GGUF download, CUDA build, llama.cpp source build, knowledge base, image jobs, stable-diffusion.cpp source build) plus Development attempts when enabled. |
 | Markdown | `react-markdown` + `remark-gfm` + `react-syntax-highlighter` | Chat + editor rendering. |
 | i18n | `i18next` + `react-i18next` + browser language detector | `en` / `de`. |
 | Canvas | `@xyflow/react` | Preview workflow builder (see [Agent Mode](04-agent-mode.md) / Preview). |
@@ -44,6 +44,9 @@ ThemeProvider                 (Mantine + theme store)
       └─ ErrorBoundary        (react-error-boundary → AppErrorFallback)
          └─ RouterProvider    (TanStack Router)
 ```
+
+**Text fallback:** theme state wraps the React Query client; confirmation dialogs and the global
+error boundary sit inside that data layer; the router is the innermost application provider.
 
 i18n is initialized as a side-effect import (`src/i18n.ts`) and `dayjs` is extended with the UTC plugin at module load.
 
@@ -216,7 +219,7 @@ In dev the React app runs under Vite (5173) and proxies to the Node Web Server; 
 app.UseStaticFiles();                 // serve hashed assets from wwwroot (Program.cs:263)
 ...
 app.UseFastEndpoints(...);            // /api/local/v1/* (RoutePrefix = LocalApiRoutes.Prefix)
-app.MapHub<LocalChatHub>(...);        // nine local SignalR hubs (Operator-authorized), Program.cs:341-359
+app.MapHub<LocalChatHub>(...);        // 9 unconditional hubs (Operator-authorized), Program.cs:341-361
 app.MapHub<SchedulerHub>(...);
 app.MapHub<PreviewWorkflowHub>(...);
 app.MapHub<GgufDownloadHub>(...);
@@ -224,6 +227,7 @@ app.MapHub<CudaBuildHub>(...);
 app.MapHub<LlamaCppSourceBuildHub>(...);
 app.MapHub<KnowledgeBaseHub>(...);
 app.MapHub<ImageJobHub>(...);
+app.MapHub<StableDiffusionCppSourceBuildHub>(...);
 if (isDevelopmentModeEnabled)         // Development:Enabled, default true
     app.MapHub<DevelopmentAttemptHub>(...);
 ...
@@ -233,7 +237,7 @@ app.MapFallbackToFile("index.html");  // SPA fallback → client-side routing (P
 Notes for maintainers:
 
 - This repo uses `UseStaticFiles()` + `MapFallbackToFile("index.html")`. There is **no** `UseDefaultFiles()` call in `Program.cs` — the fallback to `index.html` is what makes deep links resolve to the SPA. (The C0re "static files" convention is the same shape; the `UseDefaultFiles` step is not present here.)
-- Static files are mapped **before** the local-API security middleware; the API surface, auth and the hubs come after. All nine hubs `RequireAuthorization(NodeAuthorizationPolicies.Operator)`. Full ordering and the per-hub contracts: [API & Hubs](09-api-and-hubs.md).
+- Static files are mapped **before** the local-API security middleware; the API surface, auth and the hubs come after. All 9 unconditional hubs and the conditional Development hub call `RequireAuthorization(NodeAuthorizationPolicies.Operator)`. Full ordering and the per-hub contracts: [API & Hubs](09-api-and-hubs.md).
 - Same-origin is the whole reason the axios `baseURL` is `""`: in production the SPA and the API share one origin, so relative paths just work.
 - HTTPS redirect/HSTS are skipped in desktop mode (`isDesktop`); Swagger/Scalar (`/scalar`) and the Agent Framework DevUI (`/devui`) are dev-only and never shipped to production.
 

@@ -1,6 +1,6 @@
 # Model-fit / Model Advisor
 
-> Last reviewed: 2026-06-27 · Code-grounded.
+> Last reviewed: 2026-07-28 · Code-grounded.
 
 Model-fit is the node's **box-aware GGUF recommendation advisor**: given the operator's use-case, it profiles the local hardware (RAM / VRAM / GPU vendor), discovers candidate GGUF repos on Hugging Face, estimates each model's memory footprint with a pure I/O-free formula, ranks the ones that fit, and caches the ranked snapshot. The React page is **cache-first** — it reads the last cached snapshot and never runs the advisor inline; the only way to (re)run the advisor is to fire the seeded Quartz `model-recommendation-check` job. This page covers the hardware profiler, the memory-fit estimator, the refresh service, the cache-read query service, the GGUF download coordinator, the Quartz wiring, the local endpoints, and the React feature.
 
@@ -40,7 +40,7 @@ This is the single most important invariant of the feature. The "latest" read an
           → IScheduledJobManagementService.TriggerNowAsync(seeded model-recommendation-check job)
           → Quartz dispatcher → ModelRecommendationCheckHandler.ExecuteAsync()
           → ModelFitRefreshService.RefreshAsync()  ← the ONLY place the advisor actually runs
-          → writes new snapshot + recommendation rows to encrypted SQLite
+          → writes new snapshot + recommendation rows to SQLite
           → SignalR scheduler hub broadcasts terminal run → page invalidates the latest cache & refetches
 ```
 
@@ -192,7 +192,7 @@ All endpoints are loopback/local-only, authenticated, and secret-redacted — se
 
 - [Local runtime & providers](03-local-runtime-and-providers.md) — host llama.cpp supervisor, binary manager, HF GGUF discovery/store the advisor depends on.
 - [Scheduler](06-scheduler.md) — Quartz dispatcher, run history, and the SignalR hub the refresh path rides.
-- [Data & persistence](08-data-and-persistence.md) — snapshot/recommendation tables in encrypted SQLite.
+- [Data & persistence](08-data-and-persistence.md) — snapshot/recommendation tables in the node SQLite database and the exact selected-field encryption boundary.
 - [API & hubs](09-api-and-hubs.md) — `/api/local/v1` mapping and OpenAPI → hey-api.
 - [React client](10-react-client.md) — TanStack Query + SignalR conventions used by this feature.
 - [Security & privacy](12-security-and-privacy.md) — local-only endpoints, secret redaction, token-presence gating.

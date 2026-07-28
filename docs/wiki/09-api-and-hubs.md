@@ -1,8 +1,8 @@
 # API Surface & Realtime Hubs
 
-> Last reviewed: 2026-07-24 · Code-grounded.
+> Baseline: `7e64ed589e14eecc0e522e807d2e531a1095d19a` · Reviewed: 2026-07-28 · Code-grounded.
 
-This page documents the **Node Web Server transport layer**: the HTTP API exposed under `/api/local/v1` (FastEndpoints), the nine SignalR push/stream hubs in `Client/Hubs`, the single outbound **WorkerHub** connection to the C0re platform, the cross-cutting transport concerns (security middleware, exception handling, health checks, auth), and how the backend's OpenAPI document becomes the single source of truth for every React REST client via hey-api.
+This page documents the **Node Web Server transport layer**: the HTTP API exposed under `/api/local/v1` (FastEndpoints), the nine unconditional SignalR push/stream hubs plus the conditional Development hub, the single outbound **WorkerHub** connection to the C0re platform, the cross-cutting transport concerns (security middleware, exception handling, health checks, auth), and how the backend's OpenAPI document becomes the single source of truth for every React REST client via hey-api.
 
 If you are adding or changing an endpoint or hub, this is the page that tells you *where the route lives, how it is secured, and what regen step you must run for the React client to see it*.
 
@@ -13,7 +13,7 @@ If you are adding or changing an endpoint or hub, this is the page that tells yo
 ```
  Browser (React SPA, same origin)                C0re Platform
         │  HTTP /api/local/v1/*  (FastEndpoints)         ▲
-        │  SignalR hubs (nine — see §2)                  │  ONE outbound
+        │  SignalR hubs (9 unconditional, 10 possible)   │  ONE outbound
         ▼                                                │  WorkerHub conn
  ┌──────────────────────────────────────────────────────┴───────────────┐
  │ Node Web Server  (XE-Local-AI-Engine.Client)                          │
@@ -24,13 +24,13 @@ If you are adding or changing an endpoint or hub, this is the page that tells yo
  │  • UseRouting / UseRateLimiter                                        │
  │  • UseAuthentication / UseAuthorization (JWT bearer, Operator policy) │
  │  • UseFastEndpoints (RoutePrefix = api/local/v1)                      │
- │  • MapHub × 9  (the 9th only when Development mode is enabled)        │
+ │  • MapHub × 9, plus DevelopmentAttemptHub when Development is enabled │
  │  • (non-Production) OpenAPI JSON + /scalar + (Development) /devui     │
  │  • MapFallbackToFile("index.html")  (serves the React build)         │
  └───────────────────────────────────────────────────────────────────────┘
 ```
 
-Two transport directions to keep straight:
+**Text fallback — two transport directions to keep straight:**
 
 - **Inbound, browser → node** — the local management API and local hubs. Loopback/local-only, authenticated as the node *operator*, secret-redacted. This is everything under `/api/local/v1`.
 - **Outbound, node → platform** — exactly **one** SignalR connection, `WorkerHubConnection`. Worker creds and platform tokens live only here and are never returned to the browser. See [Security & Privacy](12-security-and-privacy.md) for the full invariant.
@@ -45,7 +45,11 @@ The middleware/mapping order above is authoritative — see `XE-Local-AI-Engine.
 
 - **Framework:** FastEndpoints. One endpoint = one `*Endpoint.cs` class; request/response shapes live in `*EndpointDtos.cs`, FluentValidation rules in `*EndpointValidators.cs`, and entity↔DTO mapping in `Mappers/`.
 - **Route prefix:** every endpoint is mounted under `api/local/v1` via `config.Endpoints.RoutePrefix = LocalApiRoutes.Prefix` (`Program.cs:314`, `LocalApiRoutes.cs:8`).
-- **Routes are centralized**, not string-literal'd per endpoint. All route templates are constants on **23 nested static classes** in `XE-Local-AI-Engine.Client/Endpoints/Common/LocalApiRoutes.cs` (e.g. `LocalApiRoutes.Scheduler.JobById`) — 166 route constants plus the `Prefix`, nine of them hub paths. Change a path here and both the endpoint and any `Send.CreatedAtAsync<TEndpoint>()` location resolution follow.
+- **Routes are centralized**, not string-literal'd per endpoint. At the baseline,
+  `XE-Local-AI-Engine.Client/Endpoints/Common/LocalApiRoutes.cs` contains **23 route-family classes**
+  and **176 public string constants**: `Prefix` plus 175 route or hub constants (for example,
+  `LocalApiRoutes.Scheduler.JobById`). Change a path here and both the endpoint and any
+  `Send.CreatedAtAsync<TEndpoint>()` location resolution follow.
 - **operationId = camelCased class name.** A single global `NameGenerator` strips the `Endpoint` suffix and lowercases the first char (`Program.cs:327-336`): `CreateScheduledJobEndpoint` → `createScheduledJob`. These operationIds are what the hey-api React SDK function names are derived from, so **the C# class name is the public contract name** — rename with care.
 - **Errors → ProblemDetails.** `config.Errors.UseProblemDetails()` (`Program.cs:338`) turns validation failures into RFC7807. Domain exceptions are handled by the `IExceptionHandler` chain (see §4). Note that not every non-2xx is ProblemDetails: several families answer a **typed domain object** instead (the source-build `409` is the notable one — see §1 design notes).
 - **Desktop-only endpoints.** `config.Endpoints.Filter` (`Program.cs:320`) drops any endpoint implementing `IDesktopOnlyEndpoint` unless the host launched in desktop mode. Only the `app-update/*` and `github-auth/*` families use it, so they are absent from a headless OpenAPI regen.
@@ -71,7 +75,7 @@ One row per nested class in `LocalApiRoutes.cs`, in file order. The "Owner page"
 | **Agents** (`agents/*`) | `agents`, `agents/{id}`, `agents/tool-capable-models`, `agents/templates(/import)`, `agents/{id}/playbook(/...)`, `.../golden-conversations(/...)`, `.../feedback-insights`, `.../playbook/monitor`, `.../execution-logs`, `agents/run-envelopes` (operator-gated run-envelope lifecycle list), `agents/usage-summary` (token-usage rollup by model + UTC day, metadata only) | [Agent Mode](04-agent-mode.md) |
 | **Skills** (`skills/*`) | `skills`, `skills/{skillId}` | [Agent Mode](04-agent-mode.md) |
 | **Scheduler** (`scheduler/*`) | `scheduler/templates`, `scheduler/jobs`, `scheduler/jobs/{id}(/enable\|disable\|trigger)`, `scheduler/runs`, `scheduler/runs/{id}(/cancel)` | [Scheduler](06-scheduler.md) |
-| **Development** (`development/*`) | `development`, `development/capability`, `development/repositories`, `development/projects(/{projectId})`, `.../repository-connection`, `.../tasks/{taskId}`, `.../tasks/{taskId}/next-action`, `.../attempts/{attemptId}/cancel`, `.../events`, `.../tasks/{taskId}/artifacts(/{artifactId})`, `.../tasks/{taskId}/preview`, `.../tasks/{taskId}/apply` — 15 endpoints in one file, `Endpoints/Development/V1/DevelopmentEndpoints.cs` | [Architecture Overview](01-architecture-overview.md#development-mode-registered-source-managed-worktree) |
+| **Development** (`development/*`) | `development`, `development/capability`, `development/repositories`, `development/repositories/{selectedFolderId}/profile-detection`, `development/projects(/{projectId})`, `.../repository-connection`, `.../tasks/{taskId}`, `.../tasks/{taskId}/next-action`, `.../attempts/{attemptId}/cancel`, `.../events`, `.../tasks/{taskId}/artifacts(/{artifactId})`, `.../tasks/{taskId}/preview`, `.../tasks/{taskId}/apply` — 16 endpoint classes in `Endpoints/Development/V1/DevelopmentEndpoints.cs` | [Architecture Overview](01-architecture-overview.md#development-mode-registered-source-managed-worktree) |
 | **ModelFit** (`model-fit/*`) | `model-fit/recommendations/latest\|refresh`, `model-fit/hardware-profile`, `model-fit/gguf/browse\|inspect`, `model-fit/download(/cancel)`, `model-fit/gguf/downloads(/{modelName})`, `model-fit/running(/eject)`, `model-fit/catalog(/refresh)`, `model-fit/llamacpp/version\|runtime\|update`, `model-fit/llamacpp/cuda-build(/prerequisites\|status\|cancel\|remove)`, `model-fit/llamacpp/source-build(/prerequisites\|status\|cancel\|remove)`, `model-fit/hf-token`, `model-fit/profiles(/explore\|benchmark\|freeze\|invalidate)` (inference optimizer) | [Model Fit](07-model-fit.md), [Local Runtime & Providers](03-local-runtime-and-providers.md) |
 | **Preview / Open Canvas** (`preview/*`) | `preview/workflows`, `preview/workflows/{id}(/execute)`, `preview/runs/execute`, `preview/runs/{id}/continue\|cancel` | [React Client](10-react-client.md) |
 | **Images** (`images/*`) | `images/jobs` (POST create / GET list), `images/jobs/{jobId}(/cancel)`, `images/{imageId}` (decrypted PNG retrieve), `images/models`, `images/models/downloads`, `images/runtime(/eject)`, `images/runtime/source-build(/prerequisites\|status\|cancel\|remove)` | [Image Generation](14-image-generation.md) |

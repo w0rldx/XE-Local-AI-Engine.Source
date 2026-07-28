@@ -1,8 +1,8 @@
 # Local Runtime & Model Providers
 
-> Last reviewed: 2026-07-24 · Code-grounded.
+> Last reviewed: 2026-07-28 · Code-grounded.
 
-This page is the heart of the 2026-06-17 runtime re-architecture. It explains how XE Local AI Engine runs models **in-process** on the node host: the provider-neutral seams in `Providers.Abstractions`, the host **llama.cpp** process supervisor that spawns and tree-kills `llama-server` children, runtime-binary acquisition (prebuilt download, operator bring-your-own override, and the in-app **source build**), and the satellite providers (Ollama, HuggingFace GGUF store, capability detection, Codex OAuth cloud chat). Model *recommendation* (box-aware GGUF fit) is owned by [07-model-fit.md](07-model-fit.md); this page covers only how a model gets selected, loaded, and served.
+This page is the heart of the 2026-06-17 runtime re-architecture. It explains how XE Local AI Engine runs models through node-owned host child processes: the provider-neutral seams in `Providers.Abstractions`, the host **llama.cpp** process supervisor that spawns and tree-kills `llama-server` children, runtime-binary acquisition (prebuilt download, operator bring-your-own override, and the in-app **source build**), and the satellite providers (Ollama, HuggingFace GGUF store, capability detection, Codex OAuth cloud chat). Model *recommendation* (box-aware GGUF fit) is owned by [07-model-fit.md](07-model-fit.md); this page covers only how a model gets selected, loaded, and served.
 
 The big picture: there is **no Docker** and **no container sandbox** in the inference path, and the old `HostAgent` connection layer is deleted (only a teardown plan survives under `Plans/`). Inference = a host `llama-server` child process, localhost-bound, owned by a singleton supervisor. See [01-architecture-overview.md](01-architecture-overview.md) for where this fits in the node.
 

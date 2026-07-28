@@ -1,11 +1,12 @@
 # Architecture Overview
 
-> Last reviewed: 2026-07-24 · Code-grounded.
+> Baseline: `7e64ed589e14eecc0e522e807d2e531a1095d19a` · Reviewed: 2026-07-28 · Code-grounded.
 
 XE Local AI Engine (product name **XE AI-Engine**) is the **node-side runtime** of the C0re platform: a single ASP.NET Core process
 (`XE-Local-AI-Engine.Client`) that hosts the React management UI, owns the one outbound platform
-`WorkerHub` connection, serves local APIs and SignalR hubs, persists chat/state in encrypted SQLite,
-and runs the local model runtime **in-process** via a host `llama.cpp` supervisor. This page is the map:
+`WorkerHub` connection, serves local APIs and SignalR hubs, persists selected sensitive fields in SQLite
+with per-column AEAD encryption,
+and supervises node-owned `llama-server` and `sd-server` host child processes. This page is the map:
 it shows the node↔platform boundary, the in-process layering and one-way dependency flow, and the
 post-re-architecture runtime model (host llama.cpp, **no Docker, no HostAgent**). Subsystem detail lives
 in the per-topic pages linked throughout.
@@ -31,7 +32,7 @@ supervisor — lives inside the `XE-Local-AI-Engine.Client` host.
 | Optional secondary provider | `XE-Local-AI-Engine.Providers.Ollama` | `OllamaLocalModelProvider.cs` |
 | Cloud chat provider (ChatGPT OAuth) | `XE-Local-AI-Engine.Providers.CodexOAuth` | `CodexOAuthChatClientFactory.cs` |
 | Hardware probing | `XE-Local-AI-Engine.Providers.Capabilities` | `HardwareProfiler.cs` |
-| Encrypted SQLite persistence | `XE-Local-AI-Engine.Client.Persistence` | `Client/Program.cs` migration runners |
+| SQLite persistence with selected per-column AEAD encryption | `XE-Local-AI-Engine.Client.Persistence` | `Client/Program.cs` migration runners; `NodeEncryptionSaveChangesInterceptor.cs` |
 | React management UI (25 features) | `XE-Local-AI-Engine.Client.React` | `Client.React/src/features/` |
 | Dev orchestration only | `XE-Local-AI-Engine.AppHost` | `AppHost/AppHost.cs` |
 
@@ -71,10 +72,11 @@ Distinct from the platform link, the React SPA talks to the host over a **loopba
 - REST endpoints (FastEndpoints) under the prefix `LocalApiRoutes.Prefix` (`/api/local/v1`), with a
   global operationId name generator feeding the OpenAPI doc that generates the hey-api React SDK
   (`Program.cs`, `config.Endpoints.NameGenerator`).
-- **Nine** local SignalR hubs, each `RequireAuthorization(NodeAuthorizationPolicies.Operator)`
-  (`Program.cs:341-359`): `LocalChatHub`, `SchedulerHub`, `PreviewWorkflowHub`, `GgufDownloadHub`,
-  `CudaBuildHub`, `LlamaCppSourceBuildHub`, `KnowledgeBaseHub`, `ImageJobHub`, and — mapped only when
-  `Development:Enabled` (default `true`) — `DevelopmentAttemptHub`.
+- **Ten possible** local SignalR hubs, each `RequireAuthorization(NodeAuthorizationPolicies.Operator)`
+  (`Program.cs:341-361`): nine are unconditional (`LocalChatHub`, `SchedulerHub`, `PreviewWorkflowHub`,
+  `GgufDownloadHub`, `CudaBuildHub`, `LlamaCppSourceBuildHub`, `KnowledgeBaseHub`, `ImageJobHub`, and
+  `StableDiffusionCppSourceBuildHub`); `DevelopmentAttemptHub` is the tenth and is mapped only when
+  `Development:Enabled` (default `true`).
 - JWT-bearer auth (operator role), antiforgery, per-IP rate limiting, and a
   `LocalApiSecurityMiddleware` that enforces the loopback/`Host`/`Origin` posture
   (`ConfigureServices.cs`, `Program.cs`).
@@ -108,10 +110,11 @@ the host user and retains the host filesystem and network access available to th
 support are future `ISandboxRuntimeProvider`/workspace-provider work only; the current architecture does not
 present either as an active security boundary. See [Security & Privacy](12-security-and-privacy.md#development-mode-source-and-execution-boundary).
 
-**Where the code and the decisions live.** Backend: 15 endpoints in `Client/Endpoints/Development/V1/DevelopmentEndpoints.cs`
+**Where the code and the decisions live.** Backend: 16 endpoints in `Client/Endpoints/Development/V1/DevelopmentEndpoints.cs`
 (routes on `LocalApiRoutes.Development`), services under `Client.Application/Services/Development/`, live attempt output over
 `DevelopmentAttemptHub` — all in [API & Hubs](09-api-and-hubs.md). Schema: migrations `AddDevelopmentModeFoundation` and
-`BindDevelopmentProjectsToSelectedFolders` ([Data & Persistence](08-data-and-persistence.md)). Frontend:
+`BindDevelopmentProjectsToSelectedFolders`, followed by `AddDevelopmentCommandProfile`
+([Data & Persistence](08-data-and-persistence.md)). Frontend:
 `Client.React/src/features/development/` at route `/development` ([React Client](10-react-client.md)). Two accepted ADRs record
 the non-obvious decisions:
 
@@ -122,6 +125,36 @@ the non-obvious decisions:
 - [ADR 0002 — cloud authorization uses `ChatOptions.AdditionalProperties`](../adr/0002-development-cloud-egress-carrier.md): the
   carrier that authorizes every raw cloud round, including the function-result follow-up round created inside
   `FunctionInvokingChatClient`. Version-aware against the pinned `Microsoft.Extensions.AI` 10.7.0 — re-verify it when that pin moves.
+
+Command execution is selected from the code-owned `dotnet-slnx`, `dotnet-csproj`, or `generic-git`
+profiles. The React project-creation form requires confirmation before it submits a detected
+proposal, but that confirmation is a normal UI workflow control, not a backend authorization
+invariant. The backend accepts an omitted profile and applies this precedence: explicit
+`CommandProfileId`, then the optional repository import at `.xe-dev/profile.json`, then read-only
+detection. The import may name a profile and build target, but it cannot define commands,
+arguments, executables, or timeouts.
+
+Four integrity values have different purposes and must not be collapsed into one “profile
+digest”:
+
+1. At project creation, the SHA-256 digest of the exact import-file bytes is stored as provenance
+   in the canonical profile snapshot.
+2. At the start of an attempt, the managed worktree's import-file digest (including absence) is
+   captured independently; a fixed catalog command that changes it makes the next invariant check
+   fail closed.
+3. Artifacts store a digest of the canonical command-profile snapshot so evidence can be bound to
+   the selected command definition.
+4. The artifact protocol version is independent of the command-profile catalog version and all
+   three digest values.
+
+Stored profiles are reconstructed from the current code-owned catalog and rejected when the
+catalog version or canonical content no longer matches. The `generic-git` profile runs only fixed
+Git status and `git diff --check`; it can detect whitespace errors but provides no build or test
+evidence. The D3 test-write policy permits adding or copying protected test files, but rejects
+modification, deletion, or rename of a protected test that existed at the base commit. An attempt
+does not re-read the repository import file as its command source
+(`DevelopmentCommandProfileCatalog.cs`, `DevelopmentCommandProfileImport.cs`,
+`DevelopmentManagementService.ResolveCommandProfile`).
 
 `DevelopmentOptions` (`Client.Application/Services/Development/DevelopmentOptions.cs`) also carries the per-attempt guardrails:
 `MaxArtifactBytes` (16 MiB), `MaxAttemptDurationSeconds` (30 min), `MaxToolCalls` (64), `MaxChangedFiles` (256),
@@ -159,8 +192,8 @@ through `AddNodeApplication`, which composes 23 `AddNode*` feature modules
                          │  ┌────────────────┐          │  ├ HuggingFace (GGUF)│  │
                          │  │ Client.        │◀─────────┤  ├ Ollama (optional) │  │
                          │  │ Persistence    │  EF/state│  ├ CodexOAuth (cloud)│  │
-                         │  │ (encrypted     │          │  ├ Capabilities (HW) │  │
-                         │  │  SQLite)       │          │  └ StableDiffusionCpp│  │
+                         │  │ (SQLite;       │          │  ├ Capabilities (HW) │  │
+                         │  │ selected AEAD) │          │  └ StableDiffusionCpp│  │
                          │  └────────────────┘          └────┬────────────┬────┘  │
                          │                                   │ spawn      │ spawn │
                          │                       ┌───────────▼──────┐ ┌───▼─────┐ │
@@ -173,6 +206,13 @@ through `AddNodeApplication`, which composes 23 `AddNode*` feature modules
                          │                       └──────────────────┘             │
                          └──────────────────────────────────────────────────────┘
 ```
+
+**Text fallback for the diagram:** the C0re platform reaches the node only through the node-owned
+outbound `WorkerHub` connection. The loopback browser reaches the node through REST and local SignalR.
+Inside the node, the web host composes application services, AI/agent services, provider abstractions,
+and SQLite persistence. Provider implementations may start host-user `llama-server` and `sd-server`
+child processes. Those process boundaries are supervision boundaries, not container or OS-isolation
+boundaries.
 
 ### Provider seam — the key abstraction
 Application and agent code depend only on `ILocalModelProvider` / `IChatClient` /
@@ -285,7 +325,8 @@ From `Client/Program.cs`, the host performs a deterministic startup before servi
    static files, health checks, `LocalApiSecurityMiddleware`, auth, FastEndpoints, hubs, (dev) Scalar +
    Agent DevUI, SPA fallback.
 
-Persistence specifics (encrypted SQLite, the 40 EF migrations, recovery services) are covered in
+Persistence specifics (selected per-column encryption, 43 migration implementations plus 2 model
+snapshots, and recovery services) are covered in
 [Data & Persistence](08-data-and-persistence.md).
 
 ---

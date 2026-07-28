@@ -1,8 +1,12 @@
 # Testing & Validation
 
-> Last reviewed: 2026-07-24 · Code-grounded.
+> Baseline: `7e64ed589e14eecc0e522e807d2e531a1095d19a` · Reviewed: 2026-07-28 · Code-grounded.
 
 This page is the contributor map of how XE Local AI Engine is tested and what counts as "validated". It covers the test-project topology (backend integration, AI/agent, persistence + migration, Playwright E2E, plus the FakeOllama and Client.Testing support libraries), the validation commands and the `project-validate.sh` scope runner, the state of the (disabled) GitHub Actions workflows and where the gates actually run instead, and the RC evidence bar a maintainer must clear before claiming release/doc work is done. For *what each suite asserts about a subsystem*, follow the per-subsystem links — this page owns the harness, not the features.
+
+Repository tests and scripts are evidence that controls can be exercised; their presence is not proof
+that a particular deployment or release ran them, passed them, retained the output, or made that output
+available to an auditor. Operational evidence must be identified separately rather than inferred.
 
 Test stack at a glance: **TUnit 1.58.0** on **Microsoft.Testing.Platform (MTP)** for all .NET suites, **NSubstitute 5.3.0** for mocks, **Microsoft.Playwright 1.61.0 + TUnit.Playwright** for browser E2E, and **Vitest (v8 coverage)** for the React client. `global.json` sets a `10.0.100` feature-band baseline (`rollForward: latestFeature`, so it rolls forward to the highest installed 10.0 feature band and patch at or above `10.0.100` rather than pinning an exact version) and `"test": { "runner": "Microsoft.Testing.Platform" }`, so the whole repo runs under MTP, not VSTest.
 
@@ -14,7 +18,7 @@ Test stack at a glance: **TUnit 1.58.0** on **Microsoft.Testing.Platform (MTP)**
 |---|---|---|---|---|
 | `XE-Local-AI-Engine.Tests` | Backend integration (in-process host via `WebApplicationFactory<Program>`) | TUnit + NSubstitute | The whole node host: endpoints, hubs, auth, chat, agents, scheduler, model-fit, capacity, MCP, providers, memory, shutdown, and development mode | [Architecture](01-architecture-overview.md), [API & Hubs](09-api-and-hubs.md) |
 | `XE-Local-AI-Engine.AI.Agent.Tests` | Unit/component for the agent runtime | TUnit + NSubstitute | MAF/MEAI wiring: `Chat/`, `Eval/`, `Invocation/`, `Tools/`, `PreviewWorkflows/`, plus project smoke tests | [Agent Mode](04-agent-mode.md), [Chat](05-chat.md) |
-| `XE-Local-AI-Engine.Client.Persistence.Tests` | Persistence + EF migration tests | TUnit | Encrypted SQLite stores, AEAD cipher, schema-focused migration tests (23 `*MigrationTests.cs` files vs 40 migrations on disk, not strictly 1:1), and the `NegativeFence/` compile-fence | [Data & Persistence](08-data-and-persistence.md) |
+| `XE-Local-AI-Engine.Client.Persistence.Tests` | Persistence + EF migration tests | TUnit | SQLite stores with selected encrypted fields, AEAD cipher, schema-focused migration tests (23 `*MigrationTests.cs` files vs 43 migration implementations on disk, not strictly 1:1), and the `NegativeFence/` compile-fence | [Data & Persistence](08-data-and-persistence.md) |
 | `XE-Local-AI-Engine.Tests.E2ETests` | Browser E2E | Playwright + TUnit.Playwright | Real Chromium against the in-process host serving the real built React SPA (19 `*E2ETests.cs`: Chat, Agents, Scheduler, Models, NodeSettings, Dashboard, smoke, viewport, …) | [React Client](10-react-client.md), [Hosting](11-hosting-and-deployment.md) |
 | `XE-Local-AI-Engine.Testing.FakeOllama` | Support library (not a test suite) | — | In-memory fake Ollama HTTP server + deterministic embeddings, so backend tests never need a real model runtime | [Local Runtime & Providers](03-local-runtime-and-providers.md) |
 | `XE-Local-AI-Engine.Client.Testing` | Support library | — | Outbound-event recorders + `RecordingHubMessageSender` to assert what the node *would* send over WorkerHub without a real platform | [API & Hubs](09-api-and-hubs.md), [Security & Privacy](12-security-and-privacy.md) |
@@ -46,7 +50,15 @@ This is the heaviest suite and the heart of validation. `TestingWebAppFactory.cs
 
 ### `XE-Local-AI-Engine.Client.Persistence.Tests` — migrations & the negative fence
 
-Schema-focused EF migrations have dedicated `*MigrationTests.cs` files that apply the migration to a fresh encrypted SQLite DB and assert the resulting shape — 23 such files for 40 migrations on disk, so coverage is intentionally not 1:1. The file follows the migration name rather than always taking an `Add*` prefix (for example, `NodeChatOriginMigrationTests.cs` and `NodeMessageLifecycleMigrationTests.cs`). `NodeAeadCipher` and persistence encryption are tested directly. The `NegativeFence/` folder is a separate **compile-only** project (`XE-Local-AI-Engine.Client.Persistence.NegativeFence`) whose `Program.cs` constructs a `NodeMessage`; it guards a compile-time visibility/constructibility contract rather than runtime behavior. See [Data & Persistence](08-data-and-persistence.md).
+Schema-focused EF migrations have dedicated `*MigrationTests.cs` files that apply the migration to a
+fresh SQLite DB and assert the resulting shape — 23 such files for 43 migration implementations
+(41 timestamped + 2 untimestamped), so coverage is intentionally not 1:1. The file follows the migration
+name rather than always taking an `Add*` prefix (for example, `NodeChatOriginMigrationTests.cs` and
+`NodeMessageLifecycleMigrationTests.cs`). `NodeAeadCipher` and persistence encryption are tested
+directly. The `NegativeFence/` folder is a separate **compile-only** project
+(`XE-Local-AI-Engine.Client.Persistence.NegativeFence`) whose `Program.cs` constructs a `NodeMessage`;
+it guards a compile-time visibility/constructibility contract rather than runtime behavior. See
+[Data & Persistence](08-data-and-persistence.md).
 
 ### `XE-Local-AI-Engine.Tests.E2ETests` — Playwright
 
@@ -60,7 +72,7 @@ The E2E harness is the highest-fidelity path: a real browser drives the real SPA
 ### Support libraries
 
 - **FakeOllama** (`XE-Local-AI-Engine.Testing.FakeOllama`): an in-memory HTTP server (`FakeOllamaServer.StartAsync`) implementing the Ollama API surface the provider calls — `Endpoints/`: `Chat`, `Generate`, `Embed`, `Show`, `Tags`, `Ps`, `Pull`, `Delete`, plus `TestControlEndpoints` for scripting responses/failures. `Determinism/EmbeddingDeterminism.cs` produces a stable SHA256-seeded vector for any input so embedding/RAG tests are deterministic. `FakeOllamaOptions`, `FakeOllamaScriptRequest`, and `FakeOllamaFailure*` let a test pre-program model lists, scripted turns, and induced failures.
-- **Client.Testing** (`XE-Local-AI-Engine.Client.Testing`): `RecordingHubMessageSender` decorates the real `IHubMessageSender`, recording every outbound WorkerHub call (chunks, tool-call requests, approval requests, completed/failed envelopes) with a monotonic sequence number before delegating, so tests assert the node's *outbound contract* without a live platform. `IOutboundEventRecorder` has `HttpForwardingOutboundEventRecorder` (forward to a sink) and `NoOpOutboundEventRecorder` implementations; `AddHubMessageRecording(...)` wires it. This is the seam that lets tests prove the [security invariant](12-security-and-privacy.md) that only the node talks to the platform and creds never cross the boundary.
+- **Client.Testing** (`XE-Local-AI-Engine.Client.Testing`): `RecordingHubMessageSender` decorates the real `IHubMessageSender`, recording every outbound WorkerHub call (chunks, tool-call requests, approval requests, completed/failed envelopes) with a monotonic sequence number before delegating, so tests assert the node's *outbound contract* without a live platform. `IOutboundEventRecorder` has `HttpForwardingOutboundEventRecorder` (forward to a sink) and `NoOpOutboundEventRecorder` implementations; `AddHubMessageRecording(...)` wires it. This seam exercises the [security invariant](12-security-and-privacy.md) at the application boundary; it is not network observation or operating-effectiveness evidence.
 
 ## Validation commands
 
@@ -124,7 +136,7 @@ Both exist because GitHub Actions is disabled, so anything not reachable from a 
 
 ## Continuous integration — dormant
 
-> **GitHub Actions is disabled on this repository and has never produced a successful run.** Nothing in `.github/workflows/` gates a merge or a release today. Verified 2026-07-24 via `gh workflow list --all` and `gh run list`.
+> **GitHub Actions is disabled on this repository and has never produced a successful run.** Nothing in `.github/workflows/` gates a merge or a release at the baseline. External GitHub state was last checked 2026-07-24 via `gh workflow list --all` and `gh run list`; it was not recaptured for the 2026-07-28 documentation review.
 
 | Workflow file | Registered state | Run history |
 |---|---|---|
@@ -136,7 +148,15 @@ Six runs, six failures, zero successes, in the repository's whole history. Two f
 
 The workflow files are still tracked and are the design of record — read them for intent, and keep them accurate if you change the validation commands. But treat every gate below as **what would run if the workflows were re-enabled**, not as something protecting the branch you are on.
 
-**Where the gates actually live today:** [`publish/package-tester-win.ps1`](../../publish/package-tester-win.ps1) is the canonical enforced release gate. It runs the frontend gate set (frozen install, lint, OpenAPI drift check, third-party license check, coverage-gated tests, production dependency audit, production build) and the backend gate set (restore, transitive NuGet vulnerability audit, Release build, solution-wide serial tests with a hollow-gate guard) itself, on the packaging machine, at release time. It became canonical in `0.1.0-rc.4.0`; earlier tester releases predate it and are not evidence that they passed today's gates. A gate added only to a disabled workflow enforces nothing; release-script lint remains a separate local gate.
+**Where the release-time gates live:** when manually run,
+[`publish/package-tester-win.ps1`](../../publish/package-tester-win.ps1) is the canonical Windows
+tester packaging path. It runs the frontend gate set (frozen install, lint, OpenAPI drift check,
+third-party license check, coverage-gated tests, production dependency audit, production build) and
+the backend gate set (restore, transitive NuGet vulnerability audit, Release build, solution-wide
+serial tests with a hollow-gate guard) on the packaging machine. It became canonical in
+`0.1.0-rc.4.0`; earlier tester releases predate it and are not evidence that they passed today's gates.
+A gate added only to a disabled workflow enforces nothing; release-script lint remains a separate
+local gate. The script is a control definition, not evidence of a successful run.
 
 Between releases, the enforcement is you: run [`.opencode/scripts/project-validate.sh`](../../.opencode/scripts/project-validate.sh) or the raw commands above before you call a change done.
 
@@ -178,12 +198,18 @@ The README's "RC readiness status" section is the contract: **do not mark releas
   and successful verification of all five remote assets during `-PublishDraft`, and
 - confirmation that the unchanged draft was published in `w0rldx/XE-Local-AI-Engine.Tester-App`.
 
-Two things that **cannot** be proven in WSL2 or on a headless runner and must be verified on a real desktop (call this out explicitly in any RC sign-off): the no-orphan guarantee (terminal/console close reaps the `llama-server` child) and the Windows Job Object hard-kill path — both require a real desktop with a model loaded (README "Self-contained desktop run"). See [Hosting & Deployment](11-hosting-and-deployment.md).
+This baseline documentation review does not assert that those release artifacts or transcripts exist,
+were retained, or are available to the recipient.
+
+Two things that **cannot** be proven in WSL2 or on a headless runner and require target-OS evidence
+for an RC claim: the no-orphan design (terminal/console close reaps the `llama-server` child) and the
+Windows Job Object hard-kill path. Both require a real desktop with a model loaded; without the matching
+retained transcript their operating status is unknown. See [Hosting & Deployment](11-hosting-and-deployment.md).
 
 ## Maintainer checklist
 
 - Use `--treenode-filter`, never `--filter`, when targeting individual MTP tests.
-- New EF migration → add a `<Name>MigrationTests.cs` in `Client.Persistence.Tests`. Coverage is not strictly 1:1 today (23 test files for 40 migrations), but any migration that changes table/column/index shape should ship its test.
+- New EF migration → add a `<Name>MigrationTests.cs` in `Client.Persistence.Tests`. Coverage is not strictly 1:1 today (23 test files for 43 migration implementations), but any migration that changes table/column/index shape should ship its test.
 - New persistence entity surface change → re-check the `NegativeFence` compile fence still builds.
 - New WorkerHub outbound call → assert it through `RecordingHubMessageSender` and confirm no secret crosses the boundary ([Security & Privacy](12-security-and-privacy.md)).
 - New backend behavior that touches a model → drive it through `FakeOllama` (script the response) rather than a live runtime; only flip `RUN_LOCAL_INTEGRATION=true` for fidelity runs.
@@ -204,4 +230,5 @@ Two things that **cannot** be proven in WSL2 or on a headless runner and must be
 - [React Client](10-react-client.md)
 - [Hosting & Deployment](11-hosting-and-deployment.md)
 - [Security & Privacy](12-security-and-privacy.md)
+- [Technical/Security Architecture Dossier](../audits/technical-security-architecture/README.md)
 - [Home](Home.md)

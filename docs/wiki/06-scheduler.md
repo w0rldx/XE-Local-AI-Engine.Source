@@ -1,8 +1,8 @@
 # Scheduler
 
-> Last reviewed: 2026-07-24 · Code-grounded.
+> Last reviewed: 2026-07-28 · Code-grounded.
 
-The node runs a **Quartz.NET-backed job scheduler** entirely in-process inside the Node Web Server (`XE-Local-AI-Engine.Client`). It lets an operator define recurring/one-shot/manual jobs from a registered set of *templates*, fires them through a thin dispatch job, records every fire as a run-history row, supports best-effort cancellation (operator interrupt + auto-interrupt timeout), and pushes live lifecycle events to the React management UI over a SignalR hub. The data layer is encrypted node-local SQLite. Two templates ship today: the model-fit recommendation refresh and unattended execution of a saved node-local agent.
+The node runs a **Quartz.NET-backed job scheduler** entirely in-process inside the Node Web Server (`XE-Local-AI-Engine.Client`). It lets an operator define recurring/one-shot/manual jobs from a registered set of *templates*, fires them through a thin dispatch job, records every fire as a run-history row, supports best-effort cancellation (operator interrupt + auto-interrupt timeout), and pushes live lifecycle events to the React management UI over a SignalR hub. The data layer is node-local SQLite with selected sensitive fields protected by per-column AEAD. Two templates ship today: the model-fit recommendation refresh and unattended execution of a saved node-local agent.
 
 This page covers the C# scheduler subsystem (`XE-Local-AI-Engine.Client.Application/Services/Scheduler/*` + the Client host wiring), the SignalR hub (`XE-Local-AI-Engine.Client/Hubs/*`), and the React scheduler feature (`XE-Local-AI-Engine.Client.React/src/features/scheduler/*`).
 
@@ -32,7 +32,7 @@ Operator (React) ──REST /api/local/v1/scheduler/* ──▶ FastEndpoints
                                             IScheduledJobManagementService
                                             (validate → store-first → reconcile Quartz)
                                                           │
-   IScheduledJobDefinitionStore (encrypted SQLite) ◀──────┤──────▶ ISchedulerFactory (Quartz)
+   IScheduledJobDefinitionStore (SQLite; selected fields encrypted) ◀──┤──▶ ISchedulerFactory (Quartz)
                                                           │            schedules JobKey(group="scheduled-jobs")
                                                           ▼
                             Quartz fires ──▶ (NonOverlapping)SchedulerDispatchJob (thin IJob)

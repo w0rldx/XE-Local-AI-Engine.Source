@@ -1,8 +1,14 @@
 # Security & Privacy Model
 
-> Last reviewed: 2026-07-22 · Code-grounded.
+> Baseline: `7e64ed589e14eecc0e522e807d2e531a1095d19a` · Reviewed: 2026-07-28 · Code-grounded.
 
-This page documents the cross-cutting security and privacy guarantees of the XE Local AI Engine node — the invariants every contributor must preserve. The node is the *only* component that talks to the C0re platform, it keeps all secrets local, it serves its management/admin APIs to loopback only, it encrypts chat state at rest, it runs privacy-sensitive AI work on node-local models only, and it jails any tool/shell execution behind symlink-escape guards. These are not optional hardening passes layered on top of features; they are seams baked into the runtime, and breaking one is a regression even when "the feature still works."
+This page documents the cross-cutting security and privacy controls implemented in the XE Local AI
+Engine node and the invariants contributors are expected to preserve. It is code-and-test evidence
+for the stated baseline, not proof of operating effectiveness, deployment configuration, compliance,
+certification, or formal risk acceptance. The supported design routes platform traffic through the
+node-owned `WorkerHub`, keeps secret-bearing values behind node-local stores and redaction seams,
+serves management/admin APIs on loopback, encrypts selected sensitive fields at rest, routes designated
+privacy-sensitive AI work to node-local models, and confines application-mediated tool file access.
 
 If you are touching persistence, see [Data & Persistence](08-data-and-persistence.md) for the encryption schema; for endpoint/hub surface see [API & Hubs](09-api-and-hubs.md); for the node-local AI rule in agent flows see [Agent Mode](04-agent-mode.md).
 
@@ -38,9 +44,14 @@ A fresh install is inert until the operator opts in. Preserve this contract: do 
 
 ---
 
-## 2. Secrets stay local — never to the browser, never logged
+## 2. Secret-handling invariant — not returned to the browser or deliberately logged
 
-The local-only secrets are: the **node operator secret** (master key material), the **worker credentials / endpoint tokens** used on WorkerHub, **cloud-provider credentials** (e.g. Codex OAuth), the **HMAC/JWT signing keys**, and the **HuggingFace token**. None of these is ever returned across the transport boundary to the browser, and none is logged.
+The baseline implementation treats the following as node-local secrets: the **node operator secret**
+(master key material), the **worker credentials / endpoint tokens** used on WorkerHub,
+**cloud-provider credentials** (for example Codex OAuth), the **HMAC/JWT signing keys**, and the
+**HuggingFace token**. DTOs, stores, and redactors are designed so these values are not returned across
+the browser boundary or deliberately logged. That source-level design does not by itself prove the
+absence of secrets from every operational log or diagnostic artifact.
 
 ### 2.1 The operator secret and derived keys
 
@@ -48,9 +59,11 @@ The operator secret is the root of all node key material. `NodeOperatorSecretPro
 
 1. env var `XE_NODE_SQLITE_KEY` (base64-encoded 32 bytes), or `IConfiguration[XE_NODE_SQLITE_KEY]`;
 2. a raw 32-byte secret file at `/run/secrets/node-sqlite-key`;
-3. Aspire user-secret parameter `Parameters:node-sqlite-key` (local dev only).
+3. Aspire parameter `Parameters:node-sqlite-key` (local dev only).
 
-If none is present, startup *fails fast* with a helpful message — the node never falls back to an empty or default key.
+If none of those sources provides a value, startup *fails fast* with a helpful message. In the B1 Aspire development path, the tracked AppHost configuration supplies the shared default described below unless it is overridden.
+
+> **Development confidentiality warning.** `secret: true` marks the Aspire parameter as sensitive for display and handling, but B1 also commits one shared development-only value in `XE-Local-AI-Engine.AppHost/appsettings.Development.json`. It is therefore a default, not a confidential or installation-unique secret: anyone with the source can derive keys for data created under that unchanged value. A confidential per-developer override is possible but is not enforced or evidenced. Packaged desktop mode is different: `DesktopBootstrap` generates and persists a per-installation `node.key`.
 
 The secret is **never held longer than necessary**. `NodeSqliteKeyHolder` (`Services/Persistence/Implementation/NodeSqliteKeyHolder.cs`) derives the SQLite key with HKDF-SHA256 (info `c0re-node-sqlite|v1|{NodeName}`) in its constructor, then immediately zeroes the source secret with `CryptographicOperations.ZeroMemory`, and zeroes its own derived key on `Dispose`. The JWT signing key is derived separately (`NodeJwtKeyProvider`, `Services/Auth/Implementation/NodeJwtKeyProvider.cs`) so the at-rest key and the auth key are never the same bytes.
 
@@ -88,7 +101,11 @@ The marker used across redactors is the literal `[REDACTED]` (and `[REDACTED:…
 
 ## 3. Local admin API: loopback-only, Host/Origin-strict, authenticated, fail-closed
 
-Local management/admin endpoints live under `/api/local/v1` and are reachable only from the same machine. Several layers enforce this: a request-time peer + Host + Origin gate, authentication/authorization, and a startup bind guard.
+In supported configurations, local management/admin endpoints live under `/api/local/v1` and are
+reachable only from the same machine. Several layers enforce this: a request-time peer + Host + Origin
+gate, authentication/authorization, and a startup bind guard. The explicit
+`Security:AllowNonLoopbackBind=true` opt-out described below weakens the bind guard and is not a
+supported reverse-proxy/headless deployment mode.
 
 ### 3.1 Loopback peer + Host + Origin middleware (`LocalApiSecurityMiddleware`)
 
@@ -155,7 +172,10 @@ The full exception is logged server-side with method, path, trace id, user id (o
 
 ## 5. Encryption at rest
 
-Chat/state persistence in SQLite is encrypted at the column level. See [Data & Persistence](08-data-and-persistence.md) for the schema and migrations; the security-relevant cryptography is summarized here.
+Selected chat/state fields in SQLite are encrypted at the column level. This is not SQLCipher or
+whole-database encryption; structural fields and deliberately searchable data such as Knowledge Base
+chunk text/FTS remain plaintext. See [Data & Persistence](08-data-and-persistence.md) for the exact
+schema and migrations; the security-relevant cryptography is summarized here.
 
 | Component | Role | Location |
 |---|---|---|
@@ -181,13 +201,19 @@ Conversation retention is a separate privacy control, **disabled by default** (`
 
 ## 6. Privacy-sensitive AI runs node-local only
 
-Privacy-sensitive AI operations — agent-memory/playbook **analysis**, the playbook **eval/golden-conversation gate**, and memory extraction — execute against **node-local models only**, never a cloud provider. This is the privacy contract behind the playbook pipeline: a user's conversations are analyzed by a model running on the same box, not shipped to a cloud LLM. See [Agent Mode](04-agent-mode.md) for the playbook P1–P5 / eval flow and the adaptive-memory extraction loop; the wiring decisions live in `XE-Local-AI-Engine.Client.Application/Services/*` and the provider seams in `Providers.Abstractions` (`ILocalModelProvider` / `IChatClient` / `IEmbeddingGenerator`).
+At the baseline, agent-memory/playbook **analysis**, the playbook **eval/golden-conversation gate**,
+and memory extraction are wired to **node-local models**, not a cloud provider. This is the implemented
+privacy contract behind the playbook pipeline; source wiring and tests establish the path, while this
+page does not claim operational network observation. See [Agent Mode](04-agent-mode.md) for the
+playbook P1–P5 / eval flow and the adaptive-memory extraction loop; the wiring decisions live in
+`XE-Local-AI-Engine.Client.Application/Services/*` and the provider seams in
+`Providers.Abstractions` (`ILocalModelProvider` / `IChatClient` / `IEmbeddingGenerator`).
 
 **Maintainer rule:** when adding any AI step that consumes user conversation/memory content for analysis or evaluation, route it through the node-local provider path. Do not let a cloud provider (Codex OAuth, etc.) become the executor for analysis/eval. Cloud credentials themselves are local-only secrets (§2).
 
-### Two recent subsystems reinforce — not weaken — the no-extra-egress invariant
+### Two recent subsystems have explicit egress boundaries
 
-- **Voice / text-to-speech runs in the browser.** The TTS engine (Kokoro / WebGPU) executes **client-side** in the React app; the node only serves a config-only voice manifest (`Services/Voice/VoiceManifestService.cs`). Spoken output never round-trips audio through a cloud service, so the voice feature opens **no new egress channel** — it stays inside the existing browser↔local-node boundary. See [React Client](10-react-client.md).
+- **Voice / text-to-speech has client-side synthesis and model-download egress.** Kokoro / WebGPU inference executes in the React app and generated audio is not posted to the node. On first use, however, the browser fetches Kokoro model files directly from manifest-provided Hugging Face URLs (`ModelCache.ts`; `KokoroVoiceCatalog.cs`). The Web Speech fallback delegates to the browser/operating-system implementation, so this repository does not establish that fallback's network behavior. See [React Client](10-react-client.md).
 - **Inference profiling / machine key is local-only, per-box.** The per-machine launch-tuning profiles ([Local Runtime & Providers](03-local-runtime-and-providers.md)) are keyed by a `MachineKeyProvider` identifier that is a **local-only random id** — never hardware-derived, and `IMachineKeyProvider` documents it must **NEVER** be emitted in telemetry, aggregates, or logs. The profiles themselves hold only structural launch args (no secrets) and never leave the node. Keep the machine key off every outbound DTO/aggregate.
 
 ---
@@ -196,7 +222,7 @@ Privacy-sensitive AI operations — agent-memory/playbook **analysis**, the play
 
 Any node-side tool or shell execution runs inside a process jail, not against the host filesystem directly. The live provider is `ProcessSandboxRuntimeProvider` (`Services/Sandbox/Implementation/ProcessSandboxRuntimeProvider.cs`, implementing `ISandboxRuntimeProvider`; selected via `SandboxProviderSelector`). The old Docker/container sandbox runtime was removed in the 2026-06-17 runtime re-architecture — there is **no** container inference/execution path; this process-jail is the execution boundary. (Discrepancy note vs. older docs: `LocalContainerSandboxProvider` and the HostAgent layer no longer exist as live code.)
 
-**What this boundary is — and is not.** It is **supervised execution**, not an OS isolation boundary. What it enforces: only fixed, node-authored executables run (`dotnet --version`, `git` with hooks disabled, `find`/`grep` — never a model-authored command line); a working-directory jail with path-confinement and symlink-escape guards; a **scrubbed child environment** (the worker's secret-bearing environment — cloud API keys, OAuth tokens, the node SQLite key — is **not** inherited; only a fixed system/toolchain allow-list is forwarded, plus the caller's explicit variables); a per-command timeout; tree-kill teardown; and captured-output byte caps. What it does **not** provide: **no network isolation** (the child shares the host network), and **no CPU/memory/PID limits** — this is not a hardware or kernel isolation boundary. Because those two guarantees are unenforceable, the provider **fails closed**: `CreateOrAttachAsync` rejects any `SandboxCreateRequest` that asks for a network policy other than `Unrestricted`, or for any resource limit, with `SandboxCapabilityNotSupportedException`, rather than silently returning a sandbox weaker than requested. The single-user local-node threat model accepts the absent isolation because risky execution is approval-gated upstream; a future OS-isolated provider slots in behind the same `ISandboxRuntimeProvider` seam to add real network/resource confinement. The AgentHome `policy.json` records the honest `"unrestricted"` posture accordingly.
+**What this boundary is — and is not.** It is **supervised execution**, not an OS isolation boundary. What it enforces: only fixed, node-authored executables run (`dotnet --version`, `git` with hooks disabled, `find`/`grep` — never a model-authored command line); a working-directory jail with path-confinement and symlink-escape guards; a **scrubbed child environment** (the worker's secret-bearing environment — cloud API keys, OAuth tokens, the node SQLite key — is **not** inherited; only a fixed system/toolchain allow-list is forwarded, plus the caller's explicit variables); a per-command timeout; tree-kill teardown; and captured-output byte caps. What it does **not** provide: **no network isolation** (the child shares the host network), and **no CPU/memory/PID limits** — this is not a hardware or kernel isolation boundary. Because those two guarantees are unenforceable, the provider **fails closed**: `CreateOrAttachAsync` rejects any `SandboxCreateRequest` that asks for a network policy other than `Unrestricted`, or for any resource limit, with `SandboxCapabilityNotSupportedException`, rather than silently returning a sandbox weaker than requested. Risky execution is approval-gated upstream, but no formal acceptance of the residual host-user execution risk is established by this repository documentation. A future OS-isolated provider can slot in behind the same `ISandboxRuntimeProvider` seam to add real network/resource confinement. The AgentHome `policy.json` records the `"unrestricted"` posture accordingly.
 
 Guards a contributor must not weaken:
 
@@ -243,7 +269,7 @@ provider must implement and independently validate the isolation guarantees it a
 
 ### Chat attachments are staged *into* the jail, not read from the host
 
-When a chat agent-mode turn needs to read a conversation's uploaded files, `IConversationSandboxStager` (`Services/AgentHome/IConversationSandboxStager.cs`) re-stages the **existing** node sandbox so it holds **only** that conversation's extracted attachments under the workspace `attachments/` alias (the sandbox is recreated first, so it never carries another conversation's residue). The agent then reaches them with the same jailed `list_files`/`read_file`/`search_text` tools — meaning every read still passes through the §7 path-confinement, symlink-escape, and `O_NOFOLLOW`/byte-cap guards above; staging adds no host-filesystem read path that bypasses the jail. The attachment bytes were themselves secret-clean and encrypted at rest before staging (`UploadedFileBlobProtector`, §5), and any agent-memory proposal derived from them still passes the `MemoryProposalSecretScanner` (§2.2). Don't add a staging path that writes outside the workspace root or skips the recreate-before-stage step.
+When a chat agent-mode turn needs to read a conversation's uploaded files, `IConversationSandboxStager` (`Services/AgentHome/IConversationSandboxStager.cs`) re-stages the **existing** node sandbox so it holds **only** that conversation's extracted attachments under the workspace `attachments/` alias (the sandbox is recreated first, so it never carries another conversation's residue). The agent then reaches them with the same jailed `list_files`/`read_file`/`search_text` tools — meaning every read still passes through the §7 path-confinement, symlink-escape, and `O_NOFOLLOW`/byte-cap guards above; staging adds no host-filesystem read path that bypasses the jail. Attachments may contain secrets or confidential content: their stored bytes are encrypted at rest by `UploadedFileBlobProtector` (§5), but extracted content exists as plaintext while decrypted and staged for use, and no secret scan occurs before staging. `MemoryProposalSecretScanner` applies only to a later memory proposal before that proposal is persisted. Don't add a staging path that writes outside the workspace root or skips the recreate-before-stage step.
 
 ---
 
@@ -286,3 +312,4 @@ The file documents its own scope: it is the "safe set" — APIs with zero curren
 - [API & Hubs](09-api-and-hubs.md) — `/api/local/v1` surface, auth policies, local hubs
 - [Hosting & Deployment](11-hosting-and-deployment.md) — loopback/desktop binding, no-autostart
 - [Testing & Validation](13-testing-and-validation.md) — persistence-encryption & loopback tests
+- [Technical/Security Architecture Dossier](../audits/technical-security-architecture/README.md) — baseline auditor narrative, evidence states, and residual-risk limitations
