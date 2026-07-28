@@ -15,5 +15,15 @@ internal sealed class DevelopmentAttempt
     public long? InputTokens { get; set; }
     public long? OutputTokens { get; set; }
     public Guid StartOperationId { get; set; }
+
+    /// <summary>
+    ///     The canonical command profile this attempt actually ran under, captured at attempt creation and immutable
+    ///     thereafter. Stored as plaintext by design — see <c>DevelopmentAttemptConfiguration</c> for the rationale.
+    ///     <para>
+    ///         Null on attempts created before this column existed. A null means "no attempt-level snapshot", and the
+    ///         readers fall back to the project's current profile, which is exactly the pre-existing behaviour.
+    ///     </para>
+    /// </summary>
+    public string? CommandProfileJson { get; set; }
     public long Version { get; set; }
 }
