@@ -62,8 +62,28 @@ public sealed class DevelopmentOptions
     [Range(1, 100)]
     public int PlanningWithoutProgressWarningThreshold { get; init; } = 3;
 
+    /// <summary>
+    ///     The deterministic validation command profile, in dependency order. Every id must be in the code-owned
+    ///     catalog (<see cref="DevelopmentCommandIds" />), and validation passes only when all of them complete with
+    ///     exit code 0.
+    ///     <para>
+    ///         This default shipped as <c>[GitDiffCheck]</c> alone, which made the gate a whitespace check: an
+    ///         attempt could reach <c>InReview</c> having never compiled the code and never run a test. Restore,
+    ///         build and test are what make the gate mean anything — do not shrink this back to keep a fixture fast.
+    ///         A fixture that cannot afford the full profile overrides it explicitly instead.
+    ///     </para>
+    ///     <para>
+    ///         The dotnet commands name <c>XE-Local-AI-Engine.slnx</c> exactly (the Solution constant in
+    ///         <c>DevelopmentWorkspaceTools</c>), so on a foreign registered repository they fail because that
+    ///         solution is not there. That loud failure is intended and is strictly better than the silent false
+    ///         pass it replaces; making the profile repo-agnostic is tracked separately.
+    ///     </para>
+    /// </summary>
     public IReadOnlyList<string> ValidationCommandIds { get; init; } =
     [
-        DevelopmentCommandIds.GitDiffCheck
+        DevelopmentCommandIds.GitDiffCheck,
+        DevelopmentCommandIds.DotnetRestore,
+        DevelopmentCommandIds.DotnetBuildRelease,
+        DevelopmentCommandIds.DotnetTestRelease
     ];
 }

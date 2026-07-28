@@ -13,6 +13,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using NSubstitute;
 using OllamaSharp;
 using TUnit.Core.Interfaces;
@@ -343,6 +344,34 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
             services.AddSingleton<IDevelopmentCoderModel, DevelopmentE2ECoderModel>();
             services.RemoveAll<IDevelopmentReviewerModel>();
             services.AddSingleton<IDevelopmentReviewerModel, DevelopmentE2EReviewerModel>();
+
+            // Narrow the deterministic validation profile to the whitespace check, for the BROWSER suite only.
+            //
+            // The production default is git_diff_check + dotnet restore/build/test against XE-Local-AI-Engine.slnx
+            // (DevelopmentOptions.ValidationCommandIds). DevelopmentWorkflowE2ETests drives a synthetic temp git
+            // repository holding a README and nothing else, so those three dotnet commands cannot succeed there:
+            // with the real default the workflow could never reach InReview, and the suite would prove only that a
+            // non-.NET directory fails to build.
+            //
+            // This narrows what the browser test covers, NOT what the gate is. This test owns the UI state machine
+            // (register -> create -> code -> validate -> review -> hash-bound apply); the content of the gate is
+            // owned by DevelopmentValidationReviewAndApplyTests, which drives DevelopmentValidationRunner against a
+            // real buildable solution under the production default and proves that a patch which breaks the build
+            // and a patch which fails a test each keep the attempt out of InReview.
+            //
+            // It has to be done here in DI rather than as a "Development:ValidationCommandIds:0" configuration
+            // entry: ValidationCommandIds is an init-only IReadOnlyList<string> with a non-empty default, and
+            // ConfigurationBinder silently ignores that shape entirely — a config override would look like it
+            // worked and change nothing. Registering a closed-generic IOptions<DevelopmentOptions> last wins over
+            // the open-generic OptionsManager from AddOptions, and every other DevelopmentOptions value here is its
+            // production default (which is what the configuration above supplies anyway).
+            //
+            // Do NOT "fix" a red Development E2E by shrinking the production default instead of this override.
+            services.AddSingleton<IOptions<DevelopmentOptions>>(Options.Create(new DevelopmentOptions
+            {
+                Enabled = true,
+                ValidationCommandIds = [DevelopmentCommandIds.GitDiffCheck]
+            }));
 
             // The REAL WorkerEventDispatcher from the app's DI stands here (in-memory, no hosted
             // service) so it raises InvocationStateChanged and processes ReportInvocationCompletedAsync —
