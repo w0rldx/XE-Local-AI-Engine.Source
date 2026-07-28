@@ -1,10 +1,12 @@
 namespace XE_Local_AI_Engine.AI.Agent.Tests.Tools;
 
+using System.Diagnostics.Metrics;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[NotInParallel]
 public sealed class ToolArgumentRepairAIFunctionTests
 {
     private const string Schema = """
@@ -98,6 +100,21 @@ public sealed class ToolArgumentRepairAIFunctionTests
     }
 
     [Test]
+    public async Task InvokeAsync_SuccessfulCoercion_IncrementsContentFreeCoercionMetric()
+    {
+        var measurements = new List<(long Value, string? Source, int TagCount)>();
+        using var listener = CreateRepairMetricListener(measurements);
+        var function = Build(_ => { });
+
+        _ = await function.InvokeAsync(Args(("path", "a.txt"), ("count", "5")));
+
+        AssertEx.ContainsSingle(measurements,
+            static measurement => measurement.Value == 1
+                                  && measurement.Source == "coercion"
+                                  && measurement.TagCount == 1);
+    }
+
+    [Test]
     public async Task InvokeAsync_HandlerThrowsJsonException_ReturnsActionableResultNotThrow()
     {
         var function = Build(_ => throw new JsonException("bad shape"));
@@ -106,6 +123,41 @@ public sealed class ToolArgumentRepairAIFunctionTests
 
         using var document = JsonDocument.Parse(AsText(result));
         AssertEx.Equal("invalid_arguments", document.RootElement.GetProperty("error").GetString());
+    }
+
+    [Test]
+    public async Task InvokeAsync_InvalidArguments_IncrementsContentFreeRepairMetric()
+    {
+        var measurements = new List<(long Value, string? Source, int TagCount)>();
+        using var listener = CreateRepairMetricListener(measurements);
+        var function = Build(_ => { });
+
+        _ = await function.InvokeAsync(Args(("count", 1L)));
+
+        AssertEx.ContainsSingle(measurements,
+            static measurement => measurement.Value == 1
+                                  && measurement.Source == "validation"
+                                  && measurement.TagCount == 1);
+    }
+
+    [Test]
+    public async Task InvokeAsync_ValidAndAlreadyDisabledCalls_DoNotInflateRepairMetric()
+    {
+        var measurements = new List<(long Value, string? Source, int TagCount)>();
+        using var listener = CreateRepairMetricListener(measurements);
+        var function = Build(_ => { }, maxInvalidCalls: 1);
+
+        using (ToolArgumentRepairScope.BeginScope())
+        {
+            _ = await function.InvokeAsync(Args(("path", "valid.txt")));
+            _ = await function.InvokeAsync(Args(("count", 1L)));
+            _ = await function.InvokeAsync(Args(("path", "disabled.txt")));
+        }
+
+        AssertEx.ContainsSingle(measurements,
+            static measurement => measurement.Value == 1
+                                  && measurement.Source == "validation"
+                                  && measurement.TagCount == 1);
     }
 
     [Test]
@@ -200,6 +252,35 @@ public sealed class ToolArgumentRepairAIFunctionTests
             });
 
         return new ToolArgumentRepairAIFunction(inner, maxInvalidCalls, rejectUnknownProperties);
+    }
+
+    private static MeterListener CreateRepairMetricListener(List<(long Value, string? Source, int TagCount)> measurements)
+    {
+        var listener = new MeterListener
+        {
+            InstrumentPublished = (instrument, meterListener) =>
+            {
+                if (instrument.Name == "xe.agent.tool_argument_repair")
+                {
+                    meterListener.EnableMeasurementEvents(instrument);
+                }
+            }
+        };
+        listener.SetMeasurementEventCallback<long>((_, value, tags, _) =>
+        {
+            string? source = null;
+            foreach (var tag in tags)
+            {
+                if (tag.Key == "source")
+                {
+                    source = tag.Value as string;
+                }
+            }
+
+            measurements.Add((value, source, tags.Length));
+        });
+        listener.Start();
+        return listener;
     }
 
     private static AIFunctionArguments Args(params (string Key, object? Value)[] pairs)

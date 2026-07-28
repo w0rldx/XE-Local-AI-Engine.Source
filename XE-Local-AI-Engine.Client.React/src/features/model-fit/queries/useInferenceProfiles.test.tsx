@@ -63,7 +63,14 @@ describe("useInferenceProfiles mutations", () => {
 		invalidateMock.mutationFn.mockResolvedValue({ profile: { id: "p1" } });
 		benchmarkMock.mutationFn.mockResolvedValue({
 			snapshotId: "snap-1",
-			metrics: { tokensPerSecond: 42, vramAfterBytes: 6_656_000_000 },
+			metrics: {
+				role: "Chat",
+				tokensPerSecond: 42,
+				vramAfterBytes: 6_656_000_000,
+				globalFreeVramAfterBytes: 6_656_000_000,
+				processBudgetVramAfterBytes: 7_200_000_000,
+				externalPressureDetected: false,
+			},
 			profile: { id: "p1", status: "Explored" },
 		});
 	});
@@ -84,27 +91,46 @@ describe("useInferenceProfiles mutations", () => {
 		expect(invalidatedKeys).toContainEqual(LIST_KEY);
 	});
 
-	it("benchmark dispatches { profileId }, maps the metrics, and invalidates the list", async () => {
+	it("benchmark dispatches the profile id and explicit ambient-pressure decision, maps metrics, and invalidates the list", async () => {
 		const { Wrapper } = makeWrapper();
 		const { result } = renderHook(() => useBenchmarkInferenceProfile(), { wrapper: Wrapper });
 
-		result.current.mutate({ profileId: "p1" });
+		result.current.mutate({ profileId: "p1", allowPreSpawnVramPressure: true });
 
 		await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-		expect(benchmarkMock.mutationFn.mock.calls[0]?.[0]).toEqual({ body: { profileId: "p1" } });
+		expect(benchmarkMock.mutationFn.mock.calls[0]?.[0]).toEqual({
+			body: { profileId: "p1", allowPreSpawnVramPressure: true },
+		});
 		// The hook maps the wire response to the domain result shape.
 		expect(result.current.data).toEqual({
 			snapshotId: "snap-1",
 			metrics: {
+				role: "Chat",
 				tokensPerSecond: 42,
 				ppTokensPerSecond: null,
 				ttftMs: null,
 				totalLatencyMs: null,
 				cacheHitRate: null,
 				toolLoopMs: null,
+				itemsPerSecond: null,
+				inputTokensPerSecond: null,
+				p50LatencyMs: null,
+				p95LatencyMs: null,
+				batchSize: null,
+				outputDimension: null,
+				valuesFinite: null,
+				deterministicOutput: null,
 				vramLoadBytes: null,
 				vramAfterBytes: 6_656_000_000,
+				globalFreeVramLoadBytes: null,
+				globalFreeVramAfterBytes: 6_656_000_000,
+				processBudgetVramLoadBytes: null,
+				processBudgetVramAfterBytes: 7_200_000_000,
+				minimumGlobalFreeVramBytes: null,
+				minimumProcessBudgetVramBytes: null,
+				peakProcessRamBytes: null,
+				externalPressureDetected: false,
 				runs: null,
 			},
 			profile: expect.objectContaining({ id: "p1", status: "explored" }),

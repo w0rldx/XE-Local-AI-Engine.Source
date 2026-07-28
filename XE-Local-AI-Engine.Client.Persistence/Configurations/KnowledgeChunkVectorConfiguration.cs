@@ -27,6 +27,10 @@ internal sealed class KnowledgeChunkVectorConfiguration : IEntityTypeConfigurati
         builder.Property(entity => entity.EmbeddingModel)
                .HasColumnName("embedding_model");
 
+        builder.Property(entity => entity.VectorIdentity)
+               .HasColumnName("vector_identity")
+               .HasDefaultValue("legacy:unversioned");
+
         // Cascade from the owning chunk. The principal key is the chunk's UNIQUE alternate key (chunk_id), not its rowid
         // primary key. Documented FK intent only — the node-sqlite runtime connection does NOT enable PRAGMA foreign_keys,
         // so deletes are issued explicitly by the raw-SQL purge path.
@@ -44,5 +48,11 @@ internal sealed class KnowledgeChunkVectorConfiguration : IEntityTypeConfigurati
 
         builder.HasIndex(entity => entity.DocumentId);
         builder.HasIndex(entity => entity.EmbeddingModel);
+        builder.HasIndex(entity => new
+        {
+            entity.EmbeddingModel,
+            entity.VectorIdentity,
+            entity.Dim
+        });
     }
 }

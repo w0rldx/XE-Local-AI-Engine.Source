@@ -28,6 +28,8 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
 {
     private const string ConfiguredName = "nomic-embed-text";
     private const string ResolvedGgufName = "nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M";
+    private const string ResolvedVectorIdentity =
+        "nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M::layernorm-population-eps1e-5-truncate-l2:v1:512";
     private const int Dimensions = 768;
 
     private readonly INodeSqliteKeyHolder _keyHolder = new NullNodeSqliteKeyHolder();
@@ -61,11 +63,16 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
 
         var stampedDocumentModel = await ReadDocumentModelAsync(databasePath, documentId).ConfigureAwait(false);
         var vectorModels = await ReadVectorModelsAsync(databasePath, documentId).ConfigureAwait(false);
+        var documentIdentity = await ReadDocumentVectorIdentityAsync(databasePath, documentId).ConfigureAwait(false);
+        var vectorIdentities = await ReadVectorIdentitiesAsync(databasePath, documentId).ConfigureAwait(false);
 
         AssertEx.Equal(ResolvedGgufName, stampedDocumentModel);
         AssertEx.True(vectorModels.Count > 0, "Ingestion should have written at least one chunk vector.");
         AssertEx.True(vectorModels.All(model => string.Equals(model, ResolvedGgufName, StringComparison.Ordinal)),
             "Every chunk vector must be keyed by the resolved model name, not the configured name.");
+        AssertEx.Equal((ResolvedVectorIdentity, 512), documentIdentity);
+        AssertEx.True(vectorIdentities.All(identity => identity == (ResolvedVectorIdentity, 512)),
+            "Every vector row must carry the exact canonical transform identity and defensive width.");
     }
 
     [Test]
@@ -127,13 +134,38 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
     }
 
     [Test]
+    public async Task ListAsync_WhenPolicySwitchesToNative_FlagsTheMatryoshkaIndexStale()
+    {
+        var databasePath = GetDatabasePath("catalog-policy-rollback.sqlite");
+        var documentId = Guid.NewGuid();
+        await MigrateAsync(databasePath).ConfigureAwait(false);
+        await SeedDocumentAsync(databasePath, documentId, ResolvedGgufName, KnowledgeDocumentStatus.Indexed).ConfigureAwait(false);
+
+        IReadOnlyList<KnowledgeDocumentSummary> documents;
+        await using (var context = AgentDefinitionTestContextFactory.Create(databasePath, _keyHolder))
+        {
+            await EnsureForeignKeysOffAsync(context.Database.GetDbConnection()).ConfigureAwait(false);
+            documents = await CreateCatalogService(context, KnowledgeEmbeddingVectorMode.Native)
+                              .ListAsync(CancellationToken.None)
+                              .ConfigureAwait(false);
+        }
+
+        AssertEx.True(documents.Single().StaleModel,
+            "Switching to native mode must make a 512-wide Matryoshka identity stale until a full reindex completes.");
+    }
+
+    [Test]
     public async Task SearchAsync_FiltersVectorArmByResolvedModelName()
     {
         var databasePath = GetDatabasePath("search-filter.sqlite");
 
         var vectorSearch = Substitute.For<IVectorSearch>();
         string? capturedModel = null;
+        string? capturedIdentity = null;
+        var capturedDimension = 0;
         vectorSearch.SearchAsync(Arg.Any<ReadOnlyMemory<float>>(), Arg.Do<string>(model => capturedModel = model),
+                        Arg.Do<string>(identity => capturedIdentity = identity),
+                        Arg.Do<int>(dimension => capturedDimension = dimension),
                         Arg.Any<int>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>())
                     .Returns(Task.FromResult<IReadOnlyList<VectorSearchHit>>([]));
 
@@ -143,6 +175,204 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         _ = await service.SearchAsync(new KnowledgeSearchRequest("a query", Limit: 5), CancellationToken.None).ConfigureAwait(false);
 
         AssertEx.Equal(ResolvedGgufName, capturedModel);
+        AssertEx.Equal(ResolvedVectorIdentity, capturedIdentity);
+        AssertEx.Equal(512, capturedDimension);
+    }
+
+    [Test]
+    public async Task SearchAsync_WhenIndexedDocumentUsesLegacyVectorIdentity_DisclosesLastKnownGood()
+    {
+        var databasePath = GetDatabasePath("search-legacy-identity-disclosure.sqlite");
+        var documentId = Guid.NewGuid();
+        var chunkId = Guid.NewGuid();
+
+        await MigrateAsync(databasePath).ConfigureAwait(false);
+        await SeedDocumentAsync(databasePath, documentId, ConfiguredName, KnowledgeDocumentStatus.Indexed).ConfigureAwait(false);
+        await SeedChunkAsync(databasePath, documentId, chunkId, "legacy lexical content").ConfigureAwait(false);
+
+        await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
+        var service = CreateSearchService(
+            context,
+            EmptyVectorSearch(),
+            ftsHits:
+            [
+                new FtsSearchHit(chunkId, documentId, Bm25Score: -1.0)
+            ]);
+
+        var result = await service.SearchAsync(new KnowledgeSearchRequest("legacy lexical content", Limit: 5), CancellationToken.None).ConfigureAwait(false);
+
+        AssertEx.Equal(1, result.Results.Count);
+        AssertEx.Equal(KnowledgeDocumentStatus.Indexed, result.Results[0].DocumentStatus);
+        AssertEx.True(result.Results[0].ServingLastKnownGood,
+            "An Indexed document whose vectors do not match the current embedding identity must disclose lexical results as last-known-good until reindex.");
+    }
+
+    [Test]
+    public async Task SearchAsync_WhenEmbeddingProviderIsUnavailable_DoesNotMislabelCurrentIndexedVectorsAsStale()
+    {
+        var databasePath = GetDatabasePath("search-current-identity-provider-outage.sqlite");
+        var documentId = Guid.NewGuid();
+        var chunkId = Guid.NewGuid();
+
+        await MigrateAsync(databasePath).ConfigureAwait(false);
+        await SeedDocumentAsync(databasePath, documentId, ResolvedGgufName, KnowledgeDocumentStatus.Indexed).ConfigureAwait(false);
+        await SeedChunkAsync(databasePath, documentId, chunkId, "current lexical content").ConfigureAwait(false);
+
+        var unavailableProviderResolver = Substitute.For<ILocalModelProviderResolver>();
+        unavailableProviderResolver.ResolveProvider(Arg.Any<string>())
+                                   .Returns(_ => throw new InvalidOperationException("provider unavailable"));
+
+        await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
+        var service = CreateSearchService(
+            context,
+            EmptyVectorSearch(),
+            providerResolver: unavailableProviderResolver,
+            ftsHits:
+            [
+                new FtsSearchHit(chunkId, documentId, Bm25Score: -1.0)
+            ]);
+
+        var result = await service.SearchAsync(
+            new KnowledgeSearchRequest("current lexical content", Limit: 5),
+            CancellationToken.None).ConfigureAwait(false);
+
+        AssertEx.Equal(1, result.Results.Count);
+        AssertEx.Equal(KnowledgeDocumentStatus.Indexed, result.Results[0].DocumentStatus);
+        AssertEx.False(result.Results[0].ServingLastKnownGood,
+            "lexical fallback cannot infer vector staleness when no current query-vector identity was resolved");
+    }
+
+    [Test]
+    public async Task SearchAsync_NativeNomicRepeatedQuery_UsesCachedCanonicalIdentityWithoutRegeneration()
+    {
+        var databasePath = GetDatabasePath("search-native-cache.sqlite");
+        var options = Options.Create(new KnowledgeBaseOptions
+        {
+            EmbeddingVectorMode = KnowledgeEmbeddingVectorMode.Native
+        });
+        var provider = new FixedEmbeddingProvider(Descriptor(ResolvedGgufName));
+        var vectorSearch = EmptyVectorSearch();
+        await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
+        var service = CreateSearchService(
+            context,
+            vectorSearch,
+            CreateProviderResolver(provider),
+            new KnowledgeQueryEmbeddingCache(options),
+            options);
+
+        await service.SearchAsync(new KnowledgeSearchRequest("repeat native query", Limit: 5), CancellationToken.None).ConfigureAwait(false);
+        await service.SearchAsync(new KnowledgeSearchRequest("repeat native query", Limit: 5), CancellationToken.None).ConfigureAwait(false);
+
+        AssertEx.Equal(1, provider.GenerateCallCount);
+        await vectorSearch.Received(2)
+                          .SearchAsync(
+                              Arg.Any<ReadOnlyMemory<float>>(),
+                              ResolvedGgufName,
+                              $"{ResolvedGgufName}::native:v1:{Dimensions}",
+                              Dimensions,
+                              Arg.Any<int>(),
+                              Arg.Any<Guid?>(),
+                              Arg.Any<CancellationToken>())
+                          .ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task SearchAsync_NonNomicRepeatedQuery_UsesCachedCanonicalIdentityWithoutRegeneration()
+    {
+        const string nonNomicModel = "bge-m3";
+        var databasePath = GetDatabasePath("search-non-nomic-cache.sqlite");
+        var options = Options.Create(new KnowledgeBaseOptions
+        {
+            EmbeddingModelName = nonNomicModel
+        });
+        var provider = new FixedEmbeddingProvider(Descriptor(nonNomicModel));
+        var vectorSearch = EmptyVectorSearch();
+        await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
+        var service = CreateSearchService(
+            context,
+            vectorSearch,
+            CreateProviderResolver(provider),
+            new KnowledgeQueryEmbeddingCache(options),
+            options);
+
+        await service.SearchAsync(new KnowledgeSearchRequest("repeat non-nomic query", Limit: 5), CancellationToken.None).ConfigureAwait(false);
+        await service.SearchAsync(new KnowledgeSearchRequest("repeat non-nomic query", Limit: 5), CancellationToken.None).ConfigureAwait(false);
+
+        AssertEx.Equal(1, provider.GenerateCallCount);
+        await vectorSearch.Received(2)
+                          .SearchAsync(
+                              Arg.Any<ReadOnlyMemory<float>>(),
+                              nonNomicModel,
+                              $"{nonNomicModel}::native:v1:{Dimensions}",
+                              Dimensions,
+                              Arg.Any<int>(),
+                              Arg.Any<Guid?>(),
+                              Arg.Any<CancellationToken>())
+                          .ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task SearchAsync_CachedNativeWidthMismatch_ReembedsAndReplacesEntry()
+    {
+        var databasePath = GetDatabasePath("search-native-cache-mismatch.sqlite");
+        const string query = "poisoned native cache query";
+        var options = Options.Create(new KnowledgeBaseOptions
+        {
+            EmbeddingVectorMode = KnowledgeEmbeddingVectorMode.Native
+        });
+        var resolution = new EmbeddingModelResolution(ResolvedGgufName, IsConfident: true);
+        var cacheFamily = KnowledgeEmbeddingVectorPolicy.CreateCacheFamilyIdentity(resolution, options.Value.EmbeddingVectorMode);
+        var cache = new KnowledgeQueryEmbeddingCache(options);
+        cache.Store(
+            cacheFamily,
+            query,
+            new KnowledgeQueryEmbeddingCacheEntry(
+                new float[KnowledgeEmbeddingVectorPolicy.MatryoshkaWidth],
+                $"{ResolvedGgufName}::native:v1:{Dimensions}"));
+        var provider = new FixedEmbeddingProvider(Descriptor(ResolvedGgufName));
+        var vectorSearch = EmptyVectorSearch();
+        await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
+        var service = CreateSearchService(context, vectorSearch, CreateProviderResolver(provider), cache, options);
+
+        await service.SearchAsync(new KnowledgeSearchRequest(query, Limit: 5), CancellationToken.None).ConfigureAwait(false);
+        await service.SearchAsync(new KnowledgeSearchRequest(query, Limit: 5), CancellationToken.None).ConfigureAwait(false);
+
+        AssertEx.Equal(1, provider.GenerateCallCount);
+        AssertEx.True(cache.TryGet(cacheFamily, query, out var repaired), "The invalid record must be replaced by the generated vector.");
+        AssertEx.Equal($"{ResolvedGgufName}::native:v1:{Dimensions}", repaired.VectorIdentity);
+        AssertEx.Equal(Dimensions, repaired.Vector.Length);
+    }
+
+    [Test]
+    public async Task SearchAsync_CachedNativeIdentityMismatchAtSameWidth_ReembedsAndReplacesEntry()
+    {
+        var databasePath = GetDatabasePath("search-native-cache-identity-mismatch.sqlite");
+        const string query = "wrong native identity query";
+        var options = Options.Create(new KnowledgeBaseOptions
+        {
+            EmbeddingVectorMode = KnowledgeEmbeddingVectorMode.Native
+        });
+        var resolution = new EmbeddingModelResolution(ResolvedGgufName, IsConfident: true);
+        var cacheFamily = KnowledgeEmbeddingVectorPolicy.CreateCacheFamilyIdentity(resolution, options.Value.EmbeddingVectorMode);
+        var cache = new KnowledgeQueryEmbeddingCache(options);
+        cache.Store(
+            cacheFamily,
+            query,
+            new KnowledgeQueryEmbeddingCacheEntry(
+                new float[Dimensions],
+                $"different-model::native:v1:{Dimensions}"));
+        var provider = new FixedEmbeddingProvider(Descriptor(ResolvedGgufName));
+        var vectorSearch = EmptyVectorSearch();
+        await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
+        var service = CreateSearchService(context, vectorSearch, CreateProviderResolver(provider), cache, options);
+
+        await service.SearchAsync(new KnowledgeSearchRequest(query, Limit: 5), CancellationToken.None).ConfigureAwait(false);
+        await service.SearchAsync(new KnowledgeSearchRequest(query, Limit: 5), CancellationToken.None).ConfigureAwait(false);
+
+        AssertEx.Equal(1, provider.GenerateCallCount);
+        AssertEx.True(cache.TryGet(cacheFamily, query, out var repaired), "The wrong-identity record must be replaced.");
+        AssertEx.Equal($"{ResolvedGgufName}::native:v1:{Dimensions}", repaired.VectorIdentity);
+        AssertEx.Equal(Dimensions, repaired.Vector.Length);
     }
 
     [Test]
@@ -213,25 +443,36 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
             NullLogger<KnowledgeIngestionService>.Instance);
     }
 
-    private static KnowledgeDocumentCatalogService CreateCatalogService(NodeChatDbContext context)
+    private static KnowledgeDocumentCatalogService CreateCatalogService(
+        NodeChatDbContext context,
+        KnowledgeEmbeddingVectorMode vectorMode = KnowledgeEmbeddingVectorMode.Matryoshka512)
     {
-        var options = Options.Create(new KnowledgeBaseOptions());
+        var options = Options.Create(new KnowledgeBaseOptions
+        {
+            EmbeddingVectorMode = vectorMode
+        });
         return new KnowledgeDocumentCatalogService(context, CreateResolvingProviderResolver(), new EmbeddingModelResolver(options), options, TimeProvider.System);
     }
 
-    private static KnowledgeSearchService CreateSearchService(NodeChatDbContext context, IVectorSearch vectorSearch)
+    private static KnowledgeSearchService CreateSearchService(
+        NodeChatDbContext context,
+        IVectorSearch vectorSearch,
+        ILocalModelProviderResolver? providerResolver = null,
+        IKnowledgeQueryEmbeddingCache? queryEmbeddingCache = null,
+        IOptions<KnowledgeBaseOptions>? options = null,
+        IReadOnlyList<FtsSearchHit>? ftsHits = null)
     {
-        var options = Options.Create(new KnowledgeBaseOptions());
+        options ??= Options.Create(new KnowledgeBaseOptions());
 
         var ftsSearch = Substitute.For<IFtsSearch>();
         ftsSearch.SearchAsync(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>())
-                 .Returns(Task.FromResult<IReadOnlyList<FtsSearchHit>>([]));
+                 .Returns(Task.FromResult(ftsHits ?? (IReadOnlyList<FtsSearchHit>)[]));
 
         var vectorSearchFactory = Substitute.For<IVectorSearchFactory>();
         vectorSearchFactory.Create().Returns(vectorSearch);
 
         return new KnowledgeSearchService(context,
-            CreateResolvingProviderResolver(),
+            providerResolver ?? CreateResolvingProviderResolver(),
             new EmbeddingModelResolver(options),
             new KnowledgeEmbeddingPrefixer(),
             ftsSearch,
@@ -239,9 +480,24 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
             new ReciprocalRankFusion(),
             Substitute.For<IRerankerClient>(),
             Substitute.For<IContextExpansionService>(),
-            Substitute.For<IKnowledgeQueryEmbeddingCache>(),
+            queryEmbeddingCache ?? Substitute.For<IKnowledgeQueryEmbeddingCache>(),
             options,
             NullLogger<KnowledgeSearchService>.Instance);
+    }
+
+    private static IVectorSearch EmptyVectorSearch()
+    {
+        var vectorSearch = Substitute.For<IVectorSearch>();
+        vectorSearch.SearchAsync(
+                        Arg.Any<ReadOnlyMemory<float>>(),
+                        Arg.Any<string>(),
+                        Arg.Any<string>(),
+                        Arg.Any<int>(),
+                        Arg.Any<int>(),
+                        Arg.Any<Guid?>(),
+                        Arg.Any<CancellationToken>())
+                    .Returns(Task.FromResult<IReadOnlyList<VectorSearchHit>>([]));
+        return vectorSearch;
     }
 
     private static KnowledgeChunkEmbedder CreateEmbedder(IOptions<KnowledgeBaseOptions> options)
@@ -257,6 +513,11 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
     private static ILocalModelProviderResolver CreateResolvingProviderResolver()
     {
         var provider = new FixedEmbeddingProvider(Descriptor(ResolvedGgufName), Descriptor("qwen2.5:Q4_K_M"));
+        return CreateProviderResolver(provider);
+    }
+
+    private static ILocalModelProviderResolver CreateProviderResolver(ILocalModelProvider provider)
+    {
         var resolver = Substitute.For<ILocalModelProviderResolver>();
         resolver.ResolveProvider(Arg.Any<string>()).Returns(provider);
         return resolver;
@@ -297,8 +558,9 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         await using var command = connection.CreateCommand();
         command.CommandText =
             """
-            INSERT INTO knowledge_documents (document_id, original_file_name, mime_type, extension, size_bytes, content_hash, storage_path, status, chunk_count, embedding_model, created_at_utc, updated_at_utc)
-            VALUES ($id, $name, 'text/plain', '.txt', 10, $hash, $path, $status, 0, $model, 1, 1);
+            INSERT INTO knowledge_documents (document_id, original_file_name, mime_type, extension, size_bytes, content_hash, storage_path,
+                                             status, chunk_count, embedding_model, vector_identity, vector_dim, created_at_utc, updated_at_utc)
+            VALUES ($id, $name, 'text/plain', '.txt', 10, $hash, $path, $status, 0, $model, $identity, $dim, 1, 1);
             """;
         command.Parameters.AddWithValue("$id", documentId);
         command.Parameters.AddWithValue("$name", encryptedName);
@@ -306,6 +568,12 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         command.Parameters.AddWithValue("$path", documentId.ToString("D") + ".txt");
         command.Parameters.AddWithValue("$status", status.ToString());
         command.Parameters.AddWithValue("$model", embeddingModel);
+        command.Parameters.AddWithValue("$identity",
+            status == KnowledgeDocumentStatus.Indexed && string.Equals(embeddingModel, ResolvedGgufName, StringComparison.Ordinal)
+                ? ResolvedVectorIdentity
+                : KnowledgeEmbeddingVectorPolicy.LegacyIdentity);
+        command.Parameters.AddWithValue("$dim",
+            status == KnowledgeDocumentStatus.Indexed && string.Equals(embeddingModel, ResolvedGgufName, StringComparison.Ordinal) ? 512 : 0);
         _ = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
     }
 
@@ -318,6 +586,23 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         command.Parameters.AddWithValue("$id", documentId);
         var result = await command.ExecuteScalarAsync().ConfigureAwait(false);
         return (string)result!;
+    }
+
+    private static async Task SeedChunkAsync(string databasePath, Guid documentId, Guid chunkId, string content)
+    {
+        await using var connection = new SqliteConnection($"Data Source={databasePath}");
+        await connection.OpenAsync().ConfigureAwait(false);
+        await EnsureForeignKeysOffAsync(connection).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            INSERT INTO knowledge_document_chunks (chunk_id, document_id, chunk_index, content, token_count)
+            VALUES ($chunk, $document, 0, $content, 4);
+            """;
+        command.Parameters.AddWithValue("$chunk", chunkId);
+        command.Parameters.AddWithValue("$document", documentId);
+        command.Parameters.AddWithValue("$content", content);
+        _ = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
     }
 
     private static async Task<IReadOnlyList<string>> ReadVectorModelsAsync(string databasePath, Guid documentId)
@@ -335,6 +620,35 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         }
 
         return models;
+    }
+
+    private static async Task<(string Identity, int Dimension)> ReadDocumentVectorIdentityAsync(string databasePath, Guid documentId)
+    {
+        await using var connection = new SqliteConnection($"Data Source={databasePath}");
+        await connection.OpenAsync().ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT vector_identity, vector_dim FROM knowledge_documents WHERE document_id = $id;";
+        command.Parameters.AddWithValue("$id", documentId);
+        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+        _ = await reader.ReadAsync().ConfigureAwait(false);
+        return (reader.GetString(0), reader.GetInt32(1));
+    }
+
+    private static async Task<IReadOnlyList<(string Identity, int Dimension)>> ReadVectorIdentitiesAsync(string databasePath, Guid documentId)
+    {
+        await using var connection = new SqliteConnection($"Data Source={databasePath}");
+        await connection.OpenAsync().ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT vector_identity, dim FROM knowledge_chunk_vectors WHERE document_id = $id;";
+        command.Parameters.AddWithValue("$id", documentId);
+        var identities = new List<(string, int)>();
+        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+        while (await reader.ReadAsync().ConfigureAwait(false))
+        {
+            identities.Add((reader.GetString(0), reader.GetInt32(1)));
+        }
+
+        return identities;
     }
 
     private static async Task<string> ReadStatusAsync(string databasePath, Guid documentId)
@@ -402,10 +716,14 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
     // resolver, chunk embedder, and search query embedding all work without Ollama or a network round-trip.
     private sealed class FixedEmbeddingProvider(params LocalModelDescriptor[] models) : ILocalModelProvider
     {
+        private int _generateCallCount;
+
         public string ProviderName => "llamacpp";
 
+        public int GenerateCallCount => Volatile.Read(ref _generateCallCount);
+
         public IEmbeddingGenerator<string, Embedding<float>> CreateEmbeddingGenerator(LocalModelSelection selection) =>
-            new FixedGenerator();
+            new FixedGenerator(this);
 
         public Task<IReadOnlyList<LocalModelDescriptor>> ListModelsAsync(CancellationToken ct) =>
             Task.FromResult<IReadOnlyList<LocalModelDescriptor>>(models);
@@ -428,12 +746,13 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         public Task UnloadModelAsync(string modelName, CancellationToken ct) =>
             throw new NotSupportedException();
 
-        private sealed class FixedGenerator : IEmbeddingGenerator<string, Embedding<float>>
+        private sealed class FixedGenerator(FixedEmbeddingProvider owner) : IEmbeddingGenerator<string, Embedding<float>>
         {
             public Task<GeneratedEmbeddings<Embedding<float>>> GenerateAsync(IEnumerable<string> values,
                 EmbeddingGenerationOptions? options = null,
                 CancellationToken cancellationToken = default)
             {
+                Interlocked.Increment(ref owner._generateCallCount);
                 var embeddings = values.Select(static _ =>
                 {
                     var vector = new float[Dimensions];

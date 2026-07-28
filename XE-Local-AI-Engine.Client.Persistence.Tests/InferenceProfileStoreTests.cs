@@ -66,17 +66,30 @@ public sealed class InferenceProfileStoreTests : IDisposable
         AssertEx.Equal(InferenceProfileStatus.Explored, explored.Status);
 
         var benchmarkSnapshotId = Guid.NewGuid();
-        var frozen = AssertEx.NotNull(await store.MarkFrozenAsync(explored.Id, benchmarkSnapshotId, freeVramAtFreezeBytes: 6_200_000_000));
+        var frozen = AssertEx.NotNull(await store.MarkFrozenAsync(
+            explored.Id,
+            benchmarkSnapshotId,
+            globalFreeVramAtFreezeBytes: 6_200_000_000,
+            processBudgetVramAtFreezeBytes: 7_000_000_000));
 
         AssertEx.Equal(InferenceProfileStatus.Frozen, frozen.Status);
         AssertEx.Equal(benchmarkSnapshotId, frozen.BenchmarkSnapshotId);
-        AssertEx.Equal(expected: 6_200_000_000L, frozen.FreeVramAtFreezeBytes);
+        AssertEx.Equal(expected: 6_200_000_000L, frozen.GlobalFreeVramAtFreezeBytes);
+        AssertEx.Equal(expected: 7_000_000_000L, frozen.ProcessBudgetVramAtFreezeBytes);
 
         // The freeze gate only promotes an Explored row — a second freeze of an already-frozen row is rejected.
-        AssertEx.Null(await store.MarkFrozenAsync(explored.Id, Guid.NewGuid(), freeVramAtFreezeBytes: 1));
+        AssertEx.Null(await store.MarkFrozenAsync(
+            explored.Id,
+            Guid.NewGuid(),
+            globalFreeVramAtFreezeBytes: 1,
+            processBudgetVramAtFreezeBytes: 2));
 
         // Freezing an unknown id returns null.
-        AssertEx.Null(await store.MarkFrozenAsync(Guid.NewGuid(), Guid.NewGuid(), freeVramAtFreezeBytes: null));
+        AssertEx.Null(await store.MarkFrozenAsync(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            globalFreeVramAtFreezeBytes: null,
+            processBudgetVramAtFreezeBytes: null));
     }
 
     [Test]
@@ -91,7 +104,11 @@ public sealed class InferenceProfileStoreTests : IDisposable
 
         var store = new InferenceProfileStore(context, TimeProvider.System);
         var explored = await store.CreateOrUpdateExploredAsync(CreateInput(ctxSize: 4_096));
-        _ = await store.MarkFrozenAsync(explored.Id, Guid.NewGuid(), freeVramAtFreezeBytes: 5_000_000_000);
+        _ = await store.MarkFrozenAsync(
+            explored.Id,
+            Guid.NewGuid(),
+            globalFreeVramAtFreezeBytes: 5_000_000_000,
+            processBudgetVramAtFreezeBytes: 5_500_000_000);
 
         var stale = AssertEx.NotNull(await store.MarkStaleAsync(explored.Id));
         AssertEx.Equal(InferenceProfileStatus.Stale, stale.Status);
@@ -179,7 +196,9 @@ public sealed class InferenceProfileStoreTests : IDisposable
             FlashAttn: false,
             NParams: 7_600_000_000,
             IsMoe: false,
-            ExpertCount: null);
+            ExpertCount: null,
+            LaunchPolicyFingerprintVersion: 1,
+            LaunchPolicyFingerprint: "c7047b7426098004d6b49f5df8f036404399578f2c962cd33549008708241281");
     }
 
     private static NodeChatDbContext CreateContext(string databasePath, INodeSqliteKeyHolder keyHolder)

@@ -2551,14 +2551,21 @@
 				"loading": "Inferenzprofile werden geladen…",
 				"error": "Inferenzprofile konnten nicht geladen werden.",
 				"empty": "Noch keine Inferenzprofile. Erkunde ein Modell, um eines zu erstellen.",
-				"moe": "MoE",
-				"moeExperts": "MoE · {{count}} Experten",
-				"explore": {
+				"allowPreSpawnVramPressure": {
+					"label": "Benchmarks trotz bestehendem VRAM-Druck zulassen",
+					"description": "Operator-Override: Umgeht nur die Prüfung auf bestehenden VRAM-Druck vor dem Start. Neuer Druck während des Benchmarks macht den Lauf weiterhin ungültig."
+				},
+    "moe": "MoE",
+    "moeExperts": "MoE · {{count}} Experten",
+    "policyFingerprint": "Richtlinie v{{version}} · {{fingerprint}}",
+    "freezeVramSummary": "Global frei {{globalFree}} · Prozessbudget {{processBudget}}",
+    "explore": {
 					"modelLabel": "Modellname",
 					"modelPlaceholder": "z. B. unsloth/Qwen3-4B-GGUF",
-					"roleLabel": "Rolle",
-					"roleChat": "Chat",
-					"roleEmbedding": "Embedding",
+      "roleLabel": "Rolle",
+      "roleChat": "Chat",
+      "roleEmbedding": "Embedding",
+      "roleReranker": "Reranker",
 					"button": "Erkunden",
 					"success": "Optimiertes Profil für {{model}} wird erkundet.",
 					"error": "Erkundung konnte nicht gestartet werden."
@@ -2594,9 +2601,29 @@
 					"genTps": "Generierung Tok/s",
 					"cacheHit": "Cache-Treffer",
 					"toolLoop": "Tool-Schleife",
-					"vramLoad": "VRAM beim Laden",
-					"vramAfter": "VRAM danach"
-				}
+      "vramLoad": "VRAM beim Laden",
+      "vramAfter": "VRAM danach",
+      "role": "Rolle",
+      "itemsPerSecond": "Elemente/s",
+      "inputTokensPerSecond": "Eingabe-Tok/s",
+      "p50Latency": "P50-Latenz",
+      "p95Latency": "P95-Latenz",
+      "batchSize": "Batch-Größe",
+      "outputDimension": "Ausgabedimension",
+      "valuesFinite": "Endliche Werte",
+      "deterministicOutput": "Stabile Ausgabe",
+      "yes": "Ja",
+      "no": "Nein",
+      "unknown": "Unbekannt",
+      "globalFreeVramLoad": "Global frei beim Laden",
+      "globalFreeVramAfter": "Global frei danach",
+      "processBudgetVramLoad": "Prozessbudget beim Laden",
+      "processBudgetVramAfter": "Prozessbudget danach",
+      "minimumGlobalFreeVram": "Globales Minimum frei",
+      "minimumProcessBudgetVram": "Minimales Prozessbudget",
+      "peakProcessRam": "Maximaler Prozess-RAM",
+      "externalPressure": "Externer VRAM-Druck erkannt; dieser Benchmark ist ungültig."
+    }
 			}
 		},
 		"loadedModels": {

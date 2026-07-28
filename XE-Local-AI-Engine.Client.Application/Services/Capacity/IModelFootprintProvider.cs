@@ -1,6 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Services.Capacity;
 
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
+using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
 ///     Estimates the resident memory footprint (bytes) of an INSTALLED local GGUF model against a hardware profile,
@@ -17,35 +19,38 @@ public interface IModelFootprintProvider
     ///     carries neither header metadata nor a usable file size. Never throws for an absent/unreadable model
     ///     (cancellation excepted).
     /// </summary>
-    Task<ModelFootprint> ResolveFootprintAsync(string modelName, HardwareProfile profile, CancellationToken ct);
+    Task<ModelFootprint> ResolveFootprintAsync(string modelName, ModelRole role, HardwareProfile profile, CancellationToken ct);
 }
 
 /// <summary>
-///     The footprint of an installed model: <see cref="IsKnown" /> with <see cref="EstimatedBytes" /> when the estimator
+///     The footprint of an installed model: <see cref="IsKnown" /> with <see cref="Resources" /> when the estimator
 ///     produced a figure, or Unknown (the model is not installed, or no header metadata and no file size were available).
 ///     The capacity gate treats Unknown as a reject (invariant: conservative on uncertainty).
 /// </summary>
 public sealed record ModelFootprint
 {
-    private ModelFootprint(bool isKnown, long estimatedBytes)
+    private ModelFootprint(bool isKnown, ResourceFootprint resources)
     {
         IsKnown = isKnown;
-        EstimatedBytes = estimatedBytes;
+        Resources = resources;
     }
 
     /// <summary>Whether a byte estimate is available. <see langword="false" /> ⇒ the gate rejects.</summary>
     public bool IsKnown { get; }
 
     /// <summary>The estimated resident bytes when <see cref="IsKnown" />; otherwise <c>0</c> (do not consume it).</summary>
-    public long EstimatedBytes { get; }
+    public ResourceFootprint Resources { get; }
 
-    /// <summary>A known footprint of <paramref name="estimatedBytes" /> bytes.</summary>
-    public static ModelFootprint Known(long estimatedBytes)
+    /// <summary>A known dual-axis resource footprint.</summary>
+    public static ModelFootprint Known(ResourceFootprint resources)
     {
-        ArgumentOutOfRangeException.ThrowIfNegative(estimatedBytes);
-        return new ModelFootprint(isKnown: true, estimatedBytes);
+        if (resources.GpuBytes < 0 || resources.RamBytes < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(resources), "Resource axes must be non-negative.");
+        }
+        return new ModelFootprint(isKnown: true, resources);
     }
 
     /// <summary>An undeterminable footprint (not installed, or no header metadata and no file size).</summary>
-    public static ModelFootprint Unknown { get; } = new(isKnown: false, estimatedBytes: 0);
+    public static ModelFootprint Unknown { get; } = new(isKnown: false, ResourceFootprint.Zero);
 }

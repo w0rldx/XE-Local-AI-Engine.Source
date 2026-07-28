@@ -2,14 +2,15 @@ namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     Coverage for the operator profiling seam (<see cref="LlamaServerProcessSupervisor.RunExclusiveProfilingAsync{T}" />):
-///     it captures the startup banner from the launch streams, evicts any warm process so the spawn is exclusive, pins
-///     the process against idle eviction for the benchmark, appends <c>--metrics</c> to a replay spawn when asked, and
-///     always releases the single-flight gate + evicts the transient process — even when the body throws.
+///     it acquires machine-readable fit output before an explore spawn, evicts every warm role for the model so the spawn is
+///     exclusive, pins the process against idle eviction for the benchmark, appends <c>--metrics</c> to a replay spawn
+///     when asked, and always releases the single-flight gate + evicts the transient process — even when the body throws.
 /// </summary>
 public sealed class SupervisorProfilingTests
 {
@@ -57,66 +58,223 @@ public sealed class SupervisorProfilingTests
     }
 
     [Test]
-    public async Task Profiling_CapturesStartupOutput_FromBothStreams()
+    public async Task Profiling_Explore_AcquiresMachineReadableFitParamsWithProductionLaunchPolicy()
     {
-        // The fake launcher replays these through the spec's StartupCapture sink, exactly as the production launcher
-        // forwards each stdout/stderr line (the fit/device banner prints across both streams).
-        var launcher = new FakeProcessLauncher
-        {
-            StartupLines =
-            [
-                "ggml_cuda_init: found 1 CUDA devices:",
-                "llama_params_fit: n_ctx = 8192",
-                "llama_params_fit: n_gpu_layers = 32"
-            ]
-        };
+        var launcher = new FakeProcessLauncher();
+        var fitRunner = new FakeLlamaFitParamsRunner(
+            LlamaFitParamsRunResult.Success(["-c 8192 -ngl 32"]));
         await using var supervisor = SupervisorFactory.Create(launcher,
-            variantSelector: new FakeVariantSelector(GpuVariant.Cuda));
+            variantSelector: new FakeVariantSelector(GpuVariant.Cuda),
+            fitParamsRunner: fitRunner);
 
         IReadOnlyList<string> captured = [];
+        IReadOnlyList<string> successfulLaunchArguments = [];
+        int? capturedProcessId = null;
         await supervisor.RunExclusiveProfilingAsync("llama3",
             ModelRole.Chat,
             ResolvedLaunchArguments.Explore(),
             enableMetrics: false,
             (context, _) =>
             {
-                captured = context.StartupOutput;
+                captured = context.FitParamsOutput;
+                successfulLaunchArguments = context.SuccessfulLaunchArguments;
+                capturedProcessId = context.ProcessId;
                 return Task.FromResult(result: true);
             },
             CancellationToken.None);
 
-        AssertEx.Contains(captured, "llama_params_fit: n_ctx = 8192");
-        AssertEx.Contains(captured, "llama_params_fit: n_gpu_layers = 32");
-        AssertEx.Contains(captured, "ggml_cuda_init: found 1 CUDA devices:");
+        AssertEx.Contains(captured, "-c 8192 -ngl 32");
+        AssertEx.Equal<int?>(launcher.Handles.Single().ProcessId, capturedProcessId);
+        AssertEx.Equal(expected: 1, fitRunner.Calls.Count);
+        AssertEx.True(fitRunner.Calls.TryPeek(out var spec));
+        AssertEx.Contains(spec!.Arguments, "--fit");
+        AssertEx.Contains(spec.Arguments, "-v");
+        AssertArgumentValue(spec.Arguments, "-c", "16384");
+        AssertArgumentValue(spec.Arguments, "-ctk", "q8_0");
+        AssertArgumentValue(spec.Arguments, "-ctv", "q8_0");
+        AssertArgumentValue(spec.Arguments, "-fa", "on");
+        AssertEx.True(launcher.Launches.TryPeek(out var launchedSpec));
+        AssertEx.True(spec.Arguments.SequenceEqual(launchedSpec!.Arguments),
+            "The helper and profiling server must receive the same production-equivalent launch vector.");
+        AssertEx.True(successfulLaunchArguments.SequenceEqual(launchedSpec.Arguments),
+            "The profiling body must receive the exact successful server vector so replay preserves its policy.");
     }
 
     [Test]
-    public async Task Profiling_EvictsWarmProcess_ThenSpawnsExclusive()
+    [Arguments(ModelRole.Embedding, "--embeddings")]
+    [Arguments(ModelRole.Reranker, "--rerank")]
+    public async Task Profiling_Explore_AuxiliaryRolesKeepPoolingOnServerButNotFitHelper(
+        ModelRole role,
+        string roleFlag)
+    {
+        var launcher = new FakeProcessLauncher();
+        var fitRunner = new FakeLlamaFitParamsRunner(
+            LlamaFitParamsRunResult.Success(["-c 2048 -ngl 32"]));
+        await using var supervisor = SupervisorFactory.Create(
+            launcher,
+            variantSelector: new FakeVariantSelector(GpuVariant.Cuda),
+            fitParamsRunner: fitRunner);
+
+        await supervisor.RunExclusiveProfilingAsync(
+            "llama3",
+            role,
+            ResolvedLaunchArguments.Explore(),
+            enableMetrics: false,
+            (_, _) => Task.FromResult(result: true),
+            CancellationToken.None);
+
+        AssertEx.True(fitRunner.Calls.TryPeek(out var serverSpec));
+        AssertEx.Contains(serverSpec!.Arguments, roleFlag);
+        AssertArgumentValue(
+            serverSpec.Arguments,
+            "--pooling",
+            role == ModelRole.Reranker ? "rank" : "mean");
+
+        var fitArguments = LlamaFitParamsProcessRunner.BuildArguments(serverSpec.Arguments);
+        AssertEx.Contains(fitArguments, "--fit");
+        AssertEx.False(fitArguments.Contains(roleFlag));
+        AssertEx.False(fitArguments.Contains("--pooling"),
+            "server-only pooling must never be projected to pinned b9692 llama-fit-params");
+
+        AssertEx.True(launcher.Launches.TryPeek(out var launchedSpec));
+        AssertEx.True(serverSpec.Arguments.SequenceEqual(launchedSpec!.Arguments),
+            "the server must retain its role and pooling flags even though the helper projection filters them");
+    }
+
+    [Test]
+    public async Task Profiling_Explore_WhenOptimizedCandidateFails_ExposesSuccessfulSafeLaunchArguments()
+    {
+        var launcher = new FakeProcessLauncher();
+        var fitRunner = new FakeLlamaFitParamsRunner(
+            LlamaFitParamsRunResult.Success(["-c 8192 -ngl 32"]));
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            healthProbe: new FirstReadinessFailsHealthProbe(),
+            variantSelector: new FakeVariantSelector(GpuVariant.Cuda),
+            fitParamsRunner: fitRunner);
+
+        IReadOnlyList<string> successfulLaunchArguments = [];
+        await supervisor.RunExclusiveProfilingAsync("llama3",
+            ModelRole.Chat,
+            ResolvedLaunchArguments.Explore(),
+            enableMetrics: false,
+            (context, _) =>
+            {
+                successfulLaunchArguments = context.SuccessfulLaunchArguments;
+                return Task.FromResult(result: true);
+            },
+            CancellationToken.None);
+
+        AssertEx.Equal(expected: 2, fitRunner.Calls.Count);
+        AssertEx.Equal(expected: 2, launcher.LaunchCount);
+        AssertEx.True(launcher.Launches.TryDequeue(out var optimized));
+        AssertEx.Contains(optimized!.Arguments, "-ctk");
+        AssertEx.True(launcher.Launches.TryDequeue(out var safe));
+        AssertEx.False(safe!.Arguments.Contains("-ctk"));
+        AssertEx.False(safe.Arguments.Contains("-ctv"));
+        AssertEx.False(safe.Arguments.Contains("-fa"));
+        AssertEx.True(successfulLaunchArguments.SequenceEqual(safe.Arguments),
+            "The failed optimized candidate's KV/FA policy must not leak into the safe replay profile.");
+    }
+
+    [Test]
+    public async Task Profiling_Replay_DoesNotInvokeFitParamsCapability()
+    {
+        var fitRunner = new FakeLlamaFitParamsRunner(
+            LlamaFitParamsRunResult.Success(["-c 8192 -ngl 32"]));
+        await using var supervisor = SupervisorFactory.Create(
+            variantSelector: new FakeVariantSelector(GpuVariant.Cuda),
+            fitParamsRunner: fitRunner);
+
+        await supervisor.RunExclusiveProfilingAsync("llama3",
+            ModelRole.Chat,
+            ResolvedLaunchArguments.Replay(ctxSize: 8192, nGpuLayers: 32),
+            enableMetrics: false,
+            (_, _) => Task.FromResult(result: true),
+            CancellationToken.None);
+
+        AssertEx.Equal(expected: 0, fitRunner.Calls.Count);
+    }
+
+    [Test]
+    public async Task Profiling_EvictsAllWarmRolesForModel_BeforeVramCapture()
     {
         var launcher = new FakeProcessLauncher();
         await using var supervisor = SupervisorFactory.Create(launcher);
 
-        // A warm process for the same key is already running before profiling starts.
+        // Warm processes for both the target role and a sibling role of the same model are running before profiling.
         await supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None);
-        var warmHandle = launcher.Handles.Single();
+        var chatHandle = launcher.Handles.Single();
+        await supervisor.EnsureRunningAsync("llama3", ModelRole.Embedding, CancellationToken.None);
+        var embeddingHandle = launcher.Handles.Single(handle => !ReferenceEquals(handle, chatHandle));
 
-        var warmEvictedAtBody = false;
+        var chatEvictedAtCapture = false;
+        var embeddingEvictedAtCapture = false;
+        var launchCountAtCapture = -1;
+        LlamaServerProfilingVramSnapshot? capturedPreSpawnVram = null;
         var launchCountAtBody = 0;
         await supervisor.RunExclusiveProfilingAsync("llama3",
             ModelRole.Chat,
             ResolvedLaunchArguments.Explore(),
             enableMetrics: false,
-            (_, _) =>
+            (context, _) =>
             {
-                // Inside the body: the warm process was tree-killed and a fresh exclusive process spawned.
-                warmEvictedAtBody = warmHandle.WasTreeKilled;
+                capturedPreSpawnVram = context.PreSpawnVram;
                 launchCountAtBody = launcher.LaunchCount;
                 return Task.FromResult(result: true);
             },
-            CancellationToken.None);
+            CancellationToken.None,
+            _ =>
+            {
+                chatEvictedAtCapture = chatHandle.WasTreeKilled;
+                embeddingEvictedAtCapture = embeddingHandle.WasTreeKilled;
+                launchCountAtCapture = launcher.LaunchCount;
+                return Task.FromResult(new LlamaServerProfilingVramSnapshot(6, 8));
+            });
 
-        AssertEx.True(warmEvictedAtBody, "The warm process must be evicted before the profiling spawn.");
-        AssertEx.Equal(expected: 2, launchCountAtBody); // warm + exclusive profiling spawn.
+        AssertEx.True(chatEvictedAtCapture, "The target-role warm process must be evicted before ambient VRAM is captured.");
+        AssertEx.True(embeddingEvictedAtCapture, "Every sibling-role warm process for the model must be evicted before ambient VRAM is captured.");
+        AssertEx.Equal(expected: 2, launchCountAtCapture); // only the two warm processes have launched at capture time.
+        AssertEx.Equal(expected: 3, launchCountAtBody); // two warm processes + exclusive profiling spawn.
+        AssertEx.Equal(new LlamaServerProfilingVramSnapshot(6, 8), capturedPreSpawnVram);
+    }
+
+    [Test]
+    public async Task Profiling_AwaitsInflightSiblingRole_ThenEvictsItBeforeVramCapture()
+    {
+        var launcher = new FakeProcessLauncher();
+        var healthProbe = new GatedHealthProbe();
+        await using var supervisor = SupervisorFactory.Create(launcher, healthProbe);
+
+        var siblingEnsure = supervisor.EnsureRunningAsync("llama3", ModelRole.Embedding, CancellationToken.None);
+        await AssertEx.EventuallyAsync(() => healthProbe.Waiting == 1,
+            TimeSpan.FromSeconds(5),
+            "The sibling-role spawn never reached its blocked readiness probe.");
+
+        var captureEntered = false;
+        var siblingEvictedAtCapture = false;
+        var profiling = supervisor.RunExclusiveProfilingAsync("llama3",
+            ModelRole.Chat,
+            ResolvedLaunchArguments.Explore(),
+            enableMetrics: false,
+            (_, _) => Task.FromResult(result: true),
+            CancellationToken.None,
+            _ =>
+            {
+                captureEntered = true;
+                siblingEvictedAtCapture = launcher.Handles.Single().WasTreeKilled;
+                return Task.FromResult(new LlamaServerProfilingVramSnapshot(6, 8));
+            });
+
+        await Task.Delay(50);
+        AssertEx.False(captureEntered, "VRAM capture must wait for an already-started sibling-role spawn to settle.");
+
+        healthProbe.Release();
+        await siblingEnsure;
+        await profiling;
+
+        AssertEx.True(captureEntered);
+        AssertEx.True(siblingEvictedAtCapture, "The settled sibling-role process must be evicted before ambient VRAM is captured.");
+        AssertEx.Equal(expected: 2, launcher.LaunchCount); // sibling role + exclusive profiling spawn.
     }
 
     [Test]
@@ -223,5 +381,41 @@ public sealed class SupervisorProfilingTests
         var endpoint = await supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None);
         AssertEx.NotNull(endpoint);
         AssertEx.Equal(expected: 2, launcher.LaunchCount);
+    }
+
+    private static void AssertArgumentValue(IReadOnlyList<string> arguments, string argument, string expectedValue)
+    {
+        var index = -1;
+        for (var i = 0; i < arguments.Count; i++)
+        {
+            if (string.Equals(arguments[i], argument, StringComparison.Ordinal))
+            {
+                index = i;
+                break;
+            }
+        }
+
+        AssertEx.True(index >= 0 && index + 1 < arguments.Count, $"Expected argument '{argument}' with a value.");
+        AssertEx.Equal(expectedValue, arguments[index + 1]);
+    }
+
+    private sealed class FirstReadinessFailsHealthProbe : ILlamaServerHealthProbe
+    {
+        private int _readinessCalls;
+
+        public Task<bool> WaitForReadyAsync(Uri baseAddress, TimeSpan readinessTimeout, CancellationToken ct)
+        {
+            return Task.FromResult(Interlocked.Increment(ref _readinessCalls) > 1);
+        }
+
+        public Task<bool> CheckResponsiveAsync(Uri baseAddress, CancellationToken ct)
+        {
+            return Task.FromResult(true);
+        }
+
+        public Task<int?> TryReadEffectiveContextTokensAsync(Uri baseAddress, CancellationToken ct)
+        {
+            return Task.FromResult<int?>(null);
+        }
     }
 }

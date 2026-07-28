@@ -10649,9 +10649,14 @@
         "type": "object",
         "additionalProperties": false,
         "required": [
+          "externalPressureDetected",
           "runs"
         ],
         "properties": {
+          "role": {
+            "type": "string",
+            "nullable": true
+          },
           "tokensPerSecond": {
             "type": "number",
             "format": "double",
@@ -10682,6 +10687,44 @@
             "format": "double",
             "nullable": true
           },
+          "itemsPerSecond": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "inputTokensPerSecond": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "p50LatencyMs": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "p95LatencyMs": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "batchSize": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "outputDimension": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "valuesFinite": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "deterministicOutput": {
+            "type": "boolean",
+            "nullable": true
+          },
           "vramLoadBytes": {
             "type": "integer",
             "nullable": true
@@ -10689,6 +10732,37 @@
           "vramAfterBytes": {
             "type": "integer",
             "nullable": true
+          },
+          "globalFreeVramLoadBytes": {
+            "type": "integer",
+            "nullable": true
+          },
+          "globalFreeVramAfterBytes": {
+            "type": "integer",
+            "nullable": true
+          },
+          "processBudgetVramLoadBytes": {
+            "type": "integer",
+            "nullable": true
+          },
+          "processBudgetVramAfterBytes": {
+            "type": "integer",
+            "nullable": true
+          },
+          "minimumGlobalFreeVramBytes": {
+            "type": "integer",
+            "nullable": true
+          },
+          "minimumProcessBudgetVramBytes": {
+            "type": "integer",
+            "nullable": true
+          },
+          "peakProcessRamBytes": {
+            "type": "integer",
+            "nullable": true
+          },
+          "externalPressureDetected": {
+            "type": "boolean"
           },
           "runs": {
             "type": "integer",
@@ -10773,8 +10847,13 @@
             "format": "int32",
             "nullable": true
           },
-          "freeVramAtFreezeBytes": {
+          "launchPolicyFingerprintVersion": {
             "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "launchPolicyFingerprint": {
+            "type": "string",
             "nullable": true
           },
           "status": {
@@ -10790,6 +10869,14 @@
           },
           "updatedAtUtc": {
             "type": "integer"
+          },
+          "globalFreeVramAtFreezeBytes": {
+            "type": "integer",
+            "nullable": true
+          },
+          "processBudgetVramAtFreezeBytes": {
+            "type": "integer",
+            "nullable": true
           }
         }
       },
@@ -10803,6 +10890,9 @@
           "profileId": {
             "type": "string",
             "format": "guid"
+          },
+          "allowPreSpawnVramPressure": {
+            "type": "boolean"
           }
         }
       },

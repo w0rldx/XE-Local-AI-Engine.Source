@@ -6,14 +6,15 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Inference;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     <see cref="InferenceInvalidationEvaluator" /> tests: a changed active build tag marks stale; live free VRAM below
-///     the frozen baseline marks stale; and when the VRAM probe reports "unknown" the verdict degrades to the build +
-///     hardware axes only (so a matching build + matching hardware is NOT stale). Every probe is mocked.
+///     <see cref="InferenceInvalidationEvaluator" /> tests: refreshed NVIDIA global-free VRAM is authoritative, the
+///     cold invalidation path has no llama.cpp process-budget dependency, and unavailable global-free data degrades to
+///     the build + hardware axes.
 /// </summary>
 public sealed class InferenceInvalidationEvaluatorTests
 {
@@ -24,7 +25,8 @@ public sealed class InferenceInvalidationEvaluatorTests
     public async Task Invalidation_OnBuildChange_MarksStale()
     {
         // Active installed tag differs from the frozen build → stale on the build axis (hardware/VRAM match otherwise).
-        var evaluator = BuildEvaluator(installedTag: "b9999", hardware: NvidiaProfile(24 * Gb), probeFreeVram: null);
+        var evaluator = BuildEvaluator(installedTag: "b9999",
+            hardware: NvidiaProfile(24 * Gb, availableVramBytes: 8 * Gb));
 
         var stale = await evaluator.IsStaleAsync(FrozenRecord(FrozenBuild, freeVramAtFreeze: 8 * Gb), CancellationToken.None);
 
@@ -32,51 +34,150 @@ public sealed class InferenceInvalidationEvaluatorTests
     }
 
     [Test]
-    public async Task Invalidation_OnLowerFreeVram_MarksStale()
+    public async Task Invalidation_OnLowerGlobalFreeVram_MarksStale()
     {
-        // Build + hardware match; live free VRAM (4 GB) has dropped below the frozen baseline (8 GB) → stale.
-        var evaluator = BuildEvaluator(installedTag: FrozenBuild, hardware: NvidiaProfile(24 * Gb), probeFreeVram: 4 * Gb);
+        var evaluator = BuildEvaluator(installedTag: FrozenBuild,
+            hardware: NvidiaProfile(24 * Gb, availableVramBytes: 4 * Gb));
 
-        var stale = await evaluator.IsStaleAsync(FrozenRecord(FrozenBuild, freeVramAtFreeze: 8 * Gb), CancellationToken.None);
+        var profile = FrozenRecord(FrozenBuild, freeVramAtFreeze: 8 * Gb) with
+        {
+            ProcessBudgetVramAtFreezeBytes = 20 * Gb
+        };
+        var stale = await evaluator.IsStaleAsync(profile, CancellationToken.None);
 
         AssertEx.True(stale);
+    }
+
+    [Test]
+    public async Task Invalidation_RefreshesHardwareAndUsesRefreshedLowerGlobalFreeVram()
+    {
+        var cachedHardware = NvidiaProfile(24 * Gb, availableVramBytes: 8 * Gb);
+        var refreshedHardware = NvidiaProfile(24 * Gb, availableVramBytes: 4 * Gb);
+        var hardwareProfiler = Substitute.For<IHardwareProfiler>();
+        hardwareProfiler.GetProfileAsync(forceRefresh: false, Arg.Any<CancellationToken>())
+                        .Returns(Task.FromResult(cachedHardware));
+        hardwareProfiler.GetProfileAsync(forceRefresh: true, Arg.Any<CancellationToken>())
+                        .Returns(Task.FromResult(refreshedHardware));
+        var evaluator = BuildEvaluator(FrozenBuild, hardwareProfiler);
+
+        var stale = await evaluator.IsStaleAsync(
+            FrozenRecord(FrozenBuild, freeVramAtFreeze: 8 * Gb),
+            CancellationToken.None);
+
+        AssertEx.True(stale);
+        await hardwareProfiler.Received(1)
+                              .GetProfileAsync(forceRefresh: true, Arg.Any<CancellationToken>());
+        await hardwareProfiler.DidNotReceive()
+                              .GetProfileAsync(forceRefresh: false, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Invalidation_FrozenGpuColdValidation_HasNoProcessBudgetProbeDependency()
+    {
+        var constructorDependsOnProcessBudgetProbe = typeof(InferenceInvalidationEvaluator)
+                                                    .GetConstructors()
+                                                    .SelectMany(static constructor =>
+                                                        constructor.GetParameters())
+                                                    .Any(static parameter =>
+                                                        parameter.ParameterType == typeof(IProcessVramBudgetProbe));
+        var evaluator = BuildEvaluator(installedTag: FrozenBuild,
+            hardware: NvidiaProfile(24 * Gb, availableVramBytes: 8 * Gb));
+
+        var profile = FrozenRecord(FrozenBuild, freeVramAtFreeze: 8 * Gb) with
+        {
+            ProcessBudgetVramAtFreezeBytes = 8 * Gb
+        };
+        var stale = await evaluator.IsStaleAsync(profile, CancellationToken.None);
+
+        AssertEx.False(constructorDependsOnProcessBudgetProbe);
+        AssertEx.False(stale);
     }
 
     [Test]
     public async Task Invalidation_WhenProbeUnknown_DegradesToBuildAndHwOnly()
     {
         // Probe returns null (unknown): the live-VRAM check is skipped, so a matching build + matching hardware is NOT stale.
-        var evaluator = BuildEvaluator(installedTag: FrozenBuild, hardware: NvidiaProfile(24 * Gb), probeFreeVram: null);
+        var evaluator = BuildEvaluator(installedTag: FrozenBuild,
+            hardware: NvidiaProfile(24 * Gb, availableVramBytes: null));
 
         var stale = await evaluator.IsStaleAsync(FrozenRecord(FrozenBuild, freeVramAtFreeze: 8 * Gb), CancellationToken.None);
 
         AssertEx.False(stale);
     }
 
-    private static InferenceInvalidationEvaluator BuildEvaluator(string installedTag, HardwareProfile hardware, long? probeFreeVram)
+    [Test]
+    public async Task Invalidation_CpuProfile_IgnoresUnrelatedGpuPressure()
+    {
+        var evaluator = BuildEvaluator(installedTag: FrozenBuild,
+            hardware: NvidiaProfile(24 * Gb, availableVramBytes: 2 * Gb));
+        var profile = FrozenRecord(FrozenBuild, freeVramAtFreeze: 8 * Gb) with
+        {
+            Backend = InferenceBackends.Cpu
+        };
+
+        var stale = await evaluator.IsStaleAsync(profile, CancellationToken.None);
+
+        AssertEx.False(stale);
+    }
+
+    [Test]
+    public async Task Invalidation_LegacyProfileWithoutFingerprint_IsStale()
+    {
+        var evaluator = BuildEvaluator(installedTag: FrozenBuild,
+            hardware: NvidiaProfile(24 * Gb, availableVramBytes: 8 * Gb));
+        var legacy = FrozenRecord(FrozenBuild, freeVramAtFreeze: 8 * Gb) with
+        {
+            LaunchPolicyFingerprintVersion = null,
+            LaunchPolicyFingerprint = null
+        };
+
+        var stale = await evaluator.IsStaleAsync(legacy, CancellationToken.None);
+
+        AssertEx.True(stale);
+    }
+
+    private static InferenceInvalidationEvaluator BuildEvaluator(string installedTag,
+        HardwareProfile hardware)
+    {
+        var hardwareProfiler = Substitute.For<IHardwareProfiler>();
+        hardwareProfiler.GetProfileAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                        .Returns(Task.FromResult(hardware));
+
+        return BuildEvaluator(installedTag, hardwareProfiler);
+    }
+
+    private static InferenceInvalidationEvaluator BuildEvaluator(string installedTag,
+        IHardwareProfiler hardwareProfiler)
     {
         var installedStore = Substitute.For<IInstalledRuntimeStore>();
         installedStore.ReadAsync(Arg.Any<CancellationToken>())
                       .Returns(Task.FromResult<InstalledRuntimeState?>(new InstalledRuntimeState(installedTag, "llama.zip", "deadbeef", GpuVariant.Cuda, DateTimeOffset.UnixEpoch)));
 
-        var hardwareProfiler = Substitute.For<IHardwareProfiler>();
-        hardwareProfiler.GetProfileAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>())
-                        .Returns(Task.FromResult(hardware));
+        var modelStore = Substitute.For<IGgufModelStore>();
+        modelStore.ResolveModelFilePathAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                  .Returns(Task.FromResult<string?>("/models/model.gguf"));
 
-        var probe = Substitute.For<IAvailableVramProbe>();
-        probe.TryGetFreeVramBytesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-             .Returns(Task.FromResult(probeFreeVram));
+        var fingerprintProvider = Substitute.For<ILaunchPolicyFingerprintProvider>();
+        fingerprintProvider.MatchesAsync(Arg.Any<InferenceProfileRecord>(),
+                               Arg.Any<string>(),
+                               Arg.Any<CancellationToken>())
+                           .Returns(Task.FromResult(true));
 
-        return new InferenceInvalidationEvaluator(installedStore, hardwareProfiler, probe, NullLogger<InferenceInvalidationEvaluator>.Instance);
+        return new InferenceInvalidationEvaluator(installedStore,
+            modelStore,
+            fingerprintProvider,
+            hardwareProfiler,
+            NullLogger<InferenceInvalidationEvaluator>.Instance);
     }
 
-    private static HardwareProfile NvidiaProfile(long vramBytes)
+    private static HardwareProfile NvidiaProfile(long vramBytes, long? availableVramBytes)
     {
         return new HardwareProfile
         {
             TotalRamBytes = 64 * Gb,
             AvailableRamBytes = 48 * Gb,
             VramBytes = vramBytes,
+            AvailableVramBytes = availableVramBytes,
             VramKnown = true,
             GpuVendor = GpuVendor.Nvidia,
             GpuAccelAvailable = true,
@@ -104,10 +205,12 @@ public sealed class InferenceInvalidationEvaluatorTests
             NParams: 7_000_000_000,
             IsMoe: false,
             ExpertCount: null,
-            FreeVramAtFreezeBytes: freeVramAtFreeze,
+            GlobalFreeVramAtFreezeBytes: freeVramAtFreeze,
             Status: InferenceProfileStatus.Frozen,
             BenchmarkSnapshotId: Guid.NewGuid(),
             CreatedAtUtc: 0,
-            UpdatedAtUtc: 0);
+            UpdatedAtUtc: 0,
+            LaunchPolicyFingerprintVersion: LaunchPolicyFingerprintProvider.CurrentVersion,
+            LaunchPolicyFingerprint: "fingerprint");
     }
 }

@@ -1,4 +1,4 @@
-import { Alert, Badge, Button, Card, Group, Loader, Select, Stack, Table, Text, TextInput, Title, Tooltip } from "@mantine/core";
+import { Alert, Badge, Button, Card, Group, Loader, Select, Stack, Switch, Table, Text, TextInput, Title, Tooltip } from "@mantine/core";
 import { IconAlertTriangle, IconBolt, IconInfoCircle, IconPlayerPlay, IconSettings, IconSnowflake, IconTrash } from "@tabler/icons-react";
 import { Fragment, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -46,17 +46,19 @@ export function InferenceProfilePanel() {
 	const invalidate = useInvalidateInferenceProfile();
 
 	const [modelName, setModelName] = useState("");
-	// `role` is the llama-server ModelRole on the wire — only "chat" or "embedding" (the backend rejects anything else).
+	// `role` is the llama-server ModelRole on the wire.
 	const [role, setRole] = useState<string>("chat");
+	const [allowPreSpawnVramPressure, setAllowPreSpawnVramPressure] = useState(false);
 	// Ephemeral, per-row benchmark outcomes keyed by profile id — enriches the outcome line + renders the metrics card.
 	const [benchmarkResults, setBenchmarkResults] = useState<Record<string, InferenceBenchmarkResult>>({});
 
 	const profiles = profilesQuery.data ?? [];
 
-	// Only the two llama-server roles are valid explore targets (chat vs embedding); the backend parses exactly these.
+	// Keep the operator surface aligned with every llama-server role accepted by the backend.
 	const roleData = [
 		{ value: "chat", label: t("pages.modelFit.inferenceProfiles.explore.roleChat", "Chat") },
 		{ value: "embedding", label: t("pages.modelFit.inferenceProfiles.explore.roleEmbedding", "Embedding") },
+		{ value: "reranker", label: t("pages.modelFit.inferenceProfiles.explore.roleReranker", "Reranker") },
 	];
 
 	const handleExplore = (): void => {
@@ -81,7 +83,7 @@ export function InferenceProfilePanel() {
 
 	const handleBenchmark = (profile: InferenceProfileView): void => {
 		benchmark.mutate(
-			{ profileId: profile.id },
+			{ profileId: profile.id, allowPreSpawnVramPressure },
 			{
 				onSuccess: (result) => {
 					setBenchmarkResults((previous) => ({ ...previous, [profile.id]: result }));
@@ -160,6 +162,21 @@ export function InferenceProfilePanel() {
 					</Button>
 				</Group>
 
+				<Switch
+					checked={allowPreSpawnVramPressure}
+					onChange={(event) => setAllowPreSpawnVramPressure(event.currentTarget.checked)}
+					color="orange"
+					label={t(
+						"pages.modelFit.inferenceProfiles.allowPreSpawnVramPressure.label",
+						"Allow benchmarks despite existing VRAM pressure",
+					)}
+					description={t(
+						"pages.modelFit.inferenceProfiles.allowPreSpawnVramPressure.description",
+						"Operator override: bypasses only the pre-spawn ambient-pressure gate. New pressure caused during the benchmark still invalidates the run.",
+					)}
+					data-testid="inference-profile-allow-pre-spawn-vram-pressure"
+				/>
+
 				{profilesQuery.isLoading ? (
 					<Group gap="sm">
 						<Loader size="sm" />
@@ -194,7 +211,7 @@ export function InferenceProfilePanel() {
 								{profiles.map((profile) => {
 									const result = benchmarkResults[profile.id];
 									const tokensPerSecond = result?.metrics?.tokensPerSecond ?? null;
-									const vramBytes = profile.frozenVramBytes ?? result?.metrics?.vramAfterBytes ?? null;
+									const vramBytes = profile.frozenGlobalFreeVramBytes ?? result?.metrics?.globalFreeVramAfterBytes ?? null;
 									const summary = formatProfileOutcomeSummary(tokensPerSecond, vramBytes);
 									const canFreeze = profile.hasBenchmark || result !== undefined;
 									const isBenchmarking = benchmark.isPending && benchmark.variables?.profileId === profile.id;
@@ -237,6 +254,40 @@ export function InferenceProfilePanel() {
 														{profile.quant ? (
 															<Text size="xs" c="dimmed">
 																{profile.quant}
+															</Text>
+														) : null}
+														{profile.launchPolicyFingerprint && profile.launchPolicyFingerprintVersion !== null ? (
+															<Text
+																size="xs"
+																c="dimmed"
+																data-testid={`inference-profile-fingerprint-${profile.id}`}
+															>
+																{t(
+																	"pages.modelFit.inferenceProfiles.policyFingerprint",
+																	"Policy v{{version}} · {{fingerprint}}",
+																	{
+																		version: profile.launchPolicyFingerprintVersion,
+																		fingerprint: profile.launchPolicyFingerprint.slice(0, 8),
+																	},
+																)}
+															</Text>
+														) : null}
+														{profile.frozenGlobalFreeVramBytes !== null || profile.frozenProcessBudgetVramBytes !== null ? (
+															<Text size="xs" c="dimmed" data-testid={`inference-profile-freeze-vram-${profile.id}`}>
+																{t(
+																	"pages.modelFit.inferenceProfiles.freezeVramSummary",
+																	"Global free {{globalFree}} · process budget {{processBudget}}",
+																	{
+																		globalFree:
+																			profile.frozenGlobalFreeVramBytes === null
+																				? t("pages.modelFit.inferenceProfiles.metrics.unknown", "Unknown")
+																				: `${(profile.frozenGlobalFreeVramBytes / 1024 ** 3).toFixed(1)} GB`,
+																		processBudget:
+																			profile.frozenProcessBudgetVramBytes === null
+																				? t("pages.modelFit.inferenceProfiles.metrics.unknown", "Unknown")
+																				: `${(profile.frozenProcessBudgetVramBytes / 1024 ** 3).toFixed(1)} GB`,
+																	},
+																)}
 															</Text>
 														) : null}
 														{profile.isMoe ? (

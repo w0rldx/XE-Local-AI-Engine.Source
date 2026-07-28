@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Architecture;
 
 using System.Reflection;
 using NetArchTest.Rules;
+using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Capabilities;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Contracts;
@@ -34,6 +35,7 @@ public sealed class LayerDependencyTests
     private const string CapabilitiesNamespace = "XE_Local_AI_Engine.Providers.Capabilities";
     private const string StableDiffusionCppNamespace = "XE_Local_AI_Engine.Providers.StableDiffusionCpp";
     private const string AbstractionsNamespace = "XE_Local_AI_Engine.Providers.Abstractions";
+    private const string AiAgentNamespace = "XE_Local_AI_Engine.AI.Agent";
 
     // Marker types anchor each assembly so we test the real compiled IL, not a
     // namespace string. Every marker is a verified public type in its assembly.
@@ -45,6 +47,7 @@ public sealed class LayerDependencyTests
     private static readonly Assembly StableDiffusionCppAssembly = typeof(IStableDiffusionBinaryManager).Assembly;
     private static readonly Assembly AbstractionsAssembly = typeof(ILocalModelProvider).Assembly;
     private static readonly Assembly ContractsAssembly = typeof(MessageRole).Assembly;
+    private static readonly Assembly AiAgentAssembly = typeof(IInvocationAgentFactory).Assembly;
 
     [Test]
     public void OllamaProvider_DoesNotDependOnApplicationPersistenceHostOrSiblingProviders()
@@ -149,6 +152,21 @@ public sealed class LayerDependencyTests
             HuggingFaceNamespace,
             CodexOAuthNamespace,
             CapabilitiesNamespace);
+    }
+
+    [Test]
+    public void AiAgent_DoesNotDependOnApplicationPersistenceHostOrConcreteProviders()
+    {
+        AssertNoDependency(AiAgentAssembly,
+            AiAgentNamespace,
+            ClientNamespace,
+            PersistenceNamespace,
+            OllamaNamespace,
+            LlamaServerNamespace,
+            HuggingFaceNamespace,
+            CodexOAuthNamespace,
+            CapabilitiesNamespace,
+            StableDiffusionCppNamespace);
     }
 
     /// <summary>

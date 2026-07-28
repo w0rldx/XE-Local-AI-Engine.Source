@@ -6,11 +6,15 @@ namespace XE_Local_AI_Engine.Client.Services.Knowledge;
 /// </summary>
 /// <param name="DocumentId">The owning document.</param>
 /// <param name="EmbeddingModel">Model id recorded on the document row and every vector row (the search filter key).</param>
+/// <param name="VectorIdentity">Canonical model + transform algorithm/version + width identity recorded on the document and vectors.</param>
+/// <param name="VectorDimension">Width encoded by <paramref name="VectorIdentity" /> and shared by every chunk vector.</param>
 /// <param name="Sections">Sections in document order; the writer generates a GUID per section.</param>
 /// <param name="Chunks">Chunks in global order, each with its embedding blob.</param>
 public sealed record KnowledgeIndexInput(
     Guid DocumentId,
     string EmbeddingModel,
+    string VectorIdentity,
+    int VectorDimension,
     IReadOnlyList<KnowledgeChunkingSection> Sections,
     IReadOnlyList<KnowledgeIndexChunk> Chunks);
 

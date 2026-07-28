@@ -22,7 +22,17 @@ public sealed class LlamaServerExternalEndpointOptions
     public Uri? Resolve(string modelName, ModelRole role)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
-        var map = role == ModelRole.Embedding ? EmbeddingEndpointsByModel : ChatEndpointsByModel;
+        var map = role switch
+        {
+            ModelRole.Chat => ChatEndpointsByModel,
+            ModelRole.Embedding => EmbeddingEndpointsByModel,
+            ModelRole.Reranker => null,
+            _ => null
+        };
+        if (map is null)
+        {
+            return null;
+        }
         return map.TryGetValue(modelName, out var uri) ? uri : null;
     }
 }

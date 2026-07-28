@@ -5,13 +5,16 @@ using System.Globalization;
 using System.Text.Json;
 
 /// <summary>Outcome of validating (and coercing) a model's tool arguments against the tool's JSON schema.</summary>
-internal readonly record struct ToolArgumentValidation(bool IsValid, string? Reason)
+internal readonly record struct ToolArgumentValidation(bool IsValid, bool WasCoerced, string? Reason)
 {
-    public static ToolArgumentValidation Valid { get; } = new(true, null);
+    public static ToolArgumentValidation Valid(bool wasCoerced = false)
+    {
+        return new ToolArgumentValidation(true, wasCoerced, null);
+    }
 
     public static ToolArgumentValidation Invalid(string reason)
     {
-        return new ToolArgumentValidation(false, reason);
+        return new ToolArgumentValidation(false, false, reason);
     }
 }
 
@@ -48,14 +51,15 @@ internal static class ToolArgumentValidator
         // than inventing constraints the tool never declared.
         if (schema.ValueKind != JsonValueKind.Object)
         {
-            return ToolArgumentValidation.Valid;
+            return ToolArgumentValidation.Valid();
         }
 
         var hasProperties = schema.TryGetProperty("properties", out var properties) && properties.ValueKind == JsonValueKind.Object;
+        var wasCoerced = false;
 
         if (hasProperties)
         {
-            Coerce(properties, arguments);
+            wasCoerced = Coerce(properties, arguments);
         }
 
         if (TryFindRequiredViolation(schema, arguments, out var requiredReason))
@@ -66,7 +70,7 @@ internal static class ToolArgumentValidator
         if (!hasProperties)
         {
             // Nothing more to check without a declared property map.
-            return ToolArgumentValidation.Valid;
+            return ToolArgumentValidation.Valid(wasCoerced);
         }
 
         if (TryFindTypeViolation(properties, arguments, out var typeReason))
@@ -79,11 +83,12 @@ internal static class ToolArgumentValidator
             return ToolArgumentValidation.Invalid(unknownReason);
         }
 
-        return ToolArgumentValidation.Valid;
+        return ToolArgumentValidation.Valid(wasCoerced);
     }
 
-    private static void Coerce(JsonElement properties, IDictionary<string, object?> arguments)
+    private static bool Coerce(JsonElement properties, IDictionary<string, object?> arguments)
     {
+        var wasCoerced = false;
         foreach (var key in arguments.Keys.ToList())
         {
             if (!properties.TryGetProperty(key, out var propertySchema))
@@ -107,6 +112,7 @@ internal static class ToolArgumentValidator
                 {
                     value
                 };
+                wasCoerced = true;
                 continue;
             }
 
@@ -125,6 +131,7 @@ internal static class ToolArgumentValidator
             if (targets.Contains("boolean", StringComparer.Ordinal) && TryParseBoolean(text, out var parsedBool))
             {
                 arguments[key] = parsedBool;
+                wasCoerced = true;
                 continue;
             }
 
@@ -134,8 +141,11 @@ internal static class ToolArgumentValidator
             if (wantsNumber && TryParseNumber(text, wantsInteger, out var parsedNumber))
             {
                 arguments[key] = parsedNumber;
+                wasCoerced = true;
             }
         }
+
+        return wasCoerced;
     }
 
     private static bool TryFindRequiredViolation(JsonElement schema, IDictionary<string, object?> arguments, out string reason)

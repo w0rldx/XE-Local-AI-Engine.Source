@@ -21,15 +21,17 @@ public interface IInferenceProfileStore
 
     /// <summary>
     ///     Transitions the profile with <paramref name="id" /> to <see cref="InferenceProfileStatus.Frozen" />, recording
-    ///     the justifying <paramref name="benchmarkSnapshotId" /> and the <paramref name="freeVramAtFreezeBytes" />
-    ///     invalidation baseline, in a single transaction (mirrors the transactional promotion of the snapshot store). Only
+    ///     the justifying <paramref name="benchmarkSnapshotId" />, global free VRAM invalidation baseline, and
+    ///     process-specific VRAM budget diagnostic, in a single transaction (mirrors the transactional promotion of the
+    ///     snapshot store). Only
     ///     a row currently in <see cref="InferenceProfileStatus.Explored" /> is frozen (the freeze gate): a successful
     ///     benchmark is the only justification. Returns the updated profile, or <c>null</c> when no row has that id or it is
     ///     not in <see cref="InferenceProfileStatus.Explored" />.
     /// </summary>
     Task<InferenceProfileRecord?> MarkFrozenAsync(Guid id,
         Guid benchmarkSnapshotId,
-        long? freeVramAtFreezeBytes,
+        long? globalFreeVramAtFreezeBytes,
+        long? processBudgetVramAtFreezeBytes,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -55,7 +57,8 @@ public interface IInferenceProfileStore
 /// <summary>
 ///     The args/attributes an explore run drafts for one profile key. <see cref="Role" /> is the integer value of
 ///     <c>ModelRole</c> (Chat=0, Embedding=1). The store owns <c>Id</c>, timestamps, <c>Status</c>,
-///     <c>BenchmarkSnapshotId</c> and <c>FreeVramAtFreezeBytes</c> (the last two are stamped on freeze, not here).
+    ///     <c>BenchmarkSnapshotId</c> and the explicit global-free/process-budget VRAM fields (the last two are stamped on
+    ///     freeze, not here).
 /// </summary>
 public sealed record InferenceProfileInput(
     string MachineKey,
@@ -73,7 +76,9 @@ public sealed record InferenceProfileInput(
     bool FlashAttn,
     long? NParams,
     bool IsMoe,
-    int? ExpertCount);
+    int? ExpertCount,
+    int LaunchPolicyFingerprintVersion,
+    string LaunchPolicyFingerprint);
 
 /// <summary>
 ///     Typed projection of a persisted inference profile. The replay args (<see cref="CtxSize" />,
@@ -99,8 +104,11 @@ public sealed record InferenceProfileRecord(
     long? NParams,
     bool IsMoe,
     int? ExpertCount,
-    long? FreeVramAtFreezeBytes,
     InferenceProfileStatus Status,
     Guid? BenchmarkSnapshotId,
     long CreatedAtUtc,
-    long UpdatedAtUtc);
+    long UpdatedAtUtc,
+    int? LaunchPolicyFingerprintVersion = null,
+    string? LaunchPolicyFingerprint = null,
+    long? GlobalFreeVramAtFreezeBytes = null,
+    long? ProcessBudgetVramAtFreezeBytes = null);

@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Invocation.Context;
 
 using Microsoft.Extensions.AI;
+using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 
 /// <summary>
 ///     Estimates the token footprint of chat messages for input-context budgeting. Deliberately an abstraction so the
@@ -15,4 +16,31 @@ public interface ITokenEstimator
 
     /// <summary>Estimates the total token count of an ordered message list.</summary>
     int EstimateTokens(IReadOnlyList<ChatMessage> messages);
+
+    int ResolveDivisor(string? modelName)
+    {
+        return TokenEstimatorCalibrationStore.DefaultCharsPerToken;
+    }
+
+    int EstimateTokensWithDivisor(ChatMessage message, int charsPerToken)
+    {
+        return EstimateTokens(message);
+    }
+
+    int EstimateTokensWithDivisor(IReadOnlyList<ChatMessage> messages, int charsPerToken)
+    {
+        return EstimateTokens(messages);
+    }
+
+    /// <summary>Estimates one message with the named model's calibration when available.</summary>
+    int EstimateTokens(ChatMessage message, string? modelName)
+    {
+        return EstimateTokens(message);
+    }
+
+    /// <summary>Estimates a message list with the named model's calibration when available.</summary>
+    int EstimateTokens(IReadOnlyList<ChatMessage> messages, string? modelName)
+    {
+        return EstimateTokens(messages);
+    }
 }

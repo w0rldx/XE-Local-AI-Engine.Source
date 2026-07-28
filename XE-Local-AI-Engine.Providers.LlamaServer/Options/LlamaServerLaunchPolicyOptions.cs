@@ -21,22 +21,36 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Options;
 /// </remarks>
 public sealed class LlamaServerLaunchPolicyOptions
 {
+    public const int ContextAllocationPolicyVersion = 2;
+    public static IReadOnlyList<int> ChatContextTiers { get; } = [65536, 32768, 16384, 8192, 4096, 2048];
+    public const int ContextAlignmentTokens = 256;
+    public const long MinimumGpuReserveBytes = 512L * 1024 * 1024;
+    public const long MinimumRamReserveBytes = 2L * 1024 * 1024 * 1024;
+    public const double GpuReserveFraction = 0.05;
+    public const double RamReserveFraction = 0.15;
     /// <summary>
-    ///     The chat-role context default (shared with the model advisor so its KV-fit math targets the same window the
-    ///     runtime actually launches). Public so the Application-layer fit-estimator call sites reference ONE value.
+    ///     The provider-only chat-role fallback used when the composed application's capacity-aware resolver is absent.
+    ///     The shipping application selects from <see cref="ChatContextTiers" /> instead of treating this as a fixed
+    ///     launch window.
     /// </summary>
     public const int DefaultChatContextTokens = 16384;
 
     /// <summary>
-    ///     Requested chat-role context window in tokens (<c>-c</c>). Default <see cref="DefaultChatContextTokens" />
-    ///     (16384): 2× the app-side conversation budget default (<c>ConversationContextBudgetOptions.DefaultContextTokens</c>
-    ///     = 8192), leaving headroom for tool-call loops and the reserved output window, while staying modest in VRAM at
-    ///     the 12–24 GB consumer-GPU target. Worked example — with q8_0 KV (1 byte/element) and a typical 8B model
+    ///     Provider-only requested chat-role context window in tokens (<c>-c</c>). Default
+    ///     <see cref="DefaultChatContextTokens" /> (16384): 2× the app-side conversation budget default
+    ///     (<c>ConversationContextBudgetOptions.DefaultContextTokens</c> = 8192), leaving headroom for tool-call loops
+    ///     and the reserved output window. The composed application ignores this fixed fallback and chooses the largest
+    ///     stable tier in <see cref="ChatContextTiers" />. Worked example — with q8_0 KV (1 byte/element) and a typical 8B model
     ///     (32 layers, GQA n_head_kv = 8, head_dim = 128): per-token KV = 2 × 32 × 8 × 128 × 1 B = 64 KiB, so 16384
     ///     tokens ≈ 1 GiB of KV cache — comfortably within budget. Was silently the model's full train context (e.g.
     ///     262144 ⇒ ~9 GB of KV+compute) before this policy, because no <c>-c</c> was emitted (AUD4-02). Must be positive.
     /// </summary>
     public int ChatContextTokens { get; init; } = DefaultChatContextTokens;
+
+    /// <summary>
+    /// Optional deterministic process-context override. It wins over hardware tiering but never over a frozen replay.
+    /// </summary>
+    public int? DeterministicContextTokensOverride { get; init; }
 
     /// <summary>
     ///     Requested embedding-role context window in tokens (<c>-c</c>). Default 2048 — embedding requests are single,
@@ -143,6 +157,11 @@ public sealed class LlamaServerLaunchPolicyOptions
         if (ChatContextTokens <= 0)
         {
             throw new InvalidOperationException($"{nameof(ChatContextTokens)} must be positive (was {ChatContextTokens}).");
+        }
+
+        if (DeterministicContextTokensOverride is { } contextOverride && contextOverride <= 0)
+        {
+            throw new InvalidOperationException($"{nameof(DeterministicContextTokensOverride)} must be positive when set (was {contextOverride}).");
         }
 
         if (EmbeddingContextTokens <= 0)

@@ -104,7 +104,11 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
             inputs.AttentionKeyLength,
             inputs.AttentionValueLength,
             inputs.SlidingWindow,
-            inputs.SlidingWindowPattern);
+            inputs.SlidingWindowPattern,
+            ContentIdentity: entry.Sha256 ?? $"{entry.SourceRevision}:{entry.FileName}:{entry.SizeBytes}",
+            inputs.Architecture,
+            inputs.ExpertCount,
+            inputs.ExpertUsedCount);
     }
 
     /// <inheritdoc />
@@ -359,7 +363,10 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
                 metadata.AttentionKeyLength,
                 metadata.AttentionValueLength,
                 metadata.SlidingWindow,
-                metadata.SlidingWindowPattern);
+                metadata.SlidingWindowPattern,
+                metadata.Architecture,
+                metadata.ExpertCount,
+                metadata.ExpertUsedCount);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -439,9 +446,13 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
         long? AttentionKeyLength = null,
         long? AttentionValueLength = null,
         long? SlidingWindow = null,
-        long? SlidingWindowPattern = null)
+        long? SlidingWindowPattern = null,
+        string? Architecture = null,
+        long? ExpertCount = null,
+        long? ExpertUsedCount = null)
     {
         public static GgufHeaderFootprintInputs Empty { get; } = new(ParamCount: null, BlockCount: null, AttentionHeadCount: null, AttentionHeadCountKV: null,
-            EmbeddingLength: null, ContextLength: null, AttentionKeyLength: null, AttentionValueLength: null, SlidingWindow: null, SlidingWindowPattern: null);
+            EmbeddingLength: null, ContextLength: null, AttentionKeyLength: null, AttentionValueLength: null, SlidingWindow: null, SlidingWindowPattern: null,
+            Architecture: null, ExpertCount: null, ExpertUsedCount: null);
     }
 }

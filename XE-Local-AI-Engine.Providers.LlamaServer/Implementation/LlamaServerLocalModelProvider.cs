@@ -4,6 +4,7 @@ using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
+using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 
@@ -32,17 +33,22 @@ public sealed class LlamaServerLocalModelProvider : ILocalModelProvider
     private readonly IGgufModelStore _modelStore;
     private readonly TimeSpan _networkTimeout;
     private readonly ILlamaServerProcessSupervisor _supervisor;
+    private readonly ITokenEstimatorCalibrationScheduler _calibrationScheduler;
 
     /// <summary>
     ///     Creates the provider over the process supervisor and the GGUF model store. The supervisor options supply the
     ///     explicit per-call HTTP network timeout (AUD4-18) the deferred chat/embedding clients pin on the built OpenAI
     ///     client; a null options bag falls back to the default policy.
     /// </summary>
-    public LlamaServerLocalModelProvider(ILlamaServerProcessSupervisor supervisor, IGgufModelStore modelStore, LlamaServerSupervisorOptions? options = null)
+    public LlamaServerLocalModelProvider(ILlamaServerProcessSupervisor supervisor,
+        IGgufModelStore modelStore,
+        LlamaServerSupervisorOptions? options = null,
+        ITokenEstimatorCalibrationScheduler? calibrationScheduler = null)
     {
         _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
         _modelStore = modelStore ?? throw new ArgumentNullException(nameof(modelStore));
         _networkTimeout = (options ?? new LlamaServerSupervisorOptions()).HttpNetworkTimeout;
+        _calibrationScheduler = calibrationScheduler ?? new NullTokenEstimatorCalibrationScheduler();
     }
 
     /// <inheritdoc />
@@ -119,6 +125,11 @@ public sealed class LlamaServerLocalModelProvider : ILocalModelProvider
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    ///     Warm-up is intentionally chat-only: it targets the interactive path. Pre-spawning embedding and reranker
+    ///     processes would consume shared loaded-process slots for work that may never arrive; those roles remain
+    ///     demand-started by their respective clients.
+    /// </remarks>
     public async Task WarmModelAsync(string modelName, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
@@ -144,16 +155,15 @@ public sealed class LlamaServerLocalModelProvider : ILocalModelProvider
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
 
-        // A model may have both a chat and an embedding process; evict both roles. Eviction is idempotent.
-        await _supervisor.EvictAsync(modelName, ModelRole.Chat, ct).ConfigureAwait(false);
-        await _supervisor.EvictAsync(modelName, ModelRole.Embedding, ct).ConfigureAwait(false);
+        // A model may have chat, embedding, and reranker processes; evict every defined role. Eviction is idempotent.
+        await _supervisor.EvictAllRolesAsync(modelName, ct).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
     public IChatClient CreateChatClient(LocalModelSelection selection)
     {
         ValidateSelection(selection);
-        return new DeferredLlamaServerChatClient(_supervisor, selection.ModelName, _networkTimeout);
+        return new DeferredLlamaServerChatClient(_supervisor, selection.ModelName, _networkTimeout, _calibrationScheduler);
     }
 
     /// <inheritdoc />

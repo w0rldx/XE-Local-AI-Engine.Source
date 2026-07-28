@@ -84,6 +84,9 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
         AssertEx.Equal(ggufName, provider.LastSelectedModelName);
         // The resolved (GGUF) name — not the configured name — is what the ingestion lane stamps as the vector scope key.
         AssertEx.Equal(ggufName, result.ResolvedModel);
+        AssertEx.Equal(512, result.Dimension);
+        AssertEx.Equal(512 * sizeof(float), result.Vectors[0].Length);
+        AssertEx.True(result.VectorIdentity.Contains("layernorm-population-eps1e-5-truncate-l2:v1:512", StringComparison.Ordinal));
     }
 
     [Test]

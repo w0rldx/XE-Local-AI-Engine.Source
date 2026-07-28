@@ -11,9 +11,11 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 public interface IInferenceProfileService
 {
     /// <summary>
-    ///     Explores <paramref name="modelName" /> for <paramref name="role" />: spawns one auto-fit llama-server, parses
-    ///     the fitted args (falling back to the GGUF native context when the banner is unparseable) and upserts the single
-    ///     Explored profile for the key. Rejects (no spawn) when the model is not a local GGUF.
+    ///     Explores <paramref name="modelName" /> for <paramref name="role" />: acquires fitted args from the sibling
+    ///     machine-readable <c>llama-fit-params</c> capability, spawns one auto-fit llama-server, and upserts the single
+    ///     Explored profile for the key. A GPU explore whose helper/startup evidence cannot prove concrete placement fails
+    ///     observably without persisting a partial profile; CPU explores retain the GGUF-context fallback because they do
+    ///     not replay GPU placement. Rejects (no spawn) when the model is not a local GGUF.
     /// </summary>
     Task<ExploreResult> ExploreAsync(string modelName, ModelRole role, CancellationToken ct);
 
@@ -23,6 +25,12 @@ public interface IInferenceProfileService
     ///     NOT freeze.
     /// </summary>
     Task<BenchmarkResult> BenchmarkAsync(Guid profileId, CancellationToken ct);
+
+    /// <summary>
+    ///     Benchmarks a profile with an explicit operator pressure override. The override affects only the pre-spawn
+    ///     ambient-pressure rejection; incremental pressure detected during the workload still invalidates the run.
+    /// </summary>
+    Task<BenchmarkResult> BenchmarkAsync(Guid profileId, bool allowPreSpawnVramPressure, CancellationToken ct);
 
     /// <summary>
     ///     Freezes the Explored profile <paramref name="profileId" /> — gated on its most recent successful benchmark.
@@ -58,11 +66,14 @@ public sealed record InferenceProfileView(
     long? NParams,
     bool IsMoe,
     int? ExpertCount,
-    long? FreeVramAtFreezeBytes,
     string Status,
     Guid? BenchmarkSnapshotId,
     long CreatedAtUtc,
-    long UpdatedAtUtc);
+    long UpdatedAtUtc,
+    int? LaunchPolicyFingerprintVersion = null,
+    string? LaunchPolicyFingerprint = null,
+    long? GlobalFreeVramAtFreezeBytes = null,
+    long? ProcessBudgetVramAtFreezeBytes = null);
 
 /// <summary>Outcome of an explore run: the drafted profile, or a sanitized reason when the model was rejected.</summary>
 public sealed record ExploreResult(bool Success, string? FailureReason, InferenceProfileView? Profile)

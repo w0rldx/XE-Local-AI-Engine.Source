@@ -62,8 +62,16 @@ internal sealed class InferenceProfileConfiguration : IEntityTypeConfiguration<I
         builder.Property(entity => entity.ExpertCount)
                .HasColumnName("expert_count");
 
-        builder.Property(entity => entity.FreeVramAtFreezeBytes)
-               .HasColumnName("free_vram_at_freeze_bytes");
+        builder.Property(entity => entity.LaunchPolicyFingerprintVersion)
+               .HasColumnName("launch_policy_fingerprint_version");
+
+        builder.Property(entity => entity.LaunchPolicyFingerprint)
+               .HasColumnName("launch_policy_fingerprint");
+
+        builder.Property(entity => entity.GlobalFreeVramAtFreezeBytes)
+               .HasColumnName("global_free_vram_at_freeze_bytes");
+        builder.Property(entity => entity.ProcessBudgetVramAtFreezeBytes)
+               .HasColumnName("process_budget_vram_at_freeze_bytes");
 
         builder.Property(entity => entity.Status)
                .HasColumnName("status");

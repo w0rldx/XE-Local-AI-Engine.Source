@@ -83,7 +83,7 @@ public sealed class InvocationAgentFactoryTests
     }
 
     [Test]
-    public async Task CreateAsync_WhenPerSendNumCtxSet_WinsOverTheEffectiveContextFallback()
+    public async Task CreateAsync_WhenPerSendNumCtxIsSmaller_PreservesIt()
     {
         // A per-send num_ctx override must win over the runtime effective-context fallback.
         var definition = new InvocationAgentDefinition("llama3.2:3b",
@@ -105,6 +105,32 @@ public sealed class InvocationAgentFactoryTests
         var additionalProperties = AssertEx.NotNull(chatOptions.AdditionalProperties);
         AssertEx.True(additionalProperties.TryGetValue<int>("num_ctx", out var numCtx));
         AssertEx.Equal(expected: 4096, numCtx);
+    }
+
+    [Test]
+    public async Task CreateAsync_WhenPerSendNumCtxExceedsProcess_ClampsIt()
+    {
+        var definition = new InvocationAgentDefinition("llama3.2:3b",
+            "Be helpful.",
+            [],
+            [],
+            Sampling: new InvocationSamplingOptions
+            {
+                NumCtx = 65536,
+                MaxOutputTokens = 32768
+            },
+            EffectiveContextTokens: 8192);
+
+        using var chatClient = new FakeChatClient();
+        var sut = CreateSut(chatClient);
+
+        await using var context = await sut.CreateAsync(definition);
+
+        var chatOptions = ((ChatClientAgentRunOptions)context.RunOptions!).ChatOptions!;
+        var additionalProperties = AssertEx.NotNull(chatOptions.AdditionalProperties);
+        AssertEx.True(additionalProperties.TryGetValue<int>("num_ctx", out var numCtx));
+        AssertEx.Equal(expected: 8192, numCtx);
+        AssertEx.Equal(expected: 8192, chatOptions.MaxOutputTokens);
     }
 
     [Test]
@@ -715,8 +741,9 @@ public sealed class InvocationAgentFactoryTests
         AssertEx.Equal(expected: -1L, chatOptions.Seed);
     }
 
-    // MAAI001: AgentSkillsProvider/AgentInlineSkill were [Experimental] in Microsoft.Agents.AI 1.8.0 (pinned version is
-    // now 1.13.0, not re-verified); the factory adopts them deliberately for progressive disclosure of agent skills, so
+    // MAAI001: AgentSkillsProvider/AgentInlineSkill were [Experimental] in Microsoft.Agents.AI 1.8.0. The scoped
+    // suppression remains at the pinned 1.15.0 until explicit graduation evidence is available; the factory adopts them
+    // deliberately for progressive disclosure of agent skills, so
     // this test references them under the same scoped suppression the production code uses.
 #pragma warning disable MAAI001
     [Test]
@@ -729,8 +756,7 @@ public sealed class InvocationAgentFactoryTests
         // (AIContextProviders is null per MAF when none are configured) — byte-identical to the pre-skills build.
         var noSkills = new InvocationAgentDefinition("qwen3.5:0.8b", "Be helpful.", [], []);
         await using var noSkillsContext = await sut.CreateAsync(noSkills);
-        var noSkillsAgent = noSkillsContext.Agent as ChatClientAgent
-                            ?? throw new AssertionException("Expected a ChatClientAgent.");
+        var noSkillsAgent = ResolveChatClientAgent(noSkillsContext.Agent);
         AssertEx.True(noSkillsAgent.AIContextProviders is null or { Count: 0 },
             "A no-skills agent must attach no context providers.");
 
@@ -748,8 +774,7 @@ public sealed class InvocationAgentFactoryTests
                 new InvocationSkill("log-triage", "Triage logs", "## Logs")
             ]);
         await using var withSkillsContext = await sut.CreateAsync(withSkills);
-        var withSkillsAgent = withSkillsContext.Agent as ChatClientAgent
-                              ?? throw new AssertionException("Expected a ChatClientAgent.");
+        var withSkillsAgent = ResolveChatClientAgent(withSkillsContext.Agent);
         var providers = AssertEx.NotNull(withSkillsAgent.AIContextProviders, "A skills agent must attach a context provider.");
         AssertEx.Equal(expected: 1, providers.Count);
         AssertEx.True(providers[0] is AgentSkillsProvider, "The attached provider must be an AgentSkillsProvider.");
@@ -772,11 +797,11 @@ public sealed class InvocationAgentFactoryTests
         var sut = CreateSut(chatClient);
 
         await using var context = await sut.CreateAsync(definition);
-        var agent = context.Agent as ChatClientAgent ?? throw new AssertionException("Expected a ChatClientAgent.");
+        var chatClientAgent = ResolveChatClientAgent(context.Agent);
 
-        await DriveAsync(agent, context);
+        await DriveAsync(context.Agent, context);
 
-        AssertOutboundInstructionContract(chatClient, instructions, expectedAgentName: "XeInvocation-qwen3.5:0.8b", agent);
+        AssertOutboundInstructionContract(chatClient, instructions, expectedAgentName: "XeInvocation-qwen3.5:0.8b", chatClientAgent);
     }
 
     // MAAI001: the skills definition drives the AgentSkillsProvider options ctor inside the factory; the wire assertion
@@ -799,21 +824,27 @@ public sealed class InvocationAgentFactoryTests
         var sut = CreateSut(chatClient);
 
         await using var context = await sut.CreateAsync(definition);
-        var agent = context.Agent as ChatClientAgent ?? throw new AssertionException("Expected a ChatClientAgent.");
+        var chatClientAgent = ResolveChatClientAgent(context.Agent);
 
-        await DriveAsync(agent, context);
+        await DriveAsync(context.Agent, context);
 
-        AssertOutboundInstructionContract(chatClient, instructions, expectedAgentName: "XeInvocation-qwen3.5:0.8b", agent);
+        AssertOutboundInstructionContract(chatClient, instructions, expectedAgentName: "XeInvocation-qwen3.5:0.8b", chatClientAgent);
     }
 
     // Mirrors the production run loop (InvocationRunner): replay the seed messages through the agent with the per-turn
     // run options, threadless, so the capturing client observes exactly what the model would receive.
-    private static async Task DriveAsync(ChatClientAgent agent, InvocationAgentContext context)
+    private static async Task DriveAsync(AIAgent agent, InvocationAgentContext context)
     {
         await foreach (var _ in agent.RunStreamingAsync(context.SeedMessages, session: null, context.RunOptions, CancellationToken.None))
         {
             // Drain the stream so the inner chat client is actually invoked.
         }
+    }
+
+    private static ChatClientAgent ResolveChatClientAgent(AIAgent agent)
+    {
+        return agent.GetService<ChatClientAgent>()
+               ?? throw new AssertionException("Expected the agent pipeline to expose its inner ChatClientAgent.");
     }
 
     // Verifies the instructions-delivery contract on the ACTUAL outbound GetStreamingResponseAsync call: the system

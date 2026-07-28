@@ -45,7 +45,7 @@ public sealed class CapacityServiceTests
         await harness.RuntimeAudit.DidNotReceive().GetAuditAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>());
         await harness.Supervisor.DidNotReceive().CheckHealthAsync(Arg.Any<CancellationToken>());
         await harness.FootprintProvider.DidNotReceive()
-                     .ResolveFootprintAsync(Arg.Any<string>(), Arg.Any<HardwareProfile>(), Arg.Any<CancellationToken>());
+                     .ResolveFootprintAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<HardwareProfile>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -54,7 +54,7 @@ public sealed class CapacityServiceTests
         var harness = new Harness
         {
             Profile = GpuProfile(64 * Gb),
-            Footprint = ModelFootprint.Known(4 * Gb)
+            Footprint = GpuFootprint(4 * Gb)
         };
         var service = harness.Build();
 
@@ -63,7 +63,7 @@ public sealed class CapacityServiceTests
         AssertEx.Equal(CapacityVerdict.Allow, decision.Verdict);
         AssertEx.NotNull(decision.Reservation);
         // The footprint was reserved in the ledger so a concurrent decision sees the in-flight load.
-        AssertEx.Equal(4 * Gb, harness.Ledger.ReservedBytes);
+        AssertEx.Equal(4 * Gb, harness.Ledger.Reserved.GpuBytes);
     }
 
     [Test]
@@ -73,7 +73,7 @@ public sealed class CapacityServiceTests
         var harness = new Harness
         {
             Profile = GpuProfile(64 * Gb),
-            Footprint = ModelFootprint.Known(1 * Gb),
+            Footprint = GpuFootprint(1 * Gb),
             MaxLoadedProcesses = 2,
             RunningLlama =
             [
@@ -86,7 +86,7 @@ public sealed class CapacityServiceTests
         var decision = await service.DecideAsync(Model, ModelRole.Chat, CancellationToken.None);
 
         AssertEx.Equal(CapacityVerdict.RejectInsufficient, decision.Verdict);
-        AssertEx.Equal(0, harness.Ledger.ReservedBytes);
+        AssertEx.Equal(0, harness.Ledger.Reserved.GpuBytes);
     }
 
     [Test]
@@ -104,7 +104,7 @@ public sealed class CapacityServiceTests
         AssertEx.Equal(CapacityVerdict.QueueSameModel, decision.Verdict);
         // No fit math runs on the same-model path.
         await harness.FootprintProvider.DidNotReceive()
-                     .ResolveFootprintAsync(Arg.Any<string>(), Arg.Any<HardwareProfile>(), Arg.Any<CancellationToken>());
+                     .ResolveFootprintAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<HardwareProfile>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -113,7 +113,7 @@ public sealed class CapacityServiceTests
         var harness = new Harness
         {
             Profile = GpuProfile(4 * Gb),
-            Footprint = ModelFootprint.Known(40 * Gb)
+            Footprint = GpuFootprint(40 * Gb)
         };
         var service = harness.Build();
 
@@ -147,7 +147,7 @@ public sealed class CapacityServiceTests
         var harness = new Harness
         {
             Profile = CpuProfile(availableRam: 24 * Gb),
-            Footprint = ModelFootprint.Known(8 * Gb)
+            Footprint = CpuFootprint(8 * Gb)
         };
         var service = harness.Build();
 
@@ -164,7 +164,7 @@ public sealed class CapacityServiceTests
         var harness = new Harness
         {
             Profile = CpuProfile(availableRam: 10 * Gb),
-            Footprint = ModelFootprint.Known(8 * Gb),
+            Footprint = CpuFootprint(8 * Gb),
             MaxLoadedProcesses = 5,
             RunningLlama = [new LlamaServerProcessHealth("resident/big:Q4_K_M", ModelRole.Chat, IsResponsive: true, "ok")]
         };
@@ -184,14 +184,14 @@ public sealed class CapacityServiceTests
         var harness = new Harness
         {
             Profile = GpuProfileWithFreeVram(64 * Gb, availableVramBytes: 4 * Gb),
-            Footprint = ModelFootprint.Known(8 * Gb)
+            Footprint = GpuFootprint(8 * Gb)
         };
         var service = harness.Build();
 
         var decision = await service.DecideAsync(Model, ModelRole.Chat, CancellationToken.None);
 
         AssertEx.Equal(CapacityVerdict.RejectInsufficient, decision.Verdict);
-        AssertEx.Equal(0, harness.Ledger.ReservedBytes);
+        AssertEx.Equal(0, harness.Ledger.Reserved.GpuBytes);
     }
 
     [Test]
@@ -201,25 +201,68 @@ public sealed class CapacityServiceTests
         var harness = new Harness
         {
             Profile = GpuProfileWithFreeVram(64 * Gb, availableVramBytes: 20 * Gb),
-            Footprint = ModelFootprint.Known(8 * Gb)
+            Footprint = GpuFootprint(8 * Gb)
         };
         var service = harness.Build();
 
         var decision = await service.DecideAsync(Model, ModelRole.Chat, CancellationToken.None);
 
         AssertEx.Equal(CapacityVerdict.Allow, decision.Verdict);
-        AssertEx.Equal(8 * Gb, harness.Ledger.ReservedBytes);
+        AssertEx.Equal(8 * Gb, harness.Ledger.Reserved.GpuBytes);
     }
 
     [Test]
-    public async Task Capacity_GpuMode_WhenFreeVramUnknown_FallsBackToTotalVram()
+    public async Task Capacity_GpuResidentFootprint_WithNoRamReservation_DoesNotRequireRamTelemetry()
+    {
+        // A fully GPU-resident llama.cpp process memory-maps the GGUF rather than committing a second copy of its
+        // weights in RAM. A zero-RAM footprint must therefore be decided solely against free VRAM even when the platform
+        // cannot provide a useful available-RAM measurement.
+        var harness = new Harness
+        {
+            Profile = GpuProfileWithFreeVram(64 * Gb, availableVramBytes: 20 * Gb) with
+            {
+                AvailableRamBytes = 0
+            },
+            Footprint = GpuFootprint(8 * Gb, ramBytes: 0)
+        };
+        var service = harness.Build();
+
+        var decision = await service.DecideAsync(Model, ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.Equal(CapacityVerdict.Allow, decision.Verdict);
+        AssertEx.Equal(new ResourceFootprint(8 * Gb, 0), harness.Ledger.Reserved);
+    }
+
+    [Test]
+    public async Task Capacity_NvidiaGpu_WhenFreeVramUnknown_Rejects()
+    {
+        // NVIDIA is the one backend where the profiler has an authoritative global-free reader. If that measurement is
+        // absent, falling back to total VRAM would hide resident processes and over-admit, so admission fails closed.
+        var harness = new Harness
+        {
+            Profile = GpuProfileWithFreeVram(64 * Gb, availableVramBytes: null),
+            Footprint = GpuFootprint(8 * Gb)
+        };
+        var service = harness.Build();
+
+        var decision = await service.DecideAsync(Model, ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.Equal(CapacityVerdict.RejectInsufficient, decision.Verdict);
+        AssertEx.Equal(ResourceFootprint.Zero, harness.Ledger.Reserved);
+    }
+
+    [Test]
+    public async Task Capacity_NonNvidiaGpu_WhenFreeVramUnknown_FallsBackToTotalVram()
     {
         // Free-VRAM probe unavailable (AvailableVramBytes null) → degraded fallback uses total VRAM minus the ledger.
         // Total = 64 GB, footprint = 8 GB → admit (the documented over-admission risk; process cap is the backstop).
         var harness = new Harness
         {
-            Profile = GpuProfileWithFreeVram(64 * Gb, availableVramBytes: null),
-            Footprint = ModelFootprint.Known(8 * Gb)
+            Profile = GpuProfileWithFreeVram(64 * Gb, availableVramBytes: null) with
+            {
+                GpuVendor = GpuVendor.Amd
+            },
+            Footprint = GpuFootprint(8 * Gb)
         };
         var service = harness.Build();
 
@@ -236,7 +279,7 @@ public sealed class CapacityServiceTests
         var harness = new Harness
         {
             Profile = GpuProfile(64 * Gb),
-            Footprint = ModelFootprint.Known(4 * Gb)
+            Footprint = GpuFootprint(4 * Gb)
         };
         var service = harness.Build();
 
@@ -254,7 +297,7 @@ public sealed class CapacityServiceTests
         var harness = new Harness
         {
             Profile = GpuProfile(10 * Gb),
-            Footprint = ModelFootprint.Known(6 * Gb),
+            Footprint = GpuFootprint(6 * Gb),
             MaxLoadedProcesses = 5
         };
         var service = harness.Build();
@@ -267,7 +310,7 @@ public sealed class CapacityServiceTests
         var rejected = decisions.Count(d => d.Verdict == CapacityVerdict.RejectInsufficient);
         AssertEx.Equal(1, allowed);
         AssertEx.Equal(1, rejected);
-        AssertEx.Equal(6 * Gb, harness.Ledger.ReservedBytes);
+        AssertEx.Equal(6 * Gb, harness.Ledger.Reserved.GpuBytes);
     }
 
     [Test]
@@ -277,7 +320,7 @@ public sealed class CapacityServiceTests
         {
             ProviderName = OllamaLocalModelProvider.OllamaProviderName,
             Profile = GpuProfile(4 * Gb),
-            Footprint = ModelFootprint.Known(40 * Gb),
+            Footprint = GpuFootprint(40 * Gb),
             RunningOllama =
             [
                 new RunningModelSnapshot("other-model", "other-model", ExpiresAt: null, SizeBytes: 3 * Gb, SizeVramBytes: 3 * Gb)
@@ -300,7 +343,7 @@ public sealed class CapacityServiceTests
         var harness = new Harness
         {
             Profile = CpuProfile(4 * Gb),
-            Footprint = ModelFootprint.Known(8 * Gb)
+            Footprint = CpuFootprint(8 * Gb)
         };
         var service = harness.Build();
 
@@ -322,7 +365,7 @@ public sealed class CapacityServiceTests
         var harness = new Harness
         {
             Profile = GpuProfile(16 * Gb),
-            Footprint = ModelFootprint.Known(4 * Gb)
+            Footprint = GpuFootprint(4 * Gb)
         };
         var service = harness.Build();
 
@@ -332,6 +375,12 @@ public sealed class CapacityServiceTests
         AssertEx.Equal(CapacityVerdict.Allow, decision.Verdict);
         decision.Reservation?.Dispose();
     }
+
+    private static ModelFootprint GpuFootprint(long gpuBytes, long ramBytes = Gb) =>
+        ModelFootprint.Known(new ResourceFootprint(gpuBytes, ramBytes));
+
+    private static ModelFootprint CpuFootprint(long ramBytes) =>
+        ModelFootprint.Known(new ResourceFootprint(GpuBytes: 0, ramBytes));
 
     // An empty-GPU profile: the measured free-VRAM baseline equals total, so existing fit expectations are unchanged.
     private static HardwareProfile GpuProfile(long vramBytes)
@@ -411,7 +460,7 @@ public sealed class CapacityServiceTests
                         }));
             Supervisor.CheckHealthAsync(Arg.Any<CancellationToken>())
                       .Returns(Task.FromResult(RunningLlama));
-            FootprintProvider.ResolveFootprintAsync(Arg.Any<string>(), Arg.Any<HardwareProfile>(), Arg.Any<CancellationToken>())
+            FootprintProvider.ResolveFootprintAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<HardwareProfile>(), Arg.Any<CancellationToken>())
                              .Returns(Task.FromResult(Footprint));
 
             var ollama = Substitute.For<IOllamaModelService>();

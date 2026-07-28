@@ -64,8 +64,17 @@ internal sealed record class InferenceProfile
     /// <summary>Expert count for an MoE model (<c>n_expert</c>), or null. Plaintext (structural).</summary>
     public int? ExpertCount { get; set; }
 
-    /// <summary>Free-VRAM baseline (bytes) captured at freeze; the live free-VRAM invalidation trigger compares against it.</summary>
-    public long? FreeVramAtFreezeBytes { get; set; }
+    /// <summary>Version of the launch-policy fingerprint schema used for this explored profile.</summary>
+    public int? LaunchPolicyFingerprintVersion { get; set; }
+
+    /// <summary>SHA-256 identity of the runtime, model revision, role and effective launch semantics.</summary>
+    public string? LaunchPolicyFingerprint { get; set; }
+
+    /// <summary>Global device-free VRAM captured at freeze. This is the only VRAM invalidation baseline.</summary>
+    public long? GlobalFreeVramAtFreezeBytes { get; set; }
+
+    /// <summary>Calling-process VRAM budget captured at freeze; diagnostic only and never an invalidation baseline.</summary>
+    public long? ProcessBudgetVramAtFreezeBytes { get; set; }
 
     /// <summary>Lifecycle status. Plaintext (structural).</summary>
     public InferenceProfileStatus Status { get; set; }

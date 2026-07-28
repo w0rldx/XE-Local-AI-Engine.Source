@@ -157,11 +157,11 @@ internal static class AddNodeModelRuntimeExtensions
         // Application → Providers (the interface is defined in Providers, implemented here). The resolver is a singleton
         // on the cold spawn path; it opens a fresh scope per resolve to reach the SCOPED IInferenceProfileStore.
         // IMachineKeyProvider + IInferenceInvalidationEvaluator are singletons it injects. This registers the
-        // UnknownAvailableVramProbe as a TryAddSingleton fallback only: the real --list-devices probe has shipped
-        // (LlamaListDevicesVramProbe, registered by the LlamaServer provider) and overrides this floor over the same
+        // UnknownProcessVramBudgetProbe as a TryAddSingleton fallback only: the real --list-devices probe has shipped
+        // (LlamaListDevicesProcessVramBudgetProbe, registered by the LlamaServer provider) and overrides this floor over the same
         // seam, so the invalidation evaluator's live-VRAM check runs on supported backends and only this fallback skips.
         builder.Services.AddSingleton<IMachineKeyProvider, MachineKeyProvider>();
-        builder.Services.TryAddSingleton<IAvailableVramProbe, UnknownAvailableVramProbe>();
+        builder.Services.TryAddSingleton<IProcessVramBudgetProbe, UnknownProcessVramBudgetProbe>();
         builder.Services.AddSingleton<IInferenceInvalidationEvaluator, InferenceInvalidationEvaluator>();
         builder.Services.AddSingleton<IInferenceProfileResolver, InferenceProfileResolver>();
 

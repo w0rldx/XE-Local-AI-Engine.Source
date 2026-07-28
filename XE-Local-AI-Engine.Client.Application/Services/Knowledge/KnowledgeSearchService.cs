@@ -109,14 +109,20 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
         var ftsRanked = (await ftsArm.ConfigureAwait(false))
                         .Select(hit => new RankFusionInput(hit.ChunkId, -hit.Bm25Score))
                         .ToList();
-        var (queryVector, resolvedModel) = await embedArm.ConfigureAwait(false);
+        var (queryVector, resolvedModel, vectorIdentity) = await embedArm.ConfigureAwait(false);
 
         var vectorRanked = new List<RankFusionInput>();
         if (!queryVector.IsEmpty)
         {
             var vectorStart = Stopwatch.GetTimestamp();
             var vectorHits = await _vectorSearchFactory.Create()
-                                                       .SearchAsync(queryVector, resolvedModel, candidatePool, request.DocumentId, cancellationToken)
+                                                       .SearchAsync(queryVector,
+                                                           resolvedModel,
+                                                           vectorIdentity,
+                                                           queryVector.Length,
+                                                           candidatePool,
+                                                           request.DocumentId,
+                                                           cancellationToken)
                                                        .ConfigureAwait(false);
             RecordStage("vector", vectorStart);
             vectorRanked = vectorHits.Select(hit => new RankFusionInput(hit.ChunkId, hit.Score)).ToList();
@@ -155,9 +161,13 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
         {
             var selection = selections[index];
 
-            // A hit only exists because the document has queryable chunks; when its catalog status is not Indexed
-            // those chunks are the last-known-good projection served during a pending/failed re-index. Disclose it.
-            var servingLastKnownGood = selection.Row.DocumentStatus != KnowledgeDocumentStatus.Indexed;
+            // A hit only exists because the document has queryable chunks. Disclose last-known-good projections both
+            // while a re-index is pending/failed and when an Indexed row still carries an older vector identity (for
+            // example immediately after a vector-policy migration, before the operator-triggered re-index completes).
+            var servingLastKnownGood =
+                selection.Row.DocumentStatus != KnowledgeDocumentStatus.Indexed
+                || (!queryVector.IsEmpty
+                    && !string.Equals(selection.Row.VectorIdentity, vectorIdentity, StringComparison.Ordinal));
 
             hits.Add(new KnowledgeSearchHit(selection.Row.DocumentId,
                 selection.ChunkId,
@@ -191,7 +201,9 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
 
     // Semantic arm wrapper: times the query-embedding round trip. Only calls the embedding provider — never the DB — so it
     // is safe to overlap with the lexical arm above.
-    private async Task<(ReadOnlyMemory<float> Vector, string ResolvedModel)> RunEmbedArmAsync(string query, CancellationToken cancellationToken)
+    private async Task<(ReadOnlyMemory<float> Vector, string ResolvedModel, string VectorIdentity)> RunEmbedArmAsync(
+        string query,
+        CancellationToken cancellationToken)
     {
         var start = Stopwatch.GetTimestamp();
         try
@@ -320,7 +332,9 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
     // Returns the query vector plus the resolved model name it was embedded with (the vector-search scope key). On the
     // degrade path the vector is empty and the resolved name falls back to the configured name (unused, since the vector
     // arm is skipped when the vector is empty).
-    private async Task<(ReadOnlyMemory<float> Vector, string ResolvedModel)> TryEmbedQueryAsync(string query, CancellationToken cancellationToken)
+    private async Task<(ReadOnlyMemory<float> Vector, string ResolvedModel, string VectorIdentity)> TryEmbedQueryAsync(
+        string query,
+        CancellationToken cancellationToken)
     {
         try
         {
@@ -331,14 +345,17 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
             // same resolved name as the scope key). A later same-dimension model swap changes this name and excludes the
             // now-incompatible old vectors instead of silently mis-comparing them. The confidence bit is irrelevant here —
             // search degrades to lexical-only on any embedding failure regardless of why the name is what it is.
-            var embeddingModelName = (await _embeddingModelResolver.ResolveAsync(provider, cancellationToken).ConfigureAwait(false)).Name;
-
-            // Cache hit: skip the embedding round trip (typically the dominant retrieval latency). The key is (resolved
-            // model, query), so a same-dimension model swap changes the resolved name → a different key → the stale
-            // cross-model vector is never returned. RAM-only + bounded + TTL'd; the raw query text is not retained (hashed).
-            if (_queryEmbeddingCache.TryGet(embeddingModelName, query, out var cachedVector))
+            var resolution = await _embeddingModelResolver.ResolveAsync(provider, cancellationToken).ConfigureAwait(false);
+            var embeddingModelName = resolution.Name;
+            var cacheFamilyIdentity = KnowledgeEmbeddingVectorPolicy.CreateCacheFamilyIdentity(resolution, _options.EmbeddingVectorMode);
+            if (_queryEmbeddingCache.TryGet(cacheFamilyIdentity, query, out var cached)
+                && KnowledgeEmbeddingVectorPolicy.MatchesCurrentPolicy(
+                    cached.VectorIdentity,
+                    cached.Vector.Length,
+                    resolution,
+                    _options.EmbeddingVectorMode))
             {
-                return (cachedVector, embeddingModelName);
+                return (cached.Vector, embeddingModelName, cached.VectorIdentity);
             }
 
             using var generator = provider.CreateEmbeddingGenerator(new LocalModelSelection
@@ -351,23 +368,26 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
             var generated = await generator.GenerateAsync([_prefixer.ForQuery(query)], options: null, cancellationToken).ConfigureAwait(false);
             if (generated.Count == 0)
             {
-                return (ReadOnlyMemory<float>.Empty, embeddingModelName);
+                return (ReadOnlyMemory<float>.Empty, embeddingModelName, KnowledgeEmbeddingVectorPolicy.LegacyIdentity);
             }
 
-            // No static dimension check here: the query is embedded by the SAME resolved model that keys the stored chunk
-            // vectors, and ManagedCosineVectorSearch skips any candidate whose width differs from the query (defense in
-            // depth). A model with a non-768 native width therefore searches correctly instead of silently degrading.
-            var queryVector = generated[0].Vector;
-            _queryEmbeddingCache.Store(embeddingModelName, query, queryVector);
-            return (queryVector, embeddingModelName);
+            var transformed = KnowledgeEmbeddingVectorPolicy.Transform(resolution, generated[0].Vector, _options.EmbeddingVectorMode);
+
+            // The pre-generation key isolates the resolved model and policy family. The value retains the exact canonical
+            // identity (including native width), which the read path validates before accepting a hit.
+            _queryEmbeddingCache.Store(
+                cacheFamilyIdentity,
+                query,
+                new KnowledgeQueryEmbeddingCacheEntry(transformed.Values, transformed.Identity));
+            return (transformed.Values, embeddingModelName, transformed.Identity);
         }
-        catch (Exception exception) when (exception is HttpRequestException or IOException or OllamaException or InvalidOperationException)
+        catch (Exception exception) when (exception is HttpRequestException or IOException or OllamaException or InvalidOperationException or KnowledgeIngestionException)
         {
             // Model not pulled / provider down / transport error / unregistered provider name. Degrade to lexical-only.
             // Log the exception type only — never its message, never the query.
             _logger.LogWarning("Knowledge search query embedding unavailable; returning lexical results only. Exception type: {ExceptionType}.",
                 exception.GetType().Name);
-            return (ReadOnlyMemory<float>.Empty, _options.EmbeddingModelName);
+            return (ReadOnlyMemory<float>.Empty, _options.EmbeddingModelName, KnowledgeEmbeddingVectorPolicy.LegacyIdentity);
         }
     }
 
@@ -407,7 +427,7 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
             }
 
             command.CommandText = $"""
-                                   SELECT c.chunk_id, c.document_id, c.chunk_index, c.content, c.heading_path, d.storage_path, d.status
+                                   SELECT c.chunk_id, c.document_id, c.chunk_index, c.content, c.heading_path, d.storage_path, d.status, d.vector_identity
                                    FROM knowledge_document_chunks c
                                    JOIN knowledge_documents d ON d.document_id = c.document_id
                                    WHERE c.chunk_id IN ({string.Join(", ", placeholders)});
@@ -425,7 +445,8 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
                     reader.GetString(3),
                     headingPath,
                     reader.GetString(5),
-                    ParseDocumentStatus(reader.GetString(6)));
+                    ParseDocumentStatus(reader.GetString(6)),
+                    reader.GetString(7));
             }
         }
 
@@ -456,7 +477,14 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
         return root.Length > 0 ? root[0] : storagePath;
     }
 
-    private sealed record HydratedChunk(Guid DocumentId, int ChunkIndex, string Content, string? HeadingPath, string StoragePath, KnowledgeDocumentStatus DocumentStatus);
+    private sealed record HydratedChunk(
+        Guid DocumentId,
+        int ChunkIndex,
+        string Content,
+        string? HeadingPath,
+        string StoragePath,
+        KnowledgeDocumentStatus DocumentStatus,
+        string VectorIdentity);
 
     // One selected candidate carried from ranking to hit-building: the chunk id, its hydrated row, and the score to
     // stamp on the hit (the RRF score on the fusion/degrade paths, the rerank relevance on the reranked path).

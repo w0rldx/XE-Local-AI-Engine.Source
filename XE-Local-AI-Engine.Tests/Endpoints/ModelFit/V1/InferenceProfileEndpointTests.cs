@@ -118,7 +118,8 @@ public sealed class InferenceProfileEndpointTests
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
 
-        await service.DidNotReceiveWithAnyArgs().BenchmarkAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        await service.DidNotReceiveWithAnyArgs()
+                     .BenchmarkAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
     }
 
     // ──────────────────────────────────────────────────────────────────────
@@ -178,11 +179,11 @@ public sealed class InferenceProfileEndpointTests
                        NParams: 12_000_000_000,
                        IsMoe: false,
                        ExpertCount: null,
-                       FreeVramAtFreezeBytes: 6_000_000_000,
                        Status: "Frozen",
                        BenchmarkSnapshotId: Guid.NewGuid(),
                        CreatedAtUtc: 1,
-                       UpdatedAtUtc: 2)
+                       UpdatedAtUtc: 2,
+                       GlobalFreeVramAtFreezeBytes: 6_000_000_000)
                ]);
 
         await using var factory = CreateFactory(service);

@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Capacity;
 
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+
 /// <summary>
 ///     The process-wide pending-footprint ledger and decide-commit gate behind the capacity service. It exists because
 ///     the byte budget is read from a live snapshot (hardware profile + running models) that does NOT yet reflect a
@@ -23,11 +25,11 @@ public interface IPendingFootprintLedger
     Task<IDisposable> EnterDecisionAsync(CancellationToken ct);
 
     /// <summary>Total bytes currently reserved by in-flight (admitted-not-yet-released) spawns. Read under the gate.</summary>
-    long ReservedBytes { get; }
+    ResourceFootprint Reserved { get; }
 
     /// <summary>
     ///     Reserves <paramref name="bytes" /> against the ledger and returns a handle that releases the reservation on
     ///     dispose (idempotent). Call only while holding the decision gate, after deciding the model fits.
     /// </summary>
-    IDisposable Reserve(long bytes);
+    IDisposable Reserve(ResourceFootprint footprint);
 }

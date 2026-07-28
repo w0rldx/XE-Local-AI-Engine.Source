@@ -1,0 +1,50 @@
+{
+  "schema_version": "1.0",
+  "name": "xe-local-inference-golden-v1",
+  "chat": {
+    "system": "You are a concise benchmarking assistant. Answer briefly and deterministically.",
+    "cold_user": "List three primary colors, comma separated.",
+    "warm_follow_up": "Now list three secondary colors, comma separated.",
+    "tool_user": "What is the current bench status? Call the bench_status tool to find out.",
+    "tool": {
+      "name": "bench_status",
+      "description": "Returns a fixed benchmark status payload for the deterministic tool-call round.",
+      "result": {
+        "status": "ok",
+        "phase": "benchmark"
+      }
+    },
+    "long_context_sentence": "The quick brown fox jumps over the lazy dog.",
+    "long_context_target_fraction": 0.75,
+    "seed": 0,
+    "temperature": 0
+  },
+  "embedding": {
+    "short": [
+      "A red fox crosses the winter field.",
+      "A database transaction commits atomically.",
+      "The user asks for a local weather summary.",
+      "Vector similarity retrieves semantically related text."
+    ],
+    "median": [
+      "The local inference runtime launches one process per model role and records exact model, runtime, backend, and hardware provenance before comparing repeated measurements.",
+      "A reproducible benchmark excludes warmups from statistics, preserves raw outputs, reports median and nearest-rank p95, and rejects results collected under external GPU pressure."
+    ],
+    "maximum_template": "Repeat this neutral sentence until the tokenizer reports the configured maximum chunk plus prefix overhead: local inference evidence must preserve every input token without truncation."
+  },
+  "reranker": {
+    "query": "How is a reproducible local inference benchmark validated?",
+    "documents": [
+      "Fix the model, quant, file hash, corpus, runtime binary, backend, hardware, launch vector, cache state, warmups, repeats, and statistical acceptance rule.",
+      "Choose whichever model is already warm and report the fastest single run.",
+      "Ignore free VRAM because process-visible memory is always identical to global free memory.",
+      "Keep raw evidence and mark unsupported hardware explicitly rather than inferring behavior from another backend."
+    ],
+    "expected_order": [
+      0,
+      3,
+      1,
+      2
+    ]
+  }
+}

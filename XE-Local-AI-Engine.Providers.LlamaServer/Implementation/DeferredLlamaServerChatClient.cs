@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.AI;
+using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 // Aliased (not a blanket `using OpenAI.Chat`) so OpenAI.Chat.ChatMessage never collides with the MEAI ChatMessage this
 // client's IChatClient signatures use — a blanket import makes ChatMessage ambiguous and breaks the interface impl.
@@ -53,15 +54,21 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
     private readonly string _modelName;
     private readonly TimeSpan _networkTimeout;
     private readonly ILlamaServerProcessSupervisor _supervisor;
+    private readonly ITokenEstimatorCalibrationScheduler _calibrationScheduler;
 
     private IChatClient? _inner;
+    private Uri? _innerEndpoint;
 
-    public DeferredLlamaServerChatClient(ILlamaServerProcessSupervisor supervisor, string modelName, TimeSpan networkTimeout)
+    public DeferredLlamaServerChatClient(ILlamaServerProcessSupervisor supervisor,
+        string modelName,
+        TimeSpan networkTimeout,
+        ITokenEstimatorCalibrationScheduler? calibrationScheduler = null)
     {
         _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
         _modelName = modelName;
         _networkTimeout = networkTimeout;
+        _calibrationScheduler = calibrationScheduler ?? new NullTokenEstimatorCalibrationScheduler();
     }
 
     public async Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages,
@@ -72,7 +79,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
         var healed = false;
         while (true)
         {
-            var inner = await EnsureInnerAsync(cancellationToken).ConfigureAwait(false);
+            var resolved = await EnsureInnerAsync(cancellationToken).ConfigureAwait(false);
 
             // Hold an inference lease for the duration of the request so a graceful operator eject waits for it to
             // finish before teardown. A refused lease is classified: an EVICTING process fails the request up front as
@@ -82,13 +89,15 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
             var acquisition = _supervisor.TryAcquireInferenceLease(_modelName, ModelRole.Chat);
             if (acquisition.ProcessEvicting)
             {
+                _calibrationScheduler.Invalidate(_modelName);
                 throw new LlamaServerModelEjectedException(ModelEjectingMessage);
             }
 
+            _calibrationScheduler.Schedule(_modelName, resolved.BaseAddress);
             var lease = acquisition.Lease;
             try
             {
-                return await inner.GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
+                return await resolved.Client.GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex) when (!cancellationToken.IsCancellationRequested && IsServerGone(ex))
             {
@@ -96,6 +105,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
                 // truthful, not a generic provider drop.
                 if (lease is { WasEjected: true })
                 {
+                    _calibrationScheduler.Invalidate(_modelName);
                     throw new LlamaServerModelEjectedException(ModelEjectedMessage, ex);
                 }
 
@@ -125,19 +135,21 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
         var healed = false;
         while (true)
         {
-            var inner = await EnsureInnerAsync(cancellationToken).ConfigureAwait(false);
+            var resolved = await EnsureInnerAsync(cancellationToken).ConfigureAwait(false);
 
             // Same refusal classification as the non-streaming path: an eject-in-progress fails the request before the
             // stream opens; only an absent/exited process streams leaseless and relies on the pre-first-chunk self-heal.
             var acquisition = _supervisor.TryAcquireInferenceLease(_modelName, ModelRole.Chat);
             if (acquisition.ProcessEvicting)
             {
+                _calibrationScheduler.Invalidate(_modelName);
                 throw new LlamaServerModelEjectedException(ModelEjectingMessage);
             }
 
+            _calibrationScheduler.Schedule(_modelName, resolved.BaseAddress);
             var lease = acquisition.Lease;
             var enumerator =
-                inner.GetStreamingResponseAsync(messages, options, cancellationToken).GetAsyncEnumerator(cancellationToken);
+                resolved.Client.GetStreamingResponseAsync(messages, options, cancellationToken).GetAsyncEnumerator(cancellationToken);
             var retry = false;
             try
             {
@@ -157,6 +169,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
                         // the drop happened before OR mid-stream.
                         if (lease is { WasEjected: true })
                         {
+                            _calibrationScheduler.Invalidate(_modelName);
                             throw new LlamaServerModelEjectedException(ModelEjectedMessage, ex);
                         }
 
@@ -258,27 +271,35 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
         return patched;
     }
 
-    private async Task<IChatClient> EnsureInnerAsync(CancellationToken ct)
+    private async Task<ResolvedChatClient> EnsureInnerAsync(CancellationToken ct)
     {
-        var existing = Volatile.Read(ref _inner);
-        if (existing is not null)
-        {
-            return existing;
-        }
+        // Resolve the CURRENT endpoint for every real request. Besides allowing the supervisor to cheaply confirm the
+        // process is live, this is the request-triggered due check for calibration; no timer ever polls a cached target.
+        var endpoint = await _supervisor.EnsureRunningAsync(_modelName, ModelRole.Chat, ct).ConfigureAwait(false);
 
         await _initGate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
             var current = Volatile.Read(ref _inner);
-            if (current is not null)
+            if (current is not null && _innerEndpoint == endpoint.BaseAddress)
             {
-                return current;
+                return new ResolvedChatClient(current, endpoint.BaseAddress);
             }
 
-            var endpoint = await _supervisor.EnsureRunningAsync(_modelName, ModelRole.Chat, ct).ConfigureAwait(false);
+            if (current is not null)
+            {
+                _calibrationScheduler.Invalidate(_modelName);
+                current.Dispose();
+            }
+
+            // The created adapter is transferred into _inner immediately and remains owned by this wrapper; both
+            // InvalidateInner and Dispose release it. CA2000 cannot follow that ownership through ResolvedChatClient.
+#pragma warning disable CA2000
             var built = LlamaServerOpenAIAdapterFactory.CreateChatClient(endpoint.BaseAddress, _modelName, _networkTimeout);
+#pragma warning restore CA2000
+            _innerEndpoint = endpoint.BaseAddress;
             Volatile.Write(ref _inner, built);
-            return built;
+            return new ResolvedChatClient(built, endpoint.BaseAddress);
         }
         finally
         {
@@ -291,8 +312,12 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
     private void InvalidateInner()
     {
         var stale = Interlocked.Exchange(ref _inner, null);
+        _innerEndpoint = null;
+        _calibrationScheduler.Invalidate(_modelName);
         stale?.Dispose();
     }
+
+    private readonly record struct ResolvedChatClient(IChatClient Client, Uri BaseAddress);
 
     // True when the exception chain indicates the target llama-server is unreachable (refused / connection error) — i.e.
     // the process is gone — rather than a model/runtime error. Walks the full chain (including AggregateException fan-out

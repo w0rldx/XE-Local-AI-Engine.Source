@@ -1,0 +1,71 @@
+{
+  "baseline": "$REPO/docs/performance/baselines/2026-07-26-e67d6697-cpu.json",
+  "candidate": "$REPO/docs/performance/baselines/2026-07-26-932cad7d-cpu.json",
+  "commands": {
+    "chat-pp-tg": {
+      "generation_tokens_per_second": {
+        "baseline_median": 6.26745,
+        "candidate_median": 6.33255,
+        "delta_percent": 1.0386999497403275
+      },
+      "prompt_tokens_per_second": {
+        "baseline_median": 6971.612154,
+        "candidate_median": 7187.467875,
+        "delta_percent": 3.09620954568093
+      },
+      "wall_elapsed_ms": {
+        "baseline_median": 21313.095,
+        "candidate_median": 21217.427,
+        "delta_percent": -0.4488695799460448
+      }
+    },
+    "embedding-pp": {
+      "embedding_tokens_per_second": {
+        "baseline_median": 22283.671574,
+        "candidate_median": 20037.058383,
+        "delta_percent": -10.081880732891833
+      },
+      "wall_elapsed_ms": {
+        "baseline_median": 670.625,
+        "candidate_median": 670.987,
+        "delta_percent": 0.05397949673811241
+      }
+    }
+  },
+  "framework_identity": {
+    "baseline": {
+      "command_trees": [],
+      "declaration": {
+        "maf_version": "1.13.0",
+        "mcp_version": "1.4.0",
+        "meai_version": "10.7.0",
+        "openai_version": "2.11.0",
+        "source_commit": "e67d669709169fefc4cffab444af66654526a8d8"
+      }
+    },
+    "candidate": {
+      "command_trees": [],
+      "declaration": {
+        "maf_version": "1.15.0",
+        "mcp_version": "1.4.1",
+        "meai_version": "10.8.1",
+        "openai_version": "2.12.0",
+        "source_commit": "932cad7dad8f1c6ee0e715c9eb0de92f5dab9e61"
+      }
+    }
+  },
+  "framework_identity_equal": false,
+  "generated_at_utc": "2026-07-27T00:01:29Z",
+  "identity_equal": true,
+  "kind": "inference-benchmark-comparison",
+  "sanitization": {
+    "replacements": [
+      {
+        "label": "$REPO"
+      }
+    ],
+    "source_sha256": "4fea5afce26e06b55bad8582a4119dab5808826f26e3a5591f0ae9b729bcde11"
+  },
+  "sanitized": true,
+  "schema_version": "1.0"
+}

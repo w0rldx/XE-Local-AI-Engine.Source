@@ -158,14 +158,22 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
         // the pre-sampling path — the no-override guarantee.
         ApplySamplingOptions(chatOptions, additionalProperties, definition.Sampling);
 
-        // AUD4-02: when the runtime reported an effective context window and no per-send num_ctx override already set the
-        // key, carry the effective window as num_ctx so the innermost provider-round budgeter sizes against the SAME
-        // window the outer conversation budgeter uses. A per-send override (written above) wins and is left in place.
+        // The request budget can never exceed the process that was actually launched. Preserve a smaller explicit
+        // num_ctx, but clamp a larger explicit/default budget to the effective process context.
         if (definition.EffectiveContextTokens is { } effectiveContext
-            && effectiveContext > 0
-            && !additionalProperties.ContainsKey(OllamaNumCtxKey))
+            && effectiveContext > 0)
         {
-            additionalProperties[OllamaNumCtxKey] = effectiveContext;
+            var requested = effectiveContext;
+            if (definition.Sampling?.NumCtx is { } explicitContext && explicitContext > 0)
+            {
+                requested = explicitContext;
+            }
+            var clampedContext = Math.Min(requested, effectiveContext);
+            additionalProperties[OllamaNumCtxKey] = clampedContext;
+            if (chatOptions.MaxOutputTokens is { } output)
+            {
+                chatOptions.MaxOutputTokens = Math.Min(output, clampedContext);
+            }
         }
 
         InvocationAgentContext context = new()
@@ -186,7 +194,8 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
     }
 
     /// <summary>
-    ///     Builds the turn's <see cref="ChatClientAgent" />. The agent is built with NO instructions on either path:
+    ///     Builds the turn's <see cref="ChatClientAgent" /> and wraps it with the approval-replay validator. The inner
+    ///     agent is built with NO instructions on either path:
     ///     the system instructions are delivered exactly once per request as the leading <see cref="ChatRole.System" />
     ///     seed message (<see cref="BuildSeedMessages" />, replayed by the invocation runner). Passing them to the
     ///     ctor's <c>instructions</c> parameter (or to <see cref="ChatOptions.Instructions" />) as well would
@@ -200,9 +209,9 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
     ///     (progressive disclosure); its skill-discovery tools are serviced by the same FunctionInvokingChatClient that
     ///     already services the agent's own tools. Constructor argument order is
     ///     (chatClient, instructions, name, description, tools, loggerFactory, services) — verified against
-    ///     Microsoft.Agents.AI 1.13.0; named arguments pin it.
+    ///     Microsoft.Agents.AI 1.15.0; named arguments pin it.
     /// </summary>
-    private ChatClientAgent BuildAgent(InvocationAgentDefinition definition, IList<AITool> tools)
+    private AIAgent BuildAgent(InvocationAgentDefinition definition, IList<AITool> tools)
     {
         var agentName = $"{_options.AgentNamePrefix}-{definition.ModelId}";
         const string agentDescription = "XE Local AI Engine worker invocation agent.";
@@ -210,19 +219,21 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
         if (definition.Skills is not { Count: > 0 } skills)
         {
             // No-skills path: instructions are NULL on the agent — they are carried once by the seed system message
-            // (see BuildSeedMessages). Named arguments pin the 1.13.0 ctor order so name/description land as identity
+            // (see BuildSeedMessages). Named arguments pin the 1.15.0 ctor order so name/description land as identity
             // and the model receives the instructions exactly once.
-            return new ChatClientAgent(_chatClient,
-                instructions: null,
-                name: agentName,
-                description: agentDescription,
-                tools: tools,
-                loggerFactory: _loggerFactory,
-                services: _serviceProvider);
+            return new ApprovalResponseValidatingAgent(
+                new ChatClientAgent(_chatClient,
+                    instructions: null,
+                    name: agentName,
+                    description: agentDescription,
+                    tools: tools,
+                    loggerFactory: _loggerFactory,
+                    services: _serviceProvider));
         }
 
         // MAAI001: Agent Skills (AgentSkillsProvider/AgentInlineSkill) shipped as [Experimental] in Microsoft.Agents.AI
-        // 1.8.0 (verified against the 1.8.0 .xml; pinned version is now 1.13.0, not re-verified). The surface (3-arg
+        // 1.8.0. The scoped MAAI001 suppression remains at the pinned 1.15.0 until explicit graduation evidence is
+        // available. The surface (3-arg
         // AgentInlineSkill + AgentSkill[] provider ctor) is the documented progressive-disclosure path; the no-skills
         // path above stays on the stable ctor, so the experimental surface is reached only when an agent has assigned
         // skills. Suppress is scoped to this block.
@@ -239,23 +250,24 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
 #pragma warning restore CA2000
 #pragma warning restore MAAI001
 
-        return new ChatClientAgent(_chatClient,
-            new ChatClientAgentOptions
-            {
-                Name = agentName,
-                Description = agentDescription,
-                // Instructions are NOT set here (Instructions null) — they are carried once by the seed system message,
-                // exactly as on the no-skills path, so the two paths deliver instructions identically. Only the agent's
-                // own tools ride these ChatOptions; the per-turn RunOptions.ChatOptions still carries model id / think /
-                // sampling.
-                ChatOptions = new ChatOptions
+        return new ApprovalResponseValidatingAgent(
+            new ChatClientAgent(_chatClient,
+                new ChatClientAgentOptions
                 {
-                    Tools = tools
+                    Name = agentName,
+                    Description = agentDescription,
+                    // Instructions are NOT set here (Instructions null) — they are carried once by the seed system message,
+                    // exactly as on the no-skills path, so the two paths deliver instructions identically. Only the agent's
+                    // own tools ride these ChatOptions; the per-turn RunOptions.ChatOptions still carries model id / think /
+                    // sampling.
+                    ChatOptions = new ChatOptions
+                    {
+                        Tools = tools
+                    },
+                    AIContextProviders = [skillsProvider]
                 },
-                AIContextProviders = [skillsProvider]
-            },
-            _loggerFactory,
-            _serviceProvider);
+                _loggerFactory,
+                _serviceProvider));
     }
 
     /// <summary>
