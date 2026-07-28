@@ -1707,6 +1707,38 @@ export type XeLocalAiEngineClientEndpointsDevelopmentV1RegisterDevelopmentReposi
 	hostPath?: string;
 };
 
+export type XeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentTemplatesResponse = {
+	templates?: Array<XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTemplateResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTemplateResponse = {
+	id?: string;
+	alias?: string;
+	availability?: string;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentV1RegisterDevelopmentTemplateRequest = {
+	alias?: string;
+	hostPath?: string;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTemplateRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentRepositoryFromTemplateResponse = {
+	repository?: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentRepositoryResponse;
+	templateAlias?: string;
+	templateCommit?: string;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentV1CreateDevelopmentRepositoryFromTemplateRequest = {
+	templateId?: string;
+	destinationPath?: string;
+	alias?: string;
+	baseBranch?: string;
+};
+
 export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProfileDetectionResponse = {
 	profileId?: string;
 	buildTarget?: string | null;
@@ -6235,6 +6267,118 @@ export type RegisterDevelopmentRepositoryResponses = {
 
 export type RegisterDevelopmentRepositoryResponse =
 	RegisterDevelopmentRepositoryResponses[keyof RegisterDevelopmentRepositoryResponses];
+
+export type ListDevelopmentTemplatesData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/development/templates";
+};
+
+export type ListDevelopmentTemplatesErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListDevelopmentTemplatesResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentTemplatesResponse;
+};
+
+export type ListDevelopmentTemplatesResponse = ListDevelopmentTemplatesResponses[keyof ListDevelopmentTemplatesResponses];
+
+export type RegisterDevelopmentTemplateData = {
+	body: XeLocalAiEngineClientEndpointsDevelopmentV1RegisterDevelopmentTemplateRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/development/templates";
+};
+
+export type RegisterDevelopmentTemplateErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type RegisterDevelopmentTemplateResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTemplateResponse;
+};
+
+export type RegisterDevelopmentTemplateResponse =
+	RegisterDevelopmentTemplateResponses[keyof RegisterDevelopmentTemplateResponses];
+
+export type RemoveDevelopmentTemplateData = {
+	body?: never;
+	path: {
+		templateId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/development/templates/{templateId}";
+};
+
+export type RemoveDevelopmentTemplateErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type RemoveDevelopmentTemplateResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type RemoveDevelopmentTemplateResponse = RemoveDevelopmentTemplateResponses[keyof RemoveDevelopmentTemplateResponses];
+
+export type CreateDevelopmentRepositoryFromTemplateData = {
+	body: XeLocalAiEngineClientEndpointsDevelopmentV1CreateDevelopmentRepositoryFromTemplateRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/development/repositories/from-template";
+};
+
+export type CreateDevelopmentRepositoryFromTemplateErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type CreateDevelopmentRepositoryFromTemplateResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentRepositoryFromTemplateResponse;
+};
+
+export type CreateDevelopmentRepositoryFromTemplateResponse =
+	CreateDevelopmentRepositoryFromTemplateResponses[keyof CreateDevelopmentRepositoryFromTemplateResponses];
 
 export type DetectDevelopmentRepositoryProfileData = {
 	body?: never;
