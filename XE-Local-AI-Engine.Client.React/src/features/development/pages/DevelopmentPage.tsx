@@ -32,24 +32,35 @@ import { useTranslation } from "react-i18next";
 
 import { DevelopmentLivePanel } from "@/features/development/components/DevelopmentLivePanel";
 import {
+	type CreateDevelopmentRepositoryFromTemplateValues,
+	type CreatedDevelopmentRepositoryFromTemplate,
 	DevelopmentProjectForm,
 	type DevelopmentProjectFormValues,
 	type RegisterDevelopmentRepositoryValues,
+	type RegisterDevelopmentTemplateValues,
 } from "@/features/development/components/DevelopmentProjectForm";
 import { useDevelopmentAttemptHub } from "@/features/development/hooks/useDevelopmentAttemptHub";
-import { type DevelopmentRepository, isActiveAttempt } from "@/features/development/models/DevelopmentModels";
+import {
+	type DevelopmentRepository,
+	type DevelopmentTemplate,
+	isActiveAttempt,
+} from "@/features/development/models/DevelopmentModels";
 import {
 	useApplyDevelopmentPatch,
 	useCancelDevelopmentAttempt,
 	useCreateDevelopmentProject,
+	useCreateDevelopmentRepositoryFromTemplate,
 	useDevelopmentCapability,
 	useDevelopmentProject,
 	useDevelopmentProjects,
 	useDevelopmentProfileDetection,
 	useDevelopmentRepositories,
+	useDevelopmentTemplates,
 	usePreviewDevelopmentPatch,
 	useReconnectDevelopmentRepository,
 	useRegisterDevelopmentRepository,
+	useRegisterDevelopmentTemplate,
+	useRemoveDevelopmentTemplate,
 	useStartDevelopmentNextAction,
 } from "@/features/development/queries/useDevelopment";
 
@@ -97,6 +108,7 @@ export function DevelopmentPage() {
 	const capabilityQuery = useDevelopmentCapability();
 	const developmentEnabled = capabilityQuery.data?.enabled === true;
 	const repositoriesQuery = useDevelopmentRepositories(developmentEnabled);
+	const templatesQuery = useDevelopmentTemplates(developmentEnabled);
 	const projectsQuery = useDevelopmentProjects(developmentEnabled);
 	const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
 	const [reconnectFolderId, setReconnectFolderId] = useState<string | null>(null);
@@ -105,6 +117,9 @@ export function DevelopmentPage() {
 	const detectionQuery = useDevelopmentProfileDetection(profileFolderId, developmentEnabled);
 	const projectQuery = useDevelopmentProject(selectedProjectId, developmentEnabled);
 	const registerMutation = useRegisterDevelopmentRepository();
+	const registerTemplateMutation = useRegisterDevelopmentTemplate();
+	const removeTemplateMutation = useRemoveDevelopmentTemplate();
+	const createFromTemplateMutation = useCreateDevelopmentRepositoryFromTemplate();
 	const createMutation = useCreateDevelopmentProject();
 	const reconnectMutation = useReconnectDevelopmentRepository();
 	const startMutation = useStartDevelopmentNextAction();
@@ -113,6 +128,7 @@ export function DevelopmentPage() {
 	const applyMutation = useApplyDevelopmentPatch();
 
 	const repositories = useMemo(() => repositoriesQuery.data ?? [], [repositoriesQuery.data]);
+	const templates = useMemo(() => templatesQuery.data ?? [], [templatesQuery.data]);
 	const projects = useMemo(() => projectsQuery.data ?? [], [projectsQuery.data]);
 	useEffect(() => {
 		if (!selectedProjectId && projects[0]?.id) {
@@ -148,6 +164,43 @@ export function DevelopmentPage() {
 			alias: created.alias,
 			availability: created.availability ?? "Available",
 		};
+	};
+
+	const createRepositoryFromTemplate = async (
+		values: CreateDevelopmentRepositoryFromTemplateValues,
+	): Promise<CreatedDevelopmentRepositoryFromTemplate> => {
+		const created = await createFromTemplateMutation.mutateAsync({ body: values });
+		const repository = created.repository;
+		if (!repository?.id || !repository.alias) {
+			throw new Error("The template repository creation response was incomplete.");
+		}
+
+		return {
+			repository: {
+				id: repository.id,
+				alias: repository.alias,
+				availability: repository.availability ?? "Available",
+			},
+			templateAlias: created.templateAlias,
+			templateCommit: created.templateCommit,
+		};
+	};
+
+	const addTemplate = async (values: RegisterDevelopmentTemplateValues): Promise<DevelopmentTemplate> => {
+		const created = await registerTemplateMutation.mutateAsync({ body: values });
+		if (!created.id || !created.alias) {
+			throw new Error("The template registration response was incomplete.");
+		}
+
+		return {
+			id: created.id,
+			alias: created.alias,
+			availability: created.availability ?? "Available",
+		};
+	};
+
+	const removeTemplate = async (templateId: string): Promise<void> => {
+		await removeTemplateMutation.mutateAsync({ path: { templateId } });
 	};
 
 	const createProject = (values: DevelopmentProjectFormValues): void => {
@@ -292,8 +345,13 @@ export function DevelopmentPage() {
 											)
 										: undefined
 								}
+								templates={templates}
+								templatesLoading={templatesQuery.isLoading}
 								onRepositoryChange={setProfileFolderId}
 								onRegister={registerRepository}
+								onCreateFromTemplate={createRepositoryFromTemplate}
+								onAddTemplate={addTemplate}
+								onRemoveTemplate={removeTemplate}
 								onSubmit={createProject}
 							/>
 						</Accordion.Panel>

@@ -7,10 +7,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const hooksMock = vi.hoisted(() => ({
 	useDevelopmentCapability: vi.fn(),
 	useDevelopmentRepositories: vi.fn(),
+	useDevelopmentTemplates: vi.fn(),
 	useDevelopmentProfileDetection: vi.fn(),
 	useDevelopmentProjects: vi.fn(),
 	useDevelopmentProject: vi.fn(),
 	useRegisterDevelopmentRepository: vi.fn(),
+	useRegisterDevelopmentTemplate: vi.fn(),
+	useRemoveDevelopmentTemplate: vi.fn(),
+	useCreateDevelopmentRepositoryFromTemplate: vi.fn(),
 	useCreateDevelopmentProject: vi.fn(),
 	useReconnectDevelopmentRepository: vi.fn(),
 	useStartDevelopmentNextAction: vi.fn(),
@@ -143,7 +147,11 @@ describe("DevelopmentPage", () => {
 			isLoading: false,
 			error: null,
 		});
+		hooksMock.useDevelopmentTemplates.mockReturnValue({ data: [], isLoading: false, error: null });
 		hooksMock.useRegisterDevelopmentRepository.mockReturnValue(mutation());
+		hooksMock.useRegisterDevelopmentTemplate.mockReturnValue(mutation());
+		hooksMock.useRemoveDevelopmentTemplate.mockReturnValue(mutation());
+		hooksMock.useCreateDevelopmentRepositoryFromTemplate.mockReturnValue(mutation());
 		hooksMock.useCreateDevelopmentProject.mockReturnValue(mutation());
 		hooksMock.useReconnectDevelopmentRepository.mockReturnValue(mutation());
 		hooksMock.useStartDevelopmentNextAction.mockReturnValue(mutation());

@@ -37,6 +37,7 @@ import {
 	continuePreviewRun,
 	createAgentDefinition,
 	createDevelopmentProject,
+	createDevelopmentRepositoryFromTemplate,
 	createGoldenConversation,
 	createImageJob,
 	createMcpServer,
@@ -133,6 +134,7 @@ import {
 	listDevelopmentEvents,
 	listDevelopmentProjects,
 	listDevelopmentRepositories,
+	listDevelopmentTemplates,
 	listGoldenConversations,
 	listImageJobs,
 	listImageModels,
@@ -167,10 +169,12 @@ import {
 	refreshModelCatalog,
 	refreshRecommendations,
 	registerDevelopmentRepository,
+	registerDevelopmentTemplate,
 	reindexCorpus,
 	reindexKnowledgeDocument,
 	rejectSuggestedPlaybookAction,
 	removeCudaBuild,
+	removeDevelopmentTemplate,
 	removeLlamaCppSourceBuild,
 	removeStableDiffusionCppSourceBuild,
 	renameNodeChatConversation,
@@ -265,6 +269,8 @@ import type {
 	CreateAgentDefinitionResponse,
 	CreateDevelopmentProjectData,
 	CreateDevelopmentProjectResponse,
+	CreateDevelopmentRepositoryFromTemplateData,
+	CreateDevelopmentRepositoryFromTemplateResponse,
 	CreateGoldenConversationData,
 	CreateGoldenConversationResponse,
 	CreateImageJobData,
@@ -467,6 +473,8 @@ import type {
 	ListDevelopmentProjectsResponse,
 	ListDevelopmentRepositoriesData,
 	ListDevelopmentRepositoriesResponse,
+	ListDevelopmentTemplatesData,
+	ListDevelopmentTemplatesResponse,
 	ListGoldenConversationsData,
 	ListGoldenConversationsResponse,
 	ListImageJobsData,
@@ -537,6 +545,8 @@ import type {
 	RefreshRecommendationsResponse,
 	RegisterDevelopmentRepositoryData,
 	RegisterDevelopmentRepositoryResponse,
+	RegisterDevelopmentTemplateData,
+	RegisterDevelopmentTemplateResponse,
 	ReindexCorpusData,
 	ReindexCorpusResponse,
 	ReindexKnowledgeDocumentData,
@@ -545,6 +555,8 @@ import type {
 	RejectSuggestedPlaybookActionResponse,
 	RemoveCudaBuildData,
 	RemoveCudaBuildResponse,
+	RemoveDevelopmentTemplateData,
+	RemoveDevelopmentTemplateResponse,
 	RemoveLlamaCppSourceBuildData,
 	RemoveLlamaCppSourceBuildError,
 	RemoveLlamaCppSourceBuildResponse,
@@ -3281,6 +3293,96 @@ export const registerDevelopmentRepositoryMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await registerDevelopmentRepository({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const listDevelopmentTemplatesQueryKey = (options?: Options<ListDevelopmentTemplatesData>) =>
+	createQueryKey("listDevelopmentTemplates", options);
+
+export const listDevelopmentTemplatesOptions = (options?: Options<ListDevelopmentTemplatesData>) =>
+	queryOptions<
+		ListDevelopmentTemplatesResponse,
+		AxiosError<DefaultError>,
+		ListDevelopmentTemplatesResponse,
+		ReturnType<typeof listDevelopmentTemplatesQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listDevelopmentTemplates({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listDevelopmentTemplatesQueryKey(options),
+	});
+
+export const registerDevelopmentTemplateMutation = (
+	options?: Partial<Options<RegisterDevelopmentTemplateData>>,
+): UseMutationOptions<
+	RegisterDevelopmentTemplateResponse,
+	AxiosError<DefaultError>,
+	Options<RegisterDevelopmentTemplateData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		RegisterDevelopmentTemplateResponse,
+		AxiosError<DefaultError>,
+		Options<RegisterDevelopmentTemplateData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await registerDevelopmentTemplate({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const removeDevelopmentTemplateMutation = (
+	options?: Partial<Options<RemoveDevelopmentTemplateData>>,
+): UseMutationOptions<RemoveDevelopmentTemplateResponse, AxiosError<DefaultError>, Options<RemoveDevelopmentTemplateData>> => {
+	const mutationOptions: UseMutationOptions<
+		RemoveDevelopmentTemplateResponse,
+		AxiosError<DefaultError>,
+		Options<RemoveDevelopmentTemplateData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await removeDevelopmentTemplate({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const createDevelopmentRepositoryFromTemplateMutation = (
+	options?: Partial<Options<CreateDevelopmentRepositoryFromTemplateData>>,
+): UseMutationOptions<
+	CreateDevelopmentRepositoryFromTemplateResponse,
+	AxiosError<DefaultError>,
+	Options<CreateDevelopmentRepositoryFromTemplateData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		CreateDevelopmentRepositoryFromTemplateResponse,
+		AxiosError<DefaultError>,
+		Options<CreateDevelopmentRepositoryFromTemplateData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await createDevelopmentRepositoryFromTemplate({
 				...options,
 				...fnOptions,
 				throwOnError: true,

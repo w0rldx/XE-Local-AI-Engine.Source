@@ -4,22 +4,27 @@ import {
 	applyDevelopmentPatchMutation,
 	cancelDevelopmentAttemptMutation,
 	createDevelopmentProjectMutation,
+	createDevelopmentRepositoryFromTemplateMutation,
 	detectDevelopmentRepositoryProfileOptions,
 	getDevelopmentCapabilityOptions,
 	getDevelopmentProjectOptions,
 	listDevelopmentRepositoriesOptions,
 	listDevelopmentProjectsOptions,
+	listDevelopmentTemplatesOptions,
 	previewDevelopmentPatchMutation,
 	reconnectDevelopmentRepositoryMutation,
 	registerDevelopmentRepositoryMutation,
+	registerDevelopmentTemplateMutation,
+	removeDevelopmentTemplateMutation,
 	startDevelopmentNextActionMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
-import type { DevelopmentRepository } from "@/features/development/models/DevelopmentModels";
+import type { DevelopmentRepository, DevelopmentTemplate } from "@/features/development/models/DevelopmentModels";
 
 export const developmentQueryIds = {
 	capability: "getDevelopmentCapability",
 	listRepositories: "listDevelopmentRepositories",
+	listTemplates: "listDevelopmentTemplates",
 	detectRepositoryProfile: "detectDevelopmentRepositoryProfile",
 	listProjects: "listDevelopmentProjects",
 	getProject: "getDevelopmentProject",
@@ -53,6 +58,25 @@ export function useDevelopmentRepositories(enabled = true) {
 								id: repository.id,
 								alias: repository.alias,
 								availability: repository.availability ?? "Unavailable",
+							},
+						]
+					: [],
+			),
+	});
+}
+
+export function useDevelopmentTemplates(enabled = true) {
+	return useQuery({
+		...withResponseValidation(listDevelopmentTemplatesOptions()),
+		enabled,
+		select: (data): readonly DevelopmentTemplate[] =>
+			(data.templates ?? []).flatMap((template) =>
+				template.id && template.alias
+					? [
+							{
+								id: template.id,
+								alias: template.alias,
+								availability: template.availability ?? "Unavailable",
 							},
 						]
 					: [],
@@ -96,6 +120,47 @@ export function useRegisterDevelopmentRepository() {
 		...withResponseValidation(registerDevelopmentRepositoryMutation()),
 		// Detection is keyed by selected folder, so it goes with the repository list: re-registering an existing path
 		// returns the same folder id, and a cached proposal for it can predate whatever the repository looks like now.
+		onSuccess: () =>
+			Promise.all([
+				queryClient.invalidateQueries({
+					queryKey: developmentInvalidationKey(developmentQueryIds.listRepositories),
+				}),
+				queryClient.invalidateQueries({
+					queryKey: developmentInvalidationKey(developmentQueryIds.detectRepositoryProfile),
+				}),
+			]),
+	});
+}
+
+export function useRegisterDevelopmentTemplate() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		...withResponseValidation(registerDevelopmentTemplateMutation()),
+		onSuccess: () =>
+			queryClient.invalidateQueries({
+				queryKey: developmentInvalidationKey(developmentQueryIds.listTemplates),
+			}),
+	});
+}
+
+export function useRemoveDevelopmentTemplate() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		...withResponseValidation(removeDevelopmentTemplateMutation()),
+		onSuccess: () =>
+			queryClient.invalidateQueries({
+				queryKey: developmentInvalidationKey(developmentQueryIds.listTemplates),
+			}),
+	});
+}
+
+export function useCreateDevelopmentRepositoryFromTemplate() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		...withResponseValidation(createDevelopmentRepositoryFromTemplateMutation()),
+		// Seeding from a template registers a repository, so this carries the same pairing as
+		// useRegisterDevelopmentRepository: the list gains an entry, and detection is keyed by the folder id that entry
+		// carries, so a cached proposal for a reused id must not outlive the new clone.
 		onSuccess: () =>
 			Promise.all([
 				queryClient.invalidateQueries({
