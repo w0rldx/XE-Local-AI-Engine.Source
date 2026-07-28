@@ -90,6 +90,10 @@ public sealed class NodeChatDbContext : DbContext
 
     internal DbSet<DevelopmentEvent> DevelopmentEvents => Set<DevelopmentEvent>();
 
+    internal DbSet<DevelopmentTemplate> DevelopmentTemplates => Set<DevelopmentTemplate>();
+
+    internal DbSet<DevelopmentTemplateMaterialization> DevelopmentTemplateMaterializations => Set<DevelopmentTemplateMaterialization>();
+
     internal ReadOnlyMemory<byte> NodeEncryptionKey => _nodeSqliteKeyHolder.Key;
 
     /// <summary>
@@ -298,5 +302,7 @@ public sealed class NodeChatDbContext : DbContext
         modelBuilder.ApplyConfiguration(new DevelopmentAttemptConfiguration());
         modelBuilder.ApplyConfiguration(new DevelopmentArtifactConfiguration());
         modelBuilder.ApplyConfiguration(new DevelopmentEventConfiguration());
+        modelBuilder.ApplyConfiguration(new DevelopmentTemplateConfiguration());
+        modelBuilder.ApplyConfiguration(new DevelopmentTemplateMaterializationConfiguration());
     }
 }

@@ -70,6 +70,113 @@ public sealed class RegisterDevelopmentRepositoryEndpoint
     }
 }
 
+public sealed class ListDevelopmentTemplatesEndpoint
+    : EndpointWithoutRequest<ListDevelopmentTemplatesResponse>, IDevelopmentEndpoint
+{
+    public override void Configure()
+    {
+        Get(LocalApiRoutes.Development.Templates);
+        Policies(NodeAuthorizationPolicies.Operator);
+    }
+
+    public override async Task HandleAsync(CancellationToken ct)
+    {
+        var service = HttpContext.RequestServices.GetRequiredService<IDevelopmentTemplateService>();
+        var templates = await service.ListTemplatesAsync(ct).ConfigureAwait(false);
+        await Send.OkAsync(new ListDevelopmentTemplatesResponse(templates.Select(template => template.ToResponse()).ToArray()), ct)
+                  .ConfigureAwait(false);
+    }
+}
+
+public sealed class RegisterDevelopmentTemplateEndpoint
+    : Endpoint<RegisterDevelopmentTemplateRequest, DevelopmentTemplateResponse>, IDevelopmentEndpoint
+{
+    public override void Configure()
+    {
+        Post(LocalApiRoutes.Development.Templates);
+        Policies(NodeAuthorizationPolicies.Operator);
+    }
+
+    public override async Task HandleAsync(RegisterDevelopmentTemplateRequest req, CancellationToken ct)
+    {
+        try
+        {
+            var service = HttpContext.RequestServices.GetRequiredService<IDevelopmentTemplateService>();
+            var template = await service.AddTemplateAsync(req.Alias, req.HostPath, ct).ConfigureAwait(false);
+            await Send.OkAsync(template.ToResponse(), ct).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is ArgumentException
+                                              or DevelopmentWorkspaceSecurityException
+                                              or DevelopmentTemplateAliasInUseException
+                                              or DirectoryNotFoundException)
+        {
+            AddError(exception.Message);
+            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+        }
+    }
+}
+
+public sealed class RemoveDevelopmentTemplateEndpoint
+    : Endpoint<DevelopmentTemplateRequest>, IDevelopmentEndpoint
+{
+    public override void Configure()
+    {
+        Delete(LocalApiRoutes.Development.TemplateById);
+        Policies(NodeAuthorizationPolicies.Operator);
+    }
+
+    public override async Task HandleAsync(DevelopmentTemplateRequest req, CancellationToken ct)
+    {
+        var service = HttpContext.RequestServices.GetRequiredService<IDevelopmentTemplateService>();
+        if (!await service.RemoveTemplateAsync(req.TemplateId, ct).ConfigureAwait(false))
+        {
+            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            return;
+        }
+
+        await Send.NoContentAsync(ct).ConfigureAwait(false);
+    }
+}
+
+public sealed class CreateDevelopmentRepositoryFromTemplateEndpoint
+    : Endpoint<CreateDevelopmentRepositoryFromTemplateRequest, DevelopmentRepositoryFromTemplateResponse>, IDevelopmentEndpoint
+{
+    public override void Configure()
+    {
+        Post(LocalApiRoutes.Development.RepositoriesFromTemplate);
+        Policies(NodeAuthorizationPolicies.Operator);
+    }
+
+    public override async Task HandleAsync(CreateDevelopmentRepositoryFromTemplateRequest req, CancellationToken ct)
+    {
+        var service = HttpContext.RequestServices.GetRequiredService<IDevelopmentTemplateService>();
+        try
+        {
+            var result = await service.CreateFromTemplateAsync(req.TemplateId, req.DestinationPath, req.Alias, req.BaseBranch, ct)
+                                      .ConfigureAwait(false);
+            await Send.OkAsync(new DevelopmentRepositoryFromTemplateResponse(result.Repository.ToResponse(),
+                    result.TemplateAlias,
+                    result.TemplateCommit),
+                ct).ConfigureAwait(false);
+        }
+        catch (KeyNotFoundException)
+        {
+            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is ArgumentException
+                                              or DevelopmentWorkspaceSecurityException
+                                              or DevelopmentTemplateMaterializationException
+                                              or SelectedFolderValidationException
+                                              or DirectoryNotFoundException
+                                              or IOException
+                                              or UnauthorizedAccessException)
+        {
+            AddError(exception.Message);
+            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+        }
+    }
+}
+
 public sealed class DetectDevelopmentRepositoryProfileEndpoint
     : Endpoint<DevelopmentProfileDetectionRequest, DevelopmentProfileDetectionResponse>, IDevelopmentEndpoint
 {

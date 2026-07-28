@@ -97,6 +97,19 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
             EncryptRequiredProperty(entry, entry.Property(entity => entity.HostPath), Guid.Empty, entry.Entity.Id, "host_path", trackedProperties);
         }
 
+        // Development templates and the provenance of repositories materialized from them both carry host paths, so
+        // they get exactly the selected-folder treatment: node-scoped AAD binding the empty conversation id to the
+        // row's own id plus the column name.
+        foreach (var entry in nodeContext.ChangeTracker.Entries<DevelopmentTemplate>())
+        {
+            EncryptRequiredProperty(entry, entry.Property(entity => entity.HostPath), Guid.Empty, entry.Entity.Id, "host_path", trackedProperties);
+        }
+
+        foreach (var entry in nodeContext.ChangeTracker.Entries<DevelopmentTemplateMaterialization>())
+        {
+            EncryptRequiredProperty(entry, entry.Property(entity => entity.TemplatePath), Guid.Empty, entry.Entity.SelectedFolderId, "template_path", trackedProperties);
+        }
+
         // Agent definitions are node-scoped (no conversation/message), so the AAD binds the empty conversation id to
         // the definition's own id plus the column name — same layout as selected folders.
         foreach (var entry in nodeContext.ChangeTracker.Entries<AgentDefinition>())

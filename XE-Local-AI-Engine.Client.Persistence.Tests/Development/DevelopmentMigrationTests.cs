@@ -53,7 +53,12 @@ public sealed class DevelopmentMigrationTests : IDisposable
                 "development_attempts",
                 "development_events",
                 "development_projects",
-                "development_tasks"
+                "development_tasks",
+
+                // Slice 2. The template registry and the provenance of repositories materialized from it are node-scoped
+                // configuration, not part of the project/task/attempt operation journal.
+                "development_templates",
+                "development_template_materializations"
             ]));
             var indexes = await NamesAsync(connection, "index", "ux_development_%").ConfigureAwait(false);
             AssertEx.True(indexes.Contains("ux_development_attempts_one_active_per_task"));

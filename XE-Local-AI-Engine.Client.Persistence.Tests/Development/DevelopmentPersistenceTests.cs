@@ -14,7 +14,7 @@ public sealed class DevelopmentPersistenceTests : IDisposable
         _fixture.Dispose();
 
     [Test]
-    public async Task Model_ContainsExactlyFiveDevelopmentTablesAndRequiredUniqueIndexes()
+    public async Task Model_ContainsExactlyTheApprovedDevelopmentTablesAndRequiredUniqueIndexes()
     {
         await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
         await using var scope = provider.CreateAsyncScope();
@@ -26,15 +26,17 @@ public sealed class DevelopmentPersistenceTests : IDisposable
                               .Order(StringComparer.Ordinal)
                               .ToArray();
 
-        AssertEx.Equal(expected: 5, tables.Length);
+        AssertEx.Equal(expected: 7, tables.Length);
         AssertEx.True(tables.SequenceEqual([
                 "development_artifacts",
                 "development_attempts",
                 "development_events",
                 "development_projects",
-                "development_tasks"
+                "development_tasks",
+                "development_template_materializations",
+                "development_templates"
             ], StringComparer.Ordinal),
-            "The Development schema must contain exactly the five approved persistence concepts.");
+            "The Development schema must contain exactly the approved persistence concepts.");
 
         var indexNames = dbContext.Model.GetEntityTypes()
                                   .SelectMany(entity => entity.GetIndexes())
