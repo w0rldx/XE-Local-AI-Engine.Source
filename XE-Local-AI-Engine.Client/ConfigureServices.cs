@@ -56,19 +56,28 @@ public static class ConfigureServices
         // Serilog. Console is always on; a date-rolled file sink is added under the per-user data dir (same resolution as
         // the Data Protection key-ring below) so desktop/dev logs survive the console window closing and a tester bug
         // report has on-disk history. Disabled in Testing (many parallel hosts would contend for the exclusive file).
+        //
+        // writeToProviders MUST stay true. It defaults to false, which makes Serilog the terminus of the logging
+        // pipeline: events reach Serilog's own sinks and no other registered ILoggerProvider. The OpenTelemetry logger
+        // provider that ConfigureOpenTelemetry registers (ServiceDefaults/Extensions.cs) is one of those, so with the
+        // default every ILogger call dead-ends before the OTLP log exporter and the Aspire dashboard shows zero
+        // structured logs while traces/metrics still flow (those bypass ILoggerFactory entirely). Program.cs calls
+        // Logging.ClearProviders() before AddServiceDefaults, so OpenTelemetry is the only other provider in the chain
+        // and forwarding cannot resurrect a duplicate console logger.
         var logFileDirectory = LoggerExtensions.ResolveLogFileDirectory(builder.Environment, configuration);
         _ = builder.Services.AddSerilog((serviceCollection, lc) =>
-        {
-            _ = lc.ReadFrom.Configuration(configuration)
-                  .ReadFrom.Services(serviceCollection)
-                  .Enrich.FromLogContext()
-                  .WriteTo.Console(theme: ConsoleTheme.None, outputTemplate: ConsoleOutputTemplate);
-
-            if (logFileDirectory is not null)
             {
-                _ = lc.WriteToRollingFile(logFileDirectory);
-            }
-        });
+                _ = lc.ReadFrom.Configuration(configuration)
+                      .ReadFrom.Services(serviceCollection)
+                      .Enrich.FromLogContext()
+                      .WriteTo.Console(theme: ConsoleTheme.None, outputTemplate: ConsoleOutputTemplate);
+
+                if (logFileDirectory is not null)
+                {
+                    _ = lc.WriteToRollingFile(logFileDirectory);
+                }
+            },
+            writeToProviders: true);
 
         // Explicit, stable Data Protection key-ring. The framework already auto-registers Data Protection (so the
         // encrypted token stores — CloudCredentialStore, CodexTokenStore, HfTokenStore, GitHubTokenStore, the auth

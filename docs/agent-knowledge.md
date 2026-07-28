@@ -253,6 +253,16 @@ Route every writer of per-node state (settings, encrypted credential stores, har
 
 > **The bug this prevents, because it's a good one:** a stale dev `node-settings.json` got committed, the Web SDK auto-globbed it into the publish output as Content, and every fresh install was silently pinned to a nonexistent default model — first-run provisioning skipped its download with no error, just a permanently empty model store. A runtime-written JSON file must never be checked in *or* published as Content.
 
+### Serilog silently severs OTLP log export — `writeToProviders` must stay `true`
+
+`AddSerilog(...)` (`XE-Local-AI-Engine.Client/ConfigureServices.cs`) defaults `writeToProviders` to **`false`**, which makes Serilog the *terminus* of the logging pipeline: events reach Serilog's own sinks (Console, rolling file) and **no other registered `ILoggerProvider`**. The OpenTelemetry logger provider wired by `ConfigureOpenTelemetry` (`ServiceDefaults/Extensions.cs`) is one of those, so with the default **every `ILogger` call dead-ends before the OTLP log exporter**.
+
+The failure is invisible in the obvious places: traces and metrics keep flowing, because they go straight to the `TracerProvider`/`MeterProvider` and never touch `ILoggerFactory`. So the Aspire dashboard shows healthy traces and **zero structured logs**, and `aspire otel logs` returns `[]` for every resource while `aspire otel traces` is full. It reads like a collector or filter problem; it is neither.
+
+Diagnosing it: confirm `OTEL_EXPORTER_OTLP_ENDPOINT` is on the process (`tr '\0' '\n' < /proc/<pid>/environ | grep OTEL`) — traces arriving already proves the transport works. The Aspire resource is named **`app`**, not the project name, so a resource-filtered query for `XE-Local-AI-Engine.Client` errors out and a wrong-name query looks the same as an empty one. Kestrel/Hosting emit `ILogger` records at startup unconditionally; if none of those arrive, the pipeline is severed, not idle.
+
+`Program.cs` calls `Logging.ClearProviders()` before `AddServiceDefaults`, so OpenTelemetry is the only other provider in the chain — forwarding cannot resurrect a duplicate console logger. Guarded by `SerilogProviderForwardingTests`, which asserts the observable consequence (a second provider receives events) rather than the flag, so it survives a restructure.
+
 ### Other silent-failure traps
 
 - **A native process-probe with no timeout hangs provisioning forever.** `nvidia-smi`/`wmic` GPU detection once had no deadline; a hung call stalled first-run model provisioning indefinitely with nothing logged. Any shell-out to a native diagnostic needs a per-call timeout *and* an outer deadline that degrades to a safe default (CPU variant).
