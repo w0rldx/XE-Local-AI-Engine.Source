@@ -1,7 +1,7 @@
 # XE Local AI Engine
 
 XE Local AI Engine is the node-side runtime for running local AI workloads while preserving the existing C0re platform contract. The Node Web Server hosts the React management UI, owns the platform
-`WorkerHub` connection, and runs the local model runtime in-process via the llama.cpp supervisor.
+`WorkerHub` connection, and supervises node-owned `llama-server` host child processes for local inference.
 
 The repository is being prepared for an RC release. Release documentation and validation evidence live in this repo and must stay current with runtime behavior.
 
@@ -10,7 +10,7 @@ The repository is being prepared for an RC release. Release documentation and va
 - **Node Web Server** (`XE-Local-AI-Engine.Client`) — serves the React UI, local APIs under `/api/local/v1`, local SignalR hubs, SQLite-backed chat state, and the existing platform `WorkerHub`
   connection.
 - **React management UI** (`XE-Local-AI-Engine.Client.React`) — node-local browser UI for chat, settings, runtime status, logs, and models.
-- **Providers and agents** — local provider abstractions, llama.cpp in-app runtime (primary/default), Ollama provider (opt-in secondary), and shared agent execution loop.
+- **Providers and agents** — local provider abstractions, the supervised llama.cpp host runtime (primary/default), Ollama provider (opt-in secondary), and shared agent execution loop.
 - **Scheduler** — Quartz.NET-backed job scheduler with job definitions, run history, cancellation, and live run updates over a local SignalR hub (`Services/Scheduler`, `src/features/scheduler`).
 - **Model-fit / Model Advisor** — box-aware GGUF recommendation: profiles the local hardware (RAM / VRAM / GPU vendor), discovers candidate GGUF repos on Hugging Face, estimates each model's memory footprint with a
   pure, in-process (I/O-free) formula, and ranks the ones that fit. Exposed as cache-only reads plus a scheduler-driven refresh — there is no container or benchmark image (Docker was removed in the 2026-06-17
@@ -45,8 +45,15 @@ pages covering architecture, every project, the local llama.cpp runtime and prov
 chat, scheduler, model-fit, data/persistence, the API surface, the React client, hosting/deployment,
 security/privacy, and testing. Start at [`docs/wiki/Home.md`](docs/wiki/Home.md).
 
+For a baseline-scoped external review, use the
+**[Technical/Security Architecture Dossier](docs/audits/technical-security-architecture/README.md)**.
+It describes the implementation at commit `7e64ed589e14eecc0e522e807d2e531a1095d19a` as reviewed on
+2026-07-28. It is not a certification, compliance mapping, penetration-test report, or operating-
+effectiveness assurance package; each chapter labels evidence availability and known gaps.
+
 Supporting notes:
 
+- [Architecture Decision Records](docs/adr/README.md) — repository design decisions and their code-level scope.
 - [AI runtime developer notes](docs/ai-runtime.md) — narrow AI-seam maintenance rules (see the wiki for the full runtime architecture).
 - [Backend commentary map](docs/backend-commentary-map.md)
 
@@ -170,12 +177,15 @@ producing a plain self-contained zip with **no Velopack metadata and therefore n
 > anyone — native-library self-extraction, console-close child cleanup, and browser auto-open cannot be verified
 > off-Windows. The same applies to the two desktop invariants below.
 
-> The no-orphan guarantee (terminal/console close reaps `llama-server`) and the Windows Job Object path are verified on
-> real desktops with a model loaded; they cannot be exercised in WSL2 or on a headless runner.
+> The no-orphan design (terminal/console close reaps `llama-server`) and the Windows Job Object path require
+> real-desktop verification with a model loaded; they cannot be exercised in WSL2 or on a headless runner. This
+> baseline documentation review does not include or assert availability of the matching smoke-test transcript.
 
 ## RC readiness status
 
 Do not mark release or documentation work complete until matching validation evidence is available.
+The checklist below defines required release evidence; its presence here does not assert that the
+evidence was produced, retained, or made available for the documentation baseline.
 
 Required evidence includes:
 
