@@ -1,6 +1,6 @@
 # Hosting, AppHost & Deployment
 
-> Last reviewed: 2026-07-24 · Code-grounded.
+> Baseline: `7e64ed589e14eecc0e522e807d2e531a1095d19a` · Reviewed: 2026-07-28 · Code-grounded.
 
 This page covers how the XE Local AI Engine node process is **hosted and shipped**: the Aspire AppHost used for local dev/integration, the shared `ServiceDefaults`, the configuration layers (`appsettings` + the user-editable `node-settings.json` + the encrypted `hf-token.enc`), the background hosted services that run inside the node, the self-contained single-file **desktop launcher** (`XE_LAUNCH_MODE=desktop`), the publish profiles + launchers used to produce a double-click distribution, and the RC-shipped cross-platform uninstaller scripts.
 
@@ -27,7 +27,7 @@ aspire run --apphost XE-Local-AI-Engine.AppHost/XE-Local-AI-Engine.AppHost.cspro
 
 What it wires (`AppHost.cs`):
 
-- **`node-sqlite-key`** — a secret Aspire parameter (`builder.AddParameter("node-sqlite-key", secret: true)`).
+- **`node-sqlite-key`** — an Aspire parameter marked sensitive (`builder.AddParameter("node-sqlite-key", secret: true)`). B1 also commits one shared development-only default in the AppHost's `appsettings.Development.json`. The sensitive flag masks/presents the parameter as a secret in Aspire; it does not make that tracked default confidential or per-developer. Data created with the unchanged default is recoverable by anyone who has the source. A confidential override is possible but is not enforced or evidenced.
 - **`node-sqlite`** — a SQLite resource (`builder.AddSqlite(...)`) backed by a file under `.data/node-sqlite/node-chat.db`. In Development it also enables `WithSqliteWeb()` (a browser DB inspector).
 - **`app`** — the node web server (`AddProject<XE_Local_AI_Engine_Client>("app", "https")`) with external HTTP endpoints, `ASPIRE_ENABLED=true`, `ASPNETCORE_ENVIRONMENT=Development`, the SQLite key piped in as `XE_NODE_SQLITE_KEY`, `NodeAuth__Jwt__*` issuer/audience, a `WithReference`/`WaitFor` dependency on the SQLite resource, and two health checks (`/health/live`, `/health/ready`). Extra dashboard URLs are surfaced: `/scalar`, `/openapi/local/v1/v1.json`, `/devui`.
 - **`client-react`** — the Vite dev server (`AddViteApp(...)` with `WithPnpm()`), HTTPS endpoint on port **5175**, proxying to the `app` HTTPS endpoint via `VITE_PROXY_TARGET`, `WaitFor(app)`, and isolated Chromium browser logs.
@@ -41,11 +41,18 @@ What it wires (`AppHost.cs`):
 `XE-Local-AI-Engine.ServiceDefaults/Extensions.cs` provides the `AddServiceDefaults()` / `ConfigureOpenTelemetry()` extension over `IHostApplicationBuilder`. The key seam:
 
 ```csharp
-var aspireEnvironment = Environment.GetEnvironmentVariable("ASPIRE_ENABLED");
-if (string.Equals(aspireEnvironment, "true", ...)) { /* OTEL + service discovery + resilience */ }
+builder.ConfigureOpenTelemetry();
+var aspireEnabled = string.Equals(builder.Configuration["ASPIRE_ENABLED"], "true", ...);
+if (aspireEnabled) { /* service discovery + resilience/discovery HTTP defaults */ }
 ```
 
-Aspire-specific concerns (OpenTelemetry metrics/traces, service discovery, standard resilience HTTP handler) are **only** turned on when `ASPIRE_ENABLED=true` (which the AppHost sets). A desktop/headless run leaves them off. OTLP export is itself gated again on `OTEL_EXPORTER_OTLP_ENDPOINT` being set — so even under Aspire, telemetry export is a no-op unless an endpoint is configured. Tracing sources include `XE.LocalAiEngine.AI.Agent`, `Microsoft.Agents.AI*`, `Microsoft.Extensions.AI*`; the metrics meter `XE.Node` is added by literal string (ServiceDefaults cannot reference the Client project).
+OpenTelemetry logging, metrics, and tracing instrumentation is registered in **every** hosting mode. An
+OTLP exporter is attached only when `OTEL_EXPORTER_OTLP_ENDPOINT` is configured; Aspire normally
+injects that endpoint, while a default desktop/headless run records in-process without an exporter.
+Only service discovery and the standard resilience/discovery HTTP defaults remain gated on
+`ASPIRE_ENABLED=true` (which the AppHost sets). Tracing sources include
+`XE.LocalAiEngine.AI.Agent`, `Microsoft.Agents.AI*`, and `Microsoft.Extensions.AI*`; the metrics meter
+`XE.Node` is added by literal string because ServiceDefaults cannot reference the Client project.
 
 ---
 
@@ -53,11 +60,11 @@ Aspire-specific concerns (OpenTelemetry metrics/traces, service discovery, stand
 
 `XE-Local-AI-Engine.Client/Program.cs` builds a `WebApplication`. Startup order matters:
 
-1. **Resolve desktop mode early** — `var isDesktop = DesktopLaunch.IsDesktopMode(args);`. If desktop, it (a) binds loopback (`builder.WebHost.UseUrls(DesktopLaunch.LoopbackBindUrl)` = `http://127.0.0.1:0`) and (b) synthesizes config via `DesktopBootstrap.EnsureLocalDataConfiguration(builder.Configuration)` **before** `AddServices` reads configuration.
+1. **Resolve desktop mode early** — `var isDesktop = DesktopLaunch.IsDesktopMode(args, VelopackInstall.IsManaged());`. If desktop, it (a) resolves the per-user data directory, (b) acquires the single-instance lease, (c) binds through `DesktopPortStore.ResolveBindUrl(...)` using the remembered loopback port or `127.0.0.1:0`, and (d) synthesizes config via `DesktopBootstrap.EnsureLocalDataConfiguration(builder.Configuration)` **before** `AddServices` reads configuration.
 2. `AddServiceDefaults()` then `AddServices(builder.Configuration)`.
 3. DevUI / OpenAI-compatible Responses+Conversations services — **Development only**.
 4. After `Build()`: apply node-chat + node-identity EF migrations, recover interrupted chat messages, reconcile stale scheduled runs, eagerly activate the invocation-resume registry, and register the **worker shutdown drain** on `ApplicationStopping`.
-5. Pipeline: Serilog request logging (with access-token query redaction), `UseExceptionHandler` (RFC7807), **HTTPS redirect + HSTS bypassed in desktop mode**, antiforgery, static files, health checks, `LocalApiSecurityMiddleware`, routing, rate limiter, auth, FastEndpoints (route prefix `LocalApiRoutes.Prefix`), SignalR hubs (`LocalChatHub`, `SchedulerHub`, `PreviewWorkflowHub`, all `RequireAuthorization(Operator)`), Scalar/Swagger (non-Production), DevUI (Development), and `MapFallbackToFile("index.html")` for the SPA.
+5. Pipeline: Serilog request logging (with access-token query redaction), `UseExceptionHandler` (RFC7807), **HTTPS redirect + HSTS bypassed in desktop mode**, antiforgery, static files, health checks, `LocalApiSecurityMiddleware`, routing, rate limiter, auth, FastEndpoints (route prefix `LocalApiRoutes.Prefix`), 9 unconditional SignalR hubs plus conditional `DevelopmentAttemptHub` (all `RequireAuthorization(Operator)`), Scalar/Swagger (non-Production), DevUI (Development), and `MapFallbackToFile("index.html")` for the SPA.
 6. **Desktop only**: `ActivateDesktopLifecycle(app)` installs the console-close → graceful-stop triggers and the on-started browser launch.
 
 See [API & Hubs](09-api-and-hubs.md) for endpoint/hub detail and [Security & Privacy](12-security-and-privacy.md) for the loopback / `LocalApiSecurityMiddleware` invariants.
@@ -88,7 +95,7 @@ Registered via `AddHostedService<>` in `XE-Local-AI-Engine.Client/ConfigureServi
 Configuration resolves through several layers (later wins where noted):
 
 1. **`appsettings.json` + `appsettings.Development.json`** (in `XE-Local-AI-Engine.Client/`) — static defaults shipped with the binary.
-2. **Environment / Aspire parameters** — e.g. `XE_NODE_SQLITE_KEY`, `NodeAuth__Jwt__*`, the node-sqlite connection string. In Aspire these come from `AppHost.cs`.
+2. **Environment / Aspire parameters** — e.g. `XE_NODE_SQLITE_KEY`, `NodeAuth__Jwt__*`, the node-sqlite connection string. In Aspire these come from `AppHost.cs`; the operator-secret parameter has the tracked shared development default described in §1 unless a developer supplies a confidential override.
 3. **Desktop in-memory overrides** (`DesktopBootstrap`, desktop mode only — added last so they intentionally win over `appsettings`, but only reached behind the desktop flag). See §5.
 4. **`node-settings.json`** — a **user-editable, cached** settings file (not env/appsettings). `NodeSettingsStore` (`Client.Application/Services/NodeSettings/Implementation/NodeSettingsStore.cs`) reads/writes `node-settings.json` under the node data directory, with both an async and a sync (startup/DI factory) load path, tolerant JSON deserialize, and a `SemaphoreSlim` write lock. The shape is `StoredNodeSettings`. This is the runtime-editable settings store that supersedes baking values only into `appsettings`.
 5. **`hf-token.enc`** — the optional Hugging Face access token, encrypted at rest. `HfTokenStore` (`Client.Application/Services/HuggingFace/HfTokenStore.cs`) uses an `IDataProtector` (`WorkerNode.HfTokenStore.v1`) to write `hf-token.enc` under the node data dir. The token is exposed **only** to the download client, **never** logged, never put in exceptions, never indexed — the same `IDataProtector` pattern as the cloud credential / worker token stores. See [Security & Privacy](12-security-and-privacy.md).
@@ -122,6 +129,12 @@ Desktop mode turns the same binary into a double-click app. It is **opt-in** and
          └─ console-close → graceful StopApplication() (→ llama-server child reaped)
 ```
 
+**Text fallback:** desktop mode selects a per-user data directory, fills only absent local configuration,
+binds Kestrel to a remembered/free loopback port, skips HTTPS redirect/HSTS for that loopback HTTP
+listener, opens the browser after startup, and requests graceful application stop when its console
+closes. Real-desktop behavior still requires observation on the target OS; this flow description is
+not a retained smoke-test transcript.
+
 ### Loopback auto-port + persisted port + browser open
 
 - The bind URL comes from `DesktopPortStore.ResolveBindUrl(dataDirectory)` (`Client/Hosting/DesktopPortStore.cs`, used at `Program.cs:58`), **not** a hard-coded `:0`. `DesktopPortStore` **remembers the last loopback port** in a `desktop-port.txt` file under the per-user data dir and re-binds it when it is still free; only when there is no remembered port (or it is taken/invalid) does it fall back to the dynamic `http://127.0.0.1:0`. This matters because a fresh OS-assigned port every launch changes the browser **origin** (scheme+host+port) and silently resets every `localStorage`-backed user preference between runs — pinning the port keeps preferences alive. The store writes via temp-file+move (no torn file), probes availability with a throwaway `TcpListener`, and is best-effort: any IO/parse failure resolves to a dynamic bind rather than throwing.
@@ -139,7 +152,7 @@ Desktop mode turns the same binary into a double-click app. It is **opt-in** and
 - **Linux `SIGHUP`** (terminal close) → a `PosixSignalRegistration` with `context.Cancel = true` → `StopApplication()`.
 - **Windows `CTRL_CLOSE_EVENT` / logoff / shutdown** → a `SetConsoleCtrlHandler` callback (kept rooted so the GC can't reclaim the native delegate) that calls `StopApplication()` then **blocks up to ~4s** (`ConsoleCloseDrainBudget`, safely under Windows' ~5s force-kill window) for the drain.
 
-The **Windows Job Object is the hard-kill safety net** regardless of whether the drain completes. `WindowsJobObjectProcessHandle` (`Providers.LlamaServer/WindowsJobObjectProcessHandle.cs`) wraps the child in a job created with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`: closing the job handle (on `TreeKill`/`Dispose`) terminates the whole process tree, so no `llama-server` survives a supervisor stop or crash. (This Win32 path is `[SupportedOSPlatform("windows")]` and the source notes it MUST be verified on real Windows 11 — the WSL build can't exercise it.) See [Local Runtime & Providers](03-local-runtime-and-providers.md) for the supervisor side.
+The **Windows Job Object is the source-defined hard-kill safety net** regardless of whether the drain completes. `WindowsJobObjectProcessHandle` (`Providers.LlamaServer/WindowsJobObjectProcessHandle.cs`) wraps the child in a job created with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`: closing the job handle (on `TreeKill`/`Dispose`) is designed to terminate the whole process tree. This Win32 path is `[SupportedOSPlatform("windows")]` and the source notes it must be verified on real Windows 11; the WSL build cannot exercise it, and this baseline review does not include an operating transcript. See [Local Runtime & Providers](03-local-runtime-and-providers.md) for the supervisor side.
 
 ---
 
@@ -170,7 +183,7 @@ Both scripts carry an explicit **single-instance caveat**: only one instance per
 
 ### RC bundle packaging
 
-`publish/package-tester-win.ps1` is the canonical Windows tester RC path, and requires **PowerShell 7+ (`pwsh`)** — it declares `#Requires -Version 7.0`, and Windows PowerShell 5.1 turns its native-stderr 404 detection into a terminating error. On a clean Windows checkout it validates the release version/tag; rejects local Vite environment overrides; runs frontend lint, OpenAPI drift, license, coverage, production-audit, and build gates; runs backend restore, transitive NuGet vulnerability audit, Release build, and serial solution tests (refusing to start unless the **machine time zone is non-UTC**, since .NET ignores `$env:TZ` on Windows); verifies the staged SPA, tester channel/repository, and caller-supplied GitHub App client ID; then generates release notes, packs the five Velopack assets plus a local SHA-256 manifest, uploads the draft, and updates the release body. `-PublishDraft` additionally proves the pushed canonical source tag resolves to HEAD and verifies all five downloaded draft assets against that manifest before publication. A supplied client ID is always validated — empty, placeholder, and malformed (non-`Iv…`) values are rejected — and no client ID is committed in this repository. `-SkipUpload` runs every build and test gate; it relaxes only the client-ID *requirement*, and an ID-less rehearsal is stamped `REHEARSAL-DO-NOT-SHIP.txt` with the updater inert.
+`publish/package-tester-win.ps1` is the canonical Windows tester RC path, and requires **PowerShell 7+ (`pwsh`)** — it declares `#Requires -Version 7.0`, and Windows PowerShell 5.1 turns its native-stderr 404 detection into a terminating error. **When manually run** on a clean Windows checkout it validates the release version/tag; rejects local Vite environment overrides; runs frontend lint, OpenAPI drift, license, coverage, production-audit, and build gates; runs backend restore, transitive NuGet vulnerability audit, Release build, and serial solution tests (refusing to start unless the **machine time zone is non-UTC**, since .NET ignores `$env:TZ` on Windows); verifies the staged SPA, tester channel/repository, and caller-supplied GitHub App client ID; then generates release notes, packs the five Velopack assets plus a local SHA-256 manifest, uploads the draft, and updates the release body. `-PublishDraft` additionally proves the pushed canonical source tag resolves to HEAD and verifies all five downloaded draft assets against that manifest before publication. A supplied client ID is always validated — empty, placeholder, and malformed (non-`Iv…`) values are rejected — and no client ID is committed in this repository. `-SkipUpload` runs every build and test gate; it relaxes only the client-ID *requirement*, and an ID-less rehearsal is stamped `REHEARSAL-DO-NOT-SHIP.txt` with the updater inert.
 
 `publish/package-rc.sh` remains the manual portable-zip path (a bash script; it builds **both** RIDs by default, cross-building `win-x64` on Linux — smoke-test that on real Windows). It stages the single-file binary, SPA, desktop launcher, uninstaller, `READ-ME-FIRST.txt`, and `LICENSE`/`NOTICE`, then emits a zip plus `.sha256` sidecar. It fails if the SPA is missing and scans the stage for leaked runtime/state files. Its output never self-updates for two independent reasons: no Velopack metadata exists, and it publishes with an explicit `-p:UpdateChannel=main` (the inert channel) that `assert_app_config_sane` hard-fails on if it ever reads as live.
 
@@ -238,9 +251,13 @@ They share a version *string* but nothing else. Cutting a tester RC touches both
 
 ### GitHub Actions is disabled
 
-`.github/workflows/release.yml` describes a tag-triggered, channel-selectable Velopack release. **It is `disabled_manually` and has never succeeded** — its only three runs all failed on 2026-06-27. `build-and-test.yml` is likewise disabled (3 runs, 3 failures, last 2026-04-20), and `e2e.yml` was never registered as a workflow at all. Six runs, six failures, zero successes, ever (`gh workflow list --all` / `gh run list`, verified 2026-07-24).
+`.github/workflows/release.yml` describes a tag-triggered, channel-selectable Velopack release. **It is `disabled_manually` and has never succeeded** — its only three runs all failed on 2026-06-27. `build-and-test.yml` is likewise disabled (3 runs, 3 failures, last 2026-04-20), and `e2e.yml` was never registered as a workflow at all. Six runs, six failures, zero successes were last observed with `gh workflow list --all` / `gh run list` on 2026-07-24; that external state was not recaptured for the 2026-07-28 documentation review.
 
 From `0.1.0-rc.4.0` onward, tester RCs use **`publish/package-tester-win.ps1`** run by hand on Windows; earlier RCs predate that script. Read `release.yml` for design intent — the channel guard, least-privilege per-repo tokens, and the protected `release` environment are all worth keeping — but do not describe it as the release mechanism, and do not expect a pushed tag to build anything. See [Testing & Validation](13-testing-and-validation.md) for where the quality gates actually run.
+
+The presence and content of these scripts is repository design evidence, not evidence that a particular
+release ran them successfully. A release claim needs the matching retained transcript, hashes, tag,
+and target-OS smoke evidence; this page does not assert those artifacts are available.
 
 ---
 
@@ -249,7 +266,7 @@ From `0.1.0-rc.4.0` onward, tester RCs use **`publish/package-tester-win.ps1`** 
 - [Architecture Overview](01-architecture-overview.md) — where hosting sits in the whole node
 - [Project Layout](02-project-layout.md) — the 20 solution projects, including AppHost and ServiceDefaults
 - [Local Runtime & Providers](03-local-runtime-and-providers.md) — llama.cpp supervisor, process reaping, the Job Object's counterpart
-- [Data & Persistence](08-data-and-persistence.md) — node data directory, encrypted SQLite, EF migrations
+- [Data & Persistence](08-data-and-persistence.md) — node data directory, SQLite, selected per-column encryption, EF migrations
 - [API & Hubs](09-api-and-hubs.md) — endpoints, SignalR hubs, OpenAPI/Scalar
 - [React Client](10-react-client.md) — the SPA served from `wwwroot`
 - [Security & Privacy](12-security-and-privacy.md) — loopback-only, `LocalApiSecurityMiddleware`, secret stores

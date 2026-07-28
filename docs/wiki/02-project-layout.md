@@ -1,6 +1,6 @@
 # Solution & Project Layout
 
-> Last reviewed: 2026-07-24 · Code-grounded.
+> Baseline: `7e64ed589e14eecc0e522e807d2e531a1095d19a` · Reviewed: 2026-07-28 · Code-grounded.
 
 This page is the inventory and dependency map of the .NET side of XE Local AI Engine. It lists every `.csproj` registered in `XE-Local-AI-Engine.slnx`, explains each project's role, draws the project reference graph (who references whom), and states the layering rule that keeps the runtime, applications, and providers decoupled. The React client (`XE-Local-AI-Engine.Client.React`) is a separate Vite/pnpm tree wired in by Aspire and is documented on [10-react-client.md](10-react-client.md).
 
@@ -29,9 +29,9 @@ Every project below is grounded in its `.csproj` (`Sdk=` / `OutputType` / `Proje
 
 | Project | SDK / kind | Role |
 |---|---|---|
-| `XE-Local-AI-Engine.Client` | `Microsoft.NET.Sdk.Web` | The **Node Web Server**. Hosts the React UI (static files), exposes `/api/local/v1` + local SignalR hubs, owns the single platform WorkerHub connection, and supervises the in-process model runtime. The composition root — wires every provider + application service. See [01-architecture-overview.md](01-architecture-overview.md), [09-api-and-hubs.md](09-api-and-hubs.md). |
+| `XE-Local-AI-Engine.Client` | `Microsoft.NET.Sdk.Web` | The **Node Web Server**. Hosts the React UI (static files), exposes `/api/local/v1` + local SignalR hubs, owns the single platform WorkerHub connection, and supervises node-owned model-runtime host child processes. The composition root — wires every provider + application service. See [01-architecture-overview.md](01-architecture-overview.md), [09-api-and-hubs.md](09-api-and-hubs.md). |
 | `XE-Local-AI-Engine.Client.Application` | `Microsoft.NET.Sdk` | The **application layer**: decisions/orchestration for chat, agents, scheduler, model fit, inference tuning, knowledge/RAG, images, uploads, and development mode. Depends on every provider + persistence + agent + contracts. See [03-local-runtime-and-providers.md](03-local-runtime-and-providers.md), [05-chat.md](05-chat.md), [06-scheduler.md](06-scheduler.md), [07-model-fit.md](07-model-fit.md). |
-| `XE-Local-AI-Engine.Client.Persistence` | `Microsoft.NET.Sdk` | EF Core + encrypted SQLite. Owns the DbContexts, entities, and 40 migrations. References ASP.NET Identity EF Core + `Microsoft.EntityFrameworkCore.Sqlite` (design/tools `PrivateAssets`). Has **no** project references — it is a leaf. See [08-data-and-persistence.md](08-data-and-persistence.md). |
+| `XE-Local-AI-Engine.Client.Persistence` | `Microsoft.NET.Sdk` | EF Core + SQLite with selected per-column AEAD encryption. Owns the DbContexts, entities, 43 migration implementations (41 timestamped + 2 untimestamped), and 2 model snapshots. References ASP.NET Identity EF Core + `Microsoft.EntityFrameworkCore.Sqlite` (design/tools `PrivateAssets`). Has **no** project references — it is a leaf. See [08-data-and-persistence.md](08-data-and-persistence.md). |
 | `XE-Local-AI-Engine.AI.Agent` | `Microsoft.NET.Sdk`, `net10.0` | Microsoft Agent Framework (MAF) + Microsoft.Extensions.AI (MEAI) wiring: agents, tools, playbooks, the AgentHome write-back loop. See [04-agent-mode.md](04-agent-mode.md). |
 | `XE-Local-AI-Engine.AI.Contracts` | `Microsoft.NET.Sdk` | Shared, dependency-free contract types — `Enums/` and `Events/` only (verified). Referenced by both `Client` and `Client.Application` so transport DTOs/events are defined once. Note: despite the name this is an in-tree project, **not** a git submodule (no `.gitmodules` entry matches). |
 
@@ -39,7 +39,7 @@ Every project below is grounded in its `.csproj` (`Sdk=` / `OutputType` / `Proje
 
 | Project | SDK / kind | Role |
 |---|---|---|
-| `XE-Local-AI-Engine.AppHost` | `Aspire.AppHost.Sdk` 13.4.6, `Exe`, `IsAspireHost` | **Dev-only orchestration.** `AppHost.cs` wires three resources: the `Client` app (`app`, https), the Vite React app (`client-react`, port 5175), and an encrypted SQLite resource (`node-sqlite`). Hosting packages are `Aspire.Hosting.AppHost` 13.4.6, `Aspire.Hosting.JavaScript` 13.4.6, `Aspire.Hosting.Browsers` 13.4.6-preview.1.26319.6, and `CommunityToolkit.Aspire.Hosting.Sqlite` 13.4.0. Inference runs inside `Client`; the AppHost has no model-runtime resource. |
+| `XE-Local-AI-Engine.AppHost` | `Aspire.AppHost.Sdk` 13.4.6, `Exe`, `IsAspireHost` | **Dev-only orchestration.** `AppHost.cs` wires three resources: the `Client` app (`app`, https), the Vite React app (`client-react`, port 5175), and a SQLite resource (`node-sqlite`) while supplying the node key used by application-level field encryption. Hosting packages are `Aspire.Hosting.AppHost` 13.4.6, `Aspire.Hosting.JavaScript` 13.4.6, `Aspire.Hosting.Browsers` 13.4.6-preview.1.26319.6, and `CommunityToolkit.Aspire.Hosting.Sqlite` 13.4.0. Inference runs inside `Client`; the AppHost has no model-runtime resource. |
 | `XE-Local-AI-Engine.ServiceDefaults` | `Microsoft.NET.Sdk`, `IsAspireSharedProject` | Shared cross-cutting defaults: OpenTelemetry instrumentation/exporter, `Microsoft.Extensions.Http.Resilience`, service discovery. Referenced by `Client` and `Client.Application`. |
 
 ### Providers (`/Src/Providers/`)
@@ -94,6 +94,11 @@ Solid arrows are `ProjectReference` edges (verified from each `.csproj`).
 AppHost ──► Client            (orchestrates; not referenced back)
 ```
 
+**Text fallback:** `Client` is the composition root. It references `Client.Application`, persistence,
+agent, provider, contracts, and service-default projects. `Client.Application` carries the product
+orchestration dependencies; provider implementations converge on `Providers.Abstractions`.
+`AppHost` starts `Client` for development but is not referenced back by the runtime.
+
 Notable edges:
 
 - **`Client.Application` is the hub of the product graph** — it references all seven provider projects, `Client.Persistence`, `AI.Agent`, `ServiceDefaults`, and `AI.Contracts`.
@@ -120,6 +125,10 @@ Notable edges:
                                 ServiceDefaults (telemetry/resilience)
 ```
 
+**Text fallback:** web/transport code orchestrates application services. Application services depend
+on persistence, the agent runtime, and provider contracts. Provider implementations depend inward on
+their abstractions; persistence does not depend back on the web host.
+
 Maintainer invariants:
 
 1. **Providers behind abstractions.** Code outside a provider project depends on `ILocalModelProvider` / `IChatClient` / `IEmbeddingGenerator` (MEAI) — never on a provider SDK type. Adding a model backend = a new `Providers.*` project that references **only** `Providers.Abstractions`, plus DI registration in `Client.Application`/`Client`. See [03-local-runtime-and-providers.md](03-local-runtime-and-providers.md).
@@ -141,7 +150,7 @@ Repo-wide MSBuild config lives at the solution root:
 
 - [01-architecture-overview.md](01-architecture-overview.md) — how the Node Web Server, application layer, and runtime fit together.
 - [03-local-runtime-and-providers.md](03-local-runtime-and-providers.md) — the provider seams and the llama.cpp supervisor in depth.
-- [08-data-and-persistence.md](08-data-and-persistence.md) — `Client.Persistence`, encrypted SQLite, migrations.
+- [08-data-and-persistence.md](08-data-and-persistence.md) — `Client.Persistence`, SQLite, selected per-column encryption, migrations.
 - [04-agent-mode.md](04-agent-mode.md) — `AI.Agent` (MAF/MEAI) internals.
 - [09-api-and-hubs.md](09-api-and-hubs.md) — endpoints and SignalR hubs exposed by `Client`.
 - [10-react-client.md](10-react-client.md) — the React feature tree and OpenAPI→hey-api clients.

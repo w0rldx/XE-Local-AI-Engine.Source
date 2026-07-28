@@ -1,6 +1,6 @@
 # Data Model & Persistence
 
-> Last reviewed: 2026-07-24 · Code-grounded.
+> Baseline: `7e64ed589e14eecc0e522e807d2e531a1095d19a` · Reviewed: 2026-07-28 · Code-grounded.
 
 The node persists chat, agent, scheduler, model-fit and identity state in local **SQLite** through Entity Framework Core, living in the `XE-Local-AI-Engine.Client.Persistence` project. There are **two** DbContexts (`NodeChatDbContext` and `NodeIdentityDbContext`), a forward-only migration history, and a **per-column AES-256-GCM AEAD** scheme that encrypts privacy-sensitive payloads (conversation titles, message content, agent instructions, golden conversations, …) before they hit disk. This page is the maintainer reference for the schema, the encryption seams, and the migration timeline.
 
@@ -23,7 +23,7 @@ XE-Local-AI-Engine.Client.Persistence/
 ├── Configurations/                    # IEntityTypeConfiguration per entity (table/column/index mapping)
 ├── Implementation/                    # store classes (the persistence boundary the app calls)
 ├── Stores/                            # store interfaces
-└── Migrations/                        # 40 migrations + 2 model snapshots (+ per-migration .Designer.cs)
+└── Migrations/                        # 43 implementations + 2 model snapshots (+ per-migration .Designer.cs)
 ```
 
 The key-holder **implementation** that actually derives the key (`NodeSqliteKeyHolder`) lives one project up in `XE-Local-AI-Engine.Client.Application/Services/Persistence/Implementation/NodeSqliteKeyHolder.cs`; the Persistence project only owns the `INodeSqliteKeyHolder` contract and a zero-key null object. This keeps the operator-secret dependency out of the schema project.
@@ -116,7 +116,7 @@ Application code never touches `DbSet`s directly — it calls **store** classes 
 
 ## Migration timeline (forward-only)
 
-Migrations live in `Migrations/` and upgrade an existing encrypted database in place. New schema should prefer additive tables/columns with safe defaults, but the history also contains data-repair SQL and removal of obsolete schema (`DropApprovedUtilityImages`). Migrations are not automatically reversed when an older binary starts, so release rollback requires a pre-update data-directory backup or continued use of the newer binary. Each app migration ships a `.Designer.cs` and the two contexts keep separate snapshots (`NodeChatDbContextModelSnapshot.cs`, `NodeIdentityDbContextModelSnapshot.cs`, EF product version `10.0.9`).
+Migrations live in `Migrations/` and upgrade the existing SQLite schemas in place. New schema should prefer additive tables/columns with safe defaults, but the history also contains data-repair SQL and removal of obsolete schema (`DropApprovedUtilityImages`). Migrations are not automatically reversed when an older binary starts, so rollback depends on a separately captured compatible data-directory backup or continued use of the newer binary. The repository does not define a backup schedule, retention period, restore guarantee, RTO, or RPO. Each timestamped migration has a `.Designer.cs`; the two contexts keep separate snapshots (`NodeChatDbContextModelSnapshot.cs`, `NodeIdentityDbContextModelSnapshot.cs`, EF product version `10.0.9`).
 
 > A few early migrations carry **no timestamp prefix** (`InitialNodeChatSchema`, `AddNodeMessageLifecycleColumns`) — these are the original chat-schema migrations that predate the timestamped naming; they coexist with the timestamped set in the same folder.
 
@@ -151,7 +151,6 @@ Migrations live in `Migrations/` and upgrade an existing encrypted database in p
 | `20260626104651_AddConversationUploadedFiles` | `conversation_uploaded_files` (chat upload attachments; encrypted display name, cascade FK) |
 | `20260626234754_AddInferenceProfilesAndBenchmarkMetrics` | `inference_profiles` table (per-machine launch profiles) + benchmark metric columns on the model-fit snapshot (`pp_tokens_per_second`, `tool_loop_ms`, `cache_hit_rate`, `vram_load_bytes`, `vram_after_bytes`, …) |
 | `20260701175538_AddKnowledgeBaseTables` | Knowledge-base / RAG tables: `knowledge_documents`, `knowledge_document_sections`, `knowledge_document_chunks`, `knowledge_chunk_vectors` (encrypted document store + chunk embedding vectors) |
-| `20260726203016_AddKnowledgeVectorIdentity` | Canonical knowledge vector identity (`resolved model + transform/version + width`) on documents/vectors; all pre-existing projections are explicitly tagged `legacy:unversioned` so they remain source-preserved but stale until reindexed |
 | `20260701191341_AddImageRuntimeTables` | Local image-runtime tables: `image_jobs`, `image_model_profiles`, `generated_images` |
 | `20260710163634_AddAgentDefinitionBaseScaffoldOptOut` | `disable_base_scaffold` flag on `agent_definitions` (per-agent opt-out of the base scaffold prompt) |
 | `20260711002326_AddBenchmarkProfileRevisionBinding` | Bind `model_fit_benchmarks` to an inference-profile revision: `profile_id` (+ index) plus captured launch flags (`flash_attn`, `kv_type_v`) |
@@ -163,8 +162,13 @@ Migrations live in `Migrations/` and upgrade an existing encrypted database in p
 | `20260718143054_AddAgentExecutionLogProvider` | Adds provider attribution to agent execution logs |
 | `20260721191435_AddDevelopmentModeFoundation` | Adds development-mode project/run/review persistence |
 | `20260722192133_BindDevelopmentProjectsToSelectedFolders` | Binds development projects to trusted selected-folder records |
+| `20260726192021_AddLaunchPolicyFingerprintAndBenchmarkResources` | Adds launch-policy fingerprinting and measured benchmark resource fields used to detect stale inference evidence |
+| `20260726203016_AddKnowledgeVectorIdentity` | Canonical knowledge vector identity (`resolved model + transform/version + width`) on documents/vectors; all pre-existing projections are explicitly tagged `legacy:unversioned` so they remain source-preserved but stale until reindexed |
+| `20260728184839_AddDevelopmentCommandProfile` | Snapshots the code-owned Development command profile on each project and binds artifacts to its digest |
 
-(Counted on disk: **40 migration files** — 38 timestamped plus 2 untimestamped chat-schema migrations — and **2 model snapshots** = 42 `.cs` files excluding the per-migration `.Designer.cs`.)
+(Counted on disk at the baseline: **43 migration implementation files** — 41 timestamped plus 2
+untimestamped chat-schema migrations — and **2 model snapshots**. Per-migration `.Designer.cs` files
+are not included in that implementation count.)
 
 ### Notable migration mechanics
 
