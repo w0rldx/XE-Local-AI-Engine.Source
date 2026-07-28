@@ -2048,6 +2048,36 @@ export const zXeLocalAiEngineClientEndpointsDevelopmentV1RegisterDevelopmentRepo
 	hostPath: z.string().optional(),
 });
 
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTemplateResponse = z.object({
+	id: z.string().optional(),
+	alias: z.string().optional(),
+	availability: z.string().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentTemplatesResponse = z.object({
+	templates: z.array(zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTemplateResponse).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1RegisterDevelopmentTemplateRequest = z.object({
+	alias: z.string().optional(),
+	hostPath: z.string().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTemplateRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentRepositoryFromTemplateResponse = z.object({
+	repository: zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentRepositoryResponse.optional(),
+	templateAlias: z.string().optional(),
+	templateCommit: z.string().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1CreateDevelopmentRepositoryFromTemplateRequest = z.object({
+	templateId: z.guid().optional(),
+	destinationPath: z.string().optional(),
+	alias: z.string().optional(),
+	baseBranch: z.string().optional(),
+});
+
 export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProfileDetectionResponse = z.object({
 	profileId: z.string().optional(),
 	buildTarget: z.string().nullish(),
@@ -3988,6 +4018,36 @@ export const zRegisterDevelopmentRepositoryBody =
  * Success
  */
 export const zRegisterDevelopmentRepositoryResponse = zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentRepositoryResponse;
+
+/**
+ * Success
+ */
+export const zListDevelopmentTemplatesResponse = zXeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentTemplatesResponse;
+
+export const zRegisterDevelopmentTemplateBody = zXeLocalAiEngineClientEndpointsDevelopmentV1RegisterDevelopmentTemplateRequest;
+
+/**
+ * Success
+ */
+export const zRegisterDevelopmentTemplateResponse = zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTemplateResponse;
+
+export const zRemoveDevelopmentTemplatePath = z.object({
+	templateId: z.guid(),
+});
+
+/**
+ * No Content
+ */
+export const zRemoveDevelopmentTemplateResponse = z.void();
+
+export const zCreateDevelopmentRepositoryFromTemplateBody =
+	zXeLocalAiEngineClientEndpointsDevelopmentV1CreateDevelopmentRepositoryFromTemplateRequest;
+
+/**
+ * Success
+ */
+export const zCreateDevelopmentRepositoryFromTemplateResponse =
+	zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentRepositoryFromTemplateResponse;
 
 export const zDetectDevelopmentRepositoryProfilePath = z.object({
 	selectedFolderId: z.guid(),

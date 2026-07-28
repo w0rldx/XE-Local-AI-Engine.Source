@@ -282,6 +282,13 @@ public static class LocalApiRoutes
         // A GET with the folder id in the route: detection is a read of the repository, it takes no body, and a
         // body-less POST would land on this repo's 415 trap.
         public const string RepositoryProfileDetection = "development/repositories/{selectedFolderId}/profile-detection";
+
+        // Slice 2. Templates are ordinary repositories the operator already has; the registry is list/add/remove, and
+        // materializing one produces a NEW registered repository, which is why the create route sits under
+        // repositories rather than under templates.
+        public const string Templates = "development/templates";
+        public const string TemplateById = "development/templates/{templateId}";
+        public const string RepositoriesFromTemplate = "development/repositories/from-template";
         public const string Projects = "development/projects";
         public const string ProjectById = "development/projects/{projectId}";
         public const string RepositoryConnection = "development/projects/{projectId}/repository-connection";

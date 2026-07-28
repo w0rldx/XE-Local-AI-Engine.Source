@@ -75,4 +75,15 @@ public sealed class DevelopmentOptions
     /// </summary>
     [Range(1, 86400)]
     public int ToolCommandTimeoutSeconds { get; init; } = 300;
+
+    /// <summary>
+    ///     The wall-clock budget for one step of a template materialization (clone, init, add, commit).
+    ///     <para>
+    ///         Its own budget rather than <see cref="MaxAttemptDurationSeconds" />: this runs on the host at project
+    ///         creation with an operator waiting on an HTTP response, not inside an attempt. A large template's shallow
+    ///         clone is the step that dominates it.
+    ///     </para>
+    /// </summary>
+    [Range(1, 86400)]
+    public int TemplateMaterializationTimeoutSeconds { get; init; } = 600;
 }

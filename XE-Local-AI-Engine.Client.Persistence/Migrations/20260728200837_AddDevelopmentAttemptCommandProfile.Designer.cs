@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using XE_Local_AI_Engine.Client.Persistence;
 
@@ -10,9 +11,11 @@ using XE_Local_AI_Engine.Client.Persistence;
 namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
 {
     [DbContext(typeof(NodeChatDbContext))]
-    partial class NodeChatDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260728200837_AddDevelopmentAttemptCommandProfile")]
+    partial class AddDevelopmentAttemptCommandProfile
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.9");
@@ -848,78 +851,6 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasDatabaseName("ux_development_tasks_project_id");
 
                     b.ToTable("development_tasks", (string)null);
-                });
-
-            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentTemplate", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
-                        .HasColumnName("id");
-
-                    b.Property<string>("Alias")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("alias");
-
-                    b.Property<long>("CreatedAtUtc")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("created_at_utc");
-
-                    b.Property<byte[]>("HostPath")
-                        .IsRequired()
-                        .HasColumnType("BLOB")
-                        .HasColumnName("host_path");
-
-                    b.Property<long>("Version")
-                        .IsConcurrencyToken()
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("version");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Alias")
-                        .IsUnique()
-                        .HasDatabaseName("ux_development_templates_alias");
-
-                    b.ToTable("development_templates", (string)null);
-                });
-
-            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentTemplateMaterialization", b =>
-                {
-                    b.Property<Guid>("SelectedFolderId")
-                        .HasColumnType("TEXT")
-                        .HasColumnName("selected_folder_id");
-
-                    b.Property<long>("CreatedAtUtc")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("created_at_utc");
-
-                    b.Property<string>("TemplateAlias")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("template_alias");
-
-                    b.Property<string>("TemplateCommit")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("template_commit");
-
-                    b.Property<Guid>("TemplateId")
-                        .HasColumnType("TEXT")
-                        .HasColumnName("template_id");
-
-                    b.Property<byte[]>("TemplatePath")
-                        .IsRequired()
-                        .HasColumnType("BLOB")
-                        .HasColumnName("template_path");
-
-                    b.HasKey("SelectedFolderId");
-
-                    b.ToTable("development_template_materializations", (string)null);
                 });
 
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.GeneratedImage", b =>
@@ -2597,15 +2528,6 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentProject", null)
                         .WithMany()
                         .HasForeignKey("ProjectId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentTemplateMaterialization", b =>
-                {
-                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.NodeSelectedFolder", null)
-                        .WithMany()
-                        .HasForeignKey("SelectedFolderId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

@@ -14,7 +14,7 @@ public sealed class DevelopmentPersistenceTests : IDisposable
         _fixture.Dispose();
 
     [Test]
-    public async Task Model_ContainsExactlyFiveDevelopmentTablesAndRequiredUniqueIndexes()
+    public async Task Model_ContainsExactlyTheApprovedDevelopmentTablesAndRequiredUniqueIndexes()
     {
         await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
         await using var scope = provider.CreateAsyncScope();
@@ -26,15 +26,17 @@ public sealed class DevelopmentPersistenceTests : IDisposable
                               .Order(StringComparer.Ordinal)
                               .ToArray();
 
-        AssertEx.Equal(expected: 5, tables.Length);
+        AssertEx.Equal(expected: 7, tables.Length);
         AssertEx.True(tables.SequenceEqual([
                 "development_artifacts",
                 "development_attempts",
                 "development_events",
                 "development_projects",
-                "development_tasks"
+                "development_tasks",
+                "development_template_materializations",
+                "development_templates"
             ], StringComparer.Ordinal),
-            "The Development schema must contain exactly the five approved persistence concepts.");
+            "The Development schema must contain exactly the approved persistence concepts.");
 
         var indexNames = dbContext.Model.GetEntityTypes()
                                   .SelectMany(entity => entity.GetIndexes())
@@ -43,6 +45,137 @@ public sealed class DevelopmentPersistenceTests : IDisposable
         AssertEx.True(indexNames.Contains("ux_development_attempts_one_active_per_task"));
         AssertEx.True(indexNames.Contains("ux_development_events_project_sequence"));
         AssertEx.True(indexNames.Contains("ux_development_events_operation_phase"));
+    }
+
+    /// <summary>
+    ///     S1.5.1. An attempt freezes the command profile it runs under, so editing the project's profile afterwards
+    ///     cannot retroactively change what a historical attempt is judged against — and a reviewer attempt inherits
+    ///     the coder attempt's profile rather than picking up the edit, which is what keeps one evidence chain under
+    ///     one profile.
+    /// </summary>
+    [Test]
+    public async Task AttemptCommandProfile_IsFrozenAtCreationAndInheritedByTheReviewerOfThatCoderAttempt()
+    {
+        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var scope = provider.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
+        var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
+
+        const string ProfileAtAttemptTime = """{"profileId":"generic-git","profileVersion":"v1"}""";
+        const string ProfileAfterEdit = """{"profileId":"dotnet-slnx","profileVersion":"v1"}""";
+
+        var seed = DevelopmentTestFixture.CreateSeed() with { CommandProfileJson = ProfileAtAttemptTime };
+        _ = await store.CreateProjectAsync(seed).ConfigureAwait(false);
+        _ = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
+                           Guid.NewGuid(),
+                           DevelopmentTaskStatus.Ready,
+                           ExpectedTaskVersion: 1))
+                       .ConfigureAwait(false);
+
+        var coderAttemptId = Guid.NewGuid();
+        var coder = await store.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
+                                    coderAttemptId,
+                                    Guid.NewGuid(),
+                                    DevelopmentAttemptRole.Coder,
+                                    "local-model",
+                                    "local",
+                                    ExpectedTaskVersion: 2))
+                                .ConfigureAwait(false);
+
+        AssertEx.Equal(ProfileAtAttemptTime,
+            (await store.GetExecutionSnapshotAsync(coderAttemptId).ConfigureAwait(false)).CommandProfileJson,
+            "A new attempt must snapshot the project's profile as it stands at creation.");
+
+        _ = await store.TerminalizeAttemptAsync(new DevelopmentTerminalizeAttemptCommand(coderAttemptId,
+                           Guid.NewGuid(),
+                           DevelopmentAttemptStatus.Succeeded,
+                           ExpectedAttemptVersion: coder.Version))
+                       .ConfigureAwait(false);
+
+        // The profile edit. There is no operator-facing edit path yet; this is the write one would perform, and it is
+        // the exact event that made the project row stop being a safe stand-in for the attempt's profile.
+        var project = await dbContext.DevelopmentProjects.SingleAsync(entity => entity.Id == seed.ProjectId).ConfigureAwait(false);
+        project.CommandProfileJson = ProfileAfterEdit;
+        project.Version++;
+        _ = await dbContext.SaveChangesAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(ProfileAtAttemptTime,
+            (await store.GetExecutionSnapshotAsync(coderAttemptId).ConfigureAwait(false)).CommandProfileJson,
+            "Editing the project's profile must not retroactively change what a historical attempt ran under.");
+
+        // InProgress reaches InReview only through Validation; the transition table has no direct edge.
+        async Task<long> TaskVersionAsync() =>
+            await dbContext.DevelopmentTasks.AsNoTracking()
+                           .Where(entity => entity.Id == seed.TaskId)
+                           .Select(entity => entity.Version)
+                           .SingleAsync()
+                           .ConfigureAwait(false);
+
+        _ = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
+                           Guid.NewGuid(),
+                           DevelopmentTaskStatus.Validation,
+                           await TaskVersionAsync().ConfigureAwait(false)))
+                       .ConfigureAwait(false);
+        _ = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
+                           Guid.NewGuid(),
+                           DevelopmentTaskStatus.InReview,
+                           await TaskVersionAsync().ConfigureAwait(false)))
+                       .ConfigureAwait(false);
+
+        var reviewerAttemptId = Guid.NewGuid();
+        _ = await store.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
+                           reviewerAttemptId,
+                           Guid.NewGuid(),
+                           DevelopmentAttemptRole.Reviewer,
+                           "local-model",
+                           "local",
+                           await TaskVersionAsync().ConfigureAwait(false)))
+                       .ConfigureAwait(false);
+
+        AssertEx.Equal(ProfileAtAttemptTime,
+            (await store.GetExecutionSnapshotAsync(reviewerAttemptId).ConfigureAwait(false)).CommandProfileJson,
+            "A reviewer must review under the profile the coder attempt ran, not one edited in since.");
+    }
+
+    /// <summary>
+    ///     An attempt row that predates the attempt-level column reads the project's profile, so the column's
+    ///     introduction changes nothing for history already on disk.
+    /// </summary>
+    [Test]
+    public async Task AttemptCommandProfile_FallsBackToTheProjectWhenTheAttemptPredatesTheColumn()
+    {
+        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var scope = provider.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
+        var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
+
+        const string ProjectProfile = """{"profileId":"generic-git","profileVersion":"v1"}""";
+        var seed = DevelopmentTestFixture.CreateSeed() with { CommandProfileJson = ProjectProfile };
+        _ = await store.CreateProjectAsync(seed).ConfigureAwait(false);
+        _ = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
+                           Guid.NewGuid(),
+                           DevelopmentTaskStatus.Ready,
+                           ExpectedTaskVersion: 1))
+                       .ConfigureAwait(false);
+
+        var attemptId = Guid.NewGuid();
+        _ = await store.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
+                           attemptId,
+                           Guid.NewGuid(),
+                           DevelopmentAttemptRole.Coder,
+                           "local-model",
+                           "local",
+                           ExpectedTaskVersion: 2))
+                       .ConfigureAwait(false);
+
+        // Reproduce a row written before the column existed.
+        var attempt = await dbContext.DevelopmentAttempts.SingleAsync(entity => entity.Id == attemptId).ConfigureAwait(false);
+        attempt.CommandProfileJson = null;
+        _ = await dbContext.SaveChangesAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(ProjectProfile,
+            (await store.GetExecutionSnapshotAsync(attemptId).ConfigureAwait(false)).CommandProfileJson,
+            "An attempt with no snapshot must resolve the project's profile, exactly as it did before this column.");
     }
 
     [Test]

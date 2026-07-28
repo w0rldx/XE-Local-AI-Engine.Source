@@ -155,6 +155,10 @@ public sealed class DevelopmentManagementServiceTests
             Substitute.For<IActiveCloudChatClientFactory>(),
             new GenericGitDetector(),
             ProfileBackfill(),
+
+            // No materialization for these projects: they are registered repositories, not template-created ones, so
+            // the profile carries no template id.
+            Substitute.For<IDevelopmentTemplateStore>(),
             TimeProvider.System);
 
     /// <summary>Backfill is a no-op here: every project these tests build already carries a profile.</summary>

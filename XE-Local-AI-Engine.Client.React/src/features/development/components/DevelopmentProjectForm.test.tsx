@@ -250,6 +250,212 @@ describe("DevelopmentProjectForm", () => {
 		expect(submitted.buildTarget).toBeUndefined();
 	});
 
+	it("offers the template picker and destination path on the first-run surface, with no project or repository", async () => {
+		// The create Accordion auto-opens only when the node has zero projects, and this form is its entire body.
+		// Anything gated behind an existing project or a registered repository is unreachable on a fresh node, so the
+		// template entry point has to be operable from exactly this render — no repositories, no selection, no detection.
+		render(
+			<MantineProvider>
+				<DevelopmentProjectForm
+					repositories={[]}
+					repositoriesLoading={false}
+					isRegistering={false}
+					isSubmitting={false}
+					templates={[{ id: "template-1", alias: "Starter", availability: "Available" }]}
+					onRegister={vi.fn()}
+					onCreateFromTemplate={vi.fn()}
+					onSubmit={vi.fn()}
+				/>
+			</MantineProvider>,
+		);
+
+		fireEvent.click(screen.getByTestId("development-open-create-from-template"));
+
+		expect(await screen.findByTestId("development-template-select")).toBeTruthy();
+		expect(screen.getByTestId("development-template-destination")).toBeTruthy();
+		expect(screen.getByTestId("development-template-alias")).toBeTruthy();
+	});
+
+	it("creates a repository from the picked template, destination and alias, carrying the form's base branch", async () => {
+		const createFromTemplate = vi.fn().mockResolvedValue({
+			repository: { id: "repository-9", alias: "New engine", availability: "Available" },
+			templateAlias: "Starter",
+			templateCommit: "abc1234",
+		});
+		render(
+			<MantineProvider>
+				<DevelopmentProjectForm
+					repositories={[]}
+					repositoriesLoading={false}
+					isRegistering={false}
+					isSubmitting={false}
+					templates={[{ id: "template-1", alias: "Starter", availability: "Available" }]}
+					onRegister={vi.fn()}
+					onCreateFromTemplate={createFromTemplate}
+					onSubmit={vi.fn()}
+				/>
+			</MantineProvider>,
+		);
+
+		fireEvent.click(screen.getByTestId("development-open-create-from-template"));
+		fireEvent.click(await screen.findByTestId("development-template-select"));
+		fireEvent.click(await screen.findByRole("option", { name: "Starter", hidden: true }));
+		fireEvent.change(screen.getByTestId("development-template-destination"), {
+			target: { value: "/home/operator/projects/new-engine" },
+		});
+		fireEvent.change(screen.getByTestId("development-template-alias"), { target: { value: "New engine" } });
+		fireEvent.click(screen.getByTestId("development-create-from-template"));
+
+		await waitFor(() =>
+			expect(createFromTemplate).toHaveBeenCalledWith({
+				templateId: "template-1",
+				destinationPath: "/home/operator/projects/new-engine",
+				alias: "New engine",
+				baseBranch: "main",
+			}),
+		);
+	});
+
+	it("tells its owner about the repository it auto-selects after creating from a template", async () => {
+		// Regression for the a5028849 class of defect, on the template path this time. Creating from a template
+		// auto-selects the new repository, and the owner drives command-profile detection off that id. If only
+		// setValues runs, DevelopmentPage.profileFolderId stays null, detection never runs, the confirmation panel
+		// never renders, and Create silently takes its "no detection" branch — on the first-run path, where the
+		// operator has no other way to see the profile their project will run under.
+		const createFromTemplate = vi.fn().mockResolvedValue({
+			repository: { id: "repository-9", alias: "New engine", availability: "Available" },
+		});
+		const repositoryChanged = vi.fn();
+		render(
+			<MantineProvider>
+				<DevelopmentProjectForm
+					repositories={[]}
+					repositoriesLoading={false}
+					isRegistering={false}
+					isSubmitting={false}
+					templates={[{ id: "template-1", alias: "Starter", availability: "Available" }]}
+					onRegister={vi.fn()}
+					onRepositoryChange={repositoryChanged}
+					onCreateFromTemplate={createFromTemplate}
+					onSubmit={vi.fn()}
+				/>
+			</MantineProvider>,
+		);
+
+		fireEvent.click(screen.getByTestId("development-open-create-from-template"));
+		fireEvent.click(await screen.findByTestId("development-template-select"));
+		fireEvent.click(await screen.findByRole("option", { name: "Starter", hidden: true }));
+		fireEvent.change(screen.getByTestId("development-template-destination"), {
+			target: { value: "/home/operator/projects/new-engine" },
+		});
+		fireEvent.change(screen.getByTestId("development-template-alias"), { target: { value: "New engine" } });
+		fireEvent.click(screen.getByTestId("development-create-from-template"));
+
+		await waitFor(() => expect(repositoryChanged).toHaveBeenCalledWith("repository-9"));
+	});
+
+	it("blocks the template create until a template, a destination and an alias are all supplied", async () => {
+		render(
+			<MantineProvider>
+				<DevelopmentProjectForm
+					repositories={[]}
+					repositoriesLoading={false}
+					isRegistering={false}
+					isSubmitting={false}
+					templates={[{ id: "template-1", alias: "Starter", availability: "Available" }]}
+					onRegister={vi.fn()}
+					onCreateFromTemplate={vi.fn()}
+					onSubmit={vi.fn()}
+				/>
+			</MantineProvider>,
+		);
+
+		fireEvent.click(screen.getByTestId("development-open-create-from-template"));
+		const create = (await screen.findByTestId("development-create-from-template")) as HTMLButtonElement;
+		expect(create.disabled).toBe(true);
+
+		fireEvent.click(screen.getByTestId("development-template-select"));
+		fireEvent.click(await screen.findByRole("option", { name: "Starter", hidden: true }));
+		expect(create.disabled).toBe(true);
+
+		fireEvent.change(screen.getByTestId("development-template-destination"), {
+			target: { value: "/home/operator/projects/new-engine" },
+		});
+		expect(create.disabled).toBe(true);
+
+		fireEvent.change(screen.getByTestId("development-template-alias"), { target: { value: "New engine" } });
+		expect(create.disabled).toBe(false);
+	});
+
+	it("registers and removes template repositories from the same dialog", async () => {
+		const addTemplate = vi.fn().mockResolvedValue({ id: "template-2", alias: "Library", availability: "Available" });
+		const removeTemplate = vi.fn().mockResolvedValue(undefined);
+		render(
+			<MantineProvider>
+				<DevelopmentProjectForm
+					repositories={[]}
+					repositoriesLoading={false}
+					isRegistering={false}
+					isSubmitting={false}
+					templates={[{ id: "template-1", alias: "Starter", availability: "Available" }]}
+					onRegister={vi.fn()}
+					onCreateFromTemplate={vi.fn()}
+					onAddTemplate={addTemplate}
+					onRemoveTemplate={removeTemplate}
+					onSubmit={vi.fn()}
+				/>
+			</MantineProvider>,
+		);
+
+		fireEvent.click(screen.getByTestId("development-open-create-from-template"));
+		fireEvent.change(await screen.findByTestId("development-template-registry-alias"), {
+			target: { value: "Library" },
+		});
+		fireEvent.change(screen.getByTestId("development-template-registry-path"), {
+			target: { value: "/home/operator/templates/library" },
+		});
+		fireEvent.click(screen.getByTestId("development-template-add"));
+
+		await waitFor(() =>
+			expect(addTemplate).toHaveBeenCalledWith({ alias: "Library", hostPath: "/home/operator/templates/library" }),
+		);
+
+		const [removeButton] = screen.getAllByTestId("development-template-remove");
+		if (!removeButton) {
+			throw new Error("The registered-template list rendered no remove button.");
+		}
+		fireEvent.click(removeButton);
+		await waitFor(() => expect(removeTemplate).toHaveBeenCalledWith("template-1"));
+	});
+
+	it("keeps the template dialog open and surfaces a failed create", async () => {
+		const createFromTemplate = vi.fn().mockRejectedValue(new Error("The destination path is inside the node data directory."));
+		render(
+			<MantineProvider>
+				<DevelopmentProjectForm
+					repositories={[]}
+					repositoriesLoading={false}
+					isRegistering={false}
+					isSubmitting={false}
+					templates={[{ id: "template-1", alias: "Starter", availability: "Available" }]}
+					onRegister={vi.fn()}
+					onCreateFromTemplate={createFromTemplate}
+					onSubmit={vi.fn()}
+				/>
+			</MantineProvider>,
+		);
+
+		fireEvent.click(screen.getByTestId("development-open-create-from-template"));
+		fireEvent.click(await screen.findByTestId("development-template-select"));
+		fireEvent.click(await screen.findByRole("option", { name: "Starter", hidden: true }));
+		fireEvent.change(screen.getByTestId("development-template-destination"), { target: { value: "/var/lib/xe/data" } });
+		fireEvent.change(screen.getByTestId("development-template-alias"), { target: { value: "New engine" } });
+		fireEvent.click(screen.getByTestId("development-create-from-template"));
+
+		expect(await screen.findByText("The destination path is inside the node data directory.")).toBeTruthy();
+		expect(screen.getByTestId("development-create-from-template")).toBeTruthy();
+	});
+
 	it("keeps the registration dialog open and surfaces contract failures", async () => {
 		const register = vi.fn().mockRejectedValue(new Error("The repository registration response was incomplete."));
 		render(
