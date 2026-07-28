@@ -54,6 +54,7 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
                     ReviewerModelId = command.ReviewerModelId,
                     MaxTokens = command.MaxTokens,
                     MaxDurationSeconds = command.MaxDurationSeconds,
+                    CommandProfileJson = command.CommandProfileJson,
                     ConfigurationVersion = command.ConfigurationVersion,
                     TrustedRepositoryAcknowledged = command.TrustedRepositoryAcknowledged,
                     TrustedRepositoryPolicyVersion = command.TrustedRepositoryPolicyVersion,
@@ -862,7 +863,8 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
             snapshot.Attempt.Status,
             snapshot.Attempt.ModelId,
             snapshot.Attempt.Provider,
-            snapshot.Attempt.Version);
+            snapshot.Attempt.Version,
+            snapshot.Project.CommandProfileJson);
     }
 
     public async Task<IReadOnlyList<DevelopmentProjectSnapshot>> ListProjectsAsync(CancellationToken cancellationToken = default)
@@ -913,6 +915,40 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
         catch (DbUpdateConcurrencyException exception)
         {
             throw new DevelopmentConcurrencyException("The Development project changed before its repository could be reconnected.", exception);
+        }
+
+        return ProjectSnapshot(project);
+    }
+
+    public async Task<DevelopmentProjectSnapshot> BackfillCommandProfileAsync(Guid projectId,
+        string commandProfileJson,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureNotBlank(commandProfileJson, nameof(commandProfileJson));
+        var project = await _dbContext.DevelopmentProjects
+                                      .SingleOrDefaultAsync(entity => entity.Id == projectId, cancellationToken)
+                                      .ConfigureAwait(false)
+                      ?? throw new KeyNotFoundException($"Development project '{projectId}' was not found.");
+
+        // Fill-only. An existing profile is the operator-confirmed agreement for the life of the project, so a backfill
+        // pass must return it untouched rather than replace it — this is what makes a second pass, or two racing
+        // passes, harmless.
+        if (!string.IsNullOrWhiteSpace(project.CommandProfileJson))
+        {
+            return ProjectSnapshot(project);
+        }
+
+        project.CommandProfileJson = commandProfileJson;
+        project.ConfigurationVersion++;
+        project.UpdatedAtUtc = Now();
+        project.Version++;
+        try
+        {
+            _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (DbUpdateConcurrencyException exception)
+        {
+            throw new DevelopmentConcurrencyException("The Development project changed before its command profile could be backfilled.", exception);
         }
 
         return ProjectSnapshot(project);
@@ -1192,6 +1228,7 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
             ChangedFilesManifestHash = command.ChangedFilesManifestHash,
             InputArtifactIdsJson = command.InputArtifactIdsJson?.ToArray(),
             CommandProfileVersion = command.CommandProfileVersion,
+            CommandProfileDigest = command.CommandProfileDigest,
             IsValid = true
         };
 
@@ -1216,7 +1253,8 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
             entity.TrustedRepositoryAcknowledgedAtUtc,
             entity.CreatedAtUtc,
             entity.UpdatedAtUtc,
-            entity.Version);
+            entity.Version,
+            entity.CommandProfileJson);
 
     private static DevelopmentTaskSnapshot TaskSnapshot(DevelopmentTask entity) =>
         new(entity.Id,
@@ -1250,7 +1288,8 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
             entity.ChangedFilesManifestHash,
             entity.InputArtifactIdsJson,
             entity.CommandProfileVersion,
-            entity.IsValid);
+            entity.IsValid,
+            entity.CommandProfileDigest);
 
     private static string ManagedReference(Guid projectId, Guid artifactId) =>
         string.Concat(projectId.ToString("N"), "/", artifactId.ToString("N"));

@@ -45,6 +45,7 @@ import {
 	useDevelopmentCapability,
 	useDevelopmentProject,
 	useDevelopmentProjects,
+	useDevelopmentProfileDetection,
 	useDevelopmentRepositories,
 	usePreviewDevelopmentPatch,
 	useReconnectDevelopmentRepository,
@@ -100,6 +101,8 @@ export function DevelopmentPage() {
 	const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
 	const [reconnectFolderId, setReconnectFolderId] = useState<string | null>(null);
 	const [previewTaskId, setPreviewTaskId] = useState<string | null>(null);
+	const [profileFolderId, setProfileFolderId] = useState<string | null>(null);
+	const detectionQuery = useDevelopmentProfileDetection(profileFolderId, developmentEnabled);
 	const projectQuery = useDevelopmentProject(selectedProjectId, developmentEnabled);
 	const registerMutation = useRegisterDevelopmentRepository();
 	const createMutation = useCreateDevelopmentProject();
@@ -276,6 +279,20 @@ export function DevelopmentPage() {
 											)
 										: undefined
 								}
+								detection={profileFolderId ? (detectionQuery.data ?? null) : null}
+								detectionLoading={detectionQuery.isFetching}
+								detectionError={
+									detectionQuery.error
+										? errorMessage(
+												detectionQuery.error,
+												t(
+													"pages.development.errors.profileDetection",
+													"Could not inspect the repository for a build system.",
+												),
+											)
+										: undefined
+								}
+								onRepositoryChange={setProfileFolderId}
 								onRegister={registerRepository}
 								onSubmit={createProject}
 							/>

@@ -5871,6 +5871,51 @@
         ]
       }
     },
+    "/api/local/v1/development/repositories/{selectedFolderId}/profile-detection": {
+      "get": {
+        "tags": [
+          "Development"
+        ],
+        "operationId": "detectDevelopmentRepositoryProfile",
+        "parameters": [
+          {
+            "name": "selectedFolderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentProfileDetectionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/development/projects": {
       "get": {
         "tags": [
@@ -10856,6 +10901,14 @@
             "type": "string",
             "nullable": true
           },
+          "globalFreeVramAtFreezeBytes": {
+            "type": "integer",
+            "nullable": true
+          },
+          "processBudgetVramAtFreezeBytes": {
+            "type": "integer",
+            "nullable": true
+          },
           "status": {
             "type": "string"
           },
@@ -10869,14 +10922,6 @@
           },
           "updatedAtUtc": {
             "type": "integer"
-          },
-          "globalFreeVramAtFreezeBytes": {
-            "type": "integer",
-            "nullable": true
-          },
-          "processBudgetVramAtFreezeBytes": {
-            "type": "integer",
-            "nullable": true
           }
         }
       },
@@ -14740,6 +14785,29 @@
           }
         }
       },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentProfileDetectionResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "profileId": {
+            "type": "string"
+          },
+          "buildTarget": {
+            "type": "string",
+            "nullable": true
+          },
+          "candidates": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentProfileDetectionRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
       "XE_Local_AI_EngineClientEndpointsDevelopmentV1ListDevelopmentProjectsResponse": {
         "type": "object",
         "additionalProperties": false,
@@ -14806,6 +14874,18 @@
           },
           "version": {
             "type": "integer"
+          },
+          "commandProfileId": {
+            "type": "string",
+            "nullable": true
+          },
+          "commandProfileBuildTarget": {
+            "type": "string",
+            "nullable": true
+          },
+          "commandProfileDigest": {
+            "type": "string",
+            "nullable": true
           }
         }
       },
@@ -14999,6 +15079,10 @@
             "type": "string",
             "nullable": true
           },
+          "commandProfileDigest": {
+            "type": "string",
+            "nullable": true
+          },
           "isValid": {
             "type": "boolean"
           }
@@ -15097,6 +15181,14 @@
           "maxDurationSeconds": {
             "type": "integer",
             "format": "int32",
+            "nullable": true
+          },
+          "commandProfileId": {
+            "type": "string",
+            "nullable": true
+          },
+          "buildTarget": {
+            "type": "string",
             "nullable": true
           }
         }

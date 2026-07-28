@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.CloudProviders;
 
 using System.Runtime.CompilerServices;
+using System.Text;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -226,7 +227,10 @@ public sealed class DevelopmentCloudScopedSecurityTests
             DevelopmentAttemptStatus.Running,
             "cloud-model",
             "fake-cloud",
-            AttemptVersion: 1);
+            AttemptVersion: 1,
+            Encoding.UTF8.GetString(DevelopmentCommandProfileCatalog
+                                    .Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null)
+                                    .ToCanonicalUtf8()));
         var store = Substitute.For<IDevelopmentStore>();
         var blob = Substitute.For<IDevelopmentArtifactBlobStore>();
         blob.WriteAsync(projectId, Arg.Any<Guid>(), Arg.Any<ReadOnlyMemory<byte>>(), Arg.Any<CancellationToken>())
@@ -447,6 +451,13 @@ public sealed class DevelopmentCloudScopedSecurityTests
     {
         public string? AppliedPatch { get; private set; }
         public IReadOnlyList<DevelopmentCommandEvidence> CommandEvidence => [];
+
+        /// <summary>
+        ///     This stub only captures a patch; it never runs a catalog command, so the generic profile — the one
+        ///     code-owned profile that needs no build target — is the honest stub value.
+        /// </summary>
+        public DevelopmentCommandProfile Profile { get; } =
+            DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null);
 
         public Task<string> ListFilesAsync(string? path, CancellationToken cancellationToken = default) =>
             Task.FromResult(string.Empty);

@@ -551,12 +551,12 @@ export type XeLocalAiEngineClientEndpointsModelFitV1InferenceProfileViewDto = {
 	expertCount?: number | null;
 	launchPolicyFingerprintVersion?: number | null;
 	launchPolicyFingerprint?: string | null;
+	globalFreeVramAtFreezeBytes?: number | null;
+	processBudgetVramAtFreezeBytes?: number | null;
 	status: string;
 	benchmarkSnapshotId?: string | null;
 	createdAtUtc: number;
 	updatedAtUtc: number;
-	globalFreeVramAtFreezeBytes?: number | null;
-	processBudgetVramAtFreezeBytes?: number | null;
 };
 
 export type XeLocalAiEngineClientEndpointsModelFitV1BenchmarkInferenceProfileRequest = {
@@ -1707,6 +1707,16 @@ export type XeLocalAiEngineClientEndpointsDevelopmentV1RegisterDevelopmentReposi
 	hostPath?: string;
 };
 
+export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProfileDetectionResponse = {
+	profileId?: string;
+	buildTarget?: string | null;
+	candidates?: Array<string>;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProfileDetectionRequest = {
+	[key: string]: never;
+};
+
 export type XeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentProjectsResponse = {
 	items?: Array<XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectResponse>;
 };
@@ -1726,6 +1736,9 @@ export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectRespons
 	createdAtUtc?: number;
 	updatedAtUtc?: number;
 	version?: number;
+	commandProfileId?: string | null;
+	commandProfileBuildTarget?: string | null;
+	commandProfileDigest?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectDetailResponse = {
@@ -1783,6 +1796,7 @@ export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentArtifactRespon
 	subjectHash?: string | null;
 	changedFilesManifestHash?: string | null;
 	commandProfileVersion?: string | null;
+	commandProfileDigest?: string | null;
 	isValid?: boolean;
 };
 
@@ -1813,6 +1827,8 @@ export type XeLocalAiEngineClientEndpointsDevelopmentV1CreateDevelopmentProjectR
 	trustedRepositoryAcknowledged?: boolean;
 	maxTokens?: number | null;
 	maxDurationSeconds?: number | null;
+	commandProfileId?: string | null;
+	buildTarget?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectRequest = {
@@ -6219,6 +6235,36 @@ export type RegisterDevelopmentRepositoryResponses = {
 
 export type RegisterDevelopmentRepositoryResponse =
 	RegisterDevelopmentRepositoryResponses[keyof RegisterDevelopmentRepositoryResponses];
+
+export type DetectDevelopmentRepositoryProfileData = {
+	body?: never;
+	path: {
+		selectedFolderId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/development/repositories/{selectedFolderId}/profile-detection";
+};
+
+export type DetectDevelopmentRepositoryProfileErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type DetectDevelopmentRepositoryProfileResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProfileDetectionResponse;
+};
+
+export type DetectDevelopmentRepositoryProfileResponse =
+	DetectDevelopmentRepositoryProfileResponses[keyof DetectDevelopmentRepositoryProfileResponses];
 
 export type ListDevelopmentProjectsData = {
 	body?: never;

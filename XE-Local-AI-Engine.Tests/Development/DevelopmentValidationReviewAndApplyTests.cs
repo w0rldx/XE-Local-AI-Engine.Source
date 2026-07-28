@@ -26,8 +26,11 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
 {
     private static readonly Guid SelectedFolderId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
 
-    /// <summary>The shipped production validation profile, joined so order-sensitive comparison reads clearly.</summary>
-    private static readonly string ExpectedDefaultProfile = string.Join(',',
+    /// <summary>
+    ///     The validation list both code-owned .NET profiles carry, joined so order-sensitive comparison reads
+    ///     clearly.
+    /// </summary>
+    private static readonly string ExpectedDotnetValidationProfile = string.Join(',',
         DevelopmentCommandIds.GitDiffCheck,
         DevelopmentCommandIds.DotnetRestore,
         DevelopmentCommandIds.DotnetBuildRelease,
@@ -471,40 +474,60 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     }
 
     /// <summary>
-    ///     The shipped default is what the gate actually runs — <c>appsettings.json</c> sets only
-    ///     <c>Development:Enabled</c>, and <c>ValidationCommandIds</c> cannot be overridden from configuration at all
-    ///     (an init-only <c>IReadOnlyList&lt;string&gt;</c> with a non-empty default is silently ignored by
-    ///     <c>ConfigurationBinder</c>). So this default IS the production profile on every install, and it regressing
-    ///     to a whitespace check is exactly the defect the tests below exist to keep fixed.
+    ///     The validation list is no longer a <c>DevelopmentOptions</c> setting — it is per-profile and code-owned, so
+    ///     what the gate runs on any install is whatever <c>DevelopmentCommandProfileCatalog</c> materializes. This
+    ///     pins that content, per profile, and it is the regression guard for the false-green defect fixed in
+    ///     <c>18fa1d3e</c>: before that fix the shipped list was <c>git_diff_check</c> alone, so a patch that did not
+    ///     compile — or compiled and failed its tests — reached <c>InReview</c> and could be applied.
+    ///     <para>
+    ///         Shrinking either dotnet profile's list re-opens exactly that defect. Dropping
+    ///         <c>dotnet_test_release_no_build</c> makes a failing test invisible; dropping
+    ///         <c>dotnet_build_release_no_restore</c> makes a broken build invisible; reordering them makes the gate
+    ///         fail for the wrong reason, because each command depends on the one before it. <c>generic-git</c> is the
+    ///         deliberate exception and is asserted to be exactly the whitespace check: it is the honest answer for a
+    ///         repository with no detected .NET build system, and it is surfaced to the operator at confirmation
+    ///         rather than applied silently.
+    ///     </para>
     /// </summary>
     [Test]
-    public async Task DefaultValidationProfile_RunsWhitespaceRestoreBuildAndTestInDependencyOrder()
+    public async Task CodeOwnedProfiles_ValidateWhitespaceRestoreBuildAndTestInDependencyOrder()
     {
         await Task.CompletedTask.ConfigureAwait(false);
-        AssertEx.Equal(ExpectedDefaultProfile, string.Join(',', new DevelopmentOptions().ValidationCommandIds));
+        AssertEx.Equal(ExpectedDotnetValidationProfile,
+            string.Join(',',
+                DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.DotnetSlnx, "Fixture.slnx")
+                                                .ValidationCommandIds));
+        AssertEx.Equal(ExpectedDotnetValidationProfile,
+            string.Join(',',
+                DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.DotnetCsproj, "src/Lib/Lib.csproj")
+                                                .ValidationCommandIds));
+        AssertEx.Equal(DevelopmentCommandIds.GitDiffCheck,
+            string.Join(',',
+                DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null)
+                                                .ValidationCommandIds));
     }
 
     [Test]
-    public async Task Validation_UnderTheDefaultProfile_WhenPatchCompilesAndPasses_ReachesInReviewWithEveryCommandRecorded()
+    public async Task Validation_UnderTheDotnetSlnxProfile_WhenPatchCompilesAndPasses_ReachesInReviewWithEveryCommandRecorded()
     {
-        var (validation, task, commands) = await RunDefaultProfileValidationAsync(DevelopmentSyntheticSolutionRepository.PassingLibrarySource)
+        var (validation, task, commands) = await RunDotnetProfileValidationAsync(SlnxProfile(), DevelopmentSyntheticSolutionRepository.PassingLibrarySource)
             .ConfigureAwait(false);
 
         AssertEx.True(validation.Passed);
         AssertEx.Equal(DevelopmentTaskStatus.InReview, validation.TaskStatus);
         AssertEx.Equal(DevelopmentTaskStatus.InReview, task.Status);
-        AssertEx.Equal(ExpectedDefaultProfile, string.Join(',', commands.Select(static command => command.CommandId)));
+        AssertEx.Equal(ExpectedDotnetValidationProfile, string.Join(',', commands.Select(static command => command.CommandId)));
         AssertEx.True(commands.All(static command => command.Completed && command.ExitCode == 0));
     }
 
     /// <summary>
-    ///     The first of the two outcomes the shipped one-command profile silently accepted: a patch that does not
-    ///     compile. Under the old default this reached <c>InReview</c> and could be applied to the trusted repository.
+    ///     The first of the two outcomes the former one-command profile silently accepted: a patch that does not
+    ///     compile. Under that profile this reached <c>InReview</c> and could be applied to the trusted repository.
     /// </summary>
     [Test]
-    public async Task Validation_UnderTheDefaultProfile_WhenPatchBreaksTheBuild_DoesNotReachInReview()
+    public async Task Validation_UnderTheDotnetSlnxProfile_WhenPatchBreaksTheBuild_DoesNotReachInReview()
     {
-        var (validation, task, commands) = await RunDefaultProfileValidationAsync(DevelopmentSyntheticSolutionRepository.BuildBreakingLibrarySource)
+        var (validation, task, commands) = await RunDotnetProfileValidationAsync(SlnxProfile(), DevelopmentSyntheticSolutionRepository.BuildBreakingLibrarySource)
             .ConfigureAwait(false);
 
         AssertEx.False(validation.Passed);
@@ -519,13 +542,13 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     }
 
     /// <summary>
-    ///     The second outcome the shipped one-command profile silently accepted: a patch that compiles cleanly and
-    ///     fails its test. This one is invisible to every check the old default performed.
+    ///     The second outcome the former one-command profile silently accepted: a patch that compiles cleanly and
+    ///     fails its test. This one is invisible to every check that profile performed.
     /// </summary>
     [Test]
-    public async Task Validation_UnderTheDefaultProfile_WhenPatchFailsATest_DoesNotReachInReview()
+    public async Task Validation_UnderTheDotnetSlnxProfile_WhenPatchFailsATest_DoesNotReachInReview()
     {
-        var (validation, task, commands) = await RunDefaultProfileValidationAsync(DevelopmentSyntheticSolutionRepository.TestFailingLibrarySource)
+        var (validation, task, commands) = await RunDotnetProfileValidationAsync(SlnxProfile(), DevelopmentSyntheticSolutionRepository.TestFailingLibrarySource)
             .ConfigureAwait(false);
 
         AssertEx.False(validation.Passed);
@@ -540,28 +563,87 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     }
 
     /// <summary>
-    ///     Drives a coder attempt that rewrites the synthetic solution's library source with
-    ///     <paramref name="librarySource" />, then runs deterministic validation under the shipped production command
-    ///     profile and returns the outcome together with the command evidence the validation report recorded.
+    ///     The second code-owned .NET profile, driven end to end against the fixture's test project. The three tests
+    ///     above only ever prove <c>dotnet-slnx</c> works; a profile that is offered to operators but never executed
+    ///     in a test is a profile nobody has run.
+    ///     <para>
+    ///         <c>tests/Probe/Probe.csproj</c> is a real target for this profile rather than a stand-in: it is an
+    ///         <c>OutputType=Exe</c> TUnit project with a <c>ProjectReference</c> to the library the coder rewrites,
+    ///         so <c>dotnet restore/build/test</c> against it compiles and exercises the same change the solution
+    ///         profile does — through a different build target and therefore a different argument vector and digest.
+    ///     </para>
     /// </summary>
-    private async Task<(DevelopmentValidationResult Validation, DevelopmentTaskSnapshot Task, IReadOnlyList<DevelopmentCommandEvidence> Commands)> RunDefaultProfileValidationAsync(string librarySource)
+    [Test]
+    public async Task Validation_UnderTheDotnetCsprojProfile_WhenPatchCompilesAndPasses_ReachesInReviewWithEveryCommandRecorded()
+    {
+        var (validation, task, commands) = await RunDotnetProfileValidationAsync(CsprojProfile(), DevelopmentSyntheticSolutionRepository.PassingLibrarySource)
+            .ConfigureAwait(false);
+
+        AssertEx.True(validation.Passed);
+        AssertEx.Equal(DevelopmentTaskStatus.InReview, validation.TaskStatus);
+        AssertEx.Equal(DevelopmentTaskStatus.InReview, task.Status);
+        AssertEx.Equal(ExpectedDotnetValidationProfile, string.Join(',', commands.Select(static command => command.CommandId)));
+        AssertEx.True(commands.All(static command => command.Completed && command.ExitCode == 0));
+
+        // The two .NET profiles must not be interchangeable at the digest level even on the same repository: they
+        // run different argument vectors, and an artifact stamped with one must never verify against the other.
+        AssertEx.NotEqual(SlnxProfile().ComputeDigest(), CsprojProfile().ComputeDigest());
+    }
+
+    /// <summary>
+    ///     The failing half, kept to the test-failing source rather than the build-breaking one because it is the
+    ///     stronger evidence: reaching a failed <c>dotnet_test_release_no_build</c> proves all four commands really
+    ///     executed under this profile, where a build break would stop one command earlier.
+    /// </summary>
+    [Test]
+    public async Task Validation_UnderTheDotnetCsprojProfile_WhenPatchFailsATest_DoesNotReachInReview()
+    {
+        var (validation, task, commands) = await RunDotnetProfileValidationAsync(CsprojProfile(), DevelopmentSyntheticSolutionRepository.TestFailingLibrarySource)
+            .ConfigureAwait(false);
+
+        AssertEx.False(validation.Passed);
+        AssertEx.Equal(DevelopmentTaskStatus.InProgress, validation.TaskStatus);
+        AssertEx.Equal(DevelopmentTaskStatus.InProgress, task.Status);
+
+        AssertEx.Equal(expected: 0, CommandExitCode(commands, DevelopmentCommandIds.GitDiffCheck));
+        AssertEx.Equal(expected: 0, CommandExitCode(commands, DevelopmentCommandIds.DotnetRestore));
+        AssertEx.Equal(expected: 0, CommandExitCode(commands, DevelopmentCommandIds.DotnetBuildRelease));
+        AssertEx.NotEqual(notExpected: 0, CommandExitCode(commands, DevelopmentCommandIds.DotnetTestRelease));
+    }
+
+    private static DevelopmentCommandProfile SlnxProfile() =>
+        DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.DotnetSlnx,
+            DevelopmentSyntheticSolutionRepository.SolutionPath);
+
+    private static DevelopmentCommandProfile CsprojProfile() =>
+        DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.DotnetCsproj,
+            DevelopmentSyntheticSolutionRepository.ProbeProjectPath);
+
+    /// <summary>
+    ///     Drives a coder attempt that rewrites the synthetic solution's library source with
+    ///     <paramref name="librarySource" />, then runs deterministic validation under <paramref name="profile" />
+    ///     — a real code-owned .NET profile bound to a real build target in the fixture — and returns the outcome
+    ///     together with the command evidence the validation report recorded.
+    /// </summary>
+    private async Task<(DevelopmentValidationResult Validation, DevelopmentTaskSnapshot Task, IReadOnlyList<DevelopmentCommandEvidence> Commands)> RunDotnetProfileValidationAsync(DevelopmentCommandProfile profile,
+        string librarySource)
     {
         Directory.CreateDirectory(_root);
         var repository = Path.Combine(_root, "solution-" + Guid.NewGuid().ToString("N"));
         await DevelopmentSyntheticSolutionRepository.CreateAsync(repository).ConfigureAwait(false);
 
-        // 10 minutes because MaxAttemptDurationSeconds is the PER-COMMAND timeout as well as the attempt cap, and
-        // this profile now spends four commands against it. The synthetic solution restores, builds and tests in a
-        // couple of seconds; the headroom is for a cold NuGet fallback resolve on a loaded machine.
+        // 10 minutes because MaxAttemptDurationSeconds still bounds the validation run AS A WHOLE (and, with the
+        // task's MaxDurationSeconds, is the smaller of the two that wins). Per-command timeouts no longer come from
+        // here at all — they are carried by each profile command. The synthetic solution restores, builds and tests
+        // in a couple of seconds; the headroom is for a cold NuGet fallback resolve on a loaded machine.
         await using var provider = await BuildProviderAsync(new WritingCoderModel(librarySource, DevelopmentSyntheticSolutionRepository.LibrarySourcePath),
                                        new ApprovingReviewerModel(),
-                                       new DevelopmentOptions().ValidationCommandIds,
                                        maxAttemptDurationSeconds: 600)
                                    .ConfigureAwait(false);
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         var coordinator = scope.ServiceProvider.GetRequiredService<IDevelopmentCoordinator>();
-        var seed = Seed(repository);
+        var seed = Seed(repository, profile, maxDurationSeconds: 600);
         var repositoryBinding = Binding(seed, repository);
 
         _ = await coordinator.CreateProjectAsync(seed).ConfigureAwait(false);
@@ -654,18 +736,15 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         return (seed, reviewerAttemptId, review);
     }
 
-    /// <param name="validationCommandIds">
-    ///     The deterministic validation profile for this fixture. It defaults to the whitespace check alone so the
-    ///     workflow tests stay fast on a repository that is not a .NET solution; the tests that exercise the gate
-    ///     itself pass the shipped production default and bind to a synthetic buildable solution instead.
-    /// </param>
     /// <param name="maxAttemptDurationSeconds">
-    ///     The per-command timeout, which is also the attempt cap — they are the same knob today. Restore, build and
-    ///     test on the synthetic solution need more headroom than a lone `git diff --check` does.
+    ///     The attempt cap, and the ceiling on a whole validation run. It is no longer the per-command timeout: each
+    ///     command carries its own budget on the project's command profile. Restore, build and test on the synthetic
+    ///     solution need more headroom than a lone `git diff --check` does, so the tests that bind a
+    ///     <c>dotnet-slnx</c> profile raise both this and the task's own <c>MaxDurationSeconds</c> — the validation
+    ///     runner takes the smaller of the two.
     /// </param>
     private async Task<ServiceProvider> BuildProviderAsync(IDevelopmentCoderModel coderModel,
         IDevelopmentReviewerModel reviewerModel,
-        IReadOnlyList<string>? validationCommandIds = null,
         int maxAttemptDurationSeconds = 60)
     {
         Directory.CreateDirectory(_root);
@@ -682,8 +761,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
             MaxFileWriteBytes = 1024 * 1024,
             MaxPatchBytes = 1024 * 1024,
             MaxCommandOutputBytes = 256 * 1024,
-            MaxOutputTokens = 2048,
-            ValidationCommandIds = validationCommandIds ?? [DevelopmentCommandIds.GitDiffCheck]
+            MaxOutputTokens = 2048
         });
         var services = new ServiceCollection();
         services.AddSingleton<INodeSqliteKeyHolder, NullNodeSqliteKeyHolder>();
@@ -725,9 +803,19 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         return provider;
     }
 
-    private static DevelopmentCreateProjectCommand Seed(string repository)
+    /// <summary>
+    ///     Seeds a project. <paramref name="profile" /> defaults to <c>generic-git</c> — the whitespace check alone —
+    ///     so the workflow tests stay fast on a repository that is not a .NET solution at all; the tests that exercise
+    ///     the gate itself pass a real <c>dotnet-slnx</c> profile bound to the synthetic buildable solution.
+    /// </summary>
+    private static DevelopmentCreateProjectCommand Seed(string repository,
+        DevelopmentCommandProfile? profile = null,
+        int maxDurationSeconds = 60)
     {
         var canonical = DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository);
+        var resolved = profile
+                       ?? DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.GenericGit,
+                           buildTarget: null);
         return new DevelopmentCreateProjectCommand(Guid.NewGuid(),
             Guid.NewGuid(),
             Guid.NewGuid(),
@@ -745,7 +833,8 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
             TrustedRepositoryPolicyVersion: DevelopmentTrustPolicy.CurrentVersion,
             TrustedRepositoryAcknowledgedAtUtc: DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             MaxTokens: 2048,
-            MaxDurationSeconds: 60);
+            MaxDurationSeconds: maxDurationSeconds,
+            CommandProfileJson: Encoding.UTF8.GetString(resolved.ToCanonicalUtf8()));
     }
 
     private static DevelopmentRepositoryBinding Binding(DevelopmentCreateProjectCommand seed, string repository) =>
@@ -947,6 +1036,13 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     private sealed class NullWorkspaceTools : IDevelopmentWorkspaceTools
     {
         public IReadOnlyList<DevelopmentCommandEvidence> CommandEvidence => [];
+
+        /// <summary>
+        ///     The reviewer-model tests never run a command, so the cheapest real profile is the right stub — the
+        ///     generic one, which needs no build target.
+        /// </summary>
+        public DevelopmentCommandProfile Profile { get; } =
+            DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null);
 
         public Task<string> ListFilesAsync(string? path, CancellationToken cancellationToken = default) =>
             Task.FromResult(string.Empty);

@@ -28,12 +28,27 @@ internal interface IDevelopmentEvidenceService
         string sanitizedReason,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    ///     Writes an artifact and stamps it with two independent dimensions.
+    ///     <para>
+    ///         <paramref name="commandProfileVersion" /> is the artifact <em>protocol</em> version
+    ///         (<c>development-workspace-v1</c>, <c>development-validation-v1</c>, <c>development-review-v1</c>). It
+    ///         describes the shape of the artifact and is what the apply and reviewer compatibility gates compare.
+    ///     </para>
+    ///     <para>
+    ///         <paramref name="commandProfileDigest" /> is the SHA-256 of the canonical command profile that actually
+    ///         produced the evidence. It describes which commands ran. These are not the same thing and must not be
+    ///         collapsed into one field: replacing the protocol version with the digest would delete a compatibility
+    ///         safeguard and replace it with something that does not validate artifact shape at all.
+    ///     </para>
+    /// </summary>
     Task<DevelopmentPreparedArtifact> PrepareAsync(DevelopmentExecutionSnapshot snapshot,
         DevelopmentArtifactKind kind,
         ReadOnlyMemory<byte> content,
         DevelopmentPatchEvidence evidence,
         IReadOnlyList<Guid> inputArtifactIds,
         string commandProfileVersion,
+        string commandProfileDigest,
         CancellationToken cancellationToken = default);
 }
 
@@ -146,12 +161,14 @@ internal sealed class DevelopmentEvidenceService(
         DevelopmentPatchEvidence evidence,
         IReadOnlyList<Guid> inputArtifactIds,
         string commandProfileVersion,
+        string commandProfileDigest,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         ArgumentNullException.ThrowIfNull(evidence);
         ArgumentNullException.ThrowIfNull(inputArtifactIds);
         ArgumentException.ThrowIfNullOrWhiteSpace(commandProfileVersion);
+        ArgumentException.ThrowIfNullOrWhiteSpace(commandProfileDigest);
         if (kind is DevelopmentArtifactKind.ValidationReport or DevelopmentArtifactKind.ReviewReport)
         {
             _ = DevelopmentArtifactSanitizer.SanitizeText(Encoding.UTF8.GetString(content.Span));
@@ -174,7 +191,8 @@ internal sealed class DevelopmentEvidenceService(
                 SubjectHash: evidence.SubjectHash,
                 ChangedFilesManifestHash: evidence.ManifestHash,
                 InputArtifactIdsJson: JsonSerializer.SerializeToUtf8Bytes(inputArtifactIds, JsonOptions),
-                CommandProfileVersion: commandProfileVersion));
+                CommandProfileVersion: commandProfileVersion,
+                CommandProfileDigest: commandProfileDigest));
     }
 
     private async Task<ReadOnlyMemory<byte>> ReadRequiredAsync(DevelopmentArtifactSnapshot artifact, CancellationToken cancellationToken)

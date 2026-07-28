@@ -66,6 +66,7 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
     {
         var snapshot = await _store.GetExecutionSnapshotAsync(attemptId, cancellationToken).ConfigureAwait(false);
         EnsureRunnable(snapshot);
+        var profile = DevelopmentCommandProfileCatalog.ResolveStored(snapshot.CommandProfileJson);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(Math.Min(snapshot.MaxDurationSeconds ?? _options.MaxAttemptDurationSeconds,
             _options.MaxAttemptDurationSeconds)));
@@ -82,8 +83,8 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
                     _timeProvider,
                     maxOutputTokens,
                     _options.MaxToolCalls);
-            var tools = new DevelopmentWorkspaceTools(_sandbox, session, Options.Create(_options), liveProgress);
-            var prompt = BuildPrompt(snapshot, session);
+            var tools = new DevelopmentWorkspaceTools(_sandbox, session, Options.Create(_options), profile, liveProgress);
+            var prompt = BuildPrompt(snapshot, session, profile);
             var cloudContext = await CreateCloudContextAsync(snapshot, tools, timeout.Token).ConfigureAwait(false);
             var model = await _coderModel.RunAsync(snapshot.ModelId,
                 prompt,
@@ -98,11 +99,13 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
                 evidence.PatchBytes.LongLength,
                 evidence.SubjectHash);
             ValidateSubmission(model.Submission, evidence, tools.CommandEvidence);
+            DevelopmentTestWritePolicy.Ensure(evidence, profile);
             await PersistEvidenceAsync(snapshot,
                 model.Submission,
                 evidence,
                 tools.CommandEvidence,
                 cloudContext?.ArtifactId,
+                profile,
                 timeout.Token).ConfigureAwait(false);
 
             _ = await _store.TerminalizeAttemptAsync(new DevelopmentTerminalizeAttemptCommand(snapshot.AttemptId,
@@ -147,8 +150,10 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
         DevelopmentPatchEvidence evidence,
         IReadOnlyList<DevelopmentCommandEvidence> commands,
         Guid? cloudContextArtifactId,
+        DevelopmentCommandProfile profile,
         CancellationToken cancellationToken)
     {
+        var profileDigest = profile.ComputeDigest();
         IReadOnlyList<Guid>? cloudContextInputs = cloudContextArtifactId is { } contextArtifactId
             ? [contextArtifactId]
             : null;
@@ -157,18 +162,21 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
             evidence.PatchBytes,
             evidence,
             inputIds: cloudContextInputs,
+            profileDigest,
             cancellationToken).ConfigureAwait(false);
         var manifestId = await PersistArtifactAsync(snapshot,
             DevelopmentArtifactKind.ChangedFilesManifest,
             evidence.ManifestBytes,
             evidence,
             inputIds: cloudContextInputs,
+            profileDigest,
             cancellationToken).ConfigureAwait(false);
         var commandId = await PersistArtifactAsync(snapshot,
             DevelopmentArtifactKind.CommandResult,
             JsonSerializer.SerializeToUtf8Bytes(commands, JsonOptions),
             evidence,
             [patchId, manifestId],
+            profileDigest,
             cancellationToken).ConfigureAwait(false);
         var workspaceId = await PersistArtifactAsync(snapshot,
             DevelopmentArtifactKind.WorkspaceManifest,
@@ -179,18 +187,25 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
                 evidence.ManifestHash,
                 evidence.SubjectHash,
                 evidence.ExpectedResultHash,
+
+                // The artifact protocol version, unchanged. The command profile that produced this workspace is
+                // recorded separately below, because the two answer different questions.
                 commandProfileVersion = DevelopmentWorkspaceTools.ProfileVersion,
+                commandProfileId = profile.ProfileId,
+                commandProfileDigest = profileDigest,
                 changeIsolationOnly = true,
                 osIsolationClaimed = false
             }, JsonOptions),
             evidence,
             [patchId, manifestId, commandId],
+            profileDigest,
             cancellationToken).ConfigureAwait(false);
         _ = await PersistArtifactAsync(snapshot,
             DevelopmentArtifactKind.CoderSubmission,
             JsonSerializer.SerializeToUtf8Bytes(submission, JsonOptions),
             evidence,
             [patchId, manifestId, commandId, workspaceId],
+            profileDigest,
             cancellationToken).ConfigureAwait(false);
     }
 
@@ -199,6 +214,7 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
         byte[] content,
         DevelopmentPatchEvidence evidence,
         IReadOnlyList<Guid>? inputIds,
+        string profileDigest,
         CancellationToken cancellationToken)
     {
         var artifactId = Guid.NewGuid();
@@ -217,7 +233,8 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
                                 SubjectHash: evidence.SubjectHash,
                                 ChangedFilesManifestHash: evidence.ManifestHash,
                                 InputArtifactIdsJson: inputIds is null ? null : JsonSerializer.SerializeToUtf8Bytes(inputIds, JsonOptions),
-                                CommandProfileVersion: DevelopmentWorkspaceTools.ProfileVersion),
+                                CommandProfileVersion: DevelopmentWorkspaceTools.ProfileVersion,
+                                CommandProfileDigest: profileDigest),
                             cancellationToken)
                         .ConfigureAwait(false);
         return artifactId;
@@ -282,12 +299,18 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
         }
     }
 
-    private static string BuildPrompt(DevelopmentExecutionSnapshot snapshot, DevelopmentWorkspaceSession session)
+    private static string BuildPrompt(DevelopmentExecutionSnapshot snapshot,
+        DevelopmentWorkspaceSession session,
+        DevelopmentCommandProfile profile)
     {
+        // The valid run_command ids are per-project now, so they are named here rather than in the tool's
+        // [Description] attribute, which cannot interpolate them. The model still only ever sees a closed set.
         return string.Concat("Task: ", snapshot.Title,
             "\nRequirements:\n", snapshot.Requirements,
             "\nAcceptance criteria:\n", snapshot.AcceptanceCriteriaJson,
             "\nBase commit: ", session.BaseCommit,
+            "\nCommand profile: ", profile.ProfileId,
+            "\nValid run_command ids: ", string.Join(", ", profile.Commands.Select(static command => command.CommandId)),
             "\nUse only the fixed tools. The worktree is detached change isolation, not an OS security boundary.");
     }
 

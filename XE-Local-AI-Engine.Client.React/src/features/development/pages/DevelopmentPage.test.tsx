@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const hooksMock = vi.hoisted(() => ({
 	useDevelopmentCapability: vi.fn(),
 	useDevelopmentRepositories: vi.fn(),
+	useDevelopmentProfileDetection: vi.fn(),
 	useDevelopmentProjects: vi.fn(),
 	useDevelopmentProject: vi.fn(),
 	useRegisterDevelopmentRepository: vi.fn(),
@@ -131,6 +132,7 @@ describe("DevelopmentPage", () => {
 		installDomMocks();
 		vi.clearAllMocks();
 		hooksMock.useDevelopmentCapability.mockReturnValue({ data: { enabled: true }, isLoading: false, error: null });
+		hooksMock.useDevelopmentProfileDetection.mockReturnValue({ data: undefined, isFetching: false, error: null });
 		hooksMock.useDevelopmentRepositories.mockReturnValue({
 			data: [{ id: "repository-1", alias: "Workspace", availability: "Available" }],
 			isLoading: false,

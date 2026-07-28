@@ -70,6 +70,38 @@ public sealed class RegisterDevelopmentRepositoryEndpoint
     }
 }
 
+public sealed class DetectDevelopmentRepositoryProfileEndpoint
+    : Endpoint<DevelopmentProfileDetectionRequest, DevelopmentProfileDetectionResponse>, IDevelopmentEndpoint
+{
+    public override void Configure()
+    {
+        Get(LocalApiRoutes.Development.RepositoryProfileDetection);
+        Policies(NodeAuthorizationPolicies.Operator);
+    }
+
+    public override async Task HandleAsync(DevelopmentProfileDetectionRequest req, CancellationToken ct)
+    {
+        var service = HttpContext.RequestServices.GetRequiredService<IDevelopmentManagementService>();
+        try
+        {
+            var detection = await service.DetectRepositoryProfileAsync(req.SelectedFolderId, ct).ConfigureAwait(false);
+            await Send.OkAsync(new DevelopmentProfileDetectionResponse(detection.ProfileId, detection.BuildTarget, detection.Candidates), ct)
+                      .ConfigureAwait(false);
+        }
+        catch (KeyNotFoundException)
+        {
+            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is DevelopmentWorkspaceSecurityException
+                                              or SelectedFolderValidationException
+                                              or DirectoryNotFoundException)
+        {
+            AddError(exception.Message);
+            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+        }
+    }
+}
+
 public sealed class ListDevelopmentProjectsEndpoint
     : EndpointWithoutRequest<ListDevelopmentProjectsResponse>, IDevelopmentEndpoint
 {
@@ -120,7 +152,9 @@ public sealed class CreateDevelopmentProjectEndpoint
                                               req.ReviewerModelId,
                                               req.TrustedRepositoryAcknowledged,
                                               req.MaxTokens,
-                                              req.MaxDurationSeconds),
+                                              req.MaxDurationSeconds,
+                                              req.CommandProfileId,
+                                              req.BuildTarget),
                                           ct)
                                       .ConfigureAwait(false);
             await Send.OkAsync(result.ToResponse(), ct).ConfigureAwait(false);

@@ -10,6 +10,16 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 public sealed class DevelopmentMigrationTests : IDisposable
 {
     private const string PreDevelopmentMigrationId = "20260718143054_AddAgentExecutionLogProvider";
+    private const string PreCommandProfileMigrationId = "20260726203016_AddKnowledgeVectorIdentity";
+
+    private static readonly string[] DevelopmentTables =
+    [
+        "development_artifacts",
+        "development_attempts",
+        "development_events",
+        "development_projects",
+        "development_tasks"
+    ];
 
     private readonly NullNodeSqliteKeyHolder _keyHolder = new();
     private readonly string _root = Path.Combine(Path.GetTempPath(), "xe-development-migration-" + Guid.NewGuid().ToString("N"));
@@ -75,6 +85,113 @@ public sealed class DevelopmentMigrationTests : IDisposable
         AssertEx.Empty(await NamesAsync(rolledBack, "table", "development_%").ConfigureAwait(false));
     }
 
+    /// <summary>
+    ///     Pins the command-profile migration alone: its <c>Down</c> must remove only the two new columns and leave the
+    ///     Development tables — and the rows already in them — in place. This is deliberately narrower than
+    ///     <see cref="Migration_AppliesDevelopmentSchemaAndSelectedFolderBindingThenRollsBack" />, which drives the whole
+    ///     historical rollback chain down to the pre-Development schema and therefore expects the tables to be gone.
+    /// </summary>
+    [Test]
+    public async Task CommandProfileMigration_RollsBackToPrecedingSchemaWithDevelopmentTablesAndRowsIntact()
+    {
+        Directory.CreateDirectory(_root);
+        var databasePath = Path.Combine(_root, "development-command-profile.sqlite");
+        await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
+        {
+            await context.Database.MigrateAsync().ConfigureAwait(false);
+        }
+
+        var projectId = Guid.NewGuid();
+        var taskId = Guid.NewGuid();
+        var artifactId = Guid.NewGuid();
+
+        await using (var connection = new SqliteConnection($"Data Source={databasePath}"))
+        {
+            await connection.OpenAsync().ConfigureAwait(false);
+
+            var profileColumn = AssertEx.NotNull(await ReadColumnAsync(connection, "development_projects", "command_profile_json").ConfigureAwait(false));
+            AssertEx.Equal("TEXT", profileColumn.Type);
+            AssertEx.True(profileColumn.IsNullable);
+
+            var digestColumn = AssertEx.NotNull(await ReadColumnAsync(connection, "development_artifacts", "command_profile_digest").ConfigureAwait(false));
+            AssertEx.Equal("TEXT", digestColumn.Type);
+            AssertEx.True(digestColumn.IsNullable);
+
+            await SeedDevelopmentRowsAsync(connection, projectId, taskId, artifactId).ConfigureAwait(false);
+        }
+
+        await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
+        {
+            await context.Database.GetService<IMigrator>().MigrateAsync(PreCommandProfileMigrationId).ConfigureAwait(false);
+        }
+
+        await using var rolledBack = new SqliteConnection($"Data Source={databasePath}");
+        await rolledBack.OpenAsync().ConfigureAwait(false);
+
+        AssertEx.True((await NamesAsync(rolledBack, "table", "development_%").ConfigureAwait(false)).SetEquals(DevelopmentTables),
+            "Rolling back the command-profile migration must not drop or recreate any Development table.");
+        AssertEx.Null(await ReadColumnAsync(rolledBack, "development_projects", "command_profile_json").ConfigureAwait(false));
+        AssertEx.Null(await ReadColumnAsync(rolledBack, "development_artifacts", "command_profile_digest").ConfigureAwait(false));
+
+        AssertEx.Equal(1L, await ScalarAsync(rolledBack, ProjectCountSql, projectId).ConfigureAwait(false));
+        AssertEx.Equal(1L, await ScalarAsync(rolledBack, TaskCountSql, taskId).ConfigureAwait(false));
+        AssertEx.Equal(1L, await ScalarAsync(rolledBack, ArtifactCountSql, artifactId).ConfigureAwait(false));
+
+        // command_profile_version is the artifact PROTOCOL version and a different column from the digest that was
+        // just dropped; the rollback must leave it and its value untouched.
+        AssertEx.Equal("development-workspace-v1", await ScalarAsync(rolledBack, ArtifactProfileVersionSql, artifactId).ConfigureAwait(false));
+        AssertEx.Equal("origin/main", await ScalarAsync(rolledBack, ProjectBaseBranchSql, projectId).ConfigureAwait(false));
+    }
+
+    private const string ProjectCountSql = "SELECT COUNT(*) FROM development_projects WHERE id = $id;";
+    private const string TaskCountSql = "SELECT COUNT(*) FROM development_tasks WHERE id = $id;";
+    private const string ArtifactCountSql = "SELECT COUNT(*) FROM development_artifacts WHERE id = $id;";
+    private const string ArtifactProfileVersionSql = "SELECT command_profile_version FROM development_artifacts WHERE id = $id;";
+    private const string ProjectBaseBranchSql = "SELECT base_branch FROM development_projects WHERE id = $id;";
+
+    private static async Task SeedDevelopmentRowsAsync(SqliteConnection connection, Guid projectId, Guid taskId, Guid artifactId)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            INSERT INTO development_projects (id, objective, selected_folder_id, repository_identity_hash, base_branch, status,
+                                              egress_policy, coder_model_id, reviewer_model_id, max_tokens, max_duration_seconds,
+                                              command_profile_json, configuration_version, trusted_repository_acknowledged,
+                                              trusted_repository_policy_version, trusted_repository_acknowledged_at_utc,
+                                              created_at_utc, updated_at_utc, version)
+            VALUES ($projectId, X'6F', NULL, 'repo-hash', 'origin/main', 'Active', 'LocalOnly', NULL, NULL, NULL, NULL,
+                    '{"build":{"executable":"dotnet"}}', 1, 0, NULL, NULL, 1, 1, 1);
+
+            INSERT INTO development_tasks (id, project_id, title, requirements, acceptance_criteria_json, status,
+                                           current_review_round, max_review_rounds, blocked_reason, blocked_at_utc,
+                                           approved_subject_hash, created_at_utc, updated_at_utc, version)
+            VALUES ($taskId, $projectId, X'74', X'72', X'5B5D', 'Planned', 0, 3, NULL, NULL, NULL, 1, 1, 1);
+
+            INSERT INTO development_artifacts (id, project_id, task_id, attempt_id, kind, schema_version, content_json,
+                                               managed_reference, content_hash, byte_count, created_at_utc, base_commit,
+                                               subject_hash, changed_files_manifest_hash, input_artifact_ids_json,
+                                               command_profile_version, command_profile_digest, is_valid)
+            VALUES ($artifactId, $projectId, $taskId, NULL, 'WorkspaceSnapshot', 1, NULL, NULL, 'content-hash', 1, 1, NULL,
+                    NULL, NULL, NULL, 'development-workspace-v1',
+                    '0000000000000000000000000000000000000000000000000000000000000000', 1);
+            """;
+        command.Parameters.AddWithValue("$projectId", projectId.ToString());
+        command.Parameters.AddWithValue("$taskId", taskId.ToString());
+        command.Parameters.AddWithValue("$artifactId", artifactId.ToString());
+        await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+    }
+
+    private static async Task<object?> ScalarAsync(SqliteConnection connection, string sql, Guid id)
+    {
+        await using var command = connection.CreateCommand();
+#pragma warning disable CA2100 // Every caller passes a fixed test literal; the only variable, the id, is a parameter.
+        command.CommandText = sql;
+#pragma warning restore CA2100
+        command.Parameters.AddWithValue("$id", id.ToString());
+        var value = await command.ExecuteScalarAsync().ConfigureAwait(false);
+        return value is DBNull ? null : value;
+    }
+
     private static async Task<HashSet<string>> NamesAsync(SqliteConnection connection, string type, string pattern)
     {
         await using var command = connection.CreateCommand();
@@ -91,15 +208,20 @@ public sealed class DevelopmentMigrationTests : IDisposable
         return names;
     }
 
-    private static async Task<ColumnSchema?> ReadSelectedFolderColumnAsync(SqliteConnection connection)
+    private static Task<ColumnSchema?> ReadSelectedFolderColumnAsync(SqliteConnection connection) =>
+        ReadColumnAsync(connection, "development_projects", "selected_folder_id");
+
+    private static async Task<ColumnSchema?> ReadColumnAsync(SqliteConnection connection, string table, string column)
     {
         await using var command = connection.CreateCommand();
         command.CommandText =
             """
             SELECT type, "notnull"
-            FROM pragma_table_info('development_projects')
-            WHERE name = 'selected_folder_id';
+            FROM pragma_table_info($table)
+            WHERE name = $column;
             """;
+        command.Parameters.AddWithValue("$table", table);
+        command.Parameters.AddWithValue("$column", column);
         await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
         if (!await reader.ReadAsync().ConfigureAwait(false))
         {

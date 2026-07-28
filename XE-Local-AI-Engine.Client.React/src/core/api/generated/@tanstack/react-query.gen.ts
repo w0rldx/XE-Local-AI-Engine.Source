@@ -58,6 +58,7 @@ import {
 	deletePreviewWorkflow,
 	deleteScheduledJob,
 	deleteSkill,
+	detectDevelopmentRepositoryProfile,
 	disableAutoConnect,
 	disableScheduledJob,
 	disconnectConnection,
@@ -310,6 +311,8 @@ import type {
 	DeleteScheduledJobResponse,
 	DeleteSkillData,
 	DeleteSkillResponse,
+	DetectDevelopmentRepositoryProfileData,
+	DetectDevelopmentRepositoryProfileResponse,
 	DisableAutoConnectData,
 	DisableAutoConnectResponse,
 	DisableScheduledJobData,
@@ -3287,6 +3290,28 @@ export const registerDevelopmentRepositoryMutation = (
 	};
 	return mutationOptions;
 };
+
+export const detectDevelopmentRepositoryProfileQueryKey = (options: Options<DetectDevelopmentRepositoryProfileData>) =>
+	createQueryKey("detectDevelopmentRepositoryProfile", options);
+
+export const detectDevelopmentRepositoryProfileOptions = (options: Options<DetectDevelopmentRepositoryProfileData>) =>
+	queryOptions<
+		DetectDevelopmentRepositoryProfileResponse,
+		AxiosError<DefaultError>,
+		DetectDevelopmentRepositoryProfileResponse,
+		ReturnType<typeof detectDevelopmentRepositoryProfileQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await detectDevelopmentRepositoryProfile({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: detectDevelopmentRepositoryProfileQueryKey(options),
+	});
 
 export const listDevelopmentProjectsQueryKey = (options?: Options<ListDevelopmentProjectsData>) =>
 	createQueryKey("listDevelopmentProjects", options);

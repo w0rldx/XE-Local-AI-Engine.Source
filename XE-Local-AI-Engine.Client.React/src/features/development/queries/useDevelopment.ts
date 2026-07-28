@@ -4,6 +4,7 @@ import {
 	applyDevelopmentPatchMutation,
 	cancelDevelopmentAttemptMutation,
 	createDevelopmentProjectMutation,
+	detectDevelopmentRepositoryProfileOptions,
 	getDevelopmentCapabilityOptions,
 	getDevelopmentProjectOptions,
 	listDevelopmentRepositoriesOptions,
@@ -19,6 +20,7 @@ import type { DevelopmentRepository } from "@/features/development/models/Develo
 export const developmentQueryIds = {
 	capability: "getDevelopmentCapability",
 	listRepositories: "listDevelopmentRepositories",
+	detectRepositoryProfile: "detectDevelopmentRepositoryProfile",
 	listProjects: "listDevelopmentProjects",
 	getProject: "getDevelopmentProject",
 	getTask: "getDevelopmentTask",
@@ -55,6 +57,20 @@ export function useDevelopmentRepositories(enabled = true) {
 						]
 					: [],
 			),
+	});
+}
+
+/**
+ * The detection proposal for a repository the operator is about to bind. Read-only: it is what the confirmation step
+ * shows, and the confirmed answer is what the create request carries.
+ */
+export function useDevelopmentProfileDetection(selectedFolderId: string | null, enabled = true) {
+	return useQuery({
+		...withResponseValidation(
+			detectDevelopmentRepositoryProfileOptions({ path: { selectedFolderId: selectedFolderId ?? "" } }),
+		),
+		enabled: enabled && selectedFolderId !== null && selectedFolderId !== "",
+		staleTime: 30_000,
 	});
 }
 
