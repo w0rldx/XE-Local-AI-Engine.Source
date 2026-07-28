@@ -5871,6 +5871,170 @@
         ]
       }
     },
+    "/api/local/v1/development/templates": {
+      "get": {
+        "tags": [
+          "Development"
+        ],
+        "operationId": "listDevelopmentTemplates",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1ListDevelopmentTemplatesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Development"
+        ],
+        "operationId": "registerDevelopmentTemplate",
+        "requestBody": {
+          "x-name": "RegisterDevelopmentTemplateRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1RegisterDevelopmentTemplateRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentTemplateResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/development/templates/{templateId}": {
+      "delete": {
+        "tags": [
+          "Development"
+        ],
+        "operationId": "removeDevelopmentTemplate",
+        "parameters": [
+          {
+            "name": "templateId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/development/repositories/from-template": {
+      "post": {
+        "tags": [
+          "Development"
+        ],
+        "operationId": "createDevelopmentRepositoryFromTemplate",
+        "requestBody": {
+          "x-name": "CreateDevelopmentRepositoryFromTemplateRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1CreateDevelopmentRepositoryFromTemplateRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentRepositoryFromTemplateResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/development/repositories/{selectedFolderId}/profile-detection": {
       "get": {
         "tags": [
@@ -14781,6 +14945,83 @@
             "type": "string"
           },
           "hostPath": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentV1ListDevelopmentTemplatesResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "templates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentTemplateResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentTemplateResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "alias": {
+            "type": "string"
+          },
+          "availability": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentV1RegisterDevelopmentTemplateRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "alias": {
+            "type": "string"
+          },
+          "hostPath": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentTemplateRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentRepositoryFromTemplateResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "repository": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentRepositoryResponse"
+          },
+          "templateAlias": {
+            "type": "string"
+          },
+          "templateCommit": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentV1CreateDevelopmentRepositoryFromTemplateRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "templateId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "destinationPath": {
+            "type": "string"
+          },
+          "alias": {
+            "type": "string"
+          },
+          "baseBranch": {
             "type": "string"
           }
         }

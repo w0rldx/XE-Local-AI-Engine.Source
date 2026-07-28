@@ -38,6 +38,8 @@ internal static class AddNodeDevelopmentExtensions
         builder.Services.AddScoped<IDevelopmentReviewerAttemptRunner, DevelopmentReviewerAttemptRunner>();
         builder.Services.AddScoped<IDevelopmentApplyService, DevelopmentApplyService>();
         builder.Services.AddScoped<IDevelopmentRepositoryBindingService, DevelopmentRepositoryBindingService>();
+        builder.Services.AddScoped<IDevelopmentTemplateStore, DevelopmentTemplateStore>();
+        builder.Services.AddScoped<IDevelopmentTemplateService, DevelopmentTemplateService>();
         builder.Services.AddSingleton<IDevelopmentCommandProfileDetector, DevelopmentCommandProfileDetector>();
         builder.Services.AddScoped<IDevelopmentProfileBackfillService, DevelopmentProfileBackfillService>();
         builder.Services.AddSingleton<DevelopmentCloudContextCatalog>();

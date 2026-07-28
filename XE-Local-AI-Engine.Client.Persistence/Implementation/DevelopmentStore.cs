@@ -133,6 +133,7 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
                     Status = DevelopmentAttemptStatus.Running,
                     StartedAtUtc = now,
                     StartOperationId = command.OperationId,
+                    CommandProfileJson = await ResolveAttemptCommandProfileAsync(projectId, task.Id, command.Role, cancellationToken).ConfigureAwait(false),
                     Version = 1
                 };
                 _dbContext.DevelopmentAttempts.Add(attempt);
@@ -167,6 +168,53 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
                     cancellationToken).ConfigureAwait(false);
             },
             cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     The command profile to freeze onto a new attempt.
+    ///     <para>
+    ///         A Coder attempt takes the project's profile as it stands right now. A Reviewer attempt instead inherits
+    ///         the profile of the latest succeeded Coder attempt on the same task — the attempt whose result it is
+    ///         reviewing. That is what keeps one evidence chain (coder → validation → review → apply) judged under a
+    ///         single profile: without it, a profile edit landing between the coder attempt and its review would make
+    ///         the reviewer re-run different commands than the ones that produced the patch, and the apply gate would
+    ///         then reject on a digest mismatch that describes an edit rather than a defect.
+    ///     </para>
+    ///     <para>
+    ///         Returning null is meaningful and safe: it marks an attempt with no snapshot, and every reader falls back
+    ///         to the project's current profile, which is precisely the behaviour before this column existed. That is
+    ///         what makes the migration a no-op for rows that predate it.
+    ///     </para>
+    /// </summary>
+    private async Task<string?> ResolveAttemptCommandProfileAsync(Guid projectId,
+        Guid taskId,
+        DevelopmentAttemptRole role,
+        CancellationToken cancellationToken)
+    {
+        if (role == DevelopmentAttemptRole.Reviewer)
+        {
+            // Mirrors the (StartedAtUtc, Id) ordering ListAttemptsAsync exposes, so "latest succeeded coder" means the
+            // same attempt here as it does to the apply and reviewer gates that select it with LastOrDefault.
+            var inherited = await _dbContext.DevelopmentAttempts.AsNoTracking()
+                                            .Where(entity => entity.TaskId == taskId
+                                                             && entity.Role == DevelopmentAttemptRole.Coder
+                                                             && entity.Status == DevelopmentAttemptStatus.Succeeded)
+                                            .OrderByDescending(entity => entity.StartedAtUtc)
+                                            .ThenByDescending(entity => entity.Id)
+                                            .Select(entity => entity.CommandProfileJson)
+                                            .FirstOrDefaultAsync(cancellationToken)
+                                            .ConfigureAwait(false);
+            if (!string.IsNullOrWhiteSpace(inherited))
+            {
+                return inherited;
+            }
+        }
+
+        return await _dbContext.DevelopmentProjects.AsNoTracking()
+                               .Where(entity => entity.Id == projectId)
+                               .Select(entity => entity.CommandProfileJson)
+                               .SingleOrDefaultAsync(cancellationToken)
+                               .ConfigureAwait(false);
     }
 
     public async Task<DevelopmentOperationResult> TerminalizeAttemptAsync(DevelopmentTerminalizeAttemptCommand command, CancellationToken cancellationToken = default)
@@ -864,7 +912,11 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
             snapshot.Attempt.ModelId,
             snapshot.Attempt.Provider,
             snapshot.Attempt.Version,
-            snapshot.Project.CommandProfileJson);
+
+            // The attempt's own immutable snapshot wins. Falling back to the project only when the attempt has none
+            // keeps attempts that predate the column behaving exactly as before, and lets a project whose profile was
+            // backfilled after the attempt started still resolve one.
+            snapshot.Attempt.CommandProfileJson ?? snapshot.Project.CommandProfileJson);
     }
 
     public async Task<IReadOnlyList<DevelopmentProjectSnapshot>> ListProjectsAsync(CancellationToken cancellationToken = default)

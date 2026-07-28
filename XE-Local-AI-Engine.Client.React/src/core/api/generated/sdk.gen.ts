@@ -83,6 +83,9 @@ import type {
 	CreateDevelopmentProjectData,
 	CreateDevelopmentProjectErrors,
 	CreateDevelopmentProjectResponses,
+	CreateDevelopmentRepositoryFromTemplateData,
+	CreateDevelopmentRepositoryFromTemplateErrors,
+	CreateDevelopmentRepositoryFromTemplateResponses,
 	CreateGoldenConversationData,
 	CreateGoldenConversationErrors,
 	CreateGoldenConversationResponses,
@@ -371,6 +374,9 @@ import type {
 	ListDevelopmentRepositoriesData,
 	ListDevelopmentRepositoriesErrors,
 	ListDevelopmentRepositoriesResponses,
+	ListDevelopmentTemplatesData,
+	ListDevelopmentTemplatesErrors,
+	ListDevelopmentTemplatesResponses,
 	ListGoldenConversationsData,
 	ListGoldenConversationsErrors,
 	ListGoldenConversationsResponses,
@@ -468,6 +474,9 @@ import type {
 	RegisterDevelopmentRepositoryData,
 	RegisterDevelopmentRepositoryErrors,
 	RegisterDevelopmentRepositoryResponses,
+	RegisterDevelopmentTemplateData,
+	RegisterDevelopmentTemplateErrors,
+	RegisterDevelopmentTemplateResponses,
 	ReindexCorpusData,
 	ReindexCorpusErrors,
 	ReindexCorpusResponses,
@@ -480,6 +489,9 @@ import type {
 	RemoveCudaBuildData,
 	RemoveCudaBuildErrors,
 	RemoveCudaBuildResponses,
+	RemoveDevelopmentTemplateData,
+	RemoveDevelopmentTemplateErrors,
+	RemoveDevelopmentTemplateResponses,
 	RemoveLlamaCppSourceBuildData,
 	RemoveLlamaCppSourceBuildErrors,
 	RemoveLlamaCppSourceBuildResponses,
@@ -645,6 +657,8 @@ import {
 	zCreateAgentDefinitionResponse,
 	zCreateDevelopmentProjectBody,
 	zCreateDevelopmentProjectResponse,
+	zCreateDevelopmentRepositoryFromTemplateBody,
+	zCreateDevelopmentRepositoryFromTemplateResponse,
 	zCreateGoldenConversationBody,
 	zCreateGoldenConversationPath,
 	zCreateGoldenConversationResponse,
@@ -811,6 +825,7 @@ import {
 	zListDevelopmentEventsResponse,
 	zListDevelopmentProjectsResponse,
 	zListDevelopmentRepositoriesResponse,
+	zListDevelopmentTemplatesResponse,
 	zListGoldenConversationsPath,
 	zListGoldenConversationsResponse,
 	zListImageJobsResponse,
@@ -865,12 +880,16 @@ import {
 	zRefreshRecommendationsResponse,
 	zRegisterDevelopmentRepositoryBody,
 	zRegisterDevelopmentRepositoryResponse,
+	zRegisterDevelopmentTemplateBody,
+	zRegisterDevelopmentTemplateResponse,
 	zReindexCorpusResponse,
 	zReindexKnowledgeDocumentPath,
 	zReindexKnowledgeDocumentResponse,
 	zRejectSuggestedPlaybookActionPath,
 	zRejectSuggestedPlaybookActionResponse,
 	zRemoveCudaBuildResponse,
+	zRemoveDevelopmentTemplatePath,
+	zRemoveDevelopmentTemplateResponse,
 	zRemoveLlamaCppSourceBuildResponse,
 	zRemoveStableDiffusionCppSourceBuildBody,
 	zRemoveStableDiffusionCppSourceBuildResponse,
@@ -3901,6 +3920,105 @@ export const registerDevelopmentRepository = <ThrowOnError extends boolean = fal
 			{ scheme: "bearer", type: "http" },
 		],
 		url: "/api/local/v1/development/repositories",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const listDevelopmentTemplates = <ThrowOnError extends boolean = false>(
+	options?: Options<ListDevelopmentTemplatesData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<ListDevelopmentTemplatesResponses, ListDevelopmentTemplatesErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListDevelopmentTemplatesResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/development/templates",
+		...options,
+	});
+
+export const registerDevelopmentTemplate = <ThrowOnError extends boolean = false>(
+	options: Options<RegisterDevelopmentTemplateData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<RegisterDevelopmentTemplateResponses, RegisterDevelopmentTemplateErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zRegisterDevelopmentTemplateBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zRegisterDevelopmentTemplateResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/development/templates",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const removeDevelopmentTemplate = <ThrowOnError extends boolean = false>(
+	options: Options<RemoveDevelopmentTemplateData, ThrowOnError>,
+) =>
+	(options.client ?? client).delete<RemoveDevelopmentTemplateResponses, RemoveDevelopmentTemplateErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zRemoveDevelopmentTemplatePath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseValidator: async (data) => await zRemoveDevelopmentTemplateResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/development/templates/{templateId}",
+		...options,
+	});
+
+export const createDevelopmentRepositoryFromTemplate = <ThrowOnError extends boolean = false>(
+	options: Options<CreateDevelopmentRepositoryFromTemplateData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<
+		CreateDevelopmentRepositoryFromTemplateResponses,
+		CreateDevelopmentRepositoryFromTemplateErrors,
+		ThrowOnError
+	>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zCreateDevelopmentRepositoryFromTemplateBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zCreateDevelopmentRepositoryFromTemplateResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/development/repositories/from-template",
 		...options,
 		headers: {
 			"Content-Type": "application/json",

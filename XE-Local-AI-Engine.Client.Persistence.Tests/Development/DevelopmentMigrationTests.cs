@@ -11,6 +11,7 @@ public sealed class DevelopmentMigrationTests : IDisposable
 {
     private const string PreDevelopmentMigrationId = "20260718143054_AddAgentExecutionLogProvider";
     private const string PreCommandProfileMigrationId = "20260726203016_AddKnowledgeVectorIdentity";
+    private const string PreAttemptProfileMigrationId = "20260728184839_AddDevelopmentCommandProfile";
 
     private static readonly string[] DevelopmentTables =
     [
@@ -52,7 +53,12 @@ public sealed class DevelopmentMigrationTests : IDisposable
                 "development_attempts",
                 "development_events",
                 "development_projects",
-                "development_tasks"
+                "development_tasks",
+
+                // Slice 2. The template registry and the provenance of repositories materialized from it are node-scoped
+                // configuration, not part of the project/task/attempt operation journal.
+                "development_templates",
+                "development_template_materializations"
             ]));
             var indexes = await NamesAsync(connection, "index", "ux_development_%").ConfigureAwait(false);
             AssertEx.True(indexes.Contains("ux_development_attempts_one_active_per_task"));
@@ -143,11 +149,94 @@ public sealed class DevelopmentMigrationTests : IDisposable
         AssertEx.Equal("origin/main", await ScalarAsync(rolledBack, ProjectBaseBranchSql, projectId).ConfigureAwait(false));
     }
 
+    /// <summary>
+    ///     Pins the attempt-profile migration alone (S1.5.3): its <c>Down</c> must remove only
+    ///     <c>development_attempts.command_profile_json</c> and leave the Development tables, their rows, and the
+    ///     project-level profile column from the preceding migration untouched. Same narrow assertion as
+    ///     <see cref="CommandProfileMigration_RollsBackToPrecedingSchemaWithDevelopmentTablesAndRowsIntact" />, and
+    ///     deliberately not the whole-chain rollback that
+    ///     <see cref="Migration_AppliesDevelopmentSchemaAndSelectedFolderBindingThenRollsBack" /> drives.
+    /// </summary>
+    [Test]
+    public async Task AttemptCommandProfileMigration_RollsBackToPrecedingSchemaWithDevelopmentTablesAndRowsIntact()
+    {
+        Directory.CreateDirectory(_root);
+        var databasePath = Path.Combine(_root, "development-attempt-command-profile.sqlite");
+        await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
+        {
+            await context.Database.MigrateAsync().ConfigureAwait(false);
+        }
+
+        var projectId = Guid.NewGuid();
+        var taskId = Guid.NewGuid();
+        var artifactId = Guid.NewGuid();
+        var attemptId = Guid.NewGuid();
+
+        await using (var connection = new SqliteConnection($"Data Source={databasePath}"))
+        {
+            await connection.OpenAsync().ConfigureAwait(false);
+
+            var attemptProfileColumn = AssertEx.NotNull(
+                await ReadColumnAsync(connection, "development_attempts", "command_profile_json").ConfigureAwait(false));
+            AssertEx.Equal("TEXT", attemptProfileColumn.Type);
+            AssertEx.True(attemptProfileColumn.IsNullable);
+
+            await SeedDevelopmentRowsAsync(connection, projectId, taskId, artifactId).ConfigureAwait(false);
+            await SeedDevelopmentAttemptAsync(connection, attemptId, taskId).ConfigureAwait(false);
+        }
+
+        await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
+        {
+            await context.Database.GetService<IMigrator>().MigrateAsync(PreAttemptProfileMigrationId).ConfigureAwait(false);
+        }
+
+        await using var rolledBack = new SqliteConnection($"Data Source={databasePath}");
+        await rolledBack.OpenAsync().ConfigureAwait(false);
+
+        AssertEx.True((await NamesAsync(rolledBack, "table", "development_%").ConfigureAwait(false)).SetEquals(DevelopmentTables),
+            "Rolling back the attempt-profile migration must not drop or recreate any Development table.");
+        AssertEx.Null(await ReadColumnAsync(rolledBack, "development_attempts", "command_profile_json").ConfigureAwait(false));
+
+        AssertEx.Equal(1L, await ScalarAsync(rolledBack, ProjectCountSql, projectId).ConfigureAwait(false));
+        AssertEx.Equal(1L, await ScalarAsync(rolledBack, TaskCountSql, taskId).ConfigureAwait(false));
+        AssertEx.Equal(1L, await ScalarAsync(rolledBack, ArtifactCountSql, artifactId).ConfigureAwait(false));
+        AssertEx.Equal(1L, await ScalarAsync(rolledBack, AttemptCountSql, attemptId).ConfigureAwait(false));
+
+        // The attempt row must survive with its other columns readable, and the filtered unique index that constrains
+        // active attempts must still be there — a Down that rebuilt the table would silently lose it.
+        AssertEx.Equal("Succeeded", await ScalarAsync(rolledBack, AttemptStatusSql, attemptId).ConfigureAwait(false));
+        AssertEx.True((await NamesAsync(rolledBack, "index", "ux_development_attempts_%").ConfigureAwait(false))
+            .Contains("ux_development_attempts_one_active_per_task"));
+
+        // The PRECEDING migration's project-level column is a different column and must be left alone by this Down.
+        AssertEx.NotNull(await ReadColumnAsync(rolledBack, "development_projects", "command_profile_json").ConfigureAwait(false));
+        AssertEx.Equal("origin/main", await ScalarAsync(rolledBack, ProjectBaseBranchSql, projectId).ConfigureAwait(false));
+    }
+
     private const string ProjectCountSql = "SELECT COUNT(*) FROM development_projects WHERE id = $id;";
     private const string TaskCountSql = "SELECT COUNT(*) FROM development_tasks WHERE id = $id;";
     private const string ArtifactCountSql = "SELECT COUNT(*) FROM development_artifacts WHERE id = $id;";
     private const string ArtifactProfileVersionSql = "SELECT command_profile_version FROM development_artifacts WHERE id = $id;";
     private const string ProjectBaseBranchSql = "SELECT base_branch FROM development_projects WHERE id = $id;";
+    private const string AttemptCountSql = "SELECT COUNT(*) FROM development_attempts WHERE id = $id;";
+    private const string AttemptStatusSql = "SELECT status FROM development_attempts WHERE id = $id;";
+
+    private static async Task SeedDevelopmentAttemptAsync(SqliteConnection connection, Guid attemptId, Guid taskId)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            INSERT INTO development_attempts (id, task_id, predecessor_attempt_id, role, model_id, provider, status,
+                                              started_at_utc, ended_at_utc, terminal_reason, input_tokens, output_tokens,
+                                              start_operation_id, command_profile_json, version)
+            VALUES ($attemptId, $taskId, NULL, 'Coder', 'model', 'local', 'Succeeded', 1, 2, NULL, NULL, NULL,
+                    $operationId, '{"profileId":"generic-git"}', 1);
+            """;
+        command.Parameters.AddWithValue("$attemptId", attemptId.ToString());
+        command.Parameters.AddWithValue("$taskId", taskId.ToString());
+        command.Parameters.AddWithValue("$operationId", Guid.NewGuid().ToString());
+        await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+    }
 
     private static async Task SeedDevelopmentRowsAsync(SqliteConnection connection, Guid projectId, Guid taskId, Guid artifactId)
     {

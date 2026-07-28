@@ -52,17 +52,27 @@ internal sealed class DevelopmentApplyService(
 
         var project = await _store.GetProjectAsync(task.ProjectId, cancellationToken).ConfigureAwait(false);
         DevelopmentTrustPolicy.EnsureCurrent(project, _timeProvider);
-        var reviewerAttempt = (await _store.ListAttemptsAsync(taskId, cancellationToken).ConfigureAwait(false))
-                              .LastOrDefault(attempt => attempt.Role == DevelopmentAttemptRole.Reviewer
-                                                        && attempt.Status == DevelopmentAttemptStatus.Succeeded)
+        var attempts = await _store.ListAttemptsAsync(taskId, cancellationToken).ConfigureAwait(false);
+        var reviewerAttempt = attempts.LastOrDefault(attempt => attempt.Role == DevelopmentAttemptRole.Reviewer
+                                                                && attempt.Status == DevelopmentAttemptStatus.Succeeded)
                               ?? throw new DevelopmentInvalidTransitionException("Patch preview requires a successful independent reviewer attempt.");
+
+        // The profile to judge this evidence by is the one the CODER attempt ran under, not the project's current
+        // value. They are the same until a profile-edit path exists, and they diverge the moment one does: a project
+        // edited after this patch was produced would otherwise make a historical attempt fail to apply because the
+        // digests describe an edit rather than a defect. Selected the same way every other gate selects it, so all of
+        // them agree on which attempt is authoritative.
+        var coderAttempt = attempts.LastOrDefault(attempt => attempt.Role == DevelopmentAttemptRole.Coder
+                                                             && attempt.Status == DevelopmentAttemptStatus.Succeeded)
+                           ?? throw new DevelopmentInvalidTransitionException("Patch preview requires a successful coder attempt.");
+        var coderSnapshot = await _store.GetExecutionSnapshotAsync(coderAttempt.Id, cancellationToken).ConfigureAwait(false);
         var snapshot = await _store.GetExecutionSnapshotAsync(reviewerAttempt.Id, cancellationToken).ConfigureAwait(false);
         var session = await _workspaceProvider.PrepareAsync(snapshot, repository, cancellationToken).ConfigureAwait(false);
         DevelopmentEvidenceSet current;
         try
         {
             current = await _evidence.ResolveCurrentAsync(taskId, session, cancellationToken).ConfigureAwait(false);
-            var expectedProfileDigest = DevelopmentCommandProfileCatalog.ResolveStored(project.CommandProfileJson).ComputeDigest();
+            var expectedProfileDigest = DevelopmentCommandProfileCatalog.ResolveStored(coderSnapshot.CommandProfileJson).ComputeDigest();
             var (validationArtifact, _) = await ReadValidationAsync(taskId, current, expectedProfileDigest, cancellationToken).ConfigureAwait(false);
             var (reviewArtifact, reviewReport) = await ReadReviewAsync(taskId, current, validationArtifact.Id, expectedProfileDigest, cancellationToken).ConfigureAwait(false);
 

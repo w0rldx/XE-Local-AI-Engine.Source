@@ -68,6 +68,42 @@ public sealed class RegisterDevelopmentRepositoryRequest
     public string HostPath { get; init; } = string.Empty;
 }
 
+public sealed class RegisterDevelopmentTemplateRequest
+{
+    /// <summary>The label the operator will pick this template by.</summary>
+    public string Alias { get; init; } = string.Empty;
+
+    /// <summary>Absolute host path of an existing Git repository to use as a template.</summary>
+    public string HostPath { get; init; } = string.Empty;
+}
+
+public sealed class DevelopmentTemplateRequest
+{
+    public Guid TemplateId { get; init; }
+}
+
+/// <summary>
+///     Creates a new repository from a template and registers it. The engine clones the template, drops its
+///     <c>.git</c>, re-initializes, and makes one initial commit — so the result is a standalone repository with no
+///     remote and none of the template's history.
+/// </summary>
+public sealed class CreateDevelopmentRepositoryFromTemplateRequest
+{
+    public Guid TemplateId { get; init; }
+
+    /// <summary>Absolute destination path chosen by the operator. Must not live under the node data directory.</summary>
+    public string DestinationPath { get; init; } = string.Empty;
+
+    /// <summary>The alias the new repository is registered under.</summary>
+    public string Alias { get; init; } = string.Empty;
+
+    /// <summary>
+    ///     The branch the initial commit lands on. Must match the branch the project will be created with, because the
+    ///     managed worktree resolves its base commit through <c>refs/heads/{branch}</c>.
+    /// </summary>
+    public string BaseBranch { get; init; } = "main";
+}
+
 public sealed class ReconnectDevelopmentRepositoryRequest
 {
     public Guid ProjectId { get; init; }
@@ -78,6 +114,23 @@ public sealed class ReconnectDevelopmentRepositoryRequest
 public sealed record DevelopmentCapabilityResponse(bool Enabled);
 
 public sealed record DevelopmentRepositoryResponse(string Id, string Alias, string Availability);
+
+/// <summary>
+///     A registered template, projected as id plus alias. The host path never crosses this boundary, exactly as it
+///     never does for a registered repository.
+/// </summary>
+public sealed record DevelopmentTemplateResponse(string Id, string Alias, string Availability);
+
+public sealed record ListDevelopmentTemplatesResponse(IReadOnlyList<DevelopmentTemplateResponse> Templates);
+
+/// <summary>
+///     The new repository, plus which template and commit produced it. The commit sha is the template's version —
+///     templates are living repositories, so a version number would be a lie.
+/// </summary>
+public sealed record DevelopmentRepositoryFromTemplateResponse(
+    DevelopmentRepositoryResponse Repository,
+    string TemplateAlias,
+    string TemplateCommit);
 
 public sealed record DevelopmentProjectResponse(
     Guid Id,
@@ -230,6 +283,9 @@ internal static class DevelopmentContractMapper
     }
 
     public static DevelopmentRepositoryResponse ToResponse(this DevelopmentRepositoryReference value) =>
+        new(value.Id, value.Alias, value.Availability);
+
+    public static DevelopmentTemplateResponse ToResponse(this DevelopmentTemplateReference value) =>
         new(value.Id, value.Alias, value.Availability);
 
     public static DevelopmentTaskResponse ToResponse(this DevelopmentTaskSnapshot value) =>
