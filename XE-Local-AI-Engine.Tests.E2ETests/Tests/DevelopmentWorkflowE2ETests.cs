@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.E2ETests.Tests;
 
 using System.Diagnostics;
+using System.Reflection;
 using Microsoft.Playwright;
 using XE_Local_AI_Engine.Tests.E2ETests.Common;
 
@@ -168,6 +169,113 @@ public sealed class DevelopmentWorkflowE2ETests : XEE2ETestBase
         }
     }
 
+    /// <summary>
+    ///     Slice 4's reachability criterion, exercised through the browser: the executed/passed/failed counts must be
+    ///     <em>visible to the operator in the attempt view</em>, not merely persisted.
+    ///     <para>
+    ///         The other test in this file drives a README-only repository, which detection resolves to
+    ///         <c>generic-git</c> — a profile whose validation list is the whitespace check alone and which therefore
+    ///         runs no test command and produces no counts to show. So it can never exercise this, and a criterion that
+    ///         no browser test reaches is exactly the shape of the defect Slice 1 shipped: a panel that never rendered.
+    ///     </para>
+    ///     <para>
+    ///         This one uses a real buildable .NET solution with a passing test, so detection resolves
+    ///         <c>dotnet-slnx</c> and the gate runs restore, build and test for real. The coder writes
+    ///         <c>feature.txt</c> exactly as it does for the other test — a file that is deliberately irrelevant to the
+    ///         build, so the counts under assertion come from the repository's own suite rather than from anything the
+    ///         fake model contrived.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task DotnetProfile_RendersExecutedPassedAndFailedCountsInTheAttemptView()
+    {
+        var repositoryRoot = Path.Combine(Path.GetTempPath(), "xe-development-e2e-dotnet-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            await CreateDotnetRepositoryAsync(repositoryRoot).ConfigureAwait(false);
+            await Page.GotoAsync($"{NodeAppUrl}/development", new PageGotoOptions
+            {
+                WaitUntil = WaitUntilState.NetworkIdle
+            }).ConfigureAwait(false);
+
+            await RegisterRepositoryAsync(repositoryRoot).ConfigureAwait(false);
+
+            await Page.GetByLabel("Project objective").FillAsync("Surface deterministic test counts in the attempt view").ConfigureAwait(false);
+            await Page.GetByLabel("Initial task title").FillAsync("Add the deterministic feature file").ConfigureAwait(false);
+            await Page.GetByLabel("Requirements").FillAsync("Create feature.txt without disturbing the existing suite.").ConfigureAwait(false);
+            await Page.GetByLabel("Acceptance criteria (JSON)").FillAsync("[\"the existing suite still passes\"]").ConfigureAwait(false);
+            await Page.GetByLabel("Coder model ID").FillAsync("qwen3.5:0.8b").ConfigureAwait(false);
+            await Page.GetByLabel("Reviewer model ID").FillAsync("qwen3.5:0.8b").ConfigureAwait(false);
+            await Page.GetByTestId("development-trust-acknowledgement").CheckAsync().ConfigureAwait(false);
+
+            // A positive assertion, not a wait: if detection ever stopped resolving a .slnx repository to the .NET
+            // profile, this test would still go green against a gate that ran only the whitespace check — proving
+            // nothing about counts while looking like it had.
+            await Expect(Page.GetByTestId("development-profile-confirmation")).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
+            {
+                Timeout = 30_000
+            }).ConfigureAwait(false);
+            await Expect(Page.GetByTestId("development-profile-id")).ToContainTextAsync("dotnet-slnx").ConfigureAwait(false);
+            await Page.GetByTestId("development-profile-confirm").CheckAsync().ConfigureAwait(false);
+            await Page.GetByTestId("development-create-project").ClickAsync().ConfigureAwait(false);
+
+            await Expect(Page.GetByTestId("development-project-detail")).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
+            {
+                Timeout = 10_000
+            }).ConfigureAwait(false);
+
+            var nextAction = Page.GetByTestId("development-start-next");
+            await nextAction.ClickAsync().ConfigureAwait(false);
+            await Expect(nextAction).ToHaveTextAsync("Run deterministic validation", new LocatorAssertionsToHaveTextOptions
+            {
+                Timeout = 30_000
+            }).ConfigureAwait(false);
+            await nextAction.ClickAsync().ConfigureAwait(false);
+
+            // Generous, because this validation genuinely restores, builds and tests a .NET solution inside the
+            // sandbox rather than running one git command. Reaching the review action is the signal that all four
+            // profile commands finished and the gate passed.
+            await Expect(nextAction).ToHaveTextAsync("Start independent review", new LocatorAssertionsToHaveTextOptions
+            {
+                Timeout = ValidationTimeoutMilliseconds
+            }).ConfigureAwait(false);
+
+            await Page.GetByRole(AriaRole.Tab, new PageGetByRoleOptions
+            {
+                Name = "Validation"
+            }).ClickAsync().ConfigureAwait(false);
+
+            // The criterion itself. The counts come from the fixture's single passing test, so they are exact:
+            // one discovered, one executed, one passed, none failed.
+            var counts = Page.GetByTestId("development-validation-test-counts");
+            await Expect(counts).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
+            {
+                Timeout = 30_000
+            }).ConfigureAwait(false);
+            await Expect(counts).ToContainTextAsync("Tests executed").ConfigureAwait(false);
+            await Expect(counts).ToContainTextAsync("Tests passed").ConfigureAwait(false);
+            await Expect(counts).ToContainTextAsync("Tests failed").ConfigureAwait(false);
+
+            // A parse failure renders instead of the counts, so its absence is part of the evidence that these
+            // numbers were actually read rather than defaulted.
+            await Expect(Page.GetByTestId("development-validation-test-parse-failure")).ToHaveCountAsync(0).ConfigureAwait(false);
+            await Expect(Page.GetByTestId("development-validation-no-tests")).ToHaveCountAsync(0).ConfigureAwait(false);
+            await Expect(Page.GetByTestId("development-validation-failure")).ToHaveCountAsync(0).ConfigureAwait(false);
+            await Expect(Page.GetByTestId("development-validation-result")).ToContainTextAsync("Validation passed").ConfigureAwait(false);
+        }
+        finally
+        {
+            TryDeleteDirectory(repositoryRoot);
+        }
+    }
+
+    /// <summary>
+    ///     Restore, build and test of a small solution inside the sandbox, on a cold per-session NuGet directory.
+    ///     Measured at roughly two seconds for the equivalent fixture in the backend suite; the headroom is for a
+    ///     loaded machine and a cold SDK start, not for an expected duration.
+    /// </summary>
+    private const int ValidationTimeoutMilliseconds = 300_000;
+
     private static async Task CreateRepositoryAsync(string repositoryRoot)
     {
         Directory.CreateDirectory(repositoryRoot);
@@ -183,6 +291,193 @@ public sealed class DevelopmentWorkflowE2ETests : XEE2ETestBase
                 "-m",
                 "initial fixture")
             .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     Builds a throwaway Git repository that is a real, buildable .NET solution with one passing test, so
+    ///     profile detection resolves <c>dotnet-slnx</c> and the gate has a genuine suite to count.
+    ///     <para>
+    ///         Deliberately a near-twin of <c>DevelopmentSyntheticSolutionRepository</c> in the backend suite rather
+    ///         than a shared type: that class is <c>internal</c> to another test assembly, and the two fixtures want
+    ///         opposite baselines. The backend one starts RED on purpose so a coder attempt can steer the outcome
+    ///         three ways; this one starts GREEN, because the E2E coder writes an inert <c>feature.txt</c> and the
+    ///         point here is the counts reaching the screen, not the gate's verdict logic.
+    ///     </para>
+    /// </summary>
+    private static async Task CreateDotnetRepositoryAsync(string repositoryRoot)
+    {
+        Directory.CreateDirectory(Path.Combine(repositoryRoot, "src", "Lib"));
+        Directory.CreateDirectory(Path.Combine(repositoryRoot, "tests", "Probe"));
+
+        var (packagesRoot, testFrameworkVersion) = ResolveTestFrameworkPackage();
+
+        // Pin the same SDK band and MTP runner this repository uses: the code-owned .NET profiles pass
+        // --max-parallel-test-modules 1, which a VSTest-mode `dotnet test` rejects outright.
+        await WriteAsync(repositoryRoot,
+            "global.json",
+            """
+            {
+              "sdk": { "version": "10.0.100", "rollForward": "latestFeature", "allowPrerelease": false },
+              "test": { "runner": "Microsoft.Testing.Platform" }
+            }
+
+            """).ConfigureAwait(false);
+
+        // Restore must succeed with no network: DevelopmentWorkspaceTools points NUGET_PACKAGES at a fresh
+        // per-session directory, so the ambient cache is invisible. Clearing the sources and declaring the host
+        // cache as a fallback folder resolves the graph from disk instead.
+        await WriteAsync(repositoryRoot,
+            "NuGet.config",
+            $"""
+             <?xml version="1.0" encoding="utf-8"?>
+             <configuration>
+               <packageSources>
+                 <clear />
+               </packageSources>
+               <fallbackPackageFolders>
+                 <clear />
+                 <add key="host" value="{packagesRoot}" />
+               </fallbackPackageFolders>
+             </configuration>
+
+             """).ConfigureAwait(false);
+
+        // Build output must be ignored: the patch is exported with `git add -A`, so an un-ignored bin/ or obj/
+        // produced by validation would change the subject hash between validation and review and block apply for a
+        // reason unrelated to the change.
+        await WriteAsync(repositoryRoot,
+            ".gitignore",
+            """
+            bin/
+            obj/
+            TestResults/
+
+            """).ConfigureAwait(false);
+
+        await WriteAsync(repositoryRoot,
+            "SyntheticFixture.slnx",
+            """
+            <Solution>
+                <Project Path="src/Lib/Lib.csproj"/>
+                <Project Path="tests/Probe/Probe.csproj"/>
+            </Solution>
+
+            """).ConfigureAwait(false);
+
+        await WriteAsync(repositoryRoot,
+            "src/Lib/Lib.csproj",
+            """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <Nullable>enable</Nullable>
+                <ImplicitUsings>enable</ImplicitUsings>
+              </PropertyGroup>
+            </Project>
+
+            """).ConfigureAwait(false);
+
+        await WriteAsync(repositoryRoot,
+            "src/Lib/Feature.cs",
+            """
+            namespace Lib;
+
+            public static class Feature
+            {
+                public static string Value() => "base";
+            }
+
+            """).ConfigureAwait(false);
+
+        await WriteAsync(repositoryRoot,
+            "tests/Probe/Probe.csproj",
+            $"""
+             <Project Sdk="Microsoft.NET.Sdk">
+               <PropertyGroup>
+                 <TargetFramework>net10.0</TargetFramework>
+                 <OutputType>Exe</OutputType>
+                 <Nullable>enable</Nullable>
+                 <ImplicitUsings>enable</ImplicitUsings>
+               </PropertyGroup>
+               <ItemGroup>
+                 <PackageReference Include="TUnit" Version="{testFrameworkVersion}" />
+                 <ProjectReference Include="../../src/Lib/Lib.csproj"/>
+               </ItemGroup>
+             </Project>
+
+             """).ConfigureAwait(false);
+
+        // Exactly one test, and it passes at HEAD. The assertion in the test above depends on that count.
+        await WriteAsync(repositoryRoot,
+            "tests/Probe/FeatureTests.cs",
+            """
+            namespace Probe;
+
+            public sealed class FeatureTests
+            {
+                [Test]
+                public async Task Value_ReturnsTheApprovedContent() =>
+                    await Assert.That(Lib.Feature.Value()).IsEqualTo("base");
+            }
+
+            """).ConfigureAwait(false);
+
+        await RunGitAsync(repositoryRoot, "init", "--initial-branch=main").ConfigureAwait(false);
+        await RunGitAsync(repositoryRoot, "add", "-A", "--", ".").ConfigureAwait(false);
+        await RunGitAsync(repositoryRoot,
+                "-c",
+                "user.name=Development E2E",
+                "-c",
+                "user.email=development-e2e@example.test",
+                "commit",
+                "-m",
+                "synthetic dotnet fixture")
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     The NuGet cache and TUnit version to restore the fixture from, both taken from this test host — the version
+    ///     is the one this assembly runs on and the cache is the one it was restored into, so the pair is present on
+    ///     any machine that could have built this project.
+    /// </summary>
+    private static (string PackagesRoot, string Version) ResolveTestFrameworkPackage()
+    {
+        var packagesRoot = Environment.GetEnvironmentVariable("NUGET_PACKAGES");
+        if (string.IsNullOrWhiteSpace(packagesRoot))
+        {
+            packagesRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".nuget", "packages");
+        }
+
+        packagesRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(packagesRoot));
+        var packageDirectory = Path.Combine(packagesRoot, "tunit");
+        if (!Directory.Exists(packageDirectory))
+        {
+            throw new InvalidOperationException($"The NuGet package cache '{packagesRoot}' has no restored TUnit package, so the synthetic Development solution cannot be restored offline.");
+        }
+
+        var loaded = typeof(TestAttribute).Assembly
+                                          .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
+                                          .InformationalVersion?
+                                          .Split('+')[0];
+        if (!string.IsNullOrWhiteSpace(loaded) && Directory.Exists(Path.Combine(packageDirectory, loaded)))
+        {
+            return (packagesRoot, loaded);
+        }
+
+        var newest = Directory.EnumerateDirectories(packageDirectory)
+                              .Select(Path.GetFileName)
+                              .OfType<string>()
+                              .OrderByDescending(static name => name, StringComparer.OrdinalIgnoreCase)
+                              .FirstOrDefault()
+                     ?? throw new InvalidOperationException($"The NuGet package cache '{packagesRoot}' has a TUnit package directory with no restored version in it.");
+        return (packagesRoot, newest);
+    }
+
+    private static async Task WriteAsync(string repositoryRoot, string relativePath, string content)
+    {
+        var path = Path.Combine(repositoryRoot, relativePath.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        await File.WriteAllTextAsync(path, content).ConfigureAwait(false);
     }
 
     private static async Task RunGitAsync(string workingDirectory, params string[] arguments)
