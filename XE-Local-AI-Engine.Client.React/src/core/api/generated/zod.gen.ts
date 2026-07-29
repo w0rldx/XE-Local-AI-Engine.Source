@@ -2029,8 +2029,31 @@ export const zXeLocalAiEngineClientEndpointsImagesV1StartStableDiffusionCppSourc
 	acknowledgeCustomSourceRisk: z.boolean(),
 });
 
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerDaemonResponse = z.object({
+	daemonId: z.string().optional(),
+	serverVersion: z.string().optional(),
+	endpoint: z.string().optional(),
+	confirmedAtUtc: z.iso.datetime({ offset: true }).nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerRuntimeResponse = z.object({
+	ready: z.boolean().optional(),
+	status: z.string().optional(),
+	message: z.string().optional(),
+	requiresOperatorConfirmation: z.boolean().optional(),
+	endpoint: z.string().nullish(),
+	endpointSource: z.string().nullish(),
+	observedDaemon: zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerDaemonResponse.nullish(),
+	pinnedDaemon: zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerDaemonResponse.nullish(),
+});
+
 export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentCapabilityResponse = z.object({
 	enabled: z.boolean().optional(),
+	containerRuntime: zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerRuntimeResponse.optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1ConfirmDevelopmentContainerRuntimeRequest = z.object({
+	daemonId: z.string().optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentRepositoryResponse = z.object({
@@ -4004,6 +4027,15 @@ export const zStartStableDiffusionCppSourceBuildResponse =
  * Success
  */
 export const zGetDevelopmentCapabilityResponse = zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentCapabilityResponse;
+
+export const zConfirmDevelopmentContainerRuntimeBody =
+	zXeLocalAiEngineClientEndpointsDevelopmentV1ConfirmDevelopmentContainerRuntimeRequest;
+
+/**
+ * Success
+ */
+export const zConfirmDevelopmentContainerRuntimeResponse =
+	zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerRuntimeResponse;
 
 /**
  * Success

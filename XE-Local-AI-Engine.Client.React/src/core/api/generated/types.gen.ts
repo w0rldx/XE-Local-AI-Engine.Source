@@ -1690,6 +1690,29 @@ export type XeLocalAiEngineClientEndpointsImagesV1StartStableDiffusionCppSourceB
 
 export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentCapabilityResponse = {
 	enabled?: boolean;
+	containerRuntime?: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerRuntimeResponse;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerRuntimeResponse = {
+	ready?: boolean;
+	status?: string;
+	message?: string;
+	requiresOperatorConfirmation?: boolean;
+	endpoint?: string | null;
+	endpointSource?: string | null;
+	observedDaemon?: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerDaemonResponse | null;
+	pinnedDaemon?: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerDaemonResponse | null;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerDaemonResponse = {
+	daemonId?: string;
+	serverVersion?: string;
+	endpoint?: string;
+	confirmedAtUtc?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentV1ConfirmDevelopmentContainerRuntimeRequest = {
+	daemonId?: string;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentRepositoriesResponse = {
@@ -6211,6 +6234,34 @@ export type GetDevelopmentCapabilityResponses = {
 };
 
 export type GetDevelopmentCapabilityResponse = GetDevelopmentCapabilityResponses[keyof GetDevelopmentCapabilityResponses];
+
+export type ConfirmDevelopmentContainerRuntimeData = {
+	body: XeLocalAiEngineClientEndpointsDevelopmentV1ConfirmDevelopmentContainerRuntimeRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/development/container-runtime/confirmation";
+};
+
+export type ConfirmDevelopmentContainerRuntimeErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ConfirmDevelopmentContainerRuntimeResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerRuntimeResponse;
+};
+
+export type ConfirmDevelopmentContainerRuntimeResponse =
+	ConfirmDevelopmentContainerRuntimeResponses[keyof ConfirmDevelopmentContainerRuntimeResponses];
 
 export type ListDevelopmentRepositoriesData = {
 	body?: never;

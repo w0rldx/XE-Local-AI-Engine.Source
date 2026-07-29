@@ -71,6 +71,9 @@ import type {
 	CodexStatusData,
 	CodexStatusErrors,
 	CodexStatusResponses,
+	ConfirmDevelopmentContainerRuntimeData,
+	ConfirmDevelopmentContainerRuntimeErrors,
+	ConfirmDevelopmentContainerRuntimeResponses,
 	ConnectConnectionData,
 	ConnectConnectionErrors,
 	ConnectConnectionResponses,
@@ -650,6 +653,8 @@ import {
 	zCodexLoginResponse,
 	zCodexLogoutResponse,
 	zCodexStatusResponse,
+	zConfirmDevelopmentContainerRuntimeBody,
+	zConfirmDevelopmentContainerRuntimeResponse,
 	zConnectConnectionResponse,
 	zContinuePreviewRunPath,
 	zContinuePreviewRunResponse,
@@ -3877,6 +3882,36 @@ export const getDevelopmentCapability = <ThrowOnError extends boolean = false>(
 		],
 		url: "/api/local/v1/development/capability",
 		...options,
+	});
+
+export const confirmDevelopmentContainerRuntime = <ThrowOnError extends boolean = false>(
+	options: Options<ConfirmDevelopmentContainerRuntimeData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<
+		ConfirmDevelopmentContainerRuntimeResponses,
+		ConfirmDevelopmentContainerRuntimeErrors,
+		ThrowOnError
+	>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zConfirmDevelopmentContainerRuntimeBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zConfirmDevelopmentContainerRuntimeResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/development/container-runtime/confirmation",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
 	});
 
 export const listDevelopmentRepositories = <ThrowOnError extends boolean = false>(
