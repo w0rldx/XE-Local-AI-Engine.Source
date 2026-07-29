@@ -13,8 +13,8 @@ The repository is being prepared for an RC release. Release documentation and va
 - **Providers and agents** — local provider abstractions, the supervised llama.cpp host runtime (primary/default), Ollama provider (opt-in secondary), and shared agent execution loop.
 - **Scheduler** — Quartz.NET-backed job scheduler with job definitions, run history, cancellation, and live run updates over a local SignalR hub (`Services/Scheduler`, `src/features/scheduler`).
 - **Model-fit / Model Advisor** — box-aware GGUF recommendation: profiles the local hardware (RAM / VRAM / GPU vendor), discovers candidate GGUF repos on Hugging Face, estimates each model's memory footprint with a
-  pure, in-process (I/O-free) formula, and ranks the ones that fit. Exposed as cache-only reads plus a scheduler-driven refresh — there is no container or benchmark image (Docker was removed in the 2026-06-17
-  runtime re-architecture) (`Services/ModelFit`, `src/features/model-fit`). See [docs/wiki/07-model-fit.md](docs/wiki/07-model-fit.md).
+  pure, in-process (I/O-free) formula, and ranks the ones that fit. Exposed as cache-only reads plus a scheduler-driven refresh — the advisor is estimator-only and never spawns a process, so there is no container
+  or benchmark image anywhere in this path (`Services/ModelFit`, `src/features/model-fit`). See [docs/wiki/07-model-fit.md](docs/wiki/07-model-fit.md).
 - **Image generation** — local text-to-image via **stable-diffusion.cpp**: the node supervises a resident `sd-server` child process (one daemon per model, readiness-gated, idle-evicted on its own loopback port
   range), serializes generation to one job at a time with queue/cancel, and persists produced images encrypted-at-rest. Ships **enabled by default** (`Services/Images`, `Providers.StableDiffusionCpp`,
   `src/features/images`). See [docs/wiki/14-image-generation.md](docs/wiki/14-image-generation.md).
@@ -27,7 +27,10 @@ The repository is being prepared for an RC release. Release documentation and va
   The operator registers a trusted local Git repository once, then selects it by an opaque ID and alias; the host path stays internal to the node. The agent works in a managed worktree outside the selected source
   repository, and only a reviewed apply whose base and evidence hashes still match may change that source. Generated source, MSBuild targets, source generators, and tests execute as the host user with the host's
   filesystem and network access. The Process sandbox and Agent Home controls constrain application-mediated paths and bytes; they are not an operating-system security boundary. Set
-  `Development:Enabled=false` as an emergency switch when that execution posture is not intended. MXC and devcontainer-backed isolation remain future provider work.
+  `Development:Enabled=false` as an emergency switch when that execution posture is not intended. MXC remains future provider work.
+  [ADR 0004](docs/adr/0004-development-mode-container-execution-docker-stopgap.md) (accepted 2026-07-29) moves this feature's execution onto a **Docker container provider**, behind the same provider seam and as an
+  interim step ahead of MXC. That work is in progress; when it lands, **a running Docker daemon becomes a hard requirement for Development Mode** — there is deliberately no unisolated fallback, so a machine without one
+  gets no Development Mode rather than a quietly weaker one. Docker stays scoped to this feature: chat, embeddings, model acquisition and image generation never require it.
 - **MCP tool extensibility** — registered MCP servers whose live tool snapshots are offered to agents through the local tool registry (`Services/Mcp`, `src/features/mcp`).
 - **Tests and fixtures** — backend/client persistence tests, integration-style tests, E2E harness, and FakeOllama in-process test server.
 
@@ -69,7 +72,8 @@ Component-specific notes:
 - .NET SDK from [`global.json`](global.json)
 - Node.js compatible with `XE-Local-AI-Engine.Client.React/package.json`
 - pnpm via Corepack or a local install
-- A GPU with current drivers is optional; the app self-provisions its llama.cpp runtime and GGUF models at first run. (Docker and Ollama are **not** required — Docker was removed in the 2026-06-17 runtime re-architecture and llama.cpp is the local runtime; see [docs/wiki/03-local-runtime-and-providers.md](docs/wiki/03-local-runtime-and-providers.md).)
+- A GPU with current drivers is optional; the app self-provisions its llama.cpp runtime and GGUF models at first run. (Neither Docker nor Ollama is required to build or run the engine — llama.cpp is the local runtime and inference needs only a driver; see [docs/wiki/03-local-runtime-and-providers.md](docs/wiki/03-local-runtime-and-providers.md).)
+- Docker: **not required today.** It becomes a prerequisite for **Development Mode only** — and only for that feature — once its container execution lands ([ADR 0004](docs/adr/0004-development-mode-container-execution-docker-stopgap.md)); that work is in progress, not shipped. At that point Development Mode will need a running daemon, plus its data root inside the WSL2 filesystem on Windows, and its real-daemon integration tests will need one too (without a daemon they report as blocked or skipped-with-reason, never as a pass). Nothing else in the app gains a Docker dependency.
 
 ### Common commands
 

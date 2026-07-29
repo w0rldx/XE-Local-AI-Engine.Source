@@ -8,7 +8,8 @@ XE Local AI Engine (product name **XE AI-Engine**) is the **node-side runtime** 
 with per-column AEAD encryption,
 and supervises node-owned `llama-server` and `sd-server` host child processes. This page is the map:
 it shows the node↔platform boundary, the in-process layering and one-way dependency flow, and the
-post-re-architecture runtime model (host llama.cpp, **no Docker, no HostAgent**). Subsystem detail lives
+post-re-architecture runtime model (host llama.cpp, **no Docker on the inference path, no HostAgent**;
+Development Mode execution is the one scoped exception — see [ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md)). Subsystem detail lives
 in the per-topic pages linked throughout.
 
 ---
@@ -16,9 +17,17 @@ in the per-topic pages linked throughout.
 ## What the system is
 
 The engine is **one deployable web server** plus a Vite/React SPA it serves. There is no separate worker
-process, no container runtime, and (since the 2026-06-17 re-architecture) no HostAgent sidecar. Everything
-— the management UI, the local REST/SignalR surface, the agent execution loop, and the model runtime
-supervisor — lives inside the `XE-Local-AI-Engine.Client` host.
+process, no container runtime on the inference path, and (since the 2026-06-17 re-architecture) no
+HostAgent sidecar. Everything — the management UI, the local REST/SignalR surface, the agent execution
+loop, and the model runtime supervisor — lives inside the `XE-Local-AI-Engine.Client` host.
+
+> **Scoped exception: Development Mode execution.** [ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md)
+> (Accepted 2026-07-29) permits Docker for Development Mode build/test/lint execution **only**, as a
+> stopgap ahead of MXC. It changes nothing above: the engine is still one process, and inference, model
+> acquisition, embedding and image generation carry no container dependency. The provider is chosen
+> **per feature** — AgentHome and Coder stay on the process sandbox provider. The container provider
+> itself is Slice 3 of the dev-mode plan and is **in progress**, so read the ADR rather than the tree
+> for what is decided.
 
 | Concern | Where it lives | Evidence |
 |---|---|---|
@@ -106,9 +115,20 @@ to the expected base commit and evidence hashes; apply revalidates those values 
 source. An agent cannot make its managed worktree authoritative merely by changing files there.
 
 This is an application-enforced workflow boundary, not operating-system isolation. Build and test code runs as
-the host user and retains the host filesystem and network access available to that user. MXC and devcontainer
-support are future `ISandboxRuntimeProvider`/workspace-provider work only; the current architecture does not
-present either as an active security boundary. See [Security & Privacy](12-security-and-privacy.md#development-mode-source-and-execution-boundary).
+the host user and retains the host filesystem and network access available to that user. MXC remains future
+`ISandboxRuntimeProvider`/workspace-provider work; the current architecture does not present it as an active
+security boundary. See [Security & Privacy](12-security-and-privacy.md#development-mode-source-and-execution-boundary).
+
+**Direction of travel.** [ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md) (Accepted
+2026-07-29) moves Development Mode execution onto a **container provider behind the same `ISandboxRuntimeProvider`
+seam**, with a running Docker daemon as a hard requirement for the feature and **no unisolated fallback** — no
+daemon means no Development Mode, deliberately, so the isolation posture cannot depend on what happens to be
+installed. Repository-supplied container configuration is rejected wholesale (engine-generated canonical mounts,
+operator-approved digest-pinned images, no socket or device mounts, no repository Dockerfile builds); on Linux,
+Docker-socket access is root-equivalent, and the ADR documents that rather than mitigating it. Docker is recorded
+as a **stopgap**, not a replacement for MXC, and does not close the seam. The work is Slice 3 of
+`Plans/2026-07-28-dev-mode-container-sandbox-and-command-profiles-plan.md` and is **in progress** — until it lands,
+the paragraph above describes what actually executes.
 
 **Where the code and the decisions live.** Backend: 16 endpoints in `Client/Endpoints/Development/V1/DevelopmentEndpoints.cs`
 (routes on `LocalApiRoutes.Development`), services under `Client.Application/Services/Development/`, live attempt output over
@@ -255,7 +275,7 @@ The runtime was deliberately re-architected (status: *decisions locked*). The dr
 
 | # | Decision | Reality in code |
 |---|---|---|
-| 2 | **Docker removed entirely** | No `Docker.DotNet`, no container sandbox as the inference path. `AppHost.cs` comment confirms the in-Aspire HostAgent/Docker resource was removed. |
+| 2 | **Docker removed entirely** — **amended 2026-07-29 to "no Docker on the inference path"** by [ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md) | No container sandbox as the inference path; `AppHost.cs` comment confirms the in-Aspire HostAgent/Docker resource was removed. The amendment permits a Docker Engine API client (`Docker.DotNet.Enhanced` — the maintained testcontainers fork, whose assembly/namespace is still `Docker.DotNet`) and a running daemon **for Development Mode build/test/lint execution only**, as an interim step ahead of MXC. The epic's `:29` grep-clean acceptance criterion was amended in the same change. |
 | 5/6 | Hybrid spawn-per-model lifecycle; app-controlled HF download + local store | `LlamaServerProcessSupervisor`, `LlamaServerLocalModelProvider`, `Providers.HuggingFace`. |
 | 7/8 | Prebuilt llama.cpp, recommended-pinned + user-upgradable; GPU variant selection only | `LlamaCppBinaryManager`, `LlamaCppReleasePins.cs`, `IGpuVariantSelector`, `LlamaCppUpdateCheckService` (notify-only update check). **Amended since the lock:** prebuilt download is still the default and the only *automatic* path, but two opt-in operator paths now sit ahead of it in `EnsureBinaryAsync` — an environment-variable bring-your-own binary override, and an in-app **source build** (`ILlamaCppSourceBuildService`, `LlamaCppSourceBuildService.cs`) that closes the missing-Linux-CUDA-prebuilt gap. Neither ever runs implicitly. See [Local Runtime & Providers §2.6](03-local-runtime-and-providers.md#26-in-app-source-builds-linux). |
 | 14 | **Ollama kept as optional native secondary** (no Docker) | `Providers.Ollama` still exists; **de-orchestrated** from Aspire dev — `AppHost.cs` orchestrates only `app` + Vite + SQLite, llama.cpp is the dev runtime. |
@@ -287,12 +307,16 @@ A maintainer must preserve these. Each is enforced or anchored in code today:
 5. **Provider SDK types do not cross `Providers.Abstractions`.** Depend on `ILocalModelProvider` /
    `IChatClient` / `IEmbeddingGenerator`; keep OllamaSharp / llama-server HTTP types inside provider
    projects.
-6. **No code path requires Docker or WSL, and nothing requires a CUDA toolkit to *run*.** The only
+6. **No inference path requires Docker or WSL, and nothing requires a CUDA toolkit to *run*.** The only
    external dependency for inference is a GPU driver — and CPU fallback always works (re-architecture
-   invariant §3). The one place a toolchain is needed is the **opt-in in-app source build**, which is an
+   invariant §3). Two opt-in features sit outside this and need more: the **in-app source build**, an
    explicit operator action guarded by a prerequisite checklist (`cmake`/`gcc`/`g++`/`git`, plus `nvcc` for
-   the CUDA backend) and is unavailable off Linux. A node that never invokes it never needs any of that.
-   See [Local Runtime & Providers §2.6](03-local-runtime-and-providers.md#26-in-app-source-builds-linux).
+   the CUDA backend) and unavailable off Linux (see
+   [Local Runtime & Providers §2.6](03-local-runtime-and-providers.md#26-in-app-source-builds-linux)); and
+   **Development Mode**, which per [ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md)
+   takes a running Docker daemon as a hard requirement (on Windows, with the Dev Mode data root forced into
+   the WSL2 filesystem). Neither ever runs implicitly, and a node that uses neither needs none of it — chat,
+   embedding and image generation are unaffected either way.
 7. **Inference = host llama.cpp process(es).** spawn-per-model, supervised in-app; routing is per-send by
    `ChatOptions.ModelId` (`RuntimeChatClient`). Ollama is an optional secondary, not the dev default.
    Launch args follow an **explore → freeze → replay** lifecycle: the supervisor no longer forces
