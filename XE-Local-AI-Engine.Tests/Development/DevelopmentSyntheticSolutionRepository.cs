@@ -76,7 +76,18 @@ internal static class DevelopmentSyntheticSolutionRepository
     ///     Creates the repository at <paramref name="repositoryRoot" /> and commits it on <c>main</c>, leaving a
     ///     clean worktree at a single base commit.
     /// </summary>
-    public static async Task CreateAsync(string repositoryRoot, CancellationToken cancellationToken = default)
+    /// <param name="repositoryRoot">Where to create the repository.</param>
+    /// <param name="includeTests">
+    ///     When false, the solution contains the library alone and no test project at all. This is the shape of a
+    ///     registered repository that simply has no tests, and it is a distinct case from a suite that ran and failed:
+    ///     <c>dotnet test</c> answers <c>No test projects were found.</c> on stderr and exits 1, so the gate has no
+    ///     result to read rather than a bad one. Slice 4's policy for that case is a specific, actionable failure —
+    ///     never a pass, and never indistinguishable from a build break.
+    /// </param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    public static async Task CreateAsync(string repositoryRoot,
+        bool includeTests = true,
+        CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(repositoryRoot);
         Directory.CreateDirectory(Path.Combine(repositoryRoot, "src", "Lib"));
@@ -141,13 +152,20 @@ internal static class DevelopmentSyntheticSolutionRepository
 
         await WriteAsync(repositoryRoot,
             SolutionPath,
-            """
-            <Solution>
-                <Project Path="src/Lib/Lib.csproj"/>
-                <Project Path="tests/Probe/Probe.csproj"/>
-            </Solution>
+            includeTests
+                ? """
+                  <Solution>
+                      <Project Path="src/Lib/Lib.csproj"/>
+                      <Project Path="tests/Probe/Probe.csproj"/>
+                  </Solution>
 
-            """,
+                  """
+                : """
+                  <Solution>
+                      <Project Path="src/Lib/Lib.csproj"/>
+                  </Solution>
+
+                  """,
             cancellationToken).ConfigureAwait(false);
 
         await WriteAsync(repositoryRoot,
@@ -166,6 +184,22 @@ internal static class DevelopmentSyntheticSolutionRepository
 
         await WriteAsync(repositoryRoot, LibrarySourcePath, BaselineLibrarySource, cancellationToken).ConfigureAwait(false);
 
+        if (includeTests)
+        {
+            await WriteTestProjectAsync(repositoryRoot, testFrameworkVersion, cancellationToken).ConfigureAwait(false);
+        }
+
+        await RunGitAsync(repositoryRoot, cancellationToken, "init", "--initial-branch=main", ".").ConfigureAwait(false);
+        await RunGitAsync(repositoryRoot, cancellationToken, "config", "user.email", "development-validation@example.invalid").ConfigureAwait(false);
+        await RunGitAsync(repositoryRoot, cancellationToken, "config", "user.name", "Development Validation Test").ConfigureAwait(false);
+        await RunGitAsync(repositoryRoot, cancellationToken, "add", "-A", "--", ".").ConfigureAwait(false);
+        await RunGitAsync(repositoryRoot, cancellationToken, "commit", "-m", "synthetic solution fixture").ConfigureAwait(false);
+    }
+
+    private static async Task WriteTestProjectAsync(string repositoryRoot,
+        string testFrameworkVersion,
+        CancellationToken cancellationToken)
+    {
         await WriteAsync(repositoryRoot,
             ProbeProjectPath,
             $"""
@@ -199,12 +233,6 @@ internal static class DevelopmentSyntheticSolutionRepository
 
               """,
             cancellationToken).ConfigureAwait(false);
-
-        await RunGitAsync(repositoryRoot, cancellationToken, "init", "--initial-branch=main", ".").ConfigureAwait(false);
-        await RunGitAsync(repositoryRoot, cancellationToken, "config", "user.email", "development-validation@example.invalid").ConfigureAwait(false);
-        await RunGitAsync(repositoryRoot, cancellationToken, "config", "user.name", "Development Validation Test").ConfigureAwait(false);
-        await RunGitAsync(repositoryRoot, cancellationToken, "add", "-A", "--", ".").ConfigureAwait(false);
-        await RunGitAsync(repositoryRoot, cancellationToken, "commit", "-m", "synthetic solution fixture").ConfigureAwait(false);
     }
 
     private static string LibrarySource(string value) =>

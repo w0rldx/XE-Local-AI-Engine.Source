@@ -300,7 +300,31 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
             "\nValidated subject: ", validation.SubjectHash,
             "\nValidation profile: ", validation.CommandProfileVersion,
             "\nValidation passed: ", validation.Passed,
+            DescribeTestResults(validation),
             "\nUse only the read-only tools. Never modify the worktree or claim task completion.");
+
+    /// <summary>
+    ///     Puts the gate's structured test counts in front of the reviewer. "Validation passed" alone does not let a
+    ///     reviewer tell a change covered by twenty executed tests from one covered by two, and coverage of the change
+    ///     is exactly the judgement the review round exists to make.
+    /// </summary>
+    private static string DescribeTestResults(DevelopmentValidationReport validation)
+    {
+        var outcomes = validation.Commands
+                                 .Where(static command => command.TestOutcome is not null)
+                                 .Select(static command => (command.CommandId, Outcome: command.TestOutcome!))
+                                 .ToArray();
+        if (outcomes.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        return "\nTest results:\n"
+               + string.Join('\n',
+                   outcomes.Select(static entry => entry.Outcome.Parsed
+                       ? $"- {entry.CommandId}: {entry.Outcome.Executed} executed, {entry.Outcome.Passed} passed, {entry.Outcome.Failed} failed, {entry.Outcome.Discovered} discovered"
+                       : $"- {entry.CommandId}: no readable test result ({entry.Outcome.ParseFailureCode})"));
+    }
 
     private static string SanitizedReason(Exception exception) =>
         exception switch
