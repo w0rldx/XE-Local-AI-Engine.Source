@@ -28,13 +28,28 @@ interface DevelopmentLivePanelProps {
 	readonly events: readonly DevelopmentEvent[];
 }
 
-function Metric({ label, value }: { readonly label: string; readonly value: string | number }) {
+function Metric({
+	label,
+	value,
+	valueTestId,
+}: {
+	readonly label: string;
+	readonly value: string | number;
+	/**
+	 * Put on the VALUE, not the tile. The validation counts are an acceptance criterion, and a test that can only
+	 * locate the tile can assert that a number rendered but not which one — so it would still pass against four
+	 * zeroes, which is the exact false green this panel exists to expose.
+	 */
+	readonly valueTestId?: string;
+}) {
 	return (
 		<Paper withBorder={true} p="sm">
 			<Text size="xs" c="dimmed">
 				{label}
 			</Text>
-			<Text fw={600}>{value}</Text>
+			<Text fw={600} data-testid={valueTestId}>
+				{value}
+			</Text>
 		</Paper>
 	);
 }
@@ -140,10 +155,26 @@ function ValidationTestOutcomeView({ outcome }: { readonly outcome: DevelopmentT
 
 	return (
 		<SimpleGrid cols={{ base: 2, sm: 4 }} mt="sm" data-testid="development-validation-test-counts">
-			<Metric label={t("pages.development.validation.tests.discovered", "Tests discovered")} value={outcome.discovered} />
-			<Metric label={t("pages.development.validation.tests.executed", "Tests executed")} value={outcome.executed} />
-			<Metric label={t("pages.development.validation.tests.passed", "Tests passed")} value={outcome.passed} />
-			<Metric label={t("pages.development.validation.tests.failed", "Tests failed")} value={outcome.failed} />
+			<Metric
+				label={t("pages.development.validation.tests.discovered", "Tests discovered")}
+				value={outcome.discovered}
+				valueTestId="development-validation-test-discovered"
+			/>
+			<Metric
+				label={t("pages.development.validation.tests.executed", "Tests executed")}
+				value={outcome.executed}
+				valueTestId="development-validation-test-executed"
+			/>
+			<Metric
+				label={t("pages.development.validation.tests.passed", "Tests passed")}
+				value={outcome.passed}
+				valueTestId="development-validation-test-passed"
+			/>
+			<Metric
+				label={t("pages.development.validation.tests.failed", "Tests failed")}
+				value={outcome.failed}
+				valueTestId="development-validation-test-failed"
+			/>
 		</SimpleGrid>
 	);
 }
