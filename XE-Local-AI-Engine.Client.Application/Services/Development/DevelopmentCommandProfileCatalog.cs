@@ -138,7 +138,7 @@ internal static class DevelopmentCommandProfileCatalog
     ///     </para>
     ///     <para>
     ///         This does <em>not</em> touch the three artifact protocol versions
-    ///         (<c>development-workspace-v1</c>, <c>development-validation-v1</c>, <c>development-review-v1</c>) or the
+    ///         (<c>development-workspace-v1</c>, <c>development-validation-v2</c>, <c>development-review-v1</c>) or the
     ///         gates that compare them. Those describe artifact shape compatibility; this describes command content.
     ///         They are separate dimensions and an earlier revision of the plan was wrong to propose merging them.
     ///     </para>

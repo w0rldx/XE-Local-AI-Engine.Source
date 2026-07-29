@@ -510,7 +510,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     [Test]
     public async Task Validation_UnderTheDotnetSlnxProfile_WhenPatchCompilesAndPasses_ReachesInReviewWithEveryCommandRecorded()
     {
-        var (validation, task, commands) = await RunDotnetProfileValidationAsync(SlnxProfile(), DevelopmentSyntheticSolutionRepository.PassingLibrarySource)
+        var (validation, task, commands, report) = await RunDotnetProfileValidationAsync(SlnxProfile(), DevelopmentSyntheticSolutionRepository.PassingLibrarySource)
             .ConfigureAwait(false);
 
         AssertEx.True(validation.Passed);
@@ -518,6 +518,24 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         AssertEx.Equal(DevelopmentTaskStatus.InReview, task.Status);
         AssertEx.Equal(ExpectedDotnetValidationProfile, string.Join(',', commands.Select(static command => command.CommandId)));
         AssertEx.True(commands.All(static command => command.Completed && command.ExitCode == 0));
+
+        // Slice 4: the gate no longer just knows the test command exited zero, it knows what the suite did. The
+        // fixture has exactly one test, and it ran.
+        var outcome = TestOutcome(commands);
+        AssertEx.True(outcome.Parsed);
+        AssertEx.Equal(expected: 1, outcome.Discovered);
+        AssertEx.Equal(expected: 1, outcome.Executed);
+        AssertEx.Equal(expected: 1, outcome.Passed);
+        AssertEx.Equal(expected: 0, outcome.Failed);
+
+        // Only the test command carries a result. A build or a whitespace check has none, and must not be given an
+        // empty one that the executed>0 rule would then reject.
+        AssertEx.True(commands.Where(static command => !string.Equals(command.CommandId, DevelopmentCommandIds.DotnetTestRelease, StringComparison.Ordinal))
+                              .All(static command => command.TestOutcome is null));
+
+        // A passing report carries no failure code, so a UI can key on its presence alone.
+        AssertEx.Null(report.FailureCode);
+        AssertEx.Null(report.FailureDetail);
     }
 
     /// <summary>
@@ -527,18 +545,31 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     [Test]
     public async Task Validation_UnderTheDotnetSlnxProfile_WhenPatchBreaksTheBuild_DoesNotReachInReview()
     {
-        var (validation, task, commands) = await RunDotnetProfileValidationAsync(SlnxProfile(), DevelopmentSyntheticSolutionRepository.BuildBreakingLibrarySource)
+        var (validation, task, commands, report) = await RunDotnetProfileValidationAsync(SlnxProfile(), DevelopmentSyntheticSolutionRepository.BuildBreakingLibrarySource)
             .ConfigureAwait(false);
 
         AssertEx.False(validation.Passed);
         AssertEx.Equal(DevelopmentTaskStatus.InProgress, validation.TaskStatus);
         AssertEx.Equal(DevelopmentTaskStatus.InProgress, task.Status);
 
-        // The build is what rejected it: the whitespace check and the restore ahead of it both succeeded, and the
-        // test command never ran because the runner stops at the first failure.
+        // The build is what rejected it: the whitespace check and the restore ahead of it both succeeded.
         AssertEx.Equal(expected: 0, CommandExitCode(commands, DevelopmentCommandIds.GitDiffCheck));
         AssertEx.Equal(expected: 0, CommandExitCode(commands, DevelopmentCommandIds.DotnetRestore));
         AssertEx.NotEqual(notExpected: 0, CommandExitCode(commands,DevelopmentCommandIds.DotnetBuildRelease));
+
+        // The runner does NOT stop at the first failure — it runs the whole declared profile. (An earlier revision of
+        // this test said otherwise in a comment; the loop in DevelopmentValidationRunner has no break.) So the test
+        // command still runs, and what it does then is worth pinning: measured, `dotnet test --no-build` finds no
+        // test binary to launch and reports a perfectly READABLE "Zero tests ran" summary with all-zero counts. This
+        // is the shape the executed>0 rule exists for — the counts parse cleanly and they are zero.
+        var outcome = TestOutcome(commands);
+        AssertEx.True(outcome.Parsed);
+        AssertEx.Equal(expected: 0, outcome.Executed);
+
+        // The reported reason is still the build, because the verdict takes the first failing command in profile
+        // order rather than the last. An operator reading this gets "the build broke", not "no tests ran".
+        AssertEx.Equal(DevelopmentValidationFailureCodes.CommandFailed, report.FailureCode);
+        AssertEx.Contains(report.FailureDetail, DevelopmentCommandIds.DotnetBuildRelease);
     }
 
     /// <summary>
@@ -548,7 +579,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     [Test]
     public async Task Validation_UnderTheDotnetSlnxProfile_WhenPatchFailsATest_DoesNotReachInReview()
     {
-        var (validation, task, commands) = await RunDotnetProfileValidationAsync(SlnxProfile(), DevelopmentSyntheticSolutionRepository.TestFailingLibrarySource)
+        var (validation, task, commands, report) = await RunDotnetProfileValidationAsync(SlnxProfile(), DevelopmentSyntheticSolutionRepository.TestFailingLibrarySource)
             .ConfigureAwait(false);
 
         AssertEx.False(validation.Passed);
@@ -560,6 +591,52 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         AssertEx.Equal(expected: 0, CommandExitCode(commands, DevelopmentCommandIds.DotnetRestore));
         AssertEx.Equal(expected: 0, CommandExitCode(commands, DevelopmentCommandIds.DotnetBuildRelease));
         AssertEx.NotEqual(notExpected: 0, CommandExitCode(commands,DevelopmentCommandIds.DotnetTestRelease));
+
+        // Slice 4: the report now says WHAT failed, not merely that something did. One test ran and it failed.
+        var outcome = TestOutcome(commands);
+        AssertEx.True(outcome.Parsed);
+        AssertEx.Equal(expected: 1, outcome.Executed);
+        AssertEx.Equal(expected: 0, outcome.Passed);
+        AssertEx.Equal(expected: 1, outcome.Failed);
+        AssertEx.Equal(DevelopmentValidationFailureCodes.TestsFailed, report.FailureCode);
+    }
+
+    /// <summary>
+    ///     S4.4 — the policy for a registered repository that has no tests at all.
+    ///     <para>
+    ///         Its build target compiles perfectly well; there is simply nothing to run. Before Slice 4 the gate had
+    ///         no opinion about that beyond the test command's exit code, and a runner that answered zero would have
+    ///         been accepted as a pass. The rule now is that a change cannot be validated by a suite that ran nothing,
+    ///         and — because this is a state the operator can actually fix — it is reported with its own code rather
+    ///         than collapsed into "validation failed".
+    ///     </para>
+    ///     <para>
+    ///         D3 is what makes the failure recoverable rather than a dead end: the agent may ADD tests, it just may
+    ///         not weaken or delete the ones that existed at <c>BaseCommit</c>. So the remedy for this failure is
+    ///         available to the same loop that hit it.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task Validation_WhenTheRegisteredRepositoryHasNoTests_FailsWithItsOwnReasonRatherThanPassing()
+    {
+        var (validation, task, commands, report) = await RunDotnetProfileValidationAsync(SlnxProfile(),
+                                                           DevelopmentSyntheticSolutionRepository.PassingLibrarySource,
+                                                           includeTests: false)
+                                                       .ConfigureAwait(false);
+
+        AssertEx.False(validation.Passed);
+        AssertEx.Equal(DevelopmentTaskStatus.InProgress, validation.TaskStatus);
+        AssertEx.Equal(DevelopmentTaskStatus.InProgress, task.Status);
+
+        // Everything up to the test command is genuinely green — this is not a build failure wearing a different hat.
+        AssertEx.Equal(expected: 0, CommandExitCode(commands, DevelopmentCommandIds.GitDiffCheck));
+        AssertEx.Equal(expected: 0, CommandExitCode(commands, DevelopmentCommandIds.DotnetRestore));
+        AssertEx.Equal(expected: 0, CommandExitCode(commands, DevelopmentCommandIds.DotnetBuildRelease));
+
+        var outcome = TestOutcome(commands);
+        AssertEx.False(outcome.Parsed);
+        AssertEx.Equal(DevelopmentTestParseFailureCodes.NoTestProjects, outcome.ParseFailureCode);
+        AssertEx.Equal(DevelopmentValidationFailureCodes.TestResultsUnparsed, report.FailureCode);
     }
 
     /// <summary>
@@ -576,7 +653,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     [Test]
     public async Task Validation_UnderTheDotnetCsprojProfile_WhenPatchCompilesAndPasses_ReachesInReviewWithEveryCommandRecorded()
     {
-        var (validation, task, commands) = await RunDotnetProfileValidationAsync(CsprojProfile(), DevelopmentSyntheticSolutionRepository.PassingLibrarySource)
+        var (validation, task, commands, report) = await RunDotnetProfileValidationAsync(CsprojProfile(), DevelopmentSyntheticSolutionRepository.PassingLibrarySource)
             .ConfigureAwait(false);
 
         AssertEx.True(validation.Passed);
@@ -584,6 +661,14 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         AssertEx.Equal(DevelopmentTaskStatus.InReview, task.Status);
         AssertEx.Equal(ExpectedDotnetValidationProfile, string.Join(',', commands.Select(static command => command.CommandId)));
         AssertEx.True(commands.All(static command => command.Completed && command.ExitCode == 0));
+
+        // The adapter is bound to the profile FAMILY, not to one profile, so the second .NET profile must read its
+        // results too — otherwise dotnet-csproj would silently run without the executed>0 rule applying to it.
+        var outcome = TestOutcome(commands);
+        AssertEx.True(outcome.Parsed);
+        AssertEx.Equal(expected: 1, outcome.Executed);
+        AssertEx.Equal(expected: 1, outcome.Passed);
+        AssertEx.Null(report.FailureCode);
 
         // The two .NET profiles must not be interchangeable at the digest level even on the same repository: they
         // run different argument vectors, and an artifact stamped with one must never verify against the other.
@@ -598,7 +683,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     [Test]
     public async Task Validation_UnderTheDotnetCsprojProfile_WhenPatchFailsATest_DoesNotReachInReview()
     {
-        var (validation, task, commands) = await RunDotnetProfileValidationAsync(CsprojProfile(), DevelopmentSyntheticSolutionRepository.TestFailingLibrarySource)
+        var (validation, task, commands, report) = await RunDotnetProfileValidationAsync(CsprojProfile(), DevelopmentSyntheticSolutionRepository.TestFailingLibrarySource)
             .ConfigureAwait(false);
 
         AssertEx.False(validation.Passed);
@@ -609,6 +694,9 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         AssertEx.Equal(expected: 0, CommandExitCode(commands, DevelopmentCommandIds.DotnetRestore));
         AssertEx.Equal(expected: 0, CommandExitCode(commands, DevelopmentCommandIds.DotnetBuildRelease));
         AssertEx.NotEqual(notExpected: 0, CommandExitCode(commands, DevelopmentCommandIds.DotnetTestRelease));
+
+        AssertEx.Equal(expected: 1, TestOutcome(commands).Failed);
+        AssertEx.Equal(DevelopmentValidationFailureCodes.TestsFailed, report.FailureCode);
     }
 
     private static DevelopmentCommandProfile SlnxProfile() =>
@@ -625,12 +713,13 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     ///     — a real code-owned .NET profile bound to a real build target in the fixture — and returns the outcome
     ///     together with the command evidence the validation report recorded.
     /// </summary>
-    private async Task<(DevelopmentValidationResult Validation, DevelopmentTaskSnapshot Task, IReadOnlyList<DevelopmentCommandEvidence> Commands)> RunDotnetProfileValidationAsync(DevelopmentCommandProfile profile,
-        string librarySource)
+    private async Task<(DevelopmentValidationResult Validation, DevelopmentTaskSnapshot Task, IReadOnlyList<DevelopmentCommandEvidence> Commands, DevelopmentValidationReport Report)> RunDotnetProfileValidationAsync(DevelopmentCommandProfile profile,
+        string librarySource,
+        bool includeTests = true)
     {
         Directory.CreateDirectory(_root);
         var repository = Path.Combine(_root, "solution-" + Guid.NewGuid().ToString("N"));
-        await DevelopmentSyntheticSolutionRepository.CreateAsync(repository).ConfigureAwait(false);
+        await DevelopmentSyntheticSolutionRepository.CreateAsync(repository, includeTests).ConfigureAwait(false);
 
         // 10 minutes because MaxAttemptDurationSeconds still bounds the validation run AS A WHOLE (and, with the
         // task's MaxDurationSeconds, is the smaller of the two that wins). Per-command timeouts no longer come from
@@ -669,12 +758,12 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
                                     .RunAsync(seed.TaskId, repositoryBinding)
                                     .ConfigureAwait(false);
         var task = await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false);
-        var commands = await ReadValidationCommandsAsync(scope.ServiceProvider, validation.ArtifactId, seed.TaskId).ConfigureAwait(false);
-        return (validation, task, commands);
+        var report = await ReadValidationReportAsync(scope.ServiceProvider, validation.ArtifactId, seed.TaskId).ConfigureAwait(false);
+        return (validation, task, report.Commands, report);
     }
 
-    /// <summary>Reads back the command evidence the validation runner persisted into its report artifact.</summary>
-    private static async Task<IReadOnlyList<DevelopmentCommandEvidence>> ReadValidationCommandsAsync(IServiceProvider services,
+    /// <summary>Reads back the report the validation runner persisted into its artifact.</summary>
+    private static async Task<DevelopmentValidationReport> ReadValidationReportAsync(IServiceProvider services,
         Guid artifactId,
         Guid taskId)
     {
@@ -685,11 +774,17 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
                                     .ConfigureAwait(false);
         AssertEx.Equal(DevelopmentArtifactReadStatus.Found, payload.Status);
         var report = JsonSerializer.Deserialize<DevelopmentValidationReport>(payload.Content.Span, ReportJsonOptions);
-        return AssertEx.NotNull(report).Commands;
+        return AssertEx.NotNull(report);
     }
 
     private static int CommandExitCode(IReadOnlyList<DevelopmentCommandEvidence> commands, string commandId) =>
         AssertEx.NotNull(commands.SingleOrDefault(command => string.Equals(command.CommandId, commandId, StringComparison.Ordinal))).ExitCode;
+
+    /// <summary>The structured result the code-owned adapter read back from the profile's test command.</summary>
+    private static DevelopmentTestOutcome TestOutcome(IReadOnlyList<DevelopmentCommandEvidence> commands) =>
+        AssertEx.NotNull(AssertEx.NotNull(commands.SingleOrDefault(static command =>
+                                       string.Equals(command.CommandId, DevelopmentCommandIds.DotnetTestRelease, StringComparison.Ordinal)))
+                                 .TestOutcome);
 
     private static async Task<(DevelopmentCreateProjectCommand Seed, Guid ReviewerAttemptId, DevelopmentReviewerAttemptResult Review)> RunThroughReviewAsync(IServiceProvider services,
         string repository)
