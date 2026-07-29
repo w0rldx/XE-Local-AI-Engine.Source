@@ -21,7 +21,14 @@ internal sealed record DevelopmentCommandEvidence(
     bool OutputTruncated,
     long DurationMilliseconds,
     string StandardOutput,
-    string StandardError);
+    string StandardError,
+
+    /// <summary>
+    ///     The structured test result for this command, or null when the command produces none. Read by a code-owned
+    ///     <see cref="IDevelopmentTestResultAdapter" /> from the command's raw output before that output is truncated
+    ///     for evidence — see <see cref="DevelopmentWorkspaceTools.ExecuteCatalogAsync" />.
+    /// </summary>
+    DevelopmentTestOutcome? TestOutcome = null);
 
 internal interface IDevelopmentWorkspaceTools
 {
@@ -252,13 +259,24 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
         var command = _profile.ResolveCommand(commandId);
 
         _liveProgress?.CommandStarted(commandId);
-        var result = await ExecuteAsync(commandId,
+
+        // Raw first, truncated second, and the result adapter reads the raw copy. A runner prints its result summary
+        // LAST and Truncate keeps the HEAD, so parsing the evidence copy would lose the summary on any repository
+        // verbose enough to exceed MaxCommandOutputBytes — turning a perfectly readable green or red into an
+        // unparseable one, which fails validation. Only bytes the sandbox itself dropped are genuinely unrecoverable.
+        var raw = await ExecuteRawAsync(commandId,
             command.Executable,
             command.Arguments,
             "/",
             standardInput: null,
             ResolveTimeout(command.TimeoutSeconds),
             cancellationToken).ConfigureAwait(false);
+        var testOutcome = DevelopmentTestResultAdapters.Resolve(_profile, commandId)
+                                                       ?.Parse(raw.StandardOutput,
+                                                           raw.StandardError,
+                                                           raw.StandardOutputTruncated || raw.StandardErrorTruncated);
+
+        var result = TruncateForEvidence(raw);
         await EnsureWorkspaceInvariantAsync(cancellationToken).ConfigureAwait(false);
         var evidence = new DevelopmentCommandEvidence(commandId,
             result.ExitCode,
@@ -266,7 +284,8 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
             result.StandardOutputTruncated || result.StandardErrorTruncated,
             (long)result.Duration.TotalMilliseconds,
             result.StandardOutput,
-            result.StandardError);
+            result.StandardError,
+            testOutcome);
         _commandEvidence.Add(evidence);
         _liveProgress?.CommandCompleted(evidence);
         return result;
@@ -357,9 +376,29 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
         string workingDirectory,
         string? standardInput,
         TimeSpan timeout,
-        CancellationToken cancellationToken)
-    {
-        var result = await _sandbox.ExecuteAsync(_session.SandboxHandle, new SandboxCommandRequest
+        CancellationToken cancellationToken) =>
+        TruncateForEvidence(await ExecuteRawAsync(executionPrefix,
+            executable,
+            arguments,
+            workingDirectory,
+            standardInput,
+            timeout,
+            cancellationToken).ConfigureAwait(false));
+
+    /// <summary>
+    ///     Runs a command and returns its output as the sandbox produced it, capped only by the sandbox's own stream
+    ///     limit. Callers that persist the result must pass it through <see cref="TruncateForEvidence" /> first; the
+    ///     only reason to hold the untruncated form is to read structure out of it, because the engine's evidence cap
+    ///     keeps the head and the structure a test runner emits is at the tail.
+    /// </summary>
+    private Task<SandboxCommandResult> ExecuteRawAsync(string executionPrefix,
+        string executable,
+        IReadOnlyList<string> arguments,
+        string workingDirectory,
+        string? standardInput,
+        TimeSpan timeout,
+        CancellationToken cancellationToken) =>
+        _sandbox.ExecuteAsync(_session.SandboxHandle, new SandboxCommandRequest
         {
             ExecutionId = executionPrefix + "-" + Guid.NewGuid().ToString("N"),
             Executable = executable,
@@ -368,7 +407,10 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
             StandardInput = standardInput,
             Environment = BuildEnvironment(),
             Timeout = timeout
-        }, cancellationToken).ConfigureAwait(false);
+        }, cancellationToken);
+
+    private SandboxCommandResult TruncateForEvidence(SandboxCommandResult result)
+    {
         var outputTruncated = Encoding.UTF8.GetByteCount(result.StandardOutput) > _options.MaxCommandOutputBytes;
         var errorTruncated = Encoding.UTF8.GetByteCount(result.StandardError) > _options.MaxCommandOutputBytes;
         return result with
