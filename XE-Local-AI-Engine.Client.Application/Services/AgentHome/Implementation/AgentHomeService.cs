@@ -169,11 +169,18 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         {
             AttachKey = attachKey,
             RuntimeProfile = effectiveProfile,
-            // The live ProcessSandboxRuntimeProvider supervises but does not isolate the network, so it fails closed on
-            // any request for network confinement. Request Unrestricted honestly rather than asking for a No-network
-            // guarantee it cannot deliver; the sandbox's protection is the working-dir jail + approval gate, not egress
-            // isolation. A future OS-isolated provider that advertises SupportsNetworkPolicy can request None instead.
-            NetworkPolicy = SandboxNetworkPolicy.Unrestricted
+            // Default-deny egress wherever the provider can actually enforce it (PLAN-sandbox-hardening S2, locked
+            // decision #3). Everything AgentHome and Coder run inside the sandbox is local — `dotnet --version`, git
+            // init/config/add/commit/diff under /dev/null hooks, and Coder's find/grep — so denying egress costs no
+            // supported capability and removes the sandbox child's reach to the node's own loopback API, the LAN, and
+            // the cloud-metadata endpoint.
+            //
+            // The choice is CAPABILITY-GATED rather than unconditional: the provider fails closed on a confinement
+            // request it cannot honor, so asking for None on a host without user namespaces (or on Windows, where the
+            // mechanism is not implemented) would not harden AgentHome — it would stop it running at all. Asking for
+            // exactly what the provider advertises keeps the guarantee real where it exists and keeps AgentHome working
+            // where it does not, with the degradation visible in the sandbox containment log rather than silent.
+            NetworkPolicy = ResolveNetworkPolicy()
         };
         var handle = await _provider.CreateOrAttachAsync(createRequest, prepareToken).ConfigureAwait(false);
 
@@ -618,6 +625,21 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         return ProfileCommands.TryGetValue(runtimeProfile, out var descriptor)
             ? descriptor
             : throw new AgentHomeRequestRejectedException($"no command descriptor is registered for runtime profile '{runtimeProfile}'.");
+    }
+
+    /// <summary>
+    ///     The egress posture to request for the AgentHome sandbox: <see cref="SandboxNetworkPolicy.None" /> where the
+    ///     provider advertises real network confinement, otherwise <see cref="SandboxNetworkPolicy.Unrestricted" />.
+    ///     <para>
+    ///         <see cref="AgentHomeManifestService" /> derives the manifest's <c>policy.json</c> network posture from
+    ///         this SAME capability flag, so the manifest cannot claim a posture the run did not actually get.
+    ///     </para>
+    /// </summary>
+    private SandboxNetworkPolicy ResolveNetworkPolicy()
+    {
+        return _provider.Capabilities.HasFlag(SandboxProviderCapabilities.SupportsNetworkPolicy)
+            ? SandboxNetworkPolicy.None
+            : SandboxNetworkPolicy.Unrestricted;
     }
 
     private static bool HasCopiedWorkspace(IReadOnlyList<SelectedFolderSnapshot> snapshots)

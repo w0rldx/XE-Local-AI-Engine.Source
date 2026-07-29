@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
 	applyDevelopmentPatchMutation,
 	cancelDevelopmentAttemptMutation,
+	confirmDevelopmentContainerRuntimeMutation,
 	createDevelopmentProjectMutation,
 	createDevelopmentRepositoryFromTemplateMutation,
 	detectDevelopmentRepositoryProfileOptions,
@@ -44,6 +45,22 @@ export function useDevelopmentCapability() {
 	return useQuery({
 		...withResponseValidation(getDevelopmentCapabilityOptions()),
 		staleTime: 30_000,
+	});
+}
+
+/**
+ * Records the operator's explicit approval of the container runtime currently reachable (decision D10).
+ *
+ * Invalidates the capability query on settle so the panel re-reads the preflight rather than trusting the mutation's
+ * own response — the daemon can change again between the confirmation and the next render, and the capability query is
+ * the single place that answer is derived.
+ */
+export function useConfirmDevelopmentContainerRuntime() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		...withResponseValidation(confirmDevelopmentContainerRuntimeMutation()),
+		onSettled: () =>
+			queryClient.invalidateQueries({ queryKey: developmentInvalidationKey(developmentQueryIds.capability) }),
 	});
 }
 

@@ -33,6 +33,7 @@ import {
 	codexLogin,
 	codexLogout,
 	codexStatus,
+	confirmDevelopmentContainerRuntime,
 	connectConnection,
 	continuePreviewRun,
 	createAgentDefinition,
@@ -261,6 +262,8 @@ import type {
 	CodexLogoutResponse,
 	CodexStatusData,
 	CodexStatusResponse,
+	ConfirmDevelopmentContainerRuntimeData,
+	ConfirmDevelopmentContainerRuntimeResponse,
 	ConnectConnectionData,
 	ConnectConnectionResponse,
 	ContinuePreviewRunData,
@@ -3256,6 +3259,30 @@ export const getDevelopmentCapabilityOptions = (options?: Options<GetDevelopment
 		},
 		queryKey: getDevelopmentCapabilityQueryKey(options),
 	});
+
+export const confirmDevelopmentContainerRuntimeMutation = (
+	options?: Partial<Options<ConfirmDevelopmentContainerRuntimeData>>,
+): UseMutationOptions<
+	ConfirmDevelopmentContainerRuntimeResponse,
+	AxiosError<DefaultError>,
+	Options<ConfirmDevelopmentContainerRuntimeData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		ConfirmDevelopmentContainerRuntimeResponse,
+		AxiosError<DefaultError>,
+		Options<ConfirmDevelopmentContainerRuntimeData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await confirmDevelopmentContainerRuntime({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
 
 export const listDevelopmentRepositoriesQueryKey = (options?: Options<ListDevelopmentRepositoriesData>) =>
 	createQueryKey("listDevelopmentRepositories", options);

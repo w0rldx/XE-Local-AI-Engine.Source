@@ -5792,6 +5792,53 @@
         ]
       }
     },
+    "/api/local/v1/development/container-runtime/confirmation": {
+      "post": {
+        "tags": [
+          "Development"
+        ],
+        "operationId": "confirmDevelopmentContainerRuntime",
+        "requestBody": {
+          "x-name": "ConfirmDevelopmentContainerRuntimeRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1ConfirmDevelopmentContainerRuntimeRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentContainerRuntimeResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/development/repositories": {
       "get": {
         "tags": [
@@ -14907,6 +14954,80 @@
         "properties": {
           "enabled": {
             "type": "boolean"
+          },
+          "containerRuntime": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentContainerRuntimeResponse"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentContainerRuntimeResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "ready": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "requiresOperatorConfirmation": {
+            "type": "boolean"
+          },
+          "endpoint": {
+            "type": "string",
+            "nullable": true
+          },
+          "endpointSource": {
+            "type": "string",
+            "nullable": true
+          },
+          "observedDaemon": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentContainerDaemonResponse"
+              }
+            ]
+          },
+          "pinnedDaemon": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentContainerDaemonResponse"
+              }
+            ]
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentContainerDaemonResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "daemonId": {
+            "type": "string"
+          },
+          "serverVersion": {
+            "type": "string"
+          },
+          "endpoint": {
+            "type": "string"
+          },
+          "confirmedAtUtc": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentV1ConfirmDevelopmentContainerRuntimeRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "daemonId": {
+            "type": "string"
           }
         }
       },

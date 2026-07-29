@@ -35,9 +35,15 @@ The **runtime re-architecture** (locked 2026-06-17) replaced the old container/H
 | `XE-Local-AI-Engine.HostAgent.*` connection layer | **Deleted** — host owns the runtime directly |
 | Ollama as the default dev runtime | Ollama **present as a provider but de-orchestrated** from Aspire dev |
 | Models pre-provisioned | **HuggingFace GGUF** discovery/download + box-aware **Model Advisor** |
+| *(amended 2026-07-29)* Docker as a whole-product dependency | **Off the inference path for good** — and since [ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md) permitted for **Development Mode build/test/lint execution only**, as a stopgap ahead of MXC |
 
-If you find a doc, comment, or assumption that still describes Docker or HostAgent as live, it is
-stale — trust the code and these pages.
+If you find a doc, comment, or assumption that still describes Docker **on the inference path**, or
+HostAgent as live anywhere, it is stale — trust the code and these pages. The mirror-image error is now
+just as easy: a doc or comment asserting "no Docker **anywhere**" predates
+[ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md) and is stale in the other
+direction. The container provider it approves is Development-Mode-only, is chosen **per feature**
+(AgentHome and Coder stay on the process sandbox provider), and is Slice 3 work that is **in progress** —
+so read the ADR for what is decided rather than inferring it from the tree.
 
 **Shipped since the last review (2026-06-24…27):** a profile-driven **inference optimizer** (per-machine
 explore → freeze → replay tuning; the supervisor no longer forces `--n-gpu-layers 999` — see

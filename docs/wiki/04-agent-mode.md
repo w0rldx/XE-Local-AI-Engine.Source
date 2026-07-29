@@ -197,9 +197,12 @@ per-message attribution.
 
 ### 2.2 The AgentHome write-back loop
 
-`AgentHomeService.RunLifecycleAsync` (`Services/AgentHome/Implementation/AgentHomeService.cs:90`)
-drives a sandboxed workspace lifecycle through `ISandboxRuntimeProvider` (the process-jail provider —
-Docker is removed, see [Local Runtime & Providers](03-local-runtime-and-providers.md)). It resolves
+`AgentHomeService.RunLifecycleAsync` (`Services/AgentHome/Implementation/AgentHomeService.cs:99`)
+drives a sandboxed workspace lifecycle through `ISandboxRuntimeProvider` — for AgentHome that is the
+**process-jail provider**, and it stays that way: [ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md)
+selects a provider **per feature**, giving the container provider to Development Mode only (see
+[Local Runtime & Providers](03-local-runtime-and-providers.md) for why inference itself carries no
+container dependency). It resolves
 selected folders into the sandbox (`ISelectedFolderResolver` via a short-lived scope, since the service
 is a singleton and `NodeChatDbContext` isn't thread-safe), runs the agent, applies patches
 (`NodePatchApplyService` with `O_NOFOLLOW`/byte-recheck guards), and stages **memory proposals** that
@@ -208,7 +211,7 @@ are secret-scanned (`MemoryProposalSecretScanner`) before they can be exported. 
 
 **Conversation-attachment staging** (`IConversationSandboxStager`,
 `Services/AgentHome/IConversationSandboxStager.cs`). `AgentHomeService` also implements this narrow public
-seam (`AgentHomeService.cs:28`, `PrepareConversationAttachmentsAsync` at `:233`) so the public
+seam (`AgentHomeService.cs:28`, `PrepareConversationAttachmentsAsync` at `:244`) so the public
 `NodeChatStreamService` can stage a chat conversation's uploaded attachments into the per-turn sandbox
 without an inconsistent-accessibility error. When an agent-mode turn offers file tools, the stream
 service re-stages the owner-node sandbox to hold **only** that conversation's extracted attachments under

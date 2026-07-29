@@ -30,6 +30,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { DevelopmentContainerRuntimePanel } from "@/features/development/components/DevelopmentContainerRuntimePanel";
 import { DevelopmentLivePanel } from "@/features/development/components/DevelopmentLivePanel";
 import {
 	type CreateDevelopmentRepositoryFromTemplateValues,
@@ -48,6 +49,7 @@ import {
 import {
 	useApplyDevelopmentPatch,
 	useCancelDevelopmentAttempt,
+	useConfirmDevelopmentContainerRuntime,
 	useCreateDevelopmentProject,
 	useCreateDevelopmentRepositoryFromTemplate,
 	useDevelopmentCapability,
@@ -107,6 +109,8 @@ export function DevelopmentPage() {
 	const { t } = useTranslation();
 	const capabilityQuery = useDevelopmentCapability();
 	const developmentEnabled = capabilityQuery.data?.enabled === true;
+	const containerRuntime = capabilityQuery.data?.containerRuntime;
+	const confirmContainerRuntimeMutation = useConfirmDevelopmentContainerRuntime();
 	const repositoriesQuery = useDevelopmentRepositories(developmentEnabled);
 	const templatesQuery = useDevelopmentTemplates(developmentEnabled);
 	const projectsQuery = useDevelopmentProjects(developmentEnabled);
@@ -300,6 +304,23 @@ export function DevelopmentPage() {
 	return (
 		<Container fluid={true} py="lg">
 			<Stack gap="lg">
+				{/*
+				 * Above the page body rather than replacing it. ADR 0004 makes a container runtime a hard requirement for
+				 * Development Mode execution, but execution has not moved to the container provider yet, so blocking the
+				 * page on this preflight would break the workflow that ships today. The panel says so explicitly rather
+				 * than leaving the operator to reconcile a red banner with a page that plainly works.
+				 */}
+				<DevelopmentContainerRuntimePanel
+					runtime={containerRuntime}
+					onConfirm={(daemonId) => confirmContainerRuntimeMutation.mutate({ body: { daemonId } })}
+					confirming={confirmContainerRuntimeMutation.isPending}
+					confirmError={
+						confirmContainerRuntimeMutation.error
+							? errorMessage(confirmContainerRuntimeMutation.error, "Could not confirm the container runtime.")
+							: undefined
+					}
+				/>
+
 				<div>
 					<Title order={1}>{t("pages.development.title", "Development Mode")}</Title>
 					<Text c="dimmed">

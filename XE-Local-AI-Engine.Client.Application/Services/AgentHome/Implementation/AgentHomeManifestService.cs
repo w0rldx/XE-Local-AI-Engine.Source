@@ -259,7 +259,7 @@ internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDis
         }
     }
 
-    private static async Task EnsureBaselineFilesAsync(string agentHomeRoot, CancellationToken cancellationToken)
+    private async Task EnsureBaselineFilesAsync(string agentHomeRoot, CancellationToken cancellationToken)
     {
         foreach (var file in BuildBaselineFiles())
         {
@@ -279,7 +279,25 @@ internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDis
         }
     }
 
-    private static bool IsLayoutComplete(string agentHomeRoot)
+    /// <summary>
+    ///     The <c>policy.json</c> network posture, derived from the sandbox provider's advertised capability — the same
+    ///     flag <c>AgentHomeService.ResolveNetworkPolicy</c> uses to choose what to request. One source of truth, so the
+    ///     manifest and the run cannot disagree.
+    ///     <para>
+    ///         Note the baseline writer deliberately does NOT overwrite an existing <c>policy.json</c> (re-init
+    ///         preserves operator edits, and there is a test pinning that). An agent-home initialized before egress
+    ///         denial was available therefore keeps its original file; the derived value applies to fresh
+    ///         initializations.
+    ///     </para>
+    /// </summary>
+    private string ResolveManifestNetworkPolicy()
+    {
+        return _sandboxProvider.Capabilities.HasFlag(SandboxProviderCapabilities.SupportsNetworkPolicy)
+            ? "disabled"
+            : "unrestricted";
+    }
+
+    private bool IsLayoutComplete(string agentHomeRoot)
     {
         var directoriesPresent = AgentHomeLayoutMap.Directories
                                                    .All(relativePath => Directory.Exists(Path.Combine(agentHomeRoot, relativePath)));
@@ -288,15 +306,15 @@ internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDis
         return directoriesPresent && filesPresent;
     }
 
-    private static IReadOnlyList<AgentHomeBaselineFile> BuildBaselineFiles()
+    private IReadOnlyList<AgentHomeBaselineFile> BuildBaselineFiles()
     {
         var policyJson = JsonSerializer.Serialize(new AgentHomePolicy
             {
                 Version = AgentHomePolicy.CurrentVersion,
-                // Honest posture: the live process provider supervises but does not isolate the network, so the sandbox
-                // child shares the host network. Claiming "disabled" here would overstate the boundary. A future
-                // OS-isolated provider can write "disabled"/"restricted" once it actually enforces egress confinement.
-                NetworkPolicy = "unrestricted",
+                // DERIVED, never restated: read from the same capability flag AgentHomeService.ResolveNetworkPolicy
+                // reads, so the manifest cannot advertise a posture the run did not actually get. A hard-coded string
+                // here would silently become a lie the moment the effective policy changed on either side.
+                NetworkPolicy = ResolveManifestNetworkPolicy(),
                 AllowReadOnlyMounts = false,
                 WritableMounts = false
             },

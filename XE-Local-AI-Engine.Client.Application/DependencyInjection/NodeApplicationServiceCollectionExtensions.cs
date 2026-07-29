@@ -35,6 +35,9 @@ public static class NodeApplicationServiceCollectionExtensions
         builder.AddNodeKnowledgeBase(configuration);
         builder.AddNodeChat(configuration);
         builder.AddNodeDevelopment(configuration);
+        // Development Mode container sandbox (ADR 0004). After AddNodeDevelopment so it reads as what it is: a
+        // Development Mode concern, not an AgentHome one (decision D2).
+        builder.AddNodeContainerSandbox(configuration);
         builder.AddNodeModelRuntime(configuration);
 
         // Runs after AddNodeModelRuntime: the image model store reuses the Hugging Face download client that
