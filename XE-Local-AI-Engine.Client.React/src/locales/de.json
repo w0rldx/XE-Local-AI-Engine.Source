@@ -104,6 +104,53 @@
 		"reasoningBypassNote": "Dieses Modell gibt möglicherweise unabhängig von der Einstellung 'Keine' Reasoning aus."
 	},
 	"pages": {
+		"development": {
+			"validation": {
+				"noReport": "Für diese Aufgabe wurde noch keine deterministische Validierung ausgeführt.",
+				"loading": "Validierungsbericht wird geladen",
+				"loadError": "Der Validierungsbericht konnte nicht geladen werden.",
+				"unreadable": "Der gespeicherte Validierungsbericht konnte nicht gelesen werden, daher ist sein Ergebnis nicht vertrauenswürdig.",
+				"passed": "Validierung bestanden",
+				"failed": "Validierung fehlgeschlagen",
+				"failedTitle": "Validierung fehlgeschlagen",
+				"noTestsTitle": "Die Validierung hat keine Tests ausgeführt",
+				"current": "Aktuell",
+				"invalidated": "Ungültig",
+				"base": "Basis",
+				"evidence": "Gespeicherte Nachweise",
+				"noEvidence": "Noch keine Validierungs- oder Review-Nachweise.",
+				"failure": {
+					"commandFailed": "Ein Validierungsbefehl wurde mit einem Fehlercode beendet.",
+					"commandDidNotComplete": "Ein Validierungsbefehl wurde nicht vollständig ausgeführt.",
+					"missingCommandEvidence": "Im Bericht fehlt der Nachweis für einen Befehl, den dieses Profil verlangt.",
+					"testResultsUnparsed": "Die Testergebnisse konnten nicht ausgewertet werden, daher ist keine Testzahl dieses Laufs vertrauenswürdig.",
+					"noTestsExecuted": "Die Suite lief, hat aber keine Tests ausgeführt — dieser Lauf belegt nur den Build, nicht das Verhalten.",
+					"testsFailed": "Mindestens ein Test ist fehlgeschlagen."
+				},
+				"parseFailure": {
+					"noTestProjects": "Dieses Repository enthält kein Testprojekt, es gibt also nichts zu validieren.",
+					"summaryNotFound": "In der Befehlsausgabe wurde keine Testzusammenfassung gefunden.",
+					"summaryIncomplete": "Die Testzusammenfassung war unvollständig.",
+					"summaryInconsistent": "Die Zahlen der Testzusammenfassung passen nicht zusammen.",
+					"outputTruncated": "Die Befehlsausgabe wurde abgeschnitten, bevor die Testzusammenfassung geschrieben wurde."
+				},
+				"tests": {
+					"noTestsTitle": "Keine Tests zum Ausführen",
+					"unparsedTitle": "Testergebnisse konnten nicht ausgewertet werden",
+					"noTestsConsequence": "Ein grüner Lauf belegt hier nur den Build — niemals das Verhalten.",
+					"unparsedConsequence": "Für diesen Lauf ist keine Zahl für ausgeführte, bestandene oder fehlgeschlagene Tests verfügbar.",
+					"discovered": "Tests gefunden",
+					"executed": "Tests ausgeführt",
+					"passed": "Tests bestanden",
+					"failed": "Tests fehlgeschlagen"
+				},
+				"command": {
+					"incomplete": "Nicht abgeschlossen",
+					"truncated": "Ausgabe abgeschnitten",
+					"exitCode": "Exit"
+				}
+			}
+		},
 		"knowledgeBase": {
 			"title": "Wissensdatenbank",
 			"subtitle": "Dokumente hochladen, indexieren und fundiertes Wissen durchsuchen.",

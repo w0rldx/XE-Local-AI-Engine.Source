@@ -32,7 +32,7 @@ internal interface IDevelopmentEvidenceService
     ///     Writes an artifact and stamps it with two independent dimensions.
     ///     <para>
     ///         <paramref name="commandProfileVersion" /> is the artifact <em>protocol</em> version
-    ///         (<c>development-workspace-v1</c>, <c>development-validation-v1</c>, <c>development-review-v1</c>). It
+    ///         (<c>development-workspace-v1</c>, <c>development-validation-v2</c>, <c>development-review-v1</c>). It
     ///         describes the shape of the artifact and is what the apply and reviewer compatibility gates compare.
     ///     </para>
     ///     <para>

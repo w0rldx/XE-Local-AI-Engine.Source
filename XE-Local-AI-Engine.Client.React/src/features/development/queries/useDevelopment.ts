@@ -6,6 +6,7 @@ import {
 	createDevelopmentProjectMutation,
 	createDevelopmentRepositoryFromTemplateMutation,
 	detectDevelopmentRepositoryProfileOptions,
+	getDevelopmentArtifactOptions,
 	getDevelopmentCapabilityOptions,
 	getDevelopmentProjectOptions,
 	listDevelopmentRepositoriesOptions,
@@ -111,6 +112,34 @@ export function useDevelopmentProject(projectId: string | null, enabled = true) 
 		...withResponseValidation(getDevelopmentProjectOptions({ path: { projectId: projectId ?? "" } })),
 		enabled: enabled && projectId !== null,
 		refetchInterval: projectId === null ? false : 3000,
+	});
+}
+
+function hasIdentifier(value: string | null | undefined): boolean {
+	return typeof value === "string" && value.length > 0;
+}
+
+/**
+ * The decrypted body of one artifact. The response carries the artifact row plus `content`, an opaque string the
+ * caller parses itself — validation reports have no generated body type because they are stored as an encrypted blob.
+ *
+ * Gated on all three route ids so the query never fires for an attempt that has produced no such artifact yet.
+ */
+export function useDevelopmentArtifactContent(
+	projectId: string | null | undefined,
+	taskId: string | null | undefined,
+	artifactId: string | null | undefined,
+) {
+	return useQuery({
+		...withResponseValidation(
+			getDevelopmentArtifactOptions({
+				path: { projectId: projectId ?? "", taskId: taskId ?? "", artifactId: artifactId ?? "" },
+			}),
+		),
+		enabled: hasIdentifier(projectId) && hasIdentifier(taskId) && hasIdentifier(artifactId),
+		// An artifact is content-hash addressed and immutable for a given id: a new run writes a new artifact rather
+		// than rewriting this one, so refetching the same id is pure waste.
+		staleTime: Number.POSITIVE_INFINITY,
 	});
 }
 

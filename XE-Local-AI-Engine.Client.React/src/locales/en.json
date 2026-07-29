@@ -104,6 +104,53 @@
 		"reasoningBypassNote": "This model may emit reasoning regardless of the 'none' setting."
 	},
 	"pages": {
+		"development": {
+			"validation": {
+				"noReport": "No deterministic validation has run for this task yet.",
+				"loading": "Loading the validation report",
+				"loadError": "Could not load the validation report.",
+				"unreadable": "The stored validation report could not be read, so its result cannot be trusted.",
+				"passed": "Validation passed",
+				"failed": "Validation failed",
+				"failedTitle": "Validation failed",
+				"noTestsTitle": "Validation executed no tests",
+				"current": "Current",
+				"invalidated": "Invalidated",
+				"base": "base",
+				"evidence": "Stored evidence",
+				"noEvidence": "No validation or review evidence yet.",
+				"failure": {
+					"commandFailed": "A validation command exited non-zero.",
+					"commandDidNotComplete": "A validation command did not run to completion.",
+					"missingCommandEvidence": "The report is missing evidence for a command this profile requires.",
+					"testResultsUnparsed": "The test results could not be parsed, so no test count in this run can be trusted.",
+					"noTestsExecuted": "The suite ran but executed no tests, so this run evidences the build and nothing about behaviour.",
+					"testsFailed": "At least one test failed."
+				},
+				"parseFailure": {
+					"noTestProjects": "This repository registers no test project, so there is nothing for validation to execute.",
+					"summaryNotFound": "No test summary was found in the command output.",
+					"summaryIncomplete": "The test summary was incomplete.",
+					"summaryInconsistent": "The test summary counts did not add up.",
+					"outputTruncated": "The command output was truncated before the test summary was written."
+				},
+				"tests": {
+					"noTestsTitle": "No tests to execute",
+					"unparsedTitle": "Test results could not be parsed",
+					"noTestsConsequence": "A green run here evidences the build only — never behaviour.",
+					"unparsedConsequence": "No executed, passed or failed count is available for this run.",
+					"discovered": "Tests discovered",
+					"executed": "Tests executed",
+					"passed": "Tests passed",
+					"failed": "Tests failed"
+				},
+				"command": {
+					"incomplete": "Did not complete",
+					"truncated": "Output truncated",
+					"exitCode": "exit"
+				}
+			}
+		},
 		"knowledgeBase": {
 			"title": "Knowledge base",
 			"subtitle": "Upload documents, index them, and search grounded knowledge.",

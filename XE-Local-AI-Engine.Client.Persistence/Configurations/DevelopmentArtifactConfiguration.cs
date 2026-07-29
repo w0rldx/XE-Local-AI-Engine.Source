@@ -28,7 +28,7 @@ internal sealed class DevelopmentArtifactConfiguration : IEntityTypeConfiguratio
         builder.Property(entity => entity.CommandProfileVersion).HasColumnName("command_profile_version").HasMaxLength(64);
 
         // A SEPARATE dimension from command_profile_version above, which carries the artifact PROTOCOL version
-        // ("development-workspace-v1" / "development-validation-v1" / "development-review-v1"). This column carries the
+        // ("development-workspace-v1" / "development-validation-v2" / "development-review-v1"). This column carries the
         // 64-hex digest of the command profile that produced the artifact. A digest and a protocol version cannot share
         // one 64-character column, which is why this is a new column rather than a reuse of the existing one.
         builder.Property(entity => entity.CommandProfileDigest).HasColumnName("command_profile_digest").HasMaxLength(64);
