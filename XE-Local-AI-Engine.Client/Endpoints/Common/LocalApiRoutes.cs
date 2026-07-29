@@ -277,6 +277,10 @@ public static class LocalApiRoutes
     {
         public const string Root = "development";
         public const string Capability = "development/capability";
+
+        // Operator approval of the container runtime the capability preflight reports (decision D10). A POST because
+        // it changes what this node has approved; separate from the capability GET so a read can never pin a daemon.
+        public const string ContainerRuntimeConfirmation = "development/container-runtime/confirmation";
         public const string Repositories = "development/repositories";
 
         // A GET with the folder id in the route: detection is a read of the repository, it takes no body, and a

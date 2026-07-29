@@ -25,6 +25,18 @@
     <PackageVersion Include="PdfPig" Version="0.1.15" />
     <PackageVersion Include="DocumentFormat.OpenXml" Version="3.5.1" />
     <PackageVersion Include="UTF.Unknown" Version="2.6.0" />
+    <!-- Docker Engine API client for the Development Mode container sandbox, permitted by ADR 0004 for Development
+         Mode build/test/lint execution ONLY. It is not on the inference path and does not reintroduce HostAgent.
+
+         NOTE the package id. `Docker.DotNet` (3.125.15) is the ORIGINAL, last published 2023-05-18, netstandard-only,
+         and it drags in Newtonsoft.Json. `Docker.DotNet.Enhanced` is the MAINTAINED fork at
+         github.com/testcontainers/Docker.DotNet — same `Docker.DotNet` assembly and namespace, MIT, a real net10.0
+         target, System.Text.Json, and it is what Testcontainers 4.x itself depends on. Its description pins it to
+         Docker Engine API v29.4.1, which is the generation this product's minimum daemon speaks.
+
+         Its transports ship as separate `Docker.DotNet.Enhanced.{Unix,NPipe,NativeHttp,LegacyHttp}` packages that
+         arrive transitively and lock-step to the same version, so they need no entry of their own. -->
+    <PackageVersion Include="Docker.DotNet.Enhanced" Version="4.3.3" />
     <PackageVersion Include="CommunityToolkit.Aspire.Hosting.Sqlite" Version="13.4.0" />
     <PackageVersion Include="CommunityToolkit.Aspire.OllamaSharp" Version="13.4.0" />
     <PackageVersion Include="FastEndpoints" Version="8.2.0" />

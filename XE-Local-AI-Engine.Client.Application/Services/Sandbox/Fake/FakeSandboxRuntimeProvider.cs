@@ -45,12 +45,18 @@ public sealed class FakeSandboxRuntimeProvider : ISandboxRuntimeProvider
 
     public string ProviderName => Name;
 
+    // SupportsTrustedHostWorkspace is advertised per decision D4: the container work needs unit coverage of callers
+    // that bind an engine-managed workspace, and a fake that refused the flag would force every such test onto a real
+    // daemon — which is precisely the coverage D4 wants *in addition to* real-daemon tests, not instead of them. The
+    // fake honours it in the only way an in-memory sandbox can: CreateOrAttachAsync accepts the binding, and the
+    // virtual filesystem is preserved across attach exactly as the contract requires of a real one.
     public SandboxProviderCapabilities Capabilities =>
         SandboxProviderCapabilities.SupportsCopyInto
         | SandboxProviderCapabilities.SupportsCopyOut
         | SandboxProviderCapabilities.SupportsCommandCancellation
         | SandboxProviderCapabilities.SupportsAttach
-        | SandboxProviderCapabilities.SupportsKill;
+        | SandboxProviderCapabilities.SupportsKill
+        | SandboxProviderCapabilities.SupportsTrustedHostWorkspace;
 
     // ---- ISandboxRuntimeProvider ----
 
