@@ -111,7 +111,73 @@ public sealed class ReconnectDevelopmentRepositoryRequest
     public long ExpectedVersion { get; init; }
 }
 
-public sealed record DevelopmentCapabilityResponse(bool Enabled);
+/// <summary>
+///     Whether Development Mode is available, and — separately — whether the container runtime it needs is.
+///     <para>
+///         Two independent axes, deliberately. <see cref="Enabled" /> is this node's own configuration switch;
+///         <see cref="ContainerRuntime" /> is the state of the machine's container runtime, which ADR 0004 makes a
+///         hard requirement for Development Mode execution. Collapsing them into one boolean would tell an operator
+///         only that Development Mode is unavailable, which is the least useful true statement available: the whole
+///         value of the preflight is naming which of the two is the problem and what to do about it.
+///     </para>
+/// </summary>
+public sealed record DevelopmentCapabilityResponse(bool Enabled, DevelopmentContainerRuntimeResponse ContainerRuntime);
+
+/// <summary>
+///     The container-runtime preflight, as the operator sees it.
+///     <para>
+///         Per ADR 0004 there is no unisolated fallback: a node without a working container runtime does not get a
+///         degraded Development Mode. <see cref="Message" /> is therefore the entire user experience of that failure
+///         and always names both the cause and the action; <see cref="Status" /> is the machine-readable code the UI
+///         branches on so the prose is never parsed.
+///     </para>
+/// </summary>
+/// <param name="Ready">Whether a Development Mode container could be created right now.</param>
+/// <param name="Status">Machine-readable outcome: <c>ready</c>, <c>daemon_unreachable</c>, <c>permission_denied</c>, <c>api_version_too_old</c>, <c>daemon_changed</c>, <c>not_configured</c>, <c>probe_failed</c>.</param>
+/// <param name="Message">Operator-facing prose naming the cause and the action.</param>
+/// <param name="RequiresOperatorConfirmation">Whether clearing this needs an explicit approval rather than a fix to the machine.</param>
+/// <param name="Endpoint">The daemon endpoint the probe used, when one could be resolved.</param>
+/// <param name="EndpointSource">How that endpoint was arrived at — the input D10 exists to make visible.</param>
+/// <param name="ObservedDaemon">The daemon actually reached, when one answered.</param>
+/// <param name="PinnedDaemon">The daemon this node has approved, when it has one.</param>
+public sealed record DevelopmentContainerRuntimeResponse(
+    bool Ready,
+    string Status,
+    string Message,
+    bool RequiresOperatorConfirmation,
+    string? Endpoint,
+    string? EndpointSource,
+    DevelopmentContainerDaemonResponse? ObservedDaemon,
+    DevelopmentContainerDaemonResponse? PinnedDaemon);
+
+/// <summary>
+///     One daemon, identified. The installation id is what an operator compares when asked to approve a change, so it
+///     crosses the boundary even though it is opaque — without it the confirmation prompt would be asking someone to
+///     approve "a different daemon" with nothing to distinguish it by.
+/// </summary>
+/// <param name="DaemonId">The daemon's own installation id.</param>
+/// <param name="ServerVersion">Docker Engine version.</param>
+/// <param name="Endpoint">The endpoint this daemon was seen at.</param>
+/// <param name="ConfirmedAtUtc">When this node approved it; null for an observed-but-unapproved daemon.</param>
+public sealed record DevelopmentContainerDaemonResponse(
+    string DaemonId,
+    string ServerVersion,
+    string Endpoint,
+    DateTimeOffset? ConfirmedAtUtc);
+
+/// <summary>
+///     Approve the container runtime currently reachable (D10 re-confirmation).
+///     <para>
+///         <see cref="DaemonId" /> is required and is the daemon the operator was <em>shown</em>. The confirmation is
+///         refused if that is not the daemon reachable when the request arrives — otherwise an approval issued against
+///         one runtime could land on whichever runtime answered next, and the control would be approving something
+///         nobody looked at.
+///     </para>
+/// </summary>
+public sealed class ConfirmDevelopmentContainerRuntimeRequest
+{
+    public string DaemonId { get; init; } = string.Empty;
+}
 
 public sealed record DevelopmentRepositoryResponse(string Id, string Alias, string Availability);
 

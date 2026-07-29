@@ -220,14 +220,29 @@ playbook P1–P5 / eval flow and the adaptive-memory extraction loop; the wiring
 
 ## 7. Sandbox / process-jail for tool execution
 
-Any node-side tool or shell execution runs inside a process jail, not against the host filesystem directly. The live provider is `ProcessSandboxRuntimeProvider` (`Services/Sandbox/Implementation/ProcessSandboxRuntimeProvider.cs`, implementing `ISandboxRuntimeProvider`; selected via `SandboxProviderSelector`). The old Docker/container sandbox runtime was removed in the 2026-06-17 runtime re-architecture — there is **no** container inference/execution path; this process-jail is the execution boundary. (Discrepancy note vs. older docs: `LocalContainerSandboxProvider` and the HostAgent layer no longer exist as live code.)
+Any node-side tool or shell execution runs inside a process jail, not against the host filesystem directly. The live provider is `ProcessSandboxRuntimeProvider` (`Services/Sandbox/Implementation/ProcessSandboxRuntimeProvider.cs`, implementing `ISandboxRuntimeProvider`; selected via `SandboxProviderSelector`). The old Docker/container sandbox runtime was removed in the 2026-06-17 runtime re-architecture — there is **no** container inference path, and this process-jail is the execution boundary for AgentHome and Coder. (Discrepancy note vs. older docs: `LocalContainerSandboxProvider` and the HostAgent layer no longer exist as live code.)
 
-**What this boundary is — and is not.** It is **supervised execution**, not an OS isolation boundary. What it enforces: only fixed, node-authored executables run (`dotnet --version`, `git` with hooks disabled, `find`/`grep` — never a model-authored command line); a working-directory jail with path-confinement and symlink-escape guards; a **scrubbed child environment** (the worker's secret-bearing environment — cloud API keys, OAuth tokens, the node SQLite key — is **not** inherited; only a fixed system/toolchain allow-list is forwarded, plus the caller's explicit variables); a per-command timeout; tree-kill teardown; and captured-output byte caps. What it does **not** provide: **no network isolation** (the child shares the host network), and **no CPU/memory/PID limits** — this is not a hardware or kernel isolation boundary. Because those two guarantees are unenforceable, the provider **fails closed**: `CreateOrAttachAsync` rejects any `SandboxCreateRequest` that asks for a network policy other than `Unrestricted`, or for any resource limit, with `SandboxCapabilityNotSupportedException`, rather than silently returning a sandbox weaker than requested. Risky execution is approval-gated upstream, but no formal acceptance of the residual host-user execution risk is established by this repository documentation. A future OS-isolated provider can slot in behind the same `ISandboxRuntimeProvider` seam to add real network/resource confinement. The AgentHome `policy.json` records the `"unrestricted"` posture accordingly.
+> **One scoped exception, and it does not move this boundary.** [ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md) (Accepted 2026-07-29) permits Docker for **Development Mode build/test/lint execution only**, as a stopgap ahead of MXC. Provider selection is **per feature**: Development Mode gets the container provider; **AgentHome (4 injection sites) and Coder (3) stay on `ProcessSandboxRuntimeProvider`** and keep exactly the posture described below. Two things follow for a security reader. First, hardening the process provider is *not* superseded by the container work — those two features remain on it. Second, on Linux **access to the Docker socket is root-equivalent**; the ADR records this rather than mitigating it, and the product neither requires nor provides rootless Docker. The container provider is Slice 3 of `Plans/2026-07-28-dev-mode-container-sandbox-and-command-profiles-plan.md` and is **in progress**; until it lands, Development Mode also runs on the process provider, and the section below is the whole story.
+
+**What this boundary is — and is not.** It is **supervised execution**, not an OS isolation boundary. What it enforces: only fixed, node-authored executables run (`dotnet --version`, `git` with hooks disabled, `find`/`grep` — never a model-authored command line); a working-directory jail with path-confinement and symlink-escape guards; a **scrubbed child environment** (the worker's secret-bearing environment — cloud API keys, OAuth tokens, the node SQLite key — is **not** inherited; only a fixed system/toolchain allow-list is forwarded, plus the caller's explicit variables); a per-command timeout; tree-kill teardown; and captured-output byte caps. It is **not** a hardware or kernel isolation boundary. Risky execution is approval-gated upstream, but no formal acceptance of the residual host-user execution risk is established by this repository documentation.
+
+**Network and resource containment are per mechanism and per host — never assume either from this page alone.** What the current host can actually deliver is *measured once at startup* into `SandboxContainment` (`Services/Sandbox/Implementation/Launch/SandboxContainment.cs`), and each mechanism is independently optional: process-group launch (`setsid`), CPU/memory/PID ceilings (`systemd-run --user`), and network isolation (`unshare` — a fresh **empty network namespace** with no route to host loopback, the LAN, or the cloud-metadata endpoint). Each is probed by really performing the operation, not by testing for the binary. Off Linux, and where every probe fails, the record is `SandboxContainment.None` and the child is a plain process with the host's network and no ceilings.
+
+The **capability-honesty invariant** runs in both directions off that one record, which is what keeps advertisement and enforcement from drifting apart:
+
+- `Capabilities` advertises `SupportsNetworkPolicy` / `SupportsResourceLimits` **only** where the matching mechanism is active.
+- `BuildLaunchPolicy` (called by `CreateOrAttachAsync`) **fail-closed rejects** any `SandboxCreateRequest` asking for something the host cannot serve, with `SandboxCapabilityNotSupportedException`, rather than silently returning a sandbox weaker than requested. It rejects on three counts: `NetworkPolicy.Restricted` at all (no allow-list mechanism exists), a denial request when `SupportsNetworkIsolation` is false, and resource limits when `SupportsResourceLimits` is false.
+- Each `…UnavailableReason` carries the measured reason, so a degraded host logs *why* and a live-gated test skips with a reason instead of passing silently.
+
+Neither half may be softened into a silent no-op: a caller must never believe it received isolation the provider does not implement.
+
+Two scope limits a reader must not overrun. **Egress is deny-everything or nothing** — where the mechanism is active the child gets an empty namespace, so egress is denied outright rather than filtered; `SandboxNetworkPolicy.Restricted` (an allow-list) stays unsupported and rejected. And **Development Mode does not get this** — `DevelopmentWorkspaceProvider` requests `Unrestricted` because its `dotnet restore` needs the network until the container work's restore machinery exists. Only AgentHome requests the denial, so there is no engine-wide egress posture to cite — though **Coder is covered too**, because `CoderWorkspaceReader` does not create its own sandbox: it attaches to AgentHome's via `ISandboxRuntimeProvider.ConnectAsync`, so that one policy decision covers AgentHome's 4 injection sites and Coder's 3. The request is itself **capability-gated** (`AgentHomeService.ResolveNetworkPolicy`): it asks for `None` only where the provider advertises `SupportsNetworkPolicy`, and `Unrestricted` otherwise — an unconditional request would be rejected fail-closed on any host without the mechanism. The AgentHome `policy.json` records the posture in force **at the time the agent home was initialised** (`"unrestricted"` when nothing is enforced, `"disabled"` when egress is denied); note that `EnsureBaselineFilesAsync` deliberately does **not** overwrite an existing `policy.json`, so a home created before denial shipped keeps a file reading `"unrestricted"` while the run is actually denied. That preservation is a tested contract protecting operator edits across re-init, and the drift runs in the safe direction — the file under-reports the boundary, never over-reports it — so read the provider's advertised capability, not this file, when you need the posture of a *current* run. An empty namespace is still not a kernel-hardened boundary: **strong isolation remains deferred to a future OS-isolated provider (MXC) behind this same seam**, and approval-gating upstream stays the interim control wherever a mechanism is inactive.
 
 Guards a contributor must not weaken:
 
 - **No inherited worker environment.** `ExecuteAsync` clears the child's environment and repopulates it only from `InheritableEnvironmentAllowlist` (PATH/HOME/temp/locale/`DOTNET_*` + Windows essentials), then layers the caller's explicit `request.Environment`. Never widen this to inherit the parent environment — the worker holds secrets that must not reach a sandbox command.
-- **Fail-closed capability contract.** Do not soften `CreateOrAttachAsync`'s rejection of unenforceable network/resource guarantees into a silent no-op; a caller must never believe it received isolation the provider does not implement.
+- **Fail-closed capability contract.** Do not soften `CreateOrAttachAsync`'s rejection of unenforceable network/resource guarantees into a silent no-op; a caller must never believe it received isolation the provider does not implement. Equally, do not advertise a capability the startup probe did not measure as active — both halves must keep reading the same `SandboxContainment`.
+- **The user-bus environment strip is load-bearing, not tidiness.** A network namespace does **not** confine UNIX sockets. `systemd-run --user` needs `XDG_RUNTIME_DIR` to reach the per-user systemd bus, and a sandboxed child that inherited it could start a unit **outside** its own scope and namespace — escaping both the resource ceiling and the egress denial. Verified live before the fix. Those variables are injected for the launch **wrapper only** and stripped by an `env -u` layer immediately before the sandboxed executable is exec'd; never let them reach the child.
 
 - **Path confinement.** `ResolveJailPath` and `IsUnderJailRoot` reject any path that escapes the jail root before any file op happens.
 - **Symlink-escape guard.** `EnsureNoSymlinkComponentsUnderJail` walks from the resolved leaf upward to the jail root and throws `UnauthorizedAccessException` on the *first* symlink component — defeating a "plant-a-symlink-after-resolve" swap (`ProcessSandboxRuntimeProvider.cs`).
@@ -263,9 +278,33 @@ and tests run as the host user and have that user's host filesystem and network 
 Agent Home are application-level path, byte, environment, and lifecycle controls; neither is an OS security
 boundary. Do not describe the selected folder as a kernel-enforced filesystem allow-list.
 
-MXC and devcontainer-backed execution are future provider work behind the existing sandbox/workspace seams.
-Neither is integrated today, and no current MXC profile should be documented as a security boundary. Any future
-provider must implement and independently validate the isolation guarantees it advertises.
+MXC remains future provider work behind the existing sandbox/workspace seams. It is not integrated today, and no
+current MXC profile should be documented as a security boundary. Any future provider must implement and
+independently validate the isolation guarantees it advertises.
+
+**Container-backed Development Mode execution is decided but not yet shipped.**
+[ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md) (Accepted 2026-07-29) approves a
+Docker-backed provider behind the same `ISandboxRuntimeProvider` seam for Development Mode build/test/lint
+execution — as a **stopgap ahead of MXC**, which stays the long-term hard-isolation seam. The paragraphs above
+describe what executes today and remain accurate until Slice 3 of
+`Plans/2026-07-28-dev-mode-container-sandbox-and-command-profiles-plan.md` lands. What the decision already fixes,
+and what a reviewer should hold it to:
+
+- **A running daemon is a hard requirement for the feature, with no unisolated fallback.** No daemon means no
+  Development Mode — it must fail with an actionable message rather than silently degrading to the process
+  provider, so an operator can tell from the outside which posture ran.
+- **Repository-supplied container configuration is rejected wholesale.** Engine-generated canonical mounts only;
+  no socket or named-pipe mounts, no devices, no `--privileged`, no added capabilities, no host PID/network/IPC
+  namespaces; operator-approved digest-pinned images only; no repository Dockerfile builds; no `${localEnv:*}`.
+  A `devcontainer.json` in a repository the agent can write is untrusted input, and a Docker-socket mount is full
+  host compromise.
+- **On Linux, Docker-socket access is root-equivalent.** The ADR documents this rather than mitigating it. Rootless
+  Docker is the operator's option; the product neither depends on it nor claims it. Do not describe the container
+  provider as removing host-user risk.
+- **A pinned image digest pins bytes, not hermeticity.** Mounts, runtime state, host kernel, platform, dependency
+  resolution and network inputs all stay variable. Do not describe digest pinning as reproducibility.
+- **The scope is narrow by construction, and widening it is a new operator decision**, not an implementation
+  detail.
 
 ### Chat attachments are staged *into* the jail, not read from the host
 

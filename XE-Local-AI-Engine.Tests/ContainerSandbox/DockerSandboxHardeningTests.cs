@@ -1,0 +1,326 @@
+namespace XE_Local_AI_Engine.Tests.ContainerSandbox;
+
+using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
+using XE_Local_AI_Engine.Tests.Testing;
+
+/// <summary>
+///     The §3.8 hardening contract, guarantee by guarantee.
+///     <para>
+///         Each case weakens exactly one setting in the daemon's read-back and asserts that the verifier names that
+///         setting. One-at-a-time matters: a verifier that rejected everything would pass a test that only ever
+///         showed it a fully-broken container, and would then be indistinguishable from one that had genuinely
+///         checked each guarantee. The conformant case pinned first is what makes the rest meaningful.
+///     </para>
+/// </summary>
+public sealed class DockerSandboxHardeningTests
+{
+    [Test]
+    public void FindViolations_WhenTheDaemonAppliedEverythingAsked_ReportsNone()
+    {
+        AssertEx.Empty(DockerSandboxHardening.FindViolations(Specification(), Conformant()));
+    }
+
+    [Test]
+    public void FindViolations_WhenTheContainerWouldRunAsRoot_RejectsIt()
+    {
+        var violations = DockerSandboxHardening.FindViolations(Specification(), Conformant() with { User = "0:0" });
+
+        AssertEx.ContainsSingle(violations, violation => violation.Contains("non-root user", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public void FindViolations_WhenTheUserFieldIsUnset_RejectsIt()
+    {
+        // Docker's own default. An unset User means root, so an empty read-back is the single most likely way this
+        // guarantee is lost in practice and must not read as "nothing to check".
+        var violations = DockerSandboxHardening.FindViolations(Specification(), Conformant() with { User = string.Empty });
+
+        AssertEx.Contains(violations, violation => violation.Contains("non-root user", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public void FindViolations_WhenCapabilitiesWereNotDropped_RejectsIt()
+    {
+        var violations = DockerSandboxHardening.FindViolations(Specification(), Conformant() with { CapabilitiesDropped = [] });
+
+        AssertEx.ContainsSingle(violations, violation => violation.Contains("capability drop", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public void FindViolations_WhenACapabilityWasAdded_RejectsIt()
+    {
+        var violations = DockerSandboxHardening.FindViolations(Specification(), Conformant() with { CapabilitiesAdded = ["SYS_ADMIN"] });
+
+        AssertEx.ContainsSingle(violations, violation => violation.Contains("added capabilities", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public void FindViolations_WhenNoNewPrivilegesIsMissing_RejectsIt()
+    {
+        var violations = DockerSandboxHardening.FindViolations(Specification(), Conformant() with { SecurityOptions = [] });
+
+        AssertEx.ContainsSingle(violations, violation => violation.Contains("no-new-privileges", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public void FindViolations_WhenNoNewPrivilegesIsExplicitlyFalse_RejectsIt()
+    {
+        var violations = DockerSandboxHardening.FindViolations(Specification(),
+            Conformant() with { SecurityOptions = ["no-new-privileges:false"] });
+
+        AssertEx.ContainsSingle(violations, violation => violation.Contains("no-new-privileges", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public void FindViolations_AcceptsTheDaemonsAlternativeRenderingOfNoNewPrivileges()
+    {
+        // Guards the opposite failure: a cosmetic change in how the daemon spells this option must not become a
+        // spurious rejection, or the control acquires the reputation that gets it turned off.
+        AssertEx.Empty(DockerSandboxHardening.FindViolations(Specification(),
+            Conformant() with { SecurityOptions = ["no-new-privileges"] }));
+    }
+
+    [Test]
+    public void FindViolations_WhenTheContainerIsPrivileged_RejectsIt()
+    {
+        var violations = DockerSandboxHardening.FindViolations(Specification(), Conformant() with { Privileged = true });
+
+        AssertEx.ContainsSingle(violations, violation => violation.Contains("privileged", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public void FindViolations_WhenADeviceWasMapped_RejectsIt()
+    {
+        var violations = DockerSandboxHardening.FindViolations(Specification(), Conformant() with { DeviceCount = 1 });
+
+        AssertEx.ContainsSingle(violations, violation => violation.Contains("devices", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public void FindViolations_WhenAHostNamespaceIsShared_RejectsEachOne()
+    {
+        AssertEx.Contains(DockerSandboxHardening.FindViolations(Specification(), Conformant() with { PidMode = "host" }),
+            violation => violation.Contains("PID namespace", StringComparison.Ordinal));
+        AssertEx.Contains(DockerSandboxHardening.FindViolations(Specification(), Conformant() with { IpcMode = "host" }),
+            violation => violation.Contains("IPC namespace", StringComparison.Ordinal));
+        AssertEx.Contains(DockerSandboxHardening.FindViolations(Specification(), Conformant() with { UtsMode = "host" }),
+            violation => violation.Contains("UTS namespace", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public void FindViolations_TreatsAnEmptyNamespaceModeAsPrivate()
+    {
+        // The daemon reports "" for the private default (measured against Engine 29.6.1). Reading that as "unknown"
+        // would fail every conformant container.
+        AssertEx.Empty(DockerSandboxHardening.FindViolations(Specification(),
+            Conformant() with { PidMode = string.Empty, UtsMode = string.Empty }));
+    }
+
+    [Test]
+    public void FindViolations_WhenTheNetworkIsNotTheOneAskedFor_RejectsIt()
+    {
+        var violations = DockerSandboxHardening.FindViolations(Specification(), Conformant() with { NetworkMode = "bridge" });
+
+        AssertEx.ContainsSingle(violations, violation => violation.Contains("network mode", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public void FindViolations_WhenTheNetworkIsTheHostNamespace_RejectsIt()
+    {
+        var violations = DockerSandboxHardening.FindViolations(Specification(), Conformant() with { NetworkMode = "host" });
+
+        AssertEx.Contains(violations, violation => violation.Contains("host network namespace", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public void FindViolations_WhenTheRootFilesystemIsWritable_RejectsIt()
+    {
+        var violations = DockerSandboxHardening.FindViolations(Specification(), Conformant() with { ReadOnlyRootFilesystem = false });
+
+        AssertEx.ContainsSingle(violations, violation => violation.Contains("read-only root filesystem", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public void FindViolations_WhenTheScratchTmpfsIsAbsent_RejectsIt()
+    {
+        var violations = DockerSandboxHardening.FindViolations(Specification(),
+            Conformant() with { TemporaryFilesystems = new Dictionary<string, string>(StringComparer.Ordinal) });
+
+        AssertEx.ContainsSingle(violations, violation => violation.Contains("tmpfs scratch", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public void FindViolations_WhenTheScratchTmpfsIsUnbounded_RejectsIt()
+    {
+        // An unbounded tmpfs is host RAM with extra steps, and it is applied without error, so nothing but this check
+        // would notice.
+        var violations = DockerSandboxHardening.FindViolations(Specification(),
+            Conformant() with
+            {
+                TemporaryFilesystems = new Dictionary<string, string>(StringComparer.Ordinal) { ["/scratch"] = "rw,noexec" }
+            });
+
+        AssertEx.ContainsSingle(violations, violation => violation.Contains("no size bound", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public void FindViolations_WhenMountPropagationIsNotPrivate_RejectsIt()
+    {
+        var violations = DockerSandboxHardening.FindViolations(Specification(),
+            Conformant() with { Mounts = [Mount() with { Propagation = "rshared" }] });
+
+        AssertEx.ContainsSingle(violations, violation => violation.Contains("mount propagation", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public void FindViolations_WhenTheWorkspaceMountIsMissing_RejectsIt()
+    {
+        var violations = DockerSandboxHardening.FindViolations(Specification(), Conformant() with { Mounts = [] });
+
+        AssertEx.ContainsSingle(violations, violation => violation.Contains("is absent", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public void FindViolations_WhenTheContainerCarriesAMountTheEngineDidNotRequest_RejectsIt()
+    {
+        // D7's whole premise is that only engine-generated mounts exist. A mount nobody asked for is either a
+        // daemon-side default this code has not accounted for or one somebody injected, and both are refusals.
+        var violations = DockerSandboxHardening.FindViolations(Specification(),
+            Conformant() with
+            {
+                Mounts =
+                [
+                    Mount(),
+                    new DockerBindMount
+                    {
+                        HostPath = "/var/run/docker.sock",
+                        ContainerPath = "/var/run/docker.sock",
+                        ReadOnly = false,
+                        Propagation = "private"
+                    }
+                ]
+            });
+
+        AssertEx.ContainsSingle(violations, violation => violation.Contains("did not request", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public void FindViolations_WhenAReadOnlyMountCameBackWritable_RejectsIt()
+    {
+        var specification = Specification() with { BindMounts = [Mount() with { ReadOnly = true }] };
+        var violations = DockerSandboxHardening.FindViolations(specification, Conformant() with { Mounts = [Mount()] });
+
+        AssertEx.ContainsSingle(violations, violation => violation.Contains("asked for read-only", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public void FindViolations_WhenAResourceCeilingWasNotApplied_RejectsEachOne()
+    {
+        AssertEx.Contains(DockerSandboxHardening.FindViolations(Specification(), Conformant() with { MemoryBytes = 0 }),
+            violation => violation.Contains("memory limit", StringComparison.Ordinal) && violation.Contains("unlimited", StringComparison.Ordinal));
+        AssertEx.Contains(DockerSandboxHardening.FindViolations(Specification(), Conformant() with { NanoCpus = 0 }),
+            violation => violation.Contains("CPU limit", StringComparison.Ordinal));
+        AssertEx.Contains(DockerSandboxHardening.FindViolations(Specification(), Conformant() with { PidsLimit = 0 }),
+            violation => violation.Contains("PID limit", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public void FindViolations_CollectsEveryViolationRatherThanStoppingAtTheFirst()
+    {
+        // Debugging a misconfigured daemon one restart at a time is how a security control earns the reputation that
+        // gets it disabled.
+        var violations = DockerSandboxHardening.FindViolations(Specification(),
+            Conformant() with
+            {
+                User = "0:0",
+                Privileged = true,
+                ReadOnlyRootFilesystem = false,
+                CapabilitiesDropped = []
+            });
+
+        AssertEx.True(violations.Count >= 4, $"Expected at least four violations, got {violations.Count}: {string.Join(" | ", violations)}");
+    }
+
+    [Test]
+    public void BuildSpecification_ProducesASpecificationThatSatisfiesItsOwnContract()
+    {
+        // Guards the direction the per-guarantee cases cannot: that the specification the provider actually sends is
+        // itself conformant, rather than merely being checked against conformant-looking test data.
+        var specification = DockerSandboxHardening.BuildSpecification(Options(),
+            new ResolvedContainerIdentity(UserId: 1000, GroupId: 1000),
+            "xe-dev-test",
+            "sandbox-1",
+            [Mount()]);
+
+        AssertEx.Equal("1000:1000", specification.User);
+        AssertEx.Equal("none", specification.NetworkMode);
+        AssertEx.True(specification.ReadOnlyRootFilesystem);
+        AssertEx.Contains(specification.CapabilitiesToDrop, "ALL");
+        AssertEx.Contains(specification.SecurityOptions, "no-new-privileges:true");
+        AssertEx.Contains(specification.TemporaryFilesystems["/scratch"], "size=");
+        AssertEx.Equal(expected: 512L * 1024 * 1024, specification.MemoryBytes);
+        AssertEx.Equal(expected: 2_000_000_000L, specification.NanoCpus);
+        AssertEx.Equal(expected: 256L, specification.PidsLimit);
+    }
+
+    internal static ContainerSandboxOptions Options()
+    {
+        return new ContainerSandboxOptions
+        {
+            Image = "example@sha256:" + new string('a', count: 64),
+            UserId = 1000,
+            GroupId = 1000,
+            WorkspaceMountTarget = "/workspace",
+            ScratchMountTarget = "/scratch",
+            ScratchSizeMb = 64,
+            MemoryMb = 512,
+            CpuCount = 2,
+            PidsLimit = 256
+        };
+    }
+
+    internal static DockerBindMount Mount()
+    {
+        return new DockerBindMount
+        {
+            HostPath = "/host/workspace",
+            ContainerPath = "/workspace",
+            ReadOnly = false,
+            Propagation = "private"
+        };
+    }
+
+    internal static DockerContainerSpecification Specification()
+    {
+        return DockerSandboxHardening.BuildSpecification(Options(),
+            new ResolvedContainerIdentity(UserId: 1000, GroupId: 1000),
+            "xe-dev-test",
+            "sandbox-1",
+            [Mount()]);
+    }
+
+    internal static DockerContainerSettings Conformant()
+    {
+        var specification = Specification();
+        return new DockerContainerSettings
+        {
+            ContainerId = "container-1",
+            User = specification.User,
+            NetworkMode = specification.NetworkMode,
+            Privileged = false,
+            ReadOnlyRootFilesystem = true,
+            CapabilitiesDropped = specification.CapabilitiesToDrop,
+            CapabilitiesAdded = [],
+            SecurityOptions = specification.SecurityOptions,
+            TemporaryFilesystems = specification.TemporaryFilesystems,
+            Mounts = specification.BindMounts,
+            MemoryBytes = specification.MemoryBytes,
+            NanoCpus = specification.NanoCpus,
+            PidsLimit = specification.PidsLimit,
+            DeviceCount = 0,
+            PidMode = string.Empty,
+            IpcMode = "private",
+            UtsMode = string.Empty
+        };
+    }
+}

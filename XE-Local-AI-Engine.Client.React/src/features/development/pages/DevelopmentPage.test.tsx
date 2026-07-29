@@ -19,6 +19,7 @@ const hooksMock = vi.hoisted(() => ({
 	useReconnectDevelopmentRepository: vi.fn(),
 	useStartDevelopmentNextAction: vi.fn(),
 	useCancelDevelopmentAttempt: vi.fn(),
+	useConfirmDevelopmentContainerRuntime: vi.fn(),
 	usePreviewDevelopmentPatch: vi.fn(),
 	useApplyDevelopmentPatch: vi.fn(),
 }));
@@ -156,6 +157,7 @@ describe("DevelopmentPage", () => {
 		hooksMock.useReconnectDevelopmentRepository.mockReturnValue(mutation());
 		hooksMock.useStartDevelopmentNextAction.mockReturnValue(mutation());
 		hooksMock.useCancelDevelopmentAttempt.mockReturnValue(mutation());
+		hooksMock.useConfirmDevelopmentContainerRuntime.mockReturnValue(mutation());
 		hooksMock.usePreviewDevelopmentPatch.mockReturnValue(mutation());
 		hooksMock.useApplyDevelopmentPatch.mockReturnValue(mutation());
 	});

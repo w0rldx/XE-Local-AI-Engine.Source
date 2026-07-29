@@ -140,6 +140,16 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
         {
             AttachKey = attachKey,
             RuntimeProfile = RuntimeProfile,
+            // DELIBERATELY Unrestricted — a recorded deferral, not an oversight, and not an inconsistency with
+            // AgentHome. AgentHome now requests default-deny egress (PLAN-sandbox-hardening S2) because everything it
+            // runs in the sandbox is local. Development Mode is different: the dotnet-slnx / dotnet-csproj profiles run
+            // `dotnet restore` into a per-task NUGET_PACKAGES root that starts COLD, so denying egress here today would
+            // not harden Development Mode — it would break it outright, along with the validation gate that depends on
+            // a real restore/build/test run.
+            //
+            // Turning this off is S3.6, and it is only safe once D6's companion machinery exists: restore limited to
+            // the base commit's manifests, plus a dependency-manifest change failing validation with its specific
+            // reason. Until both halves land, "network off" here is an outage rather than a hardening win.
             NetworkPolicy = SandboxNetworkPolicy.Unrestricted,
             TrustedHostWorkspace = new SandboxTrustedHostWorkspace
             {

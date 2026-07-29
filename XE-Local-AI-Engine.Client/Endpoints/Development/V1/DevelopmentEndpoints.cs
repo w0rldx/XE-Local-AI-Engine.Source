@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Development;
+using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 
 public sealed class GetDevelopmentCapabilityEndpoint
@@ -18,10 +19,105 @@ public sealed class GetDevelopmentCapabilityEndpoint
         Policies(NodeAuthorizationPolicies.Operator);
     }
 
-    public override Task HandleAsync(CancellationToken ct)
+    public override async Task HandleAsync(CancellationToken ct)
     {
         var enabled = HttpContext.RequestServices.GetRequiredService<IOptions<DevelopmentOptions>>().Value.Enabled;
-        return Send.OkAsync(new DevelopmentCapabilityResponse(enabled), ct);
+        var preflight = await HttpContext.RequestServices.GetRequiredService<IDockerDaemonPreflightService>()
+                                         .InspectAsync(ct)
+                                         .ConfigureAwait(false);
+
+        await Send.OkAsync(new DevelopmentCapabilityResponse(enabled, preflight.ToResponse()), ct).ConfigureAwait(false);
+    }
+}
+
+/// <summary>
+///     Records the operator's explicit approval of the container runtime currently reachable (decision D10).
+///     <para>
+///         Its own endpoint rather than a flag on the capability GET, because pinning a daemon is a decision and a GET
+///         must not make decisions: a page refresh, a prefetch or a health check would otherwise silently approve
+///         whatever daemon happened to be answering.
+///     </para>
+/// </summary>
+public sealed class ConfirmDevelopmentContainerRuntimeEndpoint
+    : Endpoint<ConfirmDevelopmentContainerRuntimeRequest, DevelopmentContainerRuntimeResponse>, IDevelopmentEndpoint
+{
+    public override void Configure()
+    {
+        Post(LocalApiRoutes.Development.ContainerRuntimeConfirmation);
+        Policies(NodeAuthorizationPolicies.Operator);
+    }
+
+    public override async Task HandleAsync(ConfirmDevelopmentContainerRuntimeRequest req, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(req.DaemonId))
+        {
+            AddError("A container runtime id is required so the confirmation approves the runtime you were shown.");
+            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            return;
+        }
+
+        var preflight = await HttpContext.RequestServices.GetRequiredService<IDockerDaemonPreflightService>()
+                                         .ConfirmAsync(req.DaemonId, ct)
+                                         .ConfigureAwait(false);
+
+        await Send.OkAsync(preflight.ToResponse(), ct).ConfigureAwait(false);
+    }
+}
+
+/// <summary>Projects the container-runtime preflight onto its wire contract.</summary>
+internal static class DevelopmentContainerRuntimeMapper
+{
+    public static DevelopmentContainerRuntimeResponse ToResponse(this DockerDaemonPreflight preflight)
+    {
+        ArgumentNullException.ThrowIfNull(preflight);
+
+        return new DevelopmentContainerRuntimeResponse(preflight.Ready,
+            ToStatusCode(preflight.Status),
+            preflight.Message,
+            preflight.RequiresOperatorConfirmation,
+            preflight.Endpoint?.Display,
+            preflight.Endpoint is null ? null : ToSourceCode(preflight.Endpoint.Source),
+            preflight.ObservedDaemon is null
+                ? null
+                : new DevelopmentContainerDaemonResponse(preflight.ObservedDaemon.DaemonId,
+                    preflight.ObservedDaemon.ServerVersion,
+                    preflight.ObservedDaemon.Endpoint.Display,
+                    ConfirmedAtUtc: null),
+            preflight.PinnedDaemon is null
+                ? null
+                : new DevelopmentContainerDaemonResponse(preflight.PinnedDaemon.DaemonId,
+                    preflight.PinnedDaemon.ServerVersion,
+                    preflight.PinnedDaemon.Endpoint,
+                    preflight.PinnedDaemon.ConfirmedAtUtc));
+    }
+
+    // Mapped explicitly rather than by ToString(): these codes are a wire contract the React app branches on, and
+    // renaming an enum member should not silently change what a client sees.
+    private static string ToStatusCode(DockerDaemonPreflightStatus status)
+    {
+        return status switch
+        {
+            DockerDaemonPreflightStatus.Ready => "ready",
+            DockerDaemonPreflightStatus.DaemonUnreachable => "daemon_unreachable",
+            DockerDaemonPreflightStatus.PermissionDenied => "permission_denied",
+            DockerDaemonPreflightStatus.ApiVersionTooOld => "api_version_too_old",
+            DockerDaemonPreflightStatus.DaemonIdentityChanged => "daemon_changed",
+            DockerDaemonPreflightStatus.NotConfigured => "not_configured",
+            _ => "probe_failed"
+        };
+    }
+
+    private static string ToSourceCode(DockerDaemonEndpointSource source)
+    {
+        return source switch
+        {
+            DockerDaemonEndpointSource.Configuration => "configuration",
+            DockerDaemonEndpointSource.DockerHostEnvironmentVariable => "docker_host",
+            DockerDaemonEndpointSource.DefaultUnixSocket => "default_socket",
+            DockerDaemonEndpointSource.UserRuntimeUnixSocket => "user_socket",
+            DockerDaemonEndpointSource.WindowsNamedPipe => "windows_pipe",
+            _ => "unknown"
+        };
     }
 }
 

@@ -8,6 +8,8 @@ using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Tools;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
+using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
+using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Reaping;
 
 internal static class AddNodeAgentHomeExtensions
 {
@@ -50,7 +52,28 @@ internal static class AddNodeAgentHomeExtensions
                .Bind(configuration.GetSection(LocalContainerOptions.SectionName))
                .ValidateOnStart();
         builder.Services.AddSingleton<IValidateOptions<LocalContainerOptions>, LocalContainerOptionsValidator>();
+        // Sandbox containment. The probe measures ONCE per host which mechanisms a sandboxed child can really be
+        // launched under (systemd user scope for CPU/memory/PID ceilings, empty network namespace for egress denial),
+        // and is a singleton precisely so that measurement is shared: the provider's advertised Capabilities and the
+        // launch path both read it, which is what makes "advertise only what is enforced" mechanical rather than a
+        // convention someone has to remember.
+        builder.Services.AddSingleton<ISandboxContainmentProbe, HostSandboxContainmentProbe>();
+        builder.Services.AddSingleton<ISandboxLauncher, SandboxLauncher>();
+        builder.Services.AddSingleton<ISandboxMarkerStore, FileSandboxMarkerStore>();
+        // Group signalling is a Linux mechanism (setsid + kill(-pgid)); elsewhere no marker is ever written, so the
+        // no-op keeps the reaper's logic identical while its /proc and libc paths stay off platforms without them.
+        if (OperatingSystem.IsLinux())
+        {
+            builder.Services.AddSingleton<ISandboxProcessGroupKiller, LinuxSandboxProcessGroupKiller>();
+        }
+        else
+        {
+            builder.Services.AddSingleton<ISandboxProcessGroupKiller, NoOpSandboxProcessGroupKiller>();
+        }
         builder.Services.AddSingleton(SandboxProviderSelector.Resolve);
+        // Startup sweep for sandbox children orphaned by a hard host kill (which skips the provider's Dispose/KillAsync
+        // paths entirely), mirroring AddHostedService<StaleLlamaServerReaper> in the llama.cpp provider.
+        builder.Services.AddHostedService<SandboxOrphanReaper>();
         // AgentHome layout initializer. Materializes the worker-local /agent-home tree idempotently and can run while
         // AgentHome itself is disabled.
         builder.Services.AddOptions<AgentHomeOptions>()
