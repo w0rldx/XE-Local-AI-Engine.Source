@@ -252,9 +252,13 @@ public sealed class DevelopmentWorkflowE2ETests : XEE2ETestBase
             {
                 Timeout = 30_000
             }).ConfigureAwait(false);
-            await Expect(counts).ToContainTextAsync("Tests executed").ConfigureAwait(false);
-            await Expect(counts).ToContainTextAsync("Tests passed").ConfigureAwait(false);
-            await Expect(counts).ToContainTextAsync("Tests failed").ConfigureAwait(false);
+            // The VALUES, not just the labels. Asserting only that a counts grid rendered would pass against four
+            // zeroes — which is precisely the false green this slice exists to expose. The fixture has exactly one
+            // test and it passes, so every number here is exact.
+            await Expect(Page.GetByTestId("development-validation-test-discovered")).ToHaveTextAsync("1").ConfigureAwait(false);
+            await Expect(Page.GetByTestId("development-validation-test-executed")).ToHaveTextAsync("1").ConfigureAwait(false);
+            await Expect(Page.GetByTestId("development-validation-test-passed")).ToHaveTextAsync("1").ConfigureAwait(false);
+            await Expect(Page.GetByTestId("development-validation-test-failed")).ToHaveTextAsync("0").ConfigureAwait(false);
 
             // A parse failure renders instead of the counts, so its absence is part of the evidence that these
             // numbers were actually read rather than defaulted.
