@@ -4,7 +4,14 @@ Last reviewed: 2026-07-24
 
 This note records the official documentation checked before tightening XML comments and implementation comments in the launch-feature cleanup pass. Use it as source grounding for comments only; it does not change runtime behavior.
 
-> **2026-07-24 re-grounding.** Guidance for three deleted subsystems — **HostAgent/tray (Avalonia)**, **WSL managed distro**, and **Docker** (including rootless) — has been retired, along with the **gRPC** transport guidance. None of them exist in the tree, and a comment describing any of them as live is a defect. **Ollama is not in that list**: it was *not* removed and its guidance below still stands. Package pins in this file were re-read from `Directory.Packages.props` on the same date.
+> **2026-07-24 re-grounding, amended 2026-07-29.** Guidance for two deleted subsystems — **HostAgent/tray (Avalonia)** and the **WSL managed distro** — is retired, along with the **gRPC** transport guidance. None of those exist in the tree, and a comment describing any of them as live is a defect. **Ollama is not in that list**: it was *not* removed and its guidance below still stands. Package pins in this file were re-read from `Directory.Packages.props` on 2026-07-24.
+>
+> **Docker was on that list and no longer is — read this before deleting a Docker comment.** [ADR 0004](adr/0004-development-mode-container-execution-docker-stopgap.md) (Accepted 2026-07-29) narrows "no Docker anywhere" to **no Docker on the inference path**, permitting it for **Development Mode build/test/lint execution only**. So the rule is now directional, not a blanket:
+>
+> - A comment describing Docker **on the inference path**, in the model runtime, in model acquisition, or as part of **HostAgent** or the deleted `LocalContainerSandboxProvider` is still a **defect**.
+> - A comment describing Docker as the **Development Mode execution sandbox** is **correct and must not be deleted** — even though this file previously told you it was retired guidance. Verify against the ADR before touching it.
+> - **Rootless Docker guidance stays retired.** The ADR documents that Docker-socket access is root-equivalent on Linux rather than mitigating it; the product neither depends on rootless Docker nor claims it. Do not write a comment implying otherwise.
+> - **WSL nuance:** the deleted subsystem was the *managed distro* (`wsl --unregister xe-engine-runtime`), and it stays deleted. That is **not** the same as decision D1's requirement that Development Mode's data root live inside the WSL2 filesystem on Windows — a comment describing *that* is correct.
 
 ## Review cadence and version anchors
 
@@ -98,7 +105,9 @@ Sources:
 
 ## Desktop launch and local admin HTTP comments
 
-> **Retired subsystems — do not write comments for these.** This section previously carried active guidance for **HostAgent launch/tray** (Avalonia tray app), **WSL managed-distro**, and **rootless Docker** comments. All three subsystems were **deliberately deleted** in the runtime re-architecture: there is no Avalonia tray app, no managed WSL distro, and no Docker anywhere in the tree. Tool sandboxing is a supervised native process (`ProcessSandboxRuntimeProvider`), and the Windows-elevation need the HostAgent existed for is served by an in-app unprivileged process supervisor. Never reintroduce a comment that describes any of them as live — see the locked runtime decisions in [`agent-knowledge.md`](agent-knowledge.md). **Ollama is the exception: it was *not* removed** — it remains a gated, opt-in secondary provider (llama.cpp is the default runtime), so the Ollama guidance above still applies.
+> **Retired subsystems — do not write comments for these.** This section previously carried active guidance for **HostAgent launch/tray** (Avalonia tray app), **WSL managed-distro**, and **rootless Docker** comments. Those three are **deliberately deleted** and stay deleted: there is no Avalonia tray app, no managed WSL distro, and no rootless-Docker dependency. The Windows-elevation need the HostAgent existed for is served by an in-app unprivileged process supervisor. Never reintroduce a comment that describes any of them as live — see the locked runtime decisions in [`agent-knowledge.md`](agent-knowledge.md). **Ollama is the exception: it was *not* removed** — it remains a gated, opt-in secondary provider (llama.cpp is the default runtime), so the Ollama guidance above still applies.
+>
+> **Two corrections to the sentence this blockquote used to carry (2026-07-29).** First, "no Docker anywhere in the tree" is **no longer the rule** — see the amended re-grounding at the top of this file. Docker is permitted for **Development Mode execution only** under [ADR 0004](adr/0004-development-mode-container-execution-docker-stopgap.md), so a Dev-Mode container comment is correct and must not be deleted by a cleanup pass; Docker on the inference path remains a defect. Second, "tool sandboxing is a supervised native process" is now **feature-specific**: `ProcessSandboxRuntimeProvider` is the provider for **AgentHome and Coder**, which stay on it, while Development Mode moves to the container provider behind the same `ISandboxRuntimeProvider` seam. Do not "correct" a comment that says so.
 
 What remains applicable from this seam:
 

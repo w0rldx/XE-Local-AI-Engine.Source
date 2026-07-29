@@ -5,7 +5,7 @@ Read `docs/agent-knowledge.md` before your first non-trivial change in this repo
 - A bare `TODO`/`FIXME` in a C# comment **fails the build** (Sonar S1135 + warnings-as-errors). Write "follow-up:" instead.
 - OpenAPI regen without `XE_LAUNCH_MODE=desktop` **silently drops** desktop-only endpoints from the generated client.
 - `aspire stop` is a **no-op** on this stack — use `scripts/dev-stop.sh`, or you leave an orphaned `llama-server` holding a port and VRAM.
-- Docker and HostAgent were **deliberately removed**. Don't reintroduce them. Ollama was **not** removed — it's a gated secondary provider; llama.cpp is the default runtime.
+- HostAgent was **deliberately removed** — don't reintroduce it. Docker is off the **inference path** and stays there, but is permitted for **Development Mode execution only** (ADR 0004). Ollama was **not** removed — it's a gated secondary provider; llama.cpp is the default runtime.
 - This WSL box **has** an RTX 5090 (32 GB, sm_120) + CUDA. Older notes claiming no GPU — or claiming a 4080/16 GB/sm_89 — are wrong.
 
 The doc's "Stale beliefs corrected" table lists rules that were true once and are false now — check it before acting on a remembered convention.
