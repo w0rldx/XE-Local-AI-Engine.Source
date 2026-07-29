@@ -1,9 +1,9 @@
 # ADR 0004: Docker is permitted for Development Mode execution only, as a stopgap ahead of MXC
 
-- **Status:** Proposed — **awaiting operator sign-off.** No implementation work may rely on this record until it is Accepted.
+- **Status:** Accepted
 - **Date:** 2026-07-29
 - **Scope:** Development Mode build/test/lint execution. Nothing else.
-- **Authority:** Decision D0 in `Plans/2026-07-28-dev-mode-container-sandbox-and-command-profiles-plan.md` §2.1, resolved by the operator 2026-07-28. This record does not reopen that decision; it states it precisely enough to be enforced and to be revisited.
+- **Authority:** Decision D0 in `Plans/2026-07-28-dev-mode-container-sandbox-and-command-profiles-plan.md` §2.1, resolved by the operator 2026-07-28. Accepted by the repository owner (`w0rldx`) on 2026-07-29, in the session that drafted it. This record does not reopen that decision; it states it precisely enough to be enforced and to be revisited.
 - **Amends:** `Plans/2026-06-17-runtime-rearchitecture-epic.md` — locked decision 2 (`:46`) and the acceptance criterion at `:29`.
 
 ## Context
@@ -50,4 +50,6 @@ Stated honestly, including the ones that are costs.
 
 ## Status of the work this record gates
 
-`Plans/2026-07-28-dev-mode-container-sandbox-and-command-profiles-plan.md` Slice 3 (the container sandbox provider) **may not begin until this ADR is Accepted**. Slices 1, 1.5 and 2 are merged and carry no Docker dependency; Slice 4 is likewise independent of this record. Slice 5 (the documentation sweep above) follows sign-off.
+`Plans/2026-07-28-dev-mode-container-sandbox-and-command-profiles-plan.md` Slice 3 (the container sandbox provider) was gated on this record and is **unblocked as of 2026-07-29**. Slices 1, 1.5, 2 and 4 are merged and carry no Docker dependency. Slice 5 (the documentation sweep above) is likewise unblocked and should land close behind Slice 3 — until it does, eleven documents contradict this ADR, and `docs/agent-knowledge.md` is among them, which is the first file an agent reads.
+
+Two conditions from the plan still stand and are not waived by acceptance: `Plans/PLAN-sandbox-hardening-2026-07-01.md` should ship before or alongside Slice 3 (§8.5), and the OpenSandbox evaluation is recorded as **declined for Slice 3** with flip conditions (§8.8) — accepting Docker here is not an invitation to substitute a different platform without meeting them.
