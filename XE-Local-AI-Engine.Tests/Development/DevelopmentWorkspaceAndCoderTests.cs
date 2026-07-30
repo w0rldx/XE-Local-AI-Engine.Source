@@ -329,6 +329,143 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         AssertEx.Equal(protectedBefore.StandardOutput.Trim(), protectedAfter.StandardOutput.Trim());
     }
 
+    /// <summary>
+    ///     S3.4 / decision D8: the managed workspace is an engine-owned standalone clone, not a linked worktree.
+    ///     Every assertion here is a property the container boundary depends on, and each one fails a different way of
+    ///     getting the clone wrong.
+    /// </summary>
+    [Test]
+    public async Task WorkspaceProvider_CreatesStandaloneCloneWithNoRemoteNoSharedObjectsAndDetachedHead()
+    {
+        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+
+        // Extra commits so shallowness is observable: a source repository with a single commit would produce a
+        // one-commit workspace either way, which would let the silently-ignored --depth trap pass this test.
+        for (var index = 0; index < 2; index++)
+        {
+            await File.WriteAllTextAsync(Path.Combine(repository, "README.md"), $"base {index}\n").ConfigureAwait(false);
+            EnsureSuccess(await RunProcessAsync(repository, "git", "add", "README.md").ConfigureAwait(false));
+            EnsureSuccess(await RunProcessAsync(repository, "git", "commit", "-m", $"extra {index}").ConfigureAwait(false));
+        }
+
+        // A remote on the source repository: the clone inherits `origin` and it must not survive.
+        EnsureSuccess(await RunProcessAsync(repository, "git", "remote", "add", "origin", "https://example.invalid/upstream.git").ConfigureAwait(false));
+
+        var data = Path.Combine(_root, "standalone-data");
+        Directory.CreateDirectory(data);
+        var options = Options.Create(OptionsValue());
+        var canonical = DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository);
+        var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(canonical));
+
+        using var sandbox = CreateSandbox();
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System);
+        var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
+        var workspace = session.HostWorktreePath;
+
+        // .git is a real directory, not the pointer file a linked worktree gets — git works at all inside a bind mount.
+        AssertEx.True(Directory.Exists(Path.Combine(workspace, ".git")),
+            "the managed workspace must own a real .git directory, not a worktree pointer file");
+        AssertEx.False(File.Exists(Path.Combine(workspace, ".git")),
+            "the managed workspace .git must not be a pointer file");
+
+        // No shared object store: nothing in the workspace names an object database it does not own.
+        AssertEx.False(File.Exists(Path.Combine(workspace, ".git", "objects", "info", "alternates")),
+            "the managed workspace must not share an object store with the trusted source repository");
+
+        // Shallow: proves the file:// transport was used. Given a plain local path git ignores --depth with only a
+        // warning and hardlinks the whole history, which is the exact coupling D8 exists to prevent.
+        var count = await RunProcessAsync(workspace, "git", "rev-list", "--count", "HEAD").ConfigureAwait(false);
+        EnsureSuccess(count);
+        AssertEx.Equal("1", count.StandardOutput.Trim(),
+            "the managed workspace must be a shallow clone — a full history means --depth was silently ignored");
+
+        // No remote: the trusted source repository is not reachable by name from the workspace.
+        var remotes = await RunProcessAsync(workspace, "git", "remote").ConfigureAwait(false);
+        EnsureSuccess(remotes);
+        AssertEx.Equal(string.Empty, remotes.StandardOutput.Trim(),
+            "the managed workspace must not inherit any remote back to the trusted source repository");
+
+        // Detached at the recorded base commit.
+        var symbolic = await RunProcessAsync(workspace, "git", "symbolic-ref", "--quiet", "HEAD").ConfigureAwait(false);
+        AssertEx.NotEqual(notExpected: 0, symbolic.ExitCode, "a clone leaves HEAD attached; the managed workspace must be detached");
+        var head = await RunProcessAsync(workspace, "git", "rev-parse", "--verify", "HEAD^{commit}").ConfigureAwait(false);
+        EnsureSuccess(head);
+        AssertEx.Equal(session.BaseCommit, head.StandardOutput.Trim());
+
+        // The common Git directory resolves INSIDE the workspace and is not the trusted source's — the inverted
+        // meaning of the --git-common-dir check under D8.
+        var commonDirectory = await RunProcessAsync(workspace, "git", "rev-parse", "--git-common-dir").ConfigureAwait(false);
+        EnsureSuccess(commonDirectory);
+        var resolvedCommon = Path.TrimEndingDirectorySeparator(Path.GetFullPath(commonDirectory.StandardOutput.Trim(), workspace));
+        AssertEx.Equal(Path.TrimEndingDirectorySeparator(Path.GetFullPath(Path.Combine(workspace, ".git"))), resolvedCommon);
+        var trustedCommon = await RunProcessAsync(repository, "git", "rev-parse", "--git-common-dir").ConfigureAwait(false);
+        EnsureSuccess(trustedCommon);
+        AssertEx.NotEqual(Path.TrimEndingDirectorySeparator(Path.GetFullPath(trustedCommon.StandardOutput.Trim(), repository)), resolvedCommon);
+
+        // The source repository keeps no administrative record of the workspace, which a linked worktree would have
+        // left behind in .git/worktrees and which nothing in this codebase ever pruned.
+        AssertEx.False(Directory.Exists(Path.Combine(repository, ".git", "worktrees")),
+            "a standalone clone must leave no worktree administrative state in the trusted source repository");
+    }
+
+    /// <summary>
+    ///     Repository-local Git configuration must not be able to turn a host-side git invocation into host-side
+    ///     command execution.
+    ///     <para>
+    ///         <c>core.fsmonitor</c> is executed as a shell command on the first index refresh, and
+    ///         <see cref="DevelopmentPatchEvidenceService" /> runs <c>reset</c> and <c>add -A</c> <em>on the host</em>
+    ///         against the workspace. Under D8 the workspace <c>.git/config</c> is writable from inside the container,
+    ///         so without the pinned <c>-c core.fsmonitor=</c> this is a container-to-host escape. The include chain is
+    ///         covered too: a command-line <c>-c</c> outranks configuration reached through <c>include.path</c>.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task EvidenceExport_WhenWorkspaceConfigPlantsFsmonitor_DoesNotExecuteItOnTheHost()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            Skip.Test("The planted fsmonitor payload is a POSIX shell command.");
+            return;
+        }
+
+        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var data = Path.Combine(_root, "fsmonitor-data");
+        Directory.CreateDirectory(data);
+        var options = Options.Create(OptionsValue());
+        var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
+
+        using var sandbox = CreateSandbox();
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System);
+        var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
+        var tools = new DevelopmentWorkspaceTools(sandbox, session, options, GenericProfile);
+        _ = await tools.WriteFileAsync("src/feature.txt", "bounded change\n").ConfigureAwait(false);
+
+        var directMarker = Path.Combine(_root, "fsmonitor-direct");
+        var includedMarker = Path.Combine(_root, "fsmonitor-included");
+
+        // Directly in the workspace's own config, exactly as a container-side write would land it.
+        EnsureSuccess(await RunProcessAsync(session.HostWorktreePath,
+            "git",
+            "config",
+            "core.fsmonitor",
+            $"touch '{directMarker}'; false").ConfigureAwait(false));
+
+        var evidence = new DevelopmentPatchEvidenceService(sandbox, options);
+        _ = await evidence.ExportAsync(session).ConfigureAwait(false);
+        AssertEx.False(File.Exists(directMarker),
+            "a repository-local core.fsmonitor must not execute during host-side evidence export");
+
+        // The same payload reached through an include chain, which a naive per-file scan of .git/config would miss.
+        EnsureSuccess(await RunProcessAsync(session.HostWorktreePath, "git", "config", "--unset", "core.fsmonitor").ConfigureAwait(false));
+        await File.WriteAllTextAsync(Path.Combine(session.HostWorktreePath, ".git", "included.config"),
+            $"[core]\n\tfsmonitor = \"touch '{includedMarker}'; false\"\n").ConfigureAwait(false);
+        EnsureSuccess(await RunProcessAsync(session.HostWorktreePath, "git", "config", "include.path", "included.config").ConfigureAwait(false));
+
+        _ = await evidence.ExportAsync(session).ConfigureAwait(false);
+        AssertEx.False(File.Exists(includedMarker),
+            "an include.path chain must not reintroduce an executable core.fsmonitor on the host");
+    }
+
     [Test]
     public async Task WorkspaceProvider_RejectsPreservedWorktreeWhoseHeadNoLongerMatchesPersistedBase()
     {
@@ -343,7 +480,21 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         {
             var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System);
             session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
-            EnsureSuccess(await RunProcessAsync(session.HostWorktreePath, "git", "commit", "--allow-empty", "-m", "unexpected-head").ConfigureAwait(false));
+
+            // Identity is supplied per-command because the managed workspace is now a standalone clone: `git clone`
+            // does not copy the source repository's local config, so the identity the fixture set there is absent here.
+            // Without this the commit fails for the wrong reason and the test would pass vacuously.
+            EnsureSuccess(await RunProcessAsync(session.HostWorktreePath,
+                "git",
+                "-c",
+                "user.email=development-workspace@example.invalid",
+                "-c",
+                "user.name=Development Workspace Test",
+                "commit",
+                "--allow-empty",
+                "--no-gpg-sign",
+                "-m",
+                "unexpected-head").ConfigureAwait(false));
             await sandbox.KillAsync(session.SandboxHandle).ConfigureAwait(false);
         }
 
