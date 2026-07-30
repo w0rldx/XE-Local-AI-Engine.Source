@@ -56,11 +56,14 @@ internal static class AgentHomeGit
     ///         repository-local config and selected by an <em>in-tree</em> <c>.gitattributes</c> still executes on
     ///         <c>git add</c>. <c>core.attributesfile=/dev/null</c> only disables the <em>global</em> attributes file —
     ///         in-tree <c>.gitattributes</c> outranks it — and git has no command-line flag that disables attribute
-    ///         processing, so it is not closable from here. It is closed instead by the mount boundary: S3.5 binds
-    ///         <c>&lt;workspace&gt;/.git/config</c> read-only into the container, and a filter driver that cannot be
-    ///         <em>defined</em> cannot run, whatever the in-tree <c>.gitattributes</c> selects. That mount exists only
-    ///         under the container provider, so until S3.12 switches Development off the process provider these pins are
-    ///         the only mitigation in force and they do not cover that vector.
+    ///         processing, so it is not closable from here. Two things close it instead, and both live outside this
+    ///         class: S3.5 binds <c>&lt;workspace&gt;/.git/config</c> read-only into the container, and a filter driver
+    ///         that cannot be <em>defined</em> cannot run whatever the in-tree <c>.gitattributes</c> selects; and Lane C
+    ///         rewrites that file to a known-good minimal config immediately before each host-side git invocation, which
+    ///         is provider-independent and therefore also covers the process provider Development still runs on until
+    ///         S3.12. The second one matters because S3.4 <em>introduced</em> this exposure rather than inheriting it:
+    ///         the previous linked worktree had a pointer-<em>file</em> <c>.git</c>, so a workspace-confined write could
+    ///         not reach repository-local config at all.
     ///     </para>
     /// </summary>
     public static IReadOnlyList<string> Arguments(params string[] tail)
