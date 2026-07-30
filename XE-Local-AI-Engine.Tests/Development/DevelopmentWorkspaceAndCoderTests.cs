@@ -237,7 +237,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         {
             Environment.SetEnvironmentVariable("PATH", fakeBin + Path.PathSeparator + originalPath);
             using var sandbox = CreateSandbox();
-            var service = new DevelopmentPatchEvidenceService(sandbox, Options.Create(OptionsValue()));
+            var service = new DevelopmentPatchEvidenceService(Options.Create(OptionsValue()));
             var session = new DevelopmentWorkspaceSession(Guid.NewGuid(),
                 Guid.NewGuid(),
                 Guid.NewGuid(),
@@ -299,7 +299,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 
             var status = await tools.RunCommandAsync(DevelopmentCommandIds.GitStatus).ConfigureAwait(false);
             AssertEx.Contains(status, "src/feature.txt", StringComparison.Ordinal);
-            var evidenceService = new DevelopmentPatchEvidenceService(sandbox, options);
+            var evidenceService = new DevelopmentPatchEvidenceService(options);
             var evidence = await evidenceService.ExportAsync(first).ConfigureAwait(false);
             AssertEx.Equal(first.BaseCommit, evidence.BaseCommit);
             AssertEx.NotNullOrEmpty(evidence.PatchHash);
@@ -367,7 +367,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         var tools = new DevelopmentWorkspaceTools(sandbox, session, options, GenericProfile);
         _ = await tools.WriteFileAsync("large.txt", new string('x', 1024)).ConfigureAwait(false);
 
-        var evidence = new DevelopmentPatchEvidenceService(sandbox, options);
+        var evidence = new DevelopmentPatchEvidenceService(options);
         await AssertEx.ThrowsAsync<InvalidDataException>(() => evidence.ExportAsync(session));
     }
 
@@ -401,7 +401,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         var runner = new DevelopmentCoderAttemptRunner(store,
             workspace,
             sandbox,
-            new DevelopmentPatchEvidenceService(sandbox, options),
+            new DevelopmentPatchEvidenceService(options),
             blob,
             new WritingCoderModel(),
             new UnexpectedCloudContextService(),
