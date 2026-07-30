@@ -40,6 +40,43 @@ public sealed class DockerSandboxHardeningTests
     }
 
     [Test]
+    public void FindViolations_AgainstARootlessDaemon_AcceptsUidZeroBecauseItIsNotHostRoot()
+    {
+        // The §3.8 rule as written is inverted under a rootless daemon: container uid 0 maps to the INVOKING USER's
+        // unprivileged host account, and it is the only identity that can use an engine-generated bind mount there
+        // (measured on Engine 29.6.1 rootless: --user 1000:1000 could not create a file in the mount at all). It still
+        // has every capability dropped, no-new-privileges set and a read-only rootfs.
+        var specification = Specification() with { User = "0:0" };
+
+        AssertEx.Empty(DockerSandboxHardening.FindViolations(specification,
+            Conformant() with { User = "0:0" },
+            daemonIsRootless: true));
+    }
+
+    [Test]
+    public void FindViolations_AgainstARootfulDaemon_StillRejectsUidZero()
+    {
+        // The relaxation is scoped to the daemon that earns it, and to nothing else.
+        var specification = Specification() with { User = "0:0" };
+        var violations = DockerSandboxHardening.FindViolations(specification, Conformant() with { User = "0:0" });
+
+        AssertEx.ContainsSingle(violations, violation => violation.Contains("non-root user", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public void FindViolations_AnUnsetUserIsRejectedEvenAgainstARootlessDaemon()
+    {
+        // An empty User is Docker's default, i.e. "nobody decided". Rootless makes uid 0 acceptable as a CHOICE; it
+        // does not make the absence of a choice acceptable.
+        var specification = Specification() with { User = string.Empty };
+        var violations = DockerSandboxHardening.FindViolations(specification,
+            Conformant() with { User = string.Empty },
+            daemonIsRootless: true);
+
+        AssertEx.Contains(violations, violation => violation.Contains("non-root user", StringComparison.Ordinal));
+    }
+
+    [Test]
     public void FindViolations_WhenCapabilitiesWereNotDropped_RejectsIt()
     {
         var violations = DockerSandboxHardening.FindViolations(Specification(), Conformant() with { CapabilitiesDropped = [] });
@@ -264,7 +301,6 @@ public sealed class DockerSandboxHardeningTests
         AssertEx.Equal(expected: 256L, specification.PidsLimit);
     }
 
-
     [Test]
     public void BuildSpecification_WhenUnrestrictedEgressIsAskedFor_UsesTheDefaultBridgeRatherThanNone()
     {
@@ -282,7 +318,6 @@ public sealed class DockerSandboxHardeningTests
         AssertEx.Contains(specification.CapabilitiesToDrop, "ALL");
         AssertEx.Contains(specification.SecurityOptions, "no-new-privileges:true");
     }
-
 
     [Test]
     public void FindViolations_VerifiesTheRequestedNetworkModeRatherThanAssumingNone()
@@ -302,7 +337,6 @@ public sealed class DockerSandboxHardeningTests
             violation => violation.Contains("network mode", StringComparison.Ordinal));
     }
 
-
     [Test]
     public void FindViolations_TheHostNetworkIsRejectedEvenWhenItIsWhatWasAskedFor()
     {
@@ -313,7 +347,6 @@ public sealed class DockerSandboxHardeningTests
 
         AssertEx.ContainsSingle(violations, violation => violation.Contains("host network namespace", StringComparison.Ordinal));
     }
-
 
     [Test]
     public async Task ResolveNetworkMode_ARestrictedEgressAllowListIsFailClosedRejected()

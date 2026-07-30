@@ -27,14 +27,23 @@ internal sealed class ContainerSandboxOptionsValidator : IValidateOptions<Contai
                          + "A tag names whatever the registry last pushed, not the bytes the operator approved (plan D7).");
         }
 
-        if (options.UserId is 0)
+        // Deliberately NOT rejecting UID/GID 0 here. Whether zero is root depends on the daemon, and this validator
+        // runs at startup with no daemon in reach: under a rootless daemon container UID 0 is the invoking user's own
+        // unprivileged host account and is the only identity that can use an engine-generated bind mount, while under
+        // a rootful one it is host root. A startup rejection would therefore refuse a correct configuration on one
+        // machine and accept nothing extra on the other. The check has moved to where the answer is knowable —
+        // DockerSandboxRuntimeProvider probes the daemon before it resolves the identity, and refuses UID 0 against a
+        // daemon that is not verified rootless. Negative values are still rejected, by the Range data annotation.
+        //
+        // What IS answerable without a daemon is whether the two halves of the identity agree about which mapping they
+        // live in. Under a rootless daemon 0 names the invoking user; pairing a 0 with a non-zero id straddles two
+        // different host accounts, so the container would not own what it creates whichever daemon runs it.
+        if (options.UserId is not null && options.GroupId is not null && (options.UserId is 0) != (options.GroupId is 0))
         {
-            failures.Add($"'{nameof(ContainerSandboxOptions.UserId)}' must not be 0. §3.8 requires non-root execution with an explicit UID.");
-        }
-
-        if (options.GroupId is 0)
-        {
-            failures.Add($"'{nameof(ContainerSandboxOptions.GroupId)}' must not be 0. §3.8 requires non-root execution with an explicit GID.");
+            failures.Add($"'{nameof(ContainerSandboxOptions.UserId)}' and '{nameof(ContainerSandboxOptions.GroupId)}' must both be 0 "
+                         + "or neither. 0 is meaningful only against a rootless daemon, where it maps to the invoking user's own "
+                         + "host account; mixing it with a subordinate id splits the identity across two host accounts and the "
+                         + "container would not own what it creates.");
         }
 
         ValidateMountTarget(nameof(ContainerSandboxOptions.WorkspaceMountTarget), options.WorkspaceMountTarget, failures);

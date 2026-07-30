@@ -32,6 +32,19 @@ internal static class DockerWorkspaceHostFiles
     private const int WriteCreateNoFollowCloseOnExecFlags = 0x1 | 0x40 | 0x200 | 0x20000 | 0x80000;
     private const int DefaultCreateFileMode = 0b110_100_100;
 
+    // statx(2). AT_FDCWD is the "resolve relative to the working directory" dirfd; the path here is always absolute.
+    // AT_SYMLINK_NOFOLLOW makes the stat itself refuse to traverse a leaf symlink, so ownership is read off the file
+    // that was actually created rather than off whatever a planted link points at.
+    private const int AtFileDescriptorCurrentWorkingDirectory = -100;
+    private const int AtSymlinkNoFollow = 0x100;
+    private const uint StatxOwnerMask = 0x8 | 0x10;
+
+    // Byte offsets into `struct statx`. Unlike `struct stat` this is a kernel UAPI structure with a fixed layout that
+    // is identical on every architecture, which is the entire reason statx is used here rather than stat: a stat
+    // binding would have to know the target architecture and the glibc vintage to find the same two fields.
+    private const int StatxUserIdOffset = 20;
+    private const int StatxBufferBytes = 256;
+
     /// <summary>
     ///     Writes <paramref name="content" /> to the host bytes behind <paramref name="sandboxPath" />. Throws
     ///     <see cref="UnauthorizedAccessException" /> when the path escapes the workspace or traverses a symlink.
@@ -65,6 +78,30 @@ internal static class DockerWorkspaceHostFiles
 
         EnsureNoSymlinkComponents(canonicalRoot, destination, sandboxPath);
         await WriteNoFollowAsync(destination, content, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     Reads the owning UID of a host path without following a leaf symlink. Returns <see langword="null" /> when
+    ///     the platform cannot answer (anything but Linux, or a kernel without <c>statx</c>) — the caller decides
+    ///     what an unanswerable probe means, because on a rootful daemon it is a different question than on a
+    ///     rootless one.
+    /// </summary>
+    internal static uint? TryReadOwnerUserId(string hostPath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(hostPath);
+
+        if (!OperatingSystem.IsLinux())
+        {
+            return null;
+        }
+
+        var pathBytes = new byte[Encoding.UTF8.GetByteCount(hostPath) + 1];
+        Encoding.UTF8.GetBytes(hostPath, pathBytes);
+        var buffer = new byte[StatxBufferBytes];
+
+        return statx(AtFileDescriptorCurrentWorkingDirectory, pathBytes, AtSymlinkNoFollow, StatxOwnerMask, buffer) != 0
+            ? null
+            : BitConverter.ToUInt32(buffer, StatxUserIdOffset);
     }
 
     /// <summary>
@@ -129,4 +166,8 @@ internal static class DockerWorkspaceHostFiles
     [DllImport("libc", EntryPoint = "open", SetLastError = true)]
     [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
     private static extern int open(byte[] pathname, int flags, int mode);
+
+    [DllImport("libc", EntryPoint = "statx", SetLastError = true)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
+    private static extern int statx(int directoryFileDescriptor, byte[] pathname, int flags, uint mask, byte[] buffer);
 }

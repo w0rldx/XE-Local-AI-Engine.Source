@@ -27,19 +27,25 @@ public sealed record ContainerSandboxOptions
     public string? Image { get; init; }
 
     /// <summary>
-    ///     In-container UID the sandbox process runs as. Must be non-zero: §3.8 requires non-root execution with an
-    ///     explicit UID/GID, and Docker runs as root unless overridden.
+    ///     In-container UID the sandbox process runs as.
     ///     <para>
-    ///         Null means "resolve the engine process's own effective UID at startup". That is the value that makes an
-    ///         engine-generated bind mount readable and writable under a conventional rootful daemon, where an
-    ///         in-container UID maps straight through to the same host UID.
+    ///         Null — the default — means "resolve it per create against the daemon that will run the container", which
+    ///         is the only way to get this right: a rootful daemon maps an in-container UID straight through, so the
+    ///         engine's own effective UID is the one that can use an engine-generated bind mount, while a rootless
+    ///         daemon maps container UID 0 to the invoking user and every other UID into the subordinate range, which
+    ///         owns nothing of ours. See <c>ResolvedContainerIdentity</c> for the measured evidence.
+    ///     </para>
+    ///     <para>
+    ///         Set it only when your daemon maps identities in a way neither rule describes; an explicit value wins
+    ///         over both. Zero is accepted here but is honoured ONLY against a daemon verified rootless — against a
+    ///         rootful daemon it is host root, and the create is refused.
     ///     </para>
     /// </summary>
-    [Range(1, int.MaxValue)]
+    [Range(0, int.MaxValue)]
     public int? UserId { get; init; }
 
-    /// <summary>In-container GID. Must be non-zero. Null resolves to the engine process's effective GID.</summary>
-    [Range(1, int.MaxValue)]
+    /// <summary>In-container GID. Null resolves per create, exactly as <see cref="UserId" /> does.</summary>
+    [Range(0, int.MaxValue)]
     public int? GroupId { get; init; }
 
     /// <summary>Absolute in-container path the engine-generated workspace mount is bound at.</summary>
