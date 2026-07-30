@@ -204,9 +204,16 @@ public sealed class AgentHomePatchServiceTests : IDisposable
         AssertEx.Equal(changeType, entry.ChangeType);
     }
 
+    /// <summary>
+    ///     <c>core.fsmonitor=</c> is pinned for security rather than byte stability — git executes a configured
+    ///     <c>core.fsmonitor</c> value as a shell command on index refresh — but it belongs in the same assertion
+    ///     because the flag set must stay identical between baseline creation and diff.
+    /// </summary>
     private static bool HasHardenedFlags(IReadOnlyList<string> arguments)
     {
-        return arguments.Contains("core.hooksPath=/dev/null") && arguments.Contains("core.attributesfile=/dev/null");
+        return arguments.Contains("core.hooksPath=/dev/null")
+               && arguments.Contains("core.attributesfile=/dev/null")
+               && arguments.Contains("core.fsmonitor=");
     }
 
     private static AgentHomePatchService CreateService(FakeSandboxRuntimeProvider provider, long maxPatchBytes = 52428800)

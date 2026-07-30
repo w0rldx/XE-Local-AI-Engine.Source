@@ -202,9 +202,17 @@ public sealed class AgentHomeWorkspaceServiceTests : IDisposable
         return AgentHomeGit.Executable + " " + string.Join(" ", AgentHomeGit.Arguments(tail));
     }
 
+    /// <summary>
+    ///     <c>core.fsmonitor=</c> is a security pin, not a byte-stability one: git executes a configured
+    ///     <c>core.fsmonitor</c> value as a shell command on the first index refresh, so an unpinned invocation lets
+    ///     repository-local config run commands wherever git runs. It is asserted alongside the byte-stabilizing flags
+    ///     because the whole set has to stay identical between baseline creation and diff.
+    /// </summary>
     private static bool HasHardenedFlags(IReadOnlyList<string> arguments)
     {
-        return arguments.Contains("core.hooksPath=/dev/null") && arguments.Contains("core.attributesfile=/dev/null");
+        return arguments.Contains("core.hooksPath=/dev/null")
+               && arguments.Contains("core.attributesfile=/dev/null")
+               && arguments.Contains("core.fsmonitor=");
     }
 
     private static bool IssuesArgument(IReadOnlyList<SandboxCommandRequest> commands, string argument)
