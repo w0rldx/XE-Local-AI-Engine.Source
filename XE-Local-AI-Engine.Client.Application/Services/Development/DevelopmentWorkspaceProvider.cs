@@ -11,6 +11,33 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
 {
     private const string RuntimeProfile = "development-local";
     private const int WorkspaceManifestVersion = 2;
+
+    /// <summary>
+    ///     The in-sandbox root the per-task runtime directories are requested at. A <em>requested</em> path: the process
+    ///     provider identity-maps and reports the host path instead, and only a provider with a mount layer places
+    ///     anything here. Chosen to sit outside the workspace and the scratch tmpfs so it cannot shadow either.
+    /// </summary>
+    private const string RuntimeMountRoot = "/xe-runtime";
+
+    /// <summary>
+    ///     <c>.git/config</c> named in the sandbox-path namespace, whose root IS the workspace. A provider with a mount
+    ///     layer derives the real target from the host path (it is inside the trusted workspace, so the engine must not
+    ///     have to know what that workspace is called inside the sandbox); this is the neutral spelling of the same
+    ///     place.
+    /// </summary>
+    private const string GitConfigSandboxPath = "/.git/config";
+
+    /// <summary>
+    ///     The per-task runtime subdirectories a build needs, and the reason D9 is satisfied at zero cost.
+    ///     <para>
+    ///         <c>workspace.json</c> — the workspace CONTROL MANIFEST — sits directly in <c>RuntimePath</c>, and D9
+    ///         requires it to be unreachable from inside any sandbox. Mounting these four named subdirectories rather
+    ///         than their parent is what keeps it out. Nothing inside a sandbox needs it: every accessor is host-side in
+    ///         <see cref="PrepareAsync" /> and runs before the sandbox exists.
+    ///     </para>
+    /// </summary>
+    private static readonly string[] RuntimeDirectoryNames = ["home", "tmp", "nuget", "dotnet"];
+
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly INodeDataDirectory _dataDirectory;
@@ -65,6 +92,17 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
             snapshot.TaskId.ToString("N"));
         Directory.CreateDirectory(Path.GetDirectoryName(worktreePath)!);
         Directory.CreateDirectory(runtimePath);
+
+        // Created HERE and not only in DevelopmentWorkspaceTools, which runs after this method returns. A provider with
+        // a mount layer binds these directories at create time, and a bind source the daemon has to invent is created
+        // with the DAEMON's ownership — under a rootful daemon that is root, and the container then cannot write its
+        // own HOME. The tools' own EnsureRuntimeDirectories stays: it is what keeps a directly constructed tools
+        // instance working, and creating an existing directory costs nothing.
+        foreach (var name in RuntimeDirectoryNames)
+        {
+            Directory.CreateDirectory(Path.Combine(runtimePath, name));
+        }
+
         var workspaceManifestPath = Path.Combine(runtimePath, "workspace.json");
 
         var git = new HostGitRunner(_options.MaxAttemptDurationSeconds);
@@ -156,7 +194,8 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
             TrustedHostWorkspace = new SandboxTrustedHostWorkspace
             {
                 RootPath = worktreePath
-            }
+            },
+            Mounts = BuildMounts(runtimePath, worktreePath)
         }, cancellationToken).ConfigureAwait(false);
 
         return new DevelopmentWorkspaceSession(snapshot.ProjectId,
@@ -167,6 +206,55 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
             worktreePath,
             runtimePath,
             handle);
+    }
+
+    /// <summary>
+    ///     The engine-generated mounts this feature needs beyond the workspace itself.
+    ///     <para>
+    ///         The four runtime subdirectories are named individually rather than by mounting their parent, and that is
+    ///         the whole of D9's control-state exclusion: <c>workspace.json</c> lives in the parent and stays outside
+    ///         every sandbox because the parent is never mounted.
+    ///     </para>
+    ///     <para>
+    ///         <c>.git/config</c> is requested READ-ONLY, and only from a provider that advertises
+    ///         <see cref="SandboxProviderCapabilities.SupportsReadOnlyMounts" />. It is a nested file mount layered over
+    ///         the read-write workspace: the work tree stays writable so the agent can edit, <c>.git/index</c> stays
+    ///         writable so <c>git apply --index</c> still works, and <c>.git/config</c> becomes both unwritable and
+    ///         unremovable — a filter driver that cannot be DEFINED cannot run, whatever an in-tree
+    ///         <c>.gitattributes</c> selects.
+    ///     </para>
+    ///     <para>
+    ///         The capability gate is not defensive coding. A provider with no mount layer fails a read-only request
+    ///         closed rather than serving it writable, so requesting it unconditionally would kill Development Mode
+    ///         outright on the process provider it runs on today — which is exactly why the engine-side rewrite in
+    ///         <see cref="DevelopmentWorkspaceGitConfig" /> exists as the provider-independent half rather than as a
+    ///         belt-and-braces extra.
+    ///     </para>
+    /// </summary>
+    private IReadOnlyList<SandboxMount> BuildMounts(string runtimePath, string worktreePath)
+    {
+        var mounts = RuntimeDirectoryNames
+                     .Select(name => new SandboxMount
+                     {
+                         HostPath = Path.Combine(runtimePath, name),
+                         SandboxPath = RuntimeMountRoot + "/" + name,
+                         ReadOnly = false
+                     })
+                     .ToList();
+
+        var gitConfigPath = Path.Combine(worktreePath, ".git", "config");
+        if ((_sandbox.Capabilities & SandboxProviderCapabilities.SupportsReadOnlyMounts) != SandboxProviderCapabilities.None
+            && File.Exists(gitConfigPath))
+        {
+            mounts.Add(new SandboxMount
+            {
+                HostPath = gitConfigPath,
+                SandboxPath = GitConfigSandboxPath,
+                ReadOnly = true
+            });
+        }
+
+        return mounts;
     }
 
     private static void ValidateBaseBranch(string baseBranch)
