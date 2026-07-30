@@ -53,10 +53,22 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
 
     private const int DefaultMaxCapturedOutputBytes = 4 * 1024 * 1024;
 
+    // The mapping probe runs `touch`, whose entire useful output is an error line. A small ceiling keeps a
+    // misbehaving image from turning a create-time check into a multi-megabyte capture.
+    private const int ProbeCapturedOutputBytes = 4 * 1024;
+
     // On Windows the engine is a native Windows process while the container is Linux (D1), so the host's own account
     // identifiers do not name anything inside it. 1000 is the conventional first non-root Linux account and is only a
     // default: an operator whose image expects another id sets UserId/GroupId explicitly.
     private const int WindowsDefaultUserId = 1000;
+
+    // The in-container id that a rootless daemon maps to the invoking user — i.e. to the engine's own host account.
+    // See ResolveIdentity for the measurement; this constant is 0 because of that mapping, not because root is wanted.
+    private const int RootlessMappedUserId = 0;
+
+    // Prefix for the file the create-time mapping probe writes. Dot-leading so an ordinary `ls` in the workspace does
+    // not show it, and removed host-side immediately afterwards either way.
+    private const string WorkspaceProbePrefix = ".xe-sandbox-mapping-probe-";
 
     private readonly IDockerRuntimeClientFactory _clientFactory;
     private readonly ILogger<DockerSandboxRuntimeProvider> _logger;
@@ -89,7 +101,10 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
     ///         <c>400 container rootfs is marked read-only</c> regardless of the destination path, including a writable
     ///         <c>tmpfs</c> — and §3.8 makes that root filesystem non-negotiable. The workspace bind mount is the same
     ///         bytes on both sides, so the write goes to the host path backing the destination, under the containment
-    ///         and symlink guards <c>DockerWorkspaceHostFiles</c> applies.
+    ///         and symlink guards <c>DockerWorkspaceHostFiles</c> applies. That the engine and the container can each
+    ///         read what the other wrote is not assumed either: <see cref="CreateOrAttachAsync" /> proves it with a
+    ///         probe file before it returns a handle, so this capability is verified per sandbox rather than claimed
+    ///         once.
     ///     </para>
     /// </summary>
     public SandboxProviderCapabilities Capabilities =>
@@ -351,36 +366,116 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
     }
 
     /// <summary>
-    ///     Resolve the in-container UID/GID. An unset value takes the engine process's own effective ids, which is the
-    ///     pairing that makes an engine-generated bind mount usable under a conventional rootful daemon. Zero is
-    ///     rejected outright, from either source: §3.8 requires non-root execution, and silently running as root
-    ///     because the engine happens to be running as root is exactly the fail-open this contract forbids.
+    ///     Resolve the in-container UID/GID for the daemon that is about to run the container.
+    ///     <para>
+    ///         The rule is <em>the container must run as the identity that maps to the engine's own host UID, and that
+    ///         identity must not map to host root</em>, and the two daemon modes answer it with opposite numbers. On a
+    ///         rootful daemon an in-container UID maps straight through, so the answer is the engine's own effective
+    ///         ids and zero would be host root. On a rootless daemon container UID 0 <b>is</b> the invoking user —
+    ///         measured on Engine 29.6.1 rootless with <c>/etc/subuid</c> = <c>…:100000:65536</c>, a container run as
+    ///         <c>1000:1000</c> could not create a file in the engine-generated workspace mount at all
+    ///         (<c>Permission denied</c>, because container 1000 is host 100999), while one run as <c>0:0</c> wrote
+    ///         files that landed host-side owned by uid 1000, the engine's own account. Refusing zero there would
+    ///         refuse the only identity that works.
+    ///     </para>
+    ///     <para>
+    ///         "Root" in a rootless container is not host root: it still has every capability dropped,
+    ///         no-new-privileges set and a read-only root filesystem, and it maps to an unprivileged host account —
+    ///         strictly less privileged than the engine process that created it. An explicit operator-configured id
+    ///         wins over both defaults, because a daemon may map identities in a way neither rule describes.
+    ///     </para>
     /// </summary>
-    internal static ResolvedContainerIdentity ResolveIdentity(ContainerSandboxOptions options, Func<int> userIdReader, Func<int> groupIdReader)
+    internal static ResolvedContainerIdentity ResolveIdentity(ContainerSandboxOptions options,
+        bool daemonIsRootless,
+        Func<int> userIdReader,
+        Func<int> groupIdReader)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(userIdReader);
         ArgumentNullException.ThrowIfNull(groupIdReader);
 
-        var userId = options.UserId ?? userIdReader();
-        var groupId = options.GroupId ?? groupIdReader();
+        var userId = options.UserId ?? (daemonIsRootless ? RootlessMappedUserId : userIdReader());
+        var groupId = options.GroupId ?? (daemonIsRootless ? RootlessMappedUserId : groupIdReader());
 
-        if (userId <= 0 || groupId <= 0)
+        if (userId < 0 || groupId < 0)
         {
             throw new SandboxCapabilityNotSupportedException(
-                $"The docker sandbox provider refuses to create a container as uid {userId}, gid {groupId}. The §3.8 hardening "
-                + "contract requires non-root execution with an explicit UID and GID. Set "
-                + $"'{ContainerSandboxOptions.SectionName}:UserId' and ':GroupId' to non-zero values.");
+                $"The docker sandbox provider refuses to create a container as uid {userId}, gid {groupId}: neither may be negative.");
+        }
+
+        if ((userId == 0 || groupId == 0) && !daemonIsRootless)
+        {
+            throw new SandboxCapabilityNotSupportedException(
+                $"The docker sandbox provider refuses to create a container as uid {userId}, gid {groupId} against a daemon that "
+                + "does not report itself rootless. On a rootful daemon an in-container id maps straight through, so 0 is host "
+                + "root — which the §3.8 hardening contract forbids. (0 is accepted only against a daemon that reports itself "
+                + "rootless, where it maps to the invoking user's own unprivileged account. That is a description of how the "
+                + "two daemon modes differ, not a recommendation to switch: this product neither requires nor supplies rootless "
+                + "Docker.) Set "
+                + $"'{ContainerSandboxOptions.SectionName}:UserId' and ':GroupId' to the ids that own this node's workspace.");
         }
 
         return new ResolvedContainerIdentity(userId, groupId);
     }
 
-    private static ResolvedContainerIdentity ResolveIdentity(ContainerSandboxOptions options)
+    private static ResolvedContainerIdentity ResolveIdentity(ContainerSandboxOptions options, bool daemonIsRootless)
     {
         return ResolveIdentity(options,
+            daemonIsRootless,
             static () => OperatingSystem.IsWindows() ? WindowsDefaultUserId : (int)GetEffectiveUserId(),
             static () => OperatingSystem.IsWindows() ? WindowsDefaultUserId : (int)GetEffectiveGroupId());
+    }
+
+    /// <summary>
+    ///     Decides whether the workspace mount really behaves as both sides need, from the evidence of one probe file
+    ///     the container created. Returns <see langword="null" /> when the mapping is sound, or the reason it is not.
+    ///     <para>
+    ///         A pure function because it is the half that has to be tested against mappings this machine cannot
+    ///         produce. It exists at all because <c>inspect</c> cannot answer the question: the daemon echoes back the
+    ///         UID it was <em>asked</em> for and has nothing to say about what that UID maps to, so a read-back that
+    ///         agrees perfectly is compatible with a container that cannot write a byte. One probe settles three
+    ///         things at once — the mount is writable from inside, it is backed by the host directory the engine
+    ///         thinks it is, and what the container creates belongs to the engine — under either daemon mode and
+    ///         without trusting the <c>rootless</c> label.
+    ///     </para>
+    /// </summary>
+    internal static string? DescribeWorkspaceMappingFailure(bool containerWroteTheProbe,
+        bool probeVisibleOnHost,
+        uint? engineUserId,
+        uint? probeOwnerUserId)
+    {
+        if (!containerWroteTheProbe)
+        {
+            return "the container could not create a file in its own workspace mount. Under a rootless daemon this is what a "
+                   + "conventional non-root UID looks like: container uid N>0 maps to the subordinate range, which does not own "
+                   + "the engine-generated workspace.";
+        }
+
+        if (!probeVisibleOnHost)
+        {
+            return "the file the container created in its workspace mount is not present on the host path the engine bound "
+                   + "there, so the two sides are not looking at the same bytes.";
+        }
+
+        if (engineUserId is null)
+        {
+            // Non-Linux engine host: there is no host UID to compare against, and the write-through checks above have
+            // already established the property that matters. Nothing further is claimed rather than guessed.
+            return null;
+        }
+
+        if (probeOwnerUserId is null)
+        {
+            return "the owner of the file the container created could not be read on the host, so the engine cannot confirm it "
+                   + "owns what the container writes. Refused rather than assumed.";
+        }
+
+        return probeOwnerUserId == engineUserId
+            ? null
+            : $"the container writes into the workspace as host uid {probeOwnerUserId}, but this engine runs as uid "
+              + $"{engineUserId}, so neither side can modify the other's files. Set "
+              + $"'{ContainerSandboxOptions.SectionName}:UserId' and ':GroupId' to the in-container ids that map to uid "
+              + $"{engineUserId} on this daemon.";
     }
 
     // DllImport rather than the source-generated LibraryImport, matching ProcessSandboxRuntimeProvider: the generated
@@ -428,28 +523,8 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
         string sandboxId,
         CancellationToken cancellationToken)
     {
-        var identity = ResolveIdentity(options);
         var workspaceRoot = Path.GetFullPath(request.TrustedHostWorkspace!.RootPath);
         Directory.CreateDirectory(workspaceRoot);
-
-        var specification = DockerSandboxHardening.BuildSpecification(options,
-            identity,
-            "xe-dev-" + sandboxId,
-            sandboxId,
-            [
-                new DockerBindMount
-                {
-                    HostPath = workspaceRoot,
-                    ContainerPath = options.WorkspaceMountTarget,
-                    ReadOnly = false,
-                    Propagation = DockerSandboxHardening.PrivateMountPropagation
-                }
-            ],
-            // Honored, not ignored. This provider advertises SupportsResourceLimits, so a caller's ceiling must be the
-            // ceiling that gets applied — and because it is baked into the specification, the read-back verification
-            // below checks the caller's numbers rather than the engine's defaults.
-            request.ResourceLimits,
-            request.NetworkPolicy);
 
         var endpoint = DockerDaemonEndpointResolver.Resolve(options);
         var client = _clientFactory.Create(endpoint);
@@ -457,11 +532,35 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
 
         try
         {
+            // Probed BEFORE the identity is resolved, because the identity depends on it: which in-container UID maps
+            // to this engine's host UID is a property of the daemon, not of the configuration.
+            var daemon = await client.ProbeAsync(cancellationToken).ConfigureAwait(false);
+            var identity = ResolveIdentity(options, daemon.IsRootless);
+
+            var specification = DockerSandboxHardening.BuildSpecification(options,
+                identity,
+                "xe-dev-" + sandboxId,
+                sandboxId,
+                [
+                    new DockerBindMount
+                    {
+                        HostPath = workspaceRoot,
+                        ContainerPath = options.WorkspaceMountTarget,
+                        ReadOnly = false,
+                        Propagation = DockerSandboxHardening.PrivateMountPropagation
+                    }
+                ],
+                // Honored, not ignored. This provider advertises SupportsResourceLimits, so a caller's ceiling must be
+                // the ceiling that gets applied — and because it is baked into the specification, the read-back
+                // verification below checks the caller's numbers rather than the engine's defaults.
+                request.ResourceLimits,
+                request.NetworkPolicy);
+
             containerId = await client.CreateContainerAsync(specification, cancellationToken).ConfigureAwait(false);
             await client.StartContainerAsync(containerId, cancellationToken).ConfigureAwait(false);
 
             var observed = await client.InspectContainerAsync(containerId, cancellationToken).ConfigureAwait(false);
-            var violations = DockerSandboxHardening.FindViolations(specification, observed);
+            var violations = DockerSandboxHardening.FindViolations(specification, observed, daemon.IsRootless);
             if (violations.Count > 0)
             {
                 // The whole point of the read-back. The container exists and is running, and it is still refused,
@@ -475,6 +574,9 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
                     + "daemon's own read-back, so it was removed rather than used. Unverified guarantees: "
                     + string.Join(" ", violations));
             }
+
+            await VerifyWorkspaceMappingAsync(client, containerId, workspaceRoot, options.WorkspaceMountTarget, identity, cancellationToken)
+                .ConfigureAwait(false);
 
             var handle = new SandboxHandle
             {
@@ -498,6 +600,81 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
 
             await client.DisposeAsync().ConfigureAwait(false);
             throw;
+        }
+    }
+
+    /// <summary>
+    ///     Proves the workspace mount is usable in both directions, by having the container create a probe file and
+    ///     then reading it back from the host. Throws <see cref="SandboxCapabilityNotSupportedException" /> — leaving
+    ///     the caller's <c>catch</c> to remove the container — when it is not.
+    ///     <para>
+    ///         This is the half of the §3.8 user check that the daemon cannot perform for us. An inspect only echoes
+    ///         back the UID that was asked for; it has no way to say what that UID maps to, and under a rootless daemon
+    ///         a perfectly conformant read-back is compatible with a container that cannot write a single byte into its
+    ///         own workspace. One probe settles the mount's writability, the identity mapping and the engine's own
+    ///         access to what the container creates, under either daemon mode and without trusting the
+    ///         <c>rootless</c> label the daemon reports about itself.
+    ///     </para>
+    /// </summary>
+    private async Task VerifyWorkspaceMappingAsync(IDockerRuntimeClient client,
+        string containerId,
+        string workspaceRoot,
+        string workspaceMountTarget,
+        ResolvedContainerIdentity identity,
+        CancellationToken cancellationToken)
+    {
+        var probeName = WorkspaceProbePrefix + Guid.NewGuid().ToString("N");
+        var hostProbePath = Path.Combine(workspaceRoot, probeName);
+
+        try
+        {
+            // `touch` through the exec API rather than a shell line: no quoting, and therefore nothing for a mount
+            // target containing a space or a quote to do.
+            var outcome = await client.ExecuteAsync(containerId,
+                                          new DockerExecutionRequest
+                                          {
+                                              Executable = "touch",
+                                              Arguments = [DockerSandboxPaths.ResolveContainerPath(workspaceMountTarget, probeName)],
+                                              MaxCapturedBytes = ProbeCapturedOutputBytes
+                                          },
+                                          cancellationToken)
+                                      .ConfigureAwait(false);
+
+            var engineUserId = OperatingSystem.IsLinux() ? GetEffectiveUserId() : (uint?)null;
+            var failure = DescribeWorkspaceMappingFailure(outcome.ExitCode == 0,
+                File.Exists(hostProbePath),
+                engineUserId,
+                File.Exists(hostProbePath) ? DockerWorkspaceHostFiles.TryReadOwnerUserId(hostProbePath) : null);
+
+            if (failure is not null)
+            {
+                _logger.LogError("Refusing container {ContainerId}: its workspace mount does not map to this engine ({Failure})",
+                    containerId,
+                    failure);
+
+                throw new SandboxCapabilityNotSupportedException(
+                    $"The docker sandbox provider created a container as uid {identity.UserSpecification}, but {failure} The container "
+                    + "was removed rather than used: a sandbox whose workspace the engine and the container cannot both write is not "
+                    + "one Development Mode can run in, and the daemon's own read-back cannot detect this — it reports the id that "
+                    + "was asked for, never what that id maps to.");
+            }
+        }
+        finally
+        {
+            SafeDeleteProbe(hostProbePath);
+        }
+    }
+
+    private void SafeDeleteProbe(string hostProbePath)
+    {
+        try
+        {
+            File.Delete(hostProbePath);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // A probe file left behind is untidy, not unsafe, and must never mask the verdict that produced it.
+            _logger.LogWarning(exception, "Failed to remove the workspace mapping probe at {ProbePath}.", hostProbePath);
         }
     }
 

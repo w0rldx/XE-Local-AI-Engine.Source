@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.ContainerSandbox;
 
+using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging.Abstractions;
 using TUnit.Core.Exceptions;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
@@ -65,7 +66,7 @@ public sealed class DockerSandboxRealDaemonTests
         // the flag" is not verification; this is what the flag became.
         var settings = await fixture.Client.InspectContainerAsync(fixture.ContainerId);
 
-        AssertEx.Equal($"{options.UserId}:{options.GroupId}", settings.User);
+        AssertEx.Equal(fixture.Specification.User, settings.User);
         AssertEx.False(settings.Privileged);
         AssertEx.True(settings.ReadOnlyRootFilesystem);
         AssertEx.Contains(settings.CapabilitiesDropped, "ALL");
@@ -85,7 +86,7 @@ public sealed class DockerSandboxRealDaemonTests
                      && string.Equals(mount.Propagation, "private", StringComparison.Ordinal));
 
         // And the verifier agrees, which is the assertion the provider actually makes.
-        AssertEx.Empty(DockerSandboxHardening.FindViolations(fixture.Specification, settings));
+        AssertEx.Empty(DockerSandboxHardening.FindViolations(fixture.Specification, settings, fixture.DaemonIsRootless));
     }
 
     [Test]
@@ -96,8 +97,9 @@ public sealed class DockerSandboxRealDaemonTests
 
         // The inspect read-back says what the daemon recorded. These say what the kernel did — a stronger claim, and
         // the one the operator's threat model rests on.
-        AssertEx.Equal("1000", await ProbeAsync(fixture, "id -u"));
-        AssertEx.Equal("1000", await ProbeAsync(fixture, "id -g"));
+        var expectedIdentity = fixture.Specification.User.Split(':', 2);
+        AssertEx.Equal(expectedIdentity[0], await ProbeAsync(fixture, "id -u"));
+        AssertEx.Equal(expectedIdentity[1], await ProbeAsync(fixture, "id -g"));
         AssertEx.Equal("READONLY", await ProbeAsync(fixture, "touch /probe 2>/dev/null && echo WRITABLE || echo READONLY"));
         AssertEx.Equal("SCRATCH-WRITABLE", await ProbeAsync(fixture, $"touch {options.ScratchMountTarget}/probe && echo SCRATCH-WRITABLE"));
         AssertEx.Equal("NET-BLOCKED", await ProbeAsync(fixture, "wget -T2 -q -O- http://1.1.1.1 >/dev/null 2>&1 && echo NET-OK || echo NET-BLOCKED"));
@@ -138,7 +140,6 @@ public sealed class DockerSandboxRealDaemonTests
         AssertEx.Equal("exported", (await File.ReadAllTextAsync(destination)).Trim());
     }
 
-
     [Test]
     public async Task RealDaemon_TheWorkingDirectoryIsMappedOntoTheWorkspaceRatherThanTheContainerRoot()
     {
@@ -162,7 +163,6 @@ public sealed class DockerSandboxRealDaemonTests
         AssertEx.Equal("relative-write", await File.ReadAllTextAsync(Path.Combine(fixture.WorkspaceRoot, "from-cwd.txt")));
     }
 
-
     [Test]
     public async Task RealDaemon_ANestedWorkingDirectoryIsMappedUnderTheWorkspaceToo()
     {
@@ -181,7 +181,6 @@ public sealed class DockerSandboxRealDaemonTests
 
         AssertEx.Equal(options.WorkspaceMountTarget + "/nested", pwd.StandardOutput.Trim());
     }
-
 
     [Test]
     public async Task RealDaemon_StandardInput_ReachesTheChildAndChangesTheFileItWrites()
@@ -209,7 +208,6 @@ public sealed class DockerSandboxRealDaemonTests
         AssertEx.Equal(Payload, await File.ReadAllTextAsync(Path.Combine(fixture.WorkspaceRoot, "applied.txt")));
     }
 
-
     [Test]
     public async Task RealDaemon_ALargePayloadDoesNotDeadlockAgainstTheChildsOwnOutput()
     {
@@ -236,7 +234,6 @@ public sealed class DockerSandboxRealDaemonTests
         AssertEx.Equal(payload.Length, (int)new FileInfo(Path.Combine(fixture.WorkspaceRoot, "big.txt")).Length);
     }
 
-
     [Test]
     public async Task RealDaemon_WhenNoStandardInputIsSupplied_TheChildStillSeesEndOfInputRatherThanHanging()
     {
@@ -258,7 +255,6 @@ public sealed class DockerSandboxRealDaemonTests
         AssertEx.Equal("done", result.StandardOutput.Trim());
     }
 
-
     [Test]
     public async Task RealDaemon_CopyInto_LandsInTheWorkspaceAndTheContainerCanReadIt()
     {
@@ -278,7 +274,6 @@ public sealed class DockerSandboxRealDaemonTests
         AssertEx.Equal("written-by-the-engine", await ProbeAsync(fixture, $"cat {options.WorkspaceMountTarget}/nested/written.txt"));
     }
 
-
     [Test]
     public async Task RealDaemon_CopyInto_RefusesADestinationThatEscapesTheWorkspace()
     {
@@ -292,7 +287,6 @@ public sealed class DockerSandboxRealDaemonTests
 
         AssertEx.False(File.Exists(Path.Combine(fixture.WorkspaceRoot, "..", "escaped.txt")));
     }
-
 
     [Test]
     public async Task RealDaemon_CopyInto_RefusesToWriteThroughASymlinkThePreviousCommandPlanted()
@@ -314,7 +308,6 @@ public sealed class DockerSandboxRealDaemonTests
             new SandboxCopyRequest { SourcePath = source, DestinationPath = "/escape/planted.txt" }));
     }
 
-
     [Test]
     public async Task RealDaemon_WhenNoneIsRequested_EgressIsDenied()
     {
@@ -326,7 +319,6 @@ public sealed class DockerSandboxRealDaemonTests
         AssertEx.Equal("NET-BLOCKED",
             await ProbeAsync(fixture, "wget -T2 -q -O- http://1.1.1.1 >/dev/null 2>&1 && echo NET-OK || echo NET-BLOCKED"));
     }
-
 
     [Test]
     public async Task RealDaemon_WhenUnrestrictedIsRequested_TheContainerIsCreatedOnTheDefaultBridge()
@@ -343,7 +335,77 @@ public sealed class DockerSandboxRealDaemonTests
         AssertEx.Equal("bridge", settings.NetworkMode);
         AssertEx.NotEqual("host", settings.NetworkMode);
         // Everything else the contract requires still holds; only egress moved.
-        AssertEx.Empty(DockerSandboxHardening.FindViolations(fixture.Specification, settings));
+        AssertEx.Empty(DockerSandboxHardening.FindViolations(fixture.Specification, settings, fixture.DaemonIsRootless));
+    }
+
+    [Test]
+    public async Task RealDaemon_WhatTheContainerWritesIntoTheWorkspaceIsOwnedByThisEngine()
+    {
+        // The invariant §3.8 got backwards, verified the only way it can be. `inspect` echoes back the uid that was
+        // ASKED for and can never say what that uid maps to, so this writes from inside the container and stats the
+        // result host-side. Measured on this box (Engine 29.6.1 rootless, /etc/subuid w0rldx:100000:65536): container
+        // uid 0 lands host-side as uid 1000 (the engine), while container uid 1000 would be host uid 100999 and could
+        // not create the file at all.
+        var options = await RequireDaemonAsync();
+        await using var fixture = await ContainerFixture.CreateAsync(options);
+
+        AssertEx.Equal("WROTE", await ProbeAsync(fixture, $"touch {options.WorkspaceMountTarget}/owned.txt && echo WROTE"));
+
+        var hostPath = Path.Combine(fixture.WorkspaceRoot, "owned.txt");
+        AssertEx.True(File.Exists(hostPath), "the file the container created is not visible on the host side of the mount.");
+        var owner = DockerWorkspaceHostFiles.TryReadOwnerUserId(hostPath);
+        AssertEx.True(owner.HasValue, "the owner of the container-created file could not be read on the host.");
+        AssertEx.Equal(LibC.GetEffectiveUserId(), owner!.Value);
+
+        // And the round trip closes: the engine can rewrite what the container created.
+        await File.WriteAllTextAsync(hostPath, "engine-rewrote-it");
+        AssertEx.Equal("engine-rewrote-it", await ProbeAsync(fixture, $"cat {options.WorkspaceMountTarget}/owned.txt"));
+    }
+
+    [Test]
+    public async Task RealDaemon_AnIdentityThatDoesNotMapToThisEngine_IsRefusedAndTheContainerRemoved()
+    {
+        // The measurement that inverted the rule, as a regression pin. Under this box's rootless daemon the §3.8
+        // mandate of `--user 1000:1000` produces a container that cannot write a byte into its own workspace — and
+        // every §3.8 read-back still passes, because the daemon applied exactly what it was told. Only the probe
+        // catches it. Skipped rather than inverted on a rootful daemon, where 1000 is the correct answer.
+        var options = await RequireDaemonAsync();
+        if (!await IsRootlessAsync(options))
+        {
+            throw new SkipTestException(
+                "SKIPPED — this daemon is not rootless, so an in-container uid maps straight through and there is no "
+                + "mis-mapping to reproduce. The inverted-identity case is only reachable against a rootless daemon.");
+        }
+
+        var mismatched = options with { UserId = 1000, GroupId = 1000 };
+        using var workspace = new TemporaryDirectory();
+        var workspaceRoot = Path.Combine(workspace.Path, "workspace");
+        Directory.CreateDirectory(workspaceRoot);
+
+        var monitor = new StaticOptionsMonitor<ContainerSandboxOptions>(mismatched);
+        await using var provider = new DockerSandboxRuntimeProvider(monitor,
+            new DockerDotNetRuntimeClientFactory(monitor),
+            new FixedTimeProvider(FixedNow),
+            NullLogger<DockerSandboxRuntimeProvider>.Instance);
+
+        var exception = await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(() => provider.CreateOrAttachAsync(
+            new SandboxCreateRequest
+            {
+                AttachKey = new SandboxAttachKey
+                {
+                    OwnerUserId = Guid.NewGuid().ToString("N"),
+                    NodeId = "integration-node",
+                    ProviderName = DockerSandboxRuntimeProvider.Name,
+                    RuntimeProfile = "development",
+                    ManifestVersion = 1
+                },
+                RuntimeProfile = "development",
+                NetworkPolicy = SandboxNetworkPolicy.None,
+                TrustedHostWorkspace = new SandboxTrustedHostWorkspace { RootPath = workspaceRoot }
+            }));
+
+        AssertEx.Contains(exception.Message, "workspace mount");
+        AssertEx.Empty(Directory.GetFileSystemEntries(workspaceRoot));
     }
 
     [Test]
@@ -374,6 +436,11 @@ public sealed class DockerSandboxRealDaemonTests
         var options = DockerSandboxHardeningTests.Options() with
         {
             Image = TestImage,
+            // Left unset ON PURPOSE. Which in-container id can use an engine-generated bind mount is a property of
+            // the daemon, not of this test: a rootful daemon wants the engine's own uid, a rootless one wants 0.
+            // Pinning 1000 here would pass on one machine and fail on the other for reasons unrelated to the contract.
+            UserId = null,
+            GroupId = null,
             ScratchSizeMb = 64,
             MemoryMb = 512,
             CpuCount = 2,
@@ -408,6 +475,27 @@ public sealed class DockerSandboxRealDaemonTests
         return options;
     }
 
+    /// <summary>Whether the reachable daemon reports itself rootless, read through the same probe production uses.</summary>
+    private static async Task<bool> IsRootlessAsync(ContainerSandboxOptions options)
+    {
+        await using var client = new DockerDotNetRuntimeClientFactory(new StaticOptionsMonitor<ContainerSandboxOptions>(options))
+            .Create(DockerDaemonEndpointResolver.Resolve(options));
+
+        return (await client.ProbeAsync()).IsRootless;
+    }
+
+    /// <summary>The engine process's own effective ids. The tests need them for the same reason the provider does.</summary>
+    private static class LibC
+    {
+        [DllImport("libc", EntryPoint = "geteuid")]
+        [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
+        public static extern uint GetEffectiveUserId();
+
+        [DllImport("libc", EntryPoint = "getegid")]
+        [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
+        public static extern uint GetEffectiveGroupId();
+    }
+
     private static async Task<string> ProbeAsync(ContainerFixture fixture, string shellCommand)
     {
         var result = await fixture.Provider.ExecuteAsync(fixture.Handle,
@@ -426,6 +514,7 @@ public sealed class DockerSandboxRealDaemonTests
             IDockerRuntimeClient client,
             string containerId,
             DockerContainerSpecification specification,
+            bool daemonIsRootless,
             TemporaryDirectory workspace)
         {
             Provider = provider;
@@ -433,6 +522,7 @@ public sealed class DockerSandboxRealDaemonTests
             Client = client;
             ContainerId = containerId;
             Specification = specification;
+            DaemonIsRootless = daemonIsRootless;
             _workspace = workspace;
         }
 
@@ -445,6 +535,8 @@ public sealed class DockerSandboxRealDaemonTests
         public string ContainerId { get; }
 
         public DockerContainerSpecification Specification { get; }
+
+        public bool DaemonIsRootless { get; }
 
         public string WorkspaceRoot => Path.Combine(_workspace.Path, "workspace");
 
@@ -475,8 +567,13 @@ public sealed class DockerSandboxRealDaemonTests
                 TrustedHostWorkspace = new SandboxTrustedHostWorkspace { RootPath = workspaceRoot }
             });
 
+            var client = factory.Create(DockerDaemonEndpointResolver.Resolve(options));
+            var daemon = await client.ProbeAsync();
             var specification = DockerSandboxHardening.BuildSpecification(options,
-                new ResolvedContainerIdentity(options.UserId!.Value, options.GroupId!.Value),
+                DockerSandboxRuntimeProvider.ResolveIdentity(options,
+                    daemon.IsRootless,
+                    () => (int)LibC.GetEffectiveUserId(),
+                    () => (int)LibC.GetEffectiveGroupId()),
                 "xe-dev-" + handle.SandboxId,
                 handle.SandboxId,
                 [
@@ -491,10 +588,9 @@ public sealed class DockerSandboxRealDaemonTests
                 requestedLimits: null,
                 networkPolicy);
 
-            var client = factory.Create(DockerDaemonEndpointResolver.Resolve(options));
             var containerId = await ResolveContainerIdAsync(client, "xe-dev-" + handle.SandboxId);
 
-            return new ContainerFixture(provider, handle, client, containerId, specification, workspace);
+            return new ContainerFixture(provider, handle, client, containerId, specification, daemon.IsRootless, workspace);
         }
 
         public async ValueTask DisposeAsync()

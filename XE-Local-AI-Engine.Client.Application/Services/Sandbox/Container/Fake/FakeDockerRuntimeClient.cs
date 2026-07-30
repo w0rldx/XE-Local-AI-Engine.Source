@@ -29,6 +29,23 @@ public sealed class FakeDockerRuntimeClient : IDockerRuntimeClient
         Identity = identity ?? new DockerDaemonIdentity("fake-daemon", "29.6.1", "1.55", "1.40", "linux", endpoint);
     }
 
+    /// <summary>
+    ///     Whether a <c>touch</c> of a path under a bind mount really creates the file on the host side of that mount.
+    ///     <para>
+    ///         On by default because a conformant daemon does exactly this, and the provider's create-time mapping
+    ///         probe depends on it — a fake that could not write through a mount would fail every create for a reason
+    ///         that has nothing to do with what the test is about. Turning it off is how a test reproduces the
+    ///         rootless-mapping failure this machine's daemon cannot be asked to produce on demand: a container that
+    ///         reports success while nothing appears on the host.
+    ///     </para>
+    /// </summary>
+    public bool WritesThroughBindMounts { get; set; } = true;
+
+    /// <summary>Every <see cref="DockerExecutionRequest" /> this client was handed, in order.</summary>
+    public IReadOnlyList<DockerExecutionRequest> ExecutedRequests => _executed.ToArray();
+
+    private readonly ConcurrentQueue<DockerExecutionRequest> _executed = new();
+
     public DockerDaemonEndpoint Endpoint { get; }
 
     /// <summary>The identity <see cref="ProbeAsync" /> reports. Settable so an attestation-change test can move it.</summary>
@@ -48,11 +65,6 @@ public sealed class FakeDockerRuntimeClient : IDockerRuntimeClient
 
     /// <summary>Container ids removed through this client, in order.</summary>
     public IReadOnlyList<string> RemovedContainerIds => _removed.ToArray();
-
-    /// <summary>Every <see cref="DockerExecutionRequest" /> this client was handed, in order.</summary>
-    public IReadOnlyList<DockerExecutionRequest> ExecutedRequests => _executed.ToArray();
-
-    private readonly ConcurrentQueue<DockerExecutionRequest> _executed = new();
 
     private readonly ConcurrentQueue<string> _removed = new();
 
@@ -128,20 +140,56 @@ public sealed class FakeDockerRuntimeClient : IDockerRuntimeClient
     {
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
-        GetRecord(containerId);
+        var record = GetRecord(containerId);
         _executed.Enqueue(request);
 
         var key = BuildCommandKey(request);
-        return Task.FromResult(_scriptedCommands.TryGetValue(key, out var scripted)
-            ? scripted
-            : new DockerExecutionOutcome
+        if (_scriptedCommands.TryGetValue(key, out var scripted))
+        {
+            return Task.FromResult(scripted);
+        }
+
+        TouchThroughBindMount(record.Specification, request);
+
+        return Task.FromResult(new DockerExecutionOutcome
+        {
+            ExitCode = 0,
+            StandardOutput = string.Empty,
+            StandardError = string.Empty,
+            StandardOutputTruncated = false,
+            StandardErrorTruncated = false
+        });
+    }
+
+    /// <summary>
+    ///     Emulates the one wire effect this fake cannot leave unmodelled: a <c>touch</c> of a path inside a bind mount
+    ///     appears on the host side of that mount. Only <c>touch</c>, and only under a declared mount — everything else
+    ///     stays a scripted outcome, because a fake that started really running commands would stop being a fake.
+    /// </summary>
+    private void TouchThroughBindMount(DockerContainerSpecification specification, DockerExecutionRequest request)
+    {
+        if (!WritesThroughBindMounts
+            || !string.Equals(request.Executable, "touch", StringComparison.Ordinal)
+            || request.Arguments.Count != 1)
+        {
+            return;
+        }
+
+        var containerPath = request.Arguments[0];
+        foreach (var mount in specification.BindMounts)
+        {
+            var prefix = mount.ContainerPath.EndsWith('/') ? mount.ContainerPath : mount.ContainerPath + "/";
+            if (!containerPath.StartsWith(prefix, StringComparison.Ordinal))
             {
-                ExitCode = 0,
-                StandardOutput = string.Empty,
-                StandardError = string.Empty,
-                StandardOutputTruncated = false,
-                StandardErrorTruncated = false
-            });
+                continue;
+            }
+
+            var relative = containerPath[prefix.Length..].Replace('/', Path.DirectorySeparatorChar);
+            var hostPath = Path.Combine(mount.HostPath, relative);
+            Directory.CreateDirectory(Path.GetDirectoryName(hostPath)!);
+            File.WriteAllBytes(hostPath, []);
+            return;
+        }
     }
 
     /// <summary>Register a deterministic outcome for an executable plus space-joined arguments.</summary>

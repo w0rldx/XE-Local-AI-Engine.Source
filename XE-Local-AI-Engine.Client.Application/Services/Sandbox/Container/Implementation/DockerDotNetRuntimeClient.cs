@@ -68,7 +68,8 @@ internal sealed class DockerDotNetRuntimeClient : IDockerRuntimeClient
                 version.APIVersion ?? string.Empty,
                 version.MinAPIVersion ?? string.Empty,
                 version.Os ?? string.Empty,
-                Endpoint);
+                Endpoint,
+                IsRootless(info));
         }
         catch (Exception exception) when (exception is not DockerRuntimeException and not OperationCanceledException)
         {
@@ -252,7 +253,6 @@ internal sealed class DockerDotNetRuntimeClient : IDockerRuntimeClient
         }
     }
 
-
     /// <summary>
     ///     Drives both directions of one exec stream and returns its captured output.
     ///     <para>
@@ -290,11 +290,23 @@ internal sealed class DockerDotNetRuntimeClient : IDockerRuntimeClient
         }
     }
 
-
     private static async Task SendAsync(MultiplexedStream stream, byte[] payload, CancellationToken cancellationToken)
     {
         await stream.WriteAsync(payload, offset: 0, payload.Length, cancellationToken).ConfigureAwait(false);
         stream.CloseWrite();
+    }
+
+    /// <summary>
+    ///     Whether the daemon runs rootless, read off the same <c>SecurityOptions</c> list <c>docker info</c> prints.
+    ///     Matched on the <c>name=</c> key rather than on the whole entry, because the daemon renders these as
+    ///     comma-separated key/value groups (<c>name=seccomp,profile=builtin</c>) and only the name is stable.
+    /// </summary>
+    private static bool IsRootless(SystemInfoResponse info)
+    {
+        return info.SecurityOptions?.Any(option => option
+                                                  .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                                                  .Any(part => part.Equals("name=rootless", StringComparison.OrdinalIgnoreCase)))
+               ?? false;
     }
 
     private static Mount ToMount(DockerBindMount bindMount)
