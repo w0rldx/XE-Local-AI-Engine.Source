@@ -280,7 +280,8 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
                 SandboxId = sandboxId,
                 AttachKey = request.AttachKey,
                 CreatedAt = _timeProvider.GetUtcNow(),
-                ManifestVersion = request.AttachKey.ManifestVersion
+                ManifestVersion = request.AttachKey.ManifestVersion,
+                Mounts = ResolveIdentityMounts(request, jailDirectory)
             };
             _sandboxes[sandboxId] = new JailState(handle, jailDirectory, launchPolicy, request.TrustedHostWorkspace is not null);
             return Task.FromResult(handle);
@@ -887,11 +888,64 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
                 $"The '{Name}' sandbox provider cannot enforce resource limits (CPU/memory/PID) on this host ({containment.ResourceLimitsUnavailableReason ?? "no mechanism is available"}). Remove SandboxResourceLimits or use a provider that advertises SupportsResourceLimits."));
         }
 
+        // A read-only mount needs a mount layer, and this provider has none — the child runs on the host filesystem
+        // with ordinary permissions. Rejected rather than served writable: a caller that asked for read-only and got
+        // read-write would believe a file was protected that anything in the sandbox can overwrite, which is the same
+        // silent downgrade the network and resource-limit branches above exist to prevent. Callers that want this
+        // where it exists must gate the request on SupportsReadOnlyMounts, exactly as AgentHome gates its egress
+        // request on SupportsNetworkPolicy.
+        if (request.Mounts?.Any(static mount => mount.ReadOnly) == true)
+        {
+            throw new SandboxCapabilityNotSupportedException(string.Create(CultureInfo.InvariantCulture,
+                $"The '{Name}' sandbox provider has no mount layer and cannot make a mount read-only. Remove the read-only mount, or use a provider that advertises SupportsReadOnlyMounts."));
+        }
+
         return new SandboxLaunchPolicy
         {
             ResourceLimits = wantsLimits ? limits : null,
             DenyNetworkEgress = denyEgress
         };
+    }
+
+    /// <summary>
+    ///     Resolves the engine's requested mounts as an IDENTITY map: a host child already sees the host filesystem, so
+    ///     every requested host path is reachable under its own name and nothing is mounted anywhere.
+    ///     <para>
+    ///         The requested <see cref="SandboxMount.SandboxPath" /> is therefore <em>discarded</em>, not honoured, and
+    ///         the handle reports the host path instead. That is the honest answer rather than a shortcut: a caller that
+    ///         put the requested path into a child's environment would name a directory this provider never created.
+    ///     </para>
+    ///     <para>
+    ///         This deliberately does NOT start confining anything. The mount list is a description of what the sandbox
+    ///         can reach, and under this provider that set was already the whole host filesystem; narrowing it here
+    ///         would change the preserved-workspace contract under callers that never asked for it.
+    ///     </para>
+    /// </summary>
+    private static IReadOnlyList<SandboxMountBinding> ResolveIdentityMounts(SandboxCreateRequest request, string jailDirectory)
+    {
+        var bindings = new List<SandboxMountBinding>();
+        if (request.TrustedHostWorkspace is not null)
+        {
+            bindings.Add(new SandboxMountBinding(jailDirectory, jailDirectory, ReadOnly: false));
+        }
+
+        foreach (var mount in request.Mounts ?? [])
+        {
+            if (string.IsNullOrWhiteSpace(mount.HostPath))
+            {
+                throw new ArgumentException("An engine-generated sandbox mount must name a host path.", nameof(request));
+            }
+
+            var canonical = Path.TrimEndingDirectorySeparator(Path.GetFullPath(mount.HostPath));
+            if (!Directory.Exists(canonical) && !File.Exists(canonical))
+            {
+                throw new DirectoryNotFoundException($"The engine-generated sandbox mount source '{mount.HostPath}' does not exist.");
+            }
+
+            bindings.Add(new SandboxMountBinding(canonical, canonical, mount.ReadOnly));
+        }
+
+        return bindings;
     }
 
     private JailState? FindAliveByKey(SandboxAttachKey attachKey)
