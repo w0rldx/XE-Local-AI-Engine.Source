@@ -10,7 +10,9 @@ using System.Text;
 ///     cancellation and kill be exercised honestly. All timestamps come from the injected <see cref="TimeProvider" />
 ///     so behavior is reproducible. Mirrors the production-resident, config-selected <c>FakeDockerRuntimeClient</c>.
 /// </summary>
-public sealed class FakeSandboxRuntimeProvider : ISandboxRuntimeProvider
+// Serves BOTH per-feature roles (D2), so a test host — and the CI-mandatory default — can drive AgentHome, Coder and
+// Development Mode off one deterministic provider instance.
+public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, IDevelopmentSandboxRuntimeProvider
 {
     /// <summary>The provider name this fake registers under for configuration-bound selection.</summary>
     public const string Name = "fake";

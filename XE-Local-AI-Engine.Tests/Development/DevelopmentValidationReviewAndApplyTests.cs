@@ -863,7 +863,10 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         services.AddSingleton<INodeDataDirectory>(new FakeNodeDataDirectory(dataRoot));
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<IOptions<DevelopmentOptions>>(options);
-        services.AddSingleton<ISandboxRuntimeProvider>(_ => new ProcessSandboxRuntimeProvider(Options.Create(new LocalContainerOptions()),
+        // Registered under the Development ROLE, not the bare contract: per-feature selection (D2) means nothing
+        // resolves ISandboxRuntimeProvider any more, so a bare registration here would build a container in which
+        // every Development service failed to resolve its sandbox.
+        services.AddSingleton<IDevelopmentSandboxRuntimeProvider>(_ => new ProcessSandboxRuntimeProvider(Options.Create(new LocalContainerOptions()),
             TimeProvider.System));
         services.AddSingleton<NodeEncryptionSaveChangesInterceptor>();
         services.AddSingleton<NodeEncryptionMaterializationInterceptor>();

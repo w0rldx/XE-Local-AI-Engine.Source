@@ -72,7 +72,10 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Reaping;
 ///         are deferred to MXC.
 ///     </para>
 /// </summary>
-public sealed class ProcessSandboxRuntimeProvider : ISandboxRuntimeProvider, IDisposable
+// Serves BOTH per-feature roles (D2): AgentHome/Coder resolve it through IAgentSandboxRuntimeProvider, and Development
+// Mode resolves it through IDevelopmentSandboxRuntimeProvider until an operator selects a container provider. When both
+// roles name this provider they resolve the SAME DI singleton — see the _jailRoot comment for why that matters.
+public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, IDevelopmentSandboxRuntimeProvider, IDisposable
 {
     /// <summary>The provider name this registers under for configuration-bound selection.</summary>
     public const string Name = "process";

@@ -32,7 +32,11 @@ using Microsoft.Extensions.Options;
 ///         hardening contract testable against a real daemon.
 ///     </para>
 /// </summary>
-public sealed class DockerSandboxRuntimeProvider : ISandboxRuntimeProvider, IAsyncDisposable
+// Implements the Development role ONLY, and that omission is load-bearing rather than an oversight: ADR 0004 permits
+// Docker for Development Mode build/test/lint execution only, so this provider deliberately does NOT implement
+// IAgentSandboxRuntimeProvider. Registering it for AgentHome or Coder is therefore a COMPILE ERROR, not something a
+// reviewer has to notice — which is what keeps a container requirement from spreading to features D0 scopes it out of.
+public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimeProvider, IAsyncDisposable
 {
     /// <summary>The provider name this registers under for configuration-bound selection.</summary>
     public const string Name = "docker";

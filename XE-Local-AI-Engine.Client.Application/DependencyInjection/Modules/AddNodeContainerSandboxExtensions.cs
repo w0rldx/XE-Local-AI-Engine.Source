@@ -14,9 +14,11 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Container.Implementation;
 ///         decision explicitly rejects.
 ///     </para>
 ///     <para>
-///         Note what is NOT here: <c>SandboxProviderSelector</c> is untouched, so nothing resolves
-///         <c>DockerSandboxRuntimeProvider</c> as the AgentHome sandbox. Wiring Development Mode over to it is
-///         per-feature selection across all thirteen injection sites, and it is a separate change.
+///         Note what is NOT here: no binding of <c>DockerSandboxRuntimeProvider</c> to a role. The two role
+///         interfaces are registered by <c>AddNodeAgentHome</c>, which runs BEFORE this module — safely, because they
+///         are lazy factory delegates. <c>SandboxProviderSelector.ResolveDevelopment</c> reaches the concrete type
+///         registered below only when <c>Development:Sandbox:Provider</c> names it; nothing here can hand it to
+///         AgentHome, which no longer needs a convention to guarantee because the type system does.
 ///     </para>
 /// </summary>
 internal static class AddNodeContainerSandboxExtensions
@@ -36,9 +38,10 @@ internal static class AddNodeContainerSandboxExtensions
         builder.Services.AddSingleton<IDockerDaemonAttestationStore, DockerDaemonAttestationStore>();
         builder.Services.AddSingleton<IDockerDaemonPreflightService, DockerDaemonPreflightService>();
 
-        // Registered as a concrete type, not as ISandboxRuntimeProvider. Binding it to the interface would make it a
-        // candidate for AgentHome's resolution, which D2 places on the process provider — and a container requirement
-        // silently acquired by a feature that does not need one is exactly what per-feature selection prevents.
+        // Registered as a concrete type. The role factory in AddNodeAgentHome resolves it from here, which is what
+        // makes it a DI singleton rather than a fresh instance per resolution. It could not be bound to the agent role
+        // even deliberately: it implements IDevelopmentSandboxRuntimeProvider only, so a container requirement
+        // silently acquired by a feature that does not need one is a compile error, not a review catch.
         builder.Services.AddSingleton<DockerSandboxRuntimeProvider>();
 
         return builder;

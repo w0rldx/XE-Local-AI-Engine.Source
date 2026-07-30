@@ -15,11 +15,11 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
 
     private readonly INodeDataDirectory _dataDirectory;
     private readonly DevelopmentOptions _options;
-    private readonly ISandboxRuntimeProvider _sandbox;
+    private readonly IDevelopmentSandboxRuntimeProvider _sandbox;
     private readonly TimeProvider _timeProvider;
 
     public DevelopmentWorkspaceProvider(INodeDataDirectory dataDirectory,
-        ISandboxRuntimeProvider sandbox,
+        IDevelopmentSandboxRuntimeProvider sandbox,
         IOptions<DevelopmentOptions> options,
         TimeProvider timeProvider)
     {

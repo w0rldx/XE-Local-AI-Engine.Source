@@ -170,14 +170,14 @@ internal sealed class DevelopmentValidationRunner : IDevelopmentValidationRunner
 
     private readonly IDevelopmentEvidenceService _evidence;
     private readonly DevelopmentOptions _options;
-    private readonly ISandboxRuntimeProvider _sandbox;
+    private readonly IDevelopmentSandboxRuntimeProvider _sandbox;
     private readonly IDevelopmentStore _store;
     private readonly TimeProvider _timeProvider;
     private readonly IDevelopmentWorkspaceProvider _workspaceProvider;
 
     public DevelopmentValidationRunner(IDevelopmentStore store,
         IDevelopmentWorkspaceProvider workspaceProvider,
-        ISandboxRuntimeProvider sandbox,
+        IDevelopmentSandboxRuntimeProvider sandbox,
         IDevelopmentEvidenceService evidence,
         IOptions<DevelopmentOptions> options,
         TimeProvider timeProvider)
