@@ -226,11 +226,9 @@ internal sealed class DevelopmentValidationRunner : IDevelopmentValidationRunner
                 _ = await tools.RunCommandAsync(commandId, timeout.Token).ConfigureAwait(false);
             }
 
+            var protectedRoots = DevelopmentArtifactSanitizer.ResolveProtectedRoots(repository.RepositoryRoot, session);
             var commands = tools.CommandEvidence
-                                .Select(command => DevelopmentArtifactSanitizer.Sanitize(command,
-                                    repository.RepositoryRoot,
-                                    session.HostWorktreePath,
-                                    session.RuntimePath))
+                                .Select(command => DevelopmentArtifactSanitizer.Sanitize(command, protectedRoots))
                                 .ToArray();
             var verdict = DevelopmentValidationVerdict.Evaluate(profile, commands);
             var passed = verdict.Passed;
