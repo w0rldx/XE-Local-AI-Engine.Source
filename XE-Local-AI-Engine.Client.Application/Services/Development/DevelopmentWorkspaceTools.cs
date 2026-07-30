@@ -76,10 +76,10 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
     private readonly DevelopmentAttemptLiveProgress? _liveProgress;
     private readonly DevelopmentOptions _options;
     private readonly DevelopmentCommandProfile _profile;
-    private readonly ISandboxRuntimeProvider _sandbox;
+    private readonly IDevelopmentSandboxRuntimeProvider _sandbox;
     private readonly DevelopmentWorkspaceSession _session;
 
-    public DevelopmentWorkspaceTools(ISandboxRuntimeProvider sandbox,
+    public DevelopmentWorkspaceTools(IDevelopmentSandboxRuntimeProvider sandbox,
         DevelopmentWorkspaceSession session,
         IOptions<DevelopmentOptions> options,
         DevelopmentCommandProfile profile,

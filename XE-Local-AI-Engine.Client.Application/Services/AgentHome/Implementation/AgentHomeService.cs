@@ -55,7 +55,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
     private readonly IAgentHomeMemoryProposalService _memoryProposalService;
     private readonly AgentHomeOptions _options;
     private readonly IAgentHomePatchService _patchService;
-    private readonly ISandboxRuntimeProvider _provider;
+    private readonly IAgentSandboxRuntimeProvider _provider;
     private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly IConversationUploadedFileStore _uploadedFileStore;
 
@@ -69,7 +69,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
     private int _runCounter;
 
     public AgentHomeService(IAgentHomeManifestService manifestService,
-        ISandboxRuntimeProvider provider,
+        IAgentSandboxRuntimeProvider provider,
         IAgentHomeIdentityProvider identityProvider,
         IAgentHomeWorkspaceService workspaceService,
         IAgentHomePatchService patchService,

@@ -31,10 +31,10 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
 
     private readonly IAgentHomeIdentityProvider _identityProvider;
     private readonly CoderOptions _options;
-    private readonly ISandboxRuntimeProvider _provider;
+    private readonly IAgentSandboxRuntimeProvider _provider;
     private readonly ISensitiveFileExclusionService _exclusionService;
 
-    public CoderWorkspaceReader(ISandboxRuntimeProvider provider,
+    public CoderWorkspaceReader(IAgentSandboxRuntimeProvider provider,
         IAgentHomeIdentityProvider identityProvider,
         ISensitiveFileExclusionService exclusionService,
         IOptions<CoderOptions> options,
