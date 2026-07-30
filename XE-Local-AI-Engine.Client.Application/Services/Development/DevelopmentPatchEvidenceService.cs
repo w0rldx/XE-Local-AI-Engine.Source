@@ -51,6 +51,15 @@ internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenc
     {
         ArgumentNullException.ThrowIfNull(session);
         cancellationToken.ThrowIfCancellationRequested();
+
+        // Immediately before the first HOST-side Git command, and the ordering is the control. `reset` refreshes the
+        // index and `add -A` runs clean filters, so a repository-local `core.fsmonitor` or `filter.<driver>.clean` in
+        // the workspace's own .git/config executes HERE, on the machine running the engine — and the standalone clone
+        // (S3.4) is what made that file agent-writable inside the jail. AgentHomeGit's -c pins close fsmonitor but
+        // cannot close filter drivers, whose names are arbitrary; removing the definitions closes both without
+        // enumerating any key. No meaningful TOCTOU: the attempt has finished and no agent command is in flight.
+        DevelopmentWorkspaceGitConfig.RestoreMinimal(session.HostWorktreePath);
+
         _ = await RunGitExactAsync(session,
             ["reset", "--mixed", "--quiet", "HEAD", "--"],
             maxOutputBytes: 4096,
