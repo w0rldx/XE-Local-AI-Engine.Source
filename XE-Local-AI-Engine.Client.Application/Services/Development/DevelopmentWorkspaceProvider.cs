@@ -82,10 +82,12 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
             EnsureGitSuccess(resolve, "The configured base branch could not be resolved.");
             baseCommit = resolve.StandardOutput.Trim();
 
-            var create = await git.RunAsync(canonicalRepositoryRoot,
-                AgentHomeGit.Arguments("worktree", "add", "--detach", worktreePath, baseCommit),
+            await CreateStandaloneWorkspaceAsync(git,
+                canonicalRepositoryRoot,
+                worktreePath,
+                snapshot.BaseBranch,
+                baseCommit,
                 cancellationToken).ConfigureAwait(false);
-            EnsureGitSuccess(create, "The managed Development worktree could not be created.");
             await WriteWorkspaceManifestAsync(workspaceManifestPath,
                 new WorkspaceManifest(WorkspaceManifestVersion,
                     identity,
@@ -187,6 +189,107 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
         }
     }
 
+    /// <summary>
+    ///     Creates the managed workspace as an engine-owned standalone clone (decision D8), replacing
+    ///     <c>git worktree add --detach</c>.
+    ///     <para>
+    ///         A linked worktree's <c>.git</c> is a pointer <em>file</em> into the trusted source repository, so binding
+    ///         the workspace into a container either breaks git outright or hands the container the user's real
+    ///         repository — refs, config, objects and <c>hooks</c>, which is host-side arbitrary code execution. A clone
+    ///         owns its own <c>.git</c>, so the workspace is self-contained and the trusted source repository is not
+    ///         reachable from it.
+    ///     </para>
+    ///     <para>
+    ///         Three steps here are not optional, and each one fails an assertion that would otherwise pass silently:
+    ///         a clone leaves HEAD <em>attached</em> to the cloned branch, so it must be detached or both this provider's
+    ///         own <c>symbolic-ref</c> check and <c>DevelopmentWorkspaceTools.EnsureWorkspaceInvariantAsync</c> reject
+    ///         it after the first catalog command; a clone <em>inherits</em> <c>origin</c> pointing at the trusted source
+    ///         repository, which is a live named path straight back to the thing that is supposed to be unreachable
+    ///         (Slice 2 gets this for free by discarding <c>.git</c>, and this path deliberately cannot); and the result
+    ///         must still be standing on the base commit that was resolved before the clone.
+    ///     </para>
+    /// </summary>
+    private static async Task CreateStandaloneWorkspaceAsync(HostGitRunner git,
+        string canonicalRepositoryRoot,
+        string worktreePath,
+        string baseBranch,
+        string baseCommit,
+        CancellationToken cancellationToken)
+    {
+        var parent = Path.GetDirectoryName(worktreePath)
+                     ?? throw new DevelopmentWorkspaceSecurityException("The managed Development workspace path has no parent directory.");
+        try
+        {
+            var clone = await git.RunAsync(parent,
+                AgentHomeGit.Arguments([.. StandaloneGitClone.Arguments(canonicalRepositoryRoot, worktreePath, baseBranch)]),
+                cancellationToken).ConfigureAwait(false);
+            EnsureGitSuccess(clone, "The managed Development workspace could not be cloned.");
+
+            if (!StandaloneGitClone.IsStandalone(worktreePath))
+            {
+                throw new DevelopmentWorkspaceSecurityException("The managed Development workspace clone does not own a standalone Git directory.");
+            }
+
+            // Detaching onto the pre-resolved base commit rather than the clone's own tip is also what closes the
+            // window between resolving the base branch and cloning it. If the source branch moved in between, the
+            // shallow clone does not contain the recorded commit at all and this fails outright instead of silently
+            // producing a workspace standing on a different base than the one persisted in the manifest.
+            var detach = await git.RunAsync(worktreePath,
+                AgentHomeGit.Arguments("checkout", "--detach", baseCommit),
+                cancellationToken).ConfigureAwait(false);
+            EnsureGitSuccess(detach, "The managed Development workspace could not be detached onto its base commit.");
+
+            var removeOrigin = await git.RunAsync(worktreePath,
+                AgentHomeGit.Arguments("remote", "remove", "origin"),
+                cancellationToken).ConfigureAwait(false);
+            EnsureGitSuccess(removeOrigin, "The managed Development workspace inherited remote could not be removed.");
+
+            var remotes = await git.RunAsync(worktreePath,
+                AgentHomeGit.Arguments("remote"),
+                cancellationToken).ConfigureAwait(false);
+            EnsureGitSuccess(remotes, "The managed Development workspace remotes could not be listed.");
+            if (!string.IsNullOrWhiteSpace(remotes.StandardOutput))
+            {
+                throw new DevelopmentWorkspaceSecurityException("The managed Development workspace must not reference any Git remote.");
+            }
+
+            var head = await git.RunAsync(worktreePath,
+                AgentHomeGit.Arguments("rev-parse", "--verify", "HEAD^{commit}"),
+                cancellationToken).ConfigureAwait(false);
+            EnsureGitSuccess(head, "The managed Development workspace HEAD could not be resolved.");
+            if (!string.Equals(head.StandardOutput.Trim(), baseCommit, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new DevelopmentWorkspaceSecurityException("The managed Development workspace clone does not stand on its resolved base commit.");
+            }
+        }
+        catch
+        {
+            // Only reachable when the workspace directory did not exist before this call, so removing it cannot destroy
+            // a preserved workspace. Leaving a half-cloned tree behind would be worse than none: the next attempt takes
+            // the preserved-workspace branch and trusts it.
+            StandaloneGitClone.TryDelete(worktreePath);
+            throw;
+        }
+    }
+
+    /// <summary>
+    ///     Re-validates a workspace that survived a restart. ADR 0001 decision 3 requires the workspace and its diff to
+    ///     be preserved, so this runs on the reuse path as well as immediately after creation.
+    ///     <para>
+    ///         The <c>--git-common-dir</c> check <em>inverted</em> its meaning under D8. It used to assert the
+    ///         workspace's common directory <em>equals</em> the trusted source repository's, which is what proved the
+    ///         workspace was a linked worktree of the bound repository. A standalone clone must assert the opposite: the
+    ///         common directory resolves <em>inside</em> the workspace, and is explicitly <em>not</em> the trusted
+    ///         source's. The negative is stated separately on purpose — a change that silently re-pointed the workspace
+    ///         at the source repository would otherwise satisfy the first clause by accident on a host where the two
+    ///         paths coincide, and this is exactly the condition D8 exists to prevent.
+    ///     </para>
+    ///     <para>
+    ///         <c>rev-parse --git-common-dir</c> prints a <em>relative</em> <c>.git</c> in a clone (it printed an
+    ///         absolute path for a linked worktree), which needs no new plumbing:
+    ///         <see cref="ResolveGitPathAsync" /> already resolves against the working directory.
+    ///     </para>
+    /// </summary>
     private static async Task ValidatePreservedWorktreeAsync(HostGitRunner git,
         string worktreePath,
         string trustedCommonGitDirectory,
@@ -210,7 +313,9 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
         EnsureGitSuccess(head, "The preserved Development worktree HEAD could not be resolved.");
 
         if (!PathEquals(topLevel, canonicalWorktree)
-            || !PathEquals(commonGitDirectory, trustedCommonGitDirectory)
+            || !PathEquals(commonGitDirectory, Path.Combine(canonicalWorktree, ".git"))
+            || PathEquals(commonGitDirectory, trustedCommonGitDirectory)
+            || !StandaloneGitClone.IsStandalone(canonicalWorktree)
             || !string.Equals(head.StandardOutput.Trim(), baseCommit, StringComparison.OrdinalIgnoreCase))
         {
             throw new DevelopmentWorkspaceSecurityException("The preserved Development worktree no longer matches its exact trusted base.");
