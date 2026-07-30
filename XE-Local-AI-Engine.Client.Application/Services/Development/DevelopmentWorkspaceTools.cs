@@ -429,19 +429,49 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
     private TimeSpan ResolveTimeout(int requestedSeconds) =>
         TimeSpan.FromSeconds(Math.Min(Math.Max(requestedSeconds, 1), _options.MaxAttemptDurationSeconds));
 
+    /// <summary>
+    ///     The environment every sandboxed command runs under, with every path expressed in the SANDBOX's namespace
+    ///     rather than the host's.
+    ///     <para>
+    ///         This used to emit absolute host paths, which worked only because the child ran on the host. Inside a
+    ///         container none of them exist and the root filesystem is read-only, so <c>dotnet restore</c>, <c>build</c>
+    ///         and <c>test</c> all fail — and they fail obscurely, because the error names a directory the container has
+    ///         never heard of. The mapping comes from the sandbox handle, so the process provider (which identity-maps
+    ///         and therefore still emits host paths) is byte-identical to what it did before.
+    ///     </para>
+    /// </summary>
     private IReadOnlyDictionary<string, string> BuildEnvironment()
     {
+        var home = ResolveRuntimeDirectory("home");
+        var temporary = ResolveRuntimeDirectory("tmp");
         return new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            ["HOME"] = Path.Combine(_session.RuntimePath, "home"),
-            ["TMPDIR"] = Path.Combine(_session.RuntimePath, "tmp"),
-            ["TMP"] = Path.Combine(_session.RuntimePath, "tmp"),
-            ["TEMP"] = Path.Combine(_session.RuntimePath, "tmp"),
-            ["NUGET_PACKAGES"] = Path.Combine(_session.RuntimePath, "nuget"),
-            ["DOTNET_CLI_HOME"] = Path.Combine(_session.RuntimePath, "dotnet"),
+            ["HOME"] = home,
+            ["TMPDIR"] = temporary,
+            ["TMP"] = temporary,
+            ["TEMP"] = temporary,
+            ["NUGET_PACKAGES"] = ResolveRuntimeDirectory("nuget"),
+            ["DOTNET_CLI_HOME"] = ResolveRuntimeDirectory("dotnet"),
             ["DOTNET_CLI_TELEMETRY_OPTOUT"] = "1",
             ["DOTNET_NOLOGO"] = "1"
         };
+    }
+
+    /// <summary>
+    ///     Translates one per-task runtime directory into the path that names it inside the sandbox.
+    ///     <para>
+    ///         Throws rather than falling back to the host path when no mount covers it. A fallback would produce a
+    ///         command that looks correct and fails deep inside a build against a directory that does not exist, which
+    ///         is strictly harder to diagnose than a refusal here naming the missing mount.
+    ///     </para>
+    /// </summary>
+    private string ResolveRuntimeDirectory(string name)
+    {
+        var hostPath = Path.Combine(_session.RuntimePath, name);
+        return _session.SandboxHandle.TryResolveSandboxPath(hostPath)
+               ?? throw new InvalidOperationException(
+                   $"The sandbox does not expose the Development runtime directory '{name}'. The workspace provider must request it as an "
+                   + "engine-generated mount before any command runs.");
     }
 
     private void EnsureRuntimeDirectories()

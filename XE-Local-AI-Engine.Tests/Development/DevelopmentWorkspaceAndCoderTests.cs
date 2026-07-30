@@ -455,8 +455,14 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         AssertEx.False(File.Exists(directMarker),
             "a repository-local core.fsmonitor must not execute during host-side evidence export");
 
-        // The same payload reached through an include chain, which a naive per-file scan of .git/config would miss.
-        EnsureSuccess(await RunProcessAsync(session.HostWorktreePath, "git", "config", "--unset", "core.fsmonitor").ConfigureAwait(false));
+        // The export now also REWRITES the workspace config to a minimal one before running git, so the planted key is
+        // already gone by this point. `git config --unset` on an absent key exits 5, so the tear-down step is best
+        // effort rather than EnsureSuccess'd — the property under test is unchanged, only the fixture's assumption that
+        // the file survives the export.
+        _ = await RunProcessAsync(session.HostWorktreePath, "git", "config", "--unset", "core.fsmonitor").ConfigureAwait(false);
+        AssertEx.False((await File.ReadAllTextAsync(Path.Combine(session.HostWorktreePath, ".git", "config")).ConfigureAwait(false))
+                       .Contains("fsmonitor", StringComparison.OrdinalIgnoreCase),
+            "the export must leave no fsmonitor definition behind in the workspace config");
         await File.WriteAllTextAsync(Path.Combine(session.HostWorktreePath, ".git", "included.config"),
             $"[core]\n\tfsmonitor = \"touch '{includedMarker}'; false\"\n").ConfigureAwait(false);
         EnsureSuccess(await RunProcessAsync(session.HostWorktreePath, "git", "config", "include.path", "included.config").ConfigureAwait(false));

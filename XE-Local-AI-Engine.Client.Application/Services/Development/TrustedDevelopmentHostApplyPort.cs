@@ -167,7 +167,23 @@ internal sealed class TrustedDevelopmentHostApplyPort(
             UseShellExecute = false,
             CreateNoWindow = true
         };
-        foreach (var argument in arguments)
+        // Prefixed with the SAME hardened `-c` vector DevelopmentPatchEvidenceService runs under, and it was missing
+        // here. Two consequences, and the second is the one that bites first.
+        //
+        // Byte drift: the evidence service computes the approved PatchHash from `diff --cached --binary` taken WITH
+        // core.attributesfile=/dev/null and core.quotePath=false, and this port recomputes the same diff and compares
+        // hashes. A `.gitattributes` in the trusted repository defining a clean filter or a text conversion made the
+        // two disagree, and the apply then reported "did not reach the exact approved result" for a reason that had
+        // nothing to do with the patch.
+        //
+        // Exec suppression: `status` refreshes the index, so a repository-local core.fsmonitor executes here. This is
+        // the operator's OWN repository rather than an agent-writable one, so it is defence in depth rather than a
+        // closed hole — but it costs nothing and it stops a later command re-opening it.
+        //
+        // NOTE this port runs against `repositoryRoot`, the operator's registered repository — NOT the managed
+        // workspace. The engine-side .git/config REWRITE therefore deliberately does not run here: it would rewrite the
+        // user's own repository configuration, which the engine does not own and the agent cannot reach.
+        foreach (var argument in AgentHomeGit.Arguments([.. arguments]))
         {
             startInfo.ArgumentList.Add(argument);
         }

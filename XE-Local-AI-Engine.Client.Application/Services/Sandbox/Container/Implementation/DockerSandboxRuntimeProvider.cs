@@ -34,12 +34,12 @@ using Microsoft.Extensions.Options;
 ///         There is no path through this class that returns a handle to a container it could not verify.
 ///     </para>
 ///     <para>
-///         Phase 1 scope. This provider is registered but is NOT wired into Development Mode execution — that switch
-///         is per-feature provider selection (D2), and <c>SandboxProviderSelector</c> is untouched. The mount broker
-///         (D9 control-state exclusion, per-attempt HOME/temp/tool state), the standalone workspace clone (D8), the
-///         dependency-manifest rejection (D6), lifecycle ownership and the startup reaper are all later work; what
-///         exists here is a single engine-generated workspace bind mount, which is the minimum that makes the
-///         hardening contract testable against a real daemon.
+///         Scope. This provider is registered but is still NOT wired into Development Mode execution — that switch is
+///         per-feature provider selection (D2), and <c>SandboxProviderSelector</c> remains untouched. What exists here
+///         now is the workspace bind mount PLUS the engine-generated mounts of the neutral mount broker (S3.5), which
+///         is what makes a container able to serve a build at all: a read-only rootfs with no HOME, temp or package
+///         cache cannot run <c>dotnet restore</c>. The dependency-manifest rejection (D6), lifecycle ownership and the
+///         startup reaper are still later work.
 ///     </para>
 /// </summary>
 // Implements the Development role ONLY, and that omission is load-bearing rather than an oversight: ADR 0004 permits
@@ -149,6 +149,7 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
             if (_sandboxes.TryGetValue(sandboxId, out var existing))
             {
                 EnsureCompatibleWorkspaceBinding(existing, request.TrustedHostWorkspace);
+                EnsureCompatibleMounts(existing, request, options);
                 return existing.Handle;
             }
 
@@ -516,6 +517,104 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
         // silent weakening this contract exists to prevent. Rejecting before creating also keeps the caller from ever
         // having to reason about a container that should not have existed.
         _ = DockerSandboxHardening.ResolveNetworkMode(request.NetworkPolicy);
+
+        ValidateMountTargets(request, options, Path.GetFullPath(request.TrustedHostWorkspace.RootPath));
+    }
+
+    /// <summary>
+    ///     Rejects, before anything is created, every engine-generated mount this provider could not place exactly as
+    ///     asked.
+    ///     <para>
+    ///         The overlap sweep is <em>N-way</em> and shared with startup validation
+    ///         (<see cref="ContainerSandboxOptionsValidator.FindOverlap" />). Two configured targets need one
+    ///         comparison; the workspace, the scratch tmpfs and an open-ended list of runtime mounts need every pair,
+    ///         and a mount placed at an ancestor of another silently hides everything the descendant was meant to
+    ///         expose — after which the daemon's read-back still agrees, because the daemon was asked for exactly that.
+    ///     </para>
+    ///     <para>
+    ///         One nesting is legitimate and is the reason this is not a flat "no overlaps" rule: a <em>file</em> mount
+    ///         layered over a directory mount, which is how <c>&lt;workspace&gt;/.git/config</c> is made read-only
+    ///         without making the work tree read-only. A file mount replaces exactly one path and can hide nothing
+    ///         else, so it is admitted while a directory nested inside another directory is not.
+    ///     </para>
+    /// </summary>
+    private static void ValidateMountTargets(SandboxCreateRequest request, ContainerSandboxOptions options, string workspaceRoot)
+    {
+        var strict = new List<(string Name, string? Path)>
+        {
+            (nameof(ContainerSandboxOptions.WorkspaceMountTarget), options.WorkspaceMountTarget),
+            (nameof(ContainerSandboxOptions.ScratchMountTarget), options.ScratchMountTarget)
+        };
+        var overlays = new List<string>();
+
+        foreach (var mount in request.Mounts ?? [])
+        {
+            ValidateMountTarget(mount);
+            var isFile = File.Exists(mount.HostPath);
+            if (!isFile && !Directory.Exists(mount.HostPath))
+            {
+                // A bind source the daemon has never seen is created BY the daemon, owned by whatever the daemon runs
+                // as — which under a rootful daemon is root, and the container then cannot write its own HOME. Refused
+                // here so the failure names the missing directory instead of surfacing as a permission error inside a
+                // build.
+                throw new SandboxCapabilityNotSupportedException(
+                    $"The engine-generated sandbox mount source '{mount.HostPath}' does not exist. The engine must create it before the "
+                    + "sandbox: a bind source the daemon has to invent is created with the daemon's own ownership, not the engine's.");
+            }
+
+            // The RESOLVED target, not the requested one. A mount inside the trusted workspace is placed by derivation
+            // (see ResolveMountTarget), so sweeping the requested string would sweep a path that is never applied.
+            var target = ResolveMountTarget(mount, options, workspaceRoot);
+            if (isFile)
+            {
+                overlays.Add(target);
+            }
+            else
+            {
+                strict.Add(("mount " + target, target));
+            }
+        }
+
+        if (ContainerSandboxOptionsValidator.FindOverlap(strict) is { } collision)
+        {
+            throw new SandboxCapabilityNotSupportedException(
+                $"The engine-generated sandbox mounts '{collision.First}' ('{collision.FirstPath}') and '{collision.Second}' "
+                + $"('{collision.SecondPath}') overlap. One would shadow the other, and the daemon's read-back would still agree "
+                + "because it applied exactly what it was asked for.");
+        }
+
+        // A file overlay is admitted above, but only as an overlay: it must still not land exactly on top of a
+        // directory mount target, which would replace the whole mount with a single file.
+        var replaced = overlays.FirstOrDefault(overlay =>
+            strict.Any(target => string.Equals(target.Path?.TrimEnd('/'), overlay.TrimEnd('/'), StringComparison.Ordinal)));
+        if (replaced is not null)
+        {
+            throw new SandboxCapabilityNotSupportedException(
+                $"The engine-generated file mount '{replaced}' lands exactly on a directory mount target and would replace it.");
+        }
+    }
+
+    /// <summary>
+    ///     Container paths are POSIX whatever the engine host is (D1 allows a native Windows engine driving a Linux
+    ///     container), so this validates the string rather than asking <see cref="Path" />, whose rooting and separator
+    ///     rules would answer for the wrong operating system.
+    /// </summary>
+    private static void ValidateMountTarget(SandboxMount mount)
+    {
+        if (string.IsNullOrWhiteSpace(mount.HostPath) || string.IsNullOrWhiteSpace(mount.SandboxPath))
+        {
+            throw new SandboxCapabilityNotSupportedException(
+                "An engine-generated sandbox mount must name both a host path and an in-container target.");
+        }
+
+        if (!mount.SandboxPath.StartsWith('/')
+            || mount.SandboxPath.Contains("..", StringComparison.Ordinal)
+            || mount.SandboxPath.TrimEnd('/').Length == 0)
+        {
+            throw new SandboxCapabilityNotSupportedException(
+                $"The engine-generated sandbox mount target '{mount.SandboxPath}' must be an absolute in-container path below '/', "
+                + "with no '..' segment.");
+        }
     }
 
     private async Task<SandboxHandle> CreateVerifiedAsync(SandboxCreateRequest request,
@@ -537,19 +636,12 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
             var daemon = await client.ProbeAsync(cancellationToken).ConfigureAwait(false);
             var identity = ResolveIdentity(options, daemon.IsRootless);
 
+            var bindMounts = BuildBindMounts(request, options, workspaceRoot);
             var specification = DockerSandboxHardening.BuildSpecification(options,
                 identity,
                 "xe-dev-" + sandboxId,
                 sandboxId,
-                [
-                    new DockerBindMount
-                    {
-                        HostPath = workspaceRoot,
-                        ContainerPath = options.WorkspaceMountTarget,
-                        ReadOnly = false,
-                        Propagation = DockerSandboxHardening.PrivateMountPropagation
-                    }
-                ],
+                bindMounts,
                 // Honored, not ignored. This provider advertises SupportsResourceLimits, so a caller's ceiling must be
                 // the ceiling that gets applied — and because it is baked into the specification, the read-back
                 // verification below checks the caller's numbers rather than the engine's defaults.
@@ -584,7 +676,10 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
                 SandboxId = sandboxId,
                 AttachKey = request.AttachKey,
                 CreatedAt = _timeProvider.GetUtcNow(),
-                ManifestVersion = request.AttachKey.ManifestVersion
+                ManifestVersion = request.AttachKey.ManifestVersion,
+                // Read off the SPECIFICATION, which is the same list the read-back was verified against — so what the
+                // handle reports is what the daemon confirmed it applied, not what the caller asked for.
+                Mounts = [.. bindMounts.Select(static mount => new SandboxMountBinding(mount.HostPath, mount.ContainerPath, mount.ReadOnly))]
             };
 
             _sandboxes[sandboxId] = new SandboxState(handle, client, containerId, workspaceRoot, options.WorkspaceMountTarget);
@@ -601,6 +696,72 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
             await client.DisposeAsync().ConfigureAwait(false);
             throw;
         }
+    }
+
+    /// <summary>
+    ///     Turns the neutral mount contract into Docker bind mounts: the workspace first, then every engine-generated
+    ///     mount at the target it asked for.
+    ///     <para>
+    ///         The list this returns is the SAME list handed to <see cref="DockerSandboxHardening.BuildSpecification" />
+    ///         and therefore the same one <c>DockerSandboxHardening.VerifyMounts</c> checks the daemon's read-back
+    ///         against — both that every requested mount is present with the propagation and read-only flag it asked
+    ///         for, and that the container carries no mount the engine did NOT request, which is the D7 enforcement.
+    ///         Composing a second list here would route these mounts around that check while leaving it looking intact.
+    ///     </para>
+    /// </summary>
+    private static IReadOnlyList<DockerBindMount> BuildBindMounts(SandboxCreateRequest request,
+        ContainerSandboxOptions options,
+        string workspaceRoot)
+    {
+        var mounts = new List<DockerBindMount>
+        {
+            new()
+            {
+                HostPath = workspaceRoot,
+                ContainerPath = options.WorkspaceMountTarget,
+                ReadOnly = false,
+                Propagation = DockerSandboxHardening.PrivateMountPropagation
+            }
+        };
+
+        mounts.AddRange((request.Mounts ?? []).Select(mount => new DockerBindMount
+        {
+            HostPath = Path.GetFullPath(mount.HostPath),
+            ContainerPath = ResolveMountTarget(mount, options, workspaceRoot),
+            ReadOnly = mount.ReadOnly,
+            Propagation = DockerSandboxHardening.PrivateMountPropagation
+        }));
+
+        return mounts;
+    }
+
+    /// <summary>
+    ///     Where one engine-generated mount lands inside the container.
+    ///     <para>
+    ///         A host path <em>inside</em> the trusted workspace is DERIVED from the workspace mount target and its own
+    ///         relative path, and the requested <see cref="SandboxMount.SandboxPath" /> is not consulted. That is not a
+    ///         convenience: the engine must be able to ask for a nested mount — the read-only <c>.git/config</c> is the
+    ///         one that matters — without knowing what the workspace is called inside a container, which is exactly the
+    ///         Docker-shaped knowledge the neutral contract forbids it from having. Deriving it also makes the nesting
+    ///         correct by construction rather than by two sides agreeing on a string.
+    ///     </para>
+    ///     <para>
+    ///         Everything else is placed at the path the caller asked for, validated absolute and non-overlapping
+    ///         beforehand. A per-task HOME or package cache must NOT land inside the repository work tree, so those live
+    ///         outside the workspace mount and their requested target is the only thing that can say where.
+    ///     </para>
+    /// </summary>
+    private static string ResolveMountTarget(SandboxMount mount, ContainerSandboxOptions options, string workspaceRoot)
+    {
+        var hostPath = Path.GetFullPath(mount.HostPath);
+        var workspacePrefix = Path.TrimEndingDirectorySeparator(workspaceRoot) + Path.DirectorySeparatorChar;
+        if (!hostPath.StartsWith(workspacePrefix, StringComparison.Ordinal))
+        {
+            return DockerSandboxPaths.NormalizePosix(mount.SandboxPath);
+        }
+
+        var relative = hostPath[workspacePrefix.Length..].Replace(Path.DirectorySeparatorChar, '/');
+        return DockerSandboxPaths.ResolveContainerPath(options.WorkspaceMountTarget, relative);
     }
 
     /// <summary>
@@ -689,6 +850,26 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
             // A container that could not be removed is a leak, not a reason to swallow the original rejection. Logged
             // loudly; the startup reaper is the thing that finally collects it, and it is later work.
             _logger.LogError(exception, "Failed to remove container {ContainerId} after a fail-closed create.", containerId);
+        }
+    }
+
+    /// <summary>
+    ///     A container's mounts are fixed at creation, so an attach that asks for a different set cannot be served. It
+    ///     is refused rather than ignored: silently returning the old container would hand the caller a handle whose
+    ///     reported mapping is right and whose CONTENT is a set of mounts it did not ask for.
+    /// </summary>
+    private static void EnsureCompatibleMounts(SandboxState state, SandboxCreateRequest request, ContainerSandboxOptions options)
+    {
+        var requested = BuildBindMounts(request, options, state.WorkspaceRoot)
+                        .Select(static mount => (mount.HostPath, mount.ContainerPath, mount.ReadOnly))
+                        .ToArray();
+        var applied = state.Handle.Mounts.Select(static mount => (mount.HostPath, SandboxPath: mount.SandboxPath, mount.ReadOnly)).ToArray();
+
+        if (!requested.SequenceEqual(applied))
+        {
+            throw new SandboxCapabilityNotSupportedException(
+                "An existing sandbox for this attach key carries a different engine-generated mount set. A container's mounts are fixed "
+                + "at creation, so kill it before rebinding.");
         }
     }
 
