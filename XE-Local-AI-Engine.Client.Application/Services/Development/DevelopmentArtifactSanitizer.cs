@@ -10,14 +10,49 @@ internal static partial class DevelopmentArtifactSanitizer
     [GeneratedRegex(@"(?<![A-Za-z0-9])![A-Za-z][A-Za-z0-9]{11,}(?![A-Za-z0-9])", RegexOptions.ExplicitCapture, 2000)]
     private static partial Regex BarePasswordLikeValueRegex();
 
-    [GeneratedRegex(@"(?<![A-Za-z0-9:/])/(?!/)[^\s\x00-\x1F\""'<>|]+", RegexOptions.ExplicitCapture, 2000)]
+    // The second lookbehind is what keeps a TARGETED redaction legible, and it is load-bearing rather than cosmetic.
+    // Without it the two passes fight: the targeted pass replaces the engine root, leaving
+    // "[REDACTED:development-path]/src/Lib/Foo.cs(7,13)", and then this pattern matches the very next '/' — ']' is not
+    // in the excluded lookbehind class — and swallows the file and line as well. Measured against real `dotnet build`
+    // output, the whole compiler diagnostic collapsed to two adjacent markers, so the targeted pass bought nothing at
+    // all and a reviewer could not tell which file failed. Excluding the marker keeps exactly the workspace-relative
+    // remainder, which is the part a reviewer needs and the part that carries no host information.
+    [GeneratedRegex(@"(?<![A-Za-z0-9:/])(?<!\[REDACTED:development-path\])/(?!/)[^\s\x00-\x1F\""'<>|]+", RegexOptions.ExplicitCapture, 2000)]
     private static partial Regex UnixAbsolutePathRegex();
 
-    [GeneratedRegex(@"(?<![A-Za-z0-9])[A-Za-z]:[\\/][^\s\x00-\x1F\""'<>|]+", RegexOptions.ExplicitCapture, 2000)]
+    [GeneratedRegex(@"(?<![A-Za-z0-9])(?<!\[REDACTED:development-path\])[A-Za-z]:[\\/][^\s\x00-\x1F\""'<>|]+", RegexOptions.ExplicitCapture, 2000)]
     private static partial Regex WindowsAbsolutePathRegex();
 
     [GeneratedRegex(@"\\\\[^\s\\/]+[\\/][^\s\x00-\x1F\""'<>|]+", RegexOptions.ExplicitCapture, 2000)]
     private static partial Regex UncAbsolutePathRegex();
+
+    /// <summary>
+    ///     The roots a Development artifact's targeted redaction must cover: the three HOST roots, plus every root the
+    ///     same directories are known by INSIDE the sandbox.
+    ///     <para>
+    ///         The sandbox half is not belt and braces. A command that runs in a container prints container-internal
+    ///         paths, which never match a host root — so targeted redaction becomes a silent no-op, the generic pattern
+    ///         fires instead, and the whole diagnostic collapses to one undifferentiated marker. Nothing errors; the
+    ///         reviewer's view of a failure simply degrades. Under the process provider the two halves are identical and
+    ///         the duplicates are discarded, so this is one code path for both providers rather than a container branch.
+    ///     </para>
+    /// </summary>
+    internal static string[] ResolveProtectedRoots(string repositoryRoot, DevelopmentWorkspaceSession session)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+
+        var roots = new List<string> { repositoryRoot, session.HostWorktreePath, session.RuntimePath };
+        roots.AddRange(session.SandboxHandle.Mounts.Select(static mount => mount.SandboxPath));
+
+        // The runtime mount ROOT as well as each mounted subdirectory: a build prints ".../xe-runtime/nuget/..." but it
+        // also prints the parent, and redacting only the leaves would leave the parent to the generic pattern.
+        roots.AddRange(session.SandboxHandle.Mounts
+                              .Select(static mount => mount.SandboxPath)
+                              .Select(static path => path[..Math.Max(path.LastIndexOf('/'), val2: 0)])
+                              .Where(static parent => parent.Length > 1));
+
+        return [.. roots.Where(static root => !string.IsNullOrWhiteSpace(root))];
+    }
 
     /// <summary>
     ///     Sanitizes captured command output. Unlike a reviewer submission, a redactable match here is REDACTED and

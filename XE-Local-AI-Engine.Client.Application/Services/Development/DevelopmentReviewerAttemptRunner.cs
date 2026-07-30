@@ -126,9 +126,7 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
                 cloudContext?.Route,
                 timeout.Token).ConfigureAwait(false);
             var submission = DevelopmentArtifactSanitizer.Sanitize(model.Submission,
-                repository.RepositoryRoot,
-                session.HostWorktreePath,
-                session.RuntimePath);
+                DevelopmentArtifactSanitizer.ResolveProtectedRoots(repository.RepositoryRoot, session));
 
             var afterReview = await _evidence.ResolveCurrentAsync(snapshot.TaskId, session, timeout.Token).ConfigureAwait(false);
             if (!string.Equals(evidence.Current.SubjectHash, afterReview.Current.SubjectHash, StringComparison.OrdinalIgnoreCase))
