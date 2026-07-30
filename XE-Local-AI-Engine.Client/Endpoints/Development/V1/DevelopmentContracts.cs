@@ -112,16 +112,27 @@ public sealed class ReconnectDevelopmentRepositoryRequest
 }
 
 /// <summary>
-///     Whether Development Mode is available, and — separately — whether the container runtime it needs is.
+///     Whether Development Mode is available, which sandbox provider it executes on, and — only when that provider is
+///     the container one — whether the container runtime is usable.
 ///     <para>
-///         Two independent axes, deliberately. <see cref="Enabled" /> is this node's own configuration switch;
-///         <see cref="ContainerRuntime" /> is the state of the machine's container runtime, which ADR 0004 makes a
-///         hard requirement for Development Mode execution. Collapsing them into one boolean would tell an operator
-///         only that Development Mode is unavailable, which is the least useful true statement available: the whole
-///         value of the preflight is naming which of the two is the problem and what to do about it.
+///         Three axes rather than one boolean, deliberately. <see cref="Enabled" /> is this node's own configuration
+///         switch; <see cref="SandboxProvider" /> is the provider per-feature selection (D2) actually resolved; and
+///         <see cref="ContainerRuntime" /> is the preflight of the machine's container runtime, which ADR 0004 makes a
+///         hard requirement for Development Mode execution <em>on that provider</em>. Collapsing them would tell an
+///         operator only that Development Mode is unavailable, which is the least useful true statement available: the
+///         whole value of the preflight is naming which axis is the problem and what to do about it.
+///     </para>
+///     <para>
+///         <see cref="ContainerRuntime" /> is null when <see cref="SandboxProvider" /> is not the container provider,
+///         and that null is the honest answer rather than a missing value: a node running Development Mode on the
+///         supervised process sandbox has no container dependency to report, and reporting an unreachable daemon
+///         anyway would present a false blocker on a feature that works.
 ///     </para>
 /// </summary>
-public sealed record DevelopmentCapabilityResponse(bool Enabled, DevelopmentContainerRuntimeResponse ContainerRuntime);
+/// <param name="Enabled">This node's Development Mode configuration switch.</param>
+/// <param name="SandboxProvider">The sandbox provider in force for Development Mode (<c>fake</c>, <c>process</c>, or <c>docker</c>).</param>
+/// <param name="ContainerRuntime">The container-runtime preflight, present only when the container provider is in force.</param>
+public sealed record DevelopmentCapabilityResponse(bool Enabled, string SandboxProvider, DevelopmentContainerRuntimeResponse? ContainerRuntime);
 
 /// <summary>
 ///     The container-runtime preflight, as the operator sees it.
