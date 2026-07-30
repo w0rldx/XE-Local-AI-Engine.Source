@@ -178,7 +178,13 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
                                           {
                                               Executable = request.Executable,
                                               Arguments = request.Arguments,
-                                              WorkingDirectory = request.WorkingDirectory ?? state.WorkspaceMountTarget,
+                                              // MAPPED, not forwarded. The caller's working directory is a path in the
+                                              // sandbox namespace whose root is the workspace, so Development Mode's
+                                              // literal "/" means the repository root and not the container's root —
+                                              // which is where an unmapped forward would have run every command.
+                                              WorkingDirectory = request.WorkingDirectory is null
+                                                  ? state.WorkspaceMountTarget
+                                                  : DockerSandboxPaths.ResolveContainerPath(state.WorkspaceMountTarget, request.WorkingDirectory),
                                               Environment = request.Environment,
                                               MaxCapturedBytes = DefaultMaxCapturedOutputBytes
                                           },
@@ -247,11 +253,12 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxBytes);
 
         var state = GetAliveState(handle);
+        var containerPath = DockerSandboxPaths.ResolveContainerPath(state.WorkspaceMountTarget, sandboxPath);
         var outcome = await state.Client.ExecuteAsync(state.ContainerId,
                                       new DockerExecutionRequest
                                       {
                                           Executable = "cat",
-                                          Arguments = [sandboxPath],
+                                          Arguments = [containerPath],
                                           // One byte over the caller's bound, so a file exactly at the bound is
                                           // returned while one over it is detected rather than silently trimmed.
                                           MaxCapturedBytes = maxBytes + 1
