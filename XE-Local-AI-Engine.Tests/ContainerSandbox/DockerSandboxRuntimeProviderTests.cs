@@ -259,9 +259,10 @@ public sealed class DockerSandboxRuntimeProviderTests
     {
         var (provider, client, workspace) = CreateProvider();
         var handle = await provider.CreateOrAttachAsync(CreateRequest(workspace));
+        // Note the mapping: the sandbox path "/big.txt" is the workspace root, which the container sees at /workspace.
         client.RegisterCommand("cat /workspace/big.txt", exitCode: 0, new string('x', count: 128));
 
-        await AssertEx.ThrowsAsync<InvalidDataException>(() => provider.ReadFileAsync(handle, "/workspace/big.txt", maxBytes: 64));
+        await AssertEx.ThrowsAsync<InvalidDataException>(() => provider.ReadFileAsync(handle, "/big.txt", maxBytes: 64));
     }
 
     [Test]
@@ -287,6 +288,75 @@ public sealed class DockerSandboxRuntimeProviderTests
 
         AssertEx.Equal(first.SandboxId, second.SandboxId);
         AssertEx.Equal(expected: 1, client.CreatedContainerIds.Count);
+    }
+
+
+    [Test]
+    public async Task ReadFileAsync_MapsTheSandboxPathOntoTheWorkspaceMountRatherThanTheContainerRoot()
+    {
+        var (provider, client, workspace) = CreateProvider();
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(workspace));
+        client.RegisterCommand("cat /workspace/src/a.txt", exitCode: 0, "mapped");
+
+        AssertEx.Equal("mapped", await provider.ReadFileAsync(handle, "/src/a.txt", maxBytes: 4096));
+    }
+
+
+    [Test]
+    public async Task ReadFileAsync_WhenTheSandboxPathEscapesTheWorkspace_Refuses()
+    {
+        var (provider, _, workspace) = CreateProvider();
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(workspace));
+
+        await AssertEx.ThrowsAsync<UnauthorizedAccessException>(
+            () => provider.ReadFileAsync(handle, "/../../etc/shadow", maxBytes: 4096));
+    }
+
+
+    [Test]
+    public async Task ExecuteAsync_MapsTheWorkingDirectoryOntoTheWorkspaceMount()
+    {
+        // The defect this pins: Development Mode passes the literal "/" for EVERY command. Forwarded unmapped, that
+        // reaches the wire as WorkingDir="/" and every build, test and git command runs in the container's root
+        // instead of the repository — where it finds no repository at all.
+        var (provider, client, workspace) = CreateProvider();
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(workspace));
+
+        await provider.ExecuteAsync(handle,
+            new SandboxCommandRequest { ExecutionId = "exec-root", Executable = "git", Arguments = ["status"], WorkingDirectory = "/" });
+        await provider.ExecuteAsync(handle,
+            new SandboxCommandRequest { ExecutionId = "exec-nested", Executable = "git", Arguments = ["status"], WorkingDirectory = "/src/app" });
+
+        var working = client.ExecutedRequests
+                            .Where(request => string.Equals(request.Executable, "git", StringComparison.Ordinal))
+                            .Select(request => request.WorkingDirectory)
+                            .ToArray();
+
+        AssertEx.Equal("/workspace|/workspace/src/app", string.Join('|', working));
+    }
+
+
+    [Test]
+    public async Task ExecuteAsync_WhenNoWorkingDirectoryIsGiven_UsesTheWorkspaceMount()
+    {
+        var (provider, client, workspace) = CreateProvider();
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(workspace));
+
+        await provider.ExecuteAsync(handle, new SandboxCommandRequest { ExecutionId = "exec-1", Executable = "git", Arguments = ["status"] });
+
+        AssertEx.Equal("/workspace",
+            client.ExecutedRequests.Single(request => string.Equals(request.Executable, "git", StringComparison.Ordinal)).WorkingDirectory);
+    }
+
+
+    [Test]
+    public async Task ExecuteAsync_WhenTheWorkingDirectoryEscapesTheWorkspace_Refuses()
+    {
+        var (provider, _, workspace) = CreateProvider();
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(workspace));
+
+        await AssertEx.ThrowsAsync<UnauthorizedAccessException>(() => provider.ExecuteAsync(handle,
+            new SandboxCommandRequest { ExecutionId = "exec-1", Executable = "git", WorkingDirectory = "/../../" }));
     }
 
     private static (DockerSandboxRuntimeProvider Provider, FakeDockerRuntimeClient Client, string Workspace) CreateProvider()

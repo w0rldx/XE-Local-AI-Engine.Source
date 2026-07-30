@@ -49,6 +49,11 @@ public sealed class FakeDockerRuntimeClient : IDockerRuntimeClient
     /// <summary>Container ids removed through this client, in order.</summary>
     public IReadOnlyList<string> RemovedContainerIds => _removed.ToArray();
 
+    /// <summary>Every <see cref="DockerExecutionRequest" /> this client was handed, in order.</summary>
+    public IReadOnlyList<DockerExecutionRequest> ExecutedRequests => _executed.ToArray();
+
+    private readonly ConcurrentQueue<DockerExecutionRequest> _executed = new();
+
     private readonly ConcurrentQueue<string> _removed = new();
 
     public ValueTask DisposeAsync()
@@ -124,6 +129,7 @@ public sealed class FakeDockerRuntimeClient : IDockerRuntimeClient
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
         GetRecord(containerId);
+        _executed.Enqueue(request);
 
         var key = BuildCommandKey(request);
         return Task.FromResult(_scriptedCommands.TryGetValue(key, out var scripted)

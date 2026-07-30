@@ -117,7 +117,9 @@ public sealed class DockerSandboxRealDaemonTests
         await File.WriteAllTextAsync(Path.Combine(fixture.WorkspaceRoot, "marker.txt"), "from-host");
 
         var handle = fixture.Handle;
-        var content = await fixture.Provider.ReadFileAsync(handle, options.WorkspaceMountTarget + "/marker.txt", maxBytes: 4096);
+        // The sandbox path is "/marker.txt", not "/workspace/marker.txt": the sandbox root IS the workspace, exactly
+        // as it is for the process provider.
+        var content = await fixture.Provider.ReadFileAsync(handle, "/marker.txt", maxBytes: 4096);
 
         AssertEx.Equal("from-host", content.Trim());
     }
@@ -131,9 +133,53 @@ public sealed class DockerSandboxRealDaemonTests
         var destination = Path.Combine(fixture.WorkspaceRoot, "..", "copied-out.txt");
 
         await fixture.Provider.CopyOutAsync(fixture.Handle,
-            new SandboxCopyRequest { SourcePath = options.WorkspaceMountTarget + "/export.txt", DestinationPath = destination });
+            new SandboxCopyRequest { SourcePath = "/export.txt", DestinationPath = destination });
 
         AssertEx.Equal("exported", (await File.ReadAllTextAsync(destination)).Trim());
+    }
+
+
+    [Test]
+    public async Task RealDaemon_TheWorkingDirectoryIsMappedOntoTheWorkspaceRatherThanTheContainerRoot()
+    {
+        // Development Mode passes the literal "/" for EVERY command. Unmapped, that reaches the wire as WorkingDir="/"
+        // and every build, test and git command runs in the container's root — where there is no repository. The
+        // second assertion is the one that cannot be faked: a RELATIVE write from that working directory has to land
+        // in the engine's own workspace directory on the host.
+        var options = await RequireDaemonAsync();
+        await using var fixture = await ContainerFixture.CreateAsync(options);
+
+        var pwd = await fixture.Provider.ExecuteAsync(fixture.Handle,
+            new SandboxCommandRequest
+            {
+                ExecutionId = Guid.NewGuid().ToString("N"),
+                Executable = "/bin/sh",
+                Arguments = ["-c", "pwd && printf relative-write > from-cwd.txt"],
+                WorkingDirectory = "/"
+            });
+
+        AssertEx.Equal(options.WorkspaceMountTarget, pwd.StandardOutput.Trim());
+        AssertEx.Equal("relative-write", await File.ReadAllTextAsync(Path.Combine(fixture.WorkspaceRoot, "from-cwd.txt")));
+    }
+
+
+    [Test]
+    public async Task RealDaemon_ANestedWorkingDirectoryIsMappedUnderTheWorkspaceToo()
+    {
+        var options = await RequireDaemonAsync();
+        await using var fixture = await ContainerFixture.CreateAsync(options);
+        Directory.CreateDirectory(Path.Combine(fixture.WorkspaceRoot, "nested"));
+
+        var pwd = await fixture.Provider.ExecuteAsync(fixture.Handle,
+            new SandboxCommandRequest
+            {
+                ExecutionId = Guid.NewGuid().ToString("N"),
+                Executable = "/bin/sh",
+                Arguments = ["-c", "pwd"],
+                WorkingDirectory = "/nested"
+            });
+
+        AssertEx.Equal(options.WorkspaceMountTarget + "/nested", pwd.StandardOutput.Trim());
     }
 
     [Test]
