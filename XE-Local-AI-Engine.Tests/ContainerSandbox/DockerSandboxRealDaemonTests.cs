@@ -314,6 +314,38 @@ public sealed class DockerSandboxRealDaemonTests
             new SandboxCopyRequest { SourcePath = source, DestinationPath = "/escape/planted.txt" }));
     }
 
+
+    [Test]
+    public async Task RealDaemon_WhenNoneIsRequested_EgressIsDenied()
+    {
+        var options = await RequireDaemonAsync();
+        await using var fixture = await ContainerFixture.CreateAsync(options, SandboxNetworkPolicy.None);
+
+        var settings = await fixture.Client.InspectContainerAsync(fixture.ContainerId);
+        AssertEx.Equal("none", settings.NetworkMode);
+        AssertEx.Equal("NET-BLOCKED",
+            await ProbeAsync(fixture, "wget -T2 -q -O- http://1.1.1.1 >/dev/null 2>&1 && echo NET-OK || echo NET-BLOCKED"));
+    }
+
+
+    [Test]
+    public async Task RealDaemon_WhenUnrestrictedIsRequested_TheContainerIsCreatedOnTheDefaultBridge()
+    {
+        // Development Mode requests this: its `dotnet restore` needs the network until D6's package proxy exists, so
+        // while the provider served only `None` the switch could never be thrown. Egress itself is not asserted here —
+        // that would make the suite depend on this machine having working outbound DNS — but the applied network mode
+        // is read back off the daemon, which is the guarantee the provider makes.
+        var options = await RequireDaemonAsync();
+        await using var fixture = await ContainerFixture.CreateAsync(options, SandboxNetworkPolicy.Unrestricted);
+
+        var settings = await fixture.Client.InspectContainerAsync(fixture.ContainerId);
+
+        AssertEx.Equal("bridge", settings.NetworkMode);
+        AssertEx.NotEqual("host", settings.NetworkMode);
+        // Everything else the contract requires still holds; only egress moved.
+        AssertEx.Empty(DockerSandboxHardening.FindViolations(fixture.Specification, settings));
+    }
+
     [Test]
     public async Task RealDaemon_KillAsync_RemovesTheContainerFromTheDaemon()
     {
@@ -416,7 +448,8 @@ public sealed class DockerSandboxRealDaemonTests
 
         public string WorkspaceRoot => Path.Combine(_workspace.Path, "workspace");
 
-        public static async Task<ContainerFixture> CreateAsync(ContainerSandboxOptions options)
+        public static async Task<ContainerFixture> CreateAsync(ContainerSandboxOptions options,
+            SandboxNetworkPolicy networkPolicy = SandboxNetworkPolicy.None)
         {
             var workspace = new TemporaryDirectory();
             var workspaceRoot = Path.Combine(workspace.Path, "workspace");
@@ -438,7 +471,7 @@ public sealed class DockerSandboxRealDaemonTests
                     ManifestVersion = 1
                 },
                 RuntimeProfile = "development",
-                NetworkPolicy = SandboxNetworkPolicy.None,
+                NetworkPolicy = networkPolicy,
                 TrustedHostWorkspace = new SandboxTrustedHostWorkspace { RootPath = workspaceRoot }
             });
 
@@ -454,7 +487,9 @@ public sealed class DockerSandboxRealDaemonTests
                         ReadOnly = false,
                         Propagation = "private"
                     }
-                ]);
+                ],
+                requestedLimits: null,
+                networkPolicy);
 
             var client = factory.Create(DockerDaemonEndpointResolver.Resolve(options));
             var containerId = await ResolveContainerIdAsync(client, "xe-dev-" + handle.SandboxId);

@@ -175,16 +175,43 @@ public sealed class DockerSandboxRuntimeProviderTests
     }
 
     [Test]
-    public async Task CreateOrAttachAsync_WhenANetworkPolicyOtherThanNoneIsRequested_RefusesBeforeCreatingAnything()
+    public async Task CreateOrAttachAsync_WhenARestrictedEgressAllowListIsRequested_RefusesBeforeCreatingAnything()
     {
         var (provider, client, workspace) = CreateProvider();
 
-        await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(
-            () => provider.CreateOrAttachAsync(CreateRequest(workspace) with { NetworkPolicy = SandboxNetworkPolicy.Unrestricted }));
+        var exception = await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(
+            () => provider.CreateOrAttachAsync(CreateRequest(workspace) with { NetworkPolicy = SandboxNetworkPolicy.Restricted }));
 
+        AssertEx.Contains(exception.Message, "no mechanism");
         // Nothing was created. A container that should never have existed is not a thing the caller should have to
         // reason about afterwards.
         AssertEx.Empty(client.CreatedContainerIds);
+    }
+
+    [Test]
+    public async Task CreateOrAttachAsync_WhenUnrestrictedEgressIsRequested_ServesItOnTheDefaultBridge()
+    {
+        // Development Mode asks for this today: its `dotnet restore` needs the network until the D6 package-proxy
+        // machinery exists, so a provider that served only `None` could never be switched on for it at all.
+        var (provider, client, workspace) = CreateProvider();
+
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(workspace) with { NetworkPolicy = SandboxNetworkPolicy.Unrestricted });
+
+        var settings = await client.InspectContainerAsync(client.CreatedContainerIds[0]);
+        AssertEx.Equal("bridge", settings.NetworkMode);
+        AssertEx.NotNullOrEmpty(handle.SandboxId);
+    }
+
+    [Test]
+    public async Task CreateOrAttachAsync_WhenNoneIsRequested_StillGetsAnEmptyNetworkNamespace()
+    {
+        // The other half of the pair: widening to serve Unrestricted must not have quietly widened the default.
+        var (provider, client, workspace) = CreateProvider();
+
+        await provider.CreateOrAttachAsync(CreateRequest(workspace));
+
+        var settings = await client.InspectContainerAsync(client.CreatedContainerIds[0]);
+        AssertEx.Equal("none", settings.NetworkMode);
     }
 
     [Test]

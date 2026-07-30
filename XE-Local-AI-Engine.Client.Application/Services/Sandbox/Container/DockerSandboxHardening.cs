@@ -29,7 +29,37 @@ internal static class DockerSandboxHardening
     internal const string NoNewPrivileges = "no-new-privileges:true";
     internal const string PrivateMountPropagation = "private";
     internal const string NoNetworkMode = "none";
+
+    /// <summary>Docker's default bridge network: a private namespace with NAT egress, and no host interface.</summary>
+    internal const string BridgeNetworkMode = "bridge";
+
     internal const string HostNamespaceMode = "host";
+
+    /// <summary>
+    ///     The Docker network mode that serves a requested policy, or a rejection for one that has no mechanism here.
+    ///     <para>
+    ///         <see cref="SandboxNetworkPolicy.None" /> is the network namespace with nothing in it.
+    ///         <see cref="SandboxNetworkPolicy.Unrestricted" /> is the default bridge — still a private namespace with
+    ///         no host interface, but with NAT egress, which is what Development Mode's <c>dotnet restore</c> needs
+    ///         until the D6 package-proxy machinery exists. <see cref="SandboxNetworkPolicy.Restricted" /> is an egress
+    ///         allow-list and stays fail-closed rejected: there is no mechanism for it here, and returning a bridge
+    ///         while the caller believed it had an allow-list would be exactly the silent weakening this contract
+    ///         exists to prevent.
+    ///     </para>
+    /// </summary>
+    internal static string ResolveNetworkMode(SandboxNetworkPolicy policy)
+    {
+        return policy switch
+        {
+            SandboxNetworkPolicy.None => NoNetworkMode,
+            SandboxNetworkPolicy.Unrestricted => BridgeNetworkMode,
+            _ => throw new SandboxCapabilityNotSupportedException(
+                $"The docker sandbox provider has no mechanism for '{policy}'. It serves "
+                + $"{nameof(SandboxNetworkPolicy.None)} (an empty network namespace) and "
+                + $"{nameof(SandboxNetworkPolicy.Unrestricted)} (the default bridge). A restricted egress allow-list is the "
+                + "separate v2 package-proxy project (plan D6).")
+        };
+    }
 
     /// <summary>
     ///     Mount options for the scratch <c>tmpfs</c>. <c>noexec</c>/<c>nosuid</c>/<c>nodev</c> are set because the
@@ -57,7 +87,8 @@ internal static class DockerSandboxHardening
         string containerName,
         string sandboxId,
         IReadOnlyList<DockerBindMount> bindMounts,
-        SandboxResourceLimits? requestedLimits = null)
+        SandboxResourceLimits? requestedLimits = null,
+        SandboxNetworkPolicy networkPolicy = SandboxNetworkPolicy.None)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(identity);
@@ -79,7 +110,7 @@ internal static class DockerSandboxHardening
             // operator's choice, not ours.
             Entrypoint = ["/bin/sh"],
             Command = ["-c", "while :; do sleep 3600; done"],
-            NetworkMode = NoNetworkMode,
+            NetworkMode = ResolveNetworkMode(networkPolicy),
             CapabilitiesToDrop = [DropAllCapabilities],
             SecurityOptions = [NoNewPrivileges],
             ReadOnlyRootFilesystem = true,
@@ -205,6 +236,14 @@ internal static class DockerSandboxHardening
         }
     }
 
+    /// <summary>
+    ///     Verifies the network mode that was <em>requested</em>, whatever it was — not a hardcoded "none". Egress
+    ///     denial is served only when the caller asks for it, so pinning this check to "none" would fail every
+    ///     legitimate <see cref="SandboxNetworkPolicy.Unrestricted" /> create while proving nothing extra about a
+    ///     <see cref="SandboxNetworkPolicy.None" /> one. The host-namespace check is separate and unconditional
+    ///     precisely because it is not a policy question: no requested policy makes sharing the host's network stack
+    ///     acceptable, and it is the one mode that would let a container reach the daemon socket that created it.
+    /// </summary>
     private static void VerifyNetwork(DockerContainerSpecification requested, DockerContainerSettings observed, List<string> violations)
     {
         if (!string.Equals(requested.NetworkMode, observed.NetworkMode, StringComparison.OrdinalIgnoreCase))
@@ -212,7 +251,8 @@ internal static class DockerSandboxHardening
             violations.Add($"network mode: asked for '{requested.NetworkMode}', the daemon reports '{Describe(observed.NetworkMode)}'.");
         }
 
-        if (observed.NetworkMode.Equals(HostNamespaceMode, StringComparison.OrdinalIgnoreCase))
+        if (observed.NetworkMode.Equals(HostNamespaceMode, StringComparison.OrdinalIgnoreCase)
+            || observed.NetworkMode.StartsWith(HostNamespaceMode + ":", StringComparison.OrdinalIgnoreCase))
         {
             violations.Add("network mode: the container shares the host network namespace.");
         }
