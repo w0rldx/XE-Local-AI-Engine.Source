@@ -146,6 +146,13 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
             baseCommit = manifest.BaseCommit;
         }
 
+        // BEFORE the first host-side Git command touches a workspace a previous attempt could have written to. The
+        // validation below runs `rev-parse` and `symbolic-ref` on the HOST with this workspace as the working
+        // directory, so a repository-local exec-bearing key would be executing here, not in the sandbox. Also covers
+        // the freshly cloned case, where it is a cheap no-op — the clone's own config already contains nothing but the
+        // preserved keys once `origin` has been removed.
+        DevelopmentWorkspaceGitConfig.RestoreMinimal(worktreePath);
+
         await ValidatePreservedWorktreeAsync(git,
             worktreePath,
             trustedCommonGitDirectory,
