@@ -27,4 +27,22 @@ public sealed record SandboxCreateRequest
     ///     preserve it on kill/restart, or reject the request fail-closed.
     /// </summary>
     public SandboxTrustedHostWorkspace? TrustedHostWorkspace { get; init; }
+
+    /// <summary>
+    ///     Additional engine-generated mounts the sandbox needs beyond <see cref="TrustedHostWorkspace" /> — the
+    ///     per-task HOME, temp, package-cache and tool-state roots a build writes to, and any file the sandbox must see
+    ///     read-only.
+    ///     <para>
+    ///         Engine-generated <em>only</em>. Nothing here may be derived from a registered repository: a repository is
+    ///         a tree the agent can write, and decision D7 rejects repository-supplied mount configuration wholesale
+    ///         because a repository that could name a mount could name the daemon socket.
+    ///     </para>
+    ///     <para>
+    ///         What is NOT here is as load-bearing as what is. Decision D9 requires the workspace control manifest to be
+    ///         unreachable from inside any sandbox, and the cheapest way to satisfy it is to mount the named
+    ///         subdirectories of a control-state root rather than the root itself — so a caller lists
+    ///         <c>&lt;runtime&gt;/home</c> and its siblings, never <c>&lt;runtime&gt;</c>.
+    ///     </para>
+    /// </summary>
+    public IReadOnlyList<SandboxMount>? Mounts { get; init; }
 }

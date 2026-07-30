@@ -409,6 +409,73 @@ public sealed class DockerSandboxRealDaemonTests
     }
 
     [Test]
+    public async Task RealDaemon_TheEngineGeneratedRuntimeMountsAreVisibleAndWritableFromInside()
+    {
+        // The measured failure this closes: BuildEnvironment pointed HOME, TMPDIR, NUGET_PACKAGES and DOTNET_CLI_HOME
+        // at absolute HOST paths. Inside a container those do not exist and the rootfs is read-only, so `dotnet
+        // restore` / `build` / `test` all fail. Asserting a WRITE rather than existence is the point — a mount that is
+        // present but not writable fails restore just as completely.
+        var options = await RequireDaemonAsync();
+        await using var fixture = await ContainerFixture.CreateWithRuntimeMountsAsync(options);
+
+        foreach (var name in new[] { "home", "tmp", "nuget", "dotnet" })
+        {
+            AssertEx.Equal("WROTE", await ProbeAsync(fixture, $"touch /xe-runtime/{name}/probe && echo WROTE"));
+            AssertEx.True(File.Exists(Path.Combine(fixture.RuntimeRoot, name, "probe")),
+                $"the container's write to /xe-runtime/{name} is not visible on the host side of the mount.");
+        }
+
+        // And the handle answers the translation question the engine actually asks.
+        AssertEx.Equal("/xe-runtime/nuget", fixture.Handle.TryResolveSandboxPath(Path.Combine(fixture.RuntimeRoot, "nuget")));
+    }
+
+    [Test]
+    public async Task RealDaemon_TheWorkspaceControlManifestIsNotReachableFromInsideTheContainer()
+    {
+        // D9. workspace.json sits directly in the runtime root and holds the repository identity, the selected folder
+        // and the base commit. Mounting the four named subdirectories rather than their parent is the whole of the
+        // exclusion, so this asserts the parent is not reachable by any route the mounts provide.
+        var options = await RequireDaemonAsync();
+        await using var fixture = await ContainerFixture.CreateWithRuntimeMountsAsync(options);
+        await File.WriteAllTextAsync(Path.Combine(fixture.RuntimeRoot, "workspace.json"), "{\"baseCommit\":\"secret\"}");
+
+        AssertEx.Equal("ABSENT", await ProbeAsync(fixture, "cat /xe-runtime/workspace.json 2>/dev/null && echo READABLE || echo ABSENT"));
+        AssertEx.Equal("ABSENT", await ProbeAsync(fixture, "cat /xe-runtime/../workspace.json 2>/dev/null && echo READABLE || echo ABSENT"));
+        AssertEx.False((await ProbeAsync(fixture, "cat /xe-runtime/workspace.json 2>&1")).Contains("secret", StringComparison.Ordinal));
+
+        // The fixture really did write it, so the assertions above are about the mount and not about a missing file.
+        AssertEx.True(File.Exists(Path.Combine(fixture.RuntimeRoot, "workspace.json")));
+    }
+
+    [Test]
+    public async Task RealDaemon_TheGitConfigMountIsReadOnlyAndUnremovableWhileTheWorkTreeStaysWritable()
+    {
+        // The container-side closure of the .git/config execution vector, and all four halves matter: the config is
+        // unwritable AND unremovable (it is a mount point, so `rm` answers "Resource busy"), while the work tree stays
+        // writable so the agent can edit and .git/index stays writable so `git apply --index` still works.
+        var options = await RequireDaemonAsync();
+        await using var fixture = await ContainerFixture.CreateWithRuntimeMountsAsync(options);
+
+        // Matched rather than compared: a failed shell REDIRECTION reports on the shell's own stderr, which `2>/dev/null`
+        // on the command does not cover, so the probe legitimately carries the kernel's message alongside the verdict.
+        // Asserting the negative too is what stops "contains READONLY" from passing on output that also said WRITABLE.
+        var write = await ProbeAsync(fixture, $"echo pwn >> {options.WorkspaceMountTarget}/.git/config 2>/dev/null && echo WRITABLE || echo READONLY");
+        AssertEx.Contains(write, "READONLY");
+        AssertEx.False(write.Contains("WRITABLE", StringComparison.Ordinal), write);
+
+        var remove = await ProbeAsync(fixture, $"rm -f {options.WorkspaceMountTarget}/.git/config 2>/dev/null && echo REMOVED || echo BUSY");
+        AssertEx.Contains(remove, "BUSY");
+        AssertEx.False(remove.Contains("REMOVED", StringComparison.Ordinal), remove);
+        AssertEx.Equal("TREE-WRITABLE",
+            await ProbeAsync(fixture, $"touch {options.WorkspaceMountTarget}/edited.cs && echo TREE-WRITABLE"));
+        AssertEx.Equal("INDEX-WRITABLE",
+            await ProbeAsync(fixture, $"touch {options.WorkspaceMountTarget}/.git/index && echo INDEX-WRITABLE"));
+
+        // The host side is untouched by any of it.
+        AssertEx.Equal("[core]\n", await File.ReadAllTextAsync(Path.Combine(fixture.WorkspaceRoot, ".git", "config")));
+    }
+
+    [Test]
     public async Task RealDaemon_KillAsync_RemovesTheContainerFromTheDaemon()
     {
         var options = await RequireDaemonAsync();
@@ -540,12 +607,51 @@ public sealed class DockerSandboxRealDaemonTests
 
         public string WorkspaceRoot => Path.Combine(_workspace.Path, "workspace");
 
+        public string RuntimeRoot => Path.Combine(_workspace.Path, "runtime");
+
+        /// <summary>
+        ///     The fixture in the shape Development Mode actually asks for: the workspace, the four per-task runtime
+        ///     subdirectories, and a read-only <c>.git/config</c> nested inside the workspace. Deliberately mounts the
+        ///     four subdirectories and NOT their parent, which is what keeps <c>workspace.json</c> out (D9).
+        /// </summary>
+        public static Task<ContainerFixture> CreateWithRuntimeMountsAsync(ContainerSandboxOptions options)
+        {
+            return CreateAsync(options, SandboxNetworkPolicy.None, withRuntimeMounts: true);
+        }
+
         public static async Task<ContainerFixture> CreateAsync(ContainerSandboxOptions options,
-            SandboxNetworkPolicy networkPolicy = SandboxNetworkPolicy.None)
+            SandboxNetworkPolicy networkPolicy = SandboxNetworkPolicy.None,
+            bool withRuntimeMounts = false)
         {
             var workspace = new TemporaryDirectory();
             var workspaceRoot = Path.Combine(workspace.Path, "workspace");
             Directory.CreateDirectory(workspaceRoot);
+
+            var runtimeRoot = Path.Combine(workspace.Path, "runtime");
+            var mounts = new List<SandboxMount>();
+            if (withRuntimeMounts)
+            {
+                foreach (var name in new[] { "home", "tmp", "nuget", "dotnet" })
+                {
+                    Directory.CreateDirectory(Path.Combine(runtimeRoot, name));
+                    mounts.Add(new SandboxMount
+                    {
+                        HostPath = Path.Combine(runtimeRoot, name),
+                        SandboxPath = "/xe-runtime/" + name,
+                        ReadOnly = false
+                    });
+                }
+
+                Directory.CreateDirectory(Path.Combine(workspaceRoot, ".git"));
+                await File.WriteAllTextAsync(Path.Combine(workspaceRoot, ".git", "config"), "[core]\n");
+                await File.WriteAllTextAsync(Path.Combine(workspaceRoot, ".git", "index"), string.Empty);
+                mounts.Add(new SandboxMount
+                {
+                    HostPath = Path.Combine(workspaceRoot, ".git", "config"),
+                    SandboxPath = "/.git/config",
+                    ReadOnly = true
+                });
+            }
 
             var monitor = new StaticOptionsMonitor<ContainerSandboxOptions>(options);
             var factory = new DockerDotNetRuntimeClientFactory(monitor);
@@ -564,11 +670,16 @@ public sealed class DockerSandboxRealDaemonTests
                 },
                 RuntimeProfile = "development",
                 NetworkPolicy = networkPolicy,
-                TrustedHostWorkspace = new SandboxTrustedHostWorkspace { RootPath = workspaceRoot }
+                TrustedHostWorkspace = new SandboxTrustedHostWorkspace { RootPath = workspaceRoot },
+                Mounts = mounts
             });
 
             var client = factory.Create(DockerDaemonEndpointResolver.Resolve(options));
             var daemon = await client.ProbeAsync();
+
+            // Rebuilt from what the handle REPORTS rather than from the request, so the specification these tests
+            // verify against is the one the provider actually applied — including the derived container target for a
+            // mount nested inside the workspace.
             var specification = DockerSandboxHardening.BuildSpecification(options,
                 DockerSandboxRuntimeProvider.ResolveIdentity(options,
                     daemon.IsRootless,
@@ -577,13 +688,13 @@ public sealed class DockerSandboxRealDaemonTests
                 "xe-dev-" + handle.SandboxId,
                 handle.SandboxId,
                 [
-                    new DockerBindMount
+                    .. handle.Mounts.Select(mount => new DockerBindMount
                     {
-                        HostPath = Path.GetFullPath(workspaceRoot),
-                        ContainerPath = options.WorkspaceMountTarget,
-                        ReadOnly = false,
+                        HostPath = mount.HostPath,
+                        ContainerPath = mount.SandboxPath,
+                        ReadOnly = mount.ReadOnly,
                         Propagation = "private"
-                    }
+                    })
                 ],
                 requestedLimits: null,
                 networkPolicy);
