@@ -216,7 +216,10 @@ internal sealed class DockerDotNetRuntimeClient : IDockerRuntimeClient
             {
                 AttachStdout = true,
                 AttachStderr = true,
-                AttachStdin = false,
+                // Attached only when there is something to send. An exec with stdin attached and nothing written stays
+                // open on the child's read until the connection is torn down, so attaching unconditionally would turn
+                // every ordinary command into one that waits for input nobody is going to send.
+                AttachStdin = request.StandardInput is not null,
                 TTY = false,
                 Cmd = [request.Executable, .. request.Arguments],
                 WorkingDir = request.WorkingDirectory ?? string.Empty,
@@ -228,7 +231,7 @@ internal sealed class DockerDotNetRuntimeClient : IDockerRuntimeClient
                                             .StartContainerExecAsync(created.ID, new ContainerExecStartParameters { Detach = false, TTY = false }, cancellationToken)
                                             .ConfigureAwait(false);
 
-            var (standardOutput, standardError) = await stream.ReadOutputToEndAsync(cancellationToken).ConfigureAwait(false);
+            var (standardOutput, standardError) = await PumpAsync(stream, request.StandardInput, cancellationToken).ConfigureAwait(false);
             var inspected = await _client.Exec.InspectContainerExecAsync(created.ID, cancellationToken).ConfigureAwait(false);
 
             var (outputText, outputTruncated) = Truncate(standardOutput, request.MaxCapturedBytes);
@@ -247,6 +250,51 @@ internal sealed class DockerDotNetRuntimeClient : IDockerRuntimeClient
         {
             throw Classify(exception);
         }
+    }
+
+
+    /// <summary>
+    ///     Drives both directions of one exec stream and returns its captured output.
+    ///     <para>
+    ///         The payload goes up WHILE the output is drained, not before it. A Docker exec is a single bidirectional
+    ///         connection: with nothing reading, a child that writes as it reads fills the daemon's buffer, the daemon
+    ///         stops accepting the payload, and the two sides wait on each other until the command times out.
+    ///         Development Mode's patch ceiling is 8 MB, comfortably past where a serialised version stops working.
+    ///     </para>
+    ///     <para>
+    ///         The half-close after the write is equally load-bearing: a child reading to end-of-input — <c>git apply</c>
+    ///         taking its patch from standard input is the case that matters — never returns while the write side is
+    ///         open, so without <c>CloseWrite</c> the command hangs rather than completes.
+    ///     </para>
+    /// </summary>
+    private static async Task<(string StandardOutput, string StandardError)> PumpAsync(MultiplexedStream stream,
+        string? standardInput,
+        CancellationToken cancellationToken)
+    {
+        if (standardInput is null)
+        {
+            return await stream.ReadOutputToEndAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        var payload = Encoding.UTF8.GetBytes(standardInput);
+        var writeTask = SendAsync(stream, payload, cancellationToken);
+        try
+        {
+            return await stream.ReadOutputToEndAsync(cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            // Awaited inside this method, so the stream outlives both halves: a write still in flight when the caller
+            // disposed the stream would be a use-after-dispose rather than a tidy-up detail.
+            await writeTask.ConfigureAwait(false);
+        }
+    }
+
+
+    private static async Task SendAsync(MultiplexedStream stream, byte[] payload, CancellationToken cancellationToken)
+    {
+        await stream.WriteAsync(payload, offset: 0, payload.Length, cancellationToken).ConfigureAwait(false);
+        stream.CloseWrite();
     }
 
     private static Mount ToMount(DockerBindMount bindMount)

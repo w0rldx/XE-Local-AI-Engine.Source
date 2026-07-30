@@ -182,6 +182,82 @@ public sealed class DockerSandboxRealDaemonTests
         AssertEx.Equal(options.WorkspaceMountTarget + "/nested", pwd.StandardOutput.Trim());
     }
 
+
+    [Test]
+    public async Task RealDaemon_StandardInput_ReachesTheChildAndChangesTheFileItWrites()
+    {
+        // The false-green defect, reproduced in the shape that produced it. Development Mode pipes its patch to git,
+        // which reads it from standard input; with standard input unattached git reads end-of-file, applies nothing,
+        // and exits zero — so a test asserting only the exit code passes against the broken build. What is asserted
+        // here is the CONTENT the child wrote from what it read, which without standard input is an empty file while
+        // the exit code is still zero.
+        var options = await RequireDaemonAsync();
+        await using var fixture = await ContainerFixture.CreateAsync(options);
+        const string Payload = "diff --git a/a.txt b/a.txt\n+++ piped through stdin\n";
+
+        var result = await fixture.Provider.ExecuteAsync(fixture.Handle,
+            new SandboxCommandRequest
+            {
+                ExecutionId = Guid.NewGuid().ToString("N"),
+                Executable = "/bin/sh",
+                Arguments = ["-c", "cat > applied.txt"],
+                WorkingDirectory = "/",
+                StandardInput = Payload
+            });
+
+        AssertEx.Equal(expected: 0, result.ExitCode);
+        AssertEx.Equal(Payload, await File.ReadAllTextAsync(Path.Combine(fixture.WorkspaceRoot, "applied.txt")));
+    }
+
+
+    [Test]
+    public async Task RealDaemon_ALargePayloadDoesNotDeadlockAgainstTheChildsOwnOutput()
+    {
+        // A Docker exec is one bidirectional connection. `tee` reads and writes at the same time, so a client that
+        // sent the whole payload before draining output would fill the daemon's buffer, the daemon would stop
+        // accepting the payload, and both sides would wait on each other until the timeout. Development Mode's patch
+        // ceiling is 8 MB; two here is comfortably past where a serialised implementation stops working.
+        var options = await RequireDaemonAsync();
+        await using var fixture = await ContainerFixture.CreateAsync(options);
+        var payload = new string('p', count: 2 * 1024 * 1024);
+
+        var result = await fixture.Provider.ExecuteAsync(fixture.Handle,
+            new SandboxCommandRequest
+            {
+                ExecutionId = Guid.NewGuid().ToString("N"),
+                Executable = "/bin/sh",
+                Arguments = ["-c", "tee big.txt"],
+                WorkingDirectory = "/",
+                StandardInput = payload,
+                Timeout = TimeSpan.FromSeconds(60)
+            });
+
+        AssertEx.True(result.Completed, "the command did not complete — a deadlock between the payload and the child's output.");
+        AssertEx.Equal(payload.Length, (int)new FileInfo(Path.Combine(fixture.WorkspaceRoot, "big.txt")).Length);
+    }
+
+
+    [Test]
+    public async Task RealDaemon_WhenNoStandardInputIsSupplied_TheChildStillSeesEndOfInputRatherThanHanging()
+    {
+        // The other half of the stdin change: attaching stdin unconditionally would leave every ordinary command
+        // waiting on input nobody sends. A short timeout here would surface that as a cancelled, incomplete result.
+        var options = await RequireDaemonAsync();
+        await using var fixture = await ContainerFixture.CreateAsync(options);
+
+        var result = await fixture.Provider.ExecuteAsync(fixture.Handle,
+            new SandboxCommandRequest
+            {
+                ExecutionId = Guid.NewGuid().ToString("N"),
+                Executable = "/bin/sh",
+                Arguments = ["-c", "echo done"],
+                Timeout = TimeSpan.FromSeconds(20)
+            });
+
+        AssertEx.True(result.Completed);
+        AssertEx.Equal("done", result.StandardOutput.Trim());
+    }
+
     [Test]
     public async Task RealDaemon_KillAsync_RemovesTheContainerFromTheDaemon()
     {

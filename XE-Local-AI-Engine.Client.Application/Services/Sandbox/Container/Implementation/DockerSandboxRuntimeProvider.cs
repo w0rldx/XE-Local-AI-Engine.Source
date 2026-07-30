@@ -186,6 +186,7 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
                                                   ? state.WorkspaceMountTarget
                                                   : DockerSandboxPaths.ResolveContainerPath(state.WorkspaceMountTarget, request.WorkingDirectory),
                                               Environment = request.Environment,
+                                              StandardInput = request.StandardInput,
                                               MaxCapturedBytes = DefaultMaxCapturedOutputBytes
                                           },
                                           execution.Token)

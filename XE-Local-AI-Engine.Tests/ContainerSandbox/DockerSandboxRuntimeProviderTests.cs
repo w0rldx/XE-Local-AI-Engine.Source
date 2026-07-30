@@ -359,6 +359,28 @@ public sealed class DockerSandboxRuntimeProviderTests
             new SandboxCommandRequest { ExecutionId = "exec-1", Executable = "git", WorkingDirectory = "/../../" }));
     }
 
+
+    [Test]
+    public async Task ExecuteAsync_CarriesStandardInputThroughToTheClient()
+    {
+        // apply_patch pipes the patch to `git apply -`. Dropped, git reads EOF from an unattached stdin and EXITS 0,
+        // so the tool reports success having applied nothing — a false green rather than a failure.
+        var (provider, client, workspace) = CreateProvider();
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(workspace));
+
+        await provider.ExecuteAsync(handle,
+            new SandboxCommandRequest
+            {
+                ExecutionId = "exec-1",
+                Executable = "git",
+                Arguments = ["apply", "-"],
+                StandardInput = "diff --git a/a.txt b/a.txt\n"
+            });
+
+        var executed = client.ExecutedRequests.Single(request => string.Equals(request.Executable, "git", StringComparison.Ordinal));
+        AssertEx.Equal("diff --git a/a.txt b/a.txt\n", executed.StandardInput);
+    }
+
     private static (DockerSandboxRuntimeProvider Provider, FakeDockerRuntimeClient Client, string Workspace) CreateProvider()
     {
         var workspace = Path.Combine(Path.GetTempPath(), "xe-container-tests", Guid.NewGuid().ToString("N"));
