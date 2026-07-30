@@ -258,6 +258,62 @@ public sealed class DockerSandboxRealDaemonTests
         AssertEx.Equal("done", result.StandardOutput.Trim());
     }
 
+
+    [Test]
+    public async Task RealDaemon_CopyInto_LandsInTheWorkspaceAndTheContainerCanReadIt()
+    {
+        // write_file is built on copy-into, which threw unconditionally. Docker refuses archive extraction into a
+        // read-only-rootfs container, so this goes through the host side of the bind mount — and the assertion that
+        // matters is that the CONTAINER can read what the engine wrote.
+        var options = await RequireDaemonAsync();
+        await using var fixture = await ContainerFixture.CreateAsync(options);
+        var source = Path.Combine(fixture.WorkspaceRoot, "..", "copy-in-source.txt");
+        await File.WriteAllTextAsync(source, "written-by-the-engine");
+
+        await fixture.Provider.CopyIntoAsync(fixture.Handle,
+            new SandboxCopyRequest { SourcePath = source, DestinationPath = "/nested/written.txt" });
+
+        AssertEx.Equal("written-by-the-engine",
+            await File.ReadAllTextAsync(Path.Combine(fixture.WorkspaceRoot, "nested", "written.txt")));
+        AssertEx.Equal("written-by-the-engine", await ProbeAsync(fixture, $"cat {options.WorkspaceMountTarget}/nested/written.txt"));
+    }
+
+
+    [Test]
+    public async Task RealDaemon_CopyInto_RefusesADestinationThatEscapesTheWorkspace()
+    {
+        var options = await RequireDaemonAsync();
+        await using var fixture = await ContainerFixture.CreateAsync(options);
+        var source = Path.Combine(fixture.WorkspaceRoot, "..", "escape-source.txt");
+        await File.WriteAllTextAsync(source, "should-not-land");
+
+        await AssertEx.ThrowsAsync<UnauthorizedAccessException>(() => fixture.Provider.CopyIntoAsync(fixture.Handle,
+            new SandboxCopyRequest { SourcePath = source, DestinationPath = "/../escaped.txt" }));
+
+        AssertEx.False(File.Exists(Path.Combine(fixture.WorkspaceRoot, "..", "escaped.txt")));
+    }
+
+
+    [Test]
+    public async Task RealDaemon_CopyInto_RefusesToWriteThroughASymlinkThePreviousCommandPlanted()
+    {
+        // Not hypothetical: the container can create the symlink, and it is the HOST that resolves it when the engine
+        // writes. Planted from inside the container, exactly as a compromised build step would.
+        var options = await RequireDaemonAsync();
+        await using var fixture = await ContainerFixture.CreateAsync(options);
+        var outside = Path.Combine(fixture.WorkspaceRoot, "..", "outside");
+        Directory.CreateDirectory(outside);
+
+        AssertEx.Equal("PLANTED",
+            await ProbeAsync(fixture, $"ln -s /tmp {options.WorkspaceMountTarget}/escape && echo PLANTED"));
+
+        var source = Path.Combine(fixture.WorkspaceRoot, "..", "symlink-source.txt");
+        await File.WriteAllTextAsync(source, "should-not-land");
+
+        await AssertEx.ThrowsAsync<UnauthorizedAccessException>(() => fixture.Provider.CopyIntoAsync(fixture.Handle,
+            new SandboxCopyRequest { SourcePath = source, DestinationPath = "/escape/planted.txt" }));
+    }
+
     [Test]
     public async Task RealDaemon_KillAsync_RemovesTheContainerFromTheDaemon()
     {

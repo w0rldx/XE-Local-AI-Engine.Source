@@ -36,10 +36,10 @@ public sealed class DockerSandboxRuntimeProviderTests
         AssertEx.True(capabilities.HasFlag(SandboxProviderCapabilities.SupportsAttach));
         AssertEx.True(capabilities.HasFlag(SandboxProviderCapabilities.SupportsKill));
 
-        // Measured, not assumed: Docker answers 400 "container rootfs is marked read-only" to an archive extraction
-        // against a read-only-rootfs container regardless of destination, and §3.8 requires that rootfs. So the
-        // capability cannot be honoured and is not claimed.
-        AssertEx.False(capabilities.HasFlag(SandboxProviderCapabilities.SupportsCopyInto));
+        // Served, but not through Docker's archive endpoint: that answers 400 "container rootfs is marked read-only"
+        // against a read-only-rootfs container regardless of destination, and §3.8 requires that rootfs. The write
+        // goes to the host side of the workspace bind mount instead, which needs no archive endpoint at all.
+        AssertEx.True(capabilities.HasFlag(SandboxProviderCapabilities.SupportsCopyInto));
     }
 
     [Test]
@@ -243,15 +243,54 @@ public sealed class DockerSandboxRuntimeProviderTests
     }
 
     [Test]
-    public async Task CopyIntoAsync_IsRejectedRatherThanEmulated()
+    public async Task CopyIntoAsync_WritesThroughTheWorkspaceMountOnTheHostSide()
+    {
+        // write_file is built on this. While it threw, Development Mode's write_file could not work at all.
+        var (provider, _, workspace) = CreateProvider();
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(workspace));
+        var source = Path.Combine(workspace, "..", Guid.NewGuid().ToString("N") + ".source");
+        await File.WriteAllTextAsync(source, "written-by-the-engine");
+
+        await provider.CopyIntoAsync(handle, new SandboxCopyRequest { SourcePath = source, DestinationPath = "/nested/a.txt" });
+
+        // The HOST path behind the mount, not the container path: the mount source is where the bytes go.
+        AssertEx.Equal("written-by-the-engine", await File.ReadAllTextAsync(Path.Combine(workspace, "nested", "a.txt")));
+        File.Delete(source);
+    }
+
+    [Test]
+    public async Task CopyIntoAsync_WhenTheDestinationEscapesTheWorkspace_Refuses()
     {
         var (provider, _, workspace) = CreateProvider();
         var handle = await provider.CreateOrAttachAsync(CreateRequest(workspace));
+        var source = Path.Combine(workspace, "..", Guid.NewGuid().ToString("N") + ".source");
+        await File.WriteAllTextAsync(source, "x");
 
-        var exception = await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(
-            () => provider.CopyIntoAsync(handle, new SandboxCopyRequest { SourcePath = "/host/a", DestinationPath = "/scratch/a" }));
+        await AssertEx.ThrowsAsync<UnauthorizedAccessException>(
+            () => provider.CopyIntoAsync(handle, new SandboxCopyRequest { SourcePath = source, DestinationPath = "/../escaped.txt" }));
 
-        AssertEx.Contains(exception.Message, "read-only root filesystem");
+        AssertEx.False(File.Exists(Path.Combine(workspace, "..", "escaped.txt")));
+        File.Delete(source);
+    }
+
+    [Test]
+    public async Task CopyIntoAsync_WhenAComponentOfTheDestinationIsASymlink_Refuses()
+    {
+        // A command inside the container can plant one, and it is the HOST that resolves it — so an unguarded write
+        // would let the sandbox choose where the engine writes.
+        var (provider, _, workspace) = CreateProvider();
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(workspace));
+        var outside = Path.Combine(workspace, "..", "outside-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(outside);
+        Directory.CreateSymbolicLink(Path.Combine(workspace, "escape"), outside);
+        var source = Path.Combine(workspace, "..", Guid.NewGuid().ToString("N") + ".source");
+        await File.WriteAllTextAsync(source, "x");
+
+        await AssertEx.ThrowsAsync<UnauthorizedAccessException>(
+            () => provider.CopyIntoAsync(handle, new SandboxCopyRequest { SourcePath = source, DestinationPath = "/escape/planted.txt" }));
+
+        AssertEx.False(File.Exists(Path.Combine(outside, "planted.txt")));
+        File.Delete(source);
     }
 
     [Test]

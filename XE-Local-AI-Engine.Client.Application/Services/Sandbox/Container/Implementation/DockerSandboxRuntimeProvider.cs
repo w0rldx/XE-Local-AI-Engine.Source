@@ -73,17 +73,18 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
     ///     Advertises only what this provider verifies on a real container, which is not the same as what it passes to
     ///     the daemon.
     ///     <para>
-    ///         <see cref="SandboxProviderCapabilities.SupportsCopyInto" /> is deliberately absent. Docker refuses
-    ///         <c>PUT /containers/{id}/archive</c> outright against a container with a read-only root filesystem —
-    ///         measured against Engine 29.6.1, which answers <c>400 container rootfs is marked read-only</c>
-    ///         regardless of the destination path, including a writable <c>tmpfs</c>. §3.8 makes the read-only root
-    ///         filesystem non-negotiable, so copy-into is structurally unavailable to a conformant container and
-    ///         advertising it would be a claim this provider cannot honour. Host-side transfer through the
-    ///         engine-generated workspace mount is the route, and it belongs to the mount broker.
+    ///         <see cref="SandboxProviderCapabilities.SupportsCopyInto" /> is served, but not through Docker's archive
+    ///         endpoint: Docker refuses <c>PUT /containers/{id}/archive</c> outright against a container with a
+    ///         read-only root filesystem — measured against Engine 29.6.1, which answers
+    ///         <c>400 container rootfs is marked read-only</c> regardless of the destination path, including a writable
+    ///         <c>tmpfs</c> — and §3.8 makes that root filesystem non-negotiable. The workspace bind mount is the same
+    ///         bytes on both sides, so the write goes to the host path backing the destination, under the containment
+    ///         and symlink guards <c>DockerWorkspaceHostFiles</c> applies.
     ///     </para>
     /// </summary>
     public SandboxProviderCapabilities Capabilities =>
         SandboxProviderCapabilities.SupportsCopyOut
+        | SandboxProviderCapabilities.SupportsCopyInto
         | SandboxProviderCapabilities.SupportsReadOnlyMounts
         | SandboxProviderCapabilities.SupportsNetworkPolicy
         | SandboxProviderCapabilities.SupportsResourceLimits
@@ -223,17 +224,33 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
         }
     }
 
-    public Task CopyIntoAsync(SandboxHandle handle, SandboxCopyRequest request, CancellationToken cancellationToken = default)
+    /// <summary>
+    ///     Writes a host file into the sandbox through the workspace bind mount rather than through Docker's archive
+    ///     endpoint, which a read-only-rootfs container refuses outright (see <see cref="Capabilities" />).
+    ///     <para>
+    ///         The destination is mapped to the mount's HOST path, not its container path — the whole point is that the
+    ///         write happens on this side of the mount — and it is then subjected to the same guards the process
+    ///         provider applies to its jail: containment under the workspace root, rejection of any symlinked component,
+    ///         and an <c>O_NOFOLLOW</c> create. Those are not ceremony here. A command running in the container can
+    ///         plant a symlink in the workspace, and it is the host that resolves it, so an unguarded write would let
+    ///         the sandbox choose where the engine writes.
+    ///     </para>
+    /// </summary>
+    public async Task CopyIntoAsync(SandboxHandle handle, SandboxCopyRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(handle);
         ArgumentNullException.ThrowIfNull(request);
+        cancellationToken.ThrowIfCancellationRequested();
 
-        // Not advertised, and therefore rejected rather than emulated. See the Capabilities documentation: Docker
-        // refuses archive extraction into a container whose root filesystem is read-only, and §3.8 requires it to be.
-        throw new SandboxCapabilityNotSupportedException(
-            "The docker sandbox provider does not serve copy-into. Docker refuses archive extraction into a container with a "
-            + "read-only root filesystem, and the §3.8 hardening contract requires one, so this provider does not advertise "
-            + "SupportsCopyInto. Write through the engine-generated workspace mount on the host instead.");
+        var state = GetAliveState(handle);
+        var content = await File.ReadAllBytesAsync(request.SourcePath, cancellationToken).ConfigureAwait(false);
+
+        await DockerWorkspaceHostFiles.WriteAsync(state.WorkspaceRoot,
+                                       state.WorkspaceMountTarget,
+                                       request.DestinationPath,
+                                       content,
+                                       cancellationToken)
+                                   .ConfigureAwait(false);
     }
 
     public async Task<string> ReadFileAsync(SandboxHandle handle, string sandboxPath, CancellationToken cancellationToken = default)
