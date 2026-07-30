@@ -12,11 +12,21 @@ using Microsoft.Extensions.Options;
 ///     §3.8 hardening contract and <em>verified</em> against the daemon's own read-back before the handle is returned.
 ///     Permitted for Development Mode build/test/lint execution only, per ADR 0004.
 ///     <para>
-///         Security posture: unlike <c>ProcessSandboxRuntimeProvider</c>, this provider does isolate — the container
-///         gets its own filesystem, network and PID namespaces with capabilities dropped, no-new-privileges set, a
-///         read-only root filesystem and enforced CPU/memory/PID ceilings. What it is not is a replacement for the
-///         MXC seam: ADR 0004 records Docker as an interim backend behind <see cref="ISandboxRuntimeProvider" />, not
-///         as the end of that seam, and on Linux the daemon socket this provider talks to is root-equivalent.
+///         Security posture, stated per mechanism rather than as one claim. Unconditionally, and verified against the
+///         daemon's read-back: the container gets its own filesystem, PID, IPC and UTS namespaces, every capability
+///         dropped, no-new-privileges, a read-only root filesystem, no devices, and enforced CPU/memory/PID ceilings.
+///         <b>Egress is confined only when the caller asks for it.</b> <see cref="SandboxNetworkPolicy.None" /> gets an
+///         empty network namespace; <see cref="SandboxNetworkPolicy.Unrestricted" /> gets Docker's default bridge —
+///         still a private namespace with no host interface, but with NAT egress — and Development Mode requests that
+///         today because its <c>dotnet restore</c> needs the network until the D6 package-proxy machinery exists.
+///         <see cref="SandboxNetworkPolicy.Restricted" /> has no mechanism here and stays fail-closed rejected. So do
+///         not read "container" as "offline": whichever policy is in force is the one the caller chose, and it is the
+///         one verified.
+///     </para>
+///     <para>
+///         What none of this is, is a replacement for the MXC seam: ADR 0004 records Docker as an interim backend
+///         behind <see cref="ISandboxRuntimeProvider" />, not as the end of that seam, and on Linux the daemon socket
+///         this provider talks to is root-equivalent.
 ///     </para>
 ///     <para>
 ///         Fail-closed everywhere. If any single §3.8 guarantee cannot be read back off the created container, the
@@ -406,16 +416,11 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
                 "The docker sandbox provider requires an engine-managed trusted host workspace on the create request.");
         }
 
-        if (request.NetworkPolicy != SandboxNetworkPolicy.None)
-        {
-            // `Restricted` has no mechanism here — an egress allow-list is the v2 package-proxy project (D6) — and
-            // `Unrestricted` is not on offer: this provider exists to confine, and handing back a container that
-            // shares the host network would be a weaker sandbox than the caller asked for by any reading.
-            throw new SandboxCapabilityNotSupportedException(
-                $"The docker sandbox provider serves only {nameof(SandboxNetworkPolicy.None)}; "
-                + $"'{request.NetworkPolicy}' was requested. Agent-facing execution runs with the network off (plan D6); "
-                + "a restricted egress allow-list is separate, later work.");
-        }
+        // `None` and `Unrestricted` both have a mechanism and are both served exactly as asked; `Restricted` does not
+        // and is rejected here rather than downgraded, because an allow-list quietly served as an open bridge is the
+        // silent weakening this contract exists to prevent. Rejecting before creating also keeps the caller from ever
+        // having to reason about a container that should not have existed.
+        _ = DockerSandboxHardening.ResolveNetworkMode(request.NetworkPolicy);
     }
 
     private async Task<SandboxHandle> CreateVerifiedAsync(SandboxCreateRequest request,
@@ -443,7 +448,8 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
             // Honored, not ignored. This provider advertises SupportsResourceLimits, so a caller's ceiling must be the
             // ceiling that gets applied — and because it is baked into the specification, the read-back verification
             // below checks the caller's numbers rather than the engine's defaults.
-            request.ResourceLimits);
+            request.ResourceLimits,
+            request.NetworkPolicy);
 
         var endpoint = DockerDaemonEndpointResolver.Resolve(options);
         var client = _clientFactory.Create(endpoint);
