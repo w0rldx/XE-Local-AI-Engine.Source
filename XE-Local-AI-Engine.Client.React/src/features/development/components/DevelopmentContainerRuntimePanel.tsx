@@ -5,7 +5,12 @@ import { useTranslation } from "react-i18next";
 import type { XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerRuntimeResponse as ContainerRuntimeStatus } from "@/core/api/generated/types.gen";
 
 interface DevelopmentContainerRuntimePanelProps {
-	readonly runtime: ContainerRuntimeStatus | undefined;
+	/**
+	 * Null when Development Mode is not running on the container provider — the backend reports no container-runtime
+	 * block at all in that case, rather than a preflight for a dependency this node does not have. Undefined while the
+	 * capability query is still in flight. Both render nothing.
+	 */
+	readonly runtime: ContainerRuntimeStatus | null | undefined;
 	readonly onConfirm: (daemonId: string) => void;
 	readonly confirming: boolean;
 	readonly confirmError?: string;

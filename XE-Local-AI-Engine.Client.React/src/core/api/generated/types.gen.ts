@@ -1690,7 +1690,8 @@ export type XeLocalAiEngineClientEndpointsImagesV1StartStableDiffusionCppSourceB
 
 export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentCapabilityResponse = {
 	enabled?: boolean;
-	containerRuntime?: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerRuntimeResponse;
+	sandboxProvider?: string;
+	containerRuntime?: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerRuntimeResponse | null;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerRuntimeResponse = {
