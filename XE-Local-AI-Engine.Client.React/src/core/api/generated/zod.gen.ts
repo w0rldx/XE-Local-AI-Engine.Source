@@ -2008,6 +2008,7 @@ export const zXeLocalAiEngineClientEndpointsImagesV1RetrieveImageRequest = z.rec
 export const zXeLocalAiEngineClientEndpointsImagesV1StartImageModelDownloadResponse = z.object({
 	modelName: z.string(),
 	accepted: z.boolean(),
+	alreadyInFlight: z.boolean(),
 });
 
 export const zXeLocalAiEngineClientEndpointsImagesV1ImageModelPartDownloadRequest = z.object({
@@ -3050,6 +3051,18 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActio
 		.optional(),
 });
 
+export const zXeLocalAiEngineClientEndpointsImagesV1ImageModelDownloadStatusResponse = z.object({
+	modelName: z.string(),
+	phase: z.string(),
+	completedBytes: z.int().nullish(),
+	totalBytes: z.int().nullish(),
+	sanitizedError: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1ListImageModelDownloadsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsImagesV1ImageModelDownloadStatusResponse),
+});
+
 /**
  * Success
  */
@@ -4022,6 +4035,11 @@ export const zRetrieveImagePath = z.object({
  * No Content
  */
 export const zRetrieveImageResponse = z.void();
+
+/**
+ * Success
+ */
+export const zListImageModelDownloadsResponse = zXeLocalAiEngineClientEndpointsImagesV1ListImageModelDownloadsResponse;
 
 export const zStartImageModelDownloadBody = zXeLocalAiEngineClientEndpointsImagesV1StartImageModelDownloadRequest;
 

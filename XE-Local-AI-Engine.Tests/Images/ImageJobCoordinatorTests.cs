@@ -130,6 +130,26 @@ public sealed class ImageJobCoordinatorTests
         AssertEx.Equal(expected: 0, harness.ActivityGate.ActiveLeaseCount);
     }
 
+    /// <summary>
+    ///     F-030: the runtime rounds the requested size up (a requested 100x512 is produced as 128x512). The succeeded
+    ///     job must record the dimensions the runtime reported producing, not the ones that were requested — otherwise
+    ///     the job card describes an image that does not exist.
+    /// </summary>
+    [Test]
+    public async Task GenerateAsync_WhenTheRuntimeRoundedTheSize_RecordsTheProducedDimensionsOnTheJob()
+    {
+        using var harness = Harness.Create(blockRuntime: false, producedSize: (128, 512));
+
+        var input = NewInput("rounded-up") with { Width = 100, Height = 512 };
+        var jobId = await harness.Coordinator.EnqueueAsync(input, CancellationToken.None).ConfigureAwait(false);
+
+        await WaitForStatusAsync(harness, jobId, ImageJobStatus.Succeeded).ConfigureAwait(false);
+
+        var view = AssertEx.NotNull(await harness.Coordinator.GetAsync(jobId, CancellationToken.None).ConfigureAwait(false));
+        AssertEx.Equal(expected: 128, view.Width, "A succeeded job must report the produced width (128), not the requested one (100).");
+        AssertEx.Equal(expected: 512, view.Height);
+    }
+
     [Test]
     public async Task DisposeAsync_WhenAJobIsGenerating_PersistsCancelledBeforeReturning()
     {
@@ -311,9 +331,9 @@ public sealed class ImageJobCoordinatorTests
             Coordinator.Dispose();
         }
 
-        public static Harness Create(bool blockRuntime, bool admitJobs = true)
+        public static Harness Create(bool blockRuntime, bool admitJobs = true, (int Width, int Height)? producedSize = null)
         {
-            var runtime = new FakeImageRuntime(blockRuntime);
+            var runtime = new FakeImageRuntime(blockRuntime, producedSize);
             var store = new FakeImageJobStore();
             var images = new FakeGeneratedImageStore();
             var activityGate = new FakeImageRuntimeActivityGate(admitJobs);
@@ -403,7 +423,9 @@ public sealed class ImageJobCoordinatorTests
         }
     }
 
-    private sealed class FakeImageRuntime(bool blockUntilReleased) : IImageRuntime
+    // producedSize models a runtime that returns an image whose size differs from the request (stable-diffusion.cpp
+    // rounds up to a multiple of 64); null echoes the request, the pre-existing behaviour.
+    private sealed class FakeImageRuntime(bool blockUntilReleased, (int Width, int Height)? producedSize = null) : IImageRuntime
     {
         private readonly TaskCompletionSource _started = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -456,8 +478,8 @@ public sealed class ImageJobCoordinatorTests
                     3,
                     4
                 },
-                Width = request.Width,
-                Height = request.Height,
+                Width = producedSize?.Width ?? request.Width,
+                Height = producedSize?.Height ?? request.Height,
                 Seed = 42,
                 Duration = TimeSpan.FromMilliseconds(7)
             };
@@ -513,14 +535,22 @@ public sealed class ImageJobCoordinatorTests
             return Task.CompletedTask;
         }
 
-        public Task MarkSucceededAsync(Guid jobId, Guid imageId, long completedAtUtc, long durationMs, CancellationToken cancellationToken)
+        public Task MarkSucceededAsync(Guid jobId,
+            Guid imageId,
+            long completedAtUtc,
+            long durationMs,
+            int outputWidth,
+            int outputHeight,
+            CancellationToken cancellationToken)
         {
             Update(jobId, view => view with
             {
                 Status = ImageJobStatus.Succeeded,
                 ImageId = imageId,
                 CompletedAtUtc = completedAtUtc,
-                DurationMs = durationMs
+                DurationMs = durationMs,
+                Width = outputWidth > 0 ? outputWidth : view.Width,
+                Height = outputHeight > 0 ? outputHeight : view.Height
             });
             return Task.CompletedTask;
         }

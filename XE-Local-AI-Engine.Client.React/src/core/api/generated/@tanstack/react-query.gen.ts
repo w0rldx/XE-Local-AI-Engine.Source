@@ -139,6 +139,7 @@ import {
 	listDevelopmentTemplates,
 	listGoldenConversations,
 	listImageJobs,
+	listImageModelDownloads,
 	listImageModels,
 	listInferenceProfiles,
 	listKnowledgeDocuments,
@@ -485,6 +486,8 @@ import type {
 	ListGoldenConversationsResponse,
 	ListImageJobsData,
 	ListImageJobsResponse,
+	ListImageModelDownloadsData,
+	ListImageModelDownloadsResponse,
 	ListImageModelsData,
 	ListImageModelsResponse,
 	ListInferenceProfilesData,
@@ -3219,6 +3222,28 @@ export const retrieveImageOptions = (options: Options<RetrieveImageData>) =>
 			return data;
 		},
 		queryKey: retrieveImageQueryKey(options),
+	});
+
+export const listImageModelDownloadsQueryKey = (options?: Options<ListImageModelDownloadsData>) =>
+	createQueryKey("listImageModelDownloads", options);
+
+export const listImageModelDownloadsOptions = (options?: Options<ListImageModelDownloadsData>) =>
+	queryOptions<
+		ListImageModelDownloadsResponse,
+		AxiosError<DefaultError>,
+		ListImageModelDownloadsResponse,
+		ReturnType<typeof listImageModelDownloadsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listImageModelDownloads({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listImageModelDownloadsQueryKey(options),
 	});
 
 export const startImageModelDownloadMutation = (
