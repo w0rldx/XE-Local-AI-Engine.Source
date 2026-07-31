@@ -2932,6 +2932,14 @@
 			"saved": "Workflow saved.",
 			"defaultName": "Untitled workflow",
 			"deleteHint": "Tip: select a block or connection and press Delete (or Backspace) to remove it. Start and End cannot be removed.",
+			"runs": {
+				"title": "Runs on this node",
+				"description": "Runs are held on the node, not in this browser tab. Reattach to follow a run again after a reload, or cancel it to free its slot.",
+				"cancelAll": "Cancel all runs",
+				"cancelledCount": "Cancelled {{count}} run(s).",
+				"reattachAria": "Reattach to run",
+				"cancelAria": "Cancel run"
+			},
 			"list": {
 				"empty": "No saved workflows yet. Create one to get started.",
 				"openAria": "Open workflow",
@@ -3017,6 +3025,7 @@
 				"execute": "Could not start the run.",
 				"continue": "Could not continue the run.",
 				"cancel": "Could not cancel the run.",
+				"cancelAll": "Could not cancel the runs.",
 				"conflict": "This workflow changed elsewhere. Reload and reapply your edits."
 			}
 		},

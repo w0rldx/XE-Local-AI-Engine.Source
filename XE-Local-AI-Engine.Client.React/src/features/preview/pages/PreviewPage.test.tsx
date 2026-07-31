@@ -2,6 +2,7 @@
 
 import { MantineProvider } from "@mantine/core";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import type { ComponentProps } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PreviewWorkflowDetail, PreviewWorkflowGraph } from "@/features/preview/models/PreviewWorkflowModels";
@@ -36,6 +37,9 @@ const { hooksMock, storeMock, runStoreMock } = vi.hoisted(() => ({
 		useExecuteUnsavedPreviewWorkflow: vi.fn(),
 		useContinuePreviewRun: vi.fn(),
 		useCancelPreviewRun: vi.fn(),
+		useCancelAllPreviewRuns: vi.fn(),
+		usePreviewRuns: vi.fn(),
+		usePreviewRun: vi.fn(),
 	},
 	storeMock: vi.fn(),
 	runStoreMock: vi.fn(),
@@ -75,15 +79,17 @@ const DETAIL: PreviewWorkflowDetail = {
 
 const executeSaved = vi.fn();
 const executeUnsaved = vi.fn();
+const registerRun = vi.fn();
+const onRouteRunIdChange = vi.fn();
 
 function idleMutation(mutate: ReturnType<typeof vi.fn>) {
 	return { mutate, isPending: false } as const;
 }
 
-function renderOpenWorkflow(): void {
+function renderOpenWorkflow(props: Partial<ComponentProps<typeof PreviewPage>> = {}): void {
 	render(
 		<MantineProvider>
-			<PreviewPage />
+			<PreviewPage {...props} />
 		</MantineProvider>,
 	);
 }
@@ -108,6 +114,8 @@ describe("PreviewPage Execute path", () => {
 		installJsdomEnvironmentMocks();
 		executeSaved.mockReset();
 		executeUnsaved.mockReset();
+		registerRun.mockReset();
+		onRouteRunIdChange.mockReset();
 
 		storeMock.mockReturnValue({
 			canvasTarget: { mode: "open", id: "wf-1" },
@@ -115,7 +123,7 @@ describe("PreviewPage Execute path", () => {
 		});
 		runStoreMock.mockReturnValue({
 			runs: {},
-			actions: { registerRun: vi.fn(), reset: vi.fn() },
+			actions: { registerRun, reset: vi.fn(), markCancelled: vi.fn() },
 		});
 
 		hooksMock.usePreviewWorkflows.mockReturnValue({ data: [], isLoading: false });
@@ -127,6 +135,9 @@ describe("PreviewPage Execute path", () => {
 		hooksMock.useExecuteUnsavedPreviewWorkflow.mockReturnValue(idleMutation(executeUnsaved));
 		hooksMock.useContinuePreviewRun.mockReturnValue(idleMutation(vi.fn()));
 		hooksMock.useCancelPreviewRun.mockReturnValue(idleMutation(vi.fn()));
+		hooksMock.useCancelAllPreviewRuns.mockReturnValue(idleMutation(vi.fn()));
+		hooksMock.usePreviewRuns.mockReturnValue({ data: [], isLoading: false });
+		hooksMock.usePreviewRun.mockReturnValue({ data: undefined, isSuccess: false });
 	});
 
 	afterEach(cleanup);
@@ -157,5 +168,53 @@ describe("PreviewPage Execute path", () => {
 		expect(executeUnsaved).toHaveBeenCalledTimes(1);
 		expect(executeUnsaved.mock.calls[0]?.[0]).toEqual(canvasGraph);
 		expect(executeSaved).not.toHaveBeenCalled();
+	});
+
+	it("puts the new runId in the route so a reload can find the run again", () => {
+		// The reload leak, client side: before this the runId lived only in page state, so reloading abandoned the run
+		// on the node — unreachable and (parked on Pause) holding its concurrency slot until a node restart.
+		canvasGraph = PERSISTED_GRAPH;
+		executeSaved.mockImplementation((_id: string, handlers: { onSuccess: (data: { runId: string }) => void }) => {
+			handlers.onSuccess({ runId: "run-99" });
+		});
+		renderOpenWorkflow({ onRouteRunIdChange });
+
+		fireEvent.click(screen.getByTestId("stub-execute"));
+
+		expect(onRouteRunIdChange).toHaveBeenCalledWith("run-99");
+	});
+
+	it("reattaches to the runId carried in the route on load", () => {
+		// A reloaded tab knows nothing except the id in its URL. Registering it is the whole reattach: the hub hook
+		// then joins the run's group and replays every buffered event the tab has not applied.
+		canvasGraph = PERSISTED_GRAPH;
+		renderOpenWorkflow({ routeRunId: "run-from-url" });
+
+		expect(registerRun).toHaveBeenCalledWith("run-from-url");
+	});
+
+	it("drops a route runId the node no longer knows about", () => {
+		// A 404 from GET preview/runs/{id} resolves to null: the run was swept, cancelled, or aged out of the replay
+		// window, so the URL must stop advertising a run nobody can act on.
+		canvasGraph = PERSISTED_GRAPH;
+		hooksMock.usePreviewRun.mockReturnValue({ data: null, isSuccess: true });
+
+		renderOpenWorkflow({ routeRunId: "run-gone", onRouteRunIdChange });
+
+		expect(onRouteRunIdChange).toHaveBeenCalledWith(null);
+	});
+
+	it("keeps a route runId the node still knows about", () => {
+		// The discriminating other half: a live run must NOT be cleared out of the route.
+		canvasGraph = PERSISTED_GRAPH;
+		hooksMock.usePreviewRun.mockReturnValue({
+			data: { runId: "run-live", state: "Paused", isLive: true, startedAtUtc: 0, lastSeq: 3, subscriberCount: 0 },
+			isSuccess: true,
+		});
+
+		renderOpenWorkflow({ routeRunId: "run-live", onRouteRunIdChange });
+
+		expect(registerRun).toHaveBeenCalledWith("run-live");
+		expect(onRouteRunIdChange).not.toHaveBeenCalledWith(null);
 	});
 });

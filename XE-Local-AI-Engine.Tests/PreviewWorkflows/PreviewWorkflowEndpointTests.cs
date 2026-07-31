@@ -33,6 +33,9 @@ public sealed class PreviewWorkflowEndpointTests
             (HttpMethod.Delete, $"{ApiPrefix}/preview/workflows/{Guid.NewGuid()}"),
             (HttpMethod.Post, $"{ApiPrefix}/preview/workflows/{Guid.NewGuid()}/execute"),
             (HttpMethod.Post, $"{ApiPrefix}/preview/runs/execute"),
+            (HttpMethod.Get, $"{ApiPrefix}/preview/runs"),
+            (HttpMethod.Get, $"{ApiPrefix}/preview/runs/{Guid.NewGuid()}"),
+            (HttpMethod.Post, $"{ApiPrefix}/preview/runs/cancel-all"),
             (HttpMethod.Post, $"{ApiPrefix}/preview/runs/{Guid.NewGuid()}/continue"),
             (HttpMethod.Post, $"{ApiPrefix}/preview/runs/{Guid.NewGuid()}/cancel")
         };
@@ -115,6 +118,107 @@ public sealed class PreviewWorkflowEndpointTests
 
         AssertEx.NotEqual(HttpStatusCode.UnsupportedMediaType, response.StatusCode, $"Body-less POST to {action} must not return 415.");
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode, $"An unknown run on body-less {action} must report 404 (authorized + bound), not 415.");
+    }
+
+    [Test]
+    public async Task PreviewRuns_AreDiscoverableById_AndCancelAllReclaimsTheirSlots()
+    {
+        // The reload-leak recovery path end to end over HTTP: a run whose id is no longer held by any page must be
+        // findable via GET preview/runs, fetchable by id, and clearable via cancel-all — none of which existed before.
+        await using var factory = new TestingWebAppFactory
+        {
+            ConfigureAdditionalTestServices = services =>
+            {
+                services.RemoveAll<IPreviewWorkflowRunner>();
+                // Parks on Pause: exactly the state that used to hold a concurrency slot forever.
+                services.AddSingleton<IPreviewWorkflowRunner>(new FakePreviewWorkflowRunner((_, _) =>
+                    new ScriptedPreviewRunSession([PreviewWorkflowUpdate.RunPaused("pause", "upstream", "req-1")])));
+            }
+        };
+        using var client = factory.CreateClient();
+
+        using var executeRequest = new HttpRequestMessage(HttpMethod.Post, $"{ApiPrefix}/preview/runs/execute")
+        {
+            Content = JsonContent.Create(new
+            {
+                graph = PreviewGraphBuilder.Linear()
+            })
+        };
+        factory.AddNodeBearerToken(executeRequest);
+        using var executeResponse = await client.SendAsync(executeRequest).ConfigureAwait(false);
+        AssertEx.Equal(HttpStatusCode.OK, executeResponse.StatusCode);
+        var started = await executeResponse.Content.ReadFromJsonAsync<PreviewRunStartedResponse>(JsonOptions).ConfigureAwait(false);
+        var runId = started!.RunId;
+
+        // Discoverable in the list — this is the call the client makes after a reload to find orphaned runs. The run is
+        // in the registry before execute returns, so no polling is needed.
+        var listed = await ListRunIds(client, factory).ConfigureAwait(false);
+        AssertEx.Contains(listed, runId, "the started run must appear in GET preview/runs.");
+
+        // Fetchable by id, and reaching Paused — the exact state a reloaded page used to be unable to reach.
+        var run = await PollRunAsync(client, factory, runId,
+                                    static r => string.Equals(r.GetProperty("state").GetString(), "Paused", StringComparison.Ordinal))
+                      .ConfigureAwait(false);
+        AssertEx.Equal(runId.ToString(), run.GetProperty("runId").GetString());
+        AssertEx.True(run.GetProperty("isLive").GetBoolean(), "a run holding a slot must report isLive.");
+        AssertEx.Equal(expected: "pause", run.GetProperty("pausedNodeId").GetString());
+
+        // An unknown id is a 404 so the client can drop a stale runId out of its route.
+        using var missingRequest = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/preview/runs/{Guid.NewGuid()}");
+        factory.AddNodeBearerToken(missingRequest);
+        using var missingResponse = await client.SendAsync(missingRequest).ConfigureAwait(false);
+        AssertEx.Equal(HttpStatusCode.NotFound, missingResponse.StatusCode);
+
+        // Cancel-all reclaims the slot without a node restart.
+        using var cancelAllRequest = new HttpRequestMessage(HttpMethod.Post, $"{ApiPrefix}/preview/runs/cancel-all");
+        factory.AddNodeBearerToken(cancelAllRequest);
+        using var cancelAllResponse = await client.SendAsync(cancelAllRequest).ConfigureAwait(false);
+        AssertEx.Equal(HttpStatusCode.OK, cancelAllResponse.StatusCode);
+        var cancelAll = await cancelAllResponse.Content.ReadFromJsonAsync<JsonElement>(JsonOptions).ConfigureAwait(false);
+        AssertEx.Equal(expected: 1, cancelAll.GetProperty("cancelledCount").GetInt32());
+
+        var after = await PollRunAsync(client, factory, runId, static r => !r.GetProperty("isLive").GetBoolean())
+                        .ConfigureAwait(false);
+        AssertEx.False(after.GetProperty("isLive").GetBoolean(), "a cancelled run must no longer hold a concurrency slot.");
+        AssertEx.Equal(expected: "Cancelled", after.GetProperty("state").GetString());
+    }
+
+    private static async Task<List<Guid>> ListRunIds(HttpClient client, TestingWebAppFactory factory)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/preview/runs");
+        factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions).ConfigureAwait(false);
+
+        return [.. payload.GetProperty("items").EnumerateArray().Select(item => item.GetProperty("runId").GetGuid())];
+    }
+
+    /// <summary>GETs the run until <paramref name="predicate" /> holds (the run's state machine advances on a background drain).</summary>
+    private static async Task<JsonElement> PollRunAsync(HttpClient client,
+        TestingWebAppFactory factory,
+        Guid runId,
+        Func<JsonElement, bool> predicate)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+        JsonElement last = default;
+
+        while (DateTime.UtcNow < deadline)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/preview/runs/{runId}");
+            factory.AddNodeBearerToken(request);
+            using var response = await client.SendAsync(request).ConfigureAwait(false);
+            AssertEx.Equal(HttpStatusCode.OK, response.StatusCode, "the run must stay resolvable by id while it is live or retained.");
+
+            last = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions).ConfigureAwait(false);
+            if (predicate(last))
+            {
+                return last;
+            }
+
+            await Task.Delay(25).ConfigureAwait(false);
+        }
+
+        throw new TimeoutException($"Run {runId} never reached the expected state. Last: {last}");
     }
 
     private sealed record PreviewRunStartedResponse(Guid RunId);

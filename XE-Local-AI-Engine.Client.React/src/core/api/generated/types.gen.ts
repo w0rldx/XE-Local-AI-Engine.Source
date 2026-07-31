@@ -4,315 +4,2096 @@ export type ClientOptions = {
 	baseURL: `${string}://${string}` | (string & {});
 };
 
-export type XeLocalAiEngineClientEndpointsVoiceV1VoiceManifestResponse = {
-	enabled: boolean;
-	models: Array<XeLocalAiEngineClientEndpointsVoiceV1VoiceManifestModelDto>;
-	voices: Array<XeLocalAiEngineClientEndpointsVoiceV1VoiceManifestVoiceDto>;
-	defaultVoiceId: string;
-	remoteFallback?: XeLocalAiEngineClientEndpointsVoiceV1VoiceManifestRemoteFallbackDto | null;
+/**
+ * the dto used to send an error response to the client
+ */
+export type FastEndpointsErrorResponse = {
+	/**
+	 * the http status code sent to the client. default is 400.
+	 */
+	statusCode?: number;
+	/**
+	 * the message for the error response
+	 */
+	message?: string;
+	/**
+	 * the collection of errors for the current context
+	 */
+	errors?: {
+		[key: string]: Array<string>;
+	};
 };
 
-export type XeLocalAiEngineClientEndpointsVoiceV1VoiceManifestModelDto = {
-	id: string;
-	displayName: string;
-	language: string;
-	version: string;
-	files: Array<XeLocalAiEngineClientEndpointsVoiceV1VoiceManifestModelFileDto>;
+/**
+ * RFC9457 compatible problem details/ error response class. this can be used by configuring startup like so:
+ * app.UseFastEndpoints(c => c.Errors.UseProblemDetails())
+ */
+export type FastEndpointsProblemDetails = {
+	type?: string;
+	title?: string;
+	status?: number;
+	instance?: string;
+	traceId?: string;
+	/**
+	 * the details of the error
+	 */
+	detail?: string | null;
+	errors?: Array<FastEndpointsProblemDetailsError>;
 };
 
-export type XeLocalAiEngineClientEndpointsVoiceV1VoiceManifestModelFileDto = {
-	dtype: string;
-	file: string;
-	byteSize: number;
-	sha256: string;
-	downloadUrl: string;
+/**
+ * the error details object
+ */
+export type FastEndpointsProblemDetailsError = {
+	/**
+	 * the name of the error or property of the dto that caused the error
+	 */
+	name?: string;
+	/**
+	 * the reason for the error
+	 */
+	reason?: string;
+	/**
+	 * the code of the error
+	 */
+	code?: string | null;
+	/**
+	 * the severity of the error
+	 */
+	severity?: string | null;
 };
 
-export type XeLocalAiEngineClientEndpointsVoiceV1VoiceManifestVoiceDto = {
+export type XeLocalAiEngineAiContractsEnumsInvocationStatus =
+	| "Pending"
+	| "Assigned"
+	| "Running"
+	| "Completed"
+	| "Failed"
+	| "Cancelled";
+
+export type XeLocalAiEngineClientEndpointsAgentsV1AgentDefinitionResponse = {
 	id: string;
 	name: string;
-	language: string;
-	gender: string;
-};
-
-export type XeLocalAiEngineClientEndpointsVoiceV1VoiceManifestRemoteFallbackDto = {
-	enabled: boolean;
-	endpoint?: string | null;
-};
-
-export type XeLocalAiEngineClientEndpointsTutorialStateV1TutorialStateResponse = {
-	entries: Array<XeLocalAiEngineClientEndpointsTutorialStateV1TutorialStateEntryResponse>;
-};
-
-export type XeLocalAiEngineClientEndpointsTutorialStateV1TutorialStateEntryResponse = {
-	key: string;
-	status: string;
-	atUtc: string;
-};
-
-export type XeLocalAiEngineClientEndpointsTutorialStateV1SaveTutorialStateRequest = {
-	key?: string;
-	status?: string;
-};
-
-export type XeLocalAiEngineClientEndpointsSkillsV1SkillResponse = {
-	id: string;
-	name: string;
-	description: string;
-	body: string;
-	enabled: boolean;
+	description?: string | null;
+	instructions: string;
+	modelProfile?: string | null;
+	reasoningEffort?: string | null;
+	kind: XeLocalAiEngineClientPersistenceAgentDefinitionKind;
+	allowedToolNames: Array<string>;
+	toolApprovals: {
+		[key: string]: boolean;
+	};
+	orchestrationTopologyJson?: string | null;
+	playbookEnabled: boolean;
+	defaultTemporaryChat: boolean;
+	memoryExtractionEnabled: boolean;
+	disableBaseScaffold: boolean;
+	allowedSkillIds: Array<string>;
 	version: number;
 	createdAtUtc: number;
 	updatedAtUtc: number;
 };
 
-export type XeLocalAiEngineClientEndpointsSkillsV1CreateSkillRequest = {
-	name?: string | null;
-	description?: string | null;
-	body?: string | null;
-};
-
-export type XeLocalAiEngineClientEndpointsSkillsV1DeleteSkillRequest = {
-	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsSkillsV1GetSkillRequest = {
-	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsSkillsV1ListSkillsResponse = {
-	items: Array<XeLocalAiEngineClientEndpointsSkillsV1SkillSummaryResponse>;
-};
-
-export type XeLocalAiEngineClientEndpointsSkillsV1SkillSummaryResponse = {
+export type XeLocalAiEngineClientEndpointsAgentsV1AgentExecutionLogResponse = {
 	id: string;
-	name: string;
-	description: string;
-	enabled: boolean;
-	version: number;
+	agentDefinitionId: string;
+	conversationId?: string | null;
+	messageId?: string | null;
+	modelName: string;
+	configHash: string;
+	latencyMs: number;
+	promptTokens?: number | null;
+	completionTokens?: number | null;
+	success: boolean;
+	errorClass?: string | null;
 	createdAtUtc: number;
-	updatedAtUtc: number;
 };
 
-export type XeLocalAiEngineClientEndpointsSkillsV1UpdateSkillRequest = {
+export type XeLocalAiEngineClientEndpointsAgentsV1AgentFeedbackInsightsResponse = {
+	agentDefinitionId: string;
+	agentName: string;
+	generatedAtUtc: number;
+	minOccurrenceThreshold: number;
+	overall: XeLocalAiEngineClientEndpointsAgentsV1OverallFeedbackResponse;
+	byTool: Array<XeLocalAiEngineClientEndpointsAgentsV1ToolFeedbackResponse>;
+	exemplars: Array<XeLocalAiEngineClientEndpointsAgentsV1FeedbackExemplarResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1AgentPlaybookMonitorResponse = {
+	items?: Array<XeLocalAiEngineClientEndpointsAgentsV1PlaybookActionMonitorItemResponse>;
+	retrieval?: XeLocalAiEngineClientEndpointsAgentsV1PlaybookRetrievalResponse;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1AgentRunEnvelopeResponse = {
+	id: string;
+	schemaVersion: number;
+	agentDefinitionId: string;
+	conversationId?: string | null;
+	messageId?: string | null;
+	invocationId?: string | null;
+	requestId?: string | null;
+	modelName: string;
+	terminalStatus: string;
+	success: boolean;
+	failureCategory?: string | null;
+	durationMs: number;
+	promptTokens?: number | null;
+	completionTokens?: number | null;
+	reasoningTokens?: number | null;
+	totalTokens?: number | null;
+	contentChunkCount?: number | null;
+	reasoningChunkCount?: number | null;
+	traceId?: string | null;
+	startedAtUtc?: number | null;
+	createdAtUtc: number;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1AgentTemplateSummary = {
+	slug: string;
+	name: string;
+	description?: string | null;
+	division: string;
+	estimatedPromptTokens: number;
+	hasOriginalTools: boolean;
+	alreadyImported: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1AgentUsageProviderTotalsResponse = {
+	provider: string;
+	runCount: number;
+	promptTokens: number;
+	completionTokens: number;
+	reasoningTokens: number;
+	totalTokens: number;
+	estimatedCostUsd: number;
+	currency: string;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryBucketResponse = {
+	modelName: string;
+	provider: string;
+	dayStartUtcMs: number;
+	runCount: number;
+	promptTokens: number;
+	completionTokens: number;
+	reasoningTokens: number;
+	totalTokens: number;
+	estimatedCostUsd: number;
+	currency: string;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryResponse = {
+	items: Array<XeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryBucketResponse>;
+	totals: XeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryTotalsResponse;
+	byProvider: Array<XeLocalAiEngineClientEndpointsAgentsV1AgentUsageProviderTotalsResponse>;
+	retentionDays: number;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryTotalsResponse = {
+	runCount: number;
+	promptTokens: number;
+	completionTokens: number;
+	reasoningTokens: number;
+	totalTokens: number;
+	estimatedCostUsd: number;
+	currency: string;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1AnalyzePlaybookRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1ApproveGoldenConversationRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1CreateAgentDefinitionRequest = {
 	name?: string | null;
 	description?: string | null;
-	body?: string | null;
+	instructions?: string | null;
+	modelProfile?: string | null;
+	reasoningEffort?: string | null;
+	kind?: XeLocalAiEngineClientPersistenceAgentDefinitionKind;
+	allowedToolNames?: Array<string> | null;
+	toolApprovals?: {
+		[key: string]: boolean;
+	} | null;
+	orchestrationTopologyJson?: string | null;
+	playbookEnabled?: boolean;
+	defaultTemporaryChat?: boolean;
+	memoryExtractionEnabled?: boolean;
+	disableBaseScaffold?: boolean;
+	allowedSkillIds?: Array<string> | null;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1CreateGoldenConversationRequest = {
+	title: string;
+	inputTurns: Array<XeLocalAiEngineClientEndpointsAgentsV1GoldenTurnDto>;
+	assertion?: XeLocalAiEngineClientEndpointsAgentsV1GoldenAssertionDto | null;
+	rubric?: string | null;
 	enabled?: boolean;
 };
 
-export type XeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobRunCancelResponse = {
-	outcome: string;
-	cancellationRequestedAtUtc?: number | null;
+export type XeLocalAiEngineClientEndpointsAgentsV1CreatePlaybookActionRequest = {
+	state?: XeLocalAiEngineClientPersistencePlaybookActionState;
+	triggerCondition?: string | null;
+	behavior?: string | null;
+	scope?: string | null;
+	priority?: number;
 };
 
-export type XeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobRunRouteRequest = {
+export type XeLocalAiEngineClientEndpointsAgentsV1DeleteAgentDefinitionRequest = {
 	[key: string]: never;
 };
 
-export type XeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobResponse = {
+export type XeLocalAiEngineClientEndpointsAgentsV1DeleteGoldenConversationRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1DeletePlaybookActionRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1FeedbackExemplarResponse = {
+	rating: string;
+	comment: string;
+	messageId: string;
+	conversationId: string;
+	createdAtUtc: number;
+	truncated: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1GetAgentDefinitionRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1GetAgentFeedbackInsightsRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1GetAgentPlaybookMonitorRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1GoldenAssertionDto = {
+	requiredPhrases?: Array<string>;
+	forbiddenPhrases?: Array<string>;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1GoldenConversationResponse = {
 	id: string;
-	templateId: string;
-	displayName: string;
-	description?: string | null;
+	agentDefinitionId: string;
+	title: string;
+	inputTurns: Array<XeLocalAiEngineClientEndpointsAgentsV1GoldenTurnDto>;
+	assertion?: XeLocalAiEngineClientEndpointsAgentsV1GoldenAssertionDto | null;
+	rubric?: string | null;
 	enabled: boolean;
-	scheduleKind: XeLocalAiEngineClientEndpointsSchedulerV1ScheduleKind;
-	cronExpression?: string | null;
-	intervalSeconds?: number | null;
-	repeatCount?: number | null;
-	startAtUtc?: number | null;
-	endAtUtc?: number | null;
-	timeZoneId: string;
-	misfirePolicy: XeLocalAiEngineClientEndpointsSchedulerV1SchedulerMisfirePolicy;
-	preventOverlap: boolean;
-	maxRuntimeSeconds?: number | null;
-	hasParameters: boolean;
-	createdBy: XeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobCreator;
+	source: string;
+	sourceMessageId?: string | null;
+	sourceConversationId?: string | null;
 	createdAtUtc: number;
 	updatedAtUtc: number;
-	disabledAtUtc?: number | null;
-	deletedAtUtc?: number | null;
 };
 
-export type XeLocalAiEngineClientEndpointsSchedulerV1ScheduleKind = "Cron" | "OneShot" | "SimpleInterval" | "Manual";
-
-export type XeLocalAiEngineClientEndpointsSchedulerV1SchedulerMisfirePolicy = "Smart" | "SkipMissed" | "FireOnceNow";
-
-export type XeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobCreator = "User" | "Agent" | "System";
-
-export type XeLocalAiEngineClientEndpointsSchedulerV1CreateScheduledJobRequest = {
-	templateId: string;
-	displayName: string;
-	description?: string | null;
-	scheduleKind: XeLocalAiEngineClientEndpointsSchedulerV1ScheduleKind;
-	cronExpression?: string | null;
-	intervalSeconds?: number | null;
-	repeatCount?: number | null;
-	startAtUtc?: number | null;
-	endAtUtc?: number | null;
-	timeZoneId?: string;
-	misfirePolicy?: XeLocalAiEngineClientEndpointsSchedulerV1SchedulerMisfirePolicy;
-	preventOverlap?: boolean;
-	maxRuntimeSeconds?: number | null;
-	parameters?: string | null;
+export type XeLocalAiEngineClientEndpointsAgentsV1GoldenHarvestResponse = {
+	thumbsUpScanned?: number;
+	createdCount?: number;
+	duplicateCount?: number;
+	skippedCount?: number;
 };
 
-export type XeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobRouteRequest = {
+export type XeLocalAiEngineClientEndpointsAgentsV1GoldenTurnDto = {
+	role?: string;
+	text?: string;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1HarvestGoldenConversationsRequest = {
 	[key: string]: never;
 };
 
-export type XeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobActionRequest = {
+export type XeLocalAiEngineClientEndpointsAgentsV1ImportAgentTemplatesRequest = {
+	slugs?: Array<string> | null;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1ImportAgentTemplatesResponse = {
+	imported: Array<string>;
+	skippedExisting: Array<string>;
+	unknown: Array<string>;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1ListAgentDefinitionsResponse = {
+	items: Array<XeLocalAiEngineClientEndpointsAgentsV1AgentDefinitionResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1ListAgentExecutionLogsRequest = {
 	[key: string]: never;
 };
 
-export type XeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobRunResponse = {
+export type XeLocalAiEngineClientEndpointsAgentsV1ListAgentExecutionLogsResponse = {
+	items: Array<XeLocalAiEngineClientEndpointsAgentsV1AgentExecutionLogResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1ListAgentPlaybookActionsRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1ListAgentTemplatesResponse = {
+	items: Array<XeLocalAiEngineClientEndpointsAgentsV1AgentTemplateSummary>;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1ListGoldenConversationsRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1ListGoldenConversationsResponse = {
+	items: Array<XeLocalAiEngineClientEndpointsAgentsV1GoldenConversationResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1ListPlaybookActionsResponse = {
+	items: Array<XeLocalAiEngineClientEndpointsAgentsV1PlaybookActionResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1ListRunEnvelopesRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1ListRunEnvelopesResponse = {
+	items: Array<XeLocalAiEngineClientEndpointsAgentsV1AgentRunEnvelopeResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1OverallFeedbackResponse = {
+	total: number;
+	up: number;
+	down: number;
+	downRate: number;
+	meetsThreshold: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1PlaybookActionMonitorItemResponse = {
+	actionId?: string;
+	enabledAtUtc?: number;
+	beforeDownRate?: number;
+	afterDownRate?: number;
+	afterSampleSize?: number;
+	status?: XeLocalAiEngineClientServicesMonitoringPlaybookMonitorStatus;
+	flagged?: boolean;
+	facetToolName?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1PlaybookActionResponse = {
 	id: string;
-	scheduledJobId: string;
-	templateId: string;
-	triggeredBy: XeLocalAiEngineClientEndpointsSchedulerV1ScheduledRunTrigger;
-	status: XeLocalAiEngineClientEndpointsSchedulerV1ScheduledRunStatus;
-	scheduledFireTimeUtc?: number | null;
-	actualFireTimeUtc?: number | null;
+	agentDefinitionId: string;
+	state: XeLocalAiEngineClientPersistencePlaybookActionState;
+	source: XeLocalAiEngineClientPersistencePlaybookActionSource;
+	memoryScope?: XeLocalAiEngineClientPersistenceMemoryScope | null;
+	triggerCondition?: string | null;
+	behavior: string;
+	scope?: string | null;
+	priority: number;
+	version: number;
+	createdAtUtc: number;
+	updatedAtUtc: number;
+	sourceFeedbackIds?: Array<string> | null;
+	confidence?: number | null;
+	evalResult?: XeLocalAiEngineClientEndpointsAgentsV1PlaybookEvalResultResponse | null;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1PlaybookEvalCaseResultResponse = {
+	goldenCaseId?: string;
+	scoredBy?: string;
+	baselinePass?: boolean;
+	candidatePass?: boolean;
+	regressed?: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1PlaybookEvalResultResponse = {
+	passed?: boolean;
+	evaluatedAtUtc?: number;
+	actionVersionAtEval?: number;
+	modelName?: string;
+	goldenCaseCount?: number;
+	goldenCaseTotal?: number;
+	baselinePassCount?: number;
+	candidatePassCount?: number;
+	regressedCaseCount?: number;
+	improvedCaseCount?: number;
+	cases?: Array<XeLocalAiEngineClientEndpointsAgentsV1PlaybookEvalCaseResultResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1PlaybookRetrievalResponse = {
+	threshold?: number;
+	topK?: number;
+	ranker?: string;
+	embeddingModel?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1SuggestedPlaybookActionRouteRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1ToolCapableModelsResponse = {
+	models: Array<string>;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1ToolFeedbackResponse = {
+	toolName: string;
+	total: number;
+	up: number;
+	down: number;
+	downRate: number;
+	meetsThreshold: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1UpdateAgentDefinitionRequest = {
+	name?: string | null;
+	description?: string | null;
+	instructions?: string | null;
+	modelProfile?: string | null;
+	reasoningEffort?: string | null;
+	kind?: XeLocalAiEngineClientPersistenceAgentDefinitionKind;
+	allowedToolNames?: Array<string> | null;
+	toolApprovals?: {
+		[key: string]: boolean;
+	} | null;
+	orchestrationTopologyJson?: string | null;
+	playbookEnabled?: boolean;
+	defaultTemporaryChat?: boolean;
+	memoryExtractionEnabled?: boolean;
+	disableBaseScaffold?: boolean;
+	allowedSkillIds?: Array<string> | null;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1UpdatePlaybookActionRequest = {
+	state?: XeLocalAiEngineClientPersistencePlaybookActionState;
+	triggerCondition?: string | null;
+	behavior?: string | null;
+	scope?: string | null;
+	priority?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActionRequest = {
+	behavior?: string | null;
+	triggerCondition?: string | null;
+	scope?: string | null;
+	priority?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsApiFoundationV1ValidationProblemProbeRequest = {
+	name: string;
+};
+
+export type XeLocalAiEngineClientEndpointsApiFoundationV1ValidationProblemProbeResponse = {
+	name: string;
+};
+
+export type XeLocalAiEngineClientEndpointsAppUpdateV1AppUpdateStatusResponse = {
+	currentVersion: string;
+	availableVersion?: string | null;
+	updateAvailable: boolean;
+	authState: string;
+	login?: string | null;
+	isDesktop: boolean;
+	isOffline: boolean;
+	lastCheckedUtc?: number | null;
+};
+
+export type XeLocalAiEngineClientEndpointsAppUpdateV1ApplyAppUpdateResponse = {
+	applying: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsAppUpdateV1GetAppUpdateStatusRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthPollResponse = {
+	state: string;
+	login?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthStartResponse = {
+	userCode: string;
+	verificationUri: string;
+	expiresInSeconds: number;
+	intervalSeconds: number;
+};
+
+export type XeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthStatusResponse = {
+	authState: string;
+	login?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsAuthV1NodeAccessTokenResponse = {
+	accessToken: string;
+	expiresAtUtc: string;
+};
+
+export type XeLocalAiEngineClientEndpointsAuthV1NodeAuthStatusResponse = {
+	setupRequired: boolean;
+	authenticated: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsAuthV1NodeChangePasswordRequest = {
+	currentPassword: string;
+	newPassword: string;
+};
+
+export type XeLocalAiEngineClientEndpointsAuthV1NodeLoginRequest = {
+	email?: string | null;
+	password: string;
+};
+
+export type XeLocalAiEngineClientEndpointsAuthV1NodeMeResponse = {
+	userName: string;
+	roles: Array<string>;
+};
+
+export type XeLocalAiEngineClientEndpointsAuthV1NodeSetupRequest = {
+	email: string;
+	password: string;
+};
+
+export type XeLocalAiEngineClientEndpointsCloudCodexV1CodexLoginResponse = {
+	authorizeUrl: string;
+};
+
+export type XeLocalAiEngineClientEndpointsCloudCodexV1CodexStatusResponse = {
+	signedIn: boolean;
+	accountId?: string | null;
+	expiresAtUtc?: string | null;
+	loginPending: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryHeaderDto = {
+	name: string;
+	value?: string | null;
+	isSecret?: boolean;
+	hasStoredValue?: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryModelDto = {
+	deploymentName: string;
+	displayLabel?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundrySettingsResponse = {
+	endpoint?: string | null;
+	authMode: string;
+	apiSurface?: string;
+	hasStoredApiKey?: boolean;
+	models?: Array<XeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryModelDto>;
+	headers?: Array<XeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryHeaderDto>;
+	additionalAllowedHostSuffixes?: Array<string>;
+	entraTenantId?: string | null;
+	entraClientId?: string | null;
+	hasStoredEntraClientSecret?: boolean;
+	entraTokenScope?: string | null;
+	entraSignInMethod?: string;
+	entraAuthCodeRedirectUri?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsCloudSettingsV1CloudSettingsResponse = {
+	providerName: string;
+	azureFoundry?: XeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundrySettingsResponse | null;
+};
+
+export type XeLocalAiEngineClientEndpointsCloudSettingsV1EntraAuthCodeSignInResponse = {
+	authorizeUrl: string;
+	expiresAtUtc: string;
+};
+
+export type XeLocalAiEngineClientEndpointsCloudSettingsV1EntraAuthCodeSignInStatusResponse = {
+	state: string;
+	expiresAtUtc?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsCloudSettingsV1EntraDeviceCodeSignInResponse = {
+	userCode: string;
+	verificationUri: string;
+	expiresAtUtc: string;
+};
+
+export type XeLocalAiEngineClientEndpointsCloudSettingsV1EntraDeviceCodeSignInStatusResponse = {
+	state: string;
+	userCode?: string | null;
+	verificationUri?: string | null;
+	expiresAtUtc?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsCloudSettingsV1SaveAzureFoundryHeaderRequest = {
+	name?: string;
+	value?: string | null;
+	isSecret?: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsCloudSettingsV1SaveCloudSettingsRequest = {
+	providerName?: string;
+	endpoint: string;
+	authMode?: string;
+	apiKey?: string | null;
+	apiSurface?: string;
+	models?: Array<XeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryModelDto>;
+	headers?: Array<XeLocalAiEngineClientEndpointsCloudSettingsV1SaveAzureFoundryHeaderRequest>;
+	additionalAllowedHostSuffixes?: Array<string>;
+	entraTenantId?: string | null;
+	entraClientId?: string | null;
+	entraClientSecret?: string | null;
+	entraTokenScope?: string | null;
+	entraSignInMethod?: string;
+	entraAuthCodeRedirectUri?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsConnectionV1ConnectionStatusResponse = {
+	state: string;
+	lastError?: string | null;
+	lastUpdatedAt?: string;
+	isPaired?: boolean;
+	autoConnectOnStart?: boolean;
+	bindingMethod?: string | null;
+	lastKnownNodeName?: string | null;
+	tokenExpiresAt?: string | null;
+	canConnect?: boolean;
+	canDisconnect?: boolean;
+	canEnableAutoConnect?: boolean;
+	canDisableAutoConnect?: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentV1ConfirmDevelopmentContainerRuntimeRequest = {
+	daemonId?: string;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentV1CreateDevelopmentProjectRequest = {
+	operationId?: string;
+	selectedFolderId?: string;
+	objective?: string;
+	baseBranch?: string;
+	taskTitle?: string;
+	requirements?: string;
+	acceptanceCriteriaJson?: string;
+	egressPolicy?: string;
+	coderModelId?: string;
+	reviewerModelId?: string;
+	trustedRepositoryAcknowledged?: boolean;
+	maxTokens?: number | null;
+	maxDurationSeconds?: number | null;
+	commandProfileId?: string | null;
+	buildTarget?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentV1CreateDevelopmentRepositoryFromTemplateRequest = {
+	templateId?: string;
+	destinationPath?: string;
+	alias?: string;
+	baseBranch?: string;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentActionRequest = {
+	operationId?: string;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentApplyResponse = {
+	operationId?: string;
+	phase?: string;
+	outcome?: string;
+	status?: string;
+	version?: number;
+	sequence?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentArtifactContentResponse = {
+	artifact?: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentArtifactResponse;
+	content?: string;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentArtifactRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentArtifactResponse = {
+	id?: string;
+	projectId?: string;
+	taskId?: string;
+	attemptId?: string | null;
+	kind?: string;
+	contentHash?: string;
+	byteCount?: number;
+	createdAtUtc?: number;
+	baseCommit?: string | null;
+	subjectHash?: string | null;
+	changedFilesManifestHash?: string | null;
+	commandProfileVersion?: string | null;
+	commandProfileDigest?: string | null;
+	isValid?: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentAttemptRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentAttemptResponse = {
+	id?: string;
+	taskId?: string;
+	predecessorAttemptId?: string | null;
+	role?: string;
+	modelId?: string;
+	provider?: string;
+	status?: string;
+	startedAtUtc?: number | null;
+	endedAtUtc?: number | null;
+	terminalReason?: string | null;
+	inputTokens?: number | null;
+	outputTokens?: number | null;
+	version?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentCapabilityResponse = {
+	enabled?: boolean;
+	sandboxProvider?: string;
+	containerRuntime?: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerRuntimeResponse | null;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerDaemonResponse = {
+	daemonId?: string;
+	serverVersion?: string;
+	endpoint?: string;
+	confirmedAtUtc?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerRuntimeResponse = {
+	ready?: boolean;
+	status?: string;
+	message?: string;
+	requiresOperatorConfirmation?: boolean;
+	endpoint?: string | null;
+	endpointSource?: string | null;
+	observedDaemon?: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerDaemonResponse | null;
+	pinnedDaemon?: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerDaemonResponse | null;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentEventResponse = {
+	id?: string;
+	projectId?: string;
+	taskId?: string | null;
+	attemptId?: string | null;
+	sequence?: number;
+	eventType?: string;
+	occurredAtUtc?: number;
+	operationId?: string | null;
+	operationPhase?: string | null;
+	outcome?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentNextActionResponse = {
+	action?: string;
+	projectId?: string;
+	taskId?: string;
+	attemptId?: string | null;
+	taskStatus?: string;
+	role?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentPatchPreviewResponse = {
+	subjectHash?: string;
+	patchHash?: string;
+	manifestHash?: string;
+	expectedResultHash?: string;
+	patch?: string;
+	changedFiles?: Array<XeLocalAiEngineClientServicesDevelopmentDevelopmentPatchPreviewFile>;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProfileDetectionRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProfileDetectionResponse = {
+	profileId?: string;
+	buildTarget?: string | null;
+	candidates?: Array<string>;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectDetailResponse = {
+	project?: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectResponse;
+	tasks?: Array<XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTaskDetailResponse>;
+	events?: Array<XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentEventResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectResponse = {
+	id?: string;
+	objective?: string;
+	selectedFolderId?: string | null;
+	repositoryConnectionRequired?: boolean;
+	baseBranch?: string;
+	status?: string;
+	egressPolicy?: string;
+	coderModelId?: string | null;
+	reviewerModelId?: string | null;
+	maxTokens?: number | null;
+	maxDurationSeconds?: number | null;
+	createdAtUtc?: number;
+	updatedAtUtc?: number;
+	version?: number;
+	commandProfileId?: string | null;
+	commandProfileBuildTarget?: string | null;
+	commandProfileDigest?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentRepositoryFromTemplateResponse = {
+	repository?: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentRepositoryResponse;
+	templateAlias?: string;
+	templateCommit?: string;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentRepositoryResponse = {
+	id?: string;
+	alias?: string;
+	availability?: string;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTaskDetailResponse = {
+	task?: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTaskResponse;
+	attempts?: Array<XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentAttemptResponse>;
+	artifacts?: Array<XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentArtifactResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTaskRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTaskResponse = {
+	id?: string;
+	projectId?: string;
+	title?: string;
+	requirements?: string;
+	acceptanceCriteriaJson?: string;
+	status?: string;
+	currentReviewRound?: number;
+	maxReviewRounds?: number;
+	blockedReason?: string | null;
+	approvedSubjectHash?: string | null;
+	version?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTemplateRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTemplateResponse = {
+	id?: string;
+	alias?: string;
+	availability?: string;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentArtifactsResponse = {
+	items?: Array<XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentArtifactResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentEventsResponse = {
+	items?: Array<XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentEventResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentProjectsResponse = {
+	items?: Array<XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentRepositoriesResponse = {
+	items?: Array<XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentRepositoryResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentTemplatesResponse = {
+	templates?: Array<XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTemplateResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentV1ReconnectDevelopmentRepositoryRequest = {
+	selectedFolderId?: string;
+	expectedVersion?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentV1RegisterDevelopmentRepositoryRequest = {
+	alias?: string;
+	hostPath?: string;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentV1RegisterDevelopmentTemplateRequest = {
+	alias?: string;
+	hostPath?: string;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1CreateImageJobRequest = {
+	modelName: string;
+	prompt: string;
+	negativePrompt?: string | null;
+	seed?: string | null;
+	width?: number;
+	height?: number;
+	steps?: number;
+	sampler?: string | null;
+	cfgScale?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1GetStableDiffusionCppSourceBuildPrerequisitesRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1ImageJobResponse = {
+	id: string;
+	modelName: string;
+	prompt: string;
+	negativePrompt?: string | null;
+	seed: string;
+	width: number;
+	height: number;
+	steps: number;
+	sampler: string;
+	cfgScale: number;
+	status: string;
+	createdAtUtc: number;
+	startedAtUtc?: number | null;
 	completedAtUtc?: number | null;
 	durationMs?: number | null;
-	summary?: string | null;
-	errorMessage?: string | null;
+	imageId?: string | null;
+	sanitizedError?: string | null;
 	cancellationRequestedAtUtc?: number | null;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1ImageJobRouteRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1ImageModelDownloadStatusResponse = {
+	modelName: string;
+	phase: string;
+	completedBytes?: number | null;
+	totalBytes?: number | null;
+	sanitizedError?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1ImageModelPartDownloadRequest = {
+	role: string;
+	fileName: string;
+	sha256?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1ImageModelPartResponse = {
+	role: string;
+	fileName: string;
+	sizeBytes: number;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1ImageModelResponse = {
+	modelName: string;
+	repoId: string;
+	family: string;
+	kind: string;
+	sizeBytes: number;
+	parts: Array<XeLocalAiEngineClientEndpointsImagesV1ImageModelPartResponse>;
+	downloadedAtUtc: number;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1ImageRuntimeActionRequest = {
+	accepted?: boolean | null;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1ImageRuntimeActivityResponse = {
+	activeJobCount: number;
+	spawnReadinessCount: number;
+	residentProcessCount: number;
+	mutationReserved: boolean;
+	evictionReserved: boolean;
+	isBusy: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1ImageRuntimeBlockedResponse = {
+	reason: string;
+	message: string;
+	activity: XeLocalAiEngineClientEndpointsImagesV1ImageRuntimeActivityResponse;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1ImageRuntimeStatusResponse = {
+	managedRuntime?: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionInstalledRuntimeResponse | null;
+	activity: XeLocalAiEngineClientEndpointsImagesV1ImageRuntimeActivityResponse;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1ListImageJobsResponse = {
+	items: Array<XeLocalAiEngineClientEndpointsImagesV1ImageJobResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1ListImageModelDownloadsResponse = {
+	items: Array<XeLocalAiEngineClientEndpointsImagesV1ImageModelDownloadStatusResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1ListImageModelsResponse = {
+	items: Array<XeLocalAiEngineClientEndpointsImagesV1ImageModelResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1RetrieveImageRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBackendDto = "cpu" | "vulkan" | "cuda";
+
+export type XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildDescriptorResponse = {
+	buildId: string;
+	backend: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBackendDto;
+	source: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceSelectionDto;
+	repository: string;
+	revisionMode: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceRevisionModeDto;
+	requestedCommit?: string | null;
+	resolvedCommit?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildPrerequisiteItemResponse = {
+	key: string;
+	satisfied: boolean;
+	detail: string;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildPrerequisitesResponse = {
+	backend: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBackendDto;
+	items: Array<XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildPrerequisiteItemResponse>;
+	canBuild: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildStatusResponse = {
+	phase: string;
+	isRunning: boolean;
+	terminal: boolean;
+	logStartSequence: number;
+	logLines: Array<string>;
+	sanitizedError?: string | null;
+	currentBuild?: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildDescriptorResponse | null;
+	startedAtUtc?: number | null;
+	completedAtUtc?: number | null;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceRevisionModeDto =
+	| "enginePinned"
+	| "defaultBranch"
+	| "explicitCommit";
+
+export type XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceSelectionDto = "official" | "custom";
+
+export type XeLocalAiEngineClientEndpointsImagesV1StableDiffusionInstalledRuntimeResponse = {
+	validity: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionInstalledRuntimeValidityDto;
+	desiredBackend: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBackendDto;
+	sourceRepository: string;
+	sourceCommit: string;
+	sourceSelection: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceSelectionDto;
+	sourceRevisionMode: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceRevisionModeDto;
+	sourceRequestedCommit?: string | null;
+	installedAtUtc: number;
+	invalidReason?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1StableDiffusionInstalledRuntimeValidityDto = "active" | "invalid";
+
+export type XeLocalAiEngineClientEndpointsImagesV1StartImageModelDownloadRequest = {
+	modelName: string;
+	repoId: string;
+	family: string;
+	kind?: string | null;
+	revision?: string | null;
+	parts: Array<XeLocalAiEngineClientEndpointsImagesV1ImageModelPartDownloadRequest>;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1StartImageModelDownloadResponse = {
+	modelName: string;
+	accepted: boolean;
+	alreadyInFlight: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1StartStableDiffusionCppSourceBuildRequest = {
+	backend: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBackendDto;
+	source: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceSelectionDto;
+	repository?: string | null;
+	commit?: string | null;
+	acknowledgeCustomSourceRisk: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1StartStableDiffusionCppSourceBuildResponse = {
+	started: boolean;
+	status: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildStatusResponse;
+};
+
+export type XeLocalAiEngineClientEndpointsInvocationsV1InvocationCurrentResponse = {
+	invocationId: string;
+	conversationId: string;
+	status: XeLocalAiEngineAiContractsEnumsInvocationStatus;
+	modelUsed?: string | null;
+	startedAt: string;
+	lastUpdatedAt: string;
+	completedAt?: string | null;
+	error?: string | null;
+	failureCategory?: XeLocalAiEngineClientModelsEnumsFailureCategory | null;
+	streamedChunkCount: number;
+	streamedThinkingChunkCount: number;
+	pendingToolCallCount: number;
+	hasPendingApproval: boolean;
+	traceId?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsInvocationsV1InvocationHistoryResponse = {
+	invocationId: string;
+	conversationId: string;
+	status: XeLocalAiEngineAiContractsEnumsInvocationStatus;
+	modelUsed?: string | null;
+	startedAt: string;
+	completedAt: string;
+	durationMs: number;
+	error?: string | null;
+	failureCategory?: XeLocalAiEngineClientModelsEnumsFailureCategory | null;
+	streamedChunkCount: number;
+	streamedThinkingChunkCount: number;
+	traceId?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsInvocationsV1InvocationMonitorResponse = {
+	current: XeLocalAiEngineClientEndpointsInvocationsV1InvocationCurrentResponse | null;
+	history: Array<XeLocalAiEngineClientEndpointsInvocationsV1InvocationHistoryResponse>;
+	historyCapacity: number;
+};
+
+export type XeLocalAiEngineClientEndpointsKnowledgeV1DownloadRecommendedEmbeddingResponse = {
+	modelName: string;
+	repoId: string;
+	quant: string;
+	alreadyInstalled: boolean;
+	alreadyInFlight: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsKnowledgeV1DownloadRecommendedRerankerResponse = {
+	modelName: string;
+	repoId: string;
+	quant: string;
+	alreadyInstalled: boolean;
+	alreadyInFlight: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentChunkResponse = {
+	chunkIndex: number;
+	headingPath?: string | null;
+	content: string;
+};
+
+export type XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentDetailResponse = {
+	documentId: string;
+	displayName: string;
+	status: XeLocalAiEngineClientServicesKnowledgeKnowledgeDocumentStatus;
+	failureReason?: string | null;
+	chunkCount: number;
+	embeddingModel: string;
+	staleModel: boolean;
+	sizeBytes: number;
+	createdAtUtc: number;
+	updatedAtUtc: number;
+	chunks: Array<XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentChunkResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentResponse = {
+	documentId: string;
+	displayName: string;
+	status: XeLocalAiEngineClientServicesKnowledgeKnowledgeDocumentStatus;
+	failureReason?: string | null;
+	chunkCount: number;
+	embeddingModel: string;
+	staleModel: boolean;
+	sizeBytes: number;
 	createdAtUtc: number;
 };
 
-export type XeLocalAiEngineClientEndpointsSchedulerV1ScheduledRunTrigger = "Schedule" | "Manual" | "Agent" | "System";
-
-export type XeLocalAiEngineClientEndpointsSchedulerV1ScheduledRunStatus =
-	| "Queued"
-	| "Running"
-	| "Succeeded"
-	| "Failed"
-	| "Cancelled"
-	| "TimedOut"
-	| "Skipped";
-
-export type XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobRunsResponse = {
-	items: Array<XeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobRunResponse>;
-};
-
-export type XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobRunsRequest = {
+export type XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentRouteRequest = {
 	[key: string]: never;
 };
 
-export type XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobsResponse = {
-	items: Array<XeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobResponse>;
+export type XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeSearchHitResponse = {
+	documentId: string;
+	chunkId: string;
+	title: string;
+	section?: string | null;
+	content: string;
+	source: string;
+	score: number;
+	chunkIndex: number;
+	documentStatus: XeLocalAiEngineClientServicesKnowledgeKnowledgeDocumentStatus;
+	servingLastKnownGood: boolean;
 };
 
-export type XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobsRequest = {
+export type XeLocalAiEngineClientEndpointsKnowledgeV1ListKnowledgeDocumentsResponse = {
+	items: Array<XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsKnowledgeV1ReindexCorpusResponse = {
+	enqueuedCount: number;
+};
+
+export type XeLocalAiEngineClientEndpointsKnowledgeV1SearchKnowledgeRequest = {
+	query: string;
+	limit?: number;
+	documentId?: string | null;
+	expandNeighbors?: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsKnowledgeV1SearchKnowledgeResponse = {
+	results: Array<XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeSearchHitResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsKnowledgeV1UploadKnowledgeDocumentRequest = {
+	file?: Blob | File | null;
+};
+
+export type XeLocalAiEngineClientEndpointsKnowledgeV1UploadKnowledgeDocumentResponse = {
+	documentId: string;
+	status: XeLocalAiEngineClientServicesKnowledgeKnowledgeDocumentStatus;
+	deduplicated: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalChatV1ArchiveNodeChatConversationRequest = {
+	archived?: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalChatV1BranchNodeChatConversationRequest = {
+	selectedRevisions?: {
+		[key: string]: string;
+	} | null;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalChatV1CancelNodeChatMessageRequest = {
+	conversationId: string;
+	messageId: string;
+	requestId: string;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalChatV1ConversationUploadedFileResponse = {
+	fileId: string;
+	conversationId: string;
+	originalFileName: string;
+	mimeType: string;
+	extension: string;
+	sizeBytes: number;
+	extractionStatus: string;
+	extractedChars?: number | null;
+	createdAtUtc: number;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalChatV1CreateNodeChatConversationRequest = {
+	title?: string | null;
+	userId?: string | null;
+	agentDefinitionId?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalChatV1DeleteConversationUploadRequest = {
 	[key: string]: never;
 };
 
-export type XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobTemplatesResponse = {
-	items: Array<XeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobTemplateResponse>;
+export type XeLocalAiEngineClientEndpointsLocalChatV1DeleteNodeChatConversationRequest = {
+	purgeImmediately?: boolean;
 };
 
-export type XeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobTemplateResponse = {
-	templateId: string;
-	displayName: string;
-	description: string;
-	parameterSchema?: string | null;
-	defaultParameters?: string | null;
-	supportedScheduleKinds: Array<XeLocalAiEngineClientEndpointsSchedulerV1ScheduleKind>;
-	defaultScheduleKind: XeLocalAiEngineClientEndpointsSchedulerV1ScheduleKind;
-	defaultMisfirePolicy: XeLocalAiEngineClientEndpointsSchedulerV1SchedulerMisfirePolicy;
-	defaultMaxRuntimeSeconds?: number | null;
-	allowManualTrigger: boolean;
-	allowAgentCreation: boolean;
-	historyDetailLevel: string;
-};
-
-export type XeLocalAiEngineClientEndpointsSchedulerV1UpdateScheduledJobRequest = {
-	templateId: string;
-	displayName: string;
-	description?: string | null;
-	scheduleKind: XeLocalAiEngineClientEndpointsSchedulerV1ScheduleKind;
-	cronExpression?: string | null;
-	intervalSeconds?: number | null;
-	repeatCount?: number | null;
-	startAtUtc?: number | null;
-	endAtUtc?: number | null;
-	timeZoneId?: string;
-	misfirePolicy?: XeLocalAiEngineClientEndpointsSchedulerV1SchedulerMisfirePolicy;
-	preventOverlap?: boolean;
-	maxRuntimeSeconds?: number | null;
-	parameters?: string | null;
-};
-
-export type XeLocalAiEngineClientEndpointsPreviewV1PreviewRunRouteRequest = {
+export type XeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatConversationRequest = {
 	[key: string]: never;
 };
 
-export type XeLocalAiEngineClientEndpointsPreviewV1PreviewWorkflowResponse = {
-	id?: string;
-	name?: string;
-	graph?: XeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraph;
-	version?: number;
-	createdAtUtc?: number;
-	updatedAtUtc?: number;
+export type XeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatMessageFeedbackRequest = {
+	[key: string]: never;
 };
 
-export type XeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraph = {
-	startText?: string;
-	nodes?: Array<XeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraphNode>;
-	edges?: Array<XeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraphEdge>;
+export type XeLocalAiEngineClientEndpointsLocalChatV1ListConversationUploadsRequest = {
+	[key: string]: never;
 };
 
-export type XeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraphNode = {
-	id?: string;
-	kind?: XeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowNodeKind;
-	label?: string | null;
-	instructions?: string | null;
+export type XeLocalAiEngineClientEndpointsLocalChatV1ListConversationUploadsResponse = {
+	items: Array<XeLocalAiEngineClientEndpointsLocalChatV1ConversationUploadedFileResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatConversationsRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatConversationsResponse = {
+	items: Array<XeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationSummaryResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatMessageRevisionsRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatBranchConversationResponse = {
+	sourceConversationId: string;
+	branchedConversationId: string;
+	copiedMessageCount: number;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatCancelMessageResponse = {
+	conversationId: string;
+	messageId: string;
+	requestId: string;
+	status: string;
+	cancelled: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationResponse = {
+	conversationId: string;
+	title?: string | null;
+	userId?: string | null;
+	createdAtUtc: number;
+	lastSeenUtc: number;
+	purged: boolean;
+	origin: string;
+	isPinned: boolean;
+	archived: boolean;
+	branchOfConversationId?: string | null;
+	selectedPath?: {
+		[key: string]: string;
+	} | null;
+	memoryExcluded: boolean;
+	messages: Array<XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationSummaryResponse = {
+	conversationId: string;
+	title?: string | null;
+	createdAtUtc: number;
+	lastSeenUtc: number;
+	lastMessagePreview?: string | null;
+	lastMessageStatus?: string | null;
+	purged: boolean;
+	origin: string;
+	isPinned: boolean;
+	archived: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatDeleteConversationResponse = {
+	conversationId: string;
+	cancelRequested: boolean;
+	purged: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageFeedbackResponse = {
+	messageId: string;
+	conversationId: string;
+	rating: string;
+	comment?: string | null;
+	createdAtUtc: number;
+	updatedAtUtc: number;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageResponse = {
+	messageId: string;
+	conversationId: string;
+	requestId?: string | null;
+	sequence: number;
+	role: string;
+	content: string;
+	reasoning?: string | null;
+	status: string;
+	createdAtUtc: number;
+	updatedAtUtc: number;
+	origin: string;
 	model?: string | null;
-	modelProfile?: string | null;
+	error?: string | null;
+	inputTokens?: number | null;
+	outputTokens?: number | null;
+	totalTokens?: number | null;
+	reasoningTokens?: number | null;
+	parentMessageId?: string | null;
+	variantGroupId?: string | null;
+	feedbackRating?: string | null;
+	feedbackComment?: string | null;
+	parts?: Array<XeLocalAiEngineClientServicesChatNodeChatMessagePart> | null;
+	agentDefinitionId?: string | null;
+	agentName?: string | null;
 	reasoningEffort?: string | null;
+	generationDurationMs?: number | null;
+	sources?: Array<XeLocalAiEngineClientServicesChatNodeChatMessageSource> | null;
 };
 
-export type XeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowNodeKind = "Start" | "Agent" | "Debug" | "Pause" | "End";
-
-export type XeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraphEdge = {
-	sourceId?: string;
-	targetId?: string;
+export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageRevisionsResponse = {
+	messageId: string;
+	variantGroupId?: string | null;
+	variants: Array<XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageResponse>;
 };
 
-export type XeLocalAiEngineClientEndpointsPreviewV1CreatePreviewWorkflowRequest = {
-	name: string;
-	graph: XeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraph;
+export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatSelectedPathResponse = {
+	conversationId: string;
+	selectedPath: {
+		[key: string]: string;
+	};
 };
 
-export type XeLocalAiEngineClientEndpointsPreviewV1PreviewWorkflowRouteRequest = {
+export type XeLocalAiEngineClientEndpointsLocalChatV1PinNodeChatConversationRequest = {
+	isPinned?: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalChatV1RenameNodeChatConversationRequest = {
+	title?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalChatV1ResolveToolApprovalRequest = {
+	requestId: string;
+	approved: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalChatV1ResolveToolApprovalResponse = {
+	requestId: string;
+	approved: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatConversationMemoryExcludedRequest = {
+	memoryExcluded?: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatMessageFeedbackRequest = {
+	rating: string;
+	comment?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatSelectedPathRequest = {
+	selectedPath?: {
+		[key: string]: string;
+	} | null;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalChatV1UploadConversationFileRequest = {
+	file?: Blob | File | null;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelRequest = {
 	[key: string]: never;
 };
 
-export type XeLocalAiEngineClientEndpointsPreviewV1PreviewRunStartedResponse = {
-	runId?: string;
+export type XeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelResponse = {
+	modelName: string;
+	deleted: boolean;
 };
 
-export type XeLocalAiEngineClientEndpointsPreviewV1ExecuteUnsavedPreviewWorkflowRequest = {
-	graph: XeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraph;
+export type XeLocalAiEngineClientEndpointsLocalModelsV1GetLocalModelDetailsRequest = {
+	[key: string]: never;
 };
 
-export type XeLocalAiEngineClientEndpointsPreviewV1ListPreviewWorkflowsResponse = {
-	items: Array<XeLocalAiEngineClientEndpointsPreviewV1PreviewWorkflowSummaryResponse>;
+export type XeLocalAiEngineClientEndpointsLocalModelsV1ListLocalModelsResponse = {
+	isAvailable: boolean;
+	selectedModelName?: string | null;
+	configuredDefaultModelName?: string | null;
+	error?: string | null;
+	items: Array<XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse>;
 };
 
-export type XeLocalAiEngineClientEndpointsPreviewV1PreviewWorkflowSummaryResponse = {
-	id?: string;
-	name?: string;
-	version?: number;
-	createdAtUtc?: number;
-	updatedAtUtc?: number;
+export type XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelDetailsResponse = {
+	modelName: string;
+	maxContextTokens?: number | null;
+	effectiveContextTokens?: number | null;
+	template?: string | null;
+	system?: string | null;
+	license?: string | null;
 };
 
-export type XeLocalAiEngineClientEndpointsPreviewV1UpdatePreviewWorkflowRequest = {
+export type XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse = {
+	modelName: string;
+	provider?: string;
+	sizeBytes?: number | null;
+	modifiedAtUtc?: number | null;
+	family?: string | null;
+	parameterSize?: string | null;
+	quantizationLevel?: string | null;
+	isSelected: boolean;
+	kind: string;
+	detectedKind: string;
+	capabilities: Array<string>;
+	isReasoningCapable: boolean;
+	isNativeReasoningCapable?: boolean;
+	isToolCapable: boolean;
+	isOverridden: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalModelsV1ModelKindResponse = {
+	modelName: string;
+	kind: string;
+	detectedKind: string;
+	capabilities: Array<string>;
+	isOverridden: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalModelsV1ResetModelKindRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalModelsV1RunningLocalModelResponse = {
+	modelName: string;
+	sizeBytes?: number | null;
+	sizeVramBytes?: number | null;
+	expiresAtUtc?: number | null;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalModelsV1RunningLocalModelsResponse = {
+	isAvailable: boolean;
+	ollamaConfigured: boolean;
+	error?: string | null;
+	items: Array<XeLocalAiEngineClientEndpointsLocalModelsV1RunningLocalModelResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelRequest = {
+	modelName: string;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelResponse = {
+	selectedModelName: string;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalModelsV1SetModelKindRequest = {
+	kind?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalModelsV1UnloadLocalModelRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalModelsV1UnloadLocalModelResponse = {
+	modelName: string;
+	unloaded: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsMcpV1CreateMcpServerRequest = {
+	name?: string | null;
+	description?: string | null;
+	transportKind?: XeLocalAiEngineClientPersistenceMcpTransportKind;
+	command?: string | null;
+	arguments?: Array<string> | null;
+	workingDirectory?: string | null;
+	env?: {
+		[key: string]: string;
+	} | null;
+	url?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsMcpV1DeleteMcpServerRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsMcpV1GetMcpServerRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsMcpV1GetMcpServerToolsRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsMcpV1ListMcpServersResponse = {
+	items: Array<XeLocalAiEngineClientEndpointsMcpV1McpServerResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsMcpV1McpDiscoveredToolResponse = {
 	name: string;
-	graph: XeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraph;
+	description?: string | null;
+	requiresApproval: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsMcpV1McpServerResponse = {
+	id: string;
+	name: string;
+	description?: string | null;
+	transportKind: XeLocalAiEngineClientPersistenceMcpTransportKind;
+	command?: string | null;
+	arguments: Array<string>;
+	workingDirectory?: string | null;
+	env: {
+		[key: string]: string;
+	};
+	url?: string | null;
+	enabled: boolean;
 	version: number;
+	createdAtUtc: number;
+	updatedAtUtc: number;
+};
+
+export type XeLocalAiEngineClientEndpointsMcpV1McpServerToolsResponse = {
+	status: string;
+	error?: string | null;
+	tools: Array<XeLocalAiEngineClientEndpointsMcpV1McpDiscoveredToolResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsMcpV1SetMcpServerEnabledRequest = {
+	enabled?: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsMcpV1ToolCatalogEntryResponse = {
+	name: string;
+	description: string;
+	requiresApproval: boolean;
+	source: string;
+	category: string;
+	effectiveRequiresApproval: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsMcpV1ToolCatalogResponse = {
+	tools: Array<XeLocalAiEngineClientEndpointsMcpV1ToolCatalogEntryResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsMcpV1UpdateMcpServerRequest = {
+	name?: string | null;
+	description?: string | null;
+	transportKind?: XeLocalAiEngineClientPersistenceMcpTransportKind;
+	command?: string | null;
+	arguments?: Array<string> | null;
+	workingDirectory?: string | null;
+	env?: {
+		[key: string]: string;
+	} | null;
+	url?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1BenchmarkInferenceProfileRequest = {
+	profileId: string;
+	allowPreSpawnVramPressure?: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1BenchmarkInferenceProfileResponse = {
+	snapshotId?: string | null;
+	metrics?: XeLocalAiEngineClientEndpointsModelFitV1InferenceBenchmarkMetricsDto | null;
+	profile: XeLocalAiEngineClientEndpointsModelFitV1InferenceProfileViewDto;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1BrowseGgufRepositoriesRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1BrowseGgufRepositoriesResponse = {
+	items: Array<XeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1CancelGgufDownloadRequest = {
+	modelName: string;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1CancelGgufDownloadResponse = {
+	modelName: string;
+	cancelled: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1CudaBuildPrerequisiteItemResponse = {
+	key: string;
+	satisfied: boolean;
+	detail: string;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1CudaBuildPrerequisitesResponse = {
+	items: Array<XeLocalAiEngineClientEndpointsModelFitV1CudaBuildPrerequisiteItemResponse>;
+	canBuild: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1CudaBuildStatusResponse = {
+	phase: string;
+	isRunning: boolean;
+	terminal: boolean;
+	logLines: Array<string>;
+	sanitizedError?: string | null;
+	tag?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1EjectRunningModelRequest = {
+	modelName: string;
+	role?: string | null;
+	force?: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1EjectRunningModelResponse = {
+	modelName: string;
+	role: string;
+	outcome: string;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1EnsureLlamaCppBinaryRequest = {
+	variant: string;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1ExploreInferenceProfileRequest = {
+	modelName: string;
+	role?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1FreezeInferenceProfileRequest = {
+	profileId: string;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1GetGgufDownloadStatusRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1GetHardwareProfileRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsResponse = {
+	hasCache: boolean;
+	snapshotId?: string | null;
+	status?: string | null;
+	useCase?: string | null;
+	lastRefreshedAtUtc?: number | null;
+	recommendations: Array<XeLocalAiEngineClientEndpointsModelFitV1ModelFitRecommendationResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1GetLlamaCppRuntimeRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1GetLlamaCppSourceBuildPrerequisitesRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1GgufDownloadStatusResponse = {
+	modelName: string;
+	phase: string;
+	completedBytes?: number | null;
+	totalBytes?: number | null;
+	sanitizedError?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryFileResponse = {
+	fileName: string;
+	quant: string;
+	isDynamic: boolean;
+	sizeBytes: number;
+	qualityTier: string;
+	fitVerdict: string;
+	isRecommended: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryResponse = {
+	repoId: string;
+	isGated: boolean;
+	downloads: number;
+	likes: number;
+	lastModifiedAtUtc: number;
+	license?: string | null;
+	hasUsableGguf: boolean;
+	isTrustedPublisher?: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1HardwareProfileResponse = {
+	totalRamBytes: number;
+	availableRamBytes: number;
+	vramBytes?: number | null;
+	vramKnown: boolean;
+	gpuVendor: string;
+	gpuAccelAvailable: boolean;
+	cpuCores: number;
+	freeDiskBytes: number;
+	inferenceBackend?: string;
+	gpuExpected?: boolean;
+	cpuFallback?: boolean;
+	cpuFallbackReason?: string | null;
+	cpuFallbackRemediation?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1HfTokenStatusResponse = {
+	hasToken: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1InferenceBenchmarkMetricsDto = {
+	role?: string | null;
+	tokensPerSecond?: number | null;
+	ppTokensPerSecond?: number | null;
+	ttftMs?: number | null;
+	totalLatencyMs?: number | null;
+	cacheHitRate?: number | null;
+	toolLoopMs?: number | null;
+	itemsPerSecond?: number | null;
+	inputTokensPerSecond?: number | null;
+	p50LatencyMs?: number | null;
+	p95LatencyMs?: number | null;
+	batchSize?: number | null;
+	outputDimension?: number | null;
+	valuesFinite?: boolean | null;
+	deterministicOutput?: boolean | null;
+	vramLoadBytes?: number | null;
+	vramAfterBytes?: number | null;
+	globalFreeVramLoadBytes?: number | null;
+	globalFreeVramAfterBytes?: number | null;
+	processBudgetVramLoadBytes?: number | null;
+	processBudgetVramAfterBytes?: number | null;
+	minimumGlobalFreeVramBytes?: number | null;
+	minimumProcessBudgetVramBytes?: number | null;
+	peakProcessRamBytes?: number | null;
+	externalPressureDetected: boolean;
+	runs: number;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1InferenceProfileActionResponse = {
+	profile: XeLocalAiEngineClientEndpointsModelFitV1InferenceProfileViewDto;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1InferenceProfileViewDto = {
+	id: string;
+	modelName: string;
+	role: string;
+	backend: string;
+	llamacppBuild: string;
+	quant: string;
+	ctxSize: number;
+	nGpuLayers?: number | null;
+	tensorSplit?: string | null;
+	overrideTensor?: string | null;
+	kvTypeK?: string | null;
+	kvTypeV?: string | null;
+	flashAttn: boolean;
+	nParams?: number | null;
+	isMoe: boolean;
+	expertCount?: number | null;
+	launchPolicyFingerprintVersion?: number | null;
+	launchPolicyFingerprint?: string | null;
+	globalFreeVramAtFreezeBytes?: number | null;
+	processBudgetVramAtFreezeBytes?: number | null;
+	status: string;
+	benchmarkSnapshotId?: string | null;
+	createdAtUtc: number;
+	updatedAtUtc: number;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1InspectGgufRepositoryRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1InspectGgufRepositoryResponse = {
+	repoId: string;
+	files: Array<XeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryFileResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1InvalidateInferenceProfileRequest = {
+	profileId: string;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1ListGgufDownloadsResponse = {
+	items: Array<XeLocalAiEngineClientEndpointsModelFitV1GgufDownloadStatusResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1ListInferenceProfilesResponse = {
+	items: Array<XeLocalAiEngineClientEndpointsModelFitV1InferenceProfileViewDto>;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1ListRunningModelsResponse = {
+	items: Array<XeLocalAiEngineClientEndpointsModelFitV1RunningModelResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1LlamaCppInstalledRuntimeResponse = {
+	tag: string;
+	variant: string;
+	asset: string;
+	installedAtUtc: number;
+	isSourceBuild: boolean;
+	sourceRepository?: string | null;
+	sourceCommit?: string | null;
+	sourceSelection?: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceSelectionDto | null;
+	sourceRevisionMode?: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceRevisionModeDto | null;
+	sourceRequestedCommit?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1LlamaCppRuntimeStatusResponse = {
+	installed?: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppInstalledRuntimeResponse | null;
+	recommendedTag: string;
+	upstreamLatestTag?: string | null;
+	updateAvailable: boolean;
+	isOffline: boolean;
+	runningProcessCount: number;
+	isSourceBuild: boolean;
+	rebuildAvailable: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBackendDto = "cpu" | "vulkan" | "cuda";
+
+export type XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildBlockedResponse = {
+	reason: string;
+	message: string;
+	runningProcessCount?: number | null;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildDescriptorResponse = {
+	buildId: string;
+	backend: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBackendDto;
+	source: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceSelectionDto;
+	repository: string;
+	revisionMode: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceRevisionModeDto;
+	requestedCommit?: string | null;
+	resolvedCommit?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildPrerequisiteItemResponse = {
+	key: string;
+	satisfied: boolean;
+	detail: string;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildPrerequisitesResponse = {
+	backend: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBackendDto;
+	items: Array<XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildPrerequisiteItemResponse>;
+	canBuild: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildStatusResponse = {
+	phase: string;
+	isRunning: boolean;
+	terminal: boolean;
+	logStartSequence: number;
+	logLines: Array<string>;
+	sanitizedError?: string | null;
+	currentBuild?: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildDescriptorResponse | null;
+	startedAtUtc?: number | null;
+	completedAtUtc?: number | null;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceRevisionModeDto =
+	| "enginePinned"
+	| "defaultBranch"
+	| "explicitCommit";
+
+export type XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceSelectionDto = "official" | "custom";
+
+export type XeLocalAiEngineClientEndpointsModelFitV1LlamaCppUpdateBlockedResponse = {
+	runningProcessCount: number;
+	message: string;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1LlamaCppVersionResponse = {
+	version: string;
+	variant: string;
+	isPinnedFallback: boolean;
+	pinnedTag: string;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1ModelCatalogInfoResponse = {
+	catalogVersion: string;
+	updatedAt?: string | null;
+	source: string;
+	fetchedAtUtc?: number | null;
+	sourceUrl?: string | null;
+	modelCount: number;
+	refreshSourceConfigured: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1ModelFitRecommendationResponse = {
+	rank: number;
+	modelName: string;
+	providerModelName?: string | null;
+	score: number;
+	fitLevel?: string | null;
+	runMode?: string | null;
+	quantization?: string | null;
+	estimatedTokensPerSecond?: number | null;
+	requiredRamMb?: number | null;
+	requiredVramMb?: number | null;
+	contextTokens?: number | null;
+	isInstalled: boolean;
+	pullModelName?: string | null;
+	releaseDate?: string | null;
+	isTrustedPublisher?: boolean;
+	section: string;
+	tier?: string | null;
+	catalogId?: string | null;
+	catalogDisplayName?: string | null;
+	catalogNotes?: string | null;
+	expertsOffloaded?: boolean;
+	gpuGb?: number | null;
+	cpuGb?: number | null;
+	kvQuant?: string | null;
+	kvQuantEstimatedGb?: number | null;
+	kvQuantHeadroomGb?: number | null;
+	kvQuantFits?: boolean | null;
+	kvQuantRequiresFlashAttention?: boolean | null;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsRequest = {
+	scheduledJobId?: string;
+	useCase?: string | null;
+	limit?: number | null;
+	quantOverride?: string | null;
+	ctxTarget?: number | null;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsResponse = {
+	scheduledJobId: string;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1RunningModelResponse = {
+	modelName: string;
+	role: string;
+	isResponsive: boolean;
+	detail: string;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1SetHfTokenRequest = {
+	token?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1StartCudaBuildResponse = {
+	started: boolean;
+	status: XeLocalAiEngineClientEndpointsModelFitV1CudaBuildStatusResponse;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1StartGgufDownloadRequest = {
+	repoId: string;
+	fileName?: string | null;
+	quant?: string | null;
+	revision?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1StartGgufDownloadResponse = {
+	modelName: string;
+	alreadyInFlight: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1StartLlamaCppSourceBuildRequest = {
+	backend: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBackendDto;
+	source: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceSelectionDto;
+	repository?: string | null;
+	commit?: string | null;
+	acknowledgeCustomSourceRisk: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1StartLlamaCppSourceBuildResponse = {
+	started: boolean;
+	status: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildStatusResponse;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1UpdateLlamaCppRuntimeRequest = {
+	tag: string;
+	variant?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsNodeBindingV1CancelNodeBindingResponse = {
+	cancelled?: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsNodeBindingV1NodeBindingSessionResponse = {
+	deviceCode: string;
+	userCode: string;
+	verificationUri: string;
+	verificationUriComplete: string;
+	expiresAt?: string;
+	intervalSeconds?: number;
+	status: string;
+};
+
+export type XeLocalAiEngineClientEndpointsNodeBindingV1PollNodeBindingSessionRequest = {
+	deviceCode: string;
+	userCode: string;
+	verificationUri: string;
+	verificationUriComplete: string;
+	expiresAt?: string;
+	intervalSeconds?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsNodeBindingV1PollNodeBindingSessionResponse = {
+	status: string;
+	intervalSeconds?: number;
+	expiresAt?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse = {
@@ -373,26 +2154,6 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse = {
 	} | null;
 };
 
-export type XeLocalAiEngineClientModelsSamplingOptions = {
-	temperature?: number | null;
-	topP?: number | null;
-	topK?: number | null;
-	minP?: number | null;
-	maxOutputTokens?: number | null;
-	repeatPenalty?: number | null;
-	repeatLastN?: number | null;
-	presencePenalty?: number | null;
-	frequencyPenalty?: number | null;
-	seed?: string | null;
-	stop?: Array<string> | null;
-	numCtx?: number | null;
-};
-
-export type XeLocalAiEngineClientServicesNodeSettingsModelRate = {
-	inputPer1M?: number;
-	outputPer1M?: number;
-};
-
 export type XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest = {
 	maxMessageRequestTimeoutSeconds?: number | null;
 	defaultModelName?: string | null;
@@ -429,761 +2190,351 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest 
 	} | null;
 };
 
-/**
- * RFC9457 compatible problem details/ error response class. this can be used by configuring startup like so:
- * app.UseFastEndpoints(c => c.Errors.UseProblemDetails())
- */
-export type FastEndpointsProblemDetails = {
-	type?: string;
-	title?: string;
-	status?: number;
-	instance?: string;
-	traceId?: string;
-	/**
-	 * the details of the error
-	 */
-	detail?: string | null;
-	errors?: Array<FastEndpointsProblemDetailsError>;
+export type XeLocalAiEngineClientEndpointsPreviewV1CancelAllPreviewRunsResponse = {
+	cancelledCount?: number;
 };
 
-/**
- * the error details object
- */
-export type FastEndpointsProblemDetailsError = {
-	/**
-	 * the name of the error or property of the dto that caused the error
-	 */
+export type XeLocalAiEngineClientEndpointsPreviewV1CreatePreviewWorkflowRequest = {
+	name: string;
+	graph: XeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraph;
+};
+
+export type XeLocalAiEngineClientEndpointsPreviewV1ExecuteUnsavedPreviewWorkflowRequest = {
+	graph: XeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraph;
+};
+
+export type XeLocalAiEngineClientEndpointsPreviewV1ListPreviewRunsResponse = {
+	items: Array<XeLocalAiEngineClientEndpointsPreviewV1PreviewRunSummaryResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsPreviewV1ListPreviewWorkflowsResponse = {
+	items: Array<XeLocalAiEngineClientEndpointsPreviewV1PreviewWorkflowSummaryResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsPreviewV1PreviewRunRouteRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsPreviewV1PreviewRunStartedResponse = {
+	runId?: string;
+};
+
+export type XeLocalAiEngineClientEndpointsPreviewV1PreviewRunSummaryResponse = {
+	runId?: string;
+	state?: string;
+	isLive?: boolean;
+	startedAtUtc?: number;
+	lastSeq?: number;
+	subscriberCount?: number;
+	pausedNodeId?: string | null;
+	pauseRequestId?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsPreviewV1PreviewWorkflowResponse = {
+	id?: string;
 	name?: string;
-	/**
-	 * the reason for the error
-	 */
-	reason?: string;
-	/**
-	 * the code of the error
-	 */
-	code?: string | null;
-	/**
-	 * the severity of the error
-	 */
-	severity?: string | null;
+	graph?: XeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraph;
+	version?: number;
+	createdAtUtc?: number;
+	updatedAtUtc?: number;
 };
 
-export type XeLocalAiEngineClientEndpointsNodeBindingV1CancelNodeBindingResponse = {
-	cancelled?: boolean;
+export type XeLocalAiEngineClientEndpointsPreviewV1PreviewWorkflowRouteRequest = {
+	[key: string]: never;
 };
 
-export type XeLocalAiEngineClientEndpointsNodeBindingV1PollNodeBindingSessionResponse = {
-	status: string;
-	intervalSeconds?: number;
-	expiresAt?: string | null;
+export type XeLocalAiEngineClientEndpointsPreviewV1PreviewWorkflowSummaryResponse = {
+	id?: string;
+	name?: string;
+	version?: number;
+	createdAtUtc?: number;
+	updatedAtUtc?: number;
 };
 
-export type XeLocalAiEngineClientEndpointsNodeBindingV1PollNodeBindingSessionRequest = {
-	deviceCode: string;
-	userCode: string;
-	verificationUri: string;
-	verificationUriComplete: string;
-	expiresAt?: string;
-	intervalSeconds?: number;
+export type XeLocalAiEngineClientEndpointsPreviewV1UpdatePreviewWorkflowRequest = {
+	name: string;
+	graph: XeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraph;
+	version: number;
 };
 
-export type XeLocalAiEngineClientEndpointsNodeBindingV1NodeBindingSessionResponse = {
-	deviceCode: string;
-	userCode: string;
-	verificationUri: string;
-	verificationUriComplete: string;
-	expiresAt?: string;
-	intervalSeconds?: number;
-	status: string;
+export type XeLocalAiEngineClientEndpointsSchedulerV1CreateScheduledJobRequest = {
+	templateId: string;
+	displayName: string;
+	description?: string | null;
+	scheduleKind: XeLocalAiEngineClientEndpointsSchedulerV1ScheduleKind;
+	cronExpression?: string | null;
+	intervalSeconds?: number | null;
+	repeatCount?: number | null;
+	startAtUtc?: number | null;
+	endAtUtc?: number | null;
+	timeZoneId?: string;
+	misfirePolicy?: XeLocalAiEngineClientEndpointsSchedulerV1SchedulerMisfirePolicy;
+	preventOverlap?: boolean;
+	maxRuntimeSeconds?: number | null;
+	parameters?: string | null;
 };
 
-export type XeLocalAiEngineClientEndpointsModelFitV1BenchmarkInferenceProfileResponse = {
-	snapshotId?: string | null;
-	metrics?: XeLocalAiEngineClientEndpointsModelFitV1InferenceBenchmarkMetricsDto | null;
-	profile: XeLocalAiEngineClientEndpointsModelFitV1InferenceProfileViewDto;
+export type XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobRunsRequest = {
+	[key: string]: never;
 };
 
-export type XeLocalAiEngineClientEndpointsModelFitV1InferenceBenchmarkMetricsDto = {
-	role?: string | null;
-	tokensPerSecond?: number | null;
-	ppTokensPerSecond?: number | null;
-	ttftMs?: number | null;
-	totalLatencyMs?: number | null;
-	cacheHitRate?: number | null;
-	toolLoopMs?: number | null;
-	itemsPerSecond?: number | null;
-	inputTokensPerSecond?: number | null;
-	p50LatencyMs?: number | null;
-	p95LatencyMs?: number | null;
-	batchSize?: number | null;
-	outputDimension?: number | null;
-	valuesFinite?: boolean | null;
-	deterministicOutput?: boolean | null;
-	vramLoadBytes?: number | null;
-	vramAfterBytes?: number | null;
-	globalFreeVramLoadBytes?: number | null;
-	globalFreeVramAfterBytes?: number | null;
-	processBudgetVramLoadBytes?: number | null;
-	processBudgetVramAfterBytes?: number | null;
-	minimumGlobalFreeVramBytes?: number | null;
-	minimumProcessBudgetVramBytes?: number | null;
-	peakProcessRamBytes?: number | null;
-	externalPressureDetected: boolean;
-	runs: number;
+export type XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobRunsResponse = {
+	items: Array<XeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobRunResponse>;
 };
 
-export type XeLocalAiEngineClientEndpointsModelFitV1InferenceProfileViewDto = {
+export type XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobTemplatesResponse = {
+	items: Array<XeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobTemplateResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobsRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobsResponse = {
+	items: Array<XeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsSchedulerV1ScheduleKind = "Cron" | "OneShot" | "SimpleInterval" | "Manual";
+
+export type XeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobActionRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobCreator = "User" | "Agent" | "System";
+
+export type XeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobResponse = {
 	id: string;
-	modelName: string;
-	role: string;
-	backend: string;
-	llamacppBuild: string;
-	quant: string;
-	ctxSize: number;
-	nGpuLayers?: number | null;
-	tensorSplit?: string | null;
-	overrideTensor?: string | null;
-	kvTypeK?: string | null;
-	kvTypeV?: string | null;
-	flashAttn: boolean;
-	nParams?: number | null;
-	isMoe: boolean;
-	expertCount?: number | null;
-	launchPolicyFingerprintVersion?: number | null;
-	launchPolicyFingerprint?: string | null;
-	globalFreeVramAtFreezeBytes?: number | null;
-	processBudgetVramAtFreezeBytes?: number | null;
-	status: string;
-	benchmarkSnapshotId?: string | null;
+	templateId: string;
+	displayName: string;
+	description?: string | null;
+	enabled: boolean;
+	scheduleKind: XeLocalAiEngineClientEndpointsSchedulerV1ScheduleKind;
+	cronExpression?: string | null;
+	intervalSeconds?: number | null;
+	repeatCount?: number | null;
+	startAtUtc?: number | null;
+	endAtUtc?: number | null;
+	timeZoneId: string;
+	misfirePolicy: XeLocalAiEngineClientEndpointsSchedulerV1SchedulerMisfirePolicy;
+	preventOverlap: boolean;
+	maxRuntimeSeconds?: number | null;
+	hasParameters: boolean;
+	createdBy: XeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobCreator;
 	createdAtUtc: number;
 	updatedAtUtc: number;
+	disabledAtUtc?: number | null;
+	deletedAtUtc?: number | null;
 };
 
-export type XeLocalAiEngineClientEndpointsModelFitV1BenchmarkInferenceProfileRequest = {
-	profileId: string;
-	allowPreSpawnVramPressure?: boolean;
-};
-
-export type XeLocalAiEngineClientEndpointsModelFitV1BrowseGgufRepositoriesResponse = {
-	items: Array<XeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryResponse>;
-};
-
-export type XeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryResponse = {
-	repoId: string;
-	isGated: boolean;
-	downloads: number;
-	likes: number;
-	lastModifiedAtUtc: number;
-	license?: string | null;
-	hasUsableGguf: boolean;
-	isTrustedPublisher?: boolean;
-};
-
-export type XeLocalAiEngineClientEndpointsModelFitV1BrowseGgufRepositoriesRequest = {
+export type XeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobRouteRequest = {
 	[key: string]: never;
 };
 
-export type XeLocalAiEngineClientEndpointsModelFitV1CudaBuildStatusResponse = {
-	phase: string;
-	isRunning: boolean;
-	terminal: boolean;
-	logLines: Array<string>;
-	sanitizedError?: string | null;
-	tag?: string | null;
-};
-
-export type XeLocalAiEngineClientEndpointsModelFitV1CancelGgufDownloadResponse = {
-	modelName: string;
-	cancelled: boolean;
-};
-
-export type XeLocalAiEngineClientEndpointsModelFitV1CancelGgufDownloadRequest = {
-	modelName: string;
-};
-
-export type XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildStatusResponse = {
-	phase: string;
-	isRunning: boolean;
-	terminal: boolean;
-	logStartSequence: number;
-	logLines: Array<string>;
-	sanitizedError?: string | null;
-	currentBuild?: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildDescriptorResponse | null;
-	startedAtUtc?: number | null;
-	completedAtUtc?: number | null;
-};
-
-export type XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildDescriptorResponse = {
-	buildId: string;
-	backend: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBackendDto;
-	source: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceSelectionDto;
-	repository: string;
-	revisionMode: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceRevisionModeDto;
-	requestedCommit?: string | null;
-	resolvedCommit?: string | null;
-};
-
-export type XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBackendDto = "cpu" | "vulkan" | "cuda";
-
-export type XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceSelectionDto = "official" | "custom";
-
-export type XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceRevisionModeDto =
-	| "enginePinned"
-	| "defaultBranch"
-	| "explicitCommit";
-
-export type XeLocalAiEngineClientEndpointsModelFitV1EjectRunningModelResponse = {
-	modelName: string;
-	role: string;
+export type XeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobRunCancelResponse = {
 	outcome: string;
+	cancellationRequestedAtUtc?: number | null;
 };
 
-export type XeLocalAiEngineClientEndpointsModelFitV1EjectRunningModelRequest = {
-	modelName: string;
-	role?: string | null;
-	force?: boolean;
-};
-
-export type XeLocalAiEngineClientEndpointsModelFitV1LlamaCppVersionResponse = {
-	version: string;
-	variant: string;
-	isPinnedFallback: boolean;
-	pinnedTag: string;
-};
-
-export type XeLocalAiEngineClientEndpointsModelFitV1LlamaCppUpdateBlockedResponse = {
-	runningProcessCount: number;
-	message: string;
-};
-
-export type XeLocalAiEngineClientEndpointsModelFitV1EnsureLlamaCppBinaryRequest = {
-	variant: string;
-};
-
-/**
- * the dto used to send an error response to the client
- */
-export type FastEndpointsErrorResponse = {
-	/**
-	 * the http status code sent to the client. default is 400.
-	 */
-	statusCode?: number;
-	/**
-	 * the message for the error response
-	 */
-	message?: string;
-	/**
-	 * the collection of errors for the current context
-	 */
-	errors?: {
-		[key: string]: Array<string>;
-	};
-};
-
-export type XeLocalAiEngineClientEndpointsModelFitV1InferenceProfileActionResponse = {
-	profile: XeLocalAiEngineClientEndpointsModelFitV1InferenceProfileViewDto;
-};
-
-export type XeLocalAiEngineClientEndpointsModelFitV1ExploreInferenceProfileRequest = {
-	modelName: string;
-	role?: string | null;
-};
-
-export type XeLocalAiEngineClientEndpointsModelFitV1FreezeInferenceProfileRequest = {
-	profileId: string;
-};
-
-export type XeLocalAiEngineClientEndpointsModelFitV1CudaBuildPrerequisitesResponse = {
-	items: Array<XeLocalAiEngineClientEndpointsModelFitV1CudaBuildPrerequisiteItemResponse>;
-	canBuild: boolean;
-};
-
-export type XeLocalAiEngineClientEndpointsModelFitV1CudaBuildPrerequisiteItemResponse = {
-	key: string;
-	satisfied: boolean;
-	detail: string;
-};
-
-export type XeLocalAiEngineClientEndpointsModelFitV1ListGgufDownloadsResponse = {
-	items: Array<XeLocalAiEngineClientEndpointsModelFitV1GgufDownloadStatusResponse>;
-};
-
-export type XeLocalAiEngineClientEndpointsModelFitV1GgufDownloadStatusResponse = {
-	modelName: string;
-	phase: string;
-	completedBytes?: number | null;
-	totalBytes?: number | null;
-	sanitizedError?: string | null;
-};
-
-export type XeLocalAiEngineClientEndpointsModelFitV1GetGgufDownloadStatusRequest = {
-	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsModelFitV1HardwareProfileResponse = {
-	totalRamBytes: number;
-	availableRamBytes: number;
-	vramBytes?: number | null;
-	vramKnown: boolean;
-	gpuVendor: string;
-	gpuAccelAvailable: boolean;
-	cpuCores: number;
-	freeDiskBytes: number;
-	inferenceBackend?: string;
-	gpuExpected?: boolean;
-	cpuFallback?: boolean;
-	cpuFallbackReason?: string | null;
-	cpuFallbackRemediation?: string | null;
-};
-
-export type XeLocalAiEngineClientEndpointsModelFitV1GetHardwareProfileRequest = {
-	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsModelFitV1HfTokenStatusResponse = {
-	hasToken: boolean;
-};
-
-export type XeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsResponse = {
-	hasCache: boolean;
-	snapshotId?: string | null;
-	status?: string | null;
-	useCase?: string | null;
-	lastRefreshedAtUtc?: number | null;
-	recommendations: Array<XeLocalAiEngineClientEndpointsModelFitV1ModelFitRecommendationResponse>;
-};
-
-export type XeLocalAiEngineClientEndpointsModelFitV1ModelFitRecommendationResponse = {
-	rank: number;
-	modelName: string;
-	providerModelName?: string | null;
-	score: number;
-	fitLevel?: string | null;
-	runMode?: string | null;
-	quantization?: string | null;
-	estimatedTokensPerSecond?: number | null;
-	requiredRamMb?: number | null;
-	requiredVramMb?: number | null;
-	contextTokens?: number | null;
-	isInstalled: boolean;
-	pullModelName?: string | null;
-	releaseDate?: string | null;
-	isTrustedPublisher?: boolean;
-	section: string;
-	tier?: string | null;
-	catalogId?: string | null;
-	catalogDisplayName?: string | null;
-	catalogNotes?: string | null;
-	expertsOffloaded?: boolean;
-	gpuGb?: number | null;
-	cpuGb?: number | null;
-	kvQuant?: string | null;
-	kvQuantEstimatedGb?: number | null;
-	kvQuantHeadroomGb?: number | null;
-	kvQuantFits?: boolean | null;
-	kvQuantRequiresFlashAttention?: boolean | null;
-};
-
-export type XeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsRequest = {
-	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsModelFitV1LlamaCppRuntimeStatusResponse = {
-	installed?: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppInstalledRuntimeResponse | null;
-	recommendedTag: string;
-	upstreamLatestTag?: string | null;
-	updateAvailable: boolean;
-	isOffline: boolean;
-	runningProcessCount: number;
-	isSourceBuild: boolean;
-	rebuildAvailable: boolean;
-};
-
-export type XeLocalAiEngineClientEndpointsModelFitV1LlamaCppInstalledRuntimeResponse = {
-	tag: string;
-	variant: string;
-	asset: string;
-	installedAtUtc: number;
-	isSourceBuild: boolean;
-	sourceRepository?: string | null;
-	sourceCommit?: string | null;
-	sourceSelection?: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceSelectionDto | null;
-	sourceRevisionMode?: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceRevisionModeDto | null;
-	sourceRequestedCommit?: string | null;
-};
-
-export type XeLocalAiEngineClientEndpointsModelFitV1GetLlamaCppRuntimeRequest = {
-	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildPrerequisitesResponse = {
-	backend: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBackendDto;
-	items: Array<XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildPrerequisiteItemResponse>;
-	canBuild: boolean;
-};
-
-export type XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildPrerequisiteItemResponse = {
-	key: string;
-	satisfied: boolean;
-	detail: string;
-};
-
-export type XeLocalAiEngineClientEndpointsModelFitV1GetLlamaCppSourceBuildPrerequisitesRequest = {
-	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsModelFitV1ModelCatalogInfoResponse = {
-	catalogVersion: string;
-	updatedAt?: string | null;
-	source: string;
-	fetchedAtUtc?: number | null;
-	sourceUrl?: string | null;
-	modelCount: number;
-	refreshSourceConfigured: boolean;
-};
-
-export type XeLocalAiEngineClientEndpointsModelFitV1InspectGgufRepositoryResponse = {
-	repoId: string;
-	files: Array<XeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryFileResponse>;
-};
-
-export type XeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryFileResponse = {
-	fileName: string;
-	quant: string;
-	isDynamic: boolean;
-	sizeBytes: number;
-	qualityTier: string;
-	fitVerdict: string;
-	isRecommended: boolean;
-};
-
-export type XeLocalAiEngineClientEndpointsModelFitV1InspectGgufRepositoryRequest = {
-	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsModelFitV1InvalidateInferenceProfileRequest = {
-	profileId: string;
-};
-
-export type XeLocalAiEngineClientEndpointsModelFitV1ListInferenceProfilesResponse = {
-	items: Array<XeLocalAiEngineClientEndpointsModelFitV1InferenceProfileViewDto>;
-};
-
-export type XeLocalAiEngineClientEndpointsModelFitV1ListRunningModelsResponse = {
-	items: Array<XeLocalAiEngineClientEndpointsModelFitV1RunningModelResponse>;
-};
-
-export type XeLocalAiEngineClientEndpointsModelFitV1RunningModelResponse = {
-	modelName: string;
-	role: string;
-	isResponsive: boolean;
-	detail: string;
-};
-
-export type XeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsResponse = {
+export type XeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobRunResponse = {
+	id: string;
 	scheduledJobId: string;
+	templateId: string;
+	triggeredBy: XeLocalAiEngineClientEndpointsSchedulerV1ScheduledRunTrigger;
+	status: XeLocalAiEngineClientEndpointsSchedulerV1ScheduledRunStatus;
+	scheduledFireTimeUtc?: number | null;
+	actualFireTimeUtc?: number | null;
+	completedAtUtc?: number | null;
+	durationMs?: number | null;
+	summary?: string | null;
+	errorMessage?: string | null;
+	cancellationRequestedAtUtc?: number | null;
+	createdAtUtc: number;
 };
 
-export type XeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsRequest = {
-	scheduledJobId?: string;
-	useCase?: string | null;
-	limit?: number | null;
-	quantOverride?: string | null;
-	ctxTarget?: number | null;
+export type XeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobRunRouteRequest = {
+	[key: string]: never;
 };
 
-export type XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildBlockedResponse = {
-	reason: string;
-	message: string;
-	runningProcessCount?: number | null;
+export type XeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobTemplateResponse = {
+	templateId: string;
+	displayName: string;
+	description: string;
+	parameterSchema?: string | null;
+	defaultParameters?: string | null;
+	supportedScheduleKinds: Array<XeLocalAiEngineClientEndpointsSchedulerV1ScheduleKind>;
+	defaultScheduleKind: XeLocalAiEngineClientEndpointsSchedulerV1ScheduleKind;
+	defaultMisfirePolicy: XeLocalAiEngineClientEndpointsSchedulerV1SchedulerMisfirePolicy;
+	defaultMaxRuntimeSeconds?: number | null;
+	allowManualTrigger: boolean;
+	allowAgentCreation: boolean;
+	historyDetailLevel: string;
 };
 
-export type XeLocalAiEngineClientEndpointsModelFitV1SetHfTokenRequest = {
-	token?: string | null;
+export type XeLocalAiEngineClientEndpointsSchedulerV1ScheduledRunStatus =
+	| "Queued"
+	| "Running"
+	| "Succeeded"
+	| "Failed"
+	| "Cancelled"
+	| "TimedOut"
+	| "Skipped";
+
+export type XeLocalAiEngineClientEndpointsSchedulerV1ScheduledRunTrigger = "Schedule" | "Manual" | "Agent" | "System";
+
+export type XeLocalAiEngineClientEndpointsSchedulerV1SchedulerMisfirePolicy = "Smart" | "SkipMissed" | "FireOnceNow";
+
+export type XeLocalAiEngineClientEndpointsSchedulerV1UpdateScheduledJobRequest = {
+	templateId: string;
+	displayName: string;
+	description?: string | null;
+	scheduleKind: XeLocalAiEngineClientEndpointsSchedulerV1ScheduleKind;
+	cronExpression?: string | null;
+	intervalSeconds?: number | null;
+	repeatCount?: number | null;
+	startAtUtc?: number | null;
+	endAtUtc?: number | null;
+	timeZoneId?: string;
+	misfirePolicy?: XeLocalAiEngineClientEndpointsSchedulerV1SchedulerMisfirePolicy;
+	preventOverlap?: boolean;
+	maxRuntimeSeconds?: number | null;
+	parameters?: string | null;
 };
 
-export type XeLocalAiEngineClientEndpointsModelFitV1StartCudaBuildResponse = {
-	started: boolean;
-	status: XeLocalAiEngineClientEndpointsModelFitV1CudaBuildStatusResponse;
+export type XeLocalAiEngineClientEndpointsSkillsV1CreateSkillRequest = {
+	name?: string | null;
+	description?: string | null;
+	body?: string | null;
 };
 
-export type XeLocalAiEngineClientEndpointsModelFitV1StartGgufDownloadResponse = {
-	modelName: string;
-	alreadyInFlight: boolean;
+export type XeLocalAiEngineClientEndpointsSkillsV1DeleteSkillRequest = {
+	[key: string]: never;
 };
 
-export type XeLocalAiEngineClientEndpointsModelFitV1StartGgufDownloadRequest = {
-	repoId: string;
-	fileName?: string | null;
-	quant?: string | null;
-	revision?: string | null;
+export type XeLocalAiEngineClientEndpointsSkillsV1GetSkillRequest = {
+	[key: string]: never;
 };
 
-export type XeLocalAiEngineClientEndpointsModelFitV1StartLlamaCppSourceBuildResponse = {
-	started: boolean;
-	status: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildStatusResponse;
+export type XeLocalAiEngineClientEndpointsSkillsV1ListSkillsResponse = {
+	items: Array<XeLocalAiEngineClientEndpointsSkillsV1SkillSummaryResponse>;
 };
 
-export type XeLocalAiEngineClientEndpointsModelFitV1StartLlamaCppSourceBuildRequest = {
-	backend: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBackendDto;
-	source: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceSelectionDto;
-	repository?: string | null;
-	commit?: string | null;
-	acknowledgeCustomSourceRisk: boolean;
-};
-
-export type XeLocalAiEngineClientEndpointsModelFitV1UpdateLlamaCppRuntimeRequest = {
-	tag: string;
-	variant?: string | null;
-};
-
-export type XeLocalAiEngineClientEndpointsMcpV1McpServerResponse = {
+export type XeLocalAiEngineClientEndpointsSkillsV1SkillResponse = {
 	id: string;
 	name: string;
-	description?: string | null;
-	transportKind: XeLocalAiEngineClientPersistenceMcpTransportKind;
-	command?: string | null;
-	arguments: Array<string>;
-	workingDirectory?: string | null;
-	env: {
-		[key: string]: string;
-	};
-	url?: string | null;
+	description: string;
+	body: string;
 	enabled: boolean;
 	version: number;
 	createdAtUtc: number;
 	updatedAtUtc: number;
 };
 
-export type XeLocalAiEngineClientPersistenceMcpTransportKind = "Stdio" | "Http";
-
-export type XeLocalAiEngineClientEndpointsMcpV1CreateMcpServerRequest = {
-	name?: string | null;
-	description?: string | null;
-	transportKind?: XeLocalAiEngineClientPersistenceMcpTransportKind;
-	command?: string | null;
-	arguments?: Array<string> | null;
-	workingDirectory?: string | null;
-	env?: {
-		[key: string]: string;
-	} | null;
-	url?: string | null;
-};
-
-export type XeLocalAiEngineClientEndpointsMcpV1DeleteMcpServerRequest = {
-	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsMcpV1GetMcpServerRequest = {
-	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsMcpV1McpServerToolsResponse = {
-	status: string;
-	error?: string | null;
-	tools: Array<XeLocalAiEngineClientEndpointsMcpV1McpDiscoveredToolResponse>;
-};
-
-export type XeLocalAiEngineClientEndpointsMcpV1McpDiscoveredToolResponse = {
-	name: string;
-	description?: string | null;
-	requiresApproval: boolean;
-};
-
-export type XeLocalAiEngineClientEndpointsMcpV1GetMcpServerToolsRequest = {
-	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsMcpV1ToolCatalogResponse = {
-	tools: Array<XeLocalAiEngineClientEndpointsMcpV1ToolCatalogEntryResponse>;
-};
-
-export type XeLocalAiEngineClientEndpointsMcpV1ToolCatalogEntryResponse = {
+export type XeLocalAiEngineClientEndpointsSkillsV1SkillSummaryResponse = {
+	id: string;
 	name: string;
 	description: string;
-	requiresApproval: boolean;
-	source: string;
-	category: string;
-	effectiveRequiresApproval: boolean;
+	enabled: boolean;
+	version: number;
+	createdAtUtc: number;
+	updatedAtUtc: number;
 };
 
-export type XeLocalAiEngineClientEndpointsMcpV1ListMcpServersResponse = {
-	items: Array<XeLocalAiEngineClientEndpointsMcpV1McpServerResponse>;
-};
-
-export type XeLocalAiEngineClientEndpointsMcpV1SetMcpServerEnabledRequest = {
+export type XeLocalAiEngineClientEndpointsSkillsV1UpdateSkillRequest = {
+	name?: string | null;
+	description?: string | null;
+	body?: string | null;
 	enabled?: boolean;
 };
 
-export type XeLocalAiEngineClientEndpointsMcpV1UpdateMcpServerRequest = {
-	name?: string | null;
-	description?: string | null;
-	transportKind?: XeLocalAiEngineClientPersistenceMcpTransportKind;
-	command?: string | null;
-	arguments?: Array<string> | null;
-	workingDirectory?: string | null;
-	env?: {
-		[key: string]: string;
-	} | null;
-	url?: string | null;
+export type XeLocalAiEngineClientEndpointsTutorialStateV1SaveTutorialStateRequest = {
+	key?: string;
+	status?: string;
 };
 
-export type XeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelResponse = {
-	modelName: string;
-	deleted: boolean;
-};
-
-export type XeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelRequest = {
-	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsLocalModelsV1ModelKindResponse = {
-	modelName: string;
-	kind: string;
-	detectedKind: string;
-	capabilities: Array<string>;
-	isOverridden: boolean;
-};
-
-export type XeLocalAiEngineClientEndpointsLocalModelsV1ResetModelKindRequest = {
-	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelDetailsResponse = {
-	modelName: string;
-	maxContextTokens?: number | null;
-	effectiveContextTokens?: number | null;
-	template?: string | null;
-	system?: string | null;
-	license?: string | null;
-};
-
-export type XeLocalAiEngineClientEndpointsLocalModelsV1GetLocalModelDetailsRequest = {
-	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsLocalModelsV1RunningLocalModelsResponse = {
-	isAvailable: boolean;
-	ollamaConfigured: boolean;
-	error?: string | null;
-	items: Array<XeLocalAiEngineClientEndpointsLocalModelsV1RunningLocalModelResponse>;
-};
-
-export type XeLocalAiEngineClientEndpointsLocalModelsV1RunningLocalModelResponse = {
-	modelName: string;
-	sizeBytes?: number | null;
-	sizeVramBytes?: number | null;
-	expiresAtUtc?: number | null;
-};
-
-export type XeLocalAiEngineClientEndpointsLocalModelsV1ListLocalModelsResponse = {
-	isAvailable: boolean;
-	selectedModelName?: string | null;
-	configuredDefaultModelName?: string | null;
-	error?: string | null;
-	items: Array<XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse>;
-};
-
-export type XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse = {
-	modelName: string;
-	provider?: string;
-	sizeBytes?: number | null;
-	modifiedAtUtc?: number | null;
-	family?: string | null;
-	parameterSize?: string | null;
-	quantizationLevel?: string | null;
-	isSelected: boolean;
-	kind: string;
-	detectedKind: string;
-	capabilities: Array<string>;
-	isReasoningCapable: boolean;
-	isNativeReasoningCapable?: boolean;
-	isToolCapable: boolean;
-	isOverridden: boolean;
-};
-
-export type XeLocalAiEngineClientEndpointsLocalModelsV1SetModelKindRequest = {
-	kind?: string | null;
-};
-
-export type XeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelResponse = {
-	selectedModelName: string;
-};
-
-export type XeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelRequest = {
-	modelName: string;
-};
-
-export type XeLocalAiEngineClientEndpointsLocalModelsV1UnloadLocalModelResponse = {
-	modelName: string;
-	unloaded: boolean;
-};
-
-export type XeLocalAiEngineClientEndpointsLocalModelsV1UnloadLocalModelRequest = {
-	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatCancelMessageResponse = {
-	conversationId: string;
-	messageId: string;
-	requestId: string;
+export type XeLocalAiEngineClientEndpointsTutorialStateV1TutorialStateEntryResponse = {
+	key: string;
 	status: string;
-	cancelled: boolean;
+	atUtc: string;
 };
 
-export type XeLocalAiEngineClientEndpointsLocalChatV1CancelNodeChatMessageRequest = {
-	conversationId: string;
-	messageId: string;
-	requestId: string;
+export type XeLocalAiEngineClientEndpointsTutorialStateV1TutorialStateResponse = {
+	entries: Array<XeLocalAiEngineClientEndpointsTutorialStateV1TutorialStateEntryResponse>;
 };
 
-export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationResponse = {
-	conversationId: string;
-	title?: string | null;
-	userId?: string | null;
-	createdAtUtc: number;
-	lastSeenUtc: number;
-	purged: boolean;
-	origin: string;
-	isPinned: boolean;
-	archived: boolean;
-	branchOfConversationId?: string | null;
-	selectedPath?: {
-		[key: string]: string;
-	} | null;
-	memoryExcluded: boolean;
-	messages: Array<XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageResponse>;
+export type XeLocalAiEngineClientEndpointsVoiceV1VoiceManifestModelDto = {
+	id: string;
+	displayName: string;
+	language: string;
+	version: string;
+	files: Array<XeLocalAiEngineClientEndpointsVoiceV1VoiceManifestModelFileDto>;
 };
 
-export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageResponse = {
-	messageId: string;
-	conversationId: string;
-	requestId?: string | null;
-	sequence: number;
-	role: string;
-	content: string;
-	reasoning?: string | null;
-	status: string;
-	createdAtUtc: number;
-	updatedAtUtc: number;
-	origin: string;
-	model?: string | null;
-	error?: string | null;
-	inputTokens?: number | null;
-	outputTokens?: number | null;
-	totalTokens?: number | null;
-	reasoningTokens?: number | null;
-	parentMessageId?: string | null;
-	variantGroupId?: string | null;
-	feedbackRating?: string | null;
-	feedbackComment?: string | null;
-	parts?: Array<XeLocalAiEngineClientServicesChatNodeChatMessagePart> | null;
-	agentDefinitionId?: string | null;
-	agentName?: string | null;
-	reasoningEffort?: string | null;
-	generationDurationMs?: number | null;
-	sources?: Array<XeLocalAiEngineClientServicesChatNodeChatMessageSource> | null;
+export type XeLocalAiEngineClientEndpointsVoiceV1VoiceManifestModelFileDto = {
+	dtype: string;
+	file: string;
+	byteSize: number;
+	sha256: string;
+	downloadUrl: string;
 };
+
+export type XeLocalAiEngineClientEndpointsVoiceV1VoiceManifestRemoteFallbackDto = {
+	enabled: boolean;
+	endpoint?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsVoiceV1VoiceManifestResponse = {
+	enabled: boolean;
+	models: Array<XeLocalAiEngineClientEndpointsVoiceV1VoiceManifestModelDto>;
+	voices: Array<XeLocalAiEngineClientEndpointsVoiceV1VoiceManifestVoiceDto>;
+	defaultVoiceId: string;
+	remoteFallback?: XeLocalAiEngineClientEndpointsVoiceV1VoiceManifestRemoteFallbackDto | null;
+};
+
+export type XeLocalAiEngineClientEndpointsVoiceV1VoiceManifestVoiceDto = {
+	id: string;
+	name: string;
+	language: string;
+	gender: string;
+};
+
+export type XeLocalAiEngineClientModelsEnumsFailureCategory =
+	| "Cancelled"
+	| "Timeout"
+	| "AgentRuntime"
+	| "ProviderUnreachable"
+	| "Unexpected"
+	| "AgentToolCall"
+	| "HashMismatch"
+	| "ModelUnavailable"
+	| "ModelCapabilityUnsupported"
+	| "ModelLoadFailed"
+	| "ModelNotInstalled"
+	| "ContextWindowExceeded";
+
+export type XeLocalAiEngineClientModelsSamplingOptions = {
+	temperature?: number | null;
+	topP?: number | null;
+	topK?: number | null;
+	minP?: number | null;
+	maxOutputTokens?: number | null;
+	repeatPenalty?: number | null;
+	repeatLastN?: number | null;
+	presencePenalty?: number | null;
+	frequencyPenalty?: number | null;
+	seed?: string | null;
+	stop?: Array<string> | null;
+	numCtx?: number | null;
+};
+
+export type XeLocalAiEngineClientPersistenceAgentDefinitionKind = "Single" | "Orchestrator";
+
+export type XeLocalAiEngineClientPersistenceMcpTransportKind = "Stdio" | "Http";
+
+export type XeLocalAiEngineClientPersistenceMemoryScope = "Procedural" | "Failure" | "UserPreference" | "Project";
+
+export type XeLocalAiEngineClientPersistencePlaybookActionSource = "Manual" | "Analysis" | "Extracted";
+
+export type XeLocalAiEngineClientPersistencePlaybookActionState = "Suggested" | "Enabled" | "Disabled" | "Archived";
 
 export type XeLocalAiEngineClientServicesChatNodeChatMessagePart = {
 	kind?: string;
@@ -1205,186 +2556,10 @@ export type XeLocalAiEngineClientServicesChatNodeChatMessageSource = {
 	score?: number;
 };
 
-export type XeLocalAiEngineClientEndpointsLocalChatV1CreateNodeChatConversationRequest = {
-	title?: string | null;
-	userId?: string | null;
-	agentDefinitionId?: string | null;
-};
-
-export type XeLocalAiEngineClientEndpointsLocalChatV1DeleteConversationUploadRequest = {
-	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatDeleteConversationResponse = {
-	conversationId: string;
-	cancelRequested: boolean;
-	purged: boolean;
-};
-
-export type XeLocalAiEngineClientEndpointsLocalChatV1DeleteNodeChatConversationRequest = {
-	purgeImmediately?: boolean;
-};
-
-export type XeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatConversationRequest = {
-	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsLocalChatV1ListConversationUploadsResponse = {
-	items: Array<XeLocalAiEngineClientEndpointsLocalChatV1ConversationUploadedFileResponse>;
-};
-
-export type XeLocalAiEngineClientEndpointsLocalChatV1ConversationUploadedFileResponse = {
-	fileId: string;
-	conversationId: string;
-	originalFileName: string;
-	mimeType: string;
-	extension: string;
-	sizeBytes: number;
-	extractionStatus: string;
-	extractedChars?: number | null;
-	createdAtUtc: number;
-};
-
-export type XeLocalAiEngineClientEndpointsLocalChatV1ListConversationUploadsRequest = {
-	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatConversationsResponse = {
-	items: Array<XeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationSummaryResponse>;
-};
-
-export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationSummaryResponse = {
-	conversationId: string;
-	title?: string | null;
-	createdAtUtc: number;
-	lastSeenUtc: number;
-	lastMessagePreview?: string | null;
-	lastMessageStatus?: string | null;
-	purged: boolean;
-	origin: string;
-	isPinned: boolean;
-	archived: boolean;
-};
-
-export type XeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatConversationsRequest = {
-	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsLocalChatV1RenameNodeChatConversationRequest = {
-	title?: string | null;
-};
-
-export type XeLocalAiEngineClientEndpointsLocalChatV1PinNodeChatConversationRequest = {
-	isPinned?: boolean;
-};
-
-export type XeLocalAiEngineClientEndpointsLocalChatV1ArchiveNodeChatConversationRequest = {
-	archived?: boolean;
-};
-
-export type XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatConversationMemoryExcludedRequest = {
-	memoryExcluded?: boolean;
-};
-
-export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatBranchConversationResponse = {
-	sourceConversationId: string;
-	branchedConversationId: string;
-	copiedMessageCount: number;
-};
-
-export type XeLocalAiEngineClientEndpointsLocalChatV1BranchNodeChatConversationRequest = {
-	selectedRevisions?: {
-		[key: string]: string;
-	} | null;
-};
-
-export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageRevisionsResponse = {
-	messageId: string;
-	variantGroupId?: string | null;
-	variants: Array<XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageResponse>;
-};
-
-export type XeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatMessageRevisionsRequest = {
-	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageFeedbackResponse = {
-	messageId: string;
-	conversationId: string;
-	rating: string;
-	comment?: string | null;
-	createdAtUtc: number;
-	updatedAtUtc: number;
-};
-
-export type XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatMessageFeedbackRequest = {
-	rating: string;
-	comment?: string | null;
-};
-
-export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatSelectedPathResponse = {
-	conversationId: string;
-	selectedPath: {
-		[key: string]: string;
-	};
-};
-
-export type XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatSelectedPathRequest = {
-	selectedPath?: {
-		[key: string]: string;
-	} | null;
-};
-
-export type XeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatMessageFeedbackRequest = {
-	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsLocalChatV1ResolveToolApprovalResponse = {
-	requestId: string;
-	approved: boolean;
-};
-
-export type XeLocalAiEngineClientEndpointsLocalChatV1ResolveToolApprovalRequest = {
-	requestId: string;
-	approved: boolean;
-};
-
-export type XeLocalAiEngineClientEndpointsLocalChatV1UploadConversationFileRequest = {
-	file?: Blob | File | null;
-};
-
-export type XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentRouteRequest = {
-	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsKnowledgeV1DownloadRecommendedEmbeddingResponse = {
-	modelName: string;
-	repoId: string;
-	quant: string;
-	alreadyInstalled: boolean;
-	alreadyInFlight: boolean;
-};
-
-export type XeLocalAiEngineClientEndpointsKnowledgeV1DownloadRecommendedRerankerResponse = {
-	modelName: string;
-	repoId: string;
-	quant: string;
-	alreadyInstalled: boolean;
-	alreadyInFlight: boolean;
-};
-
-export type XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentDetailResponse = {
-	documentId: string;
-	displayName: string;
-	status: XeLocalAiEngineClientServicesKnowledgeKnowledgeDocumentStatus;
-	failureReason?: string | null;
-	chunkCount: number;
-	embeddingModel: string;
-	staleModel: boolean;
-	sizeBytes: number;
-	createdAtUtc: number;
-	updatedAtUtc: number;
-	chunks: Array<XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentChunkResponse>;
+export type XeLocalAiEngineClientServicesDevelopmentDevelopmentPatchPreviewFile = {
+	path?: string;
+	changeType?: string;
+	previousPath?: string | null;
 };
 
 export type XeLocalAiEngineClientServicesKnowledgeKnowledgeDocumentStatus =
@@ -1395,1200 +2570,44 @@ export type XeLocalAiEngineClientServicesKnowledgeKnowledgeDocumentStatus =
 	| "Indexed"
 	| "Failed";
 
-export type XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentChunkResponse = {
-	chunkIndex: number;
-	headingPath?: string | null;
-	content: string;
-};
-
-export type XeLocalAiEngineClientEndpointsKnowledgeV1ListKnowledgeDocumentsResponse = {
-	items: Array<XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentResponse>;
-};
-
-export type XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentResponse = {
-	documentId: string;
-	displayName: string;
-	status: XeLocalAiEngineClientServicesKnowledgeKnowledgeDocumentStatus;
-	failureReason?: string | null;
-	chunkCount: number;
-	embeddingModel: string;
-	staleModel: boolean;
-	sizeBytes: number;
-	createdAtUtc: number;
-};
-
-export type XeLocalAiEngineClientEndpointsKnowledgeV1ReindexCorpusResponse = {
-	enqueuedCount: number;
-};
-
-export type XeLocalAiEngineClientEndpointsKnowledgeV1SearchKnowledgeResponse = {
-	results: Array<XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeSearchHitResponse>;
-};
-
-export type XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeSearchHitResponse = {
-	documentId: string;
-	chunkId: string;
-	title: string;
-	section?: string | null;
-	content: string;
-	source: string;
-	score: number;
-	chunkIndex: number;
-	documentStatus: XeLocalAiEngineClientServicesKnowledgeKnowledgeDocumentStatus;
-	servingLastKnownGood: boolean;
-};
-
-export type XeLocalAiEngineClientEndpointsKnowledgeV1SearchKnowledgeRequest = {
-	query: string;
-	limit?: number;
-	documentId?: string | null;
-	expandNeighbors?: boolean;
-};
-
-export type XeLocalAiEngineClientEndpointsKnowledgeV1UploadKnowledgeDocumentResponse = {
-	documentId: string;
-	status: XeLocalAiEngineClientServicesKnowledgeKnowledgeDocumentStatus;
-	deduplicated: boolean;
-};
-
-export type XeLocalAiEngineClientEndpointsKnowledgeV1UploadKnowledgeDocumentRequest = {
-	file?: Blob | File | null;
-};
-
-export type XeLocalAiEngineClientEndpointsInvocationsV1InvocationMonitorResponse = {
-	current: XeLocalAiEngineClientEndpointsInvocationsV1InvocationCurrentResponse | null;
-	history: Array<XeLocalAiEngineClientEndpointsInvocationsV1InvocationHistoryResponse>;
-	historyCapacity: number;
-};
-
-export type XeLocalAiEngineClientEndpointsInvocationsV1InvocationCurrentResponse = {
-	invocationId: string;
-	conversationId: string;
-	status: XeLocalAiEngineAiContractsEnumsInvocationStatus;
-	modelUsed?: string | null;
-	startedAt: string;
-	lastUpdatedAt: string;
-	completedAt?: string | null;
-	error?: string | null;
-	failureCategory?: XeLocalAiEngineClientModelsEnumsFailureCategory | null;
-	streamedChunkCount: number;
-	streamedThinkingChunkCount: number;
-	pendingToolCallCount: number;
-	hasPendingApproval: boolean;
-	traceId?: string | null;
-};
-
-export type XeLocalAiEngineAiContractsEnumsInvocationStatus =
-	| "Pending"
-	| "Assigned"
-	| "Running"
-	| "Completed"
-	| "Failed"
-	| "Cancelled";
-
-export type XeLocalAiEngineClientModelsEnumsFailureCategory =
-	| "Cancelled"
-	| "Timeout"
-	| "AgentRuntime"
-	| "ProviderUnreachable"
-	| "Unexpected"
-	| "AgentToolCall"
-	| "HashMismatch"
-	| "ModelUnavailable"
-	| "ModelCapabilityUnsupported"
-	| "ModelLoadFailed"
-	| "ModelNotInstalled"
-	| "ContextWindowExceeded";
-
-export type XeLocalAiEngineClientEndpointsInvocationsV1InvocationHistoryResponse = {
-	invocationId: string;
-	conversationId: string;
-	status: XeLocalAiEngineAiContractsEnumsInvocationStatus;
-	modelUsed?: string | null;
-	startedAt: string;
-	completedAt: string;
-	durationMs: number;
-	error?: string | null;
-	failureCategory?: XeLocalAiEngineClientModelsEnumsFailureCategory | null;
-	streamedChunkCount: number;
-	streamedThinkingChunkCount: number;
-	traceId?: string | null;
-};
-
-export type XeLocalAiEngineClientEndpointsImagesV1ImageJobRouteRequest = {
-	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildStatusResponse = {
-	phase: string;
-	isRunning: boolean;
-	terminal: boolean;
-	logStartSequence: number;
-	logLines: Array<string>;
-	sanitizedError?: string | null;
-	currentBuild?: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildDescriptorResponse | null;
-	startedAtUtc?: number | null;
-	completedAtUtc?: number | null;
-};
-
-export type XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildDescriptorResponse = {
-	buildId: string;
-	backend: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBackendDto;
-	source: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceSelectionDto;
-	repository: string;
-	revisionMode: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceRevisionModeDto;
-	requestedCommit?: string | null;
-	resolvedCommit?: string | null;
-};
-
-export type XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBackendDto = "cpu" | "vulkan" | "cuda";
-
-export type XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceSelectionDto = "official" | "custom";
-
-export type XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceRevisionModeDto =
-	| "enginePinned"
-	| "defaultBranch"
-	| "explicitCommit";
-
-export type XeLocalAiEngineClientEndpointsImagesV1ImageRuntimeActionRequest = {
-	accepted?: boolean | null;
-};
-
-export type XeLocalAiEngineClientEndpointsImagesV1ImageJobResponse = {
-	id: string;
-	modelName: string;
-	prompt: string;
-	negativePrompt?: string | null;
-	seed: string;
-	width: number;
-	height: number;
-	steps: number;
-	sampler: string;
-	cfgScale: number;
-	status: string;
-	createdAtUtc: number;
-	startedAtUtc?: number | null;
-	completedAtUtc?: number | null;
-	durationMs?: number | null;
-	imageId?: string | null;
-	sanitizedError?: string | null;
-	cancellationRequestedAtUtc?: number | null;
-};
-
-export type XeLocalAiEngineClientEndpointsImagesV1ImageRuntimeBlockedResponse = {
-	reason: string;
-	message: string;
-	activity: XeLocalAiEngineClientEndpointsImagesV1ImageRuntimeActivityResponse;
-};
-
-export type XeLocalAiEngineClientEndpointsImagesV1ImageRuntimeActivityResponse = {
-	activeJobCount: number;
-	spawnReadinessCount: number;
-	residentProcessCount: number;
-	mutationReserved: boolean;
-	evictionReserved: boolean;
-	isBusy: boolean;
-};
-
-export type XeLocalAiEngineClientEndpointsImagesV1CreateImageJobRequest = {
-	modelName: string;
-	prompt: string;
-	negativePrompt?: string | null;
-	seed?: string | null;
-	width?: number;
-	height?: number;
-	steps?: number;
-	sampler?: string | null;
-	cfgScale?: number;
-};
-
-export type XeLocalAiEngineClientEndpointsImagesV1ImageRuntimeStatusResponse = {
-	managedRuntime?: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionInstalledRuntimeResponse | null;
-	activity: XeLocalAiEngineClientEndpointsImagesV1ImageRuntimeActivityResponse;
-};
-
-export type XeLocalAiEngineClientEndpointsImagesV1StableDiffusionInstalledRuntimeResponse = {
-	validity: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionInstalledRuntimeValidityDto;
-	desiredBackend: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBackendDto;
-	sourceRepository: string;
-	sourceCommit: string;
-	sourceSelection: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceSelectionDto;
-	sourceRevisionMode: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceRevisionModeDto;
-	sourceRequestedCommit?: string | null;
-	installedAtUtc: number;
-	invalidReason?: string | null;
-};
-
-export type XeLocalAiEngineClientEndpointsImagesV1StableDiffusionInstalledRuntimeValidityDto = "active" | "invalid";
-
-export type XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildPrerequisitesResponse = {
-	backend: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBackendDto;
-	items: Array<XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildPrerequisiteItemResponse>;
-	canBuild: boolean;
-};
-
-export type XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildPrerequisiteItemResponse = {
-	key: string;
-	satisfied: boolean;
-	detail: string;
-};
-
-export type XeLocalAiEngineClientEndpointsImagesV1GetStableDiffusionCppSourceBuildPrerequisitesRequest = {
-	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsImagesV1ListImageJobsResponse = {
-	items: Array<XeLocalAiEngineClientEndpointsImagesV1ImageJobResponse>;
-};
-
-export type XeLocalAiEngineClientEndpointsImagesV1ListImageModelsResponse = {
-	items: Array<XeLocalAiEngineClientEndpointsImagesV1ImageModelResponse>;
-};
-
-export type XeLocalAiEngineClientEndpointsImagesV1ImageModelResponse = {
-	modelName: string;
-	repoId: string;
-	family: string;
-	kind: string;
-	sizeBytes: number;
-	parts: Array<XeLocalAiEngineClientEndpointsImagesV1ImageModelPartResponse>;
-	downloadedAtUtc: number;
-};
-
-export type XeLocalAiEngineClientEndpointsImagesV1ImageModelPartResponse = {
-	role: string;
-	fileName: string;
-	sizeBytes: number;
-};
-
-export type XeLocalAiEngineClientEndpointsImagesV1RetrieveImageRequest = {
-	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsImagesV1StartImageModelDownloadResponse = {
-	modelName: string;
-	accepted: boolean;
-	alreadyInFlight: boolean;
-};
-
-export type XeLocalAiEngineClientEndpointsImagesV1StartImageModelDownloadRequest = {
-	modelName: string;
-	repoId: string;
-	family: string;
-	kind?: string | null;
-	revision?: string | null;
-	parts: Array<XeLocalAiEngineClientEndpointsImagesV1ImageModelPartDownloadRequest>;
-};
-
-export type XeLocalAiEngineClientEndpointsImagesV1ImageModelPartDownloadRequest = {
-	role: string;
-	fileName: string;
-	sha256?: string | null;
-};
-
-export type XeLocalAiEngineClientEndpointsImagesV1StartStableDiffusionCppSourceBuildResponse = {
-	started: boolean;
-	status: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildStatusResponse;
-};
-
-export type XeLocalAiEngineClientEndpointsImagesV1StartStableDiffusionCppSourceBuildRequest = {
-	backend: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBackendDto;
-	source: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceSelectionDto;
-	repository?: string | null;
-	commit?: string | null;
-	acknowledgeCustomSourceRisk: boolean;
-};
-
-export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentCapabilityResponse = {
-	enabled?: boolean;
-	sandboxProvider?: string;
-	containerRuntime?: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerRuntimeResponse | null;
-};
-
-export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerRuntimeResponse = {
-	ready?: boolean;
-	status?: string;
-	message?: string;
-	requiresOperatorConfirmation?: boolean;
-	endpoint?: string | null;
-	endpointSource?: string | null;
-	observedDaemon?: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerDaemonResponse | null;
-	pinnedDaemon?: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerDaemonResponse | null;
-};
-
-export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerDaemonResponse = {
-	daemonId?: string;
-	serverVersion?: string;
-	endpoint?: string;
-	confirmedAtUtc?: string | null;
-};
-
-export type XeLocalAiEngineClientEndpointsDevelopmentV1ConfirmDevelopmentContainerRuntimeRequest = {
-	daemonId?: string;
-};
-
-export type XeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentRepositoriesResponse = {
-	items?: Array<XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentRepositoryResponse>;
-};
-
-export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentRepositoryResponse = {
-	id?: string;
-	alias?: string;
-	availability?: string;
-};
-
-export type XeLocalAiEngineClientEndpointsDevelopmentV1RegisterDevelopmentRepositoryRequest = {
-	alias?: string;
-	hostPath?: string;
-};
-
-export type XeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentTemplatesResponse = {
-	templates?: Array<XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTemplateResponse>;
-};
-
-export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTemplateResponse = {
-	id?: string;
-	alias?: string;
-	availability?: string;
-};
-
-export type XeLocalAiEngineClientEndpointsDevelopmentV1RegisterDevelopmentTemplateRequest = {
-	alias?: string;
-	hostPath?: string;
-};
-
-export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTemplateRequest = {
-	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentRepositoryFromTemplateResponse = {
-	repository?: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentRepositoryResponse;
-	templateAlias?: string;
-	templateCommit?: string;
-};
-
-export type XeLocalAiEngineClientEndpointsDevelopmentV1CreateDevelopmentRepositoryFromTemplateRequest = {
-	templateId?: string;
-	destinationPath?: string;
-	alias?: string;
-	baseBranch?: string;
-};
-
-export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProfileDetectionResponse = {
-	profileId?: string;
-	buildTarget?: string | null;
-	candidates?: Array<string>;
-};
-
-export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProfileDetectionRequest = {
-	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentProjectsResponse = {
-	items?: Array<XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectResponse>;
-};
-
-export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectResponse = {
-	id?: string;
-	objective?: string;
-	selectedFolderId?: string | null;
-	repositoryConnectionRequired?: boolean;
-	baseBranch?: string;
-	status?: string;
-	egressPolicy?: string;
-	coderModelId?: string | null;
-	reviewerModelId?: string | null;
-	maxTokens?: number | null;
-	maxDurationSeconds?: number | null;
-	createdAtUtc?: number;
-	updatedAtUtc?: number;
-	version?: number;
-	commandProfileId?: string | null;
-	commandProfileBuildTarget?: string | null;
-	commandProfileDigest?: string | null;
-};
-
-export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectDetailResponse = {
-	project?: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectResponse;
-	tasks?: Array<XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTaskDetailResponse>;
-	events?: Array<XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentEventResponse>;
-};
-
-export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTaskDetailResponse = {
-	task?: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTaskResponse;
-	attempts?: Array<XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentAttemptResponse>;
-	artifacts?: Array<XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentArtifactResponse>;
-};
-
-export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTaskResponse = {
-	id?: string;
-	projectId?: string;
-	title?: string;
-	requirements?: string;
-	acceptanceCriteriaJson?: string;
-	status?: string;
-	currentReviewRound?: number;
-	maxReviewRounds?: number;
-	blockedReason?: string | null;
-	approvedSubjectHash?: string | null;
-	version?: number;
-};
-
-export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentAttemptResponse = {
-	id?: string;
-	taskId?: string;
-	predecessorAttemptId?: string | null;
-	role?: string;
-	modelId?: string;
-	provider?: string;
-	status?: string;
-	startedAtUtc?: number | null;
-	endedAtUtc?: number | null;
-	terminalReason?: string | null;
-	inputTokens?: number | null;
-	outputTokens?: number | null;
-	version?: number;
-};
-
-export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentArtifactResponse = {
-	id?: string;
-	projectId?: string;
-	taskId?: string;
-	attemptId?: string | null;
-	kind?: string;
-	contentHash?: string;
-	byteCount?: number;
-	createdAtUtc?: number;
-	baseCommit?: string | null;
-	subjectHash?: string | null;
-	changedFilesManifestHash?: string | null;
-	commandProfileVersion?: string | null;
-	commandProfileDigest?: string | null;
-	isValid?: boolean;
-};
-
-export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentEventResponse = {
-	id?: string;
-	projectId?: string;
-	taskId?: string | null;
-	attemptId?: string | null;
-	sequence?: number;
-	eventType?: string;
-	occurredAtUtc?: number;
-	operationId?: string | null;
-	operationPhase?: string | null;
-	outcome?: string | null;
-};
-
-export type XeLocalAiEngineClientEndpointsDevelopmentV1CreateDevelopmentProjectRequest = {
-	operationId?: string;
-	selectedFolderId?: string;
-	objective?: string;
-	baseBranch?: string;
-	taskTitle?: string;
-	requirements?: string;
-	acceptanceCriteriaJson?: string;
-	egressPolicy?: string;
-	coderModelId?: string;
-	reviewerModelId?: string;
-	trustedRepositoryAcknowledged?: boolean;
-	maxTokens?: number | null;
-	maxDurationSeconds?: number | null;
-	commandProfileId?: string | null;
-	buildTarget?: string | null;
-};
-
-export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectRequest = {
-	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTaskRequest = {
-	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentNextActionResponse = {
-	action?: string;
-	projectId?: string;
-	taskId?: string;
-	attemptId?: string | null;
-	taskStatus?: string;
-	role?: string | null;
-};
-
-export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentActionRequest = {
-	operationId?: string;
-};
-
-export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentAttemptRequest = {
-	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentEventsResponse = {
-	items?: Array<XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentEventResponse>;
-};
-
-export type XeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentArtifactsResponse = {
-	items?: Array<XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentArtifactResponse>;
-};
-
-export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentArtifactContentResponse = {
-	artifact?: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentArtifactResponse;
-	content?: string;
-};
-
-export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentArtifactRequest = {
-	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentPatchPreviewResponse = {
-	subjectHash?: string;
-	patchHash?: string;
-	manifestHash?: string;
-	expectedResultHash?: string;
-	patch?: string;
-	changedFiles?: Array<XeLocalAiEngineClientServicesDevelopmentDevelopmentPatchPreviewFile>;
-};
-
-export type XeLocalAiEngineClientServicesDevelopmentDevelopmentPatchPreviewFile = {
-	path?: string;
-	changeType?: string;
-	previousPath?: string | null;
-};
-
-export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentApplyResponse = {
-	operationId?: string;
-	phase?: string;
-	outcome?: string;
-	status?: string;
-	version?: number;
-	sequence?: number;
-};
-
-export type XeLocalAiEngineClientEndpointsDevelopmentV1ReconnectDevelopmentRepositoryRequest = {
-	selectedFolderId?: string;
-	expectedVersion?: number;
-};
-
-export type XeLocalAiEngineClientEndpointsConnectionV1ConnectionStatusResponse = {
-	state: string;
-	lastError?: string | null;
-	lastUpdatedAt?: string;
-	isPaired?: boolean;
-	autoConnectOnStart?: boolean;
-	bindingMethod?: string | null;
-	lastKnownNodeName?: string | null;
-	tokenExpiresAt?: string | null;
-	canConnect?: boolean;
-	canDisconnect?: boolean;
-	canEnableAutoConnect?: boolean;
-	canDisableAutoConnect?: boolean;
-};
-
-export type XeLocalAiEngineClientEndpointsCloudSettingsV1CloudSettingsResponse = {
-	providerName: string;
-	azureFoundry?: XeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundrySettingsResponse | null;
-};
-
-export type XeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundrySettingsResponse = {
-	endpoint?: string | null;
-	authMode: string;
-	apiSurface?: string;
-	hasStoredApiKey?: boolean;
-	models?: Array<XeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryModelDto>;
-	headers?: Array<XeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryHeaderDto>;
-	additionalAllowedHostSuffixes?: Array<string>;
-	entraTenantId?: string | null;
-	entraClientId?: string | null;
-	hasStoredEntraClientSecret?: boolean;
-	entraTokenScope?: string | null;
-	entraSignInMethod?: string;
-	entraAuthCodeRedirectUri?: string | null;
-};
-
-export type XeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryModelDto = {
-	deploymentName: string;
-	displayLabel?: string | null;
-};
-
-export type XeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryHeaderDto = {
-	name: string;
-	value?: string | null;
-	isSecret?: boolean;
-	hasStoredValue?: boolean;
-};
-
-export type XeLocalAiEngineClientEndpointsCloudSettingsV1EntraAuthCodeSignInResponse = {
-	authorizeUrl: string;
-	expiresAtUtc: string;
-};
-
-export type XeLocalAiEngineClientEndpointsCloudSettingsV1EntraAuthCodeSignInStatusResponse = {
-	state: string;
-	expiresAtUtc?: string | null;
-};
-
-export type XeLocalAiEngineClientEndpointsCloudSettingsV1EntraDeviceCodeSignInResponse = {
-	userCode: string;
-	verificationUri: string;
-	expiresAtUtc: string;
-};
-
-export type XeLocalAiEngineClientEndpointsCloudSettingsV1EntraDeviceCodeSignInStatusResponse = {
-	state: string;
-	userCode?: string | null;
-	verificationUri?: string | null;
-	expiresAtUtc?: string | null;
-};
-
-export type XeLocalAiEngineClientEndpointsCloudSettingsV1SaveCloudSettingsRequest = {
-	providerName?: string;
-	endpoint: string;
-	authMode?: string;
-	apiKey?: string | null;
-	apiSurface?: string;
-	models?: Array<XeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryModelDto>;
-	headers?: Array<XeLocalAiEngineClientEndpointsCloudSettingsV1SaveAzureFoundryHeaderRequest>;
-	additionalAllowedHostSuffixes?: Array<string>;
-	entraTenantId?: string | null;
-	entraClientId?: string | null;
-	entraClientSecret?: string | null;
-	entraTokenScope?: string | null;
-	entraSignInMethod?: string;
-	entraAuthCodeRedirectUri?: string | null;
-};
-
-export type XeLocalAiEngineClientEndpointsCloudSettingsV1SaveAzureFoundryHeaderRequest = {
-	name?: string;
-	value?: string | null;
-	isSecret?: boolean;
-};
-
-export type XeLocalAiEngineClientEndpointsCloudCodexV1CodexLoginResponse = {
-	authorizeUrl: string;
-};
-
-export type XeLocalAiEngineClientEndpointsCloudCodexV1CodexStatusResponse = {
-	signedIn: boolean;
-	accountId?: string | null;
-	expiresAtUtc?: string | null;
-	loginPending: boolean;
-};
-
-export type XeLocalAiEngineClientEndpointsAuthV1NodeAuthStatusResponse = {
-	setupRequired: boolean;
-	authenticated: boolean;
-};
-
-export type XeLocalAiEngineClientEndpointsAuthV1NodeSetupRequest = {
-	email: string;
-	password: string;
-};
-
-export type XeLocalAiEngineClientEndpointsAuthV1NodeAccessTokenResponse = {
-	accessToken: string;
-	expiresAtUtc: string;
-};
-
-export type XeLocalAiEngineClientEndpointsAuthV1NodeLoginRequest = {
-	email?: string | null;
-	password: string;
-};
-
-export type XeLocalAiEngineClientEndpointsAuthV1NodeChangePasswordRequest = {
-	currentPassword: string;
-	newPassword: string;
-};
-
-export type XeLocalAiEngineClientEndpointsAuthV1NodeMeResponse = {
-	userName: string;
-	roles: Array<string>;
-};
-
-export type XeLocalAiEngineClientEndpointsAppUpdateV1ApplyAppUpdateResponse = {
-	applying: boolean;
-};
-
-export type XeLocalAiEngineClientEndpointsAppUpdateV1AppUpdateStatusResponse = {
-	currentVersion: string;
-	availableVersion?: string | null;
-	updateAvailable: boolean;
-	authState: string;
-	login?: string | null;
-	isDesktop: boolean;
-	isOffline: boolean;
-	lastCheckedUtc?: number | null;
-};
-
-export type XeLocalAiEngineClientEndpointsAppUpdateV1GetAppUpdateStatusRequest = {
-	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthStatusResponse = {
-	authState: string;
-	login?: string | null;
-};
-
-export type XeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthPollResponse = {
-	state: string;
-	login?: string | null;
-};
-
-export type XeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthStartResponse = {
-	userCode: string;
-	verificationUri: string;
-	expiresInSeconds: number;
-	intervalSeconds: number;
-};
-
-export type XeLocalAiEngineClientEndpointsApiFoundationV1ValidationProblemProbeResponse = {
-	name: string;
-};
-
-export type XeLocalAiEngineClientEndpointsApiFoundationV1ValidationProblemProbeRequest = {
-	name: string;
-};
-
-export type XeLocalAiEngineClientEndpointsAgentsV1ListPlaybookActionsResponse = {
-	items: Array<XeLocalAiEngineClientEndpointsAgentsV1PlaybookActionResponse>;
-};
-
-export type XeLocalAiEngineClientEndpointsAgentsV1PlaybookActionResponse = {
-	id: string;
-	agentDefinitionId: string;
-	state: XeLocalAiEngineClientPersistencePlaybookActionState;
-	source: XeLocalAiEngineClientPersistencePlaybookActionSource;
-	memoryScope?: XeLocalAiEngineClientPersistenceMemoryScope | null;
-	triggerCondition?: string | null;
-	behavior: string;
-	scope?: string | null;
-	priority: number;
-	version: number;
-	createdAtUtc: number;
-	updatedAtUtc: number;
-	sourceFeedbackIds?: Array<string> | null;
-	confidence?: number | null;
-	evalResult?: XeLocalAiEngineClientEndpointsAgentsV1PlaybookEvalResultResponse | null;
-};
-
-export type XeLocalAiEngineClientPersistencePlaybookActionState = "Suggested" | "Enabled" | "Disabled" | "Archived";
-
-export type XeLocalAiEngineClientPersistencePlaybookActionSource = "Manual" | "Analysis" | "Extracted";
-
-export type XeLocalAiEngineClientPersistenceMemoryScope = "Procedural" | "Failure" | "UserPreference" | "Project";
-
-export type XeLocalAiEngineClientEndpointsAgentsV1PlaybookEvalResultResponse = {
-	passed?: boolean;
-	evaluatedAtUtc?: number;
-	actionVersionAtEval?: number;
-	modelName?: string;
-	goldenCaseCount?: number;
-	goldenCaseTotal?: number;
-	baselinePassCount?: number;
-	candidatePassCount?: number;
-	regressedCaseCount?: number;
-	improvedCaseCount?: number;
-	cases?: Array<XeLocalAiEngineClientEndpointsAgentsV1PlaybookEvalCaseResultResponse>;
-};
-
-export type XeLocalAiEngineClientEndpointsAgentsV1PlaybookEvalCaseResultResponse = {
-	goldenCaseId?: string;
-	scoredBy?: string;
-	baselinePass?: boolean;
-	candidatePass?: boolean;
-	regressed?: boolean;
-};
-
-export type XeLocalAiEngineClientEndpointsAgentsV1AnalyzePlaybookRequest = {
-	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsAgentsV1GoldenConversationResponse = {
-	id: string;
-	agentDefinitionId: string;
-	title: string;
-	inputTurns: Array<XeLocalAiEngineClientEndpointsAgentsV1GoldenTurnDto>;
-	assertion?: XeLocalAiEngineClientEndpointsAgentsV1GoldenAssertionDto | null;
-	rubric?: string | null;
-	enabled: boolean;
-	source: string;
-	sourceMessageId?: string | null;
-	sourceConversationId?: string | null;
-	createdAtUtc: number;
-	updatedAtUtc: number;
-};
-
-export type XeLocalAiEngineClientEndpointsAgentsV1GoldenTurnDto = {
-	role?: string;
-	text?: string;
-};
-
-export type XeLocalAiEngineClientEndpointsAgentsV1GoldenAssertionDto = {
-	requiredPhrases?: Array<string>;
-	forbiddenPhrases?: Array<string>;
-};
-
-export type XeLocalAiEngineClientEndpointsAgentsV1ApproveGoldenConversationRequest = {
-	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsAgentsV1AgentDefinitionResponse = {
-	id: string;
-	name: string;
-	description?: string | null;
-	instructions: string;
-	modelProfile?: string | null;
-	reasoningEffort?: string | null;
-	kind: XeLocalAiEngineClientPersistenceAgentDefinitionKind;
-	allowedToolNames: Array<string>;
-	toolApprovals: {
-		[key: string]: boolean;
-	};
-	orchestrationTopologyJson?: string | null;
-	playbookEnabled: boolean;
-	defaultTemporaryChat: boolean;
-	memoryExtractionEnabled: boolean;
-	disableBaseScaffold: boolean;
-	allowedSkillIds: Array<string>;
-	version: number;
-	createdAtUtc: number;
-	updatedAtUtc: number;
-};
-
-export type XeLocalAiEngineClientPersistenceAgentDefinitionKind = "Single" | "Orchestrator";
-
-export type XeLocalAiEngineClientEndpointsAgentsV1CreateAgentDefinitionRequest = {
-	name?: string | null;
-	description?: string | null;
-	instructions?: string | null;
-	modelProfile?: string | null;
-	reasoningEffort?: string | null;
-	kind?: XeLocalAiEngineClientPersistenceAgentDefinitionKind;
-	allowedToolNames?: Array<string> | null;
-	toolApprovals?: {
-		[key: string]: boolean;
-	} | null;
-	orchestrationTopologyJson?: string | null;
-	playbookEnabled?: boolean;
-	defaultTemporaryChat?: boolean;
-	memoryExtractionEnabled?: boolean;
-	disableBaseScaffold?: boolean;
-	allowedSkillIds?: Array<string> | null;
-};
-
-export type XeLocalAiEngineClientEndpointsAgentsV1CreateGoldenConversationRequest = {
-	title: string;
-	inputTurns: Array<XeLocalAiEngineClientEndpointsAgentsV1GoldenTurnDto>;
-	assertion?: XeLocalAiEngineClientEndpointsAgentsV1GoldenAssertionDto | null;
-	rubric?: string | null;
-	enabled?: boolean;
-};
-
-export type XeLocalAiEngineClientEndpointsAgentsV1CreatePlaybookActionRequest = {
-	state?: XeLocalAiEngineClientPersistencePlaybookActionState;
-	triggerCondition?: string | null;
-	behavior?: string | null;
-	scope?: string | null;
-	priority?: number;
-};
-
-export type XeLocalAiEngineClientEndpointsAgentsV1DeleteAgentDefinitionRequest = {
-	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsAgentsV1DeleteGoldenConversationRequest = {
-	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsAgentsV1DeletePlaybookActionRequest = {
-	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsAgentsV1GetAgentDefinitionRequest = {
-	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsAgentsV1AgentFeedbackInsightsResponse = {
-	agentDefinitionId: string;
-	agentName: string;
-	generatedAtUtc: number;
-	minOccurrenceThreshold: number;
-	overall: XeLocalAiEngineClientEndpointsAgentsV1OverallFeedbackResponse;
-	byTool: Array<XeLocalAiEngineClientEndpointsAgentsV1ToolFeedbackResponse>;
-	exemplars: Array<XeLocalAiEngineClientEndpointsAgentsV1FeedbackExemplarResponse>;
-};
-
-export type XeLocalAiEngineClientEndpointsAgentsV1OverallFeedbackResponse = {
-	total: number;
-	up: number;
-	down: number;
-	downRate: number;
-	meetsThreshold: boolean;
-};
-
-export type XeLocalAiEngineClientEndpointsAgentsV1ToolFeedbackResponse = {
-	toolName: string;
-	total: number;
-	up: number;
-	down: number;
-	downRate: number;
-	meetsThreshold: boolean;
-};
-
-export type XeLocalAiEngineClientEndpointsAgentsV1FeedbackExemplarResponse = {
-	rating: string;
-	comment: string;
-	messageId: string;
-	conversationId: string;
-	createdAtUtc: number;
-	truncated: boolean;
-};
-
-export type XeLocalAiEngineClientEndpointsAgentsV1GetAgentFeedbackInsightsRequest = {
-	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsAgentsV1AgentPlaybookMonitorResponse = {
-	items?: Array<XeLocalAiEngineClientEndpointsAgentsV1PlaybookActionMonitorItemResponse>;
-	retrieval?: XeLocalAiEngineClientEndpointsAgentsV1PlaybookRetrievalResponse;
-};
-
-export type XeLocalAiEngineClientEndpointsAgentsV1PlaybookActionMonitorItemResponse = {
-	actionId?: string;
-	enabledAtUtc?: number;
-	beforeDownRate?: number;
-	afterDownRate?: number;
-	afterSampleSize?: number;
-	status?: XeLocalAiEngineClientServicesMonitoringPlaybookMonitorStatus;
-	flagged?: boolean;
-	facetToolName?: string | null;
-};
-
 export type XeLocalAiEngineClientServicesMonitoringPlaybookMonitorStatus = "InsufficientData" | "Improved" | "Flat" | "Regressed";
 
-export type XeLocalAiEngineClientEndpointsAgentsV1PlaybookRetrievalResponse = {
-	threshold?: number;
-	topK?: number;
-	ranker?: string;
-	embeddingModel?: string | null;
+export type XeLocalAiEngineClientServicesNodeSettingsModelRate = {
+	inputPer1M?: number;
+	outputPer1M?: number;
 };
 
-export type XeLocalAiEngineClientEndpointsAgentsV1GetAgentPlaybookMonitorRequest = {
-	[key: string]: never;
+export type XeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraph = {
+	startText?: string;
+	nodes?: Array<XeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraphNode>;
+	edges?: Array<XeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraphEdge>;
 };
 
-export type XeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryResponse = {
-	items: Array<XeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryBucketResponse>;
-	totals: XeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryTotalsResponse;
-	byProvider: Array<XeLocalAiEngineClientEndpointsAgentsV1AgentUsageProviderTotalsResponse>;
-	retentionDays: number;
+export type XeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraphEdge = {
+	sourceId?: string;
+	targetId?: string;
 };
 
-export type XeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryBucketResponse = {
-	modelName: string;
-	provider: string;
-	dayStartUtcMs: number;
-	runCount: number;
-	promptTokens: number;
-	completionTokens: number;
-	reasoningTokens: number;
-	totalTokens: number;
-	estimatedCostUsd: number;
-	currency: string;
-};
-
-export type XeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryTotalsResponse = {
-	runCount: number;
-	promptTokens: number;
-	completionTokens: number;
-	reasoningTokens: number;
-	totalTokens: number;
-	estimatedCostUsd: number;
-	currency: string;
-};
-
-export type XeLocalAiEngineClientEndpointsAgentsV1AgentUsageProviderTotalsResponse = {
-	provider: string;
-	runCount: number;
-	promptTokens: number;
-	completionTokens: number;
-	reasoningTokens: number;
-	totalTokens: number;
-	estimatedCostUsd: number;
-	currency: string;
-};
-
-export type XeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryRequest = {
-	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsAgentsV1ToolCapableModelsResponse = {
-	models: Array<string>;
-};
-
-export type XeLocalAiEngineClientEndpointsAgentsV1GoldenHarvestResponse = {
-	thumbsUpScanned?: number;
-	createdCount?: number;
-	duplicateCount?: number;
-	skippedCount?: number;
-};
-
-export type XeLocalAiEngineClientEndpointsAgentsV1HarvestGoldenConversationsRequest = {
-	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsAgentsV1ImportAgentTemplatesResponse = {
-	imported: Array<string>;
-	skippedExisting: Array<string>;
-	unknown: Array<string>;
-};
-
-export type XeLocalAiEngineClientEndpointsAgentsV1ImportAgentTemplatesRequest = {
-	slugs?: Array<string> | null;
-};
-
-export type XeLocalAiEngineClientEndpointsAgentsV1ListAgentDefinitionsResponse = {
-	items: Array<XeLocalAiEngineClientEndpointsAgentsV1AgentDefinitionResponse>;
-};
-
-export type XeLocalAiEngineClientEndpointsAgentsV1ListAgentExecutionLogsResponse = {
-	items: Array<XeLocalAiEngineClientEndpointsAgentsV1AgentExecutionLogResponse>;
-};
-
-export type XeLocalAiEngineClientEndpointsAgentsV1AgentExecutionLogResponse = {
-	id: string;
-	agentDefinitionId: string;
-	conversationId?: string | null;
-	messageId?: string | null;
-	modelName: string;
-	configHash: string;
-	latencyMs: number;
-	promptTokens?: number | null;
-	completionTokens?: number | null;
-	success: boolean;
-	errorClass?: string | null;
-	createdAtUtc: number;
-};
-
-export type XeLocalAiEngineClientEndpointsAgentsV1ListAgentExecutionLogsRequest = {
-	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsAgentsV1ListAgentPlaybookActionsRequest = {
-	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsAgentsV1ListAgentTemplatesResponse = {
-	items: Array<XeLocalAiEngineClientEndpointsAgentsV1AgentTemplateSummary>;
-};
-
-export type XeLocalAiEngineClientEndpointsAgentsV1AgentTemplateSummary = {
-	slug: string;
-	name: string;
-	description?: string | null;
-	division: string;
-	estimatedPromptTokens: number;
-	hasOriginalTools: boolean;
-	alreadyImported: boolean;
-};
-
-export type XeLocalAiEngineClientEndpointsAgentsV1ListGoldenConversationsResponse = {
-	items: Array<XeLocalAiEngineClientEndpointsAgentsV1GoldenConversationResponse>;
-};
-
-export type XeLocalAiEngineClientEndpointsAgentsV1ListGoldenConversationsRequest = {
-	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsAgentsV1ListRunEnvelopesResponse = {
-	items: Array<XeLocalAiEngineClientEndpointsAgentsV1AgentRunEnvelopeResponse>;
-};
-
-export type XeLocalAiEngineClientEndpointsAgentsV1AgentRunEnvelopeResponse = {
-	id: string;
-	schemaVersion: number;
-	agentDefinitionId: string;
-	conversationId?: string | null;
-	messageId?: string | null;
-	invocationId?: string | null;
-	requestId?: string | null;
-	modelName: string;
-	terminalStatus: string;
-	success: boolean;
-	failureCategory?: string | null;
-	durationMs: number;
-	promptTokens?: number | null;
-	completionTokens?: number | null;
-	reasoningTokens?: number | null;
-	totalTokens?: number | null;
-	contentChunkCount?: number | null;
-	reasoningChunkCount?: number | null;
-	traceId?: string | null;
-	startedAtUtc?: number | null;
-	createdAtUtc: number;
-};
-
-export type XeLocalAiEngineClientEndpointsAgentsV1ListRunEnvelopesRequest = {
-	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsAgentsV1SuggestedPlaybookActionRouteRequest = {
-	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsAgentsV1UpdateAgentDefinitionRequest = {
-	name?: string | null;
-	description?: string | null;
+export type XeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraphNode = {
+	id?: string;
+	kind?: XeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowNodeKind;
+	label?: string | null;
 	instructions?: string | null;
+	model?: string | null;
 	modelProfile?: string | null;
 	reasoningEffort?: string | null;
-	kind?: XeLocalAiEngineClientPersistenceAgentDefinitionKind;
-	allowedToolNames?: Array<string> | null;
-	toolApprovals?: {
-		[key: string]: boolean;
-	} | null;
-	orchestrationTopologyJson?: string | null;
-	playbookEnabled?: boolean;
-	defaultTemporaryChat?: boolean;
-	memoryExtractionEnabled?: boolean;
-	disableBaseScaffold?: boolean;
-	allowedSkillIds?: Array<string> | null;
 };
 
-export type XeLocalAiEngineClientEndpointsAgentsV1UpdatePlaybookActionRequest = {
-	state?: XeLocalAiEngineClientPersistencePlaybookActionState;
-	triggerCondition?: string | null;
-	behavior?: string | null;
-	scope?: string | null;
-	priority?: number;
-};
+export type XeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowNodeKind = "Start" | "Agent" | "Debug" | "Pause" | "End";
 
-export type XeLocalAiEngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActionRequest = {
-	behavior?: string | null;
-	triggerCondition?: string | null;
-	scope?: string | null;
-	priority?: number;
-};
-
-export type XeLocalAiEngineClientEndpointsImagesV1ImageModelDownloadStatusResponse = {
-	modelName: string;
-	phase: string;
-	completedBytes?: number | null;
-	totalBytes?: number | null;
-	sanitizedError?: string | null;
-};
-
-export type XeLocalAiEngineClientEndpointsImagesV1ListImageModelDownloadsResponse = {
-	items: Array<XeLocalAiEngineClientEndpointsImagesV1ImageModelDownloadStatusResponse>;
-};
-
-export type GetVoiceManifestData = {
+export type ListAgentDefinitionsData = {
 	body?: never;
 	path?: never;
 	query?: never;
-	url: "/api/local/v1/voice/manifest";
+	url: "/api/local/v1/agents";
 };
 
-export type GetVoiceManifestErrors = {
+export type ListAgentDefinitionsErrors = {
 	/**
 	 * Unauthorized
 	 */
@@ -2599,23 +2618,23 @@ export type GetVoiceManifestErrors = {
 	403: unknown;
 };
 
-export type GetVoiceManifestResponses = {
+export type ListAgentDefinitionsResponses = {
 	/**
 	 * Success
 	 */
-	200: XeLocalAiEngineClientEndpointsVoiceV1VoiceManifestResponse;
+	200: XeLocalAiEngineClientEndpointsAgentsV1ListAgentDefinitionsResponse;
 };
 
-export type GetVoiceManifestResponse = GetVoiceManifestResponses[keyof GetVoiceManifestResponses];
+export type ListAgentDefinitionsResponse = ListAgentDefinitionsResponses[keyof ListAgentDefinitionsResponses];
 
-export type GetTutorialStateData = {
-	body?: never;
+export type CreateAgentDefinitionData = {
+	body: XeLocalAiEngineClientEndpointsAgentsV1CreateAgentDefinitionRequest;
 	path?: never;
 	query?: never;
-	url: "/api/local/v1/tutorial-state";
+	url: "/api/local/v1/agents";
 };
 
-export type GetTutorialStateErrors = {
+export type CreateAgentDefinitionErrors = {
 	/**
 	 * Unauthorized
 	 */
@@ -2626,455 +2645,27 @@ export type GetTutorialStateErrors = {
 	403: unknown;
 };
 
-export type GetTutorialStateResponses = {
+export type CreateAgentDefinitionResponses = {
 	/**
 	 * Success
 	 */
-	200: XeLocalAiEngineClientEndpointsTutorialStateV1TutorialStateResponse;
+	200: XeLocalAiEngineClientEndpointsAgentsV1AgentDefinitionResponse;
 };
 
-export type GetTutorialStateResponse = GetTutorialStateResponses[keyof GetTutorialStateResponses];
+export type CreateAgentDefinitionResponse = CreateAgentDefinitionResponses[keyof CreateAgentDefinitionResponses];
 
-export type SaveTutorialStateData = {
-	body: XeLocalAiEngineClientEndpointsTutorialStateV1SaveTutorialStateRequest;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/tutorial-state";
-};
-
-export type SaveTutorialStateErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type SaveTutorialStateResponses = {
-	/**
-	 * No Content
-	 */
-	204: void;
-};
-
-export type SaveTutorialStateResponse = SaveTutorialStateResponses[keyof SaveTutorialStateResponses];
-
-export type ListSkillsData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/skills";
-};
-
-export type ListSkillsErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type ListSkillsResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsSkillsV1ListSkillsResponse;
-};
-
-export type ListSkillsResponse = ListSkillsResponses[keyof ListSkillsResponses];
-
-export type CreateSkillData = {
-	body: XeLocalAiEngineClientEndpointsSkillsV1CreateSkillRequest;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/skills";
-};
-
-export type CreateSkillErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type CreateSkillResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsSkillsV1SkillResponse;
-};
-
-export type CreateSkillResponse = CreateSkillResponses[keyof CreateSkillResponses];
-
-export type DeleteSkillData = {
-	body?: never;
-	path: {
-		skillId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/skills/{skillId}";
-};
-
-export type DeleteSkillErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type DeleteSkillResponses = {
-	/**
-	 * No Content
-	 */
-	204: void;
-};
-
-export type DeleteSkillResponse = DeleteSkillResponses[keyof DeleteSkillResponses];
-
-export type GetSkillData = {
-	body?: never;
-	path: {
-		skillId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/skills/{skillId}";
-};
-
-export type GetSkillErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type GetSkillResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsSkillsV1SkillResponse;
-};
-
-export type GetSkillResponse = GetSkillResponses[keyof GetSkillResponses];
-
-export type UpdateSkillData = {
-	body: XeLocalAiEngineClientEndpointsSkillsV1UpdateSkillRequest;
-	path: {
-		skillId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/skills/{skillId}";
-};
-
-export type UpdateSkillErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type UpdateSkillResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsSkillsV1SkillResponse;
-};
-
-export type UpdateSkillResponse = UpdateSkillResponses[keyof UpdateSkillResponses];
-
-export type CancelScheduledJobRunData = {
-	body?: never;
-	path: {
-		runId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/scheduler/runs/{runId}/cancel";
-};
-
-export type CancelScheduledJobRunErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type CancelScheduledJobRunResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobRunCancelResponse;
-};
-
-export type CancelScheduledJobRunResponse = CancelScheduledJobRunResponses[keyof CancelScheduledJobRunResponses];
-
-export type ListScheduledJobsData = {
-	body?: never;
-	path?: never;
-	query: {
-		includeDeleted: boolean;
-	};
-	url: "/api/local/v1/scheduler/jobs";
-};
-
-export type ListScheduledJobsErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type ListScheduledJobsResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobsResponse;
-};
-
-export type ListScheduledJobsResponse = ListScheduledJobsResponses[keyof ListScheduledJobsResponses];
-
-export type CreateScheduledJobData = {
-	body: XeLocalAiEngineClientEndpointsSchedulerV1CreateScheduledJobRequest;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/scheduler/jobs";
-};
-
-export type CreateScheduledJobErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type CreateScheduledJobResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobResponse;
-};
-
-export type CreateScheduledJobResponse = CreateScheduledJobResponses[keyof CreateScheduledJobResponses];
-
-export type DeleteScheduledJobData = {
-	body?: never;
-	path: {
-		scheduledJobId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/scheduler/jobs/{scheduledJobId}";
-};
-
-export type DeleteScheduledJobErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type DeleteScheduledJobResponses = {
-	/**
-	 * No Content
-	 */
-	204: void;
-};
-
-export type DeleteScheduledJobResponse = DeleteScheduledJobResponses[keyof DeleteScheduledJobResponses];
-
-export type GetScheduledJobData = {
-	body?: never;
-	path: {
-		scheduledJobId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/scheduler/jobs/{scheduledJobId}";
-};
-
-export type GetScheduledJobErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type GetScheduledJobResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobResponse;
-};
-
-export type GetScheduledJobResponse = GetScheduledJobResponses[keyof GetScheduledJobResponses];
-
-export type UpdateScheduledJobData = {
-	body: XeLocalAiEngineClientEndpointsSchedulerV1UpdateScheduledJobRequest;
-	path: {
-		scheduledJobId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/scheduler/jobs/{scheduledJobId}";
-};
-
-export type UpdateScheduledJobErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type UpdateScheduledJobResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobResponse;
-};
-
-export type UpdateScheduledJobResponse = UpdateScheduledJobResponses[keyof UpdateScheduledJobResponses];
-
-export type DisableScheduledJobData = {
-	body?: never;
-	path: {
-		scheduledJobId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/scheduler/jobs/{scheduledJobId}/disable";
-};
-
-export type DisableScheduledJobErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type DisableScheduledJobResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobResponse;
-};
-
-export type DisableScheduledJobResponse = DisableScheduledJobResponses[keyof DisableScheduledJobResponses];
-
-export type EnableScheduledJobData = {
-	body?: never;
-	path: {
-		scheduledJobId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/scheduler/jobs/{scheduledJobId}/enable";
-};
-
-export type EnableScheduledJobErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type EnableScheduledJobResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobResponse;
-};
-
-export type EnableScheduledJobResponse = EnableScheduledJobResponses[keyof EnableScheduledJobResponses];
-
-export type GetScheduledJobRunData = {
-	body?: never;
-	path: {
-		runId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/scheduler/runs/{runId}";
-};
-
-export type GetScheduledJobRunErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type GetScheduledJobRunResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobRunResponse;
-};
-
-export type GetScheduledJobRunResponse = GetScheduledJobRunResponses[keyof GetScheduledJobRunResponses];
-
-export type ListScheduledJobRunsData = {
+export type ListRunEnvelopesData = {
 	body?: never;
 	path?: never;
 	query?: {
-		status?: XeLocalAiEngineClientEndpointsSchedulerV1ScheduledRunStatus | null;
-		fromUtc?: number | null;
-		toUtc?: number | null;
-		scheduledJobId?: string | null;
+		conversationId?: string | null;
+		limit?: number | null;
+		offset?: number | null;
 	};
-	url: "/api/local/v1/scheduler/runs";
+	url: "/api/local/v1/agents/run-envelopes";
 };
 
-export type ListScheduledJobRunsErrors = {
+export type ListRunEnvelopesErrors = {
 	/**
 	 * Unauthorized
 	 */
@@ -3085,23 +2676,23 @@ export type ListScheduledJobRunsErrors = {
 	403: unknown;
 };
 
-export type ListScheduledJobRunsResponses = {
+export type ListRunEnvelopesResponses = {
 	/**
 	 * Success
 	 */
-	200: XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobRunsResponse;
+	200: XeLocalAiEngineClientEndpointsAgentsV1ListRunEnvelopesResponse;
 };
 
-export type ListScheduledJobRunsResponse = ListScheduledJobRunsResponses[keyof ListScheduledJobRunsResponses];
+export type ListRunEnvelopesResponse = ListRunEnvelopesResponses[keyof ListRunEnvelopesResponses];
 
-export type ListScheduledJobTemplatesData = {
+export type ListAgentTemplatesData = {
 	body?: never;
 	path?: never;
 	query?: never;
-	url: "/api/local/v1/scheduler/templates";
+	url: "/api/local/v1/agents/templates";
 };
 
-export type ListScheduledJobTemplatesErrors = {
+export type ListAgentTemplatesErrors = {
 	/**
 	 * Unauthorized
 	 */
@@ -3112,25 +2703,23 @@ export type ListScheduledJobTemplatesErrors = {
 	403: unknown;
 };
 
-export type ListScheduledJobTemplatesResponses = {
+export type ListAgentTemplatesResponses = {
 	/**
 	 * Success
 	 */
-	200: XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobTemplatesResponse;
+	200: XeLocalAiEngineClientEndpointsAgentsV1ListAgentTemplatesResponse;
 };
 
-export type ListScheduledJobTemplatesResponse = ListScheduledJobTemplatesResponses[keyof ListScheduledJobTemplatesResponses];
+export type ListAgentTemplatesResponse = ListAgentTemplatesResponses[keyof ListAgentTemplatesResponses];
 
-export type TriggerScheduledJobData = {
-	body?: never;
-	path: {
-		scheduledJobId: string;
-	};
+export type ImportAgentTemplatesData = {
+	body: XeLocalAiEngineClientEndpointsAgentsV1ImportAgentTemplatesRequest;
+	path?: never;
 	query?: never;
-	url: "/api/local/v1/scheduler/jobs/{scheduledJobId}/trigger";
+	url: "/api/local/v1/agents/templates/import";
 };
 
-export type TriggerScheduledJobErrors = {
+export type ImportAgentTemplatesErrors = {
 	/**
 	 * Unauthorized
 	 */
@@ -3141,25 +2730,111 @@ export type TriggerScheduledJobErrors = {
 	403: unknown;
 };
 
-export type TriggerScheduledJobResponses = {
+export type ImportAgentTemplatesResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsAgentsV1ImportAgentTemplatesResponse;
+};
+
+export type ImportAgentTemplatesResponse = ImportAgentTemplatesResponses[keyof ImportAgentTemplatesResponses];
+
+export type GetToolCapableModelsData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/agents/tool-capable-models";
+};
+
+export type GetToolCapableModelsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetToolCapableModelsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsAgentsV1ToolCapableModelsResponse;
+};
+
+export type GetToolCapableModelsResponse = GetToolCapableModelsResponses[keyof GetToolCapableModelsResponses];
+
+export type GetAgentUsageSummaryData = {
+	body?: never;
+	path?: never;
+	query?: {
+		fromEpochMs?: number | null;
+		toEpochMs?: number | null;
+	};
+	url: "/api/local/v1/agents/usage-summary";
+};
+
+export type GetAgentUsageSummaryErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetAgentUsageSummaryResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryResponse;
+};
+
+export type GetAgentUsageSummaryResponse = GetAgentUsageSummaryResponses[keyof GetAgentUsageSummaryResponses];
+
+export type DeleteAgentDefinitionData = {
+	body?: never;
+	path: {
+		agentDefinitionId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/agents/{agentDefinitionId}";
+};
+
+export type DeleteAgentDefinitionErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type DeleteAgentDefinitionResponses = {
 	/**
 	 * No Content
 	 */
 	204: void;
 };
 
-export type TriggerScheduledJobResponse = TriggerScheduledJobResponses[keyof TriggerScheduledJobResponses];
+export type DeleteAgentDefinitionResponse = DeleteAgentDefinitionResponses[keyof DeleteAgentDefinitionResponses];
 
-export type CancelPreviewRunData = {
+export type GetAgentDefinitionData = {
 	body?: never;
 	path: {
-		runId: string;
+		agentDefinitionId: string;
 	};
 	query?: never;
-	url: "/api/local/v1/preview/runs/{runId}/cancel";
+	url: "/api/local/v1/agents/{agentDefinitionId}";
 };
 
-export type CancelPreviewRunErrors = {
+export type GetAgentDefinitionErrors = {
 	/**
 	 * Unauthorized
 	 */
@@ -3170,25 +2845,233 @@ export type CancelPreviewRunErrors = {
 	403: unknown;
 };
 
-export type CancelPreviewRunResponses = {
+export type GetAgentDefinitionResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsAgentsV1AgentDefinitionResponse;
+};
+
+export type GetAgentDefinitionResponse = GetAgentDefinitionResponses[keyof GetAgentDefinitionResponses];
+
+export type UpdateAgentDefinitionData = {
+	body: XeLocalAiEngineClientEndpointsAgentsV1UpdateAgentDefinitionRequest;
+	path: {
+		agentDefinitionId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/agents/{agentDefinitionId}";
+};
+
+export type UpdateAgentDefinitionErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type UpdateAgentDefinitionResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsAgentsV1AgentDefinitionResponse;
+};
+
+export type UpdateAgentDefinitionResponse = UpdateAgentDefinitionResponses[keyof UpdateAgentDefinitionResponses];
+
+export type ListAgentExecutionLogsData = {
+	body?: never;
+	path: {
+		agentDefinitionId: string;
+	};
+	query?: {
+		limit?: number | null;
+		offset?: number | null;
+	};
+	url: "/api/local/v1/agents/{agentDefinitionId}/execution-logs";
+};
+
+export type ListAgentExecutionLogsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListAgentExecutionLogsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsAgentsV1ListAgentExecutionLogsResponse;
+};
+
+export type ListAgentExecutionLogsResponse = ListAgentExecutionLogsResponses[keyof ListAgentExecutionLogsResponses];
+
+export type GetAgentFeedbackInsightsData = {
+	body?: never;
+	path: {
+		agentDefinitionId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/agents/{agentDefinitionId}/feedback-insights";
+};
+
+export type GetAgentFeedbackInsightsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetAgentFeedbackInsightsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsAgentsV1AgentFeedbackInsightsResponse;
+};
+
+export type GetAgentFeedbackInsightsResponse = GetAgentFeedbackInsightsResponses[keyof GetAgentFeedbackInsightsResponses];
+
+export type ListGoldenConversationsData = {
+	body?: never;
+	path: {
+		agentDefinitionId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/agents/{agentDefinitionId}/golden-conversations";
+};
+
+export type ListGoldenConversationsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListGoldenConversationsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsAgentsV1ListGoldenConversationsResponse;
+};
+
+export type ListGoldenConversationsResponse = ListGoldenConversationsResponses[keyof ListGoldenConversationsResponses];
+
+export type CreateGoldenConversationData = {
+	body: XeLocalAiEngineClientEndpointsAgentsV1CreateGoldenConversationRequest;
+	path: {
+		agentDefinitionId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/agents/{agentDefinitionId}/golden-conversations";
+};
+
+export type CreateGoldenConversationErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type CreateGoldenConversationResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsAgentsV1GoldenConversationResponse;
+};
+
+export type CreateGoldenConversationResponse = CreateGoldenConversationResponses[keyof CreateGoldenConversationResponses];
+
+export type HarvestGoldenConversationsData = {
+	body?: never;
+	path: {
+		agentDefinitionId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/agents/{agentDefinitionId}/golden-conversations/harvest";
+};
+
+export type HarvestGoldenConversationsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type HarvestGoldenConversationsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsAgentsV1GoldenHarvestResponse;
+};
+
+export type HarvestGoldenConversationsResponse = HarvestGoldenConversationsResponses[keyof HarvestGoldenConversationsResponses];
+
+export type DeleteGoldenConversationData = {
+	body?: never;
+	path: {
+		agentDefinitionId: string;
+		goldenConversationId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/agents/{agentDefinitionId}/golden-conversations/{goldenConversationId}";
+};
+
+export type DeleteGoldenConversationErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type DeleteGoldenConversationResponses = {
 	/**
 	 * No Content
 	 */
 	204: void;
 };
 
-export type CancelPreviewRunResponse = CancelPreviewRunResponses[keyof CancelPreviewRunResponses];
+export type DeleteGoldenConversationResponse = DeleteGoldenConversationResponses[keyof DeleteGoldenConversationResponses];
 
-export type ContinuePreviewRunData = {
+export type ApproveGoldenConversationData = {
 	body?: never;
 	path: {
-		runId: string;
+		agentDefinitionId: string;
+		goldenConversationId: string;
 	};
 	query?: never;
-	url: "/api/local/v1/preview/runs/{runId}/continue";
+	url: "/api/local/v1/agents/{agentDefinitionId}/golden-conversations/{goldenConversationId}/approve";
 };
 
-export type ContinuePreviewRunErrors = {
+export type ApproveGoldenConversationErrors = {
 	/**
 	 * Unauthorized
 	 */
@@ -3199,79 +3082,174 @@ export type ContinuePreviewRunErrors = {
 	403: unknown;
 };
 
-export type ContinuePreviewRunResponses = {
+export type ApproveGoldenConversationResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsAgentsV1GoldenConversationResponse;
+};
+
+export type ApproveGoldenConversationResponse = ApproveGoldenConversationResponses[keyof ApproveGoldenConversationResponses];
+
+export type ListAgentPlaybookActionsData = {
+	body?: never;
+	path: {
+		agentDefinitionId: string;
+	};
+	query?: {
+		scope?: XeLocalAiEngineClientPersistenceMemoryScope | null;
+	};
+	url: "/api/local/v1/agents/{agentDefinitionId}/playbook";
+};
+
+export type ListAgentPlaybookActionsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListAgentPlaybookActionsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsAgentsV1ListPlaybookActionsResponse;
+};
+
+export type ListAgentPlaybookActionsResponse = ListAgentPlaybookActionsResponses[keyof ListAgentPlaybookActionsResponses];
+
+export type CreatePlaybookActionData = {
+	body: XeLocalAiEngineClientEndpointsAgentsV1CreatePlaybookActionRequest;
+	path: {
+		agentDefinitionId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/agents/{agentDefinitionId}/playbook";
+};
+
+export type CreatePlaybookActionErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type CreatePlaybookActionResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsAgentsV1PlaybookActionResponse;
+};
+
+export type CreatePlaybookActionResponse = CreatePlaybookActionResponses[keyof CreatePlaybookActionResponses];
+
+export type AnalyzePlaybookData = {
+	body?: never;
+	path: {
+		agentDefinitionId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/agents/{agentDefinitionId}/playbook/analyze";
+};
+
+export type AnalyzePlaybookErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type AnalyzePlaybookResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsAgentsV1ListPlaybookActionsResponse;
+};
+
+export type AnalyzePlaybookResponse = AnalyzePlaybookResponses[keyof AnalyzePlaybookResponses];
+
+export type GetAgentPlaybookMonitorData = {
+	body?: never;
+	path: {
+		agentDefinitionId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/agents/{agentDefinitionId}/playbook/monitor";
+};
+
+export type GetAgentPlaybookMonitorErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetAgentPlaybookMonitorResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsAgentsV1AgentPlaybookMonitorResponse;
+};
+
+export type GetAgentPlaybookMonitorResponse = GetAgentPlaybookMonitorResponses[keyof GetAgentPlaybookMonitorResponses];
+
+export type DeletePlaybookActionData = {
+	body?: never;
+	path: {
+		agentDefinitionId: string;
+		actionId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/agents/{agentDefinitionId}/playbook/{actionId}";
+};
+
+export type DeletePlaybookActionErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type DeletePlaybookActionResponses = {
 	/**
 	 * No Content
 	 */
 	204: void;
 };
 
-export type ContinuePreviewRunResponse = ContinuePreviewRunResponses[keyof ContinuePreviewRunResponses];
+export type DeletePlaybookActionResponse = DeletePlaybookActionResponses[keyof DeletePlaybookActionResponses];
 
-export type ListPreviewWorkflowsData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/preview/workflows";
-};
-
-export type ListPreviewWorkflowsErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type ListPreviewWorkflowsResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsPreviewV1ListPreviewWorkflowsResponse;
-};
-
-export type ListPreviewWorkflowsResponse = ListPreviewWorkflowsResponses[keyof ListPreviewWorkflowsResponses];
-
-export type CreatePreviewWorkflowData = {
-	body: XeLocalAiEngineClientEndpointsPreviewV1CreatePreviewWorkflowRequest;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/preview/workflows";
-};
-
-export type CreatePreviewWorkflowErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type CreatePreviewWorkflowResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsPreviewV1PreviewWorkflowResponse;
-};
-
-export type CreatePreviewWorkflowResponse = CreatePreviewWorkflowResponses[keyof CreatePreviewWorkflowResponses];
-
-export type DeletePreviewWorkflowData = {
-	body?: never;
+export type UpdatePlaybookActionData = {
+	body: XeLocalAiEngineClientEndpointsAgentsV1UpdatePlaybookActionRequest;
 	path: {
-		workflowId: string;
+		agentDefinitionId: string;
+		actionId: string;
 	};
 	query?: never;
-	url: "/api/local/v1/preview/workflows/{workflowId}";
+	url: "/api/local/v1/agents/{agentDefinitionId}/playbook/{actionId}";
 };
 
-export type DeletePreviewWorkflowErrors = {
+export type UpdatePlaybookActionErrors = {
 	/**
 	 * Unauthorized
 	 */
@@ -3282,25 +3260,26 @@ export type DeletePreviewWorkflowErrors = {
 	403: unknown;
 };
 
-export type DeletePreviewWorkflowResponses = {
+export type UpdatePlaybookActionResponses = {
 	/**
-	 * No Content
+	 * Success
 	 */
-	204: void;
+	200: XeLocalAiEngineClientEndpointsAgentsV1PlaybookActionResponse;
 };
 
-export type DeletePreviewWorkflowResponse = DeletePreviewWorkflowResponses[keyof DeletePreviewWorkflowResponses];
+export type UpdatePlaybookActionResponse = UpdatePlaybookActionResponses[keyof UpdatePlaybookActionResponses];
 
-export type GetPreviewWorkflowData = {
+export type RunPlaybookActionEvalData = {
 	body?: never;
 	path: {
-		workflowId: string;
+		agentDefinitionId: string;
+		actionId: string;
 	};
 	query?: never;
-	url: "/api/local/v1/preview/workflows/{workflowId}";
+	url: "/api/local/v1/agents/{agentDefinitionId}/playbook/{actionId}/eval";
 };
 
-export type GetPreviewWorkflowErrors = {
+export type RunPlaybookActionEvalErrors = {
 	/**
 	 * Unauthorized
 	 */
@@ -3311,54 +3290,26 @@ export type GetPreviewWorkflowErrors = {
 	403: unknown;
 };
 
-export type GetPreviewWorkflowResponses = {
+export type RunPlaybookActionEvalResponses = {
 	/**
 	 * Success
 	 */
-	200: XeLocalAiEngineClientEndpointsPreviewV1PreviewWorkflowResponse;
+	200: XeLocalAiEngineClientEndpointsAgentsV1PlaybookActionResponse;
 };
 
-export type GetPreviewWorkflowResponse = GetPreviewWorkflowResponses[keyof GetPreviewWorkflowResponses];
+export type RunPlaybookActionEvalResponse = RunPlaybookActionEvalResponses[keyof RunPlaybookActionEvalResponses];
 
-export type UpdatePreviewWorkflowData = {
-	body: XeLocalAiEngineClientEndpointsPreviewV1UpdatePreviewWorkflowRequest;
-	path: {
-		workflowId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/preview/workflows/{workflowId}";
-};
-
-export type UpdatePreviewWorkflowErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type UpdatePreviewWorkflowResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsPreviewV1PreviewWorkflowResponse;
-};
-
-export type UpdatePreviewWorkflowResponse = UpdatePreviewWorkflowResponses[keyof UpdatePreviewWorkflowResponses];
-
-export type ExecuteSavedPreviewWorkflowData = {
+export type PromoteSuggestedPlaybookActionData = {
 	body?: never;
 	path: {
-		workflowId: string;
+		agentDefinitionId: string;
+		actionId: string;
 	};
 	query?: never;
-	url: "/api/local/v1/preview/workflows/{workflowId}/execute";
+	url: "/api/local/v1/agents/{agentDefinitionId}/playbook/{actionId}/promote";
 };
 
-export type ExecuteSavedPreviewWorkflowErrors = {
+export type PromoteSuggestedPlaybookActionErrors = {
 	/**
 	 * Unauthorized
 	 */
@@ -3369,24 +3320,27 @@ export type ExecuteSavedPreviewWorkflowErrors = {
 	403: unknown;
 };
 
-export type ExecuteSavedPreviewWorkflowResponses = {
+export type PromoteSuggestedPlaybookActionResponses = {
 	/**
 	 * Success
 	 */
-	200: XeLocalAiEngineClientEndpointsPreviewV1PreviewRunStartedResponse;
+	200: XeLocalAiEngineClientEndpointsAgentsV1PlaybookActionResponse;
 };
 
-export type ExecuteSavedPreviewWorkflowResponse =
-	ExecuteSavedPreviewWorkflowResponses[keyof ExecuteSavedPreviewWorkflowResponses];
+export type PromoteSuggestedPlaybookActionResponse =
+	PromoteSuggestedPlaybookActionResponses[keyof PromoteSuggestedPlaybookActionResponses];
 
-export type ExecuteUnsavedPreviewWorkflowData = {
-	body: XeLocalAiEngineClientEndpointsPreviewV1ExecuteUnsavedPreviewWorkflowRequest;
-	path?: never;
+export type RejectSuggestedPlaybookActionData = {
+	body?: never;
+	path: {
+		agentDefinitionId: string;
+		actionId: string;
+	};
 	query?: never;
-	url: "/api/local/v1/preview/runs/execute";
+	url: "/api/local/v1/agents/{agentDefinitionId}/playbook/{actionId}/reject";
 };
 
-export type ExecuteUnsavedPreviewWorkflowErrors = {
+export type RejectSuggestedPlaybookActionErrors = {
 	/**
 	 * Unauthorized
 	 */
@@ -3397,24 +3351,55 @@ export type ExecuteUnsavedPreviewWorkflowErrors = {
 	403: unknown;
 };
 
-export type ExecuteUnsavedPreviewWorkflowResponses = {
+export type RejectSuggestedPlaybookActionResponses = {
 	/**
 	 * Success
 	 */
-	200: XeLocalAiEngineClientEndpointsPreviewV1PreviewRunStartedResponse;
+	200: XeLocalAiEngineClientEndpointsAgentsV1PlaybookActionResponse;
 };
 
-export type ExecuteUnsavedPreviewWorkflowResponse =
-	ExecuteUnsavedPreviewWorkflowResponses[keyof ExecuteUnsavedPreviewWorkflowResponses];
+export type RejectSuggestedPlaybookActionResponse =
+	RejectSuggestedPlaybookActionResponses[keyof RejectSuggestedPlaybookActionResponses];
 
-export type GetNodeSettingsData = {
+export type UpdateSuggestedPlaybookActionData = {
+	body: XeLocalAiEngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActionRequest;
+	path: {
+		agentDefinitionId: string;
+		actionId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/agents/{agentDefinitionId}/playbook/{actionId}/suggested";
+};
+
+export type UpdateSuggestedPlaybookActionErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type UpdateSuggestedPlaybookActionResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsAgentsV1PlaybookActionResponse;
+};
+
+export type UpdateSuggestedPlaybookActionResponse =
+	UpdateSuggestedPlaybookActionResponses[keyof UpdateSuggestedPlaybookActionResponses];
+
+export type ApplyAppUpdateData = {
 	body?: never;
 	path?: never;
 	query?: never;
-	url: "/api/local/v1/node-settings";
+	url: "/api/local/v1/app-update/apply";
 };
 
-export type GetNodeSettingsErrors = {
+export type ApplyAppUpdateErrors = {
 	/**
 	 * Unauthorized
 	 */
@@ -3425,23 +3410,52 @@ export type GetNodeSettingsErrors = {
 	403: unknown;
 };
 
-export type GetNodeSettingsResponses = {
+export type ApplyAppUpdateResponses = {
 	/**
 	 * Success
 	 */
-	200: XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse;
+	200: XeLocalAiEngineClientEndpointsAppUpdateV1ApplyAppUpdateResponse;
 };
 
-export type GetNodeSettingsResponse = GetNodeSettingsResponses[keyof GetNodeSettingsResponses];
+export type ApplyAppUpdateResponse = ApplyAppUpdateResponses[keyof ApplyAppUpdateResponses];
 
-export type SaveNodeSettingsData = {
-	body: XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest;
+export type GetAppUpdateStatusData = {
+	body?: never;
+	path?: never;
+	query?: {
+		refresh?: boolean | null;
+	};
+	url: "/api/local/v1/app-update/status";
+};
+
+export type GetAppUpdateStatusErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetAppUpdateStatusResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsAppUpdateV1AppUpdateStatusResponse;
+};
+
+export type GetAppUpdateStatusResponse = GetAppUpdateStatusResponses[keyof GetAppUpdateStatusResponses];
+
+export type NodeChangePasswordData = {
+	body: XeLocalAiEngineClientEndpointsAuthV1NodeChangePasswordRequest;
 	path?: never;
 	query?: never;
-	url: "/api/local/v1/node-settings";
+	url: "/api/local/v1/auth/change-password";
 };
 
-export type SaveNodeSettingsErrors = {
+export type NodeChangePasswordErrors = {
 	/**
 	 * Bad Request
 	 */
@@ -3456,16 +3470,152 @@ export type SaveNodeSettingsErrors = {
 	403: unknown;
 };
 
-export type SaveNodeSettingsError = SaveNodeSettingsErrors[keyof SaveNodeSettingsErrors];
+export type NodeChangePasswordError = NodeChangePasswordErrors[keyof NodeChangePasswordErrors];
 
-export type SaveNodeSettingsResponses = {
+export type NodeChangePasswordResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type NodeChangePasswordResponse = NodeChangePasswordResponses[keyof NodeChangePasswordResponses];
+
+export type NodeLoginData = {
+	body: XeLocalAiEngineClientEndpointsAuthV1NodeLoginRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/auth/login";
+};
+
+export type NodeLoginErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+};
+
+export type NodeLoginError = NodeLoginErrors[keyof NodeLoginErrors];
+
+export type NodeLoginResponses = {
 	/**
 	 * Success
 	 */
-	200: XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse;
+	200: XeLocalAiEngineClientEndpointsAuthV1NodeAccessTokenResponse;
 };
 
-export type SaveNodeSettingsResponse = SaveNodeSettingsResponses[keyof SaveNodeSettingsResponses];
+export type NodeLoginResponse = NodeLoginResponses[keyof NodeLoginResponses];
+
+export type NodeLogoutData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/auth/logout";
+};
+
+export type NodeLogoutErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type NodeLogoutResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type NodeLogoutResponse = NodeLogoutResponses[keyof NodeLogoutResponses];
+
+export type NodeMeData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/auth/me";
+};
+
+export type NodeMeErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type NodeMeResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsAuthV1NodeMeResponse;
+};
+
+export type NodeMeResponse = NodeMeResponses[keyof NodeMeResponses];
+
+export type NodeRefreshData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/auth/refresh";
+};
+
+export type NodeRefreshResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsAuthV1NodeAccessTokenResponse;
+};
+
+export type NodeRefreshResponse = NodeRefreshResponses[keyof NodeRefreshResponses];
+
+export type NodeSetupData = {
+	body: XeLocalAiEngineClientEndpointsAuthV1NodeSetupRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/auth/setup";
+};
+
+export type NodeSetupErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+};
+
+export type NodeSetupError = NodeSetupErrors[keyof NodeSetupErrors];
+
+export type NodeSetupResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type NodeSetupResponse = NodeSetupResponses[keyof NodeSetupResponses];
+
+export type NodeAuthStatusData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/auth/status";
+};
+
+export type NodeAuthStatusResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsAuthV1NodeAuthStatusResponse;
+};
+
+export type NodeAuthStatusResponse = NodeAuthStatusResponses[keyof NodeAuthStatusResponses];
 
 export type CancelNodeBindingData = {
 	body?: never;
@@ -3548,1182 +3698,14 @@ export type StartNodeBindingResponses = {
 
 export type StartNodeBindingResponse = StartNodeBindingResponses[keyof StartNodeBindingResponses];
 
-export type BenchmarkInferenceProfileData = {
-	body: XeLocalAiEngineClientEndpointsModelFitV1BenchmarkInferenceProfileRequest;
+export type ResolveToolApprovalData = {
+	body: XeLocalAiEngineClientEndpointsLocalChatV1ResolveToolApprovalRequest;
 	path?: never;
 	query?: never;
-	url: "/api/local/v1/model-fit/profiles/benchmark";
+	url: "/api/local/v1/chat/approvals/resolve";
 };
 
-export type BenchmarkInferenceProfileErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type BenchmarkInferenceProfileResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsModelFitV1BenchmarkInferenceProfileResponse;
-};
-
-export type BenchmarkInferenceProfileResponse = BenchmarkInferenceProfileResponses[keyof BenchmarkInferenceProfileResponses];
-
-export type BrowseGgufRepositoriesData = {
-	body?: never;
-	path?: never;
-	query?: {
-		query?: string | null;
-		limit?: number | null;
-		sort?: string | null;
-	};
-	url: "/api/local/v1/model-fit/gguf/browse";
-};
-
-export type BrowseGgufRepositoriesErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type BrowseGgufRepositoriesResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsModelFitV1BrowseGgufRepositoriesResponse;
-};
-
-export type BrowseGgufRepositoriesResponse = BrowseGgufRepositoriesResponses[keyof BrowseGgufRepositoriesResponses];
-
-export type CancelCudaBuildData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/model-fit/llamacpp/cuda-build/cancel";
-};
-
-export type CancelCudaBuildErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type CancelCudaBuildResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsModelFitV1CudaBuildStatusResponse;
-};
-
-export type CancelCudaBuildResponse = CancelCudaBuildResponses[keyof CancelCudaBuildResponses];
-
-export type CancelGgufDownloadData = {
-	body: XeLocalAiEngineClientEndpointsModelFitV1CancelGgufDownloadRequest;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/model-fit/download/cancel";
-};
-
-export type CancelGgufDownloadErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type CancelGgufDownloadResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsModelFitV1CancelGgufDownloadResponse;
-};
-
-export type CancelGgufDownloadResponse = CancelGgufDownloadResponses[keyof CancelGgufDownloadResponses];
-
-export type CancelLlamaCppSourceBuildData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/model-fit/llamacpp/source-build/cancel";
-};
-
-export type CancelLlamaCppSourceBuildErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type CancelLlamaCppSourceBuildResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildStatusResponse;
-};
-
-export type CancelLlamaCppSourceBuildResponse = CancelLlamaCppSourceBuildResponses[keyof CancelLlamaCppSourceBuildResponses];
-
-export type EjectRunningModelData = {
-	body: XeLocalAiEngineClientEndpointsModelFitV1EjectRunningModelRequest;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/model-fit/running/eject";
-};
-
-export type EjectRunningModelErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type EjectRunningModelResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsModelFitV1EjectRunningModelResponse;
-};
-
-export type EjectRunningModelResponse = EjectRunningModelResponses[keyof EjectRunningModelResponses];
-
-export type EnsureLlamaCppBinaryData = {
-	body: XeLocalAiEngineClientEndpointsModelFitV1EnsureLlamaCppBinaryRequest;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/model-fit/llamacpp/version";
-};
-
-export type EnsureLlamaCppBinaryErrors = {
-	/**
-	 * Bad Request
-	 */
-	400: FastEndpointsErrorResponse;
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-	409: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppUpdateBlockedResponse;
-};
-
-export type EnsureLlamaCppBinaryError = EnsureLlamaCppBinaryErrors[keyof EnsureLlamaCppBinaryErrors];
-
-export type EnsureLlamaCppBinaryResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppVersionResponse;
-};
-
-export type EnsureLlamaCppBinaryResponse = EnsureLlamaCppBinaryResponses[keyof EnsureLlamaCppBinaryResponses];
-
-export type ExploreInferenceProfileData = {
-	body: XeLocalAiEngineClientEndpointsModelFitV1ExploreInferenceProfileRequest;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/model-fit/profiles/explore";
-};
-
-export type ExploreInferenceProfileErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type ExploreInferenceProfileResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsModelFitV1InferenceProfileActionResponse;
-};
-
-export type ExploreInferenceProfileResponse = ExploreInferenceProfileResponses[keyof ExploreInferenceProfileResponses];
-
-export type FreezeInferenceProfileData = {
-	body: XeLocalAiEngineClientEndpointsModelFitV1FreezeInferenceProfileRequest;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/model-fit/profiles/freeze";
-};
-
-export type FreezeInferenceProfileErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type FreezeInferenceProfileResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsModelFitV1InferenceProfileActionResponse;
-};
-
-export type FreezeInferenceProfileResponse = FreezeInferenceProfileResponses[keyof FreezeInferenceProfileResponses];
-
-export type GetCudaBuildPrerequisitesData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/model-fit/llamacpp/cuda-build/prerequisites";
-};
-
-export type GetCudaBuildPrerequisitesErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type GetCudaBuildPrerequisitesResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsModelFitV1CudaBuildPrerequisitesResponse;
-};
-
-export type GetCudaBuildPrerequisitesResponse = GetCudaBuildPrerequisitesResponses[keyof GetCudaBuildPrerequisitesResponses];
-
-export type GetCudaBuildStatusData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/model-fit/llamacpp/cuda-build/status";
-};
-
-export type GetCudaBuildStatusErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type GetCudaBuildStatusResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsModelFitV1CudaBuildStatusResponse;
-};
-
-export type GetCudaBuildStatusResponse = GetCudaBuildStatusResponses[keyof GetCudaBuildStatusResponses];
-
-export type GetGgufDownloadsData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/model-fit/gguf/downloads";
-};
-
-export type GetGgufDownloadsErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type GetGgufDownloadsResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsModelFitV1ListGgufDownloadsResponse;
-};
-
-export type GetGgufDownloadsResponse = GetGgufDownloadsResponses[keyof GetGgufDownloadsResponses];
-
-export type GetGgufDownloadStatusData = {
-	body?: never;
-	path: {
-		modelName: string;
-	};
-	query?: never;
-	url: "/api/local/v1/model-fit/gguf/downloads/{modelName}";
-};
-
-export type GetGgufDownloadStatusErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type GetGgufDownloadStatusResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsModelFitV1GgufDownloadStatusResponse;
-};
-
-export type GetGgufDownloadStatusResponse = GetGgufDownloadStatusResponses[keyof GetGgufDownloadStatusResponses];
-
-export type GetHardwareProfileData = {
-	body?: never;
-	path?: never;
-	query: {
-		refresh: boolean;
-	};
-	url: "/api/local/v1/model-fit/hardware-profile";
-};
-
-export type GetHardwareProfileErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type GetHardwareProfileResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsModelFitV1HardwareProfileResponse;
-};
-
-export type GetHardwareProfileResponse = GetHardwareProfileResponses[keyof GetHardwareProfileResponses];
-
-export type GetHfTokenStatusData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/model-fit/hf-token";
-};
-
-export type GetHfTokenStatusErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type GetHfTokenStatusResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsModelFitV1HfTokenStatusResponse;
-};
-
-export type GetHfTokenStatusResponse = GetHfTokenStatusResponses[keyof GetHfTokenStatusResponses];
-
-export type SetHfTokenData = {
-	body: XeLocalAiEngineClientEndpointsModelFitV1SetHfTokenRequest;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/model-fit/hf-token";
-};
-
-export type SetHfTokenErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type SetHfTokenResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsModelFitV1HfTokenStatusResponse;
-};
-
-export type SetHfTokenResponse = SetHfTokenResponses[keyof SetHfTokenResponses];
-
-export type GetLatestRecommendationsData = {
-	body?: never;
-	path?: never;
-	query?: {
-		useCase?: string | null;
-	};
-	url: "/api/local/v1/model-fit/recommendations/latest";
-};
-
-export type GetLatestRecommendationsErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type GetLatestRecommendationsResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsResponse;
-};
-
-export type GetLatestRecommendationsResponse = GetLatestRecommendationsResponses[keyof GetLatestRecommendationsResponses];
-
-export type GetLlamaCppRuntimeData = {
-	body?: never;
-	path?: never;
-	query?: {
-		refresh?: boolean | null;
-	};
-	url: "/api/local/v1/model-fit/llamacpp/runtime";
-};
-
-export type GetLlamaCppRuntimeErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type GetLlamaCppRuntimeResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppRuntimeStatusResponse;
-};
-
-export type GetLlamaCppRuntimeResponse = GetLlamaCppRuntimeResponses[keyof GetLlamaCppRuntimeResponses];
-
-export type GetLlamaCppSourceBuildPrerequisitesData = {
-	body?: never;
-	path?: never;
-	query: {
-		backend: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBackendDto;
-	};
-	url: "/api/local/v1/model-fit/llamacpp/source-build/prerequisites";
-};
-
-export type GetLlamaCppSourceBuildPrerequisitesErrors = {
-	/**
-	 * Bad Request
-	 */
-	400: FastEndpointsErrorResponse;
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type GetLlamaCppSourceBuildPrerequisitesError =
-	GetLlamaCppSourceBuildPrerequisitesErrors[keyof GetLlamaCppSourceBuildPrerequisitesErrors];
-
-export type GetLlamaCppSourceBuildPrerequisitesResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildPrerequisitesResponse;
-};
-
-export type GetLlamaCppSourceBuildPrerequisitesResponse =
-	GetLlamaCppSourceBuildPrerequisitesResponses[keyof GetLlamaCppSourceBuildPrerequisitesResponses];
-
-export type GetLlamaCppSourceBuildStatusData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/model-fit/llamacpp/source-build/status";
-};
-
-export type GetLlamaCppSourceBuildStatusErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type GetLlamaCppSourceBuildStatusResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildStatusResponse;
-};
-
-export type GetLlamaCppSourceBuildStatusResponse =
-	GetLlamaCppSourceBuildStatusResponses[keyof GetLlamaCppSourceBuildStatusResponses];
-
-export type GetModelCatalogInfoData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/model-fit/catalog";
-};
-
-export type GetModelCatalogInfoErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type GetModelCatalogInfoResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsModelFitV1ModelCatalogInfoResponse;
-};
-
-export type GetModelCatalogInfoResponse = GetModelCatalogInfoResponses[keyof GetModelCatalogInfoResponses];
-
-export type InspectGgufRepositoryData = {
-	body?: never;
-	path?: never;
-	query?: {
-		repoId?: string | null;
-	};
-	url: "/api/local/v1/model-fit/gguf/inspect";
-};
-
-export type InspectGgufRepositoryErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type InspectGgufRepositoryResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsModelFitV1InspectGgufRepositoryResponse;
-};
-
-export type InspectGgufRepositoryResponse = InspectGgufRepositoryResponses[keyof InspectGgufRepositoryResponses];
-
-export type InvalidateInferenceProfileData = {
-	body: XeLocalAiEngineClientEndpointsModelFitV1InvalidateInferenceProfileRequest;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/model-fit/profiles/invalidate";
-};
-
-export type InvalidateInferenceProfileErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type InvalidateInferenceProfileResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsModelFitV1InferenceProfileActionResponse;
-};
-
-export type InvalidateInferenceProfileResponse = InvalidateInferenceProfileResponses[keyof InvalidateInferenceProfileResponses];
-
-export type ListInferenceProfilesData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/model-fit/profiles";
-};
-
-export type ListInferenceProfilesErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type ListInferenceProfilesResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsModelFitV1ListInferenceProfilesResponse;
-};
-
-export type ListInferenceProfilesResponse = ListInferenceProfilesResponses[keyof ListInferenceProfilesResponses];
-
-export type ListRunningModelsData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/model-fit/running";
-};
-
-export type ListRunningModelsErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type ListRunningModelsResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsModelFitV1ListRunningModelsResponse;
-};
-
-export type ListRunningModelsResponse = ListRunningModelsResponses[keyof ListRunningModelsResponses];
-
-export type RefreshModelCatalogData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/model-fit/catalog/refresh";
-};
-
-export type RefreshModelCatalogErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type RefreshModelCatalogResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsModelFitV1ModelCatalogInfoResponse;
-};
-
-export type RefreshModelCatalogResponse = RefreshModelCatalogResponses[keyof RefreshModelCatalogResponses];
-
-export type RefreshRecommendationsData = {
-	body: XeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsRequest;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/model-fit/recommendations/refresh";
-};
-
-export type RefreshRecommendationsErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type RefreshRecommendationsResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsResponse;
-};
-
-export type RefreshRecommendationsResponse = RefreshRecommendationsResponses[keyof RefreshRecommendationsResponses];
-
-export type RemoveCudaBuildData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/model-fit/llamacpp/cuda-build/remove";
-};
-
-export type RemoveCudaBuildErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type RemoveCudaBuildResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppRuntimeStatusResponse;
-};
-
-export type RemoveCudaBuildResponse = RemoveCudaBuildResponses[keyof RemoveCudaBuildResponses];
-
-export type RemoveLlamaCppSourceBuildData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/model-fit/llamacpp/source-build/remove";
-};
-
-export type RemoveLlamaCppSourceBuildErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-	409: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildBlockedResponse;
-};
-
-export type RemoveLlamaCppSourceBuildError = RemoveLlamaCppSourceBuildErrors[keyof RemoveLlamaCppSourceBuildErrors];
-
-export type RemoveLlamaCppSourceBuildResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppRuntimeStatusResponse;
-};
-
-export type RemoveLlamaCppSourceBuildResponse = RemoveLlamaCppSourceBuildResponses[keyof RemoveLlamaCppSourceBuildResponses];
-
-export type StartCudaBuildData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/model-fit/llamacpp/cuda-build";
-};
-
-export type StartCudaBuildErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type StartCudaBuildResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsModelFitV1StartCudaBuildResponse;
-};
-
-export type StartCudaBuildResponse = StartCudaBuildResponses[keyof StartCudaBuildResponses];
-
-export type StartGgufDownloadData = {
-	body: XeLocalAiEngineClientEndpointsModelFitV1StartGgufDownloadRequest;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/model-fit/download";
-};
-
-export type StartGgufDownloadErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type StartGgufDownloadResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsModelFitV1StartGgufDownloadResponse;
-};
-
-export type StartGgufDownloadResponse = StartGgufDownloadResponses[keyof StartGgufDownloadResponses];
-
-export type StartLlamaCppSourceBuildData = {
-	body: XeLocalAiEngineClientEndpointsModelFitV1StartLlamaCppSourceBuildRequest;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/model-fit/llamacpp/source-build";
-};
-
-export type StartLlamaCppSourceBuildErrors = {
-	/**
-	 * Bad Request
-	 */
-	400: FastEndpointsErrorResponse;
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-	409: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildBlockedResponse;
-};
-
-export type StartLlamaCppSourceBuildError = StartLlamaCppSourceBuildErrors[keyof StartLlamaCppSourceBuildErrors];
-
-export type StartLlamaCppSourceBuildResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsModelFitV1StartLlamaCppSourceBuildResponse;
-};
-
-export type StartLlamaCppSourceBuildResponse = StartLlamaCppSourceBuildResponses[keyof StartLlamaCppSourceBuildResponses];
-
-export type UpdateLlamaCppRuntimeData = {
-	body: XeLocalAiEngineClientEndpointsModelFitV1UpdateLlamaCppRuntimeRequest;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/model-fit/llamacpp/update";
-};
-
-export type UpdateLlamaCppRuntimeErrors = {
-	/**
-	 * Bad Request
-	 */
-	400: FastEndpointsErrorResponse;
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-	409: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppUpdateBlockedResponse;
-};
-
-export type UpdateLlamaCppRuntimeError = UpdateLlamaCppRuntimeErrors[keyof UpdateLlamaCppRuntimeErrors];
-
-export type UpdateLlamaCppRuntimeResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppVersionResponse;
-};
-
-export type UpdateLlamaCppRuntimeResponse = UpdateLlamaCppRuntimeResponses[keyof UpdateLlamaCppRuntimeResponses];
-
-export type ListMcpServersData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/mcp/servers";
-};
-
-export type ListMcpServersErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type ListMcpServersResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsMcpV1ListMcpServersResponse;
-};
-
-export type ListMcpServersResponse = ListMcpServersResponses[keyof ListMcpServersResponses];
-
-export type CreateMcpServerData = {
-	body: XeLocalAiEngineClientEndpointsMcpV1CreateMcpServerRequest;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/mcp/servers";
-};
-
-export type CreateMcpServerErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type CreateMcpServerResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsMcpV1McpServerResponse;
-};
-
-export type CreateMcpServerResponse = CreateMcpServerResponses[keyof CreateMcpServerResponses];
-
-export type DeleteMcpServerData = {
-	body?: never;
-	path: {
-		mcpServerId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/mcp/servers/{mcpServerId}";
-};
-
-export type DeleteMcpServerErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type DeleteMcpServerResponses = {
-	/**
-	 * No Content
-	 */
-	204: void;
-};
-
-export type DeleteMcpServerResponse = DeleteMcpServerResponses[keyof DeleteMcpServerResponses];
-
-export type GetMcpServerData = {
-	body?: never;
-	path: {
-		mcpServerId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/mcp/servers/{mcpServerId}";
-};
-
-export type GetMcpServerErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type GetMcpServerResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsMcpV1McpServerResponse;
-};
-
-export type GetMcpServerResponse = GetMcpServerResponses[keyof GetMcpServerResponses];
-
-export type UpdateMcpServerData = {
-	body: XeLocalAiEngineClientEndpointsMcpV1UpdateMcpServerRequest;
-	path: {
-		mcpServerId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/mcp/servers/{mcpServerId}";
-};
-
-export type UpdateMcpServerErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type UpdateMcpServerResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsMcpV1McpServerResponse;
-};
-
-export type UpdateMcpServerResponse = UpdateMcpServerResponses[keyof UpdateMcpServerResponses];
-
-export type GetMcpServerToolsData = {
-	body?: never;
-	path: {
-		mcpServerId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/mcp/servers/{mcpServerId}/tools";
-};
-
-export type GetMcpServerToolsErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type GetMcpServerToolsResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsMcpV1McpServerToolsResponse;
-};
-
-export type GetMcpServerToolsResponse = GetMcpServerToolsResponses[keyof GetMcpServerToolsResponses];
-
-export type GetToolCatalogData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/tool-catalog";
-};
-
-export type GetToolCatalogErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type GetToolCatalogResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsMcpV1ToolCatalogResponse;
-};
-
-export type GetToolCatalogResponse = GetToolCatalogResponses[keyof GetToolCatalogResponses];
-
-export type SetMcpServerEnabledData = {
-	body: XeLocalAiEngineClientEndpointsMcpV1SetMcpServerEnabledRequest;
-	path: {
-		mcpServerId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/mcp/servers/{mcpServerId}/enabled";
-};
-
-export type SetMcpServerEnabledErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type SetMcpServerEnabledResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsMcpV1McpServerResponse;
-};
-
-export type SetMcpServerEnabledResponse = SetMcpServerEnabledResponses[keyof SetMcpServerEnabledResponses];
-
-export type DeleteLocalModelData = {
-	body?: never;
-	path: {
-		modelName: string;
-	};
-	query?: never;
-	url: "/api/local/v1/models/{modelName}";
-};
-
-export type DeleteLocalModelErrors = {
+export type ResolveToolApprovalErrors = {
 	/**
 	 * Bad Request
 	 */
@@ -4738,231 +3720,16 @@ export type DeleteLocalModelErrors = {
 	403: unknown;
 };
 
-export type DeleteLocalModelError = DeleteLocalModelErrors[keyof DeleteLocalModelErrors];
+export type ResolveToolApprovalError = ResolveToolApprovalErrors[keyof ResolveToolApprovalErrors];
 
-export type DeleteLocalModelResponses = {
+export type ResolveToolApprovalResponses = {
 	/**
 	 * Success
 	 */
-	200: XeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelResponse;
+	200: XeLocalAiEngineClientEndpointsLocalChatV1ResolveToolApprovalResponse;
 };
 
-export type DeleteLocalModelResponse = DeleteLocalModelResponses[keyof DeleteLocalModelResponses];
-
-export type DeleteModelKindData = {
-	body?: never;
-	path: {
-		modelName: string;
-	};
-	query?: never;
-	url: "/api/local/v1/models/{modelName}/kind";
-};
-
-export type DeleteModelKindErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type DeleteModelKindResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsLocalModelsV1ModelKindResponse;
-};
-
-export type DeleteModelKindResponse = DeleteModelKindResponses[keyof DeleteModelKindResponses];
-
-export type PutModelKindData = {
-	body: XeLocalAiEngineClientEndpointsLocalModelsV1SetModelKindRequest;
-	path: {
-		modelName: string;
-	};
-	query?: never;
-	url: "/api/local/v1/models/{modelName}/kind";
-};
-
-export type PutModelKindErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type PutModelKindResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsLocalModelsV1ModelKindResponse;
-};
-
-export type PutModelKindResponse = PutModelKindResponses[keyof PutModelKindResponses];
-
-export type GetLocalModelDetailsData = {
-	body?: never;
-	path: {
-		modelName: string;
-	};
-	query?: never;
-	url: "/api/local/v1/models/{modelName}/details";
-};
-
-export type GetLocalModelDetailsErrors = {
-	/**
-	 * Bad Request
-	 */
-	400: FastEndpointsProblemDetails;
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type GetLocalModelDetailsError = GetLocalModelDetailsErrors[keyof GetLocalModelDetailsErrors];
-
-export type GetLocalModelDetailsResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelDetailsResponse;
-};
-
-export type GetLocalModelDetailsResponse = GetLocalModelDetailsResponses[keyof GetLocalModelDetailsResponses];
-
-export type GetRunningLocalModelsData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/models/running";
-};
-
-export type GetRunningLocalModelsErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type GetRunningLocalModelsResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsLocalModelsV1RunningLocalModelsResponse;
-};
-
-export type GetRunningLocalModelsResponse = GetRunningLocalModelsResponses[keyof GetRunningLocalModelsResponses];
-
-export type ListLocalModelsData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/models";
-};
-
-export type ListLocalModelsErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type ListLocalModelsResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsLocalModelsV1ListLocalModelsResponse;
-};
-
-export type ListLocalModelsResponse = ListLocalModelsResponses[keyof ListLocalModelsResponses];
-
-export type SelectLocalModelData = {
-	body: XeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelRequest;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/models/select";
-};
-
-export type SelectLocalModelErrors = {
-	/**
-	 * Bad Request
-	 */
-	400: FastEndpointsProblemDetails;
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type SelectLocalModelError = SelectLocalModelErrors[keyof SelectLocalModelErrors];
-
-export type SelectLocalModelResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelResponse;
-};
-
-export type SelectLocalModelResponse = SelectLocalModelResponses[keyof SelectLocalModelResponses];
-
-export type UnloadLocalModelData = {
-	body?: never;
-	path: {
-		modelName: string;
-	};
-	query?: never;
-	url: "/api/local/v1/models/{modelName}/unload";
-};
-
-export type UnloadLocalModelErrors = {
-	/**
-	 * Bad Request
-	 */
-	400: FastEndpointsProblemDetails;
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type UnloadLocalModelError = UnloadLocalModelErrors[keyof UnloadLocalModelErrors];
-
-export type UnloadLocalModelResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsLocalModelsV1UnloadLocalModelResponse;
-};
-
-export type UnloadLocalModelResponse = UnloadLocalModelResponses[keyof UnloadLocalModelResponses];
+export type ResolveToolApprovalResponse = ResolveToolApprovalResponses[keyof ResolveToolApprovalResponses];
 
 export type CancelNodeChatMessageData = {
 	body: XeLocalAiEngineClientEndpointsLocalChatV1CancelNodeChatMessageRequest;
@@ -5066,36 +3833,6 @@ export type CreateNodeChatConversationResponses = {
 
 export type CreateNodeChatConversationResponse = CreateNodeChatConversationResponses[keyof CreateNodeChatConversationResponses];
 
-export type DeleteConversationFileData = {
-	body?: never;
-	path: {
-		conversationId: string;
-		fileId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/chat/conversations/{conversationId}/uploads/{fileId}";
-};
-
-export type DeleteConversationFileErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type DeleteConversationFileResponses = {
-	/**
-	 * No Content
-	 */
-	204: void;
-};
-
-export type DeleteConversationFileResponse = DeleteConversationFileResponses[keyof DeleteConversationFileResponses];
-
 export type DeleteNodeChatConversationData = {
 	body: XeLocalAiEngineClientEndpointsLocalChatV1DeleteNodeChatConversationRequest;
 	path: {
@@ -5166,122 +3903,6 @@ export type GetNodeChatConversationResponses = {
 
 export type GetNodeChatConversationResponse = GetNodeChatConversationResponses[keyof GetNodeChatConversationResponses];
 
-export type ListConversationFilesData = {
-	body?: never;
-	path: {
-		conversationId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/chat/conversations/{conversationId}/uploads";
-};
-
-export type ListConversationFilesErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type ListConversationFilesResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsLocalChatV1ListConversationUploadsResponse;
-};
-
-export type ListConversationFilesResponse = ListConversationFilesResponses[keyof ListConversationFilesResponses];
-
-export type UploadConversationFileData = {
-	body: XeLocalAiEngineClientEndpointsLocalChatV1UploadConversationFileRequest;
-	path: {
-		conversationId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/chat/conversations/{conversationId}/uploads";
-};
-
-export type UploadConversationFileErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type UploadConversationFileResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsLocalChatV1ConversationUploadedFileResponse;
-};
-
-export type UploadConversationFileResponse = UploadConversationFileResponses[keyof UploadConversationFileResponses];
-
-export type RenameNodeChatConversationData = {
-	body: XeLocalAiEngineClientEndpointsLocalChatV1RenameNodeChatConversationRequest;
-	path: {
-		conversationId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/chat/conversations/{conversationId}/rename";
-};
-
-export type RenameNodeChatConversationErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type RenameNodeChatConversationResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationResponse;
-};
-
-export type RenameNodeChatConversationResponse = RenameNodeChatConversationResponses[keyof RenameNodeChatConversationResponses];
-
-export type PinNodeChatConversationData = {
-	body: XeLocalAiEngineClientEndpointsLocalChatV1PinNodeChatConversationRequest;
-	path: {
-		conversationId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/chat/conversations/{conversationId}/pin";
-};
-
-export type PinNodeChatConversationErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type PinNodeChatConversationResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationResponse;
-};
-
-export type PinNodeChatConversationResponse = PinNodeChatConversationResponses[keyof PinNodeChatConversationResponses];
-
 export type ArchiveNodeChatConversationData = {
 	body: XeLocalAiEngineClientEndpointsLocalChatV1ArchiveNodeChatConversationRequest;
 	path: {
@@ -5311,6 +3932,36 @@ export type ArchiveNodeChatConversationResponses = {
 
 export type ArchiveNodeChatConversationResponse =
 	ArchiveNodeChatConversationResponses[keyof ArchiveNodeChatConversationResponses];
+
+export type BranchNodeChatConversationData = {
+	body: XeLocalAiEngineClientEndpointsLocalChatV1BranchNodeChatConversationRequest;
+	path: {
+		conversationId: string;
+		messageId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/chat/conversations/{conversationId}/branch/{messageId}";
+};
+
+export type BranchNodeChatConversationErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type BranchNodeChatConversationResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsLocalChatV1NodeChatBranchConversationResponse;
+};
+
+export type BranchNodeChatConversationResponse = BranchNodeChatConversationResponses[keyof BranchNodeChatConversationResponses];
 
 export type SetNodeChatConversationMemoryExcludedData = {
 	body: XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatConversationMemoryExcludedRequest;
@@ -5342,17 +3993,17 @@ export type SetNodeChatConversationMemoryExcludedResponses = {
 export type SetNodeChatConversationMemoryExcludedResponse =
 	SetNodeChatConversationMemoryExcludedResponses[keyof SetNodeChatConversationMemoryExcludedResponses];
 
-export type BranchNodeChatConversationData = {
-	body: XeLocalAiEngineClientEndpointsLocalChatV1BranchNodeChatConversationRequest;
+export type GetNodeChatMessageFeedbackData = {
+	body?: never;
 	path: {
 		conversationId: string;
 		messageId: string;
 	};
 	query?: never;
-	url: "/api/local/v1/chat/conversations/{conversationId}/branch/{messageId}";
+	url: "/api/local/v1/chat/conversations/{conversationId}/messages/{messageId}/feedback";
 };
 
-export type BranchNodeChatConversationErrors = {
+export type GetNodeChatMessageFeedbackErrors = {
 	/**
 	 * Unauthorized
 	 */
@@ -5363,14 +4014,44 @@ export type BranchNodeChatConversationErrors = {
 	403: unknown;
 };
 
-export type BranchNodeChatConversationResponses = {
+export type GetNodeChatMessageFeedbackResponses = {
 	/**
 	 * Success
 	 */
-	200: XeLocalAiEngineClientEndpointsLocalChatV1NodeChatBranchConversationResponse;
+	200: XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageFeedbackResponse;
 };
 
-export type BranchNodeChatConversationResponse = BranchNodeChatConversationResponses[keyof BranchNodeChatConversationResponses];
+export type GetNodeChatMessageFeedbackResponse = GetNodeChatMessageFeedbackResponses[keyof GetNodeChatMessageFeedbackResponses];
+
+export type SetNodeChatMessageFeedbackData = {
+	body: XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatMessageFeedbackRequest;
+	path: {
+		conversationId: string;
+		messageId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/chat/conversations/{conversationId}/messages/{messageId}/feedback";
+};
+
+export type SetNodeChatMessageFeedbackErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type SetNodeChatMessageFeedbackResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageFeedbackResponse;
+};
+
+export type SetNodeChatMessageFeedbackResponse = SetNodeChatMessageFeedbackResponses[keyof SetNodeChatMessageFeedbackResponses];
 
 export type ListNodeChatMessageRevisionsData = {
 	body?: never;
@@ -5434,17 +4115,16 @@ export type CreateNodeChatMessageRevisionResponses = {
 export type CreateNodeChatMessageRevisionResponse =
 	CreateNodeChatMessageRevisionResponses[keyof CreateNodeChatMessageRevisionResponses];
 
-export type GetNodeChatMessageFeedbackData = {
-	body?: never;
+export type PinNodeChatConversationData = {
+	body: XeLocalAiEngineClientEndpointsLocalChatV1PinNodeChatConversationRequest;
 	path: {
 		conversationId: string;
-		messageId: string;
 	};
 	query?: never;
-	url: "/api/local/v1/chat/conversations/{conversationId}/messages/{messageId}/feedback";
+	url: "/api/local/v1/chat/conversations/{conversationId}/pin";
 };
 
-export type GetNodeChatMessageFeedbackErrors = {
+export type PinNodeChatConversationErrors = {
 	/**
 	 * Unauthorized
 	 */
@@ -5455,26 +4135,25 @@ export type GetNodeChatMessageFeedbackErrors = {
 	403: unknown;
 };
 
-export type GetNodeChatMessageFeedbackResponses = {
+export type PinNodeChatConversationResponses = {
 	/**
 	 * Success
 	 */
-	200: XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageFeedbackResponse;
+	200: XeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationResponse;
 };
 
-export type GetNodeChatMessageFeedbackResponse = GetNodeChatMessageFeedbackResponses[keyof GetNodeChatMessageFeedbackResponses];
+export type PinNodeChatConversationResponse = PinNodeChatConversationResponses[keyof PinNodeChatConversationResponses];
 
-export type SetNodeChatMessageFeedbackData = {
-	body: XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatMessageFeedbackRequest;
+export type RenameNodeChatConversationData = {
+	body: XeLocalAiEngineClientEndpointsLocalChatV1RenameNodeChatConversationRequest;
 	path: {
 		conversationId: string;
-		messageId: string;
 	};
 	query?: never;
-	url: "/api/local/v1/chat/conversations/{conversationId}/messages/{messageId}/feedback";
+	url: "/api/local/v1/chat/conversations/{conversationId}/rename";
 };
 
-export type SetNodeChatMessageFeedbackErrors = {
+export type RenameNodeChatConversationErrors = {
 	/**
 	 * Unauthorized
 	 */
@@ -5485,14 +4164,14 @@ export type SetNodeChatMessageFeedbackErrors = {
 	403: unknown;
 };
 
-export type SetNodeChatMessageFeedbackResponses = {
+export type RenameNodeChatConversationResponses = {
 	/**
 	 * Success
 	 */
-	200: XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageFeedbackResponse;
+	200: XeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationResponse;
 };
 
-export type SetNodeChatMessageFeedbackResponse = SetNodeChatMessageFeedbackResponses[keyof SetNodeChatMessageFeedbackResponses];
+export type RenameNodeChatConversationResponse = RenameNodeChatConversationResponses[keyof RenameNodeChatConversationResponses];
 
 export type SetNodeChatSelectedPathData = {
 	body: XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatSelectedPathRequest;
@@ -5529,18 +4208,16 @@ export type SetNodeChatSelectedPathResponses = {
 
 export type SetNodeChatSelectedPathResponse = SetNodeChatSelectedPathResponses[keyof SetNodeChatSelectedPathResponses];
 
-export type ResolveToolApprovalData = {
-	body: XeLocalAiEngineClientEndpointsLocalChatV1ResolveToolApprovalRequest;
-	path?: never;
+export type ListConversationFilesData = {
+	body?: never;
+	path: {
+		conversationId: string;
+	};
 	query?: never;
-	url: "/api/local/v1/chat/approvals/resolve";
+	url: "/api/local/v1/chat/conversations/{conversationId}/uploads";
 };
 
-export type ResolveToolApprovalErrors = {
-	/**
-	 * Bad Request
-	 */
-	400: FastEndpointsProblemDetails;
+export type ListConversationFilesErrors = {
 	/**
 	 * Unauthorized
 	 */
@@ -5551,27 +4228,25 @@ export type ResolveToolApprovalErrors = {
 	403: unknown;
 };
 
-export type ResolveToolApprovalError = ResolveToolApprovalErrors[keyof ResolveToolApprovalErrors];
-
-export type ResolveToolApprovalResponses = {
+export type ListConversationFilesResponses = {
 	/**
 	 * Success
 	 */
-	200: XeLocalAiEngineClientEndpointsLocalChatV1ResolveToolApprovalResponse;
+	200: XeLocalAiEngineClientEndpointsLocalChatV1ListConversationUploadsResponse;
 };
 
-export type ResolveToolApprovalResponse = ResolveToolApprovalResponses[keyof ResolveToolApprovalResponses];
+export type ListConversationFilesResponse = ListConversationFilesResponses[keyof ListConversationFilesResponses];
 
-export type DeleteKnowledgeDocumentData = {
-	body?: never;
+export type UploadConversationFileData = {
+	body: XeLocalAiEngineClientEndpointsLocalChatV1UploadConversationFileRequest;
 	path: {
-		documentId: string;
+		conversationId: string;
 	};
 	query?: never;
-	url: "/api/local/v1/knowledge-base/documents/{documentId}";
+	url: "/api/local/v1/chat/conversations/{conversationId}/uploads";
 };
 
-export type DeleteKnowledgeDocumentErrors = {
+export type UploadConversationFileErrors = {
 	/**
 	 * Unauthorized
 	 */
@@ -5582,1452 +4257,44 @@ export type DeleteKnowledgeDocumentErrors = {
 	403: unknown;
 };
 
-export type DeleteKnowledgeDocumentResponses = {
+export type UploadConversationFileResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsLocalChatV1ConversationUploadedFileResponse;
+};
+
+export type UploadConversationFileResponse = UploadConversationFileResponses[keyof UploadConversationFileResponses];
+
+export type DeleteConversationFileData = {
+	body?: never;
+	path: {
+		conversationId: string;
+		fileId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/chat/conversations/{conversationId}/uploads/{fileId}";
+};
+
+export type DeleteConversationFileErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type DeleteConversationFileResponses = {
 	/**
 	 * No Content
 	 */
 	204: void;
 };
 
-export type DeleteKnowledgeDocumentResponse = DeleteKnowledgeDocumentResponses[keyof DeleteKnowledgeDocumentResponses];
-
-export type GetKnowledgeDocumentData = {
-	body?: never;
-	path: {
-		documentId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/knowledge-base/documents/{documentId}";
-};
-
-export type GetKnowledgeDocumentErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type GetKnowledgeDocumentResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentDetailResponse;
-};
-
-export type GetKnowledgeDocumentResponse = GetKnowledgeDocumentResponses[keyof GetKnowledgeDocumentResponses];
-
-export type DownloadRecommendedEmbeddingData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/knowledge-base/embedding/download-recommended";
-};
-
-export type DownloadRecommendedEmbeddingErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type DownloadRecommendedEmbeddingResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsKnowledgeV1DownloadRecommendedEmbeddingResponse;
-};
-
-export type DownloadRecommendedEmbeddingResponse =
-	DownloadRecommendedEmbeddingResponses[keyof DownloadRecommendedEmbeddingResponses];
-
-export type DownloadRecommendedRerankerData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/knowledge-base/reranker/download-recommended";
-};
-
-export type DownloadRecommendedRerankerErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type DownloadRecommendedRerankerResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsKnowledgeV1DownloadRecommendedRerankerResponse;
-};
-
-export type DownloadRecommendedRerankerResponse =
-	DownloadRecommendedRerankerResponses[keyof DownloadRecommendedRerankerResponses];
-
-export type ListKnowledgeDocumentsData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/knowledge-base/documents";
-};
-
-export type ListKnowledgeDocumentsErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type ListKnowledgeDocumentsResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsKnowledgeV1ListKnowledgeDocumentsResponse;
-};
-
-export type ListKnowledgeDocumentsResponse = ListKnowledgeDocumentsResponses[keyof ListKnowledgeDocumentsResponses];
-
-export type UploadKnowledgeDocumentData = {
-	body: XeLocalAiEngineClientEndpointsKnowledgeV1UploadKnowledgeDocumentRequest;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/knowledge-base/documents";
-};
-
-export type UploadKnowledgeDocumentErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type UploadKnowledgeDocumentResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsKnowledgeV1UploadKnowledgeDocumentResponse;
-};
-
-export type UploadKnowledgeDocumentResponse = UploadKnowledgeDocumentResponses[keyof UploadKnowledgeDocumentResponses];
-
-export type ReindexCorpusData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/knowledge-base/reindex";
-};
-
-export type ReindexCorpusErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type ReindexCorpusResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsKnowledgeV1ReindexCorpusResponse;
-};
-
-export type ReindexCorpusResponse = ReindexCorpusResponses[keyof ReindexCorpusResponses];
-
-export type ReindexKnowledgeDocumentData = {
-	body?: never;
-	path: {
-		documentId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/knowledge-base/documents/{documentId}/reindex";
-};
-
-export type ReindexKnowledgeDocumentErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type ReindexKnowledgeDocumentResponses = {
-	/**
-	 * No Content
-	 */
-	204: void;
-};
-
-export type ReindexKnowledgeDocumentResponse = ReindexKnowledgeDocumentResponses[keyof ReindexKnowledgeDocumentResponses];
-
-export type SearchKnowledgeData = {
-	body: XeLocalAiEngineClientEndpointsKnowledgeV1SearchKnowledgeRequest;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/knowledge-base/search";
-};
-
-export type SearchKnowledgeErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type SearchKnowledgeResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsKnowledgeV1SearchKnowledgeResponse;
-};
-
-export type SearchKnowledgeResponse = SearchKnowledgeResponses[keyof SearchKnowledgeResponses];
-
-export type GetInvocationMonitorData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/invocations";
-};
-
-export type GetInvocationMonitorErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type GetInvocationMonitorResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsInvocationsV1InvocationMonitorResponse;
-};
-
-export type GetInvocationMonitorResponse = GetInvocationMonitorResponses[keyof GetInvocationMonitorResponses];
-
-export type CancelImageJobData = {
-	body?: never;
-	path: {
-		jobId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/images/jobs/{jobId}/cancel";
-};
-
-export type CancelImageJobErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type CancelImageJobResponses = {
-	/**
-	 * No Content
-	 */
-	204: void;
-};
-
-export type CancelImageJobResponse = CancelImageJobResponses[keyof CancelImageJobResponses];
-
-export type CancelStableDiffusionCppSourceBuildData = {
-	body: XeLocalAiEngineClientEndpointsImagesV1ImageRuntimeActionRequest;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/images/runtime/source-build/cancel";
-};
-
-export type CancelStableDiffusionCppSourceBuildErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type CancelStableDiffusionCppSourceBuildResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildStatusResponse;
-};
-
-export type CancelStableDiffusionCppSourceBuildResponse =
-	CancelStableDiffusionCppSourceBuildResponses[keyof CancelStableDiffusionCppSourceBuildResponses];
-
-export type ListImageJobsData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/images/jobs";
-};
-
-export type ListImageJobsErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type ListImageJobsResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsImagesV1ListImageJobsResponse;
-};
-
-export type ListImageJobsResponse = ListImageJobsResponses[keyof ListImageJobsResponses];
-
-export type CreateImageJobData = {
-	body: XeLocalAiEngineClientEndpointsImagesV1CreateImageJobRequest;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/images/jobs";
-};
-
-export type CreateImageJobErrors = {
-	/**
-	 * Bad Request
-	 */
-	400: FastEndpointsErrorResponse;
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-	409: XeLocalAiEngineClientEndpointsImagesV1ImageRuntimeBlockedResponse;
-};
-
-export type CreateImageJobError = CreateImageJobErrors[keyof CreateImageJobErrors];
-
-export type CreateImageJobResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsImagesV1ImageJobResponse;
-};
-
-export type CreateImageJobResponse = CreateImageJobResponses[keyof CreateImageJobResponses];
-
-export type EjectImageRuntimeData = {
-	body: XeLocalAiEngineClientEndpointsImagesV1ImageRuntimeActionRequest;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/images/runtime/eject";
-};
-
-export type EjectImageRuntimeErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-	409: XeLocalAiEngineClientEndpointsImagesV1ImageRuntimeBlockedResponse;
-};
-
-export type EjectImageRuntimeError = EjectImageRuntimeErrors[keyof EjectImageRuntimeErrors];
-
-export type EjectImageRuntimeResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsImagesV1ImageRuntimeStatusResponse;
-};
-
-export type EjectImageRuntimeResponse = EjectImageRuntimeResponses[keyof EjectImageRuntimeResponses];
-
-export type GetImageJobData = {
-	body?: never;
-	path: {
-		jobId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/images/jobs/{jobId}";
-};
-
-export type GetImageJobErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type GetImageJobResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsImagesV1ImageJobResponse;
-};
-
-export type GetImageJobResponse = GetImageJobResponses[keyof GetImageJobResponses];
-
-export type GetImageRuntimeStatusData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/images/runtime";
-};
-
-export type GetImageRuntimeStatusErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type GetImageRuntimeStatusResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsImagesV1ImageRuntimeStatusResponse;
-};
-
-export type GetImageRuntimeStatusResponse = GetImageRuntimeStatusResponses[keyof GetImageRuntimeStatusResponses];
-
-export type GetStableDiffusionCppSourceBuildPrerequisitesData = {
-	body?: never;
-	path?: never;
-	query: {
-		backend: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBackendDto;
-	};
-	url: "/api/local/v1/images/runtime/source-build/prerequisites";
-};
-
-export type GetStableDiffusionCppSourceBuildPrerequisitesErrors = {
-	/**
-	 * Bad Request
-	 */
-	400: FastEndpointsErrorResponse;
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type GetStableDiffusionCppSourceBuildPrerequisitesError =
-	GetStableDiffusionCppSourceBuildPrerequisitesErrors[keyof GetStableDiffusionCppSourceBuildPrerequisitesErrors];
-
-export type GetStableDiffusionCppSourceBuildPrerequisitesResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildPrerequisitesResponse;
-};
-
-export type GetStableDiffusionCppSourceBuildPrerequisitesResponse =
-	GetStableDiffusionCppSourceBuildPrerequisitesResponses[keyof GetStableDiffusionCppSourceBuildPrerequisitesResponses];
-
-export type GetStableDiffusionCppSourceBuildStatusData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/images/runtime/source-build/status";
-};
-
-export type GetStableDiffusionCppSourceBuildStatusErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type GetStableDiffusionCppSourceBuildStatusResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildStatusResponse;
-};
-
-export type GetStableDiffusionCppSourceBuildStatusResponse =
-	GetStableDiffusionCppSourceBuildStatusResponses[keyof GetStableDiffusionCppSourceBuildStatusResponses];
-
-export type ListImageModelsData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/images/models";
-};
-
-export type ListImageModelsErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type ListImageModelsResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsImagesV1ListImageModelsResponse;
-};
-
-export type ListImageModelsResponse = ListImageModelsResponses[keyof ListImageModelsResponses];
-
-export type RemoveStableDiffusionCppSourceBuildData = {
-	body: XeLocalAiEngineClientEndpointsImagesV1ImageRuntimeActionRequest;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/images/runtime/source-build/remove";
-};
-
-export type RemoveStableDiffusionCppSourceBuildErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-	409: XeLocalAiEngineClientEndpointsImagesV1ImageRuntimeBlockedResponse;
-};
-
-export type RemoveStableDiffusionCppSourceBuildError =
-	RemoveStableDiffusionCppSourceBuildErrors[keyof RemoveStableDiffusionCppSourceBuildErrors];
-
-export type RemoveStableDiffusionCppSourceBuildResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsImagesV1ImageRuntimeStatusResponse;
-};
-
-export type RemoveStableDiffusionCppSourceBuildResponse =
-	RemoveStableDiffusionCppSourceBuildResponses[keyof RemoveStableDiffusionCppSourceBuildResponses];
-
-export type RetrieveImageData = {
-	body?: never;
-	path: {
-		imageId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/images/{imageId}";
-};
-
-export type RetrieveImageErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type RetrieveImageResponses = {
-	/**
-	 * No Content
-	 */
-	204: void;
-};
-
-export type RetrieveImageResponse = RetrieveImageResponses[keyof RetrieveImageResponses];
-
-export type ListImageModelDownloadsData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/images/models/downloads";
-};
-
-export type ListImageModelDownloadsErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type ListImageModelDownloadsResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsImagesV1ListImageModelDownloadsResponse;
-};
-
-export type ListImageModelDownloadsResponse = ListImageModelDownloadsResponses[keyof ListImageModelDownloadsResponses];
-
-export type StartImageModelDownloadData = {
-	body: XeLocalAiEngineClientEndpointsImagesV1StartImageModelDownloadRequest;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/images/models/downloads";
-};
-
-export type StartImageModelDownloadErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type StartImageModelDownloadResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsImagesV1StartImageModelDownloadResponse;
-};
-
-export type StartImageModelDownloadResponse = StartImageModelDownloadResponses[keyof StartImageModelDownloadResponses];
-
-export type StartStableDiffusionCppSourceBuildData = {
-	body: XeLocalAiEngineClientEndpointsImagesV1StartStableDiffusionCppSourceBuildRequest;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/images/runtime/source-build";
-};
-
-export type StartStableDiffusionCppSourceBuildErrors = {
-	/**
-	 * Bad Request
-	 */
-	400: FastEndpointsErrorResponse;
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-	409: XeLocalAiEngineClientEndpointsImagesV1ImageRuntimeBlockedResponse;
-};
-
-export type StartStableDiffusionCppSourceBuildError =
-	StartStableDiffusionCppSourceBuildErrors[keyof StartStableDiffusionCppSourceBuildErrors];
-
-export type StartStableDiffusionCppSourceBuildResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsImagesV1StartStableDiffusionCppSourceBuildResponse;
-};
-
-export type StartStableDiffusionCppSourceBuildResponse =
-	StartStableDiffusionCppSourceBuildResponses[keyof StartStableDiffusionCppSourceBuildResponses];
-
-export type GetDevelopmentCapabilityData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/development/capability";
-};
-
-export type GetDevelopmentCapabilityErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type GetDevelopmentCapabilityResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentCapabilityResponse;
-};
-
-export type GetDevelopmentCapabilityResponse = GetDevelopmentCapabilityResponses[keyof GetDevelopmentCapabilityResponses];
-
-export type ConfirmDevelopmentContainerRuntimeData = {
-	body: XeLocalAiEngineClientEndpointsDevelopmentV1ConfirmDevelopmentContainerRuntimeRequest;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/development/container-runtime/confirmation";
-};
-
-export type ConfirmDevelopmentContainerRuntimeErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type ConfirmDevelopmentContainerRuntimeResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerRuntimeResponse;
-};
-
-export type ConfirmDevelopmentContainerRuntimeResponse =
-	ConfirmDevelopmentContainerRuntimeResponses[keyof ConfirmDevelopmentContainerRuntimeResponses];
-
-export type ListDevelopmentRepositoriesData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/development/repositories";
-};
-
-export type ListDevelopmentRepositoriesErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type ListDevelopmentRepositoriesResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentRepositoriesResponse;
-};
-
-export type ListDevelopmentRepositoriesResponse =
-	ListDevelopmentRepositoriesResponses[keyof ListDevelopmentRepositoriesResponses];
-
-export type RegisterDevelopmentRepositoryData = {
-	body: XeLocalAiEngineClientEndpointsDevelopmentV1RegisterDevelopmentRepositoryRequest;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/development/repositories";
-};
-
-export type RegisterDevelopmentRepositoryErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type RegisterDevelopmentRepositoryResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentRepositoryResponse;
-};
-
-export type RegisterDevelopmentRepositoryResponse =
-	RegisterDevelopmentRepositoryResponses[keyof RegisterDevelopmentRepositoryResponses];
-
-export type ListDevelopmentTemplatesData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/development/templates";
-};
-
-export type ListDevelopmentTemplatesErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type ListDevelopmentTemplatesResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentTemplatesResponse;
-};
-
-export type ListDevelopmentTemplatesResponse = ListDevelopmentTemplatesResponses[keyof ListDevelopmentTemplatesResponses];
-
-export type RegisterDevelopmentTemplateData = {
-	body: XeLocalAiEngineClientEndpointsDevelopmentV1RegisterDevelopmentTemplateRequest;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/development/templates";
-};
-
-export type RegisterDevelopmentTemplateErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type RegisterDevelopmentTemplateResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTemplateResponse;
-};
-
-export type RegisterDevelopmentTemplateResponse =
-	RegisterDevelopmentTemplateResponses[keyof RegisterDevelopmentTemplateResponses];
-
-export type RemoveDevelopmentTemplateData = {
-	body?: never;
-	path: {
-		templateId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/development/templates/{templateId}";
-};
-
-export type RemoveDevelopmentTemplateErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type RemoveDevelopmentTemplateResponses = {
-	/**
-	 * No Content
-	 */
-	204: void;
-};
-
-export type RemoveDevelopmentTemplateResponse = RemoveDevelopmentTemplateResponses[keyof RemoveDevelopmentTemplateResponses];
-
-export type CreateDevelopmentRepositoryFromTemplateData = {
-	body: XeLocalAiEngineClientEndpointsDevelopmentV1CreateDevelopmentRepositoryFromTemplateRequest;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/development/repositories/from-template";
-};
-
-export type CreateDevelopmentRepositoryFromTemplateErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type CreateDevelopmentRepositoryFromTemplateResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentRepositoryFromTemplateResponse;
-};
-
-export type CreateDevelopmentRepositoryFromTemplateResponse =
-	CreateDevelopmentRepositoryFromTemplateResponses[keyof CreateDevelopmentRepositoryFromTemplateResponses];
-
-export type DetectDevelopmentRepositoryProfileData = {
-	body?: never;
-	path: {
-		selectedFolderId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/development/repositories/{selectedFolderId}/profile-detection";
-};
-
-export type DetectDevelopmentRepositoryProfileErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type DetectDevelopmentRepositoryProfileResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProfileDetectionResponse;
-};
-
-export type DetectDevelopmentRepositoryProfileResponse =
-	DetectDevelopmentRepositoryProfileResponses[keyof DetectDevelopmentRepositoryProfileResponses];
-
-export type ListDevelopmentProjectsData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/development/projects";
-};
-
-export type ListDevelopmentProjectsErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type ListDevelopmentProjectsResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentProjectsResponse;
-};
-
-export type ListDevelopmentProjectsResponse = ListDevelopmentProjectsResponses[keyof ListDevelopmentProjectsResponses];
-
-export type CreateDevelopmentProjectData = {
-	body: XeLocalAiEngineClientEndpointsDevelopmentV1CreateDevelopmentProjectRequest;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/development/projects";
-};
-
-export type CreateDevelopmentProjectErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type CreateDevelopmentProjectResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectDetailResponse;
-};
-
-export type CreateDevelopmentProjectResponse = CreateDevelopmentProjectResponses[keyof CreateDevelopmentProjectResponses];
-
-export type GetDevelopmentProjectData = {
-	body?: never;
-	path: {
-		projectId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/development/projects/{projectId}";
-};
-
-export type GetDevelopmentProjectErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type GetDevelopmentProjectResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectDetailResponse;
-};
-
-export type GetDevelopmentProjectResponse = GetDevelopmentProjectResponses[keyof GetDevelopmentProjectResponses];
-
-export type GetDevelopmentTaskData = {
-	body?: never;
-	path: {
-		projectId: string;
-		taskId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/development/projects/{projectId}/tasks/{taskId}";
-};
-
-export type GetDevelopmentTaskErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type GetDevelopmentTaskResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTaskDetailResponse;
-};
-
-export type GetDevelopmentTaskResponse = GetDevelopmentTaskResponses[keyof GetDevelopmentTaskResponses];
-
-export type StartDevelopmentNextActionData = {
-	body: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentActionRequest;
-	path: {
-		projectId: string;
-		taskId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/development/projects/{projectId}/tasks/{taskId}/next-action";
-};
-
-export type StartDevelopmentNextActionErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type StartDevelopmentNextActionResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentNextActionResponse;
-};
-
-export type StartDevelopmentNextActionResponse = StartDevelopmentNextActionResponses[keyof StartDevelopmentNextActionResponses];
-
-export type CancelDevelopmentAttemptData = {
-	body?: never;
-	path: {
-		projectId: string;
-		taskId: string;
-		attemptId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/development/projects/{projectId}/tasks/{taskId}/attempts/{attemptId}/cancel";
-};
-
-export type CancelDevelopmentAttemptErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type CancelDevelopmentAttemptResponses = {
-	/**
-	 * No Content
-	 */
-	204: void;
-};
-
-export type CancelDevelopmentAttemptResponse = CancelDevelopmentAttemptResponses[keyof CancelDevelopmentAttemptResponses];
-
-export type ListDevelopmentEventsData = {
-	body?: never;
-	path: {
-		projectId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/development/projects/{projectId}/events";
-};
-
-export type ListDevelopmentEventsErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type ListDevelopmentEventsResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentEventsResponse;
-};
-
-export type ListDevelopmentEventsResponse = ListDevelopmentEventsResponses[keyof ListDevelopmentEventsResponses];
-
-export type ListDevelopmentArtifactsData = {
-	body?: never;
-	path: {
-		projectId: string;
-		taskId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/development/projects/{projectId}/tasks/{taskId}/artifacts";
-};
-
-export type ListDevelopmentArtifactsErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type ListDevelopmentArtifactsResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentArtifactsResponse;
-};
-
-export type ListDevelopmentArtifactsResponse = ListDevelopmentArtifactsResponses[keyof ListDevelopmentArtifactsResponses];
-
-export type GetDevelopmentArtifactData = {
-	body?: never;
-	path: {
-		projectId: string;
-		taskId: string;
-		artifactId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/development/projects/{projectId}/tasks/{taskId}/artifacts/{artifactId}";
-};
-
-export type GetDevelopmentArtifactErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type GetDevelopmentArtifactResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentArtifactContentResponse;
-};
-
-export type GetDevelopmentArtifactResponse = GetDevelopmentArtifactResponses[keyof GetDevelopmentArtifactResponses];
-
-export type PreviewDevelopmentPatchData = {
-	body: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentActionRequest;
-	path: {
-		projectId: string;
-		taskId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/development/projects/{projectId}/tasks/{taskId}/preview";
-};
-
-export type PreviewDevelopmentPatchErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type PreviewDevelopmentPatchResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentPatchPreviewResponse;
-};
-
-export type PreviewDevelopmentPatchResponse = PreviewDevelopmentPatchResponses[keyof PreviewDevelopmentPatchResponses];
-
-export type ApplyDevelopmentPatchData = {
-	body: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentActionRequest;
-	path: {
-		projectId: string;
-		taskId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/development/projects/{projectId}/tasks/{taskId}/apply";
-};
-
-export type ApplyDevelopmentPatchErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type ApplyDevelopmentPatchResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentApplyResponse;
-};
-
-export type ApplyDevelopmentPatchResponse = ApplyDevelopmentPatchResponses[keyof ApplyDevelopmentPatchResponses];
-
-export type ReconnectDevelopmentRepositoryData = {
-	body: XeLocalAiEngineClientEndpointsDevelopmentV1ReconnectDevelopmentRepositoryRequest;
-	path: {
-		projectId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/development/projects/{projectId}/repository-connection";
-};
-
-export type ReconnectDevelopmentRepositoryErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type ReconnectDevelopmentRepositoryResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectDetailResponse;
-};
-
-export type ReconnectDevelopmentRepositoryResponse =
-	ReconnectDevelopmentRepositoryResponses[keyof ReconnectDevelopmentRepositoryResponses];
-
-export type ConnectConnectionData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/connection/connect";
-};
-
-export type ConnectConnectionErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type ConnectConnectionResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsConnectionV1ConnectionStatusResponse;
-};
-
-export type ConnectConnectionResponse = ConnectConnectionResponses[keyof ConnectConnectionResponses];
-
-export type DisableAutoConnectData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/connection/auto-connect/disable";
-};
-
-export type DisableAutoConnectErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type DisableAutoConnectResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsConnectionV1ConnectionStatusResponse;
-};
-
-export type DisableAutoConnectResponse = DisableAutoConnectResponses[keyof DisableAutoConnectResponses];
-
-export type DisconnectConnectionData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/connection/disconnect";
-};
-
-export type DisconnectConnectionErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type DisconnectConnectionResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsConnectionV1ConnectionStatusResponse;
-};
-
-export type DisconnectConnectionResponse = DisconnectConnectionResponses[keyof DisconnectConnectionResponses];
-
-export type EnableAutoConnectData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/connection/auto-connect/enable";
-};
-
-export type EnableAutoConnectErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type EnableAutoConnectResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsConnectionV1ConnectionStatusResponse;
-};
-
-export type EnableAutoConnectResponse = EnableAutoConnectResponses[keyof EnableAutoConnectResponses];
-
-export type GetConnectionStatusData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/connection";
-};
-
-export type GetConnectionStatusErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type GetConnectionStatusResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsConnectionV1ConnectionStatusResponse;
-};
-
-export type GetConnectionStatusResponse = GetConnectionStatusResponses[keyof GetConnectionStatusResponses];
+export type DeleteConversationFileResponse = DeleteConversationFileResponses[keyof DeleteConversationFileResponses];
 
 export type ClearCloudSettingsData = {
 	body?: never;
@@ -7305,96 +4572,14 @@ export type CodexStatusResponses = {
 
 export type CodexStatusResponse = CodexStatusResponses[keyof CodexStatusResponses];
 
-export type NodeAuthStatusData = {
+export type GetConnectionStatusData = {
 	body?: never;
 	path?: never;
 	query?: never;
-	url: "/api/local/v1/auth/status";
+	url: "/api/local/v1/connection";
 };
 
-export type NodeAuthStatusResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsAuthV1NodeAuthStatusResponse;
-};
-
-export type NodeAuthStatusResponse = NodeAuthStatusResponses[keyof NodeAuthStatusResponses];
-
-export type NodeSetupData = {
-	body: XeLocalAiEngineClientEndpointsAuthV1NodeSetupRequest;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/auth/setup";
-};
-
-export type NodeSetupErrors = {
-	/**
-	 * Bad Request
-	 */
-	400: FastEndpointsProblemDetails;
-};
-
-export type NodeSetupError = NodeSetupErrors[keyof NodeSetupErrors];
-
-export type NodeSetupResponses = {
-	/**
-	 * No Content
-	 */
-	204: void;
-};
-
-export type NodeSetupResponse = NodeSetupResponses[keyof NodeSetupResponses];
-
-export type NodeLoginData = {
-	body: XeLocalAiEngineClientEndpointsAuthV1NodeLoginRequest;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/auth/login";
-};
-
-export type NodeLoginErrors = {
-	/**
-	 * Bad Request
-	 */
-	400: FastEndpointsProblemDetails;
-};
-
-export type NodeLoginError = NodeLoginErrors[keyof NodeLoginErrors];
-
-export type NodeLoginResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsAuthV1NodeAccessTokenResponse;
-};
-
-export type NodeLoginResponse = NodeLoginResponses[keyof NodeLoginResponses];
-
-export type NodeRefreshData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/auth/refresh";
-};
-
-export type NodeRefreshResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsAuthV1NodeAccessTokenResponse;
-};
-
-export type NodeRefreshResponse = NodeRefreshResponses[keyof NodeRefreshResponses];
-
-export type NodeLogoutData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/auth/logout";
-};
-
-export type NodeLogoutErrors = {
+export type GetConnectionStatusErrors = {
 	/**
 	 * Unauthorized
 	 */
@@ -7405,83 +4590,23 @@ export type NodeLogoutErrors = {
 	403: unknown;
 };
 
-export type NodeLogoutResponses = {
-	/**
-	 * No Content
-	 */
-	204: void;
-};
-
-export type NodeLogoutResponse = NodeLogoutResponses[keyof NodeLogoutResponses];
-
-export type NodeChangePasswordData = {
-	body: XeLocalAiEngineClientEndpointsAuthV1NodeChangePasswordRequest;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/auth/change-password";
-};
-
-export type NodeChangePasswordErrors = {
-	/**
-	 * Bad Request
-	 */
-	400: FastEndpointsProblemDetails;
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type NodeChangePasswordError = NodeChangePasswordErrors[keyof NodeChangePasswordErrors];
-
-export type NodeChangePasswordResponses = {
-	/**
-	 * No Content
-	 */
-	204: void;
-};
-
-export type NodeChangePasswordResponse = NodeChangePasswordResponses[keyof NodeChangePasswordResponses];
-
-export type NodeMeData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/auth/me";
-};
-
-export type NodeMeErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type NodeMeResponses = {
+export type GetConnectionStatusResponses = {
 	/**
 	 * Success
 	 */
-	200: XeLocalAiEngineClientEndpointsAuthV1NodeMeResponse;
+	200: XeLocalAiEngineClientEndpointsConnectionV1ConnectionStatusResponse;
 };
 
-export type NodeMeResponse = NodeMeResponses[keyof NodeMeResponses];
+export type GetConnectionStatusResponse = GetConnectionStatusResponses[keyof GetConnectionStatusResponses];
 
-export type ApplyAppUpdateData = {
+export type DisableAutoConnectData = {
 	body?: never;
 	path?: never;
 	query?: never;
-	url: "/api/local/v1/app-update/apply";
+	url: "/api/local/v1/connection/auto-connect/disable";
 };
 
-export type ApplyAppUpdateErrors = {
+export type DisableAutoConnectErrors = {
 	/**
 	 * Unauthorized
 	 */
@@ -7492,25 +4617,215 @@ export type ApplyAppUpdateErrors = {
 	403: unknown;
 };
 
-export type ApplyAppUpdateResponses = {
+export type DisableAutoConnectResponses = {
 	/**
 	 * Success
 	 */
-	200: XeLocalAiEngineClientEndpointsAppUpdateV1ApplyAppUpdateResponse;
+	200: XeLocalAiEngineClientEndpointsConnectionV1ConnectionStatusResponse;
 };
 
-export type ApplyAppUpdateResponse = ApplyAppUpdateResponses[keyof ApplyAppUpdateResponses];
+export type DisableAutoConnectResponse = DisableAutoConnectResponses[keyof DisableAutoConnectResponses];
 
-export type GetAppUpdateStatusData = {
+export type EnableAutoConnectData = {
 	body?: never;
 	path?: never;
-	query?: {
-		refresh?: boolean | null;
+	query?: never;
+	url: "/api/local/v1/connection/auto-connect/enable";
+};
+
+export type EnableAutoConnectErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type EnableAutoConnectResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsConnectionV1ConnectionStatusResponse;
+};
+
+export type EnableAutoConnectResponse = EnableAutoConnectResponses[keyof EnableAutoConnectResponses];
+
+export type ConnectConnectionData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/connection/connect";
+};
+
+export type ConnectConnectionErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ConnectConnectionResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsConnectionV1ConnectionStatusResponse;
+};
+
+export type ConnectConnectionResponse = ConnectConnectionResponses[keyof ConnectConnectionResponses];
+
+export type DisconnectConnectionData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/connection/disconnect";
+};
+
+export type DisconnectConnectionErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type DisconnectConnectionResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsConnectionV1ConnectionStatusResponse;
+};
+
+export type DisconnectConnectionResponse = DisconnectConnectionResponses[keyof DisconnectConnectionResponses];
+
+export type GetDevelopmentCapabilityData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/development/capability";
+};
+
+export type GetDevelopmentCapabilityErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetDevelopmentCapabilityResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentCapabilityResponse;
+};
+
+export type GetDevelopmentCapabilityResponse = GetDevelopmentCapabilityResponses[keyof GetDevelopmentCapabilityResponses];
+
+export type ConfirmDevelopmentContainerRuntimeData = {
+	body: XeLocalAiEngineClientEndpointsDevelopmentV1ConfirmDevelopmentContainerRuntimeRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/development/container-runtime/confirmation";
+};
+
+export type ConfirmDevelopmentContainerRuntimeErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ConfirmDevelopmentContainerRuntimeResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerRuntimeResponse;
+};
+
+export type ConfirmDevelopmentContainerRuntimeResponse =
+	ConfirmDevelopmentContainerRuntimeResponses[keyof ConfirmDevelopmentContainerRuntimeResponses];
+
+export type ListDevelopmentProjectsData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/development/projects";
+};
+
+export type ListDevelopmentProjectsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListDevelopmentProjectsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentProjectsResponse;
+};
+
+export type ListDevelopmentProjectsResponse = ListDevelopmentProjectsResponses[keyof ListDevelopmentProjectsResponses];
+
+export type CreateDevelopmentProjectData = {
+	body: XeLocalAiEngineClientEndpointsDevelopmentV1CreateDevelopmentProjectRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/development/projects";
+};
+
+export type CreateDevelopmentProjectErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type CreateDevelopmentProjectResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectDetailResponse;
+};
+
+export type CreateDevelopmentProjectResponse = CreateDevelopmentProjectResponses[keyof CreateDevelopmentProjectResponses];
+
+export type GetDevelopmentProjectData = {
+	body?: never;
+	path: {
+		projectId: string;
 	};
-	url: "/api/local/v1/app-update/status";
+	query?: never;
+	url: "/api/local/v1/development/projects/{projectId}";
 };
 
-export type GetAppUpdateStatusErrors = {
+export type GetDevelopmentProjectErrors = {
 	/**
 	 * Unauthorized
 	 */
@@ -7521,23 +4836,294 @@ export type GetAppUpdateStatusErrors = {
 	403: unknown;
 };
 
-export type GetAppUpdateStatusResponses = {
+export type GetDevelopmentProjectResponses = {
 	/**
 	 * Success
 	 */
-	200: XeLocalAiEngineClientEndpointsAppUpdateV1AppUpdateStatusResponse;
+	200: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectDetailResponse;
 };
 
-export type GetAppUpdateStatusResponse = GetAppUpdateStatusResponses[keyof GetAppUpdateStatusResponses];
+export type GetDevelopmentProjectResponse = GetDevelopmentProjectResponses[keyof GetDevelopmentProjectResponses];
 
-export type GetGitHubAuthStatusData = {
+export type ListDevelopmentEventsData = {
+	body?: never;
+	path: {
+		projectId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/development/projects/{projectId}/events";
+};
+
+export type ListDevelopmentEventsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListDevelopmentEventsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentEventsResponse;
+};
+
+export type ListDevelopmentEventsResponse = ListDevelopmentEventsResponses[keyof ListDevelopmentEventsResponses];
+
+export type ReconnectDevelopmentRepositoryData = {
+	body: XeLocalAiEngineClientEndpointsDevelopmentV1ReconnectDevelopmentRepositoryRequest;
+	path: {
+		projectId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/development/projects/{projectId}/repository-connection";
+};
+
+export type ReconnectDevelopmentRepositoryErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ReconnectDevelopmentRepositoryResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectDetailResponse;
+};
+
+export type ReconnectDevelopmentRepositoryResponse =
+	ReconnectDevelopmentRepositoryResponses[keyof ReconnectDevelopmentRepositoryResponses];
+
+export type GetDevelopmentTaskData = {
+	body?: never;
+	path: {
+		projectId: string;
+		taskId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/development/projects/{projectId}/tasks/{taskId}";
+};
+
+export type GetDevelopmentTaskErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetDevelopmentTaskResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTaskDetailResponse;
+};
+
+export type GetDevelopmentTaskResponse = GetDevelopmentTaskResponses[keyof GetDevelopmentTaskResponses];
+
+export type ApplyDevelopmentPatchData = {
+	body: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentActionRequest;
+	path: {
+		projectId: string;
+		taskId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/development/projects/{projectId}/tasks/{taskId}/apply";
+};
+
+export type ApplyDevelopmentPatchErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ApplyDevelopmentPatchResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentApplyResponse;
+};
+
+export type ApplyDevelopmentPatchResponse = ApplyDevelopmentPatchResponses[keyof ApplyDevelopmentPatchResponses];
+
+export type ListDevelopmentArtifactsData = {
+	body?: never;
+	path: {
+		projectId: string;
+		taskId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/development/projects/{projectId}/tasks/{taskId}/artifacts";
+};
+
+export type ListDevelopmentArtifactsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListDevelopmentArtifactsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentArtifactsResponse;
+};
+
+export type ListDevelopmentArtifactsResponse = ListDevelopmentArtifactsResponses[keyof ListDevelopmentArtifactsResponses];
+
+export type GetDevelopmentArtifactData = {
+	body?: never;
+	path: {
+		projectId: string;
+		taskId: string;
+		artifactId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/development/projects/{projectId}/tasks/{taskId}/artifacts/{artifactId}";
+};
+
+export type GetDevelopmentArtifactErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetDevelopmentArtifactResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentArtifactContentResponse;
+};
+
+export type GetDevelopmentArtifactResponse = GetDevelopmentArtifactResponses[keyof GetDevelopmentArtifactResponses];
+
+export type CancelDevelopmentAttemptData = {
+	body?: never;
+	path: {
+		projectId: string;
+		taskId: string;
+		attemptId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/development/projects/{projectId}/tasks/{taskId}/attempts/{attemptId}/cancel";
+};
+
+export type CancelDevelopmentAttemptErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type CancelDevelopmentAttemptResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type CancelDevelopmentAttemptResponse = CancelDevelopmentAttemptResponses[keyof CancelDevelopmentAttemptResponses];
+
+export type StartDevelopmentNextActionData = {
+	body: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentActionRequest;
+	path: {
+		projectId: string;
+		taskId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/development/projects/{projectId}/tasks/{taskId}/next-action";
+};
+
+export type StartDevelopmentNextActionErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type StartDevelopmentNextActionResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentNextActionResponse;
+};
+
+export type StartDevelopmentNextActionResponse = StartDevelopmentNextActionResponses[keyof StartDevelopmentNextActionResponses];
+
+export type PreviewDevelopmentPatchData = {
+	body: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentActionRequest;
+	path: {
+		projectId: string;
+		taskId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/development/projects/{projectId}/tasks/{taskId}/preview";
+};
+
+export type PreviewDevelopmentPatchErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type PreviewDevelopmentPatchResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentPatchPreviewResponse;
+};
+
+export type PreviewDevelopmentPatchResponse = PreviewDevelopmentPatchResponses[keyof PreviewDevelopmentPatchResponses];
+
+export type ListDevelopmentRepositoriesData = {
 	body?: never;
 	path?: never;
 	query?: never;
-	url: "/api/local/v1/github-auth/status";
+	url: "/api/local/v1/development/repositories";
 };
 
-export type GetGitHubAuthStatusErrors = {
+export type ListDevelopmentRepositoriesErrors = {
 	/**
 	 * Unauthorized
 	 */
@@ -7548,14 +5134,245 @@ export type GetGitHubAuthStatusErrors = {
 	403: unknown;
 };
 
-export type GetGitHubAuthStatusResponses = {
+export type ListDevelopmentRepositoriesResponses = {
 	/**
 	 * Success
 	 */
-	200: XeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthStatusResponse;
+	200: XeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentRepositoriesResponse;
 };
 
-export type GetGitHubAuthStatusResponse = GetGitHubAuthStatusResponses[keyof GetGitHubAuthStatusResponses];
+export type ListDevelopmentRepositoriesResponse =
+	ListDevelopmentRepositoriesResponses[keyof ListDevelopmentRepositoriesResponses];
+
+export type RegisterDevelopmentRepositoryData = {
+	body: XeLocalAiEngineClientEndpointsDevelopmentV1RegisterDevelopmentRepositoryRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/development/repositories";
+};
+
+export type RegisterDevelopmentRepositoryErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type RegisterDevelopmentRepositoryResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentRepositoryResponse;
+};
+
+export type RegisterDevelopmentRepositoryResponse =
+	RegisterDevelopmentRepositoryResponses[keyof RegisterDevelopmentRepositoryResponses];
+
+export type CreateDevelopmentRepositoryFromTemplateData = {
+	body: XeLocalAiEngineClientEndpointsDevelopmentV1CreateDevelopmentRepositoryFromTemplateRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/development/repositories/from-template";
+};
+
+export type CreateDevelopmentRepositoryFromTemplateErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type CreateDevelopmentRepositoryFromTemplateResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentRepositoryFromTemplateResponse;
+};
+
+export type CreateDevelopmentRepositoryFromTemplateResponse =
+	CreateDevelopmentRepositoryFromTemplateResponses[keyof CreateDevelopmentRepositoryFromTemplateResponses];
+
+export type DetectDevelopmentRepositoryProfileData = {
+	body?: never;
+	path: {
+		selectedFolderId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/development/repositories/{selectedFolderId}/profile-detection";
+};
+
+export type DetectDevelopmentRepositoryProfileErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type DetectDevelopmentRepositoryProfileResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProfileDetectionResponse;
+};
+
+export type DetectDevelopmentRepositoryProfileResponse =
+	DetectDevelopmentRepositoryProfileResponses[keyof DetectDevelopmentRepositoryProfileResponses];
+
+export type ListDevelopmentTemplatesData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/development/templates";
+};
+
+export type ListDevelopmentTemplatesErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListDevelopmentTemplatesResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentTemplatesResponse;
+};
+
+export type ListDevelopmentTemplatesResponse = ListDevelopmentTemplatesResponses[keyof ListDevelopmentTemplatesResponses];
+
+export type RegisterDevelopmentTemplateData = {
+	body: XeLocalAiEngineClientEndpointsDevelopmentV1RegisterDevelopmentTemplateRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/development/templates";
+};
+
+export type RegisterDevelopmentTemplateErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type RegisterDevelopmentTemplateResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTemplateResponse;
+};
+
+export type RegisterDevelopmentTemplateResponse =
+	RegisterDevelopmentTemplateResponses[keyof RegisterDevelopmentTemplateResponses];
+
+export type RemoveDevelopmentTemplateData = {
+	body?: never;
+	path: {
+		templateId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/development/templates/{templateId}";
+};
+
+export type RemoveDevelopmentTemplateErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type RemoveDevelopmentTemplateResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type RemoveDevelopmentTemplateResponse = RemoveDevelopmentTemplateResponses[keyof RemoveDevelopmentTemplateResponses];
+
+export type UnhandledExceptionProbeData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/diagnostics/exception-probe";
+};
+
+export type UnhandledExceptionProbeErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type UnhandledExceptionProbeResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type UnhandledExceptionProbeResponse = UnhandledExceptionProbeResponses[keyof UnhandledExceptionProbeResponses];
+
+export type ValidationProblemProbeData = {
+	body: XeLocalAiEngineClientEndpointsApiFoundationV1ValidationProblemProbeRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/diagnostics/validation-probe";
+};
+
+export type ValidationProblemProbeErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ValidationProblemProbeError = ValidationProblemProbeErrors[keyof ValidationProblemProbeErrors];
+
+export type ValidationProblemProbeResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsApiFoundationV1ValidationProblemProbeResponse;
+};
+
+export type ValidationProblemProbeResponse = ValidationProblemProbeResponses[keyof ValidationProblemProbeResponses];
 
 export type PollGitHubAuthData = {
 	body?: never;
@@ -7638,14 +5455,14 @@ export type StartGitHubAuthResponses = {
 
 export type StartGitHubAuthResponse = StartGitHubAuthResponses[keyof StartGitHubAuthResponses];
 
-export type UnhandledExceptionProbeData = {
+export type GetGitHubAuthStatusData = {
 	body?: never;
 	path?: never;
 	query?: never;
-	url: "/api/local/v1/diagnostics/exception-probe";
+	url: "/api/local/v1/github-auth/status";
 };
 
-export type UnhandledExceptionProbeErrors = {
+export type GetGitHubAuthStatusErrors = {
 	/**
 	 * Unauthorized
 	 */
@@ -7656,23 +5473,1941 @@ export type UnhandledExceptionProbeErrors = {
 	403: unknown;
 };
 
-export type UnhandledExceptionProbeResponses = {
+export type GetGitHubAuthStatusResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthStatusResponse;
+};
+
+export type GetGitHubAuthStatusResponse = GetGitHubAuthStatusResponses[keyof GetGitHubAuthStatusResponses];
+
+export type ListImageJobsData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/images/jobs";
+};
+
+export type ListImageJobsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListImageJobsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsImagesV1ListImageJobsResponse;
+};
+
+export type ListImageJobsResponse = ListImageJobsResponses[keyof ListImageJobsResponses];
+
+export type CreateImageJobData = {
+	body: XeLocalAiEngineClientEndpointsImagesV1CreateImageJobRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/images/jobs";
+};
+
+export type CreateImageJobErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsErrorResponse;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	409: XeLocalAiEngineClientEndpointsImagesV1ImageRuntimeBlockedResponse;
+};
+
+export type CreateImageJobError = CreateImageJobErrors[keyof CreateImageJobErrors];
+
+export type CreateImageJobResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsImagesV1ImageJobResponse;
+};
+
+export type CreateImageJobResponse = CreateImageJobResponses[keyof CreateImageJobResponses];
+
+export type GetImageJobData = {
+	body?: never;
+	path: {
+		jobId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/images/jobs/{jobId}";
+};
+
+export type GetImageJobErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetImageJobResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsImagesV1ImageJobResponse;
+};
+
+export type GetImageJobResponse = GetImageJobResponses[keyof GetImageJobResponses];
+
+export type CancelImageJobData = {
+	body?: never;
+	path: {
+		jobId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/images/jobs/{jobId}/cancel";
+};
+
+export type CancelImageJobErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type CancelImageJobResponses = {
 	/**
 	 * No Content
 	 */
 	204: void;
 };
 
-export type UnhandledExceptionProbeResponse = UnhandledExceptionProbeResponses[keyof UnhandledExceptionProbeResponses];
+export type CancelImageJobResponse = CancelImageJobResponses[keyof CancelImageJobResponses];
 
-export type ValidationProblemProbeData = {
-	body: XeLocalAiEngineClientEndpointsApiFoundationV1ValidationProblemProbeRequest;
+export type ListImageModelsData = {
+	body?: never;
 	path?: never;
 	query?: never;
-	url: "/api/local/v1/diagnostics/validation-probe";
+	url: "/api/local/v1/images/models";
 };
 
-export type ValidationProblemProbeErrors = {
+export type ListImageModelsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListImageModelsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsImagesV1ListImageModelsResponse;
+};
+
+export type ListImageModelsResponse = ListImageModelsResponses[keyof ListImageModelsResponses];
+
+export type ListImageModelDownloadsData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/images/models/downloads";
+};
+
+export type ListImageModelDownloadsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListImageModelDownloadsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsImagesV1ListImageModelDownloadsResponse;
+};
+
+export type ListImageModelDownloadsResponse = ListImageModelDownloadsResponses[keyof ListImageModelDownloadsResponses];
+
+export type StartImageModelDownloadData = {
+	body: XeLocalAiEngineClientEndpointsImagesV1StartImageModelDownloadRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/images/models/downloads";
+};
+
+export type StartImageModelDownloadErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type StartImageModelDownloadResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsImagesV1StartImageModelDownloadResponse;
+};
+
+export type StartImageModelDownloadResponse = StartImageModelDownloadResponses[keyof StartImageModelDownloadResponses];
+
+export type GetImageRuntimeStatusData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/images/runtime";
+};
+
+export type GetImageRuntimeStatusErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetImageRuntimeStatusResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsImagesV1ImageRuntimeStatusResponse;
+};
+
+export type GetImageRuntimeStatusResponse = GetImageRuntimeStatusResponses[keyof GetImageRuntimeStatusResponses];
+
+export type EjectImageRuntimeData = {
+	body: XeLocalAiEngineClientEndpointsImagesV1ImageRuntimeActionRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/images/runtime/eject";
+};
+
+export type EjectImageRuntimeErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	409: XeLocalAiEngineClientEndpointsImagesV1ImageRuntimeBlockedResponse;
+};
+
+export type EjectImageRuntimeError = EjectImageRuntimeErrors[keyof EjectImageRuntimeErrors];
+
+export type EjectImageRuntimeResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsImagesV1ImageRuntimeStatusResponse;
+};
+
+export type EjectImageRuntimeResponse = EjectImageRuntimeResponses[keyof EjectImageRuntimeResponses];
+
+export type StartStableDiffusionCppSourceBuildData = {
+	body: XeLocalAiEngineClientEndpointsImagesV1StartStableDiffusionCppSourceBuildRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/images/runtime/source-build";
+};
+
+export type StartStableDiffusionCppSourceBuildErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsErrorResponse;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	409: XeLocalAiEngineClientEndpointsImagesV1ImageRuntimeBlockedResponse;
+};
+
+export type StartStableDiffusionCppSourceBuildError =
+	StartStableDiffusionCppSourceBuildErrors[keyof StartStableDiffusionCppSourceBuildErrors];
+
+export type StartStableDiffusionCppSourceBuildResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsImagesV1StartStableDiffusionCppSourceBuildResponse;
+};
+
+export type StartStableDiffusionCppSourceBuildResponse =
+	StartStableDiffusionCppSourceBuildResponses[keyof StartStableDiffusionCppSourceBuildResponses];
+
+export type CancelStableDiffusionCppSourceBuildData = {
+	body: XeLocalAiEngineClientEndpointsImagesV1ImageRuntimeActionRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/images/runtime/source-build/cancel";
+};
+
+export type CancelStableDiffusionCppSourceBuildErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type CancelStableDiffusionCppSourceBuildResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildStatusResponse;
+};
+
+export type CancelStableDiffusionCppSourceBuildResponse =
+	CancelStableDiffusionCppSourceBuildResponses[keyof CancelStableDiffusionCppSourceBuildResponses];
+
+export type GetStableDiffusionCppSourceBuildPrerequisitesData = {
+	body?: never;
+	path?: never;
+	query: {
+		backend: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBackendDto;
+	};
+	url: "/api/local/v1/images/runtime/source-build/prerequisites";
+};
+
+export type GetStableDiffusionCppSourceBuildPrerequisitesErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsErrorResponse;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetStableDiffusionCppSourceBuildPrerequisitesError =
+	GetStableDiffusionCppSourceBuildPrerequisitesErrors[keyof GetStableDiffusionCppSourceBuildPrerequisitesErrors];
+
+export type GetStableDiffusionCppSourceBuildPrerequisitesResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildPrerequisitesResponse;
+};
+
+export type GetStableDiffusionCppSourceBuildPrerequisitesResponse =
+	GetStableDiffusionCppSourceBuildPrerequisitesResponses[keyof GetStableDiffusionCppSourceBuildPrerequisitesResponses];
+
+export type RemoveStableDiffusionCppSourceBuildData = {
+	body: XeLocalAiEngineClientEndpointsImagesV1ImageRuntimeActionRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/images/runtime/source-build/remove";
+};
+
+export type RemoveStableDiffusionCppSourceBuildErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	409: XeLocalAiEngineClientEndpointsImagesV1ImageRuntimeBlockedResponse;
+};
+
+export type RemoveStableDiffusionCppSourceBuildError =
+	RemoveStableDiffusionCppSourceBuildErrors[keyof RemoveStableDiffusionCppSourceBuildErrors];
+
+export type RemoveStableDiffusionCppSourceBuildResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsImagesV1ImageRuntimeStatusResponse;
+};
+
+export type RemoveStableDiffusionCppSourceBuildResponse =
+	RemoveStableDiffusionCppSourceBuildResponses[keyof RemoveStableDiffusionCppSourceBuildResponses];
+
+export type GetStableDiffusionCppSourceBuildStatusData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/images/runtime/source-build/status";
+};
+
+export type GetStableDiffusionCppSourceBuildStatusErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetStableDiffusionCppSourceBuildStatusResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildStatusResponse;
+};
+
+export type GetStableDiffusionCppSourceBuildStatusResponse =
+	GetStableDiffusionCppSourceBuildStatusResponses[keyof GetStableDiffusionCppSourceBuildStatusResponses];
+
+export type RetrieveImageData = {
+	body?: never;
+	path: {
+		imageId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/images/{imageId}";
+};
+
+export type RetrieveImageErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type RetrieveImageResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type RetrieveImageResponse = RetrieveImageResponses[keyof RetrieveImageResponses];
+
+export type GetInvocationMonitorData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/invocations";
+};
+
+export type GetInvocationMonitorErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetInvocationMonitorResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsInvocationsV1InvocationMonitorResponse;
+};
+
+export type GetInvocationMonitorResponse = GetInvocationMonitorResponses[keyof GetInvocationMonitorResponses];
+
+export type ListKnowledgeDocumentsData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/knowledge-base/documents";
+};
+
+export type ListKnowledgeDocumentsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListKnowledgeDocumentsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsKnowledgeV1ListKnowledgeDocumentsResponse;
+};
+
+export type ListKnowledgeDocumentsResponse = ListKnowledgeDocumentsResponses[keyof ListKnowledgeDocumentsResponses];
+
+export type UploadKnowledgeDocumentData = {
+	body: XeLocalAiEngineClientEndpointsKnowledgeV1UploadKnowledgeDocumentRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/knowledge-base/documents";
+};
+
+export type UploadKnowledgeDocumentErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type UploadKnowledgeDocumentResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsKnowledgeV1UploadKnowledgeDocumentResponse;
+};
+
+export type UploadKnowledgeDocumentResponse = UploadKnowledgeDocumentResponses[keyof UploadKnowledgeDocumentResponses];
+
+export type DeleteKnowledgeDocumentData = {
+	body?: never;
+	path: {
+		documentId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/knowledge-base/documents/{documentId}";
+};
+
+export type DeleteKnowledgeDocumentErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type DeleteKnowledgeDocumentResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type DeleteKnowledgeDocumentResponse = DeleteKnowledgeDocumentResponses[keyof DeleteKnowledgeDocumentResponses];
+
+export type GetKnowledgeDocumentData = {
+	body?: never;
+	path: {
+		documentId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/knowledge-base/documents/{documentId}";
+};
+
+export type GetKnowledgeDocumentErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetKnowledgeDocumentResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentDetailResponse;
+};
+
+export type GetKnowledgeDocumentResponse = GetKnowledgeDocumentResponses[keyof GetKnowledgeDocumentResponses];
+
+export type ReindexKnowledgeDocumentData = {
+	body?: never;
+	path: {
+		documentId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/knowledge-base/documents/{documentId}/reindex";
+};
+
+export type ReindexKnowledgeDocumentErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ReindexKnowledgeDocumentResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type ReindexKnowledgeDocumentResponse = ReindexKnowledgeDocumentResponses[keyof ReindexKnowledgeDocumentResponses];
+
+export type DownloadRecommendedEmbeddingData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/knowledge-base/embedding/download-recommended";
+};
+
+export type DownloadRecommendedEmbeddingErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type DownloadRecommendedEmbeddingResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsKnowledgeV1DownloadRecommendedEmbeddingResponse;
+};
+
+export type DownloadRecommendedEmbeddingResponse =
+	DownloadRecommendedEmbeddingResponses[keyof DownloadRecommendedEmbeddingResponses];
+
+export type ReindexCorpusData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/knowledge-base/reindex";
+};
+
+export type ReindexCorpusErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ReindexCorpusResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsKnowledgeV1ReindexCorpusResponse;
+};
+
+export type ReindexCorpusResponse = ReindexCorpusResponses[keyof ReindexCorpusResponses];
+
+export type DownloadRecommendedRerankerData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/knowledge-base/reranker/download-recommended";
+};
+
+export type DownloadRecommendedRerankerErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type DownloadRecommendedRerankerResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsKnowledgeV1DownloadRecommendedRerankerResponse;
+};
+
+export type DownloadRecommendedRerankerResponse =
+	DownloadRecommendedRerankerResponses[keyof DownloadRecommendedRerankerResponses];
+
+export type SearchKnowledgeData = {
+	body: XeLocalAiEngineClientEndpointsKnowledgeV1SearchKnowledgeRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/knowledge-base/search";
+};
+
+export type SearchKnowledgeErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type SearchKnowledgeResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsKnowledgeV1SearchKnowledgeResponse;
+};
+
+export type SearchKnowledgeResponse = SearchKnowledgeResponses[keyof SearchKnowledgeResponses];
+
+export type ListMcpServersData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/mcp/servers";
+};
+
+export type ListMcpServersErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListMcpServersResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsMcpV1ListMcpServersResponse;
+};
+
+export type ListMcpServersResponse = ListMcpServersResponses[keyof ListMcpServersResponses];
+
+export type CreateMcpServerData = {
+	body: XeLocalAiEngineClientEndpointsMcpV1CreateMcpServerRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/mcp/servers";
+};
+
+export type CreateMcpServerErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type CreateMcpServerResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsMcpV1McpServerResponse;
+};
+
+export type CreateMcpServerResponse = CreateMcpServerResponses[keyof CreateMcpServerResponses];
+
+export type DeleteMcpServerData = {
+	body?: never;
+	path: {
+		mcpServerId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/mcp/servers/{mcpServerId}";
+};
+
+export type DeleteMcpServerErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type DeleteMcpServerResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type DeleteMcpServerResponse = DeleteMcpServerResponses[keyof DeleteMcpServerResponses];
+
+export type GetMcpServerData = {
+	body?: never;
+	path: {
+		mcpServerId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/mcp/servers/{mcpServerId}";
+};
+
+export type GetMcpServerErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetMcpServerResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsMcpV1McpServerResponse;
+};
+
+export type GetMcpServerResponse = GetMcpServerResponses[keyof GetMcpServerResponses];
+
+export type UpdateMcpServerData = {
+	body: XeLocalAiEngineClientEndpointsMcpV1UpdateMcpServerRequest;
+	path: {
+		mcpServerId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/mcp/servers/{mcpServerId}";
+};
+
+export type UpdateMcpServerErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type UpdateMcpServerResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsMcpV1McpServerResponse;
+};
+
+export type UpdateMcpServerResponse = UpdateMcpServerResponses[keyof UpdateMcpServerResponses];
+
+export type SetMcpServerEnabledData = {
+	body: XeLocalAiEngineClientEndpointsMcpV1SetMcpServerEnabledRequest;
+	path: {
+		mcpServerId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/mcp/servers/{mcpServerId}/enabled";
+};
+
+export type SetMcpServerEnabledErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type SetMcpServerEnabledResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsMcpV1McpServerResponse;
+};
+
+export type SetMcpServerEnabledResponse = SetMcpServerEnabledResponses[keyof SetMcpServerEnabledResponses];
+
+export type GetMcpServerToolsData = {
+	body?: never;
+	path: {
+		mcpServerId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/mcp/servers/{mcpServerId}/tools";
+};
+
+export type GetMcpServerToolsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetMcpServerToolsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsMcpV1McpServerToolsResponse;
+};
+
+export type GetMcpServerToolsResponse = GetMcpServerToolsResponses[keyof GetMcpServerToolsResponses];
+
+export type GetModelCatalogInfoData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/catalog";
+};
+
+export type GetModelCatalogInfoErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetModelCatalogInfoResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1ModelCatalogInfoResponse;
+};
+
+export type GetModelCatalogInfoResponse = GetModelCatalogInfoResponses[keyof GetModelCatalogInfoResponses];
+
+export type RefreshModelCatalogData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/catalog/refresh";
+};
+
+export type RefreshModelCatalogErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type RefreshModelCatalogResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1ModelCatalogInfoResponse;
+};
+
+export type RefreshModelCatalogResponse = RefreshModelCatalogResponses[keyof RefreshModelCatalogResponses];
+
+export type StartGgufDownloadData = {
+	body: XeLocalAiEngineClientEndpointsModelFitV1StartGgufDownloadRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/download";
+};
+
+export type StartGgufDownloadErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type StartGgufDownloadResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1StartGgufDownloadResponse;
+};
+
+export type StartGgufDownloadResponse = StartGgufDownloadResponses[keyof StartGgufDownloadResponses];
+
+export type CancelGgufDownloadData = {
+	body: XeLocalAiEngineClientEndpointsModelFitV1CancelGgufDownloadRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/download/cancel";
+};
+
+export type CancelGgufDownloadErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type CancelGgufDownloadResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1CancelGgufDownloadResponse;
+};
+
+export type CancelGgufDownloadResponse = CancelGgufDownloadResponses[keyof CancelGgufDownloadResponses];
+
+export type BrowseGgufRepositoriesData = {
+	body?: never;
+	path?: never;
+	query?: {
+		query?: string | null;
+		limit?: number | null;
+		sort?: string | null;
+	};
+	url: "/api/local/v1/model-fit/gguf/browse";
+};
+
+export type BrowseGgufRepositoriesErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type BrowseGgufRepositoriesResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1BrowseGgufRepositoriesResponse;
+};
+
+export type BrowseGgufRepositoriesResponse = BrowseGgufRepositoriesResponses[keyof BrowseGgufRepositoriesResponses];
+
+export type GetGgufDownloadsData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/gguf/downloads";
+};
+
+export type GetGgufDownloadsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetGgufDownloadsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1ListGgufDownloadsResponse;
+};
+
+export type GetGgufDownloadsResponse = GetGgufDownloadsResponses[keyof GetGgufDownloadsResponses];
+
+export type GetGgufDownloadStatusData = {
+	body?: never;
+	path: {
+		modelName: string;
+	};
+	query?: never;
+	url: "/api/local/v1/model-fit/gguf/downloads/{modelName}";
+};
+
+export type GetGgufDownloadStatusErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetGgufDownloadStatusResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1GgufDownloadStatusResponse;
+};
+
+export type GetGgufDownloadStatusResponse = GetGgufDownloadStatusResponses[keyof GetGgufDownloadStatusResponses];
+
+export type InspectGgufRepositoryData = {
+	body?: never;
+	path?: never;
+	query?: {
+		repoId?: string | null;
+	};
+	url: "/api/local/v1/model-fit/gguf/inspect";
+};
+
+export type InspectGgufRepositoryErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type InspectGgufRepositoryResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1InspectGgufRepositoryResponse;
+};
+
+export type InspectGgufRepositoryResponse = InspectGgufRepositoryResponses[keyof InspectGgufRepositoryResponses];
+
+export type GetHardwareProfileData = {
+	body?: never;
+	path?: never;
+	query: {
+		refresh: boolean;
+	};
+	url: "/api/local/v1/model-fit/hardware-profile";
+};
+
+export type GetHardwareProfileErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetHardwareProfileResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1HardwareProfileResponse;
+};
+
+export type GetHardwareProfileResponse = GetHardwareProfileResponses[keyof GetHardwareProfileResponses];
+
+export type GetHfTokenStatusData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/hf-token";
+};
+
+export type GetHfTokenStatusErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetHfTokenStatusResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1HfTokenStatusResponse;
+};
+
+export type GetHfTokenStatusResponse = GetHfTokenStatusResponses[keyof GetHfTokenStatusResponses];
+
+export type SetHfTokenData = {
+	body: XeLocalAiEngineClientEndpointsModelFitV1SetHfTokenRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/hf-token";
+};
+
+export type SetHfTokenErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type SetHfTokenResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1HfTokenStatusResponse;
+};
+
+export type SetHfTokenResponse = SetHfTokenResponses[keyof SetHfTokenResponses];
+
+export type StartCudaBuildData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/llamacpp/cuda-build";
+};
+
+export type StartCudaBuildErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type StartCudaBuildResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1StartCudaBuildResponse;
+};
+
+export type StartCudaBuildResponse = StartCudaBuildResponses[keyof StartCudaBuildResponses];
+
+export type CancelCudaBuildData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/llamacpp/cuda-build/cancel";
+};
+
+export type CancelCudaBuildErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type CancelCudaBuildResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1CudaBuildStatusResponse;
+};
+
+export type CancelCudaBuildResponse = CancelCudaBuildResponses[keyof CancelCudaBuildResponses];
+
+export type GetCudaBuildPrerequisitesData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/llamacpp/cuda-build/prerequisites";
+};
+
+export type GetCudaBuildPrerequisitesErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetCudaBuildPrerequisitesResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1CudaBuildPrerequisitesResponse;
+};
+
+export type GetCudaBuildPrerequisitesResponse = GetCudaBuildPrerequisitesResponses[keyof GetCudaBuildPrerequisitesResponses];
+
+export type RemoveCudaBuildData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/llamacpp/cuda-build/remove";
+};
+
+export type RemoveCudaBuildErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type RemoveCudaBuildResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppRuntimeStatusResponse;
+};
+
+export type RemoveCudaBuildResponse = RemoveCudaBuildResponses[keyof RemoveCudaBuildResponses];
+
+export type GetCudaBuildStatusData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/llamacpp/cuda-build/status";
+};
+
+export type GetCudaBuildStatusErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetCudaBuildStatusResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1CudaBuildStatusResponse;
+};
+
+export type GetCudaBuildStatusResponse = GetCudaBuildStatusResponses[keyof GetCudaBuildStatusResponses];
+
+export type GetLlamaCppRuntimeData = {
+	body?: never;
+	path?: never;
+	query?: {
+		refresh?: boolean | null;
+	};
+	url: "/api/local/v1/model-fit/llamacpp/runtime";
+};
+
+export type GetLlamaCppRuntimeErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetLlamaCppRuntimeResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppRuntimeStatusResponse;
+};
+
+export type GetLlamaCppRuntimeResponse = GetLlamaCppRuntimeResponses[keyof GetLlamaCppRuntimeResponses];
+
+export type StartLlamaCppSourceBuildData = {
+	body: XeLocalAiEngineClientEndpointsModelFitV1StartLlamaCppSourceBuildRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/llamacpp/source-build";
+};
+
+export type StartLlamaCppSourceBuildErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsErrorResponse;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	409: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildBlockedResponse;
+};
+
+export type StartLlamaCppSourceBuildError = StartLlamaCppSourceBuildErrors[keyof StartLlamaCppSourceBuildErrors];
+
+export type StartLlamaCppSourceBuildResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1StartLlamaCppSourceBuildResponse;
+};
+
+export type StartLlamaCppSourceBuildResponse = StartLlamaCppSourceBuildResponses[keyof StartLlamaCppSourceBuildResponses];
+
+export type CancelLlamaCppSourceBuildData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/llamacpp/source-build/cancel";
+};
+
+export type CancelLlamaCppSourceBuildErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type CancelLlamaCppSourceBuildResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildStatusResponse;
+};
+
+export type CancelLlamaCppSourceBuildResponse = CancelLlamaCppSourceBuildResponses[keyof CancelLlamaCppSourceBuildResponses];
+
+export type GetLlamaCppSourceBuildPrerequisitesData = {
+	body?: never;
+	path?: never;
+	query: {
+		backend: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBackendDto;
+	};
+	url: "/api/local/v1/model-fit/llamacpp/source-build/prerequisites";
+};
+
+export type GetLlamaCppSourceBuildPrerequisitesErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsErrorResponse;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetLlamaCppSourceBuildPrerequisitesError =
+	GetLlamaCppSourceBuildPrerequisitesErrors[keyof GetLlamaCppSourceBuildPrerequisitesErrors];
+
+export type GetLlamaCppSourceBuildPrerequisitesResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildPrerequisitesResponse;
+};
+
+export type GetLlamaCppSourceBuildPrerequisitesResponse =
+	GetLlamaCppSourceBuildPrerequisitesResponses[keyof GetLlamaCppSourceBuildPrerequisitesResponses];
+
+export type RemoveLlamaCppSourceBuildData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/llamacpp/source-build/remove";
+};
+
+export type RemoveLlamaCppSourceBuildErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	409: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildBlockedResponse;
+};
+
+export type RemoveLlamaCppSourceBuildError = RemoveLlamaCppSourceBuildErrors[keyof RemoveLlamaCppSourceBuildErrors];
+
+export type RemoveLlamaCppSourceBuildResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppRuntimeStatusResponse;
+};
+
+export type RemoveLlamaCppSourceBuildResponse = RemoveLlamaCppSourceBuildResponses[keyof RemoveLlamaCppSourceBuildResponses];
+
+export type GetLlamaCppSourceBuildStatusData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/llamacpp/source-build/status";
+};
+
+export type GetLlamaCppSourceBuildStatusErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetLlamaCppSourceBuildStatusResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildStatusResponse;
+};
+
+export type GetLlamaCppSourceBuildStatusResponse =
+	GetLlamaCppSourceBuildStatusResponses[keyof GetLlamaCppSourceBuildStatusResponses];
+
+export type UpdateLlamaCppRuntimeData = {
+	body: XeLocalAiEngineClientEndpointsModelFitV1UpdateLlamaCppRuntimeRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/llamacpp/update";
+};
+
+export type UpdateLlamaCppRuntimeErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsErrorResponse;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	409: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppUpdateBlockedResponse;
+};
+
+export type UpdateLlamaCppRuntimeError = UpdateLlamaCppRuntimeErrors[keyof UpdateLlamaCppRuntimeErrors];
+
+export type UpdateLlamaCppRuntimeResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppVersionResponse;
+};
+
+export type UpdateLlamaCppRuntimeResponse = UpdateLlamaCppRuntimeResponses[keyof UpdateLlamaCppRuntimeResponses];
+
+export type EnsureLlamaCppBinaryData = {
+	body: XeLocalAiEngineClientEndpointsModelFitV1EnsureLlamaCppBinaryRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/llamacpp/version";
+};
+
+export type EnsureLlamaCppBinaryErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsErrorResponse;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	409: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppUpdateBlockedResponse;
+};
+
+export type EnsureLlamaCppBinaryError = EnsureLlamaCppBinaryErrors[keyof EnsureLlamaCppBinaryErrors];
+
+export type EnsureLlamaCppBinaryResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppVersionResponse;
+};
+
+export type EnsureLlamaCppBinaryResponse = EnsureLlamaCppBinaryResponses[keyof EnsureLlamaCppBinaryResponses];
+
+export type ListInferenceProfilesData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/profiles";
+};
+
+export type ListInferenceProfilesErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListInferenceProfilesResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1ListInferenceProfilesResponse;
+};
+
+export type ListInferenceProfilesResponse = ListInferenceProfilesResponses[keyof ListInferenceProfilesResponses];
+
+export type BenchmarkInferenceProfileData = {
+	body: XeLocalAiEngineClientEndpointsModelFitV1BenchmarkInferenceProfileRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/profiles/benchmark";
+};
+
+export type BenchmarkInferenceProfileErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type BenchmarkInferenceProfileResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1BenchmarkInferenceProfileResponse;
+};
+
+export type BenchmarkInferenceProfileResponse = BenchmarkInferenceProfileResponses[keyof BenchmarkInferenceProfileResponses];
+
+export type ExploreInferenceProfileData = {
+	body: XeLocalAiEngineClientEndpointsModelFitV1ExploreInferenceProfileRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/profiles/explore";
+};
+
+export type ExploreInferenceProfileErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ExploreInferenceProfileResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1InferenceProfileActionResponse;
+};
+
+export type ExploreInferenceProfileResponse = ExploreInferenceProfileResponses[keyof ExploreInferenceProfileResponses];
+
+export type FreezeInferenceProfileData = {
+	body: XeLocalAiEngineClientEndpointsModelFitV1FreezeInferenceProfileRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/profiles/freeze";
+};
+
+export type FreezeInferenceProfileErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type FreezeInferenceProfileResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1InferenceProfileActionResponse;
+};
+
+export type FreezeInferenceProfileResponse = FreezeInferenceProfileResponses[keyof FreezeInferenceProfileResponses];
+
+export type InvalidateInferenceProfileData = {
+	body: XeLocalAiEngineClientEndpointsModelFitV1InvalidateInferenceProfileRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/profiles/invalidate";
+};
+
+export type InvalidateInferenceProfileErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type InvalidateInferenceProfileResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1InferenceProfileActionResponse;
+};
+
+export type InvalidateInferenceProfileResponse = InvalidateInferenceProfileResponses[keyof InvalidateInferenceProfileResponses];
+
+export type GetLatestRecommendationsData = {
+	body?: never;
+	path?: never;
+	query?: {
+		useCase?: string | null;
+	};
+	url: "/api/local/v1/model-fit/recommendations/latest";
+};
+
+export type GetLatestRecommendationsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetLatestRecommendationsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsResponse;
+};
+
+export type GetLatestRecommendationsResponse = GetLatestRecommendationsResponses[keyof GetLatestRecommendationsResponses];
+
+export type RefreshRecommendationsData = {
+	body: XeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/recommendations/refresh";
+};
+
+export type RefreshRecommendationsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type RefreshRecommendationsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsResponse;
+};
+
+export type RefreshRecommendationsResponse = RefreshRecommendationsResponses[keyof RefreshRecommendationsResponses];
+
+export type ListRunningModelsData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/running";
+};
+
+export type ListRunningModelsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListRunningModelsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1ListRunningModelsResponse;
+};
+
+export type ListRunningModelsResponse = ListRunningModelsResponses[keyof ListRunningModelsResponses];
+
+export type EjectRunningModelData = {
+	body: XeLocalAiEngineClientEndpointsModelFitV1EjectRunningModelRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/running/eject";
+};
+
+export type EjectRunningModelErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type EjectRunningModelResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1EjectRunningModelResponse;
+};
+
+export type EjectRunningModelResponse = EjectRunningModelResponses[keyof EjectRunningModelResponses];
+
+export type ListLocalModelsData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/models";
+};
+
+export type ListLocalModelsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListLocalModelsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsLocalModelsV1ListLocalModelsResponse;
+};
+
+export type ListLocalModelsResponse = ListLocalModelsResponses[keyof ListLocalModelsResponses];
+
+export type GetRunningLocalModelsData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/models/running";
+};
+
+export type GetRunningLocalModelsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetRunningLocalModelsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsLocalModelsV1RunningLocalModelsResponse;
+};
+
+export type GetRunningLocalModelsResponse = GetRunningLocalModelsResponses[keyof GetRunningLocalModelsResponses];
+
+export type SelectLocalModelData = {
+	body: XeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/models/select";
+};
+
+export type SelectLocalModelErrors = {
 	/**
 	 * Bad Request
 	 */
@@ -7687,27 +7422,31 @@ export type ValidationProblemProbeErrors = {
 	403: unknown;
 };
 
-export type ValidationProblemProbeError = ValidationProblemProbeErrors[keyof ValidationProblemProbeErrors];
+export type SelectLocalModelError = SelectLocalModelErrors[keyof SelectLocalModelErrors];
 
-export type ValidationProblemProbeResponses = {
+export type SelectLocalModelResponses = {
 	/**
 	 * Success
 	 */
-	200: XeLocalAiEngineClientEndpointsApiFoundationV1ValidationProblemProbeResponse;
+	200: XeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelResponse;
 };
 
-export type ValidationProblemProbeResponse = ValidationProblemProbeResponses[keyof ValidationProblemProbeResponses];
+export type SelectLocalModelResponse = SelectLocalModelResponses[keyof SelectLocalModelResponses];
 
-export type AnalyzePlaybookData = {
+export type DeleteLocalModelData = {
 	body?: never;
 	path: {
-		agentDefinitionId: string;
+		modelName: string;
 	};
 	query?: never;
-	url: "/api/local/v1/agents/{agentDefinitionId}/playbook/analyze";
+	url: "/api/local/v1/models/{modelName}";
 };
 
-export type AnalyzePlaybookErrors = {
+export type DeleteLocalModelErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
 	/**
 	 * Unauthorized
 	 */
@@ -7718,26 +7457,31 @@ export type AnalyzePlaybookErrors = {
 	403: unknown;
 };
 
-export type AnalyzePlaybookResponses = {
+export type DeleteLocalModelError = DeleteLocalModelErrors[keyof DeleteLocalModelErrors];
+
+export type DeleteLocalModelResponses = {
 	/**
 	 * Success
 	 */
-	200: XeLocalAiEngineClientEndpointsAgentsV1ListPlaybookActionsResponse;
+	200: XeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelResponse;
 };
 
-export type AnalyzePlaybookResponse = AnalyzePlaybookResponses[keyof AnalyzePlaybookResponses];
+export type DeleteLocalModelResponse = DeleteLocalModelResponses[keyof DeleteLocalModelResponses];
 
-export type ApproveGoldenConversationData = {
+export type GetLocalModelDetailsData = {
 	body?: never;
 	path: {
-		agentDefinitionId: string;
-		goldenConversationId: string;
+		modelName: string;
 	};
 	query?: never;
-	url: "/api/local/v1/agents/{agentDefinitionId}/golden-conversations/{goldenConversationId}/approve";
+	url: "/api/local/v1/models/{modelName}/details";
 };
 
-export type ApproveGoldenConversationErrors = {
+export type GetLocalModelDetailsErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
 	/**
 	 * Unauthorized
 	 */
@@ -7748,23 +7492,118 @@ export type ApproveGoldenConversationErrors = {
 	403: unknown;
 };
 
-export type ApproveGoldenConversationResponses = {
+export type GetLocalModelDetailsError = GetLocalModelDetailsErrors[keyof GetLocalModelDetailsErrors];
+
+export type GetLocalModelDetailsResponses = {
 	/**
 	 * Success
 	 */
-	200: XeLocalAiEngineClientEndpointsAgentsV1GoldenConversationResponse;
+	200: XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelDetailsResponse;
 };
 
-export type ApproveGoldenConversationResponse = ApproveGoldenConversationResponses[keyof ApproveGoldenConversationResponses];
+export type GetLocalModelDetailsResponse = GetLocalModelDetailsResponses[keyof GetLocalModelDetailsResponses];
 
-export type ListAgentDefinitionsData = {
+export type DeleteModelKindData = {
+	body?: never;
+	path: {
+		modelName: string;
+	};
+	query?: never;
+	url: "/api/local/v1/models/{modelName}/kind";
+};
+
+export type DeleteModelKindErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type DeleteModelKindResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsLocalModelsV1ModelKindResponse;
+};
+
+export type DeleteModelKindResponse = DeleteModelKindResponses[keyof DeleteModelKindResponses];
+
+export type PutModelKindData = {
+	body: XeLocalAiEngineClientEndpointsLocalModelsV1SetModelKindRequest;
+	path: {
+		modelName: string;
+	};
+	query?: never;
+	url: "/api/local/v1/models/{modelName}/kind";
+};
+
+export type PutModelKindErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type PutModelKindResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsLocalModelsV1ModelKindResponse;
+};
+
+export type PutModelKindResponse = PutModelKindResponses[keyof PutModelKindResponses];
+
+export type UnloadLocalModelData = {
+	body?: never;
+	path: {
+		modelName: string;
+	};
+	query?: never;
+	url: "/api/local/v1/models/{modelName}/unload";
+};
+
+export type UnloadLocalModelErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type UnloadLocalModelError = UnloadLocalModelErrors[keyof UnloadLocalModelErrors];
+
+export type UnloadLocalModelResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsLocalModelsV1UnloadLocalModelResponse;
+};
+
+export type UnloadLocalModelResponse = UnloadLocalModelResponses[keyof UnloadLocalModelResponses];
+
+export type GetNodeSettingsData = {
 	body?: never;
 	path?: never;
 	query?: never;
-	url: "/api/local/v1/agents";
+	url: "/api/local/v1/node-settings";
 };
 
-export type ListAgentDefinitionsErrors = {
+export type GetNodeSettingsErrors = {
 	/**
 	 * Unauthorized
 	 */
@@ -7775,23 +7614,27 @@ export type ListAgentDefinitionsErrors = {
 	403: unknown;
 };
 
-export type ListAgentDefinitionsResponses = {
+export type GetNodeSettingsResponses = {
 	/**
 	 * Success
 	 */
-	200: XeLocalAiEngineClientEndpointsAgentsV1ListAgentDefinitionsResponse;
+	200: XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse;
 };
 
-export type ListAgentDefinitionsResponse = ListAgentDefinitionsResponses[keyof ListAgentDefinitionsResponses];
+export type GetNodeSettingsResponse = GetNodeSettingsResponses[keyof GetNodeSettingsResponses];
 
-export type CreateAgentDefinitionData = {
-	body: XeLocalAiEngineClientEndpointsAgentsV1CreateAgentDefinitionRequest;
+export type SaveNodeSettingsData = {
+	body: XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest;
 	path?: never;
 	query?: never;
-	url: "/api/local/v1/agents";
+	url: "/api/local/v1/node-settings";
 };
 
-export type CreateAgentDefinitionErrors = {
+export type SaveNodeSettingsErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
 	/**
 	 * Unauthorized
 	 */
@@ -7802,25 +7645,109 @@ export type CreateAgentDefinitionErrors = {
 	403: unknown;
 };
 
-export type CreateAgentDefinitionResponses = {
+export type SaveNodeSettingsError = SaveNodeSettingsErrors[keyof SaveNodeSettingsErrors];
+
+export type SaveNodeSettingsResponses = {
 	/**
 	 * Success
 	 */
-	200: XeLocalAiEngineClientEndpointsAgentsV1AgentDefinitionResponse;
+	200: XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse;
 };
 
-export type CreateAgentDefinitionResponse = CreateAgentDefinitionResponses[keyof CreateAgentDefinitionResponses];
+export type SaveNodeSettingsResponse = SaveNodeSettingsResponses[keyof SaveNodeSettingsResponses];
 
-export type ListGoldenConversationsData = {
+export type ListPreviewRunsData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/preview/runs";
+};
+
+export type ListPreviewRunsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListPreviewRunsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsPreviewV1ListPreviewRunsResponse;
+};
+
+export type ListPreviewRunsResponse = ListPreviewRunsResponses[keyof ListPreviewRunsResponses];
+
+export type CancelAllPreviewRunsData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/preview/runs/cancel-all";
+};
+
+export type CancelAllPreviewRunsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type CancelAllPreviewRunsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsPreviewV1CancelAllPreviewRunsResponse;
+};
+
+export type CancelAllPreviewRunsResponse = CancelAllPreviewRunsResponses[keyof CancelAllPreviewRunsResponses];
+
+export type ExecuteUnsavedPreviewWorkflowData = {
+	body: XeLocalAiEngineClientEndpointsPreviewV1ExecuteUnsavedPreviewWorkflowRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/preview/runs/execute";
+};
+
+export type ExecuteUnsavedPreviewWorkflowErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ExecuteUnsavedPreviewWorkflowResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsPreviewV1PreviewRunStartedResponse;
+};
+
+export type ExecuteUnsavedPreviewWorkflowResponse =
+	ExecuteUnsavedPreviewWorkflowResponses[keyof ExecuteUnsavedPreviewWorkflowResponses];
+
+export type GetPreviewRunData = {
 	body?: never;
 	path: {
-		agentDefinitionId: string;
+		runId: string;
 	};
 	query?: never;
-	url: "/api/local/v1/agents/{agentDefinitionId}/golden-conversations";
+	url: "/api/local/v1/preview/runs/{runId}";
 };
 
-export type ListGoldenConversationsErrors = {
+export type GetPreviewRunErrors = {
 	/**
 	 * Unauthorized
 	 */
@@ -7829,87 +7756,31 @@ export type ListGoldenConversationsErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
 };
 
-export type ListGoldenConversationsResponses = {
+export type GetPreviewRunResponses = {
 	/**
 	 * Success
 	 */
-	200: XeLocalAiEngineClientEndpointsAgentsV1ListGoldenConversationsResponse;
+	200: XeLocalAiEngineClientEndpointsPreviewV1PreviewRunSummaryResponse;
 };
 
-export type ListGoldenConversationsResponse = ListGoldenConversationsResponses[keyof ListGoldenConversationsResponses];
+export type GetPreviewRunResponse = GetPreviewRunResponses[keyof GetPreviewRunResponses];
 
-export type CreateGoldenConversationData = {
-	body: XeLocalAiEngineClientEndpointsAgentsV1CreateGoldenConversationRequest;
-	path: {
-		agentDefinitionId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/agents/{agentDefinitionId}/golden-conversations";
-};
-
-export type CreateGoldenConversationErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type CreateGoldenConversationResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsAgentsV1GoldenConversationResponse;
-};
-
-export type CreateGoldenConversationResponse = CreateGoldenConversationResponses[keyof CreateGoldenConversationResponses];
-
-export type ListAgentPlaybookActionsData = {
+export type CancelPreviewRunData = {
 	body?: never;
 	path: {
-		agentDefinitionId: string;
-	};
-	query?: {
-		scope?: XeLocalAiEngineClientPersistenceMemoryScope | null;
-	};
-	url: "/api/local/v1/agents/{agentDefinitionId}/playbook";
-};
-
-export type ListAgentPlaybookActionsErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type ListAgentPlaybookActionsResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsAgentsV1ListPlaybookActionsResponse;
-};
-
-export type ListAgentPlaybookActionsResponse = ListAgentPlaybookActionsResponses[keyof ListAgentPlaybookActionsResponses];
-
-export type CreatePlaybookActionData = {
-	body: XeLocalAiEngineClientEndpointsAgentsV1CreatePlaybookActionRequest;
-	path: {
-		agentDefinitionId: string;
+		runId: string;
 	};
 	query?: never;
-	url: "/api/local/v1/agents/{agentDefinitionId}/playbook";
+	url: "/api/local/v1/preview/runs/{runId}/cancel";
 };
 
-export type CreatePlaybookActionErrors = {
+export type CancelPreviewRunErrors = {
 	/**
 	 * Unauthorized
 	 */
@@ -7920,54 +7791,25 @@ export type CreatePlaybookActionErrors = {
 	403: unknown;
 };
 
-export type CreatePlaybookActionResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsAgentsV1PlaybookActionResponse;
-};
-
-export type CreatePlaybookActionResponse = CreatePlaybookActionResponses[keyof CreatePlaybookActionResponses];
-
-export type DeleteAgentDefinitionData = {
-	body?: never;
-	path: {
-		agentDefinitionId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/agents/{agentDefinitionId}";
-};
-
-export type DeleteAgentDefinitionErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type DeleteAgentDefinitionResponses = {
+export type CancelPreviewRunResponses = {
 	/**
 	 * No Content
 	 */
 	204: void;
 };
 
-export type DeleteAgentDefinitionResponse = DeleteAgentDefinitionResponses[keyof DeleteAgentDefinitionResponses];
+export type CancelPreviewRunResponse = CancelPreviewRunResponses[keyof CancelPreviewRunResponses];
 
-export type GetAgentDefinitionData = {
+export type ContinuePreviewRunData = {
 	body?: never;
 	path: {
-		agentDefinitionId: string;
+		runId: string;
 	};
 	query?: never;
-	url: "/api/local/v1/agents/{agentDefinitionId}";
+	url: "/api/local/v1/preview/runs/{runId}/continue";
 };
 
-export type GetAgentDefinitionErrors = {
+export type ContinuePreviewRunErrors = {
 	/**
 	 * Unauthorized
 	 */
@@ -7978,85 +7820,23 @@ export type GetAgentDefinitionErrors = {
 	403: unknown;
 };
 
-export type GetAgentDefinitionResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsAgentsV1AgentDefinitionResponse;
-};
-
-export type GetAgentDefinitionResponse = GetAgentDefinitionResponses[keyof GetAgentDefinitionResponses];
-
-export type UpdateAgentDefinitionData = {
-	body: XeLocalAiEngineClientEndpointsAgentsV1UpdateAgentDefinitionRequest;
-	path: {
-		agentDefinitionId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/agents/{agentDefinitionId}";
-};
-
-export type UpdateAgentDefinitionErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type UpdateAgentDefinitionResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsAgentsV1AgentDefinitionResponse;
-};
-
-export type UpdateAgentDefinitionResponse = UpdateAgentDefinitionResponses[keyof UpdateAgentDefinitionResponses];
-
-export type DeleteGoldenConversationData = {
-	body?: never;
-	path: {
-		agentDefinitionId: string;
-		goldenConversationId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/agents/{agentDefinitionId}/golden-conversations/{goldenConversationId}";
-};
-
-export type DeleteGoldenConversationErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type DeleteGoldenConversationResponses = {
+export type ContinuePreviewRunResponses = {
 	/**
 	 * No Content
 	 */
 	204: void;
 };
 
-export type DeleteGoldenConversationResponse = DeleteGoldenConversationResponses[keyof DeleteGoldenConversationResponses];
+export type ContinuePreviewRunResponse = ContinuePreviewRunResponses[keyof ContinuePreviewRunResponses];
 
-export type DeletePlaybookActionData = {
+export type ListPreviewWorkflowsData = {
 	body?: never;
-	path: {
-		agentDefinitionId: string;
-		actionId: string;
-	};
+	path?: never;
 	query?: never;
-	url: "/api/local/v1/agents/{agentDefinitionId}/playbook/{actionId}";
+	url: "/api/local/v1/preview/workflows";
 };
 
-export type DeletePlaybookActionErrors = {
+export type ListPreviewWorkflowsErrors = {
 	/**
 	 * Unauthorized
 	 */
@@ -8067,55 +7847,81 @@ export type DeletePlaybookActionErrors = {
 	403: unknown;
 };
 
-export type DeletePlaybookActionResponses = {
+export type ListPreviewWorkflowsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsPreviewV1ListPreviewWorkflowsResponse;
+};
+
+export type ListPreviewWorkflowsResponse = ListPreviewWorkflowsResponses[keyof ListPreviewWorkflowsResponses];
+
+export type CreatePreviewWorkflowData = {
+	body: XeLocalAiEngineClientEndpointsPreviewV1CreatePreviewWorkflowRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/preview/workflows";
+};
+
+export type CreatePreviewWorkflowErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type CreatePreviewWorkflowResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsPreviewV1PreviewWorkflowResponse;
+};
+
+export type CreatePreviewWorkflowResponse = CreatePreviewWorkflowResponses[keyof CreatePreviewWorkflowResponses];
+
+export type DeletePreviewWorkflowData = {
+	body?: never;
+	path: {
+		workflowId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/preview/workflows/{workflowId}";
+};
+
+export type DeletePreviewWorkflowErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type DeletePreviewWorkflowResponses = {
 	/**
 	 * No Content
 	 */
 	204: void;
 };
 
-export type DeletePlaybookActionResponse = DeletePlaybookActionResponses[keyof DeletePlaybookActionResponses];
+export type DeletePreviewWorkflowResponse = DeletePreviewWorkflowResponses[keyof DeletePreviewWorkflowResponses];
 
-export type UpdatePlaybookActionData = {
-	body: XeLocalAiEngineClientEndpointsAgentsV1UpdatePlaybookActionRequest;
-	path: {
-		agentDefinitionId: string;
-		actionId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/agents/{agentDefinitionId}/playbook/{actionId}";
-};
-
-export type UpdatePlaybookActionErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type UpdatePlaybookActionResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsAgentsV1PlaybookActionResponse;
-};
-
-export type UpdatePlaybookActionResponse = UpdatePlaybookActionResponses[keyof UpdatePlaybookActionResponses];
-
-export type GetAgentFeedbackInsightsData = {
+export type GetPreviewWorkflowData = {
 	body?: never;
 	path: {
-		agentDefinitionId: string;
+		workflowId: string;
 	};
 	query?: never;
-	url: "/api/local/v1/agents/{agentDefinitionId}/feedback-insights";
+	url: "/api/local/v1/preview/workflows/{workflowId}";
 };
 
-export type GetAgentFeedbackInsightsErrors = {
+export type GetPreviewWorkflowErrors = {
 	/**
 	 * Unauthorized
 	 */
@@ -8126,25 +7932,54 @@ export type GetAgentFeedbackInsightsErrors = {
 	403: unknown;
 };
 
-export type GetAgentFeedbackInsightsResponses = {
+export type GetPreviewWorkflowResponses = {
 	/**
 	 * Success
 	 */
-	200: XeLocalAiEngineClientEndpointsAgentsV1AgentFeedbackInsightsResponse;
+	200: XeLocalAiEngineClientEndpointsPreviewV1PreviewWorkflowResponse;
 };
 
-export type GetAgentFeedbackInsightsResponse = GetAgentFeedbackInsightsResponses[keyof GetAgentFeedbackInsightsResponses];
+export type GetPreviewWorkflowResponse = GetPreviewWorkflowResponses[keyof GetPreviewWorkflowResponses];
 
-export type GetAgentPlaybookMonitorData = {
+export type UpdatePreviewWorkflowData = {
+	body: XeLocalAiEngineClientEndpointsPreviewV1UpdatePreviewWorkflowRequest;
+	path: {
+		workflowId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/preview/workflows/{workflowId}";
+};
+
+export type UpdatePreviewWorkflowErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type UpdatePreviewWorkflowResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsPreviewV1PreviewWorkflowResponse;
+};
+
+export type UpdatePreviewWorkflowResponse = UpdatePreviewWorkflowResponses[keyof UpdatePreviewWorkflowResponses];
+
+export type ExecuteSavedPreviewWorkflowData = {
 	body?: never;
 	path: {
-		agentDefinitionId: string;
+		workflowId: string;
 	};
 	query?: never;
-	url: "/api/local/v1/agents/{agentDefinitionId}/playbook/monitor";
+	url: "/api/local/v1/preview/workflows/{workflowId}/execute";
 };
 
-export type GetAgentPlaybookMonitorErrors = {
+export type ExecuteSavedPreviewWorkflowErrors = {
 	/**
 	 * Unauthorized
 	 */
@@ -8155,26 +7990,259 @@ export type GetAgentPlaybookMonitorErrors = {
 	403: unknown;
 };
 
-export type GetAgentPlaybookMonitorResponses = {
+export type ExecuteSavedPreviewWorkflowResponses = {
 	/**
 	 * Success
 	 */
-	200: XeLocalAiEngineClientEndpointsAgentsV1AgentPlaybookMonitorResponse;
+	200: XeLocalAiEngineClientEndpointsPreviewV1PreviewRunStartedResponse;
 };
 
-export type GetAgentPlaybookMonitorResponse = GetAgentPlaybookMonitorResponses[keyof GetAgentPlaybookMonitorResponses];
+export type ExecuteSavedPreviewWorkflowResponse =
+	ExecuteSavedPreviewWorkflowResponses[keyof ExecuteSavedPreviewWorkflowResponses];
 
-export type GetAgentUsageSummaryData = {
+export type ListScheduledJobsData = {
+	body?: never;
+	path?: never;
+	query: {
+		includeDeleted: boolean;
+	};
+	url: "/api/local/v1/scheduler/jobs";
+};
+
+export type ListScheduledJobsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListScheduledJobsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobsResponse;
+};
+
+export type ListScheduledJobsResponse = ListScheduledJobsResponses[keyof ListScheduledJobsResponses];
+
+export type CreateScheduledJobData = {
+	body: XeLocalAiEngineClientEndpointsSchedulerV1CreateScheduledJobRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/scheduler/jobs";
+};
+
+export type CreateScheduledJobErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type CreateScheduledJobResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobResponse;
+};
+
+export type CreateScheduledJobResponse = CreateScheduledJobResponses[keyof CreateScheduledJobResponses];
+
+export type DeleteScheduledJobData = {
+	body?: never;
+	path: {
+		scheduledJobId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/scheduler/jobs/{scheduledJobId}";
+};
+
+export type DeleteScheduledJobErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type DeleteScheduledJobResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type DeleteScheduledJobResponse = DeleteScheduledJobResponses[keyof DeleteScheduledJobResponses];
+
+export type GetScheduledJobData = {
+	body?: never;
+	path: {
+		scheduledJobId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/scheduler/jobs/{scheduledJobId}";
+};
+
+export type GetScheduledJobErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetScheduledJobResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobResponse;
+};
+
+export type GetScheduledJobResponse = GetScheduledJobResponses[keyof GetScheduledJobResponses];
+
+export type UpdateScheduledJobData = {
+	body: XeLocalAiEngineClientEndpointsSchedulerV1UpdateScheduledJobRequest;
+	path: {
+		scheduledJobId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/scheduler/jobs/{scheduledJobId}";
+};
+
+export type UpdateScheduledJobErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type UpdateScheduledJobResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobResponse;
+};
+
+export type UpdateScheduledJobResponse = UpdateScheduledJobResponses[keyof UpdateScheduledJobResponses];
+
+export type DisableScheduledJobData = {
+	body?: never;
+	path: {
+		scheduledJobId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/scheduler/jobs/{scheduledJobId}/disable";
+};
+
+export type DisableScheduledJobErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type DisableScheduledJobResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobResponse;
+};
+
+export type DisableScheduledJobResponse = DisableScheduledJobResponses[keyof DisableScheduledJobResponses];
+
+export type EnableScheduledJobData = {
+	body?: never;
+	path: {
+		scheduledJobId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/scheduler/jobs/{scheduledJobId}/enable";
+};
+
+export type EnableScheduledJobErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type EnableScheduledJobResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobResponse;
+};
+
+export type EnableScheduledJobResponse = EnableScheduledJobResponses[keyof EnableScheduledJobResponses];
+
+export type TriggerScheduledJobData = {
+	body?: never;
+	path: {
+		scheduledJobId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/scheduler/jobs/{scheduledJobId}/trigger";
+};
+
+export type TriggerScheduledJobErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type TriggerScheduledJobResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type TriggerScheduledJobResponse = TriggerScheduledJobResponses[keyof TriggerScheduledJobResponses];
+
+export type ListScheduledJobRunsData = {
 	body?: never;
 	path?: never;
 	query?: {
-		fromEpochMs?: number | null;
-		toEpochMs?: number | null;
+		status?: XeLocalAiEngineClientEndpointsSchedulerV1ScheduledRunStatus | null;
+		fromUtc?: number | null;
+		toUtc?: number | null;
+		scheduledJobId?: string | null;
 	};
-	url: "/api/local/v1/agents/usage-summary";
+	url: "/api/local/v1/scheduler/runs";
 };
 
-export type GetAgentUsageSummaryErrors = {
+export type ListScheduledJobRunsErrors = {
 	/**
 	 * Unauthorized
 	 */
@@ -8185,23 +8253,81 @@ export type GetAgentUsageSummaryErrors = {
 	403: unknown;
 };
 
-export type GetAgentUsageSummaryResponses = {
+export type ListScheduledJobRunsResponses = {
 	/**
 	 * Success
 	 */
-	200: XeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryResponse;
+	200: XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobRunsResponse;
 };
 
-export type GetAgentUsageSummaryResponse = GetAgentUsageSummaryResponses[keyof GetAgentUsageSummaryResponses];
+export type ListScheduledJobRunsResponse = ListScheduledJobRunsResponses[keyof ListScheduledJobRunsResponses];
 
-export type GetToolCapableModelsData = {
+export type GetScheduledJobRunData = {
+	body?: never;
+	path: {
+		runId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/scheduler/runs/{runId}";
+};
+
+export type GetScheduledJobRunErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetScheduledJobRunResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobRunResponse;
+};
+
+export type GetScheduledJobRunResponse = GetScheduledJobRunResponses[keyof GetScheduledJobRunResponses];
+
+export type CancelScheduledJobRunData = {
+	body?: never;
+	path: {
+		runId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/scheduler/runs/{runId}/cancel";
+};
+
+export type CancelScheduledJobRunErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type CancelScheduledJobRunResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobRunCancelResponse;
+};
+
+export type CancelScheduledJobRunResponse = CancelScheduledJobRunResponses[keyof CancelScheduledJobRunResponses];
+
+export type ListScheduledJobTemplatesData = {
 	body?: never;
 	path?: never;
 	query?: never;
-	url: "/api/local/v1/agents/tool-capable-models";
+	url: "/api/local/v1/scheduler/templates";
 };
 
-export type GetToolCapableModelsErrors = {
+export type ListScheduledJobTemplatesErrors = {
 	/**
 	 * Unauthorized
 	 */
@@ -8212,111 +8338,23 @@ export type GetToolCapableModelsErrors = {
 	403: unknown;
 };
 
-export type GetToolCapableModelsResponses = {
+export type ListScheduledJobTemplatesResponses = {
 	/**
 	 * Success
 	 */
-	200: XeLocalAiEngineClientEndpointsAgentsV1ToolCapableModelsResponse;
+	200: XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobTemplatesResponse;
 };
 
-export type GetToolCapableModelsResponse = GetToolCapableModelsResponses[keyof GetToolCapableModelsResponses];
+export type ListScheduledJobTemplatesResponse = ListScheduledJobTemplatesResponses[keyof ListScheduledJobTemplatesResponses];
 
-export type HarvestGoldenConversationsData = {
-	body?: never;
-	path: {
-		agentDefinitionId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/agents/{agentDefinitionId}/golden-conversations/harvest";
-};
-
-export type HarvestGoldenConversationsErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type HarvestGoldenConversationsResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsAgentsV1GoldenHarvestResponse;
-};
-
-export type HarvestGoldenConversationsResponse = HarvestGoldenConversationsResponses[keyof HarvestGoldenConversationsResponses];
-
-export type ImportAgentTemplatesData = {
-	body: XeLocalAiEngineClientEndpointsAgentsV1ImportAgentTemplatesRequest;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/agents/templates/import";
-};
-
-export type ImportAgentTemplatesErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type ImportAgentTemplatesResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsAgentsV1ImportAgentTemplatesResponse;
-};
-
-export type ImportAgentTemplatesResponse = ImportAgentTemplatesResponses[keyof ImportAgentTemplatesResponses];
-
-export type ListAgentExecutionLogsData = {
-	body?: never;
-	path: {
-		agentDefinitionId: string;
-	};
-	query?: {
-		limit?: number | null;
-		offset?: number | null;
-	};
-	url: "/api/local/v1/agents/{agentDefinitionId}/execution-logs";
-};
-
-export type ListAgentExecutionLogsErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type ListAgentExecutionLogsResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsAgentsV1ListAgentExecutionLogsResponse;
-};
-
-export type ListAgentExecutionLogsResponse = ListAgentExecutionLogsResponses[keyof ListAgentExecutionLogsResponses];
-
-export type ListAgentTemplatesData = {
+export type ListSkillsData = {
 	body?: never;
 	path?: never;
 	query?: never;
-	url: "/api/local/v1/agents/templates";
+	url: "/api/local/v1/skills";
 };
 
-export type ListAgentTemplatesErrors = {
+export type ListSkillsErrors = {
 	/**
 	 * Unauthorized
 	 */
@@ -8327,27 +8365,137 @@ export type ListAgentTemplatesErrors = {
 	403: unknown;
 };
 
-export type ListAgentTemplatesResponses = {
+export type ListSkillsResponses = {
 	/**
 	 * Success
 	 */
-	200: XeLocalAiEngineClientEndpointsAgentsV1ListAgentTemplatesResponse;
+	200: XeLocalAiEngineClientEndpointsSkillsV1ListSkillsResponse;
 };
 
-export type ListAgentTemplatesResponse = ListAgentTemplatesResponses[keyof ListAgentTemplatesResponses];
+export type ListSkillsResponse = ListSkillsResponses[keyof ListSkillsResponses];
 
-export type ListRunEnvelopesData = {
+export type CreateSkillData = {
+	body: XeLocalAiEngineClientEndpointsSkillsV1CreateSkillRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/skills";
+};
+
+export type CreateSkillErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type CreateSkillResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsSkillsV1SkillResponse;
+};
+
+export type CreateSkillResponse = CreateSkillResponses[keyof CreateSkillResponses];
+
+export type DeleteSkillData = {
+	body?: never;
+	path: {
+		skillId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/skills/{skillId}";
+};
+
+export type DeleteSkillErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type DeleteSkillResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type DeleteSkillResponse = DeleteSkillResponses[keyof DeleteSkillResponses];
+
+export type GetSkillData = {
+	body?: never;
+	path: {
+		skillId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/skills/{skillId}";
+};
+
+export type GetSkillErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetSkillResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsSkillsV1SkillResponse;
+};
+
+export type GetSkillResponse = GetSkillResponses[keyof GetSkillResponses];
+
+export type UpdateSkillData = {
+	body: XeLocalAiEngineClientEndpointsSkillsV1UpdateSkillRequest;
+	path: {
+		skillId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/skills/{skillId}";
+};
+
+export type UpdateSkillErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type UpdateSkillResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsSkillsV1SkillResponse;
+};
+
+export type UpdateSkillResponse = UpdateSkillResponses[keyof UpdateSkillResponses];
+
+export type GetToolCatalogData = {
 	body?: never;
 	path?: never;
-	query?: {
-		conversationId?: string | null;
-		limit?: number | null;
-		offset?: number | null;
-	};
-	url: "/api/local/v1/agents/run-envelopes";
+	query?: never;
+	url: "/api/local/v1/tool-catalog";
 };
 
-export type ListRunEnvelopesErrors = {
+export type GetToolCatalogErrors = {
 	/**
 	 * Unauthorized
 	 */
@@ -8358,26 +8506,23 @@ export type ListRunEnvelopesErrors = {
 	403: unknown;
 };
 
-export type ListRunEnvelopesResponses = {
+export type GetToolCatalogResponses = {
 	/**
 	 * Success
 	 */
-	200: XeLocalAiEngineClientEndpointsAgentsV1ListRunEnvelopesResponse;
+	200: XeLocalAiEngineClientEndpointsMcpV1ToolCatalogResponse;
 };
 
-export type ListRunEnvelopesResponse = ListRunEnvelopesResponses[keyof ListRunEnvelopesResponses];
+export type GetToolCatalogResponse = GetToolCatalogResponses[keyof GetToolCatalogResponses];
 
-export type PromoteSuggestedPlaybookActionData = {
+export type GetTutorialStateData = {
 	body?: never;
-	path: {
-		agentDefinitionId: string;
-		actionId: string;
-	};
+	path?: never;
 	query?: never;
-	url: "/api/local/v1/agents/{agentDefinitionId}/playbook/{actionId}/promote";
+	url: "/api/local/v1/tutorial-state";
 };
 
-export type PromoteSuggestedPlaybookActionErrors = {
+export type GetTutorialStateErrors = {
 	/**
 	 * Unauthorized
 	 */
@@ -8388,27 +8533,50 @@ export type PromoteSuggestedPlaybookActionErrors = {
 	403: unknown;
 };
 
-export type PromoteSuggestedPlaybookActionResponses = {
+export type GetTutorialStateResponses = {
 	/**
 	 * Success
 	 */
-	200: XeLocalAiEngineClientEndpointsAgentsV1PlaybookActionResponse;
+	200: XeLocalAiEngineClientEndpointsTutorialStateV1TutorialStateResponse;
 };
 
-export type PromoteSuggestedPlaybookActionResponse =
-	PromoteSuggestedPlaybookActionResponses[keyof PromoteSuggestedPlaybookActionResponses];
+export type GetTutorialStateResponse = GetTutorialStateResponses[keyof GetTutorialStateResponses];
 
-export type RejectSuggestedPlaybookActionData = {
+export type SaveTutorialStateData = {
+	body: XeLocalAiEngineClientEndpointsTutorialStateV1SaveTutorialStateRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/tutorial-state";
+};
+
+export type SaveTutorialStateErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type SaveTutorialStateResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type SaveTutorialStateResponse = SaveTutorialStateResponses[keyof SaveTutorialStateResponses];
+
+export type GetVoiceManifestData = {
 	body?: never;
-	path: {
-		agentDefinitionId: string;
-		actionId: string;
-	};
+	path?: never;
 	query?: never;
-	url: "/api/local/v1/agents/{agentDefinitionId}/playbook/{actionId}/reject";
+	url: "/api/local/v1/voice/manifest";
 };
 
-export type RejectSuggestedPlaybookActionErrors = {
+export type GetVoiceManifestErrors = {
 	/**
 	 * Unauthorized
 	 */
@@ -8419,73 +8587,11 @@ export type RejectSuggestedPlaybookActionErrors = {
 	403: unknown;
 };
 
-export type RejectSuggestedPlaybookActionResponses = {
+export type GetVoiceManifestResponses = {
 	/**
 	 * Success
 	 */
-	200: XeLocalAiEngineClientEndpointsAgentsV1PlaybookActionResponse;
+	200: XeLocalAiEngineClientEndpointsVoiceV1VoiceManifestResponse;
 };
 
-export type RejectSuggestedPlaybookActionResponse =
-	RejectSuggestedPlaybookActionResponses[keyof RejectSuggestedPlaybookActionResponses];
-
-export type RunPlaybookActionEvalData = {
-	body?: never;
-	path: {
-		agentDefinitionId: string;
-		actionId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/agents/{agentDefinitionId}/playbook/{actionId}/eval";
-};
-
-export type RunPlaybookActionEvalErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type RunPlaybookActionEvalResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsAgentsV1PlaybookActionResponse;
-};
-
-export type RunPlaybookActionEvalResponse = RunPlaybookActionEvalResponses[keyof RunPlaybookActionEvalResponses];
-
-export type UpdateSuggestedPlaybookActionData = {
-	body: XeLocalAiEngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActionRequest;
-	path: {
-		agentDefinitionId: string;
-		actionId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/agents/{agentDefinitionId}/playbook/{actionId}/suggested";
-};
-
-export type UpdateSuggestedPlaybookActionErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type UpdateSuggestedPlaybookActionResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsAgentsV1PlaybookActionResponse;
-};
-
-export type UpdateSuggestedPlaybookActionResponse =
-	UpdateSuggestedPlaybookActionResponses[keyof UpdateSuggestedPlaybookActionResponses];
+export type GetVoiceManifestResponse = GetVoiceManifestResponses[keyof GetVoiceManifestResponses];

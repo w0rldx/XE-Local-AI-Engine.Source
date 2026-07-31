@@ -54,7 +54,7 @@ public sealed class PreviewWorkflowHubTests
         await connection.StartAsync().ConfigureAwait(false);
 
         // Subscribe to this run's group, then publish — the event must arrive scoped to the group, carrying its runId.
-        await connection.InvokeAsync("Subscribe", runId).ConfigureAwait(false);
+        await connection.InvokeAsync("Subscribe", runId, -1L).ConfigureAwait(false);
 
         var publisher = factory.Services.GetRequiredService<IPreviewWorkflowEventPublisher>();
         await publisher.PublishRunAsync(new PreviewWorkflowRunHubEvent(PreviewWorkflowHubEvents.RunStarted, runId, NodeId: null, Output: null, Error: null, RequestId: null, OccurredAtUtc: 123L,
@@ -80,7 +80,7 @@ public sealed class PreviewWorkflowHubTests
             Output: "done", Error: null, RequestId: null, OccurredAtUtc: 200L, Seq: 1L);
 
         var executionService = Substitute.For<IPreviewWorkflowExecutionService>();
-        executionService.SnapshotBufferedEvents(runId)
+        executionService.SnapshotBufferedEvents(runId, afterSeq: -1)
                         .Returns([
                             new PreviewWorkflowBufferedEvent(PreviewWorkflowHubEvents.NodeOutput, nodeEvent),
                             new PreviewWorkflowBufferedEvent(PreviewWorkflowHubEvents.RunCompleted, runEvent)
@@ -111,8 +111,9 @@ public sealed class PreviewWorkflowHubTests
 
         await connection.StartAsync().ConfigureAwait(false);
 
-        // No prior publish — the ONLY source of these events is the join-then-replay path inside Subscribe.
-        await connection.InvokeAsync("Subscribe", runId).ConfigureAwait(false);
+        // No prior publish — the ONLY source of these events is the join-then-replay path inside Subscribe. afterSeq
+        // -1 is "I have seen nothing", the value a freshly loaded page sends.
+        await connection.InvokeAsync("Subscribe", runId, -1L).ConfigureAwait(false);
 
         var gotNode = await receivedNode.Task.WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
         var gotRun = await receivedRun.Task.WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
@@ -121,6 +122,107 @@ public sealed class PreviewWorkflowHubTests
         AssertEx.Equal(expected: 0L, gotNode.Seq, "the replayed node event must carry its original seq.");
         AssertEx.Equal(PreviewWorkflowHubEvents.RunCompleted, gotRun.EventType);
         AssertEx.Equal(expected: 1L, gotRun.Seq, "the replayed run event must carry its original seq.");
+    }
+
+    [Test]
+    public async Task PreviewHub_Subscribe_FromSeq_ReplaysOnlyUnseenEvents_AndRegistersSubscriber()
+    {
+        // Reattach-after-reconnect: a client that already applied up to seq 0 resubscribes with afterSeq 0. The hub
+        // must replay ONLY seq 1 (no duplicate of seq 0) and must register the connection as a live subscriber, which
+        // is what keeps the run out of the abandoned-subscriber sweep.
+        var runId = Guid.Parse("77777777-7777-7777-7777-777777777777");
+        var seen = new PreviewWorkflowNodeHubEvent(PreviewWorkflowHubEvents.NodeOutput, runId, "agent",
+            Output: "already-applied", Error: null, OccurredAtUtc: 100L, Seq: 0L);
+        var unseen = new PreviewWorkflowRunHubEvent(PreviewWorkflowHubEvents.RunCompleted, runId, NodeId: null,
+            Output: "done", Error: null, RequestId: null, OccurredAtUtc: 200L, Seq: 1L);
+
+        var executionService = Substitute.For<IPreviewWorkflowExecutionService>();
+        // A full replay (afterSeq -1) would return BOTH; the seq-filtered call returns only the unseen one. Wiring
+        // both arrangements means the assertion below fails if the hub ignores afterSeq and asks for everything.
+        executionService.SnapshotBufferedEvents(runId, -1L)
+                        .Returns([
+                            new PreviewWorkflowBufferedEvent(PreviewWorkflowHubEvents.NodeOutput, seen),
+                            new PreviewWorkflowBufferedEvent(PreviewWorkflowHubEvents.RunCompleted, unseen)
+                        ]);
+        executionService.SnapshotBufferedEvents(runId, 0L)
+                        .Returns([new PreviewWorkflowBufferedEvent(PreviewWorkflowHubEvents.RunCompleted, unseen)]);
+
+        await using var factory = new TestingWebAppFactory
+        {
+            ConfigureAdditionalTestServices = services =>
+            {
+                services.RemoveAll<IPreviewWorkflowExecutionService>();
+                services.AddSingleton(executionService);
+            }
+        };
+
+        await using var connection = new HubConnectionBuilder()
+                                     .WithUrl("http://localhost" + LocalApiRoutes.Preview.Hub, options =>
+                                     {
+                                         options.HttpMessageHandlerFactory = _ => factory.Server.CreateHandler();
+                                         options.AccessTokenProvider = () => Task.FromResult<string?>(factory.CreateNodeAccessToken());
+                                         options.Headers.Add("Origin", "http://localhost");
+                                     })
+                                     .Build();
+
+        var nodeEvents = new List<PreviewWorkflowNodeHubEvent>();
+        var receivedRun = new TaskCompletionSource<PreviewWorkflowRunHubEvent>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _ = connection.On<PreviewWorkflowNodeHubEvent>(PreviewWorkflowHubEvents.NodeOutput, evt =>
+        {
+            lock (nodeEvents)
+            {
+                nodeEvents.Add(evt);
+            }
+        });
+        _ = connection.On<PreviewWorkflowRunHubEvent>(PreviewWorkflowHubEvents.RunCompleted, evt => receivedRun.TrySetResult(evt));
+
+        await connection.StartAsync().ConfigureAwait(false);
+        await connection.InvokeAsync("Subscribe", runId, 0L).ConfigureAwait(false);
+
+        var gotRun = await receivedRun.Task.WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+        AssertEx.Equal(expected: 1L, gotRun.Seq, "the replay must deliver the event the client has not seen.");
+
+        lock (nodeEvents)
+        {
+            AssertEx.Empty(nodeEvents);
+        }
+
+        executionService.Received().AddSubscriber(runId, Arg.Any<string>());
+    }
+
+    [Test]
+    public async Task PreviewHub_Disconnect_DropsSubscriberFromEveryRun()
+    {
+        // The reload path: the page goes away, the connection drops, and the run's watcher set must lose that
+        // connection so its abandoned-subscriber grace period starts. Without this the sweep can never fire and a
+        // paused run holds its concurrency slot until the node restarts.
+        var executionService = Substitute.For<IPreviewWorkflowExecutionService>();
+
+        await using var factory = new TestingWebAppFactory
+        {
+            ConfigureAdditionalTestServices = services =>
+            {
+                services.RemoveAll<IPreviewWorkflowExecutionService>();
+                services.AddSingleton(executionService);
+            }
+        };
+
+        var connection = new HubConnectionBuilder()
+                         .WithUrl("http://localhost" + LocalApiRoutes.Preview.Hub, options =>
+                         {
+                             options.HttpMessageHandlerFactory = _ => factory.Server.CreateHandler();
+                             options.AccessTokenProvider = () => Task.FromResult<string?>(factory.CreateNodeAccessToken());
+                             options.Headers.Add("Origin", "http://localhost");
+                         })
+                         .Build();
+
+        await connection.StartAsync().ConfigureAwait(false);
+        await connection.StopAsync().ConfigureAwait(false);
+        await connection.DisposeAsync().ConfigureAwait(false);
+
+        await AssertEx.EventuallyAsync(() => executionService.ReceivedCalls()
+                                                             .Any(c => c.GetMethodInfo().Name == nameof(IPreviewWorkflowExecutionService.RemoveSubscriberFromAllRuns)),
+            TimeSpan.FromSeconds(10)).ConfigureAwait(false);
     }
 
     [Test]

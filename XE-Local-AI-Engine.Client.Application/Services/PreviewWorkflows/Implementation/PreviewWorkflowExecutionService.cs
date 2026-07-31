@@ -255,6 +255,7 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
 
             var requestId = handle.PendingRequestId;
             handle.PendingRequestId = null;
+            handle.PausedNodeId = null;
             handle.SetState(PreviewRunState.Running);
             handle.ResetIdleClock();
 
@@ -348,12 +349,130 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
         }
     }
 
-    public IReadOnlyList<PreviewWorkflowBufferedEvent> SnapshotBufferedEvents(Guid runId)
+    public async Task<int> CancelAllAsync(CancellationToken cancellationToken = default)
     {
-        return _eventLogs.TryGetValue(runId, out var log) ? log.Snapshot() : [];
+        var cancelled = 0;
+        foreach (var runId in _runs.Keys.ToList())
+        {
+            if (await CancelAsync(runId, cancellationToken).ConfigureAwait(false) == PreviewRunCommandOutcome.Accepted)
+            {
+                cancelled++;
+            }
+        }
+
+        return cancelled;
     }
 
-    /// <summary>Idle/wall-clock sweep step, invoked by <see cref="PreviewWorkflowIdleSweeper" />.</summary>
+    public IReadOnlyList<PreviewRunSnapshot> ListRuns()
+    {
+        var snapshots = new List<PreviewRunSnapshot>();
+
+        foreach (var handle in _runs.Values)
+        {
+            snapshots.Add(ToSnapshot(handle));
+        }
+
+        // Retained (terminal but still replayable) runs are listed too: a client that reloads AFTER a run finished
+        // must be able to find it and recover the result it already paid GPU time for.
+        foreach (var (runId, log) in _eventLogs)
+        {
+            if (!_runs.ContainsKey(runId))
+            {
+                snapshots.Add(ToRetainedSnapshot(runId, log));
+            }
+        }
+
+        return [.. snapshots.OrderBy(static s => s.StartedAtUtc)];
+    }
+
+    public PreviewRunSnapshot? GetRun(Guid runId)
+    {
+        if (_runs.TryGetValue(runId, out var handle))
+        {
+            return ToSnapshot(handle);
+        }
+
+        return _eventLogs.TryGetValue(runId, out var log) ? ToRetainedSnapshot(runId, log) : null;
+    }
+
+    private PreviewRunSnapshot ToSnapshot(PreviewWorkflowRunHandle handle)
+    {
+        // The seq counter lives on the replay log (it outlives the handle), so read it from there; -1 means "nothing
+        // buffered yet", which is exactly the afterSeq a client with no history sends.
+        var lastSeq = _eventLogs.TryGetValue(handle.RunId, out var log) ? log.LastSeq : -1L;
+
+        return new PreviewRunSnapshot(handle.RunId,
+            handle.GetState(),
+            IsLive: true,
+            handle.StartedAtUtc.ToUnixTimeMilliseconds(),
+            lastSeq,
+            handle.SubscriberCount,
+            handle.PausedNodeId,
+            handle.PendingRequestId);
+    }
+
+    /// <summary>
+    ///     A run that has left <c>_runs</c> but whose replay log is still retained. Its state is recovered from the
+    ///     log's terminal event type (the log outlives the handle, so the handle's state is gone by then).
+    /// </summary>
+    private static PreviewRunSnapshot ToRetainedSnapshot(Guid runId, RunEventLog log)
+    {
+        var state = log.TerminalEventType switch
+        {
+            PreviewWorkflowHubEvents.RunCompleted => PreviewRunState.Completed,
+            PreviewWorkflowHubEvents.RunFailed => PreviewRunState.Faulted,
+            PreviewWorkflowHubEvents.RunCancelled => PreviewRunState.Cancelled,
+            // No terminal event buffered and no live handle: the run was torn down without publishing a terminal
+            // event (host shutdown). Report it as cancelled — it is definitively not running.
+            _ => PreviewRunState.Cancelled
+        };
+
+        return new PreviewRunSnapshot(runId,
+            state,
+            IsLive: false,
+            log.CreatedAtUnixMs,
+            log.LastSeq,
+            SubscriberCount: 0,
+            PausedNodeId: null,
+            PauseRequestId: null);
+    }
+
+    public IReadOnlyList<PreviewWorkflowBufferedEvent> SnapshotBufferedEvents(Guid runId, long afterSeq)
+    {
+        return _eventLogs.TryGetValue(runId, out var log) ? log.Snapshot(afterSeq) : [];
+    }
+
+    public void AddSubscriber(Guid runId, string connectionId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(connectionId);
+
+        if (_runs.TryGetValue(runId, out var handle))
+        {
+            handle.AddSubscriber(connectionId);
+        }
+    }
+
+    public void RemoveSubscriber(Guid runId, string connectionId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(connectionId);
+
+        if (_runs.TryGetValue(runId, out var handle))
+        {
+            handle.RemoveSubscriber(connectionId);
+        }
+    }
+
+    public void RemoveSubscriberFromAllRuns(string connectionId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(connectionId);
+
+        foreach (var handle in _runs.Values)
+        {
+            handle.RemoveSubscriber(connectionId);
+        }
+    }
+
+    /// <summary>Idle/wall-clock/abandoned sweep step, invoked by <see cref="PreviewWorkflowIdleSweeper" />.</summary>
     internal async Task SweepAsync(CancellationToken cancellationToken)
     {
         foreach (var handle in _runs.Values)
@@ -364,10 +483,14 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
             }
 
             // A Paused run's idle clock is suspended (IsIdleExpired returns false) and it is exempt from the wall-clock
-            // cap — so it is never swept while waiting on a human Continue.
-            if (handle.IsIdleExpired(_options.IdleTimeout) || handle.IsOverWallClock(_options.MaxRunDuration))
+            // cap — so it is never swept while waiting on a human Continue. That exemption is deliberate and stays.
+            // IsAbandonedPast is the separate, narrower condition it does NOT escape: no hub connection has been
+            // watching the run for the whole grace period, so there is no human left to press Continue and the run
+            // would otherwise hold its concurrency slot until the node restarts (the reload-leak).
+            var abandoned = handle.IsAbandonedPast(_options.AbandonedSubscriberGrace);
+            if (abandoned || handle.IsIdleExpired(_options.IdleTimeout) || handle.IsOverWallClock(_options.MaxRunDuration))
             {
-                _logger.LogInformation("Sweeping idle/expired preview run {RunId}.", handle.RunId);
+                _logger.LogInformation("Sweeping preview run {RunId} (abandoned: {Abandoned}).", handle.RunId, abandoned);
                 _ = await CancelAsync(handle.RunId, cancellationToken).ConfigureAwait(false);
             }
         }
@@ -517,6 +640,7 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
     private async Task PauseRunAsync(PreviewWorkflowRunHandle handle, PreviewWorkflowUpdate update, CancellationToken cancellationToken)
     {
         handle.PendingRequestId = update.RequestId;
+        handle.PausedNodeId = update.NodeId;
         handle.SetState(PreviewRunState.Paused);
         // Suspend the idle clock so the sweeper does not kill a run waiting on a human Continue.
         handle.SuspendIdleClock();
@@ -785,6 +909,21 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
         /// <summary>Set to the terminal event's timestamp once a terminal run event is buffered; drives eviction.</summary>
         public long? TerminalAtUnixMs { get; private set; }
 
+        /// <summary>The terminal run event's type once one is buffered — the only surviving record of a retained run's outcome.</summary>
+        public string? TerminalEventType { get; private set; }
+
+        /// <summary>The highest seq assigned so far, or -1 when nothing has been buffered.</summary>
+        public long LastSeq
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return _nextSeq - 1;
+                }
+            }
+        }
+
         /// <summary>
         ///     Assigns the next seq, builds the seq-stamped payload via <paramref name="payloadFactory" />, appends it,
         ///     and returns that payload. Drops the oldest entry when the cap is exceeded (setting
@@ -812,20 +951,29 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
                 if (isTerminal)
                 {
                     TerminalAtUnixMs = terminalAtUnixMs;
+                    TerminalEventType = methodName;
                 }
 
                 return payload;
             }
         }
 
-        public IReadOnlyList<PreviewWorkflowBufferedEvent> Snapshot()
+        /// <summary>
+        ///     Ordered copy of the buffered events with <c>Seq</c> strictly greater than <paramref name="afterSeq" />.
+        ///     A reattaching client passes the highest seq it has already applied, so a reconnect after a transient
+        ///     drop re-sends only the gap instead of the whole log.
+        /// </summary>
+        public IReadOnlyList<PreviewWorkflowBufferedEvent> Snapshot(long afterSeq)
         {
             lock (_gate)
             {
                 var copy = new List<PreviewWorkflowBufferedEvent>(_events.Count);
                 foreach (var buffered in _events)
                 {
-                    copy.Add(new PreviewWorkflowBufferedEvent(buffered.MethodName, buffered.Payload));
+                    if (buffered.Seq > afterSeq)
+                    {
+                        copy.Add(new PreviewWorkflowBufferedEvent(buffered.MethodName, buffered.Payload));
+                    }
                 }
 
                 return copy;
