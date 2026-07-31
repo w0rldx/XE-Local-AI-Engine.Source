@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "policy_id": "generic-inference-throughput-v1",
+  "allowed_identity_changes": [],
+  "rules": [
+    {
+      "id": "chat-throughput-median",
+      "command": "chat-throughput",
+      "metric": "tokens_per_second",
+      "statistic": "median",
+      "kind": "minimum_improvement_percent",
+      "threshold_percent": 20
+    },
+    {
+      "id": "embedding-throughput-median",
+      "command": "embedding-throughput",
+      "metric": "embeddings_per_second",
+      "statistic": "median",
+      "kind": "minimum_improvement_percent",
+      "threshold_percent": 20
+    }
+  ]
+}

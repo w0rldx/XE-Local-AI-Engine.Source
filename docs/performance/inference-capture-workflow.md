@@ -250,3 +250,92 @@ describes the launch process's budget.
   declared commit, a verified central-package-pins hash/version projection, and
   verified relevant assembly hashes before execution.
 - Coverage gaps remain attached to every artifact.
+
+## 5. Generic command-aggregate policy gate
+
+`compare` remains a report-only operation. Use the separate `gate` operation when
+an optimization decision needs a machine-readable pass, rejection, or
+unevaluable verdict:
+
+```bash
+python3 scripts/performance/capture_inference_evidence.py gate \
+  --baseline artifacts/performance/baseline.json \
+  --candidate artifacts/performance/candidate.json \
+  --policy docs/performance/policies/generic-inference-throughput-policy.example.json \
+  --output artifacts/performance/inference-verdict.json
+```
+
+Policies conform to
+`docs/performance/schemas/inference-comparison-policy.schema.json`. Version 1 has
+a closed contract: `schema_version`, `policy_id`, an optional
+`allowed_identity_changes` array that defaults to `[]`, and a non-empty ordered
+`rules` array. `policy_id` and every rule ID, command, and metric use the
+privacy-safe token pattern `^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$`, are limited to
+128 characters, and rule IDs must be unique. Each rule names an exact captured
+command, aggregate metric, `median` or `p95` statistic, rule kind, and finite
+non-negative percentage threshold.
+
+The percentage delta is `((candidate / baseline) - 1) * 100`. Pass/fail boundary
+comparisons use exact integer-rational cross-products derived from the
+JSON-loaded decimal representations; no floating tolerance or rounded decimal
+context decides a rule. The reported delta remains a JSON-native number and an
+unrepresentable delta fails closed.
+`minimum_improvement_percent` accepts equality or a larger delta;
+`maximum_regression_percent` accepts equality or a smaller delta. Both values
+must be finite and strictly greater than zero. Missing, non-numeric, non-finite,
+zero, or negative values make the required rule unevaluable; they never count as
+a pass or threshold rejection.
+
+The identity policy is default-deny:
+
+- `framework` permits only the independently verified framework declarations,
+  central pins, source commits, command trees, and assembly hashes to differ.
+- `runtime` permits only the independently verified runtime tag, provenance,
+  backend, binary/dependency-manifest, and auxiliary-binary identities to differ.
+
+Declaring an identity change identifies the experiment variable; it does not skip
+verification. Each artifact must retain non-empty, individually hash-verified
+model, corpus, and runtime dependency-manifest identities, a complete verified
+framework declaration, plus complete machine and runtime-device probe identity.
+When framework/application commands require framework verification,
+`required: true` carries non-empty strict command-tree, central-pin, and assembly
+identities. Native-only evidence uses `required: false` with exactly an empty
+`command_trees` array. Models, corpus, machine, devices, the complete command-name
+set, and every command argv hash remain equal.
+Command-name and argv-hash equality is established before any rule evaluation; a
+global mismatch marks the identity and every ordered rule unevaluable. Unknown or
+duplicate allowances, an undeclared difference, an unverified identity, malformed
+artifacts, or duplicate command names produce an unevaluable verdict.
+
+The gate writes the verdict atomically after flushing and syncing a temporary file.
+It contains raw-input SHA-256 hashes, the identity decision, and every rule result
+in policy order. It deliberately excludes input paths, argv, stdout/stderr,
+environment values, GPU UUIDs, secrets, and framework assembly paths.
+
+Exit codes are:
+
+- `0`: comparable, every rule evaluable, and all thresholds pass;
+- `2`: malformed/incomparable evidence or policy, unverified identity, or at
+  least one unevaluable required rule;
+- `3`: comparable and fully evaluable, with at least one threshold rejection.
+
+Exit `2` takes precedence over `3`. No active CI invokes this command; it is an
+explicit local/release decision aid until repository authority adds external
+enforcement.
+
+### Specialized Lane 4 compound gate
+
+The generic example above covers throughput command aggregates only. It does not
+certify RAM or VRAM and does not replace
+`scripts/performance/run_scheduling_grid.py`, whose specialized Lane 4 evaluator
+remains authoritative for the compound gate: role-request preflight, context
+readback, token/correctness checks, repeat determinism, canonical-baseline
+semantic equivalence, all five corpus scenarios at least 20% faster by median,
+peak process RSS regression at most 5%, and CUDA PID-scoped process-residency
+regression at most 5%.
+
+Process RSS means a harness-collected process peak/high-water value. GPU residency
+means PID-scoped evidence with status `measured`. Ambient WSL/global
+`nvidia-smi` free/used memory cannot substitute for either. CPU cells mark GPU
+memory not applicable; unavailable or zero WSL PID residency fails closed rather
+than becoming a zero-usage pass.

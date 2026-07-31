@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import copy
 import hashlib
 import importlib.util
 import inspect
 import json
+import math
 import os
+import re
 import subprocess
 import tempfile
 import time
@@ -15,6 +18,9 @@ from unittest import mock
 
 
 MODULE_PATH = Path(__file__).parents[1] / "capture_inference_evidence.py"
+REPOSITORY_ROOT = Path(__file__).parents[3]
+POLICY_SCHEMA_PATH = REPOSITORY_ROOT / "docs/performance/schemas/inference-comparison-policy.schema.json"
+POLICY_EXAMPLE_PATH = REPOSITORY_ROOT / "docs/performance/policies/generic-inference-throughput-policy.example.json"
 SPEC = importlib.util.spec_from_file_location("capture_inference_evidence", MODULE_PATH)
 assert SPEC and SPEC.loader
 capture = importlib.util.module_from_spec(SPEC)
@@ -173,6 +179,195 @@ def fit_capture_spec(server: Path, helper: Path) -> dict:
         "resource_acceptance": {"max_delta_percent": 10000},
         "coverage": {"unvalidated": []},
     }
+
+
+def gate_artifact(value: float = 100.0) -> dict:
+    framework = {
+        "source_commit": "0123456789abcdef",
+        "maf_version": "1.15.0",
+        "meai_version": "10.8.1",
+        "openai_version": "2.12.0",
+    }
+    return {
+        "schema_version": "1.0",
+        "kind": "inference-benchmark-evidence",
+        "framework": framework,
+        "verified_identity": {
+            "models": [
+                {
+                    "name": "dense",
+                    "role": "chat",
+                    "quant": "Q4_K_M",
+                    "sha256": "1" * 64,
+                    "sha256_verified": True,
+                }
+            ],
+            "corpus": {
+                "name": "golden",
+                "sha256": "2" * 64,
+                "sha256_verified": True,
+            },
+            "runtime": {
+                "tag": "b9692",
+                "provenance": "managed-source-build",
+                "backend": "cuda",
+                "sha256": "3" * 64,
+                "sha256_verified": True,
+                "runtime_local_dependencies": {
+                    "manifest_sha256": "4" * 64,
+                },
+                "auxiliary_binaries": [],
+            },
+            "framework": {
+                "required": True,
+                "verified": True,
+                "declaration": copy.deepcopy(framework),
+                "command_trees": [
+                    {
+                        "command": "chat",
+                        "git_head": framework["source_commit"],
+                        "git_head_verified": True,
+                        "git_clean": True,
+                        "declared_versions_verified": True,
+                        "central_package_pins": {
+                            "path": "Directory.Packages.props",
+                            "sha256": "7" * 64,
+                            "sha256_verified": True,
+                        },
+                        "assemblies": [
+                            {
+                                "name": "Framework.Tests.dll",
+                                "path": "/home/private/bin/Framework.Tests.dll",
+                                "sha256": "8" * 64,
+                                "sha256_verified": True,
+                            }
+                        ],
+                    }
+                ],
+            },
+        },
+        "host": {
+            "os": "Linux",
+            "kernel": "test-kernel",
+            "architecture": "x86_64",
+            "cpu": "test-cpu",
+            "logical_cpu_count": 8,
+            "runtime_devices": {
+                "argv": ["/verified/llama-server", "--list-devices"],
+                "available": True,
+                "exit_code": 0,
+                "stdout": "CUDA0: test-gpu",
+                "stderr": "",
+            },
+        },
+        "commands": [
+            {
+                "name": "chat",
+                "argv": ["/sensitive/runtime/llama-server", "--token", "fixture-secret"],
+                "argv_sha256": "5" * 64,
+                "stdout": "fixture-secret-stdout",
+                "stderr": "fixture-secret-stderr",
+                "env": {"TOKEN": "fixture-secret-environment"},
+                "framework_assemblies": [
+                    {
+                        "path": "/home/private/bin/Framework.Tests.dll",
+                        "sha256": "6" * 64,
+                    }
+                ],
+                "aggregates": {
+                    "throughput": {
+                        "median": value,
+                        "p95": value,
+                        "minimum": value,
+                        "maximum": value,
+                    }
+                },
+            }
+        ],
+    }
+
+
+def gate_policy(
+    *,
+    threshold: float = 10.0,
+    kind: str = "minimum_improvement_percent",
+    statistic: str = "median",
+    allowed_identity_changes: list[str] | None = None,
+    rules: list[dict] | None = None,
+) -> dict:
+    policy = {
+        "schema_version": "1.0",
+        "policy_id": "test-throughput-policy",
+        "rules": rules if rules is not None else [
+            {
+                "id": "throughput",
+                "command": "chat",
+                "metric": "throughput",
+                "statistic": statistic,
+                "kind": kind,
+                "threshold_percent": threshold,
+            }
+        ],
+    }
+    if allowed_identity_changes is not None:
+        policy["allowed_identity_changes"] = allowed_identity_changes
+    return policy
+
+
+def add_verified_framework_command_tree(artifact: dict, marker: str) -> None:
+    framework = artifact["framework"]
+    framework["source_commit"] = marker * 16
+    framework["maf_version"] = f"1.{marker}.0"
+    identity = artifact["verified_identity"]["framework"]
+    identity.update({
+        "required": True,
+        "verified": True,
+        "declaration": copy.deepcopy(framework),
+        "command_trees": [
+            {
+                "command": "chat",
+                "partition": "framework-contract",
+                "git_head": marker * 16,
+                "git_head_verified": True,
+                "git_clean": True,
+                "declared_versions_verified": True,
+                "central_package_pins": {
+                    "path": "Directory.Packages.props",
+                    "sha256": marker * 64,
+                    "sha256_verified": True,
+                },
+                "resolved_package_versions": {
+                    "Microsoft.Agents.AI": f"1.{marker}.0",
+                    "Microsoft.Extensions.AI": framework["meai_version"],
+                    "OpenAI": framework["openai_version"],
+                },
+                "assemblies": [
+                    {
+                        "name": "Framework.Tests.dll",
+                        "path": f"/verified/{marker}/Framework.Tests.dll",
+                        "sha256": marker * 64,
+                        "sha256_verified": True,
+                    }
+                ],
+            }
+        ],
+    })
+
+
+def write_gate_inputs(
+    root: Path,
+    baseline: dict,
+    candidate: dict,
+    policy: dict,
+) -> tuple[Path, Path, Path, Path]:
+    baseline_path = root / "baseline.json"
+    candidate_path = root / "candidate.json"
+    policy_path = root / "policy.json"
+    output_path = root / "verdict.json"
+    baseline_path.write_text(json.dumps(baseline), encoding="utf-8")
+    candidate_path.write_text(json.dumps(candidate), encoding="utf-8")
+    policy_path.write_text(json.dumps(policy), encoding="utf-8")
+    return baseline_path, candidate_path, policy_path, output_path
 
 
 class CaptureInferenceEvidenceTests(unittest.TestCase):
@@ -722,6 +917,1015 @@ class CaptureInferenceEvidenceTests(unittest.TestCase):
             self.assertEqual("<gpu-uuid>", sanitized["mig_legacy"])
             self.assertEqual("<gpu-uuid>", sanitized["mig_current"])
             self.assertNotRegex(json.dumps(sanitized), r"(?:GPU|MIG)-[0-9a-f]")
+
+
+class GateInferencePolicyTests(unittest.TestCase):
+    def run_gate(
+        self,
+        baseline: dict,
+        candidate: dict,
+        policy: dict,
+    ) -> tuple[int, dict]:
+        with tempfile.TemporaryDirectory() as raw:
+            paths = write_gate_inputs(Path(raw), baseline, candidate, policy)
+            exit_code = capture.gate_artifacts(*paths)
+            verdict = json.loads(paths[-1].read_text(encoding="utf-8"))
+        return exit_code, verdict
+
+    def run_gate_cli(
+        self,
+        root: Path,
+        baseline: dict,
+        candidate: dict,
+        policy: dict,
+    ) -> tuple[subprocess.CompletedProcess[str], dict]:
+        baseline_path, candidate_path, policy_path, output_path = write_gate_inputs(
+            root,
+            baseline,
+            candidate,
+            policy,
+        )
+        completed = subprocess.run(
+            [
+                os.fspath(Path(os.sys.executable)),
+                os.fspath(MODULE_PATH),
+                "gate",
+                "--baseline",
+                os.fspath(baseline_path),
+                "--candidate",
+                os.fspath(candidate_path),
+                "--policy",
+                os.fspath(policy_path),
+                "--output",
+                os.fspath(output_path),
+            ],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        return completed, json.loads(output_path.read_text(encoding="utf-8"))
+
+    def test_gate_accepts_equal_identity_with_default_no_allowed_changes(self) -> None:
+        baseline = gate_artifact(100)
+        candidate = gate_artifact(110)
+
+        exit_code, verdict = self.run_gate(baseline, candidate, gate_policy())
+
+        self.assertEqual(0, exit_code)
+        self.assertEqual("passed", verdict["identity"]["status"])
+        self.assertEqual([], verdict["identity"]["allowed_changes"])
+
+    def test_gate_accepts_declared_verified_framework_change(self) -> None:
+        baseline = gate_artifact(100)
+        candidate = gate_artifact(110)
+        candidate["framework"]["source_commit"] = "fedcba9876543210"
+        candidate["verified_identity"]["framework"]["declaration"]["source_commit"] = "fedcba9876543210"
+
+        exit_code, verdict = self.run_gate(
+            baseline,
+            candidate,
+            gate_policy(allowed_identity_changes=["framework"]),
+        )
+
+        self.assertEqual(0, exit_code)
+        self.assertEqual(["framework"], verdict["identity"]["changed_dimensions"])
+
+    def test_gate_accepts_fully_verified_framework_tree_pin_and_assembly_changes(self) -> None:
+        baseline = gate_artifact(100)
+        candidate = gate_artifact(110)
+        add_verified_framework_command_tree(baseline, "a")
+        add_verified_framework_command_tree(candidate, "b")
+
+        exit_code, verdict = self.run_gate(
+            baseline,
+            candidate,
+            gate_policy(allowed_identity_changes=["framework"]),
+        )
+
+        self.assertEqual(0, exit_code)
+        self.assertEqual("passed", verdict["status"])
+        self.assertEqual(["framework"], verdict["identity"]["changed_dimensions"])
+
+    def test_gate_accepts_valid_native_only_framework_identity_without_command_trees(self) -> None:
+        baseline = gate_artifact(100)
+        candidate = gate_artifact(110)
+        for artifact in (baseline, candidate):
+            artifact["verified_identity"]["framework"].update({
+                "required": False,
+                "verified": True,
+                "declaration": copy.deepcopy(artifact["framework"]),
+                "command_trees": [],
+            })
+
+        exit_code, verdict = self.run_gate(baseline, candidate, gate_policy())
+
+        self.assertEqual(0, exit_code)
+        self.assertEqual("passed", verdict["status"])
+        self.assertEqual("identity.matched", verdict["identity"]["reason"])
+
+    def test_gate_rejects_inconsistent_framework_required_and_command_tree_states(self) -> None:
+        mutations = {
+            "native-only-with-tree": lambda identity: identity.update({"required": False}),
+            "framework-required-without-tree": lambda identity: identity.update({
+                "required": True,
+                "command_trees": [],
+            }),
+        }
+        for case, mutation in mutations.items():
+            with self.subTest(case=case):
+                baseline = gate_artifact(100)
+                candidate = gate_artifact(110)
+                mutation(candidate["verified_identity"]["framework"])
+
+                exit_code, verdict = self.run_gate(baseline, candidate, gate_policy())
+
+                self.assertEqual(2, exit_code)
+                self.assertEqual("unevaluable", verdict["status"])
+                self.assertEqual("identity.unverified", verdict["identity"]["reason"])
+                self.assertTrue(verdict["rules"])
+                self.assertTrue(all(rule["passed"] is False for rule in verdict["rules"]))
+
+    def test_gate_accepts_declared_verified_runtime_change(self) -> None:
+        baseline = gate_artifact(100)
+        candidate = gate_artifact(110)
+        candidate["verified_identity"]["runtime"].update({
+            "tag": "b9999",
+            "sha256": "7" * 64,
+            "runtime_local_dependencies": {"manifest_sha256": "8" * 64},
+        })
+
+        exit_code, verdict = self.run_gate(
+            baseline,
+            candidate,
+            gate_policy(allowed_identity_changes=["runtime"]),
+        )
+
+        self.assertEqual(0, exit_code)
+        self.assertEqual(["runtime"], verdict["identity"]["changed_dimensions"])
+
+    def test_gate_rejects_undeclared_framework_and_runtime_identity_changes(self) -> None:
+        changes = {
+            "framework": lambda artifact: (
+                artifact["framework"].update({"source_commit": "fedcba9876543210"}),
+                artifact["verified_identity"]["framework"]["declaration"].update(
+                    {"source_commit": "fedcba9876543210"}
+                ),
+            ),
+            "runtime": lambda artifact: artifact["verified_identity"]["runtime"].update(
+                {"tag": "b9999"}
+            ),
+        }
+        for dimension, change in changes.items():
+            with self.subTest(dimension=dimension):
+                baseline = gate_artifact(100)
+                candidate = gate_artifact(110)
+                change(candidate)
+
+                exit_code, verdict = self.run_gate(baseline, candidate, gate_policy())
+
+                self.assertEqual(2, exit_code)
+                self.assertEqual("unevaluable", verdict["status"])
+                self.assertEqual("identity.undeclared_mismatch", verdict["identity"]["reason"])
+
+    def test_gate_rejects_unknown_or_duplicate_allowed_identity_changes(self) -> None:
+        for allowed in (["models"], ["framework", "framework"]):
+            with self.subTest(allowed=allowed):
+                exit_code, verdict = self.run_gate(
+                    gate_artifact(100),
+                    gate_artifact(110),
+                    gate_policy(allowed_identity_changes=allowed),
+                )
+
+                self.assertEqual(2, exit_code)
+                self.assertEqual("unevaluable", verdict["status"])
+                self.assertIn("policy.malformed", json.dumps(verdict))
+
+    def test_gate_rejects_unverified_allowed_framework_or_runtime_identity(self) -> None:
+        cases = ("framework", "runtime")
+        for dimension in cases:
+            with self.subTest(dimension=dimension):
+                baseline = gate_artifact(100)
+                candidate = gate_artifact(110)
+                if dimension == "framework":
+                    candidate["verified_identity"]["framework"]["verified"] = False
+                else:
+                    candidate["verified_identity"]["runtime"]["sha256_verified"] = False
+
+                exit_code, verdict = self.run_gate(
+                    baseline,
+                    candidate,
+                    gate_policy(allowed_identity_changes=[dimension]),
+                )
+
+                self.assertEqual(2, exit_code)
+                self.assertEqual("identity.unverified", verdict["identity"]["reason"])
+
+    def test_gate_rejects_empty_or_incomplete_verified_identities(self) -> None:
+        mutations = {
+            "empty-identity": lambda artifact: artifact.update({"verified_identity": {}}),
+            "empty-models": lambda artifact: artifact["verified_identity"].update({"models": []}),
+            "empty-model-digest": lambda artifact: artifact["verified_identity"]["models"][0].update(
+                {"sha256": ""}
+            ),
+            "empty-corpus-digest": lambda artifact: artifact["verified_identity"]["corpus"].update(
+                {"sha256": ""}
+            ),
+            "empty-runtime-digest": lambda artifact: artifact["verified_identity"]["runtime"].update(
+                {"sha256": ""}
+            ),
+            "empty-runtime-dependency-digest": lambda artifact: artifact["verified_identity"][
+                "runtime"
+            ]["runtime_local_dependencies"].update({"manifest_sha256": ""}),
+            "empty-framework-declaration": lambda artifact: (
+                artifact.update({"framework": {}}),
+                artifact["verified_identity"]["framework"].update({"declaration": {}}),
+            ),
+            "empty-host": lambda artifact: artifact.update({"host": {}}),
+            "empty-devices": lambda artifact: artifact["host"].update({"runtime_devices": {}}),
+        }
+        for case, mutation in mutations.items():
+            with self.subTest(case=case):
+                baseline = gate_artifact(100)
+                candidate = gate_artifact(110)
+                mutation(candidate)
+
+                exit_code, verdict = self.run_gate(baseline, candidate, gate_policy())
+
+                self.assertEqual(2, exit_code)
+                self.assertEqual("unevaluable", verdict["status"])
+                self.assertEqual("identity.unverified", verdict["identity"]["reason"])
+                self.assertTrue(verdict["rules"])
+                self.assertTrue(all(rule["passed"] is False for rule in verdict["rules"]))
+
+    def test_gate_rejects_malformed_identity_field_types(self) -> None:
+        mutations = {
+            "models-object": lambda artifact: artifact["verified_identity"].update({"models": {}}),
+            "model-string": lambda artifact: artifact["verified_identity"].update({"models": ["model"]}),
+            "corpus-string": lambda artifact: artifact["verified_identity"].update({"corpus": "corpus"}),
+            "runtime-string": lambda artifact: artifact["verified_identity"].update({"runtime": "runtime"}),
+            "framework-string": lambda artifact: artifact["verified_identity"].update(
+                {"framework": "framework"}
+            ),
+            "host-string": lambda artifact: artifact.update({"host": "host"}),
+            "devices-string": lambda artifact: artifact["host"].update(
+                {"runtime_devices": "devices"}
+            ),
+        }
+        for case, mutation in mutations.items():
+            with self.subTest(case=case):
+                candidate = gate_artifact(110)
+                mutation(candidate)
+
+                exit_code, verdict = self.run_gate(
+                    gate_artifact(100),
+                    candidate,
+                    gate_policy(),
+                )
+
+                self.assertEqual(2, exit_code)
+                self.assertEqual("identity.unverified", verdict["identity"]["reason"])
+                self.assertTrue(all(rule["passed"] is False for rule in verdict["rules"]))
+
+    def test_gate_reads_median_and_p95_aggregates(self) -> None:
+        baseline = gate_artifact(100)
+        candidate = gate_artifact(110)
+        candidate["commands"][0]["aggregates"]["throughput"]["p95"] = 125
+        rules = [
+            {
+                "id": "median-throughput",
+                "command": "chat",
+                "metric": "throughput",
+                "statistic": "median",
+                "kind": "minimum_improvement_percent",
+                "threshold_percent": 10,
+            },
+            {
+                "id": "p95-throughput",
+                "command": "chat",
+                "metric": "throughput",
+                "statistic": "p95",
+                "kind": "minimum_improvement_percent",
+                "threshold_percent": 25,
+            },
+        ]
+
+        exit_code, verdict = self.run_gate(
+            baseline,
+            candidate,
+            gate_policy(rules=rules),
+        )
+
+        self.assertEqual(0, exit_code)
+        self.assertEqual([110, 125], [item["candidate_value"] for item in verdict["rules"]])
+
+    def test_gate_minimum_improvement_passes_equality_and_rejects_below_threshold(self) -> None:
+        for candidate_value, expected_exit, expected_reason in (
+            (110, 0, "rule.passed"),
+            (109.999, 3, "rule.threshold_rejected"),
+        ):
+            with self.subTest(candidate_value=candidate_value):
+                exit_code, verdict = self.run_gate(
+                    gate_artifact(100),
+                    gate_artifact(candidate_value),
+                    gate_policy(threshold=10),
+                )
+
+                self.assertEqual(expected_exit, exit_code)
+                self.assertEqual(expected_reason, verdict["rules"][0]["reason"])
+
+    def test_gate_maximum_regression_passes_equality_and_rejects_above_threshold(self) -> None:
+        for candidate_value, expected_exit, expected_reason in (
+            (105, 0, "rule.passed"),
+            (105.001, 3, "rule.threshold_rejected"),
+        ):
+            with self.subTest(candidate_value=candidate_value):
+                exit_code, verdict = self.run_gate(
+                    gate_artifact(100),
+                    gate_artifact(candidate_value),
+                    gate_policy(kind="maximum_regression_percent", threshold=5),
+                )
+
+                self.assertEqual(expected_exit, exit_code)
+                self.assertEqual(expected_reason, verdict["rules"][0]["reason"])
+
+    def test_gate_rejects_adjacent_float_below_minimum_improvement_boundary(self) -> None:
+        exact_candidate = 110.0
+        below_candidate = math.nextafter(exact_candidate, -math.inf)
+
+        exact_exit, exact_verdict = self.run_gate(
+            gate_artifact(100),
+            gate_artifact(exact_candidate),
+            gate_policy(threshold=10),
+        )
+        below_exit, below_verdict = self.run_gate(
+            gate_artifact(100),
+            gate_artifact(below_candidate),
+            gate_policy(threshold=10),
+        )
+
+        self.assertEqual(0, exact_exit)
+        self.assertEqual("rule.passed", exact_verdict["rules"][0]["reason"])
+        self.assertEqual(3, below_exit)
+        self.assertEqual("rule.threshold_rejected", below_verdict["rules"][0]["reason"])
+
+    def test_gate_rejects_adjacent_float_above_maximum_regression_boundary(self) -> None:
+        exact_candidate = 105.0
+        above_candidate = math.nextafter(exact_candidate, math.inf)
+
+        exact_exit, exact_verdict = self.run_gate(
+            gate_artifact(100),
+            gate_artifact(exact_candidate),
+            gate_policy(kind="maximum_regression_percent", threshold=5),
+        )
+        above_exit, above_verdict = self.run_gate(
+            gate_artifact(100),
+            gate_artifact(above_candidate),
+            gate_policy(kind="maximum_regression_percent", threshold=5),
+        )
+
+        self.assertEqual(0, exact_exit)
+        self.assertEqual("rule.passed", exact_verdict["rules"][0]["reason"])
+        self.assertEqual(3, above_exit)
+        self.assertEqual("rule.threshold_rejected", above_verdict["rules"][0]["reason"])
+
+    def test_gate_rejects_arbitrary_precision_integer_below_minimum_improvement_boundary(self) -> None:
+        baseline_value = 10**100
+        exact_candidate = baseline_value * 110 // 100
+        below_candidate = exact_candidate - 1
+
+        exact_exit, exact_verdict = self.run_gate(
+            gate_artifact(baseline_value),
+            gate_artifact(exact_candidate),
+            gate_policy(threshold=10),
+        )
+        below_exit, below_verdict = self.run_gate(
+            gate_artifact(baseline_value),
+            gate_artifact(below_candidate),
+            gate_policy(threshold=10),
+        )
+
+        self.assertEqual(0, exact_exit)
+        self.assertEqual("rule.passed", exact_verdict["rules"][0]["reason"])
+        self.assertEqual(3, below_exit)
+        self.assertEqual("rule.threshold_rejected", below_verdict["rules"][0]["reason"])
+
+    def test_gate_rejects_arbitrary_precision_integer_above_maximum_regression_boundary(self) -> None:
+        baseline_value = 10**100
+        exact_candidate = baseline_value * 105 // 100
+        above_candidate = exact_candidate + 1
+
+        exact_exit, exact_verdict = self.run_gate(
+            gate_artifact(baseline_value),
+            gate_artifact(exact_candidate),
+            gate_policy(kind="maximum_regression_percent", threshold=5),
+        )
+        above_exit, above_verdict = self.run_gate(
+            gate_artifact(baseline_value),
+            gate_artifact(above_candidate),
+            gate_policy(kind="maximum_regression_percent", threshold=5),
+        )
+
+        self.assertEqual(0, exact_exit)
+        self.assertEqual("rule.passed", exact_verdict["rules"][0]["reason"])
+        self.assertEqual(3, above_exit)
+        self.assertEqual("rule.threshold_rejected", above_verdict["rules"][0]["reason"])
+
+    def test_gate_marks_missing_command_metric_statistic_or_aggregates_unevaluable(self) -> None:
+        mutations = {
+            "command": lambda artifact: artifact["commands"][0].update({"name": "other"}),
+            "metric": lambda artifact: artifact["commands"][0]["aggregates"].pop("throughput"),
+            "statistic": lambda artifact: artifact["commands"][0]["aggregates"]["throughput"].pop("median"),
+            "aggregates": lambda artifact: artifact["commands"][0].pop("aggregates"),
+        }
+        expected_reasons = {
+            "command": "rule.command_missing",
+            "metric": "rule.metric_missing",
+            "statistic": "rule.statistic_missing",
+            "aggregates": "rule.metric_missing",
+        }
+        for case, mutation in mutations.items():
+            with self.subTest(case=case):
+                candidate = gate_artifact(110)
+                mutation(candidate)
+
+                exit_code, verdict = self.run_gate(
+                    gate_artifact(100),
+                    candidate,
+                    gate_policy(),
+                )
+
+                self.assertEqual(2, exit_code)
+                self.assertEqual(expected_reasons[case], verdict["rules"][0]["reason"])
+
+    def test_gate_rejects_duplicate_or_invalid_rule_ids_and_unknown_fields_or_enums(self) -> None:
+        valid = gate_policy()["rules"][0]
+        malformed_rules = {
+            "duplicate-id": [valid, copy.deepcopy(valid)],
+            "invalid-id": [{**valid, "id": "Not Valid"}],
+            "unknown-field": [{**valid, "unexpected": True}],
+            "unknown-statistic": [{**valid, "statistic": "average"}],
+            "unknown-kind": [{**valid, "kind": "better"}],
+        }
+        for case, rules in malformed_rules.items():
+            with self.subTest(case=case):
+                exit_code, verdict = self.run_gate(
+                    gate_artifact(100),
+                    gate_artifact(110),
+                    gate_policy(rules=rules),
+                )
+
+                self.assertEqual(2, exit_code)
+                self.assertIn("policy.malformed", json.dumps(verdict))
+
+    def test_gate_rejects_unknown_top_level_policy_fields(self) -> None:
+        policy = gate_policy()
+        policy["unexpected"] = True
+
+        exit_code, verdict = self.run_gate(
+            gate_artifact(100),
+            gate_artifact(110),
+            policy,
+        )
+
+        self.assertEqual(2, exit_code)
+        self.assertIn("policy.malformed", json.dumps(verdict))
+
+    def test_gate_rejects_path_or_secret_policy_metadata_without_leaking_it(self) -> None:
+        secret = "/home/private/fixture-secret-token"
+        mutations = {
+            "policy_id": lambda policy: policy.update({"policy_id": secret}),
+            "command": lambda policy: policy["rules"][0].update({"command": secret}),
+            "metric": lambda policy: policy["rules"][0].update({"metric": secret}),
+        }
+        for field, mutation in mutations.items():
+            with self.subTest(field=field):
+                policy = gate_policy()
+                mutation(policy)
+
+                exit_code, verdict = self.run_gate(
+                    gate_artifact(100),
+                    gate_artifact(110),
+                    policy,
+                )
+                serialized = json.dumps(verdict)
+
+                self.assertEqual(2, exit_code)
+                self.assertEqual("unevaluable", verdict["status"])
+                self.assertIn("policy.malformed", serialized)
+                self.assertNotIn(secret, serialized)
+
+    def test_gate_marks_zero_negative_non_numeric_nan_and_infinite_values_unevaluable(self) -> None:
+        invalid_values = (0, -1, "fast", float("nan"), float("inf"), -float("inf"))
+        for side in ("baseline", "candidate"):
+            for invalid_value in invalid_values:
+                with self.subTest(side=side, invalid_value=invalid_value):
+                    baseline = gate_artifact(100)
+                    candidate = gate_artifact(110)
+                    target = baseline if side == "baseline" else candidate
+                    target["commands"][0]["aggregates"]["throughput"]["median"] = invalid_value
+
+                    exit_code, verdict = self.run_gate(
+                        baseline,
+                        candidate,
+                        gate_policy(),
+                    )
+
+                    self.assertEqual(2, exit_code)
+                    self.assertIn(
+                        verdict["rules"][0]["reason"],
+                        {"rule.value_zero_or_negative", "rule.value_non_finite"},
+                    )
+
+    def test_gate_rejects_negative_nan_or_infinite_thresholds_as_malformed_policy(self) -> None:
+        for threshold in (-1, float("nan"), float("inf"), -float("inf")):
+            with self.subTest(threshold=threshold):
+                exit_code, verdict = self.run_gate(
+                    gate_artifact(100),
+                    gate_artifact(110),
+                    gate_policy(threshold=threshold),
+                )
+
+                self.assertEqual(2, exit_code)
+                self.assertIn("policy.malformed", json.dumps(verdict))
+
+    def test_gate_unevaluable_rule_takes_precedence_over_threshold_rejection(self) -> None:
+        rules = [
+            {
+                "id": "rejected-throughput",
+                "command": "chat",
+                "metric": "throughput",
+                "statistic": "median",
+                "kind": "minimum_improvement_percent",
+                "threshold_percent": 20,
+            },
+            {
+                "id": "missing-metric",
+                "command": "chat",
+                "metric": "not-captured",
+                "statistic": "median",
+                "kind": "minimum_improvement_percent",
+                "threshold_percent": 1,
+            },
+        ]
+
+        exit_code, verdict = self.run_gate(
+            gate_artifact(100),
+            gate_artifact(110),
+            gate_policy(rules=rules),
+        )
+
+        self.assertEqual(2, exit_code)
+        self.assertEqual("unevaluable", verdict["status"])
+        self.assertEqual(
+            ["rule.threshold_rejected", "rule.metric_missing"],
+            [item["reason"] for item in verdict["rules"]],
+        )
+
+    def test_gate_preserves_policy_rule_order_without_silent_skipping(self) -> None:
+        rule = gate_policy()["rules"][0]
+        rules = [
+            {**rule, "id": "third"},
+            {**rule, "id": "first"},
+            {**rule, "id": "second"},
+        ]
+
+        exit_code, verdict = self.run_gate(
+            gate_artifact(100),
+            gate_artifact(110),
+            gate_policy(rules=rules),
+        )
+
+        self.assertEqual(0, exit_code)
+        self.assertEqual(["third", "first", "second"], [item["id"] for item in verdict["rules"]])
+
+    def test_gate_verdict_hashes_raw_baseline_candidate_and_policy_files(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            paths = write_gate_inputs(root, gate_artifact(100), gate_artifact(110), gate_policy())
+
+            exit_code = capture.gate_artifacts(*paths)
+            verdict = json.loads(paths[-1].read_text(encoding="utf-8"))
+
+            self.assertEqual(0, exit_code)
+            self.assertEqual(
+                {
+                    "baseline_sha256": digest(paths[0]),
+                    "candidate_sha256": digest(paths[1]),
+                    "policy_sha256": digest(paths[2]),
+                },
+                verdict["hashes"],
+            )
+
+    def test_gate_rejects_absent_non_array_or_empty_rules(self) -> None:
+        malformed_policies = (
+            {"schema_version": "1.0", "policy_id": "missing-rules"},
+            {"schema_version": "1.0", "policy_id": "object-rules", "rules": {}},
+            {"schema_version": "1.0", "policy_id": "empty-rules", "rules": []},
+        )
+        for policy in malformed_policies:
+            with self.subTest(policy_id=policy["policy_id"]):
+                exit_code, verdict = self.run_gate(
+                    gate_artifact(100),
+                    gate_artifact(110),
+                    policy,
+                )
+
+                self.assertEqual(2, exit_code)
+                self.assertEqual("unevaluable", verdict["status"])
+                self.assertIn("policy.malformed", json.dumps(verdict))
+
+    def test_gate_rejects_duplicate_command_names_on_each_artifact_side_before_lookup(self) -> None:
+        for side in ("baseline", "candidate"):
+            with self.subTest(side=side):
+                baseline = gate_artifact(100)
+                candidate = gate_artifact(110)
+                artifact = baseline if side == "baseline" else candidate
+                artifact["commands"].append(copy.deepcopy(artifact["commands"][0]))
+
+                exit_code, verdict = self.run_gate(baseline, candidate, gate_policy())
+
+                self.assertEqual(2, exit_code)
+                self.assertEqual("artifact.duplicate_command_name", verdict["identity"]["reason"])
+                self.assertEqual(side, verdict["identity"]["side"])
+
+    def test_gate_rejects_invalid_command_names_on_each_artifact_side(self) -> None:
+        for side in ("baseline", "candidate"):
+            for invalid_name in ("", "   ", None):
+                with self.subTest(side=side, invalid_name=invalid_name):
+                    baseline = gate_artifact(100)
+                    candidate = gate_artifact(110)
+                    artifact = baseline if side == "baseline" else candidate
+                    artifact["commands"][0]["name"] = invalid_name
+
+                    exit_code, verdict = self.run_gate(baseline, candidate, gate_policy())
+
+                    self.assertEqual(2, exit_code)
+                    self.assertEqual("artifact.malformed", verdict["identity"]["reason"])
+                    self.assertEqual(side, verdict["identity"]["side"])
+
+    def test_gate_rejects_malformed_artifact_schema_or_kind(self) -> None:
+        mutations = {
+            "schema": lambda artifact: artifact.update({"schema_version": "2.0"}),
+            "kind": lambda artifact: artifact.update({"kind": "other-evidence"}),
+        }
+        for side in ("baseline", "candidate"):
+            for case, mutation in mutations.items():
+                with self.subTest(side=side, case=case):
+                    baseline = gate_artifact(100)
+                    candidate = gate_artifact(110)
+                    mutation(baseline if side == "baseline" else candidate)
+
+                    exit_code, verdict = self.run_gate(baseline, candidate, gate_policy())
+
+                    self.assertEqual(2, exit_code)
+                    self.assertEqual("artifact.malformed", verdict["identity"]["reason"])
+
+    def test_gate_rejects_changed_command_argv_hash(self) -> None:
+        candidate = gate_artifact(110)
+        candidate["commands"][0]["argv_sha256"] = "9" * 64
+
+        exit_code, verdict = self.run_gate(
+            gate_artifact(100),
+            candidate,
+            gate_policy(),
+        )
+
+        self.assertEqual(2, exit_code)
+        self.assertEqual("identity.undeclared_mismatch", verdict["rules"][0]["reason"])
+
+    def test_gate_unreferenced_extra_command_name_mismatch_makes_every_rule_unevaluable(self) -> None:
+        baseline = gate_artifact(100)
+        candidate = gate_artifact(110)
+        baseline["commands"].append({
+            "name": "baseline-diagnostic",
+            "argv_sha256": "a" * 64,
+            "aggregates": {"diagnostic": {"median": 1, "p95": 1}},
+        })
+        candidate["commands"].append({
+            "name": "candidate-diagnostic",
+            "argv_sha256": "a" * 64,
+            "aggregates": {"diagnostic": {"median": 1, "p95": 1}},
+        })
+
+        exit_code, verdict = self.run_gate(baseline, candidate, gate_policy())
+
+        self.assertEqual(2, exit_code)
+        self.assertEqual("identity.undeclared_mismatch", verdict["identity"]["reason"])
+        self.assertEqual(["command_names"], verdict["identity"]["changed_dimensions"])
+        self.assertTrue(verdict["rules"])
+        self.assertTrue(all(rule["passed"] is False for rule in verdict["rules"]))
+        self.assertTrue(all(rule["reason"] == "identity.undeclared_mismatch" for rule in verdict["rules"]))
+
+    def test_gate_unreferenced_command_argv_mismatch_makes_every_rule_unevaluable(self) -> None:
+        baseline = gate_artifact(100)
+        candidate = gate_artifact(110)
+        common_command = {
+            "name": "diagnostic",
+            "argv_sha256": "a" * 64,
+            "aggregates": {"diagnostic": {"median": 1, "p95": 1}},
+        }
+        baseline["commands"].append(copy.deepcopy(common_command))
+        candidate["commands"].append(copy.deepcopy(common_command))
+        candidate["commands"][1]["argv_sha256"] = "b" * 64
+
+        exit_code, verdict = self.run_gate(baseline, candidate, gate_policy())
+
+        self.assertEqual(2, exit_code)
+        self.assertEqual("identity.undeclared_mismatch", verdict["identity"]["reason"])
+        self.assertEqual(["command_argv"], verdict["identity"]["changed_dimensions"])
+        self.assertTrue(verdict["rules"])
+        self.assertTrue(all(rule["passed"] is False for rule in verdict["rules"]))
+        self.assertTrue(all(rule["reason"] == "identity.undeclared_mismatch" for rule in verdict["rules"]))
+
+    def test_gate_atomically_replaces_verdict(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            paths = write_gate_inputs(Path(raw), gate_artifact(100), gate_artifact(110), gate_policy())
+            paths[-1].write_text("old-verdict", encoding="utf-8")
+
+            with (
+                mock.patch.object(capture.os, "replace", wraps=os.replace) as replace,
+                mock.patch.object(capture.os, "fsync", wraps=os.fsync) as fsync,
+            ):
+                exit_code = capture.gate_artifacts(*paths)
+
+            self.assertEqual(0, exit_code)
+            self.assertEqual(1, replace.call_count)
+            self.assertGreaterEqual(fsync.call_count, 1)
+            self.assertEqual("passed", json.loads(paths[-1].read_text(encoding="utf-8"))["status"])
+
+    def test_gate_write_failure_preserves_existing_verdict_and_cleans_temporary_file(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            paths = write_gate_inputs(root, gate_artifact(100), gate_artifact(110), gate_policy())
+            existing = b'{"old":true}\n'
+            paths[-1].write_bytes(existing)
+
+            with mock.patch.object(capture.os, "replace", side_effect=OSError("fixture-secret")):
+                with self.assertRaises(capture.CaptureError) as raised:
+                    capture.gate_artifacts(*paths)
+
+            self.assertEqual(existing, paths[-1].read_bytes())
+            self.assertNotIn("fixture-secret", str(raised.exception))
+            self.assertEqual(
+                {"baseline.json", "candidate.json", "policy.json", "verdict.json"},
+                {item.name for item in root.iterdir()},
+            )
+
+    def test_gate_verdict_omits_sensitive_paths_commands_streams_environment_gpu_uuid_and_assemblies(self) -> None:
+        baseline = gate_artifact(100)
+        candidate = gate_artifact(110)
+        gpu_uuid = "GPU-d753e8bb-b687-daf2-f54f-79c1ed60cae5"
+        baseline["host"]["runtime_devices"]["stdout"] = gpu_uuid
+        candidate["host"]["runtime_devices"]["stdout"] = gpu_uuid
+
+        exit_code, verdict = self.run_gate(baseline, candidate, gate_policy())
+        serialized = json.dumps(verdict)
+
+        self.assertEqual(0, exit_code)
+        for secret in (
+            "/sensitive/runtime",
+            "/home/private",
+            "fixture-secret",
+            "TOKEN",
+            '"env"',
+            gpu_uuid,
+            "Framework.Tests.dll",
+            "stdout",
+            "stderr",
+            "environment",
+            "argv",
+        ):
+            with self.subTest(secret=secret):
+                self.assertNotIn(secret, serialized)
+
+    def test_policy_schema_and_example_are_valid_and_throughput_only(self) -> None:
+        schema = json.loads(POLICY_SCHEMA_PATH.read_text(encoding="utf-8"))
+        example = json.loads(POLICY_EXAMPLE_PATH.read_text(encoding="utf-8"))
+
+        self.assertEqual("object", schema["type"])
+        self.assertFalse(schema["additionalProperties"])
+        self.assertGreaterEqual(len(example["rules"]), 1)
+        self.assertTrue(all(rule["metric"] for rule in example["rules"]))
+        self.assertNotRegex(json.dumps(example).lower(), r"\b(?:ram|rss|vram|gpu[_ -]?memory)\b")
+
+    def test_policy_schema_requires_exactly_one_minimum_rule(self) -> None:
+        schema = json.loads(POLICY_SCHEMA_PATH.read_text(encoding="utf-8"))
+
+        self.assertEqual(1, schema["properties"]["rules"]["minItems"])
+
+    def test_policy_schema_restricts_policy_id_command_and_metric_to_safe_tokens(self) -> None:
+        schema = json.loads(POLICY_SCHEMA_PATH.read_text(encoding="utf-8"))
+        patterns = {
+            "policy_id": schema["properties"]["policy_id"].get("pattern"),
+            "command": schema["$defs"]["rule"]["properties"]["command"].get("pattern"),
+            "metric": schema["$defs"]["rule"]["properties"]["metric"].get("pattern"),
+        }
+
+        self.assertTrue(all(isinstance(pattern, str) and pattern for pattern in patterns.values()))
+        for field, pattern in patterns.items():
+            with self.subTest(field=field):
+                self.assertIsNone(re.fullmatch(pattern, "/home/private/fixture-secret-token"))
+                self.assertIsNotNone(re.fullmatch(pattern, "safe-token_1"))
+
+    def test_example_policy_is_accepted_by_evaluator(self) -> None:
+        policy = json.loads(POLICY_EXAMPLE_PATH.read_text(encoding="utf-8"))
+        baseline = gate_artifact(100)
+        candidate = gate_artifact(120)
+        baseline["commands"] = [
+            {
+                "name": "chat-throughput",
+                "argv_sha256": "7" * 64,
+                "aggregates": {"tokens_per_second": {"median": 100, "p95": 100}},
+            },
+            {
+                "name": "embedding-throughput",
+                "argv_sha256": "8" * 64,
+                "aggregates": {"embeddings_per_second": {"median": 100, "p95": 100}},
+            },
+        ]
+        candidate["commands"] = copy.deepcopy(baseline["commands"])
+        candidate["commands"][0]["aggregates"]["tokens_per_second"]["median"] = 120
+        candidate["commands"][1]["aggregates"]["embeddings_per_second"]["median"] = 120
+
+        exit_code, verdict = self.run_gate(baseline, candidate, policy)
+
+        self.assertEqual(0, exit_code)
+        self.assertEqual(
+            ["chat-throughput-median", "embedding-throughput-median"],
+            [rule["id"] for rule in verdict["rules"]],
+        )
+
+    def test_gate_cli_returns_zero_with_passing_verdict(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            completed, verdict = self.run_gate_cli(
+                Path(raw),
+                gate_artifact(100),
+                gate_artifact(110),
+                gate_policy(),
+            )
+
+        self.assertEqual(0, completed.returncode)
+        self.assertEqual("passed", verdict["status"])
+        self.assertTrue(verdict["passed"])
+
+    def test_gate_cli_returns_two_with_unevaluable_verdict(self) -> None:
+        candidate = gate_artifact(110)
+        candidate["commands"][0]["aggregates"].pop("throughput")
+        with tempfile.TemporaryDirectory() as raw:
+            completed, verdict = self.run_gate_cli(
+                Path(raw),
+                gate_artifact(100),
+                candidate,
+                gate_policy(),
+            )
+
+        self.assertEqual(2, completed.returncode)
+        self.assertEqual("unevaluable", verdict["status"])
+        self.assertFalse(verdict["passed"])
+
+    def test_gate_cli_returns_three_with_rejected_verdict(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            completed, verdict = self.run_gate_cli(
+                Path(raw),
+                gate_artifact(100),
+                gate_artifact(109),
+                gate_policy(),
+            )
+
+        self.assertEqual(3, completed.returncode)
+        self.assertEqual("rejected", verdict["status"])
+        self.assertFalse(verdict["passed"])
+
+    def test_gate_cli_stderr_does_not_leak_secret_fixture_content_or_sensitive_absolute_paths(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="sensitive-gate-path-") as raw:
+            root = Path(raw)
+            baseline_path, candidate_path, policy_path, output_path = write_gate_inputs(
+                root,
+                gate_artifact(100),
+                gate_artifact(110),
+                gate_policy(),
+            )
+            policy_path.write_text('{"fixture-secret-policy":', encoding="utf-8")
+
+            completed = subprocess.run(
+                [
+                    os.fspath(Path(os.sys.executable)),
+                    os.fspath(MODULE_PATH),
+                    "gate",
+                    "--baseline",
+                    os.fspath(baseline_path),
+                    "--candidate",
+                    os.fspath(candidate_path),
+                    "--policy",
+                    os.fspath(policy_path),
+                    "--output",
+                    os.fspath(output_path),
+                ],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            verdict = json.loads(output_path.read_text(encoding="utf-8"))
+            self.assertEqual(2, completed.returncode)
+            self.assertEqual("unevaluable", verdict["status"])
+            self.assertNotIn("fixture-secret-policy", completed.stderr)
+            self.assertNotIn(os.fspath(root), completed.stderr)
+
+    def test_gate_cli_output_io_failure_returns_two_preserves_old_verdict_and_sanitizes_stderr(self) -> None:
+        if os.name != "posix":
+            self.skipTest("directory-permission output failure requires POSIX permissions")
+        with tempfile.TemporaryDirectory(prefix="sensitive-output-path-") as raw:
+            root = Path(raw)
+            baseline_path, candidate_path, policy_path, output_path = write_gate_inputs(
+                root,
+                gate_artifact(100),
+                gate_artifact(110),
+                gate_policy(),
+            )
+            old_verdict = b'{"old":"fixture-secret-old-verdict"}\n'
+            output_path.write_bytes(old_verdict)
+            root.chmod(0o500)
+            try:
+                completed = subprocess.run(
+                    [
+                        os.fspath(Path(os.sys.executable)),
+                        os.fspath(MODULE_PATH),
+                        "gate",
+                        "--baseline",
+                        os.fspath(baseline_path),
+                        "--candidate",
+                        os.fspath(candidate_path),
+                        "--policy",
+                        os.fspath(policy_path),
+                        "--output",
+                        os.fspath(output_path),
+                    ],
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+            finally:
+                root.chmod(0o700)
+
+            self.assertEqual(2, completed.returncode)
+            self.assertEqual(old_verdict, output_path.read_bytes())
+            self.assertNotIn("fixture-secret-old-verdict", completed.stderr)
+            self.assertNotIn(os.fspath(root), completed.stderr)
+            self.assertEqual(
+                {"baseline.json", "candidate.json", "policy.json", "verdict.json"},
+                {item.name for item in root.iterdir()},
+            )
+
+    def test_compare_report_shape_remains_unchanged(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            baseline_path, candidate_path, _, output_path = write_gate_inputs(
+                root,
+                gate_artifact(100),
+                gate_artifact(110),
+                gate_policy(),
+            )
+
+            capture.compare_artifacts(baseline_path, candidate_path, output_path)
+            comparison = json.loads(output_path.read_text(encoding="utf-8"))
+
+        self.assertEqual("inference-benchmark-comparison", comparison["kind"])
+        self.assertEqual(str(baseline_path.resolve()), comparison["baseline"])
+        self.assertEqual(str(candidate_path.resolve()), comparison["candidate"])
+        self.assertEqual(10, comparison["commands"]["chat"]["throughput"]["delta_percent"])
+
+    def test_compare_report_preserves_complete_legacy_top_level_and_metric_shape(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            baseline_path, candidate_path, _, output_path = write_gate_inputs(
+                root,
+                gate_artifact(100),
+                gate_artifact(110),
+                gate_policy(),
+            )
+
+            capture.compare_artifacts(baseline_path, candidate_path, output_path)
+            comparison = json.loads(output_path.read_text(encoding="utf-8"))
+
+        self.assertEqual({
+            "schema_version",
+            "kind",
+            "baseline",
+            "candidate",
+            "identity_equal",
+            "framework_identity_equal",
+            "framework_identity",
+            "commands",
+            "generated_at_utc",
+        }, set(comparison))
+        self.assertEqual("1.0", comparison["schema_version"])
+        self.assertTrue(comparison["identity_equal"])
+        self.assertEqual({"baseline", "candidate"}, set(comparison["framework_identity"]))
+        self.assertEqual(
+            {"baseline_median", "candidate_median", "delta_percent"},
+            set(comparison["commands"]["chat"]["throughput"]),
+        )
 
 
 if __name__ == "__main__":

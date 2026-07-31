@@ -21,3 +21,42 @@ the product backend is unsupported.
 
 No result from one row certifies another. In particular, WSL2 CUDA throughput does
 not certify Vulkan, native Linux OOM, native Windows contention, or 8 GB hardware.
+
+## Optimization policy enforcement
+
+| Decision surface | Evaluator | Enforced evidence | Limits |
+|---|---|---|---|
+| Generic inference command aggregates | `capture_inference_evidence.py gate` | Strict verified artifact identity, complete command-name/argv equality, and ordered exact-rational `median` or `p95` percentage rules | Throughput-style trusted aggregates only; no generic RAM/VRAM certification |
+| Lane 4 scheduling optimization | `run_scheduling_grid.py` | Semantic/correctness/determinism checks, five-scenario throughput, process peak RSS, and PID-scoped CUDA residency | Authoritative compound gate; WSL/global GPU memory cannot substitute for PID residency |
+
+Run the generic gate explicitly with two raw evidence artifacts and a policy:
+
+```bash
+python3 scripts/performance/capture_inference_evidence.py gate \
+  --baseline artifacts/performance/baseline.json \
+  --candidate artifacts/performance/candidate.json \
+  --policy docs/performance/policies/generic-inference-throughput-policy.example.json \
+  --output artifacts/performance/inference-verdict.json
+```
+
+Exit `0` passes, exit `3` is a fully evaluable threshold rejection, and exit `2`
+is malformed, incomparable, unverified, or unevaluable evidence. The evaluator
+fails closed and writes a privacy-minimal atomic verdict when all three input
+files can be read and hashed. No active CI invokes this gate; it remains an
+explicit local/release decision aid.
+
+Focused tooling regression:
+
+```bash
+python3 -m unittest \
+  scripts/performance/tests/test_capture_inference_evidence.py \
+  scripts/performance/tests/test_run_scheduling_grid.py
+python3 -m py_compile scripts/performance/capture_inference_evidence.py
+python3 -m json.tool \
+  docs/performance/schemas/inference-comparison-policy.schema.json >/dev/null
+python3 -m json.tool \
+  docs/performance/policies/generic-inference-throughput-policy.example.json >/dev/null
+```
+
+The release-script validation scope does not cover `scripts/performance/*.py`;
+run the Python checks above directly.
