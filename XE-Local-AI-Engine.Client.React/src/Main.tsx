@@ -18,6 +18,18 @@ import { i18nReady } from "./i18n";
 // then subscribe auto-capture so a recorded error assembles + persists a snapshot.
 installCollectors();
 installAutoCapture();
+if (import.meta.env.DEV) {
+	import("@/core/accessibility/DevelopmentAccessibilityAudit")
+		.then((accessibility) => accessibility.installDevelopmentAccessibilityAudit())
+		.catch((error: unknown) => {
+			console.error("[development feedback] Accessibility audit failed to load.", error);
+		});
+	import("@/core/performance/DevelopmentPerformanceFeedback")
+		.then((performance) => performance.installDevelopmentPerformanceFeedback())
+		.catch((error: unknown) => {
+			console.error("[development feedback] Performance observer failed to load.", error);
+		});
+}
 
 const rootElement = document.querySelector("#root");
 if (rootElement && !rootElement.innerHTML) {

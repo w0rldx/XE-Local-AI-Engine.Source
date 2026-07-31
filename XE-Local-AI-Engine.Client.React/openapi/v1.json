@@ -5,11 +5,6 @@
     "title": "XE Local AI Engine",
     "version": "v1"
   },
-  "servers": [
-    {
-      "url": "http://127.0.0.1:38527"
-    }
-  ],
   "paths": {
     "/api/local/v1/voice/manifest": {
       "get": {

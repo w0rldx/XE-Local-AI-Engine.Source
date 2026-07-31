@@ -9,7 +9,8 @@ import {
 	agentReasoningEfforts,
 } from "@/features/agents/models/AgentDefinitionModels";
 import type { ReasoningEffort } from "@/features/chat/models/ChatModels";
-import type { AgentModelOption } from "@/features/agents/components/AgentDefinitionForm";
+
+import type { AgentModelOption } from "./AgentDefinitionForm.types";
 
 const NODE_DEFAULT_MODEL_VALUE = "__node-default__";
 

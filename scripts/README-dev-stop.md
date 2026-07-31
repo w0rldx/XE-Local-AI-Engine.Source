@@ -1,51 +1,43 @@
-# dev-stop.sh — Reliable Aspire dev-stack teardown
+# Worktree-safe Aspire lifecycle helpers
 
-## Why `aspire stop` does nothing
-
-`aspire stop` returns `✅ stopped successfully` in ~0.1 s but kills **zero
-processes** on this topology.  The root cause is that `dcp` (the Aspire
-orchestrator) and all child processes are reparented under the user session
-manager and detached from the AppHost's PPID subtree.  `aspire stop` signals
-only the AppHost PID, which cannot propagate the signal to sibling DCP
-processes or their dotnet/node children.
-
-Upstream tracking issues: [microsoft/aspire#15806](https://github.com/microsoft/aspire/issues/15806),
-[#8919](https://github.com/microsoft/aspire/issues/8919),
-[#10377](https://github.com/microsoft/aspire/issues/10377).
-
-### Alternative: `aspire run` auto-stop
-
-Re-running `aspire run` (or `dotnet run` in the AppHost) will detect an
-existing session and stop the previous instance before starting a new one.
-This is a verify-worthy alternative if you want to restart immediately — but
-it does not work when you only want to stop without restarting.
-
-## Usage
+Use the repository wrappers rather than an unqualified `aspire start`, `aspire ps`, or
+`aspire stop --all`:
 
 ```bash
-# Stop the running dev stack (SIGTERM → 3 s grace → SIGKILL)
+scripts/dev-start.sh
+scripts/dev-status.sh
 scripts/dev-stop.sh
-
-# Preview what would be killed without sending any signals
-scripts/dev-stop.sh --dry-run
+scripts/aspire-readiness-smoke.sh
 ```
 
-## How it works
+All commands resolve the canonical AppHost path for the checkout that contains the script.
+`dev-start.sh` always supplies `--apphost`, `--isolated`, and `--non-interactive`, so ports and
+Aspire user secrets do not collide with another worktree. It launches the CLI in a captured session
+and, on any CLI/registration/status failure or signal, identity-checks and removes survivors from
+that session independently of Aspire's registry before attempting the normal scoped stop path.
+`dev-status.sh` selects the same exact
+AppHost from `aspire ps --format Json`, then emits only resource name/type/state/health and endpoint
+URLs with query strings removed. It never prints resource environment, properties, connection
+strings, or the dashboard login token.
 
-1. **Locate the AppHost** via `aspire ps --format Json` (falls back to plain
-   `aspire ps` text, then `/proc` cmdline scan if aspire is unavailable).
-2. **Build the kill list** from three sources:
-   - AppHost PID and all PPID-descendants that match the process-name allowlist.
-   - All processes in the same Linux session (SID) as the AppHost that match
-     the allowlist — this catches `dcp` and its subtree, which are session
-     siblings, not PPID-children.
-   - Any `llama-server` whose `/proc/<pid>/exe` resolves to a path under
-     `~/.local/share/XE-Local-AI-Engine/llama.cpp/` — Ollama's
-     `/usr/lib/ollama/llama-server` is never touched.
-3. **Print the kill list** (always, even without `--dry-run`).
-4. **SIGTERM** all listed PIDs, wait 3 s, then **SIGKILL** any survivors.
-   `llama-server` is killed via its process group (`kill -KILL -- -<pgid>`)
-   since it is typically a group leader.
-5. **Safety guards**: the current shell's entire ancestor chain is protected
-   and never added to the kill list; any PID not on the process-name allowlist
-   is skipped with a warning even if it shares the same session.
+`dev-stop.sh` sends an AppHost-qualified stop request and never uses `--all`. Before stopping, it
+snapshots the selected AppHost, its exact-path Aspire ancestor, the Aspire 13.4 DCP sibling whose
+command line contains the exact `--monitor <AppHost PID>` token pair, and their complete descendant
+closure regardless of executable name. This preserves ownership across DCP children that use separate sessions/process groups
+without sweeping another worktree merely because it shares a login/session SID. Every selected PID
+is paired with its `/proc` start time and revalidated immediately before TERM/KILL, so PID reuse
+cannot redirect cleanup. Aspire 13.4 survivors are terminated only from that snapshot. A descendant `llama-server` is therefore
+provably owned and cleaned. Processes outside the selected graph—including another worktree's DCP
+or a pre-existing managed `llama-server`—are untouched and do not make scoped teardown fail; success
+proves only that the selected graph and exact registration are gone. Query failures or malformed Aspire JSON are errors, never
+interpreted as "not running"; start, status, readiness, and stop all fail closed. `--dry-run` sends
+no stop request.
+
+`aspire-readiness-smoke.sh` refuses to reuse an already-running instance, starts a new isolated
+instance, delegates readiness to `aspire wait app`, and traps every exit path through the scoped
+stop helper. Override its default 180-second readiness budget with
+`XE_ASPIRE_SMOKE_TIMEOUT_SECONDS`.
+
+Set `XE_ASPIRE_APPHOST` only when intentionally targeting another explicit AppHost. The lifecycle
+scripts never terminate a managed `llama-server` merely because it shares a per-user installation
+directory; ownership must be present in the pre-stop ancestry snapshot.

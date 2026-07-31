@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration.Implementation;
 
 using System.Diagnostics.Metrics;
+using XE_Local_AI_Engine.AI.Contracts.Telemetry;
 
 /// <summary>
 ///     Shared AI.Agent-layer counters for the workflow idle watchdog, emitted by both the orchestration and the Preview
@@ -20,7 +21,7 @@ internal static class WorkflowWatchdogMetrics
 
     private const string SurfaceTag = "surface";
 
-    private static readonly Meter Meter = new("XE.LocalAiEngine.AI.Agent", "1.0.0");
+    private static readonly Meter Meter = new(TelemetrySourceNames.Agent, "1.0.0");
 
     private static readonly Counter<long> WatchdogTimeoutCounter =
         Meter.CreateCounter<long>("xe.agent.workflow.watchdog_timeout",

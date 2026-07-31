@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using OpenTelemetry;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
+using XE_Local_AI_Engine.AI.Contracts.Telemetry;
 
 // Adds common .NET Aspire services: service discovery, resilience, health checks, and OpenTelemetry.
 // This project should be referenced by each service project in your solution.
@@ -62,14 +63,10 @@ public static class Extensions
                        metrics.AddAspNetCoreInstrumentation()
                               .AddHttpClientInstrumentation()
                               .AddRuntimeInstrumentation()
-                              // Literal must match XE_Local_AI_Engine.Client.Common.Telemetry.NodeMetrics.MeterName
-                              // ("XE.Node"); ServiceDefaults cannot reference the Client project.
-                              .AddMeter("XE.Node")
-                              // Literal must match the Meter name used by the ProviderCallBudgetChatClient in the
-                              // AI.Agent project, which is XE.LocalAiEngine.AI.Agent; ServiceDefaults cannot reference
-                              // that project. Mirrors the identically named tracing AddSource below so the agent's
-                              // provider-round and budget counters are exported, not just recorded in-process.
-                              .AddMeter("XE.LocalAiEngine.AI.Agent")
+                              .AddMeter(TelemetrySourceNames.Node)
+                              // Mirrors the identically named tracing AddSource below so the agent's provider-round and
+                              // budget counters are exported, not just recorded in-process.
+                              .AddMeter(TelemetrySourceNames.Agent)
                               // Flows the OpenTelemetryChatClient's gen_ai token/duration metrics (MEAI meter
                               // "Microsoft.Extensions.AI"); wildcard mirrors the tracing AddSource below.
                               .AddMeter("Microsoft.Extensions.AI*");
@@ -77,11 +74,10 @@ public static class Extensions
                    .WithTracing(tracing =>
                    {
                        tracing.AddSource(builder.Environment.ApplicationName)
-                              // Literal must match XE_Local_AI_Engine.Client.Common.Telemetry.NodeActivitySource.SourceName
-                              // ("XE.Node"); ServiceDefaults cannot reference the Client project. Exports the coarse
-                              // pre-spawn turn/readiness spans (AUD4-23), mirroring the identically named AddMeter above.
-                              .AddSource("XE.Node")
-                              .AddSource("XE.LocalAiEngine.AI.Agent")
+                              // Exports the coarse pre-spawn turn/readiness spans (AUD4-23), mirroring the identically
+                              // named meters above.
+                              .AddSource(TelemetrySourceNames.Node)
+                              .AddSource(TelemetrySourceNames.Agent)
                               .AddSource("Microsoft.Agents.AI*")
                               .AddSource("Microsoft.Extensions.AI*")
                               .AddAspNetCoreInstrumentation(tracing =>

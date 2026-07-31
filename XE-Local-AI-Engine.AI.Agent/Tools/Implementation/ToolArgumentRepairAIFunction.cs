@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using System.Diagnostics.Metrics;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
+using XE_Local_AI_Engine.AI.Contracts.Telemetry;
 
 /// <summary>
 ///     A <see cref="DelegatingAIFunction" /> that guards the inner executable with uniform argument validation and a
@@ -20,7 +21,7 @@ using Microsoft.Extensions.AI;
 /// </summary>
 internal sealed class ToolArgumentRepairAIFunction : DelegatingAIFunction
 {
-    private static readonly Meter Meter = new("XE.LocalAiEngine.AI.Agent", "1.0.0");
+    private static readonly Meter Meter = new(TelemetrySourceNames.Agent, "1.0.0");
 
     private static readonly Counter<long> RepairCounter = Meter.CreateCounter<long>(
         "xe.agent.tool_argument_repair",
