@@ -12948,6 +12948,9 @@
           "isReasoningCapable": {
             "type": "boolean"
           },
+          "isNativeReasoningCapable": {
+            "type": "boolean"
+          },
           "isToolCapable": {
             "type": "boolean"
           },

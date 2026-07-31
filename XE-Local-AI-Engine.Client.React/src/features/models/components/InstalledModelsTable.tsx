@@ -3,7 +3,7 @@ import { IconArrowBackUp, IconCheck, IconEye, IconTrash } from "@tabler/icons-re
 import { useTranslation } from "react-i18next";
 
 import type { LocalModelViewModel } from "@/features/models/models/LocalModelModel";
-import { capabilityLabel, kindBadgeColor, kindLabel } from "@/features/models/models/ModelKindFormatters";
+import { capabilityBadgeColor, capabilityLabel, kindBadgeColor, kindLabel } from "@/features/models/models/ModelKindFormatters";
 
 interface InstalledModelsTableProps {
 	models: LocalModelViewModel[];
@@ -74,7 +74,7 @@ export function InstalledModelsTable({
 									{model.capabilities.length > 0 ? (
 										<Group gap={4}>
 											{model.capabilities.map((capability) => (
-												<Badge key={capability} size="xs" variant="outline" color="gray">
+												<Badge key={capability} size="xs" variant="outline" color={capabilityBadgeColor(capability)}>
 													{capabilityLabel(t, capability)}
 												</Badge>
 											))}
