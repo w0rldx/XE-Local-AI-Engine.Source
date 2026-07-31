@@ -1334,7 +1334,7 @@
 				"allowedRange": "Zulässiger Bereich",
 				"seconds": "Sekunden",
 				"minutes": "Minuten",
-				"bytesPositive": "Eine positive Anzahl an Bytes.",
+				"bytesPositive": "Eine positive Anzahl an Bytes. Änderungen werden ohne Neustart des Knotens wirksam.",
 				"errors": {
 					"range": "Bitte eine ganze Zahl innerhalb des zulässigen Bereichs eingeben.",
 					"format": "Muss dem Format b<Zahl> entsprechen (z. B. b9692).",
@@ -1354,11 +1354,11 @@
 				},
 				"defaultModelName": {
 					"label": "Standardmodell",
-					"description": "Das Modell, das für den lokalen Chat verwendet wird, wenn keines ausgewählt ist. Leer lassen, um den konfigurierten Standard zu verwenden."
+					"description": "Das Modell, das für den lokalen Chat verwendet wird, wenn keines ausgewählt ist. Leer lassen, um den konfigurierten Standard zu verwenden. Wird nach einem Neustart des Knotens wirksam."
 				},
 				"enableTools": {
 					"label": "Tools aktivieren",
-					"description": "Lokale Chat-Agenten dürfen Tools aufrufen."
+					"description": "Lokale Chat-Agenten dürfen Tools aufrufen. Änderungen werden ohne Neustart des Knotens wirksam."
 				},
 				"toolCapableModels": {
 					"label": "Tool-fähige Modelle",
@@ -1369,10 +1369,12 @@
 					"tagHint": "Die empfohlene llama.cpp-Version wird in der Karte für llama.cpp-Laufzeit-Updates oben verwaltet."
 				},
 				"llamaMaxLoadedProcesses": {
-					"label": "Max. geladene llama-server-Prozesse"
+					"label": "Max. geladene llama-server-Prozesse",
+					"description": "Wird nach einem Neustart des Knotens wirksam."
 				},
 				"llamaIdleTimeToLiveSeconds": {
-					"label": "Leerlauf-Prozess-Lebensdauer"
+					"label": "Leerlauf-Prozess-Lebensdauer",
+					"description": "Wird nach einem Neustart des Knotens wirksam."
 				},
 				"keepModelWarm": {
 					"enabledLabel": "Modell warmhalten",
@@ -1394,27 +1396,31 @@
 				},
 				"huggingFaceDefaultQuant": {
 					"label": "Standard-Quantisierung",
-					"description": "Bevorzugte GGUF-Quantisierung beim Herunterladen von Hugging Face (z. B. Q4_K_M)."
+					"description": "Bevorzugte GGUF-Quantisierung beim Herunterladen von Hugging Face (z. B. Q4_K_M). Wird nach einem Neustart des Knotens wirksam."
 				},
 				"worker": {
 					"title": "Worker-Limits"
 				},
 				"maxResponseSizeMb": {
-					"label": "Maximale Antwortgröße"
+					"label": "Maximale Antwortgröße",
+					"description": "Wird nach einem Neustart des Knotens wirksam."
 				},
 				"advanced": {
 					"title": "Erweitert (Entwickler)",
-					"description": "Low-Level-Orchestrierung und AgentHome-Limits. Die meisten Änderungen werden nach einem Neustart wirksam.",
+					"description": "Low-Level-Orchestrierung und AgentHome-Limits. Der Orchestrierungs-Leerlauf-Timeout und die ausstehende Tool-Aufruf-Dauer werden nach einem Neustart wirksam; die AgentHome-Limits gelten sofort.",
 					"samplingNote": "Sampling-Standardwerte werden pro Nachricht im Chat konfiguriert."
 				},
 				"orchestrationIdleTimeoutSeconds": {
-					"label": "Orchestrierungs-Leerlauf-Timeout"
+					"label": "Orchestrierungs-Leerlauf-Timeout",
+					"description": "Wird nach einem Neustart des Knotens wirksam."
 				},
 				"agentHomePrepareTimeoutSeconds": {
-					"label": "AgentHome-Vorbereitungs-Timeout"
+					"label": "AgentHome-Vorbereitungs-Timeout",
+					"description": "Änderungen werden ohne Neustart des Knotens wirksam."
 				},
 				"agentHomeCommandTimeoutSeconds": {
-					"label": "AgentHome-Befehls-Timeout"
+					"label": "AgentHome-Befehls-Timeout",
+					"description": "Änderungen werden ohne Neustart des Knotens wirksam."
 				},
 				"agentHomeMaxSelectedFolderBytes": {
 					"label": "AgentHome max. ausgewählte Ordnergröße"
@@ -1423,7 +1429,8 @@
 					"label": "AgentHome max. Patch-Größe"
 				},
 				"maxPendingToolCallAgeMinutes": {
-					"label": "Max. ausstehende Tool-Aufruf-Dauer"
+					"label": "Max. ausstehende Tool-Aufruf-Dauer",
+					"description": "Wird nach einem Neustart des Knotens wirksam."
 				},
 				"speculativeMode": {
 					"label": "Spekulatives Decoding",
@@ -1439,12 +1446,13 @@
 				},
 				"speculativeDraftModel": {
 					"label": "Entwurfsmodell",
-					"description": "Ein installiertes chatfähiges Modell als Entwurfsmodell. Muss zur Tokenizer-Familie des Zielmodells passen.",
+					"description": "Ein installiertes chatfähiges Modell als Entwurfsmodell. Muss zur Tokenizer-Familie des Zielmodells passen. Wird nach einem Neustart des Knotens wirksam.",
 					"placeholder": "Entwurfsmodell auswählen",
 					"empty": "Keine installierten Chat-Modelle"
 				},
 				"speculativeDraftMaxTokens": {
-					"label": "Entwurfstoken pro Schritt"
+					"label": "Entwurfstoken pro Schritt",
+					"description": "Wird nach einem Neustart des Knotens wirksam."
 				},
 				"chatCacheReuse": {
 					"label": "Prompt-Cache-Wiederverwendung",
