@@ -82,17 +82,26 @@
 #   HuggingFace__ModelsDirectory before running.
 #
 # Exit codes:
-#   0  — every expected step ran AND passed
-#   1  — an assertion failed, or the run was vacuous (a step produced no verdict)
-#   2  — a prerequisite is missing / usage error (nothing was run)
-#   3  — an AppHost for this worktree is already running; refusing to reuse or stop it
-#   4  — could not establish whether an AppHost is running; refusing to start one
-#   75 — CONTAMINATED: the build output changed mid-run; the result is void, re-run it
+#   0   — every expected step ran AND passed
+#   1   — the run was JUDGED and did not earn a pass: an assertion failed, or a step produced no
+#         verdict. A `1` ALWAYS comes with a `=== Summary ===` block naming each step's verdict.
+#   2   — a prerequisite is missing / usage error (nothing was run)
+#   3   — an AppHost for this worktree is already running; refusing to reuse or stop it
+#   4   — could not establish whether an AppHost is running; refusing to start one
+#   5   — INFRASTRUCTURE: the run aborted before any step could be judged (the AppHost failed to
+#         start or never became healthy, the base URL could not be discovered, or authentication
+#         failed). No summary is printed. This is deliberately NOT 1.
+#   75  — CONTAMINATED: the build output changed mid-run; the result is void, re-run it
 #   130 — interrupted (Ctrl-C). The AppHost is still torn down; the result is incomplete, not red.
 #
-# Note 1 is deliberately broad: an assertion failure and a vacuous run are both "this run did not
-# earn a pass", and both need the same response (read the summary, which names every step's
-# verdict individually). The summary, not the exit code, is what distinguishes them.
+# Why 5 exists, since this is the script a pre-RC checklist keys on: "the GPU did not do the work"
+# is a product defect that should block an RC, while "the AppHost never came up on this laptop" is
+# local infrastructure that blocks nothing. Both used to exit 1, indistinguishable to any caller,
+# with the only discriminator (whether a summary was printed) undocumented and unkeyable. A
+# wrapper can now treat 1 as "product says no" and 5 as "fix your machine and re-run".
+#
+# 1 remains deliberately broad WITHIN judged runs: an assertion failure and a vacuous step both
+# mean "this run did not earn a pass" and both need the same response — read the summary.
 #
 # A note on nvidia-smi under WSL2
 #   `nvidia-smi --query-compute-apps` reports NOTHING under WSL2 (verified 2026-07-31) — there is
@@ -689,14 +698,14 @@ CLEANUP_ARMED="true"
   echo "[gpu-smoke] dev-start.sh failed. If a global instance lock is stale, remove" >&2
   echo "[gpu-smoke]   ~/.local/share/XE-Local-AI-Engine/instance.lock" >&2
   echo "[gpu-smoke] and re-run. Only one host may run at a time." >&2
-  exit 1
+  exit 5
 }
 
 timeout "$((READY_TIMEOUT_SECONDS + 15))s" aspire wait app \
   --apphost "${XE_ASPIRE_APPHOST:-${GPU_SMOKE_PROJECT_ROOT}/XE-Local-AI-Engine.AppHost/XE-Local-AI-Engine.AppHost.csproj}" \
   --status healthy --timeout "${READY_TIMEOUT_SECONDS}" --non-interactive --nologo >/dev/null || {
   echo "[gpu-smoke] the app resource did not become healthy within ${READY_TIMEOUT_SECONDS}s." >&2
-  exit 1
+  exit 5
 }
 
 # Discover the port. It changes on EVERY restart, so it is read from Aspire's own resource list
@@ -722,7 +731,7 @@ for resource in status.get("resources", []):
 raise SystemExit(1)
 '
 )"
-[[ -n "${BASE_URL}" ]] || { echo "[gpu-smoke] could not discover the app base URL from dev-status.sh --json." >&2; exit 1; }
+[[ -n "${BASE_URL}" ]] || { echo "[gpu-smoke] could not discover the app base URL from dev-status.sh --json." >&2; exit 5; }
 log "base URL   ${BASE_URL}"
 
 drive() { python3 "${DRIVER}" --base-url "${BASE_URL}" "$@"; }
@@ -735,10 +744,10 @@ AUTH_RECORDS="$(drive auth --email "${SMOKE_EMAIL}" --password "${SMOKE_PASSWORD
   echo "[gpu-smoke] could not obtain an operator token." >&2
   echo "[gpu-smoke] If this node was already onboarded by hand, its password is not the default;" >&2
   echo "[gpu-smoke] set XE_GPU_SMOKE_EMAIL / XE_GPU_SMOKE_PASSWORD to the real credentials." >&2
-  exit 1
+  exit 5
 }
 TOKEN="$(record_value token "${AUTH_RECORDS}")"
-[[ -n "${TOKEN}" ]] || { echo "[gpu-smoke] auth produced no token." >&2; exit 1; }
+[[ -n "${TOKEN}" ]] || { echo "[gpu-smoke] auth produced no token." >&2; exit 5; }
 log "auth       ok (first-run setup performed: $(record_value setupPerformed "${AUTH_RECORDS}"))"
 
 # --- step 2 first: its verdict is an input to step 1 ------------------------
