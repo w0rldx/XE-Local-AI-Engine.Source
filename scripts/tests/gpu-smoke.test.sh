@@ -454,6 +454,30 @@ check "an unknown option => exit 2" "2" "${status}"
 out="$(PATH="${TEMP_ROOT}/bin:${PATH}" NO_BUILD_LOCK=1 "${SMOKE}" --model 2>&1)"; status=$?
 check "--model without a value => exit 2" "2" "${status}"
 
+# An infrastructure abort must NOT be exit 1. This script is what a pre-RC checklist keys on, and
+# "the GPU did not do the work" (a product defect that blocks an RC) must be distinguishable from
+# "the AppHost never came up on this laptop" (local, blocks nothing). Here dev-status reports
+# stopped so the run proceeds, then `aspire start` fails => dev-start.sh fails => exit 5, and
+# crucially NO summary block is printed because nothing was ever judged.
+cat >"${TEMP_ROOT}/bin/aspire" <<'FAKE_ASPIRE_START_FAILS'
+#!/usr/bin/env bash
+case "$1" in
+  ps)    printf '[]\n'; exit 0 ;;   # nothing running -> dev-status exits 3 -> the smoke proceeds
+  start) echo "simulated aspire start failure" >&2; exit 1 ;;
+esac
+exit 0
+FAKE_ASPIRE_START_FAILS
+chmod 700 "${TEMP_ROOT}/bin/aspire"
+
+out="$(PATH="${TEMP_ROOT}/bin:${PATH}" NO_BUILD_LOCK=1 NO_GUARD=1 XE_ASPIRE_APPHOST="${APPHOST}" "${SMOKE}" 2>&1)"; status=$?
+check "a failed AppHost start => exit 5, not 1" "5" "${status}"
+check_contains "the infrastructure abort names the instance lock" "instance.lock" "${out}"
+CHECKS=$((CHECKS + 1))
+if [[ "${out}" == *"=== Summary ==="* ]]; then
+  echo "  FAIL: an infrastructure abort must not print a summary — nothing was judged" >&2
+  FAILED=$((FAILED + 1))
+fi
+
 # ---------------------------------------------------------------------------
 echo
 if [[ "${FAILED}" -ne 0 ]]; then
