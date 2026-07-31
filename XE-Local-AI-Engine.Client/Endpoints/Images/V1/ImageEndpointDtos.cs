@@ -204,7 +204,7 @@ public sealed class StartImageModelDownloadRequest
 
 /// <summary>
 ///     Accepted (202) response for <c>POST images/models/downloads</c>. The download runs in the background; the response
-///     echoes the canonical model-name identity to track presence by.
+///     echoes the canonical model-name identity to poll the download status by.
 /// </summary>
 public sealed class StartImageModelDownloadResponse
 {
@@ -212,4 +212,37 @@ public sealed class StartImageModelDownloadResponse
 
     /// <summary>Always <c>true</c> when the request was accepted and the detached download started.</summary>
     public required bool Accepted { get; init; }
+
+    /// <summary>
+    ///     <c>true</c> when a download for the same model name was already in flight and was rejoined instead of started
+    ///     a second time (a double-submit is idempotent).
+    /// </summary>
+    public required bool AlreadyInFlight { get; init; }
+}
+
+/// <summary>
+///     Snapshot of one tracked image-model download returned by <c>GET images/models/downloads</c>. Carries only
+///     sanitized fields — no absolute path, URL, or token.
+/// </summary>
+public sealed class ImageModelDownloadStatusResponse
+{
+    public required string ModelName { get; init; }
+
+    /// <summary>Phase string: <c>Running</c>, <c>Completed</c>, <c>Cancelled</c>, or <c>Failed</c>.</summary>
+    public required string Phase { get; init; }
+
+    /// <summary>Bytes received so far; <c>null</c> until the first progress event.</summary>
+    public long? CompletedBytes { get; init; }
+
+    /// <summary>Total content length in bytes; <c>null</c> when the source did not report one.</summary>
+    public long? TotalBytes { get; init; }
+
+    /// <summary>Operator-safe failure reason; non-<c>null</c> only when <see cref="Phase" /> is <c>Failed</c>.</summary>
+    public string? SanitizedError { get; init; }
+}
+
+/// <summary>Response envelope for <c>GET images/models/downloads</c>.</summary>
+public sealed class ListImageModelDownloadsResponse
+{
+    public required IReadOnlyList<ImageModelDownloadStatusResponse> Items { get; init; }
 }

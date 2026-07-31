@@ -5679,6 +5679,38 @@
       }
     },
     "/api/local/v1/images/models/downloads": {
+      "get": {
+        "tags": [
+          "Images"
+        ],
+        "operationId": "listImageModelDownloads",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1ListImageModelDownloadsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
       "post": {
         "tags": [
           "Images"
@@ -14904,13 +14936,17 @@
         "additionalProperties": false,
         "required": [
           "modelName",
-          "accepted"
+          "accepted",
+          "alreadyInFlight"
         ],
         "properties": {
           "modelName": {
             "type": "string"
           },
           "accepted": {
+            "type": "boolean"
+          },
+          "alreadyInFlight": {
             "type": "boolean"
           }
         }
@@ -17902,6 +17938,49 @@
           "priority": {
             "type": "integer",
             "format": "int32"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsImagesV1ImageModelDownloadStatusResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "modelName",
+          "phase"
+        ],
+        "properties": {
+          "modelName": {
+            "type": "string"
+          },
+          "phase": {
+            "type": "string"
+          },
+          "completedBytes": {
+            "type": "integer",
+            "nullable": true
+          },
+          "totalBytes": {
+            "type": "integer",
+            "nullable": true
+          },
+          "sanitizedError": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsImagesV1ListImageModelDownloadsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1ImageModelDownloadStatusResponse"
+            }
           }
         }
       }

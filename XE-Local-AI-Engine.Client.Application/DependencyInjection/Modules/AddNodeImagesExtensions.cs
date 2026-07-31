@@ -37,6 +37,10 @@ internal static class AddNodeImagesExtensions
         // No-op default image-job event publisher; the Client host supersedes it with the hub-backed publisher.
         builder.Services.AddSingleton<IImageJobEventPublisher, NullImageJobEventPublisher>();
 
+        // Weight-download coordinator. Singleton for the same reason as the job coordinator: the download outlives the
+        // request that started it, and its status registry is what makes a failed download observable at all.
+        builder.Services.AddSingleton<IImageModelDownloadCoordinator, ImageModelDownloadCoordinator>();
+
         // The on-demand image-job coordinator. Singleton: the in-flight registry must outlive the request that started a
         // job (generation runs detached), and it composes the singleton runtime + blob store + IHubContext-safe publisher.
         builder.Services.AddSingleton<IImageJobCoordinator, ImageJobCoordinator>();
