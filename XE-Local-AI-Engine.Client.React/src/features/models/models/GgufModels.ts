@@ -38,6 +38,10 @@ export interface GgufRepositoryFile {
 	readonly fileName: string;
 	readonly quant: string;
 	readonly isDynamic: boolean;
+	// True for a speculative-decoding DRAFT model (an MTP drafter) shipped alongside the real weights, not a base-model
+	// quant. Its quant carries the backend's `MTP-` marker so it can never share a row label with the real file, and the
+	// picker lists drafts in their own group with no quality grade — a drafter is not a usable chat model.
+	readonly isDraft: boolean;
 	readonly sizeBytes: number;
 	readonly qualityTier: GgufQuantTier;
 	readonly fitVerdict: GgufFitVerdict;
@@ -51,8 +55,11 @@ export interface GgufRepositoryDetail {
 }
 
 // Pure rule for the picker's initial/derived selection: the backend-flagged recommended file when present, else the
-// first listed file (legacy smallest-first order), else null for an empty list. Kept side-effect-free so the dialog
-// can derive the effective selection without a derived-state effect, and so the rule is unit-testable in isolation.
+// first listed BASE quant (legacy smallest-first order), else null. A speculative-decoding draft is never the default
+// selection — it is a companion, not a chat model — so a draft is only ever selected by an explicit operator click.
+// Kept side-effect-free so the dialog can derive the effective selection without a derived-state effect, and so the
+// rule is unit-testable in isolation.
 export function recommendedGgufFileName(files: readonly GgufRepositoryFile[]): string | null {
-	return (files.find((file) => file.isRecommended) ?? files[0])?.fileName ?? null;
+	const baseQuants = files.filter((file) => !file.isDraft);
+	return (files.find((file) => file.isRecommended) ?? baseQuants[0])?.fileName ?? null;
 }

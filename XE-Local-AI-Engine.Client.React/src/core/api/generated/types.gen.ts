@@ -851,6 +851,7 @@ export type XeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryFileResponse =
 	fileName: string;
 	quant: string;
 	isDynamic: boolean;
+	isDraft: boolean;
 	sizeBytes: number;
 	qualityTier: string;
 	fitVerdict: string;

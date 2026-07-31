@@ -16,7 +16,7 @@ import {
 import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
 import { toast } from "@/core/ui/notifications/Toast";
-import { toChatModelOptions } from "@/features/chat/pages/ChatModelOptions";
+import { toChatModelOptions, toDraftModelOptions } from "@/features/chat/pages/ChatModelOptions";
 import { DownloadProgressPanel } from "@/features/models/components/DownloadProgressPanel";
 import { useActiveGgufDownloads, useCancelGgufDownload } from "@/features/models/queries/useGgufDownload";
 import { useGgufBrowseStore } from "@/features/models/stores/GgufBrowseStore";
@@ -77,11 +77,13 @@ export function NodeSettings() {
 	const [fieldErrors, setFieldErrors] = useState<Readonly<Record<string, string>>>({});
 	const fieldBounds = useMemo(() => toNodeSettingsFieldBounds(settings), [settings]);
 
-	// Installed chat-capable models offered as the speculative draft model (value = model name, resolved server-side).
+	// Models offered as the speculative draft model (value = model name, resolved server-side). Purpose-built MTP
+	// drafters are `Draft`-kind and so are absent from the chat list — they must be offered HERE, which is the only
+	// place they are usable at all.
 	const { data: localModels } = useQuery(withResponseValidation(listLocalModelsOptions()));
 	const draftModelOptions = useMemo(
 		() =>
-			toChatModelOptions(localModels?.items ?? [], localModels?.isAvailable ?? false).map((option) => ({
+			toDraftModelOptions(localModels?.items ?? [], localModels?.isAvailable ?? false).map((option) => ({
 				value: option.value,
 				label: option.label,
 			})),

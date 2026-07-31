@@ -12140,6 +12140,7 @@
           "fileName",
           "quant",
           "isDynamic",
+          "isDraft",
           "sizeBytes",
           "qualityTier",
           "fitVerdict",
@@ -12153,6 +12154,9 @@
             "type": "string"
           },
           "isDynamic": {
+            "type": "boolean"
+          },
+          "isDraft": {
             "type": "boolean"
           },
           "sizeBytes": {
