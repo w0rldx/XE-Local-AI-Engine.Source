@@ -364,6 +364,20 @@ ledger_expect "a"; ledger_pass "a" >/dev/null; ledger_skip "6-image"
 ledger_finalize >/dev/null 2>&1
 check "an unexpected-but-skipped step does not fail" "0" "$?"
 
+# ...but an opt-IN step nobody asked for and a normally-REQUIRED step the operator switched off
+# are different things, and the summary must not describe them identically. Tool calling silently
+# not being verified is precisely the state this smoke exists to make visible.
+ledger_reset
+ledger_expect "a"; ledger_pass "a" >/dev/null; ledger_skip "6-image"
+out="$(ledger_finalize 2>&1)"
+check_contains "an un-requested opt-in step reads as routine" "opt-in; not requested" "${out}"
+
+ledger_reset
+ledger_expect "a"; ledger_pass "a" >/dev/null; ledger_skip "5-tool-calling"
+out="$(ledger_finalize 2>&1)"
+check_contains "--no-tools says the feature was NOT verified" "NOT verified" "${out}"
+check_contains "--no-tools names the flag that caused it" "--no-tools" "${out}"
+
 # ---------------------------------------------------------------------------
 # Layer 2 — end-to-end preflight gates, with fakes on PATH.
 # ---------------------------------------------------------------------------
