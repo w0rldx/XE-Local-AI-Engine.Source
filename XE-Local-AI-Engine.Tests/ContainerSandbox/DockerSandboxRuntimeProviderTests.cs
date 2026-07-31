@@ -36,10 +36,10 @@ public sealed class DockerSandboxRuntimeProviderTests
         AssertEx.True(capabilities.HasFlag(SandboxProviderCapabilities.SupportsAttach));
         AssertEx.True(capabilities.HasFlag(SandboxProviderCapabilities.SupportsKill));
 
-        // Measured, not assumed: Docker answers 400 "container rootfs is marked read-only" to an archive extraction
-        // against a read-only-rootfs container regardless of destination, and §3.8 requires that rootfs. So the
-        // capability cannot be honoured and is not claimed.
-        AssertEx.False(capabilities.HasFlag(SandboxProviderCapabilities.SupportsCopyInto));
+        // Served, but not through Docker's archive endpoint: that answers 400 "container rootfs is marked read-only"
+        // against a read-only-rootfs container regardless of destination, and §3.8 requires that rootfs. The write
+        // goes to the host side of the workspace bind mount instead, which needs no archive endpoint at all.
+        AssertEx.True(capabilities.HasFlag(SandboxProviderCapabilities.SupportsCopyInto));
     }
 
     [Test]
@@ -175,16 +175,43 @@ public sealed class DockerSandboxRuntimeProviderTests
     }
 
     [Test]
-    public async Task CreateOrAttachAsync_WhenANetworkPolicyOtherThanNoneIsRequested_RefusesBeforeCreatingAnything()
+    public async Task CreateOrAttachAsync_WhenARestrictedEgressAllowListIsRequested_RefusesBeforeCreatingAnything()
     {
         var (provider, client, workspace) = CreateProvider();
 
-        await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(
-            () => provider.CreateOrAttachAsync(CreateRequest(workspace) with { NetworkPolicy = SandboxNetworkPolicy.Unrestricted }));
+        var exception = await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(
+            () => provider.CreateOrAttachAsync(CreateRequest(workspace) with { NetworkPolicy = SandboxNetworkPolicy.Restricted }));
 
+        AssertEx.Contains(exception.Message, "no mechanism");
         // Nothing was created. A container that should never have existed is not a thing the caller should have to
         // reason about afterwards.
         AssertEx.Empty(client.CreatedContainerIds);
+    }
+
+    [Test]
+    public async Task CreateOrAttachAsync_WhenUnrestrictedEgressIsRequested_ServesItOnTheDefaultBridge()
+    {
+        // Development Mode asks for this today: its `dotnet restore` needs the network until the D6 package-proxy
+        // machinery exists, so a provider that served only `None` could never be switched on for it at all.
+        var (provider, client, workspace) = CreateProvider();
+
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(workspace) with { NetworkPolicy = SandboxNetworkPolicy.Unrestricted });
+
+        var settings = await client.InspectContainerAsync(client.CreatedContainerIds[0]);
+        AssertEx.Equal("bridge", settings.NetworkMode);
+        AssertEx.NotNullOrEmpty(handle.SandboxId);
+    }
+
+    [Test]
+    public async Task CreateOrAttachAsync_WhenNoneIsRequested_StillGetsAnEmptyNetworkNamespace()
+    {
+        // The other half of the pair: widening to serve Unrestricted must not have quietly widened the default.
+        var (provider, client, workspace) = CreateProvider();
+
+        await provider.CreateOrAttachAsync(CreateRequest(workspace));
+
+        var settings = await client.InspectContainerAsync(client.CreatedContainerIds[0]);
+        AssertEx.Equal("none", settings.NetworkMode);
     }
 
     [Test]
@@ -211,20 +238,69 @@ public sealed class DockerSandboxRuntimeProviderTests
         var exception = await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(
             () => Task.FromResult(DockerSandboxRuntimeProvider.ResolveIdentity(
                 DockerSandboxHardeningTests.Options() with { UserId = null, GroupId = null },
+                daemonIsRootless: false,
                 () => 0,
                 () => 0)));
 
-        AssertEx.Contains(exception.Message, "non-root execution");
+        AssertEx.Contains(exception.Message, "host root");
     }
 
     [Test]
     public void ResolveIdentity_WhenUnset_TakesTheEngineProcessOwnIdentifiers()
     {
         var identity = DockerSandboxRuntimeProvider.ResolveIdentity(DockerSandboxHardeningTests.Options() with { UserId = null, GroupId = null },
+            daemonIsRootless: false,
             () => 1234,
             () => 5678);
 
         AssertEx.Equal("1234:5678", identity.UserSpecification);
+    }
+
+    [Test]
+    public void ResolveIdentity_AgainstARootlessDaemon_TakesUidZeroRatherThanTheEngineIdentifiers()
+    {
+        // The inversion, and the reason §3.8's flat "non-root" rule could not stand. A rootless daemon maps container
+        // uid 0 to the invoking user and container uid N>0 into the subordinate range, so the engine's own 1000 names
+        // a host account (100999 with /etc/subuid = ...:100000:65536) that owns nothing of ours. Measured on Engine
+        // 29.6.1 rootless: --user 1000:1000 could not touch a file in the engine-generated workspace mount at all.
+        var identity = DockerSandboxRuntimeProvider.ResolveIdentity(DockerSandboxHardeningTests.Options() with { UserId = null, GroupId = null },
+            daemonIsRootless: true,
+            () => 1000,
+            () => 1000);
+
+        AssertEx.Equal("0:0", identity.UserSpecification);
+    }
+
+    [Test]
+    public void ResolveIdentity_AnExplicitOperatorIdentityWinsOverEitherDefault()
+    {
+        // A daemon may map identities in a way neither rule describes, so the operator keeps the last word.
+        var rootless = DockerSandboxRuntimeProvider.ResolveIdentity(DockerSandboxHardeningTests.Options() with { UserId = 4242, GroupId = 4242 },
+            daemonIsRootless: true,
+            () => 1000,
+            () => 1000);
+        var rootful = DockerSandboxRuntimeProvider.ResolveIdentity(DockerSandboxHardeningTests.Options() with { UserId = 4242, GroupId = 4242 },
+            daemonIsRootless: false,
+            () => 1000,
+            () => 1000);
+
+        AssertEx.Equal("4242:4242", rootless.UserSpecification);
+        AssertEx.Equal("4242:4242", rootful.UserSpecification);
+    }
+
+    [Test]
+    public async Task ResolveIdentity_UidZeroAgainstARootfulDaemon_IsStillRefusedEvenWhenConfigured()
+    {
+        // The relaxation is scoped to a daemon that reports itself rootless, and nothing else. On a rootful daemon an
+        // in-container id maps straight through, so 0 there is host root.
+        var exception = await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(
+            () => Task.FromResult(DockerSandboxRuntimeProvider.ResolveIdentity(
+                DockerSandboxHardeningTests.Options() with { UserId = 0, GroupId = 0 },
+                daemonIsRootless: false,
+                () => 1000,
+                () => 1000)));
+
+        AssertEx.Contains(exception.Message, "host root");
     }
 
     [Test]
@@ -243,15 +319,54 @@ public sealed class DockerSandboxRuntimeProviderTests
     }
 
     [Test]
-    public async Task CopyIntoAsync_IsRejectedRatherThanEmulated()
+    public async Task CopyIntoAsync_WritesThroughTheWorkspaceMountOnTheHostSide()
+    {
+        // write_file is built on this. While it threw, Development Mode's write_file could not work at all.
+        var (provider, _, workspace) = CreateProvider();
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(workspace));
+        var source = Path.Combine(workspace, "..", Guid.NewGuid().ToString("N") + ".source");
+        await File.WriteAllTextAsync(source, "written-by-the-engine");
+
+        await provider.CopyIntoAsync(handle, new SandboxCopyRequest { SourcePath = source, DestinationPath = "/nested/a.txt" });
+
+        // The HOST path behind the mount, not the container path: the mount source is where the bytes go.
+        AssertEx.Equal("written-by-the-engine", await File.ReadAllTextAsync(Path.Combine(workspace, "nested", "a.txt")));
+        File.Delete(source);
+    }
+
+    [Test]
+    public async Task CopyIntoAsync_WhenTheDestinationEscapesTheWorkspace_Refuses()
     {
         var (provider, _, workspace) = CreateProvider();
         var handle = await provider.CreateOrAttachAsync(CreateRequest(workspace));
+        var source = Path.Combine(workspace, "..", Guid.NewGuid().ToString("N") + ".source");
+        await File.WriteAllTextAsync(source, "x");
 
-        var exception = await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(
-            () => provider.CopyIntoAsync(handle, new SandboxCopyRequest { SourcePath = "/host/a", DestinationPath = "/scratch/a" }));
+        await AssertEx.ThrowsAsync<UnauthorizedAccessException>(
+            () => provider.CopyIntoAsync(handle, new SandboxCopyRequest { SourcePath = source, DestinationPath = "/../escaped.txt" }));
 
-        AssertEx.Contains(exception.Message, "read-only root filesystem");
+        AssertEx.False(File.Exists(Path.Combine(workspace, "..", "escaped.txt")));
+        File.Delete(source);
+    }
+
+    [Test]
+    public async Task CopyIntoAsync_WhenAComponentOfTheDestinationIsASymlink_Refuses()
+    {
+        // A command inside the container can plant one, and it is the HOST that resolves it — so an unguarded write
+        // would let the sandbox choose where the engine writes.
+        var (provider, _, workspace) = CreateProvider();
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(workspace));
+        var outside = Path.Combine(workspace, "..", "outside-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(outside);
+        Directory.CreateSymbolicLink(Path.Combine(workspace, "escape"), outside);
+        var source = Path.Combine(workspace, "..", Guid.NewGuid().ToString("N") + ".source");
+        await File.WriteAllTextAsync(source, "x");
+
+        await AssertEx.ThrowsAsync<UnauthorizedAccessException>(
+            () => provider.CopyIntoAsync(handle, new SandboxCopyRequest { SourcePath = source, DestinationPath = "/escape/planted.txt" }));
+
+        AssertEx.False(File.Exists(Path.Combine(outside, "planted.txt")));
+        File.Delete(source);
     }
 
     [Test]
@@ -259,9 +374,30 @@ public sealed class DockerSandboxRuntimeProviderTests
     {
         var (provider, client, workspace) = CreateProvider();
         var handle = await provider.CreateOrAttachAsync(CreateRequest(workspace));
+        // Note the mapping: the sandbox path "/big.txt" is the workspace root, which the container sees at /workspace.
         client.RegisterCommand("cat /workspace/big.txt", exitCode: 0, new string('x', count: 128));
 
-        await AssertEx.ThrowsAsync<InvalidDataException>(() => provider.ReadFileAsync(handle, "/workspace/big.txt", maxBytes: 64));
+        await AssertEx.ThrowsAsync<InvalidDataException>(() => provider.ReadFileAsync(handle, "/big.txt", maxBytes: 64));
+    }
+
+    [Test]
+    public async Task ReadFileAsync_MapsTheSandboxPathOntoTheWorkspaceMountRatherThanTheContainerRoot()
+    {
+        var (provider, client, workspace) = CreateProvider();
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(workspace));
+        client.RegisterCommand("cat /workspace/src/a.txt", exitCode: 0, "mapped");
+
+        AssertEx.Equal("mapped", await provider.ReadFileAsync(handle, "/src/a.txt", maxBytes: 4096));
+    }
+
+    [Test]
+    public async Task ReadFileAsync_WhenTheSandboxPathEscapesTheWorkspace_Refuses()
+    {
+        var (provider, _, workspace) = CreateProvider();
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(workspace));
+
+        await AssertEx.ThrowsAsync<UnauthorizedAccessException>(
+            () => provider.ReadFileAsync(handle, "/../../etc/shadow", maxBytes: 4096));
     }
 
     [Test]
@@ -287,6 +423,153 @@ public sealed class DockerSandboxRuntimeProviderTests
 
         AssertEx.Equal(first.SandboxId, second.SandboxId);
         AssertEx.Equal(expected: 1, client.CreatedContainerIds.Count);
+    }
+
+    [Test]
+    public async Task ExecuteAsync_MapsTheWorkingDirectoryOntoTheWorkspaceMount()
+    {
+        // The defect this pins: Development Mode passes the literal "/" for EVERY command. Forwarded unmapped, that
+        // reaches the wire as WorkingDir="/" and every build, test and git command runs in the container's root
+        // instead of the repository — where it finds no repository at all.
+        var (provider, client, workspace) = CreateProvider();
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(workspace));
+
+        await provider.ExecuteAsync(handle,
+            new SandboxCommandRequest { ExecutionId = "exec-root", Executable = "git", Arguments = ["status"], WorkingDirectory = "/" });
+        await provider.ExecuteAsync(handle,
+            new SandboxCommandRequest { ExecutionId = "exec-nested", Executable = "git", Arguments = ["status"], WorkingDirectory = "/src/app" });
+
+        var working = client.ExecutedRequests
+                            .Where(request => string.Equals(request.Executable, "git", StringComparison.Ordinal))
+                            .Select(request => request.WorkingDirectory)
+                            .ToArray();
+
+        AssertEx.Equal("/workspace|/workspace/src/app", string.Join('|', working));
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WhenNoWorkingDirectoryIsGiven_UsesTheWorkspaceMount()
+    {
+        var (provider, client, workspace) = CreateProvider();
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(workspace));
+
+        await provider.ExecuteAsync(handle, new SandboxCommandRequest { ExecutionId = "exec-1", Executable = "git", Arguments = ["status"] });
+
+        AssertEx.Equal("/workspace",
+            client.ExecutedRequests.Single(request => string.Equals(request.Executable, "git", StringComparison.Ordinal)).WorkingDirectory);
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WhenTheWorkingDirectoryEscapesTheWorkspace_Refuses()
+    {
+        var (provider, _, workspace) = CreateProvider();
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(workspace));
+
+        await AssertEx.ThrowsAsync<UnauthorizedAccessException>(() => provider.ExecuteAsync(handle,
+            new SandboxCommandRequest { ExecutionId = "exec-1", Executable = "git", WorkingDirectory = "/../../" }));
+    }
+
+    [Test]
+    public async Task ExecuteAsync_CarriesStandardInputThroughToTheClient()
+    {
+        // apply_patch pipes the patch to `git apply -`. Dropped, git reads EOF from an unattached stdin and EXITS 0,
+        // so the tool reports success having applied nothing — a false green rather than a failure.
+        var (provider, client, workspace) = CreateProvider();
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(workspace));
+
+        await provider.ExecuteAsync(handle,
+            new SandboxCommandRequest
+            {
+                ExecutionId = "exec-1",
+                Executable = "git",
+                Arguments = ["apply", "-"],
+                StandardInput = "diff --git a/a.txt b/a.txt\n"
+            });
+
+        var executed = client.ExecutedRequests.Single(request => string.Equals(request.Executable, "git", StringComparison.Ordinal));
+        AssertEx.Equal("diff --git a/a.txt b/a.txt\n", executed.StandardInput);
+    }
+
+    [Test]
+    public async Task CreateOrAttachAsync_WhenTheContainerCannotWriteThroughTheWorkspaceMount_RefusesAndRemovesTheContainer()
+    {
+        // The failure inspect cannot see. Every §3.8 guarantee reads back perfectly here — the daemon applied exactly
+        // what it was asked for — and the container still cannot put a byte in its own workspace, which is what a
+        // wrong UID mapping looks like from the outside.
+        var (provider, client, workspace) = CreateProvider();
+        client.WritesThroughBindMounts = false;
+
+        var exception = await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(
+            () => provider.CreateOrAttachAsync(CreateRequest(workspace)));
+
+        AssertEx.Contains(exception.Message, "workspace mount");
+        AssertEx.Equal(expected: 1, client.CreatedContainerIds.Count);
+        AssertEx.Contains(client.RemovedContainerIds, client.CreatedContainerIds[0]);
+    }
+
+    [Test]
+    public async Task CreateOrAttachAsync_LeavesNoProbeFileBehindInTheWorkspace()
+    {
+        var (provider, _, workspace) = CreateProvider();
+
+        await provider.CreateOrAttachAsync(CreateRequest(workspace));
+
+        AssertEx.Empty(Directory.GetFileSystemEntries(workspace));
+    }
+
+    [Test]
+    public void DescribeWorkspaceMappingFailure_WhenTheProbeOwnerIsNotTheEngine_NamesTheMismatch()
+    {
+        // The rootless mis-mapping in numbers: container uid 1000 lands host-side as 100999 (subuid base 100000), so
+        // the engine at uid 1000 cannot modify what its own sandbox writes. No inspect can report this — the daemon
+        // echoes back the uid it was ASKED for and knows nothing about what that uid maps to.
+        var failure = DockerSandboxRuntimeProvider.DescribeWorkspaceMappingFailure(containerWroteTheProbe: true,
+            probeVisibleOnHost: true,
+            engineUserId: 1000u,
+            probeOwnerUserId: 100_999u);
+
+        AssertEx.Contains(AssertEx.NotNull(failure), "100999");
+        AssertEx.Contains(failure, "1000");
+    }
+
+    [Test]
+    public void DescribeWorkspaceMappingFailure_WhenTheOwnerMatches_ReportsNothing()
+    {
+        AssertEx.Null(DockerSandboxRuntimeProvider.DescribeWorkspaceMappingFailure(containerWroteTheProbe: true,
+            probeVisibleOnHost: true,
+            engineUserId: 1000u,
+            probeOwnerUserId: 1000u));
+    }
+
+    [Test]
+    public void DescribeWorkspaceMappingFailure_WhenTheOwnerCannotBeRead_FailsClosed()
+    {
+        // Refused rather than assumed: an unreadable owner is not evidence of a correct mapping.
+        AssertEx.NotNull(DockerSandboxRuntimeProvider.DescribeWorkspaceMappingFailure(containerWroteTheProbe: true,
+            probeVisibleOnHost: true,
+            engineUserId: 1000u,
+            probeOwnerUserId: null));
+    }
+
+    [Test]
+    public void DescribeWorkspaceMappingFailure_WhenTheProbeIsInvisibleOnTheHost_NamesTheMountRatherThanTheOwner()
+    {
+        AssertEx.Contains(AssertEx.NotNull(DockerSandboxRuntimeProvider.DescribeWorkspaceMappingFailure(containerWroteTheProbe: true,
+                probeVisibleOnHost: false,
+                engineUserId: 1000u,
+                probeOwnerUserId: null)),
+            "not present on the host");
+    }
+
+    [Test]
+    public void DescribeWorkspaceMappingFailure_OnAnEngineHostWithNoUnixOwnership_StopsAtTheWriteThroughChecks()
+    {
+        // A Windows engine has no host UID to compare against, and the write-through checks have already established
+        // the property that matters. Claiming nothing further beats guessing.
+        AssertEx.Null(DockerSandboxRuntimeProvider.DescribeWorkspaceMappingFailure(containerWroteTheProbe: true,
+            probeVisibleOnHost: true,
+            engineUserId: null,
+            probeOwnerUserId: null));
     }
 
     private static (DockerSandboxRuntimeProvider Provider, FakeDockerRuntimeClient Client, string Workspace) CreateProvider()

@@ -14955,8 +14955,16 @@
           "enabled": {
             "type": "boolean"
           },
+          "sandboxProvider": {
+            "type": "string"
+          },
           "containerRuntime": {
-            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentContainerRuntimeResponse"
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentContainerRuntimeResponse"
+              }
+            ]
           }
         }
       },

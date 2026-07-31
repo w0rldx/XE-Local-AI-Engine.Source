@@ -7,9 +7,22 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Development;
+using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
+using XE_Local_AI_Engine.Client.Services.Sandbox.Container.Implementation;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 
+/// <summary>
+///     Reports Development Mode's availability, and the state of the runtime it will actually execute on.
+///     <para>
+///         The container-runtime block is reported only when the resolved
+///         <see cref="IDevelopmentSandboxRuntimeProvider" /> really is the container provider. Reporting it
+///         unconditionally — which is what this endpoint did before per-feature selection (D2) landed — told operators
+///         that a node without a Docker daemon could not run Development Mode, while Development Mode was in fact
+///         running perfectly well on the supervised process sandbox. An over-reported dependency is not a harmless
+///         extra field: it is a false blocker on a working feature.
+///     </para>
+/// </summary>
 public sealed class GetDevelopmentCapabilityEndpoint
     : EndpointWithoutRequest<DevelopmentCapabilityResponse>, IDevelopmentEndpoint
 {
@@ -22,11 +35,18 @@ public sealed class GetDevelopmentCapabilityEndpoint
     public override async Task HandleAsync(CancellationToken ct)
     {
         var enabled = HttpContext.RequestServices.GetRequiredService<IOptions<DevelopmentOptions>>().Value.Enabled;
+        var providerName = HttpContext.RequestServices.GetRequiredService<IDevelopmentSandboxRuntimeProvider>().ProviderName;
+        if (!string.Equals(providerName, DockerSandboxRuntimeProvider.Name, StringComparison.Ordinal))
+        {
+            await Send.OkAsync(new DevelopmentCapabilityResponse(enabled, providerName, ContainerRuntime: null), ct).ConfigureAwait(false);
+            return;
+        }
+
         var preflight = await HttpContext.RequestServices.GetRequiredService<IDockerDaemonPreflightService>()
                                          .InspectAsync(ct)
                                          .ConfigureAwait(false);
 
-        await Send.OkAsync(new DevelopmentCapabilityResponse(enabled, preflight.ToResponse()), ct).ConfigureAwait(false);
+        await Send.OkAsync(new DevelopmentCapabilityResponse(enabled, providerName, preflight.ToResponse()), ct).ConfigureAwait(false);
     }
 }
 

@@ -185,7 +185,7 @@ public sealed class AgentHomeProcessWriteBackLoopTests : IDisposable
     }
 
     private ServiceHarness CreateHarness(TimeProvider clock,
-        ISandboxRuntimeProvider provider,
+        IAgentSandboxRuntimeProvider provider,
         ISelectedFolderResolver resolver)
     {
         var root = Path.Combine(Path.GetTempPath(), "agenthome-proc-svc-" + Guid.NewGuid().ToString("N"));

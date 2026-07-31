@@ -29,7 +29,37 @@ internal static class DockerSandboxHardening
     internal const string NoNewPrivileges = "no-new-privileges:true";
     internal const string PrivateMountPropagation = "private";
     internal const string NoNetworkMode = "none";
+
+    /// <summary>Docker's default bridge network: a private namespace with NAT egress, and no host interface.</summary>
+    internal const string BridgeNetworkMode = "bridge";
+
     internal const string HostNamespaceMode = "host";
+
+    /// <summary>
+    ///     The Docker network mode that serves a requested policy, or a rejection for one that has no mechanism here.
+    ///     <para>
+    ///         <see cref="SandboxNetworkPolicy.None" /> is the network namespace with nothing in it.
+    ///         <see cref="SandboxNetworkPolicy.Unrestricted" /> is the default bridge — still a private namespace with
+    ///         no host interface, but with NAT egress, which is what Development Mode's <c>dotnet restore</c> needs
+    ///         until the D6 package-proxy machinery exists. <see cref="SandboxNetworkPolicy.Restricted" /> is an egress
+    ///         allow-list and stays fail-closed rejected: there is no mechanism for it here, and returning a bridge
+    ///         while the caller believed it had an allow-list would be exactly the silent weakening this contract
+    ///         exists to prevent.
+    ///     </para>
+    /// </summary>
+    internal static string ResolveNetworkMode(SandboxNetworkPolicy policy)
+    {
+        return policy switch
+        {
+            SandboxNetworkPolicy.None => NoNetworkMode,
+            SandboxNetworkPolicy.Unrestricted => BridgeNetworkMode,
+            _ => throw new SandboxCapabilityNotSupportedException(
+                $"The docker sandbox provider has no mechanism for '{policy}'. It serves "
+                + $"{nameof(SandboxNetworkPolicy.None)} (an empty network namespace) and "
+                + $"{nameof(SandboxNetworkPolicy.Unrestricted)} (the default bridge). A restricted egress allow-list is the "
+                + "separate v2 package-proxy project (plan D6).")
+        };
+    }
 
     /// <summary>
     ///     Mount options for the scratch <c>tmpfs</c>. <c>noexec</c>/<c>nosuid</c>/<c>nodev</c> are set because the
@@ -57,7 +87,8 @@ internal static class DockerSandboxHardening
         string containerName,
         string sandboxId,
         IReadOnlyList<DockerBindMount> bindMounts,
-        SandboxResourceLimits? requestedLimits = null)
+        SandboxResourceLimits? requestedLimits = null,
+        SandboxNetworkPolicy networkPolicy = SandboxNetworkPolicy.None)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(identity);
@@ -79,7 +110,7 @@ internal static class DockerSandboxHardening
             // operator's choice, not ours.
             Entrypoint = ["/bin/sh"],
             Command = ["-c", "while :; do sleep 3600; done"],
-            NetworkMode = NoNetworkMode,
+            NetworkMode = ResolveNetworkMode(networkPolicy),
             CapabilitiesToDrop = [DropAllCapabilities],
             SecurityOptions = [NoNewPrivileges],
             ReadOnlyRootFilesystem = true,
@@ -107,14 +138,25 @@ internal static class DockerSandboxHardening
     ///         security control acquires the reputation that gets it disabled.
     ///     </para>
     /// </summary>
-    internal static IReadOnlyList<string> FindViolations(DockerContainerSpecification requested, DockerContainerSettings observed)
+    /// <param name="requested">What the engine asked the daemon for.</param>
+    /// <param name="observed">What the daemon read back.</param>
+    /// <param name="daemonIsRootless">
+    ///     Whether the daemon is rootless. It moves exactly one rule: under a rootless daemon container UID 0 is the
+    ///     invoking user's unprivileged host account, not host root, so it is the identity §3.8's "not root" rule is
+    ///     actually about — and the conventional non-root UID is the one that maps to a host account owning nothing.
+    ///     Note what inspect can and cannot settle: it echoes back the UID that was <em>asked</em> for and can never
+    ///     say what that UID maps to, so this flag relaxes a check the caller must then close with a real probe.
+    /// </param>
+    internal static IReadOnlyList<string> FindViolations(DockerContainerSpecification requested,
+        DockerContainerSettings observed,
+        bool daemonIsRootless = false)
     {
         ArgumentNullException.ThrowIfNull(requested);
         ArgumentNullException.ThrowIfNull(observed);
 
         var violations = new List<string>();
 
-        VerifyUser(requested, observed, violations);
+        VerifyUser(requested, observed, daemonIsRootless, violations);
         VerifyCapabilities(observed, violations);
         VerifySecurityOptions(observed, violations);
         VerifyPrivilegeAndDevices(observed, violations);
@@ -127,7 +169,10 @@ internal static class DockerSandboxHardening
         return violations;
     }
 
-    private static void VerifyUser(DockerContainerSpecification requested, DockerContainerSettings observed, List<string> violations)
+    private static void VerifyUser(DockerContainerSpecification requested,
+        DockerContainerSettings observed,
+        bool daemonIsRootless,
+        List<string> violations)
     {
         if (!string.Equals(requested.User, observed.User, StringComparison.Ordinal))
         {
@@ -136,11 +181,25 @@ internal static class DockerSandboxHardening
         }
 
         // Belt and braces against a specification that was itself wrong: `0:0`, `0`, `root` and an empty value all
-        // mean root, and Docker defaults to root whenever the field is unset.
+        // mean root, and Docker defaults to root whenever the field is unset. An empty value is refused under EITHER
+        // daemon mode — an unset User is the daemon's default rather than a decision, and a rootless daemon does not
+        // make "we never chose" acceptable.
         var uid = observed.User.Split(':', 2)[0];
-        if (string.IsNullOrEmpty(uid)
-            || string.Equals(uid, "0", StringComparison.Ordinal)
-            || string.Equals(uid, "root", StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrEmpty(uid))
+        {
+            violations.Add($"non-root user: the container would run as root ('{Describe(observed.User)}').");
+            return;
+        }
+
+        var namesUidZero = string.Equals(uid, "0", StringComparison.Ordinal)
+                           || string.Equals(uid, "root", StringComparison.OrdinalIgnoreCase);
+
+        // Under a rootless daemon, UID 0 in the container is the invoking user's own unprivileged host account — it
+        // still has every capability dropped, no-new-privileges set and a read-only root filesystem, and it is
+        // strictly less privileged than the engine process that created it. Refusing it there would refuse the ONLY
+        // identity that can use an engine-generated bind mount, so the rule inverts rather than relaxes. It stays a
+        // hard refusal on a rootful daemon, where UID 0 is host root.
+        if (namesUidZero && !daemonIsRootless)
         {
             violations.Add($"non-root user: the container would run as root ('{Describe(observed.User)}').");
         }
@@ -205,6 +264,14 @@ internal static class DockerSandboxHardening
         }
     }
 
+    /// <summary>
+    ///     Verifies the network mode that was <em>requested</em>, whatever it was — not a hardcoded "none". Egress
+    ///     denial is served only when the caller asks for it, so pinning this check to "none" would fail every
+    ///     legitimate <see cref="SandboxNetworkPolicy.Unrestricted" /> create while proving nothing extra about a
+    ///     <see cref="SandboxNetworkPolicy.None" /> one. The host-namespace check is separate and unconditional
+    ///     precisely because it is not a policy question: no requested policy makes sharing the host's network stack
+    ///     acceptable, and it is the one mode that would let a container reach the daemon socket that created it.
+    /// </summary>
     private static void VerifyNetwork(DockerContainerSpecification requested, DockerContainerSettings observed, List<string> violations)
     {
         if (!string.Equals(requested.NetworkMode, observed.NetworkMode, StringComparison.OrdinalIgnoreCase))
@@ -212,7 +279,8 @@ internal static class DockerSandboxHardening
             violations.Add($"network mode: asked for '{requested.NetworkMode}', the daemon reports '{Describe(observed.NetworkMode)}'.");
         }
 
-        if (observed.NetworkMode.Equals(HostNamespaceMode, StringComparison.OrdinalIgnoreCase))
+        if (observed.NetworkMode.Equals(HostNamespaceMode, StringComparison.OrdinalIgnoreCase)
+            || observed.NetworkMode.StartsWith(HostNamespaceMode + ":", StringComparison.OrdinalIgnoreCase))
         {
             violations.Add("network mode: the container shares the host network namespace.");
         }
@@ -307,13 +375,33 @@ internal static class DockerSandboxHardening
 }
 
 /// <summary>
-///     The UID/GID a sandbox container runs as, resolved once at startup.
+///     The UID/GID a sandbox container runs as, resolved per create against the daemon that will run it.
 ///     <para>
-///         Defaulting to the engine process's own effective UID/GID is what makes an engine-generated bind mount
-///         usable: under a conventional rootful daemon an in-container UID maps straight through to the same host UID,
-///         so a workspace owned by the engine's user is readable and writable by a container running as that user. It
-///         is a default, not a requirement — an operator whose daemon maps UIDs differently sets the values
-///         explicitly. What is <em>not</em> negotiable is that neither may be zero.
+///         The invariant is not "never zero" — it is <em>the container must run as the identity that maps to the
+///         engine's own host UID, and that identity must not map to host root</em>. Which UID satisfies that depends
+///         on the daemon, and the two answers are opposites:
+///     </para>
+///     <list type="bullet">
+///         <item>
+///             <description>
+///                 <b>Rootful daemon:</b> an in-container UID maps straight through, so the answer is the engine
+///                 process's own effective UID/GID, and zero is host root and refused.
+///             </description>
+///         </item>
+///         <item>
+///             <description>
+///                 <b>Rootless daemon:</b> container UID 0 maps to the invoking user and container UID <c>N&gt;0</c>
+///                 maps to <c>subuid_base + N - 1</c>, so the answer is 0 — and the conventional 1000 is a host
+///                 account that owns nothing of ours. Measured on Engine 29.6.1 rootless with
+///                 <c>/etc/subuid</c> = <c>…:100000:65536</c>: <c>--user 1000:1000</c> could not create a file in the
+///                 engine-generated workspace mount at all, while <c>--user 0:0</c> wrote files the engine then owned.
+///             </description>
+///         </item>
+///     </list>
+///     <para>
+///         An operator-configured UID/GID still wins over both, because a daemon may map identities in a way neither
+///         rule describes. And none of this is taken on trust: an inspect can only echo back the UID that was asked
+///         for, never what it maps to, so the provider proves the mapping with a real probe file after creation.
 ///     </para>
 /// </summary>
 /// <param name="UserId">In-container UID.</param>

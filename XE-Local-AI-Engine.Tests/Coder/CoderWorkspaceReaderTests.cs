@@ -514,7 +514,7 @@ public sealed class CoderWorkspaceReaderTests : IDisposable
         return new ProcessSandboxRuntimeProvider(options, TimeProvider.System);
     }
 
-    private static CoderWorkspaceReader CreateReader(ISandboxRuntimeProvider provider)
+    private static CoderWorkspaceReader CreateReader(IAgentSandboxRuntimeProvider provider)
     {
         return new CoderWorkspaceReader(provider,
             new StubIdentityProvider(),

@@ -8,6 +8,8 @@ using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Tools;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
+using XE_Local_AI_Engine.Client.Services.Sandbox.Fake;
+using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Reaping;
 
@@ -46,6 +48,14 @@ internal static class AddNodeAgentHomeExtensions
                .Bind(configuration.GetSection(SandboxOptions.SectionName))
                .ValidateOnStart();
         builder.Services.AddSingleton<IValidateOptions<SandboxOptions>, SandboxOptionsValidator>();
+        // Development Mode's own provider selection (D2). Bound HERE rather than in AddNodeDevelopment because that
+        // module returns early when Development Mode is disabled, while the selector registered below must be able to
+        // read this option unconditionally. Unset means "whatever the agent role resolved", so binding it changes
+        // nothing on a node that does not set it.
+        builder.Services.AddOptions<DevelopmentSandboxOptions>()
+               .Bind(configuration.GetSection(DevelopmentSandboxOptions.SectionName))
+               .ValidateOnStart();
+        builder.Services.AddSingleton<IValidateOptions<DevelopmentSandboxOptions>, DevelopmentSandboxOptionsValidator>();
         // Local-container provider options. Bound and validated unconditionally; the fail-closed validator matters only
         // when the local-container provider is selected. The provider is a thin gRPC client that reuses HostAgent options.
         builder.Services.AddOptions<LocalContainerOptions>()
@@ -70,7 +80,18 @@ internal static class AddNodeAgentHomeExtensions
         {
             builder.Services.AddSingleton<ISandboxProcessGroupKiller, NoOpSandboxProcessGroupKiller>();
         }
-        builder.Services.AddSingleton(SandboxProviderSelector.Resolve);
+        // The concrete providers are registered as themselves, and the two ROLES are factories over them. Two things
+        // follow, both deliberate. (1) When the agent and Development roles name the same provider they get the SAME
+        // SINGLETON: ProcessSandboxRuntimeProvider allocates its jail root once per instance, and CoderWorkspaceReader
+        // reaches AgentHome's live sandbox by attach key through ConnectAsync — a second instance would answer "no
+        // workspace available" to every coder tool. (2) There is no ISandboxRuntimeProvider registration at all, so a
+        // new consumer must state which role it wants rather than silently inheriting whichever provider won.
+        // DockerSandboxRuntimeProvider is registered in AddNodeContainerSandbox, which runs after this module; the
+        // roles are lazy factory delegates, so that ordering is fine.
+        builder.Services.AddSingleton<FakeSandboxRuntimeProvider>();
+        builder.Services.AddSingleton<ProcessSandboxRuntimeProvider>();
+        builder.Services.AddSingleton(SandboxProviderSelector.ResolveAgent);
+        builder.Services.AddSingleton(SandboxProviderSelector.ResolveDevelopment);
         // Startup sweep for sandbox children orphaned by a hard host kill (which skips the provider's Dispose/KillAsync
         // paths entirely), mirroring AddHostedService<StaleLlamaServerReaper> in the llama.cpp provider.
         builder.Services.AddHostedService<SandboxOrphanReaper>();

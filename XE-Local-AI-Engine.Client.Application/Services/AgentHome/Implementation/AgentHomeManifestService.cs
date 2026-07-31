@@ -46,12 +46,12 @@ internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDis
     private readonly SemaphoreSlim _gate = new(initialCount: 1, maxCount: 1);
     private readonly ILogger<AgentHomeManifestService> _logger;
     private readonly AgentHomeOptions _options;
-    private readonly ISandboxRuntimeProvider _sandboxProvider;
+    private readonly IAgentSandboxRuntimeProvider _sandboxProvider;
     private readonly TimeProvider _timeProvider;
 
     public AgentHomeManifestService(INodeDataDirectory dataDirectory,
         IOptions<AgentHomeOptions> options,
-        ISandboxRuntimeProvider sandboxProvider,
+        IAgentSandboxRuntimeProvider sandboxProvider,
         TimeProvider timeProvider,
         ILogger<AgentHomeManifestService> logger)
     {

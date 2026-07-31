@@ -6,8 +6,16 @@ using System.Text;
 ///     Provider-neutral runtime over which AgentHome creates a node-scoped sandbox, copies selected folders in,
 ///     executes commands, reads results, copies artifacts out, and tears the sandbox down. The
 ///     contract is shaped by AgentHome's lifecycle, not by any provider SDK — no Docker / OpenSandbox / gRPC type
-///     appears here. Implementations: <c>FakeSandboxRuntimeProvider</c> (deterministic, CI-mandatory, the safe default)
-///     and <c>ProcessSandboxRuntimeProvider</c> (a jailed supervised-child process).
+///     appears here. Implementations: <c>FakeSandboxRuntimeProvider</c> (deterministic, CI-mandatory, the safe default),
+///     <c>ProcessSandboxRuntimeProvider</c> (a jailed supervised-child process), and <c>DockerSandboxRuntimeProvider</c>
+///     (a hardened container, Development Mode only per ADR 0004).
+///     <para>
+///         This interface is deliberately NOT registered in DI, and nothing injects it. Consumers take one of the two
+///         role-scoped markers instead — <see cref="IAgentSandboxRuntimeProvider" /> or
+///         <see cref="IDevelopmentSandboxRuntimeProvider" /> — because provider selection is per feature (decision
+///         D2). This stays the shared contract those roles are expressed in, and the seam a future hardware-isolated
+///         (MXC) provider slots into.
+///     </para>
 /// </summary>
 public interface ISandboxRuntimeProvider
 {

@@ -44,14 +44,14 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
     private readonly IDevelopmentAttemptLiveBroker? _liveBroker;
     private readonly DevelopmentOptions _options;
     private readonly IDevelopmentReviewerModel _reviewerModel;
-    private readonly ISandboxRuntimeProvider _sandbox;
+    private readonly IDevelopmentSandboxRuntimeProvider _sandbox;
     private readonly IDevelopmentStore _store;
     private readonly TimeProvider _timeProvider;
     private readonly IDevelopmentWorkspaceProvider _workspaceProvider;
 
     public DevelopmentReviewerAttemptRunner(IDevelopmentStore store,
         IDevelopmentWorkspaceProvider workspaceProvider,
-        ISandboxRuntimeProvider sandbox,
+        IDevelopmentSandboxRuntimeProvider sandbox,
         IDevelopmentEvidenceService evidence,
         IDevelopmentReviewerModel reviewerModel,
         IDevelopmentCloudAttemptContextService cloudContext,
@@ -126,9 +126,7 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
                 cloudContext?.Route,
                 timeout.Token).ConfigureAwait(false);
             var submission = DevelopmentArtifactSanitizer.Sanitize(model.Submission,
-                repository.RepositoryRoot,
-                session.HostWorktreePath,
-                session.RuntimePath);
+                DevelopmentArtifactSanitizer.ResolveProtectedRoots(repository.RepositoryRoot, session));
 
             var afterReview = await _evidence.ResolveCurrentAsync(snapshot.TaskId, session, timeout.Token).ConfigureAwait(false);
             if (!string.Equals(evidence.Current.SubjectHash, afterReview.Current.SubjectHash, StringComparison.OrdinalIgnoreCase))

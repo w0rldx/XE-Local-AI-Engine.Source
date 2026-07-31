@@ -10,7 +10,9 @@ using System.Text;
 ///     cancellation and kill be exercised honestly. All timestamps come from the injected <see cref="TimeProvider" />
 ///     so behavior is reproducible. Mirrors the production-resident, config-selected <c>FakeDockerRuntimeClient</c>.
 /// </summary>
-public sealed class FakeSandboxRuntimeProvider : ISandboxRuntimeProvider
+// Serves BOTH per-feature roles (D2), so a test host — and the CI-mandatory default — can drive AgentHome, Coder and
+// Development Mode off one deterministic provider instance.
+public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, IDevelopmentSandboxRuntimeProvider
 {
     /// <summary>The provider name this fake registers under for configuration-bound selection.</summary>
     public const string Name = "fake";
@@ -83,7 +85,8 @@ public sealed class FakeSandboxRuntimeProvider : ISandboxRuntimeProvider
                 SandboxId = sandboxId,
                 AttachKey = request.AttachKey,
                 CreatedAt = _timeProvider.GetUtcNow(),
-                ManifestVersion = request.AttachKey.ManifestVersion
+                ManifestVersion = request.AttachKey.ManifestVersion,
+                Mounts = ResolveIdentityMounts(request)
             };
             _sandboxes[sandboxId] = new SandboxState(handle);
             return Task.FromResult(handle);
@@ -315,6 +318,30 @@ public sealed class FakeSandboxRuntimeProvider : ISandboxRuntimeProvider
             var state = GetAliveState(handle);
             return state.SandboxFiles.Keys.OrderBy(key => key, StringComparer.Ordinal).ToArray();
         }
+    }
+
+    /// <summary>
+    ///     Mirrors <c>ProcessSandboxRuntimeProvider</c>'s identity map, because that is the behaviour a caller written
+    ///     against the fake has to keep when it meets the process provider. It does not check the host filesystem: the
+    ///     fake's whole point is a virtual one, and a unit test naming a directory it never created must still get a
+    ///     usable handle.
+    /// </summary>
+    private static IReadOnlyList<SandboxMountBinding> ResolveIdentityMounts(SandboxCreateRequest request)
+    {
+        var bindings = new List<SandboxMountBinding>();
+        if (request.TrustedHostWorkspace is not null)
+        {
+            var workspace = Path.TrimEndingDirectorySeparator(Path.GetFullPath(request.TrustedHostWorkspace.RootPath));
+            bindings.Add(new SandboxMountBinding(workspace, workspace, ReadOnly: false));
+        }
+
+        foreach (var mount in request.Mounts ?? [])
+        {
+            var canonical = Path.TrimEndingDirectorySeparator(Path.GetFullPath(mount.HostPath));
+            bindings.Add(new SandboxMountBinding(canonical, canonical, mount.ReadOnly));
+        }
+
+        return bindings;
     }
 
     private string ResolveCopyContent(string sourcePath)

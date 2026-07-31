@@ -842,7 +842,7 @@ public sealed class AgentHomeServiceTests : IDisposable
     }
 
     private ServiceHarness CreateHarness(TimeProvider clock,
-        ISandboxRuntimeProvider provider,
+        IAgentSandboxRuntimeProvider provider,
         ISelectedFolderResolver resolver,
         IAgentHomeIdentityProvider? identity = null,
         int commandTimeoutSeconds = 300,
@@ -897,7 +897,7 @@ public sealed class AgentHomeServiceTests : IDisposable
         return new ServiceHarness(service, manifestService, serviceProvider);
     }
 
-    private sealed class CancelRecordingProvider : ISandboxRuntimeProvider
+    private sealed class CancelRecordingProvider : IAgentSandboxRuntimeProvider
     {
         private readonly FakeSandboxRuntimeProvider _inner;
         private int _cancelCommandCallCount;

@@ -181,6 +181,18 @@ public sealed record DockerExecutionRequest
     /// <summary>Optional environment additions for this command.</summary>
     public IReadOnlyDictionary<string, string>? Environment { get; init; }
 
+    /// <summary>
+    ///     Optional standard input piped to the command, after which the write side is closed so the child sees EOF.
+    ///     <para>
+    ///         Load-bearing, not a convenience. Development Mode pipes patches to <c>git apply -</c>; a client that
+    ///         dropped this would leave git reading EOF from an unattached stdin, and <c>git apply</c> given nothing
+    ///         to apply <em>exits 0</em>. The caller would be told the patch applied while nothing changed, which is
+    ///         a silent false green rather than a visible failure — so this field exists to make that impossible
+    ///         rather than to make stdin available.
+    ///     </para>
+    /// </summary>
+    public string? StandardInput { get; init; }
+
     /// <summary>Captured-output ceiling per stream, in bytes.</summary>
     public required int MaxCapturedBytes { get; init; }
 }
