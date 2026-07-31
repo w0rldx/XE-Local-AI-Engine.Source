@@ -207,6 +207,23 @@ record_values() {
   awk -F'\t' -v k="${key}" '$1 == k { sub(/^[^\t]*\t/, ""); print }' <<<"${text}"
 }
 
+# Coerce a sampled value to a plain integer, defaulting to 0.
+#
+# Bash arithmetic treats a non-numeric word as a VARIABLE NAME, so `$(( x - 1 ))` with x="[N/A]"
+# aborts the whole script under `set -u` ("unbound variable") instead of producing a verdict. The
+# failure is safe (non-zero, and the EXIT trap still tears the AppHost down) but it kills the run
+# with a cryptic message and no ledger, which is the opposite of what this script is for.
+# nvidia-smi can legitimately emit non-numeric fields such as "[N/A]" on a degraded driver.
+# 0 is the right default: it fails every floor rather than passing one.
+as_int() {
+  local value="${1:-}"
+  if [[ "${value}" =~ ^-?[0-9]+$ ]]; then
+    printf '%s\n' "${value}"
+  else
+    printf '0\n'
+  fi
+}
+
 # ---------------------------------------------------------------------------
 # Assertions. Kept as pure functions of their arguments so scripts/tests/gpu-smoke.test.sh can
 # drive every refuse-to-pass path with synthetic driver output and no GPU.
@@ -337,8 +354,20 @@ assert_chat_reply() {
 # Step 4. THE load-bearing assertion: a correct reply proves nothing, because CPU fallback answers
 # correctly too. Both halves must hold — utilisation crossed a floor while generating, AND VRAM
 # is still above the pre-start baseline with the model resident.
+#
+# The VRAM half is the DISCRIMINATING one; the utilisation half is the noisier one. Measured on
+# this WSL2 box: GPU 64-72% / +1199-1211 MiB versus CPU-fallback 11-14% / +0 MiB. A desktop
+# compositor idling on the same GPU can drift utilisation over a 15% floor on its own, and one
+# CPU-fallback run did exactly that — while the VRAM delta stayed at a flat 0 MiB and still
+# failed the step. Because BOTH must pass, utilisation noise can only ever cause a false
+# FAILURE, never a false pass, which is the safe direction for this script to be wrong in.
+# Raise XE_GPU_SMOKE_MIN_UTIL_PERCENT on a busy desktop rather than lowering it.
 assert_gpu_was_used() {
-  local peak_util="$1" peak_vram="$2" baseline_vram="$3" loaded_vram="$4"
+  local peak_util baseline_vram loaded_vram peak_vram
+  peak_util="$(as_int "$1")"
+  peak_vram="$(as_int "$2")"
+  baseline_vram="$(as_int "$3")"
+  loaded_vram="$(as_int "$4")"
   local rise=$((loaded_vram - baseline_vram))
   log "gpu: peakUtil=${peak_util}% baselineVram=${baseline_vram}MiB peakVram=${peak_vram}MiB loadedVram=${loaded_vram}MiB rise=${rise}MiB"
   local ok=0
@@ -396,7 +425,9 @@ assert_image_result() {
 }
 
 assert_vram_released() {
-  local baseline="$1" after="$2"
+  local baseline after
+  baseline="$(as_int "$1")"
+  after="$(as_int "$2")"
   local excess=$((after - baseline))
   log "eject: baselineVram=${baseline}MiB afterEject=${after}MiB excess=${excess}MiB (tolerance ${EJECT_TOLERANCE_MIB}MiB)"
   if [[ "${excess}" -gt "${EJECT_TOLERANCE_MIB}" ]]; then

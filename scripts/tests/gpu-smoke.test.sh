@@ -158,6 +158,19 @@ check_contains "no VRAM rise is explained" "No model weights appear to be reside
 assert_gpu_was_used 0 0 3300 0 >/dev/null 2>&1
 check "all-zero samples fail (no samples collected)" "1" "$?"
 
+# nvidia-smi can emit non-numeric fields such as "[N/A]" on a degraded driver. Bash arithmetic
+# would treat those as VARIABLE NAMES and abort the whole run under `set -u`, killing the ledger
+# instead of producing a verdict. They must coerce to 0 and fail the floors.
+check "as_int passes integers through" "4552" "$(as_int 4552)"
+check "as_int coerces junk to 0" "0" "$(as_int '[N/A]')"
+check "as_int coerces empty to 0" "0" "$(as_int '')"
+
+assert_gpu_was_used "[N/A]" "[N/A]" 3300 "[N/A]" >/dev/null 2>&1
+check "non-numeric samples fail rather than aborting" "1" "$?"
+
+assert_gpu_was_used "" "" 3300 "" >/dev/null 2>&1
+check "empty samples fail rather than aborting" "1" "$?"
+
 assert_gpu_was_used 72 4552 3353 4552 >/dev/null 2>&1
 check "real GPU numbers pass" "0" "$?"
 
@@ -197,6 +210,10 @@ check_contains "held VRAM names the orphan signature" "orphaned-llama-server sig
 
 assert_vram_released 3353 3385 >/dev/null 2>&1
 check "VRAM returned to baseline passes" "0" "$?"
+
+# Same coercion trap as step 4: junk must not abort the run mid-summary.
+assert_vram_released 3353 "[N/A]" >/dev/null 2>&1
+check "non-numeric post-eject reading does not abort" "0" "$?"
 
 echo "== model selection =="
 
