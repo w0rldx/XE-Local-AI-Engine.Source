@@ -36,6 +36,11 @@ export function kindLabel(t: Translate, kind: string): string {
 }
 
 // Localized label for a raw Ollama capability string, falling back to the raw value for capabilities without a label.
+//
+// The two reasoning capabilities are deliberately distinct and are never both present on one model:
+//   `thinking`         → a GRADED think:<level> control is available (Qwen3, DeepSeek-R1 class).
+//   `native_reasoning` → the model reasons on a channel baked into its chat template, with no graded switch
+//                        (OpenAI harmony / gpt-oss). It keeps the binary On/Off reasoning vocabulary.
 export function capabilityLabel(t: Translate, capability: string): string {
 	switch (capability) {
 		case "tools":
@@ -44,8 +49,24 @@ export function capabilityLabel(t: Translate, capability: string): string {
 			return t("pages.models.type.capability.vision", "Vision");
 		case "thinking":
 			return t("pages.models.type.capability.thinking", "Thinking");
+		case "native_reasoning":
+			return t("pages.models.type.capability.nativeReasoning", "Native reasoning");
 		default:
 			return capability;
+	}
+}
+
+// Capability-chip color. The two reasoning capabilities get distinct hues so "graded thinking control" and "reasons
+// natively" are told apart at a glance instead of reading as the same neutral chip; everything else stays gray.
+// Violet matches the chat picker's graded reasoning badge, teal its native counterpart.
+export function capabilityBadgeColor(capability: string): string {
+	switch (capability) {
+		case "thinking":
+			return "violet";
+		case "native_reasoning":
+			return "teal";
+		default:
+			return "gray";
 	}
 }
 

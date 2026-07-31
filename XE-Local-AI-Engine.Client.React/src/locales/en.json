@@ -746,6 +746,7 @@
 			"loadingHistory": "Loading local chat history…",
 			"loadingMessages": "Loading messages…",
 			"modelUnavailable": "Unavailable",
+			"nativeReasoningLabel": "Native reasoning",
 			"reasoningLabel": "Reasoning",
 			"retryConnection": "Retry",
 			"stop": "Stop",
@@ -1653,7 +1654,8 @@
 				"capability": {
 					"tools": "Tools",
 					"vision": "Vision",
-					"thinking": "Thinking"
+					"thinking": "Thinking",
+					"nativeReasoning": "Native reasoning"
 				},
 				"overrideLabel": "Override type",
 				"reset": "Reset to detected"
