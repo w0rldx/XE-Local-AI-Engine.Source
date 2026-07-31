@@ -434,8 +434,14 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         AssertEx.Equal(expected: 3, task.CurrentReviewRound);
     }
 
+    /// <summary>
+    ///     The reviewer's half of the whole-attempt output budget. See
+    ///     <c>DevelopmentWorkspaceAndCoderTests.CoderModel_AcceptsCumulativeOutputAcrossRoundsAndRejectsOnlyAboveTheWholeAttemptCeiling</c>
+    ///     for why the old <c>maxOutputTokens + 1</c> expectation pinned a defect rather than a rule: the cap is
+    ///     per provider call, the usage report is cumulative over the tool loop.
+    /// </summary>
     [Test]
-    public async Task ReviewerModel_AllowsLargeInputWithinOutputCapAndRejectsOutputCapPlusOne()
+    public async Task ReviewerModel_AcceptsCumulativeOutputAcrossRoundsAndRejectsOnlyAboveTheWholeAttemptCeiling()
     {
         var cloud = Substitute.For<IActiveCloudChatClientFactory>();
         cloud.IsCloudProviderSelected(Arg.Any<string>()).Returns(false);
@@ -463,14 +469,28 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         AssertEx.Equal<long?>(40_000, result.InputTokens);
         AssertEx.Equal<long?>(64, result.OutputTokens);
 
-        using var overChat = new CapturingReviewerChatClient(inputTokens: 40_000, outputTokens: 65);
+        // More than one call's budget across the loop is normal, and must be accepted.
+        using var multiRoundChat = new CapturingReviewerChatClient(inputTokens: 40_000, outputTokens: 65);
+        var multiRound = new DevelopmentReviewerModel(multiRoundChat, cloud, resolver);
+        var accepted = await multiRound.RunAsync("reviewer-local",
+                                           "review exact subject",
+                                           new NullWorkspaceTools(),
+                                           maxOutputTokens: 64,
+                                           maxToolCalls: 8)
+                                       .ConfigureAwait(false);
+        AssertEx.Equal<long?>(65, accepted.OutputTokens);
+
+        // maxToolCalls 8 => at most 9 provider calls => a whole-attempt ceiling of 9 x 64.
+        const int Ceiling = 9 * 64;
+        using var overChat = new CapturingReviewerChatClient(inputTokens: 40_000, outputTokens: Ceiling + 1);
         var over = new DevelopmentReviewerModel(overChat, cloud, resolver);
-        await AssertEx.ThrowsAsync<InvalidOperationException>(() => over.RunAsync("reviewer-local",
-                          "review exact subject",
-                          new NullWorkspaceTools(),
-                          maxOutputTokens: 64,
-                          maxToolCalls: 8))
-                      .ConfigureAwait(false);
+        var failure = await AssertEx.ThrowsAsync<DevelopmentAttemptEvidenceException>(() => over.RunAsync("reviewer-local",
+                                        "review exact subject",
+                                        new NullWorkspaceTools(),
+                                        maxOutputTokens: 64,
+                                        maxToolCalls: 8))
+                                    .ConfigureAwait(false);
+        AssertEx.Equal(DevelopmentAttemptFailureCodes.OutputTokenBudgetExceeded, failure.FailureCode);
     }
 
     /// <summary>

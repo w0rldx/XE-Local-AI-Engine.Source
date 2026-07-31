@@ -152,18 +152,18 @@ internal sealed class DevelopmentReviewerModel(
         var response = updates.ToChatResponse();
         liveProgress?.CompleteOutput(response.Usage);
 
-        var usage = response.Usage ?? throw new InvalidOperationException("The Development reviewer response did not report token usage.");
-        var inputTokens = usage.InputTokenCount ?? throw new InvalidOperationException("The Development reviewer response did not report input-token usage.");
-        var outputTokens = usage.OutputTokenCount ?? throw new InvalidOperationException("The Development reviewer response did not report output-token usage.");
-        var accountedTokens = checked(inputTokens + outputTokens);
-        var totalTokens = Math.Max(usage.TotalTokenCount ?? accountedTokens, accountedTokens);
-        if (inputTokens < 0 || outputTokens < 0 || totalTokens < 0 || outputTokens > maxOutputTokens)
-        {
-            throw new InvalidOperationException("The Development reviewer exceeded the configured output-token limit.");
-        }
+        var usage = response.Usage;
+        var (inputTokens, outputTokens) = DevelopmentAttemptOutputBudget.Accept(usage?.InputTokenCount,
+            usage?.OutputTokenCount,
+            usage?.TotalTokenCount,
+            maxOutputTokens,
+            providerCalls,
+            "reviewer");
 
         return new DevelopmentReviewerModelResult(gateway.Submission
-                                                  ?? throw new InvalidOperationException("The reviewer attempt ended without a typed review submission."),
+                                                  ?? throw new DevelopmentAttemptEvidenceException(DevelopmentAttemptFailureCodes.MissingSubmission,
+                                                      "The Development reviewer stopped without calling submit_review, so the round produced no disposition. "
+                                                      + "Re-run the review, or use a model that reliably closes with a tool call."),
             inputTokens,
             outputTokens);
     }
@@ -217,10 +217,16 @@ internal sealed class DevelopmentReviewerModel(
             Count("submit_review", null);
             if (Submission is not null)
             {
-                throw new InvalidOperationException("The reviewer submission can be recorded only once.");
+                throw new DevelopmentAttemptEvidenceException(DevelopmentAttemptFailureCodes.DuplicateSubmission,
+                    "The Development reviewer called submit_review more than once. Exactly one submission closes a review round.");
             }
 
-            ArgumentException.ThrowIfNullOrWhiteSpace(summary);
+            if (string.IsNullOrWhiteSpace(summary))
+            {
+                throw new DevelopmentAttemptEvidenceException(DevelopmentAttemptFailureCodes.MissingSummary,
+                    "The Development reviewer's submit_review call had an empty summary. The summary is the operator-facing record of the verdict.");
+            }
+
             if (!Enum.TryParse<DevelopmentReviewDisposition>(disposition, ignoreCase: true, out var parsed))
             {
                 throw new ArgumentException("Review disposition must be Approved or ChangesRequested.", nameof(disposition));
@@ -259,7 +265,9 @@ internal sealed class DevelopmentReviewerModel(
         {
             if (Interlocked.Increment(ref _toolCalls) > _maxToolCalls)
             {
-                throw new InvalidOperationException("The Development reviewer exceeded the configured tool-call limit.");
+                throw new DevelopmentAttemptEvidenceException(DevelopmentAttemptFailureCodes.ToolCallBudgetExceeded,
+                    $"The Development reviewer asked for more than {_maxToolCalls} tool calls. "
+                    + "Give the task a narrower objective, or raise Development:MaxToolCalls.");
             }
 
             _liveProgress?.ToolStarted(toolId, arguments);

@@ -35,6 +35,33 @@
     <None Remove="node-settings.json"/>
   </ItemGroup>
 
+  <!--
+    The runtime-written per-node directories, removed from EVERY default glob including Compile.
+
+    node-settings.json above covers one file against one glob. These directories need the wider treatment because
+    Development Mode clones REGISTERED REPOSITORIES into `development/workspaces/`, and in a source checkout
+    INodeDataDirectory resolves to ContentRootPath — this directory. The Web SDK then globs the cloned repository's
+    own source into this project.
+
+    Measured on 2026-07-31, after three Development Mode tasks against a small C# repository, `dotnet build` of this
+    project failed with CS0101/CS0579 duplicate-definition errors from `development/workspaces/**/Calculator.cs` and
+    from the workspaces' own obj/ trees. The host application stopped compiling because an agent wrote a file in a
+    sandbox.
+
+    The build break is the loud half. The quiet half is worse and is why this is a Compile exclusion and not just a
+    Content one: without it, C# written by a model into an untrusted repository's workspace is a source file of this
+    application, compiled into its assembly on publish.
+
+    Keep this list in step with .gitignore's entries for the same paths — they exist for the same reason, and "gitignored"
+    and "not globbed" are different guarantees.
+  -->
+  <ItemGroup>
+    <Compile Remove="development/**;generated-images/**;logs/**;backups/**;dp-keys/**;models/**"/>
+    <Content Remove="development/**;generated-images/**;logs/**;backups/**;dp-keys/**;models/**"/>
+    <None Remove="development/**;generated-images/**;logs/**;backups/**;dp-keys/**;models/**"/>
+    <EmbeddedResource Remove="development/**;generated-images/**;logs/**;backups/**;dp-keys/**;models/**"/>
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Azure.AI.OpenAI"/>
     <PackageReference Include="BouncyCastle.Cryptography"/>

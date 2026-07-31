@@ -329,6 +329,10 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
         {
             OperationCanceledException => "The bounded Development reviewer attempt was cancelled or timed out.",
             DevelopmentWorkspaceSecurityException => "The Development reviewer attempt violated a workspace security policy.",
+
+            // See DevelopmentCoderAttemptRunner.SanitizedReason: this message is engine-authored, so it is safe to
+            // surface verbatim rather than replacing a diagnosed failure with a generic one.
+            DevelopmentAttemptEvidenceException evidence => evidence.TerminalReason,
             _ => "The bounded Development reviewer attempt failed before producing valid exact evidence."
         };
 }

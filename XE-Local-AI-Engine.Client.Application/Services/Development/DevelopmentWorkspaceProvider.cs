@@ -40,6 +40,40 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
+    /// <summary>
+    ///     The MSBuild and NuGet files whose discovery walks <em>up</em> from a project directory until the first hit,
+    ///     written empty one level above every managed workspace so that walk stops at the workspace instead of
+    ///     escaping into whatever happens to be above the node's data directory.
+    ///     <para>
+    ///         Reproduced live on 2026-07-31 with the process sandbox provider, which is the shipped default. Running
+    ///         from a source checkout puts the node's data root inside this repository, so a registered repository's
+    ///         <c>dotnet restore</c> inherited <em>this</em> repository's <c>Directory.Packages.props</c> and failed
+    ///         <c>NU1008</c> — Central Package Management demanded a <c>PackageVersion</c> item for a package the
+    ///         target repository declares perfectly legally inline. Validation was measuring the host's build
+    ///         configuration, not the repository under test. The container provider never had this: its mount root
+    ///         <em>is</em> the workspace, so the walk already terminated there.
+    ///     </para>
+    ///     <para>
+    ///         A repository that brings its own copy of one of these files is unaffected — MSBuild and NuGet stop at
+    ///         the first file found, which is the repository's own, one level below this barrier. The barrier is only
+    ///         ever read for repositories that declare nothing, and for those "no central package management, no
+    ///         inherited props or targets" is the correct answer rather than an imposed one.
+    ///     </para>
+    ///     <para>
+    ///         It lives one level ABOVE the workspace on purpose. Written inside it, every file here would appear in
+    ///         <c>git status</c> as an untracked change and land in the attempt's changed-file manifest — the evidence
+    ///         the whole feature is built on.
+    ///     </para>
+    /// </summary>
+    private static readonly (string FileName, string Content)[] BuildConfigurationBarrier =
+    [
+        ("Directory.Build.props", "<Project>\n  <!-- Bounds MSBuild's upward search to the managed Development workspace below. -->\n</Project>\n"),
+        ("Directory.Build.targets", "<Project>\n  <!-- Bounds MSBuild's upward search to the managed Development workspace below. -->\n</Project>\n"),
+        ("Directory.Packages.props",
+            "<Project>\n  <PropertyGroup>\n    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>\n  </PropertyGroup>\n</Project>\n"),
+        ("Directory.Solution.props", "<Project>\n  <!-- Bounds MSBuild's upward search to the managed Development workspace below. -->\n</Project>\n")
+    ];
+
     private readonly INodeDataDirectory _dataDirectory;
     private readonly DevelopmentOptions _options;
     private readonly IDevelopmentSandboxRuntimeProvider _sandbox;
@@ -92,6 +126,7 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
             snapshot.TaskId.ToString("N"));
         Directory.CreateDirectory(Path.GetDirectoryName(worktreePath)!);
         Directory.CreateDirectory(runtimePath);
+        EnsureBuildConfigurationBarrier(Path.GetDirectoryName(worktreePath)!);
 
         // Created HERE and not only in DevelopmentWorkspaceTools, which runs after this method returns. A provider with
         // a mount layer binds these directories at create time, and a bind source the daemon has to invent is created
@@ -262,6 +297,29 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
         }
 
         return mounts;
+    }
+
+    /// <summary>
+    ///     Writes <see cref="BuildConfigurationBarrier" /> into the workspace's parent directory, which is engine-owned
+    ///     and outside every sandbox mount.
+    ///     <para>
+    ///         Rewritten on every prepare rather than only on creation: an operator (or a stray build) can delete these,
+    ///         and a silently missing barrier reopens the defect with no symptom until a restore fails confusingly. A
+    ///         file that already holds the expected content is left alone.
+    ///     </para>
+    /// </summary>
+    private static void EnsureBuildConfigurationBarrier(string workspaceParentPath)
+    {
+        foreach (var (fileName, content) in BuildConfigurationBarrier)
+        {
+            var path = Path.Combine(workspaceParentPath, fileName);
+            if (File.Exists(path) && string.Equals(File.ReadAllText(path), content, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            File.WriteAllText(path, content);
+        }
     }
 
     private static void ValidateBaseBranch(string baseBranch)
