@@ -1097,6 +1097,7 @@ export type XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse = {
 	detectedKind: string;
 	capabilities: Array<string>;
 	isReasoningCapable: boolean;
+	isNativeReasoningCapable?: boolean;
 	isToolCapable: boolean;
 	isOverridden: boolean;
 };

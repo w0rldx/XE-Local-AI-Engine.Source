@@ -73,14 +73,27 @@ public sealed class LocalModelResponse
     /// <summary>Machine-detected classification as a <c>ModelKind</c> string (drives the "reset to detected" affordance).</summary>
     public required string DetectedKind { get; init; }
 
-    /// <summary>Raw Ollama capability strings for read-only badges (e.g. <c>tools</c>, <c>vision</c>, <c>thinking</c>).</summary>
+    /// <summary>
+    ///     Raw Ollama capability strings for read-only badges (e.g. <c>tools</c>, <c>vision</c>, <c>thinking</c>,
+    ///     <c>native_reasoning</c>).
+    /// </summary>
     public required IReadOnlyList<string> Capabilities { get; init; }
 
     /// <summary>
-    ///     True when the model advertises the Ollama <c>thinking</c> capability. The composer uses this to gate the
-    ///     reasoning-effort menu so a non-reasoning model is never offered (or sent) the <c>think</c> field.
+    ///     True when the model advertises the Ollama <c>thinking</c> capability — i.e. GRADED reasoning, a switchable
+    ///     <c>think:&lt;level&gt;</c> control. The composer uses this to gate the graded reasoning-effort menu so a
+    ///     non-reasoning model is never offered (or sent) the <c>think</c> field.
     /// </summary>
     public required bool IsReasoningCapable { get; init; }
+
+    /// <summary>
+    ///     True when the model reasons NATIVELY: its chat template bakes reasoning onto its own channel with no graded
+    ///     switch (the OpenAI harmony family, e.g. gpt-oss). Mutually exclusive with <see cref="IsReasoningCapable" />.
+    ///     The composer renders its own badge for this and keeps the BINARY on/none effort vocabulary — a native model
+    ///     must never be routed into the graded path. Defaults to <see langword="false" /> so an older client that omits
+    ///     the field behaves exactly as before.
+    /// </summary>
+    public bool IsNativeReasoningCapable { get; init; }
 
     /// <summary>
     ///     True when the model advertises the Ollama <c>tools</c> capability. The composer uses this to gate the local-tool

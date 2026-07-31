@@ -71,6 +71,7 @@ const localDefaultModelOptionBase: ModelOption = {
 	label: "Local default",
 	displayName: "Local runtime default",
 	isReasoningModel: false,
+	isNativeReasoningModel: false,
 	isToolCapable: false,
 	isAvailable: true,
 	statusLabel: "Runtime-selected model",
@@ -294,8 +295,15 @@ export function Chat() {
 	// - Cloud (Codex) models get the full OpenAI Responses vocabulary: none/minimal/low/medium/high/xhigh.
 	//   "minimal" and "xhigh" are Codex-only and must NEVER be offered for Ollama models.
 	// - Ollama models that advertise the `thinking` capability get the graded Ollama set: none/low/medium/high.
-	// - Every other model (non-thinking Ollama, local default) gets binary On/Off: on/none.
+	// - Every other model (native-reasoning, non-thinking Ollama, local default) gets binary On/Off: on/none.
 	//   On omits think so a model that reasons by default runs its built-in reasoning; Off sends think:false.
+	//
+	// NATIVE-reasoning models (harmony/gpt-oss, `isNativeReasoningModel`) belong in the BINARY bucket on purpose and
+	// are deliberately absent from the condition below. They reason on a template-baked channel with no graded switch,
+	// so offering none/low/medium/high would be a menu whose levels do nothing — and routing them through the graded
+	// path would send an `enable_thinking=false` their template has no kwarg for, breaking reasoning-off outright.
+	// Their capability is surfaced by the picker BADGE instead, which is what fixes the "gpt-oss cannot reason"
+	// misreport without touching this vocabulary.
 	const selectedModelIsCloud = selectedModelOption?.isCloud === true;
 	const availableReasoningEfforts = useMemo<ReasoningEffort[]>(() => {
 		if (selectedModelIsCloud) {

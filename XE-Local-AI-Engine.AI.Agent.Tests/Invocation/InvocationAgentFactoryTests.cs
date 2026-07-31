@@ -217,6 +217,47 @@ public sealed class InvocationAgentFactoryTests
         AssertEx.False(additionalProperties.ContainsKey("think"));
     }
 
+    /// <summary>
+    ///     F-014 regression pin. A NATIVE-reasoning model (the OpenAI harmony family, e.g. gpt-oss-20b) reports
+    ///     <c>SupportsThinking=false</c> by design — its template bakes reasoning onto a <c>&lt;|channel|&gt;analysis</c>
+    ///     channel with no graded switch — and reasons only because this branch OMITS the think field. Detecting native
+    ///     reasoning as a second capability must NOT change that: adding the harmony markers to the GRADED list instead
+    ///     would flip the model into the <c>if (definition.SupportsThinking)</c> arm, which writes <c>think</c> and, on
+    ///     effort <c>none</c>, the <c>enable_thinking=false</c> marker — a kwarg the harmony template does not have
+    ///     (measured: 0 occurrences). Both keys are asserted ABSENT here, so that mistake fails loudly.
+    /// </summary>
+    [Test]
+    [Arguments("on")]
+    [Arguments("low")]
+    [Arguments("medium")]
+    [Arguments("high")]
+    public async Task CreateAsync_WhenNativeReasoningModel_OmitsThinkAndNeverDisablesTemplateThinking(string effort)
+    {
+        // A native-reasoning model reaches the factory exactly as gpt-oss does today: SupportsThinking FALSE.
+        var definition = new InvocationAgentDefinition("unsloth/gpt-oss-20b-GGUF:Q5_K_M",
+            "Be helpful.",
+            [],
+            [],
+            effort,
+            SupportsThinking: false);
+
+        using var chatClient = new FakeChatClient();
+        var sut = CreateSut(chatClient);
+
+        await using var context = await sut.CreateAsync(definition);
+
+        var runOptions = context.RunOptions as ChatClientAgentRunOptions
+                         ?? throw new AssertionException("Expected ChatClientAgentRunOptions.");
+        var chatOptions = runOptions.ChatOptions
+                          ?? throw new AssertionException("Expected ChatOptions to be populated.");
+        var additionalProperties = AssertEx.NotNull(chatOptions.AdditionalProperties);
+
+        AssertEx.False(additionalProperties.ContainsKey("think"),
+            "a native-reasoning model must keep the omit-think path so its template reasoning runs");
+        AssertEx.False(additionalProperties.ContainsKey(InvocationAgentFactory.LlamaDisableThinkingMarkerKey),
+            "a native-reasoning model must never be sent enable_thinking=false — the harmony template has no such kwarg");
+    }
+
     [Test]
     public async Task CreateAsync_WhenSupportsThinkingFalseAndReasoningNone_SendsThinkFalse()
     {

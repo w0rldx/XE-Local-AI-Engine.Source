@@ -53,7 +53,10 @@ internal static class LocalModelsMapper
     ///     WITHOUT an <c>/api/show</c> probe — a downloaded GGUF in the chat picker has a completion head by
     ///     construction. Reasoning/tool support and the capability tokens are detected offline from the model's GGUF
     ///     chat template (carried on the descriptor by the store); a model whose template could not be read defaults to
-    ///     the safe no-tools/no-reasoning classification (a non-tool model is never offered tools). An embedding-only
+    ///     the safe no-tools/no-reasoning classification (a non-tool model is never offered tools). Reasoning surfaces as
+    ///     TWO mutually exclusive flags: <see cref="LocalModelResponse.IsReasoningCapable" /> (graded — a
+    ///     <c>think:&lt;level&gt;</c> control exists) and <see cref="LocalModelResponse.IsNativeReasoningCapable" />
+    ///     (the model reasons on a template-baked channel with no graded switch). An embedding-only
     ///     GGUF is recognized offline from its name (<see cref="ModelKindDetector.IsEmbeddingName" />, matching
     ///     EMBED/NOMIC-EMBED/BGE-… fragments) and tagged <see cref="ModelKind.Embedding" />; a reranker
     ///     (cross-encoder) GGUF is recognized from its name (<see cref="ModelKindDetector.IsRerankerName" />, matching
@@ -82,6 +85,7 @@ internal static class LocalModelsMapper
                        DetectedKind = kind.ToString(),
                        Capabilities = descriptor.Capabilities,
                        IsReasoningCapable = descriptor.IsReasoningCapable,
+                       IsNativeReasoningCapable = descriptor.IsNativeReasoningCapable,
                        IsToolCapable = descriptor.IsToolCapable,
                        IsOverridden = false
                    };
