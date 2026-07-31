@@ -155,16 +155,71 @@ describe("DevelopmentLivePanel validation evidence", () => {
 		expect(screen.getByTestId("development-validation-command-dotnet_test_release_no_build")).toBeTruthy();
 	});
 
-	it("reads the report from the latest valid artifact only", () => {
+	it("reads the newest report whether or not it is still valid", () => {
+		// This asserted the opposite until F-056: selecting on `isValid` dropped every FAILED report, because a failed
+		// gate invalidates the task's approval evidence. Validity is a presentation decision made from the report's
+		// own verdict; it is not a reason to refuse to read the newest report.
 		contentQuery(JSON.stringify(report()));
 
 		renderPanel([
 			{ ...validationArtifact, id: "artifact-old", createdAtUtc: 1000 },
 			{ ...validationArtifact, id: "artifact-newest-invalid", createdAtUtc: 9000, isValid: false },
-			{ ...validationArtifact, id: "artifact-newest-valid", createdAtUtc: 5000 },
+			{ ...validationArtifact, id: "artifact-older-valid", createdAtUtc: 5000 },
 		]);
 
-		expect(queriesMock.useDevelopmentArtifactContent).toHaveBeenCalledWith("project-1", "task-1", "artifact-newest-valid");
+		expect(queriesMock.useDevelopmentArtifactContent).toHaveBeenCalledWith("project-1", "task-1", "artifact-newest-invalid");
+	});
+
+	it("renders a failed validation as failed, with its reason, rather than as nothing having run", () => {
+		// F-056, verbatim: the container gate failed, the timeline read `ValidationFinalized — Failed`, and the
+		// Validation tab said "No deterministic validation has run for this task yet." A failed gate invalidates the
+		// approval evidence, so `isValid` is false on the very report that carries the answer.
+		contentQuery(
+			JSON.stringify(
+				report({
+					passed: false,
+					failureCode: "command_failed",
+					failureDetail: "Command dotnet_restore exited with code 1.",
+					commands: [
+						command("dotnet_restore", {
+							exitCode: 1,
+							standardError:
+								'One or more system calls failed: mkdir("[REDACTED:development-path]/shm/session1", AllUsers_ReadWriteExecute) == -1; errno == EROFS;',
+						}),
+					],
+				}),
+			),
+		);
+
+		renderPanel([{ ...validationArtifact, isValid: false }]);
+
+		expect(screen.queryByTestId("development-validation-no-report")).toBeNull();
+		expect(screen.getByTestId("development-validation-result").textContent).toBe("Validation failed");
+
+		const failure = screen.getByTestId("development-validation-failure");
+		expect(within(failure).getByText("A validation command exited non-zero.")).toBeTruthy();
+		expect(within(failure).getByText("Command dotnet_restore exited with code 1.")).toBeTruthy();
+
+		// The stderr is the only account of WHY, and it was previously withheld even once the report was reachable.
+		expect(screen.getByTestId("development-validation-command-output-dotnet_restore").textContent).toContain(
+			"errno == EROFS",
+		);
+
+		// Staleness is still reported — as its own axis, next to the failure rather than instead of it.
+		expect(screen.getByTestId("development-validation-failed-invalidated-note")).toBeTruthy();
+	});
+
+	it("keeps a superseded PASS out of the current result instead of presenting its counts", () => {
+		// The other half of the same separation. A pass that is no longer current would assert something untrue about
+		// the tree it is displayed beside, so its counts stay hidden — but the panel says so explicitly rather than
+		// falling through to "nothing ran".
+		contentQuery(JSON.stringify(report()));
+
+		renderPanel([{ ...validationArtifact, isValid: false }]);
+
+		expect(screen.getByTestId("development-validation-superseded")).toBeTruthy();
+		expect(screen.queryByTestId("development-validation-no-report")).toBeNull();
+		expect(screen.queryByTestId("development-validation-test-counts")).toBeNull();
 	});
 
 	it("renders the parse failure instead of counts when the adapter could not read the results", () => {
