@@ -180,8 +180,20 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         AssertEx.Equal(expected: 0, chat.CallCount);
     }
 
+    /// <summary>
+    ///     The output budget is a WHOLE-ATTEMPT ceiling measured against a CUMULATIVE usage report, so it has to be
+    ///     derived the way the input ceiling already was — per-call budget times the round count.
+    ///     <para>
+    ///         This test previously rejected <c>maxOutputTokens + 1</c>, which pinned the defect rather than the rule:
+    ///         <c>MaxOutputTokens</c> is what the provider enforces on <em>each</em> round, while
+    ///         <c>ToChatResponse().Usage</c> sums <em>every</em> round. Any tool loop whose rounds together out-talked
+    ///         one round's budget was failed for exceeding a limit no call had exceeded. Reproduced live on
+    ///         2026-07-31 against <c>unsloth/Ornith-1.0-9B-GGUF:Q4_K_M</c>: a coder attempt reported 33k cumulative
+    ///         output tokens under a 32768 per-call budget and its completed work was discarded.
+    ///     </para>
+    /// </summary>
     [Test]
-    public async Task CoderModel_AllowsLargeInputWithinOutputCapAndRejectsOutputCapPlusOne()
+    public async Task CoderModel_AcceptsCumulativeOutputAcrossRoundsAndRejectsOnlyAboveTheWholeAttemptCeiling()
     {
         var cloud = Substitute.For<IActiveCloudChatClientFactory>();
         cloud.IsCloudProviderSelected("local-model").Returns(false);
@@ -197,19 +209,32 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
             IsToolCapable = true
         });
 
-        using var exactChat = new SubmittingChatClient(inputTokens: 40_000, outputTokens: 60);
-        var exact = new DevelopmentCoderModel(exactChat, cloud, resolver);
-        var result = await exact.RunAsync("local-model", "prompt", tools, maxOutputTokens: 60, maxToolCalls: 2).ConfigureAwait(false);
-        AssertEx.Equal<long?>(40_000, result.InputTokens);
-        AssertEx.Equal<long?>(60, result.OutputTokens);
+        // maxToolCalls 2 => at most 3 provider calls => a whole-attempt ceiling of 3 x 60.
+        const int PerCall = 60;
+        const int MaxToolCalls = 2;
+        const long Ceiling = (MaxToolCalls + 1) * PerCall;
+        AssertEx.Equal(Ceiling, DevelopmentAttemptOutputBudget.Cumulative(PerCall, MaxToolCalls + 1));
 
-        using var overChat = new SubmittingChatClient(inputTokens: 40_000, outputTokens: 61);
+        using var exactChat = new SubmittingChatClient(inputTokens: 40_000, outputTokens: (int)Ceiling);
+        var exact = new DevelopmentCoderModel(exactChat, cloud, resolver);
+        var result = await exact.RunAsync("local-model", "prompt", tools, PerCall, MaxToolCalls).ConfigureAwait(false);
+        AssertEx.Equal<long?>(40_000, result.InputTokens);
+        AssertEx.Equal<long?>(Ceiling, result.OutputTokens);
+
+        // The regression the old expectation inverted: more than ONE call's budget is normal for a tool loop.
+        using var multiRoundChat = new SubmittingChatClient(inputTokens: 40_000, outputTokens: PerCall + 1);
+        var multiRound = new DevelopmentCoderModel(multiRoundChat, cloud, resolver);
+        var accepted = await multiRound.RunAsync("local-model", "prompt", tools, PerCall, MaxToolCalls).ConfigureAwait(false);
+        AssertEx.Equal<long?>(PerCall + 1, accepted.OutputTokens);
+
+        using var overChat = new SubmittingChatClient(inputTokens: 40_000, outputTokens: (int)Ceiling + 1);
         var over = new DevelopmentCoderModel(overChat, cloud, resolver);
-        await AssertEx.ThrowsAsync<InvalidOperationException>(() => over.RunAsync("local-model",
+        var failure = await AssertEx.ThrowsAsync<DevelopmentAttemptEvidenceException>(() => over.RunAsync("local-model",
             "prompt",
             tools,
-            maxOutputTokens: 60,
-            maxToolCalls: 2));
+            PerCall,
+            MaxToolCalls));
+        AssertEx.Equal(DevelopmentAttemptFailureCodes.OutputTokenBudgetExceeded, failure.FailureCode);
     }
 
     [Test]
@@ -591,6 +616,68 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
             MaxAttemptDurationSeconds = 60,
             MaxOutputTokens = 2048
         };
+
+    /// <summary>
+    ///     MSBuild and NuGet resolve <c>Directory.Build.props</c>, <c>Directory.Build.targets</c> and
+    ///     <c>Directory.Packages.props</c> by walking UP from the project until the first hit, with no upper bound. The
+    ///     managed workspace therefore inherits whatever sits above the node's data directory unless something stops
+    ///     the walk.
+    ///     <para>
+    ///         Reproduced live on 2026-07-31: running from a source checkout puts the data root inside this
+    ///         repository, so a registered repository's <c>dotnet restore</c> picked up <em>this</em> repository's
+    ///         Central Package Management and failed <c>NU1008</c> for a package it declares legally inline. The
+    ///         validation gate was measuring the host's build configuration.
+    ///     </para>
+    ///     <para>
+    ///         The barrier must sit one level ABOVE the workspace, never inside it: a file inside would show up as an
+    ///         untracked change and land in the attempt's changed-file manifest, which is the evidence the apply gate
+    ///         is built on. Both halves are asserted.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task WorkspaceProvider_WritesBuildConfigurationBarrierAboveTheWorkspaceAndNotInsideIt()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var data = Path.Combine(_root, "barrier-data");
+        Directory.CreateDirectory(data);
+
+        // An ancestor that would otherwise be inherited, exactly as the live defect had it.
+        await File.WriteAllTextAsync(Path.Combine(data, "Directory.Packages.props"),
+            "<Project><PropertyGroup><ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally></PropertyGroup></Project>")
+            .ConfigureAwait(false);
+
+        var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(
+            DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
+        using var sandbox = CreateSandbox();
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, Options.Create(OptionsValue()), TimeProvider.System);
+        var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
+
+        var workspaceParent = Path.GetDirectoryName(session.HostWorktreePath)!;
+        foreach (var fileName in new[] { "Directory.Build.props", "Directory.Build.targets", "Directory.Packages.props", "Directory.Solution.props" })
+        {
+            AssertEx.True(File.Exists(Path.Combine(workspaceParent, fileName)), $"{fileName} must bound the upward search");
+            AssertEx.False(File.Exists(Path.Combine(session.HostWorktreePath, fileName)),
+                $"{fileName} must not be written inside the workspace, where it would become a changed file");
+        }
+
+        AssertEx.True((await File.ReadAllTextAsync(Path.Combine(workspaceParent, "Directory.Packages.props")).ConfigureAwait(false))
+            .Contains("<ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>", StringComparison.Ordinal));
+
+        // The workspace stays clean: the barrier is invisible to the repository's own Git state.
+        var status = await RunProcessAsync(session.HostWorktreePath, "git", "status", "--porcelain").ConfigureAwait(false);
+        EnsureSuccess(status);
+        AssertEx.Equal(string.Empty, status.StandardOutput.Trim());
+
+        // A deleted barrier is restored on the next prepare rather than silently reopening the defect.
+        File.Delete(Path.Combine(workspaceParent, "Directory.Packages.props"));
+        _ = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
+        AssertEx.True(File.Exists(Path.Combine(workspaceParent, "Directory.Packages.props")));
+    }
 
     private static DevelopmentExecutionSnapshot Snapshot(string identity,
         bool acknowledged = true,

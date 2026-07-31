@@ -279,7 +279,8 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
     {
         if (string.IsNullOrWhiteSpace(submission.Summary))
         {
-            throw new ArgumentException("The typed coder submission requires a summary.", nameof(submission));
+            throw new DevelopmentAttemptEvidenceException(DevelopmentAttemptFailureCodes.MissingSummary,
+                "The Development coder's submit_implementation call had an empty summary.");
         }
 
         var actualFiles = evidence.ChangedFiles.Select(static item => item.Path).ToHashSet(StringComparer.Ordinal);
@@ -289,15 +290,46 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
                                        .ToHashSet(StringComparer.Ordinal);
         if (!actualFiles.SetEquals(submittedFiles))
         {
-            throw new InvalidOperationException("The typed coder submission does not match the exact changed-file manifest.");
+            // Naming the difference is the whole point. The generic message this replaced left the operator unable to
+            // tell "the model under-reported" from "an earlier failed attempt left files in this task's preserved
+            // workspace" — which is a real and common cause, because the workspace is per task, not per attempt.
+            throw new DevelopmentAttemptEvidenceException(DevelopmentAttemptFailureCodes.ChangedFileManifestMismatch,
+                "The Development coder's submitted changed-file list is not exactly the workspace's changed files. "
+                + Describe("Changed but not submitted", actualFiles.Except(submittedFiles, StringComparer.Ordinal))
+                + Describe("Submitted but not changed", submittedFiles.Except(actualFiles, StringComparer.Ordinal))
+                + "The workspace is shared by every attempt on this task, so files a previous attempt left behind also count as changed.");
         }
 
         var executed = commands.Select(static command => command.CommandId).ToHashSet(StringComparer.Ordinal);
-        if (submission.CommandIds.Any(commandId => !executed.Contains(commandId)))
+        var unexecuted = submission.CommandIds.Where(commandId => !executed.Contains(commandId)).ToArray();
+        if (unexecuted.Length != 0)
         {
-            throw new InvalidOperationException("The typed coder submission claims command evidence that was not executed.");
+            throw new DevelopmentAttemptEvidenceException(DevelopmentAttemptFailureCodes.UnexecutedCommandClaimed,
+                "The Development coder claimed command evidence it never produced. "
+                + Describe("Claimed but not run", unexecuted));
         }
     }
+
+    /// <summary>
+    ///     Renders one side of a set difference for an operator reason, bounded so a large diff cannot overrun the
+    ///     persisted terminal-reason column.
+    /// </summary>
+    private static string Describe(string label, IEnumerable<string> paths)
+    {
+        var bounded = paths.Order(StringComparer.Ordinal).ToArray();
+        if (bounded.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        var shown = string.Join(", ", bounded.Take(MaxDescribedPaths));
+        var remainder = bounded.Length - MaxDescribedPaths;
+        return remainder > 0
+            ? $"{label}: {shown} (+{remainder} more). "
+            : $"{label}: {shown}. ";
+    }
+
+    private const int MaxDescribedPaths = 5;
 
     private static string BuildPrompt(DevelopmentExecutionSnapshot snapshot,
         DevelopmentWorkspaceSession session,
@@ -311,7 +343,19 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
             "\nBase commit: ", session.BaseCommit,
             "\nCommand profile: ", profile.ProfileId,
             "\nValid run_command ids: ", string.Join(", ", profile.Commands.Select(static command => command.CommandId)),
-            "\nUse only the fixed tools. The worktree is detached change isolation, not an OS security boundary.");
+            "\nUse only the fixed tools. The worktree is detached change isolation, not an OS security boundary.",
+
+            // The submission contract is stated here because ValidateSubmission enforces it exactly, and until now
+            // nothing told the model what it was. Measured live on 2026-07-31: a capable model produced a correct fix,
+            // also wrote two incidental files, listed only the fix in changedFiles, and the whole attempt — including
+            // the correct fix — was discarded for a rule it had never been given.
+            "\n\nSubmission contract, enforced exactly:",
+            "\n- Close the attempt with exactly one submit_implementation call, after all edits are done.",
+            "\n- changedFiles must list every workspace file that differs from the base commit, and nothing else.",
+            "\n  It is compared as a set against `git status`, so check get_status before submitting. Files an earlier",
+            "\n  attempt on this task left behind are still changed files and must be listed.",
+            "\n- commandIds must contain only ids you actually ran with run_command in this attempt.",
+            "\n- summary must be non-empty.");
     }
 
     private static string SanitizedReason(Exception exception)
@@ -320,6 +364,10 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
         {
             OperationCanceledException => "The bounded Development coder attempt was cancelled or timed out.",
             DevelopmentWorkspaceSecurityException => "The Development coder attempt violated a workspace security policy.",
+
+            // Authored here, never assembled from model output or an absolute host path, which is what makes it safe
+            // to surface verbatim. Everything else still falls through to the generic reason.
+            DevelopmentAttemptEvidenceException evidence => evidence.TerminalReason,
             _ => "The bounded Development coder attempt failed before producing valid exact evidence."
         };
     }
