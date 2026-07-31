@@ -37,11 +37,19 @@ interface ModelSelectorOptionProps {
 	option: ModelOption;
 	selected: boolean;
 	reasoningLabel: string;
+	nativeReasoningLabel: string;
 	statusFallback: (option: ModelOption) => string;
 	onSelect: (value: string) => void;
 }
 
-function ModelSelectorOption({ option, selected, reasoningLabel, statusFallback, onSelect }: ModelSelectorOptionProps) {
+function ModelSelectorOption({
+	option,
+	selected,
+	reasoningLabel,
+	nativeReasoningLabel,
+	statusFallback,
+	onSelect,
+}: ModelSelectorOptionProps) {
 	const label = display(option, option.value);
 	const showValue = option.value !== label;
 
@@ -68,6 +76,10 @@ function ModelSelectorOption({ option, selected, reasoningLabel, statusFallback,
 						<Text size="sm" fw={600} lineClamp={1}>
 							{label}
 						</Text>
+						{/* Two distinct reasoning capabilities, never both set (the detector makes graded win). Violet =
+						    a graded think:<level> control; teal = reasons natively on a template-baked channel, keeping
+						    the binary On/Off vocabulary. Rendering the second badge is what stops the picker implying a
+						    harmony model (gpt-oss) cannot reason at all. */}
 						{option.isReasoningModel ? (
 							<Badge
 								size="xs"
@@ -77,6 +89,18 @@ function ModelSelectorOption({ option, selected, reasoningLabel, statusFallback,
 								className={classes["reasoning-badge"]}
 							>
 								{reasoningLabel}
+							</Badge>
+						) : null}
+						{!option.isReasoningModel && option.isNativeReasoningModel ? (
+							<Badge
+								size="xs"
+								variant="light"
+								color="teal"
+								leftSection={<IconSparkles size={10} />}
+								className={classes["reasoning-badge"]}
+								data-testid={`chat-model-native-reasoning-badge-${option.value}`}
+							>
+								{nativeReasoningLabel}
 							</Badge>
 						) : null}
 					</Group>
@@ -156,6 +180,7 @@ interface ModelSelectorSectionProps {
 	items: ModelOption[];
 	title: string;
 	reasoningLabel: string;
+	nativeReasoningLabel: string;
 	selectedModel: string;
 	statusFallback: (option: ModelOption) => string;
 	onSelect: (value: string) => void;
@@ -165,6 +190,7 @@ function ModelSelectorSection({
 	items,
 	title,
 	reasoningLabel,
+	nativeReasoningLabel,
 	selectedModel,
 	statusFallback,
 	onSelect,
@@ -184,6 +210,7 @@ function ModelSelectorSection({
 					option={option}
 					selected={option.value === selectedModel}
 					reasoningLabel={reasoningLabel}
+					nativeReasoningLabel={nativeReasoningLabel}
 					statusFallback={statusFallback}
 					onSelect={onSelect}
 				/>
@@ -217,6 +244,9 @@ export function ModelSelectorCard({
 	// models are embedding/unknown shows just the local-default option. Detect that to explain the otherwise-bare list.
 	const hasNoChatModels = hasNoLocalChatModels(modelOptions);
 	const reasoningLabel = t("pages.chat.reasoningLabel", "Reasoning");
+	// Distinct from `reasoningLabel`: that badge means "a graded reasoning control is available", this one means
+	// "the model reasons by default, on/off only".
+	const nativeReasoningLabel = t("pages.chat.nativeReasoningLabel", "Native reasoning");
 	const statusFallback = (option: ModelOption): string =>
 		option.isAvailable ? t("pages.chat.modelAvailable", "Available") : t("pages.chat.modelUnavailable", "Unavailable");
 
@@ -351,6 +381,7 @@ export function ModelSelectorCard({
 									items={availableOptions}
 									title={t("pages.chat.modelSelector.availableModels", "Available")}
 									reasoningLabel={reasoningLabel}
+									nativeReasoningLabel={nativeReasoningLabel}
 									selectedModel={selectedModel}
 									statusFallback={statusFallback}
 									onSelect={select}
@@ -359,6 +390,7 @@ export function ModelSelectorCard({
 									items={unavailableOptions}
 									title={t("pages.chat.modelSelector.unavailableModels", "Unavailable")}
 									reasoningLabel={reasoningLabel}
+									nativeReasoningLabel={nativeReasoningLabel}
 									selectedModel={selectedModel}
 									statusFallback={statusFallback}
 									onSelect={select}

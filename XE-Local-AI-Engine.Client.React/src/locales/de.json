@@ -746,6 +746,7 @@
 			"loadingHistory": "Lokaler Chat-Verlauf wird geladen…",
 			"loadingMessages": "Nachrichten werden geladen…",
 			"modelUnavailable": "Nicht verfügbar",
+			"nativeReasoningLabel": "Natives Reasoning",
 			"reasoningLabel": "Reasoning",
 			"retryConnection": "Erneut versuchen",
 			"stop": "Stopp",
@@ -1653,7 +1654,8 @@
 				"capability": {
 					"tools": "Werkzeuge",
 					"vision": "Bild",
-					"thinking": "Denken"
+					"thinking": "Denken",
+					"nativeReasoning": "Natives Denken"
 				},
 				"overrideLabel": "Typ überschreiben",
 				"reset": "Auf erkannt zurücksetzen"

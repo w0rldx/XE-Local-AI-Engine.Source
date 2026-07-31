@@ -43,7 +43,25 @@ describe("toModelOption capability mapping", () => {
 		const option = toModelOption(model({ isReasoningCapable: undefined, isToolCapable: undefined }), true);
 
 		expect(option.isReasoningModel).toBe(false);
+		expect(option.isNativeReasoningModel).toBe(false);
 		expect(option.isToolCapable).toBe(false);
+	});
+
+	// F-014: a native-reasoning model (harmony/gpt-oss) reasons, but on a template-baked channel with no graded
+	// switch. It must surface as its OWN capability and must NOT be folded into isReasoningModel — that flag drives
+	// the graded think:<level> menu and the backend branch that writes `think` / `enable_thinking=false`.
+	it("maps isNativeReasoningCapable to its own flag without setting isReasoningModel", () => {
+		const option = toModelOption(model({ isNativeReasoningCapable: true, isReasoningCapable: false }), true);
+
+		expect(option.isNativeReasoningModel).toBe(true);
+		expect(option.isReasoningModel).toBe(false);
+	});
+
+	it("keeps a graded reasoning model out of the native flag", () => {
+		const option = toModelOption(model({ isReasoningCapable: true, isNativeReasoningCapable: false }), true);
+
+		expect(option.isReasoningModel).toBe(true);
+		expect(option.isNativeReasoningModel).toBe(false);
 	});
 });
 
@@ -79,7 +97,7 @@ describe("resolveLocalDefaultModelCapabilities", () => {
 			model({ modelName: "qwen3:8b", isSelected: true, isReasoningCapable: true, isToolCapable: true }),
 		]);
 
-		expect(capabilities).toEqual({ isReasoningModel: true, isToolCapable: true });
+		expect(capabilities).toEqual({ isReasoningModel: true, isNativeReasoningModel: false, isToolCapable: true });
 	});
 
 	it("falls back to name-ascending order when no model is the node default and mod-times tie", () => {
@@ -89,7 +107,7 @@ describe("resolveLocalDefaultModelCapabilities", () => {
 			model({ modelName: "gemma:12b", isReasoningCapable: false, isToolCapable: true }),
 		]);
 
-		expect(capabilities).toEqual({ isReasoningModel: false, isToolCapable: true });
+		expect(capabilities).toEqual({ isReasoningModel: false, isNativeReasoningModel: false, isToolCapable: true });
 	});
 
 	it("falls back to the most-recently-modified chat model, overriding name order", () => {
@@ -99,7 +117,7 @@ describe("resolveLocalDefaultModelCapabilities", () => {
 			model({ modelName: "zeta", modifiedAtUtc: 2000, isReasoningCapable: true, isToolCapable: true }),
 		]);
 
-		expect(capabilities).toEqual({ isReasoningModel: true, isToolCapable: true });
+		expect(capabilities).toEqual({ isReasoningModel: true, isNativeReasoningModel: false, isToolCapable: true });
 	});
 
 	it("ignores non-chat models when resolving the default", () => {
@@ -108,7 +126,7 @@ describe("resolveLocalDefaultModelCapabilities", () => {
 			model({ modelName: "qwen3:8b", isReasoningCapable: true, isToolCapable: false }),
 		]);
 
-		expect(capabilities).toEqual({ isReasoningModel: true, isToolCapable: false });
+		expect(capabilities).toEqual({ isReasoningModel: true, isNativeReasoningModel: false, isToolCapable: false });
 	});
 
 	it("excludes CodexOAuth provider entries from the resolved default", () => {
@@ -117,13 +135,13 @@ describe("resolveLocalDefaultModelCapabilities", () => {
 			model({ modelName: "gemma:12b", isReasoningCapable: false, isToolCapable: false }),
 		]);
 
-		expect(capabilities).toEqual({ isReasoningModel: false, isToolCapable: false });
+		expect(capabilities).toEqual({ isReasoningModel: false, isNativeReasoningModel: false, isToolCapable: false });
 	});
 
 	it("returns false capabilities when there are no chat models", () => {
 		const capabilities = resolveLocalDefaultModelCapabilities([]);
 
-		expect(capabilities).toEqual({ isReasoningModel: false, isToolCapable: false });
+		expect(capabilities).toEqual({ isReasoningModel: false, isNativeReasoningModel: false, isToolCapable: false });
 	});
 });
 
