@@ -1663,6 +1663,7 @@
 					"chat": "Chat",
 					"embedding": "Embedding",
 					"reranker": "Reranker",
+					"draft": "Draft (speculative decoding)",
 					"unknown": "Unknown"
 				},
 				"capability": {
@@ -1716,6 +1717,8 @@
 					"inspectError": "Could not load this repository's files.",
 					"noFiles": "No downloadable GGUF files found.",
 					"dynamic": "Dynamic",
+					"draft": "Draft model",
+					"draftHint": "Speculative-decoding drafter — not a chat model",
 					"recommended": "Recommended",
 					"columns": {
 						"quant": "Quant",

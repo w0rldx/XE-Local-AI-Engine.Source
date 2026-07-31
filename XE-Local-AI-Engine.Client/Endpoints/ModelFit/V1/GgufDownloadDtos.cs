@@ -73,6 +73,14 @@ public sealed class GgufRepositoryFileResponse
     /// <summary>Whether the quant is an Unsloth Dynamic (<c>UD-</c>) quant (e.g. <c>UD-Q4_K_XL</c>).</summary>
     public required bool IsDynamic { get; init; }
 
+    /// <summary>
+    ///     Whether this file is a speculative-decoding DRAFT model (an MTP drafter) rather than a base-model quant. Its
+    ///     <see cref="Quant" /> carries the <c>MTP-</c> marker so it can never share a label with the real weights, and
+    ///     the picker lists drafts in their own group (never as a quality-graded quant row). Still downloadable — the
+    ///     node's <c>Draft model (MTP)</c> speculative mode needs one.
+    /// </summary>
+    public required bool IsDraft { get; init; }
+
     public required long SizeBytes { get; init; }
 
     /// <summary>

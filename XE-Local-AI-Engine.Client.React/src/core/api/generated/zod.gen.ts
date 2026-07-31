@@ -1540,6 +1540,7 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryFileResponse
 	qualityTier: z.string(),
 	fitVerdict: z.string(),
 	isRecommended: z.boolean(),
+	isDraft: z.boolean(),
 });
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryResponse = z.object({

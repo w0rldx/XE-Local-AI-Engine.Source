@@ -1765,6 +1765,7 @@ export type XeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryFileResponse =
 	qualityTier: string;
 	fitVerdict: string;
 	isRecommended: boolean;
+	isDraft: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryResponse = {
