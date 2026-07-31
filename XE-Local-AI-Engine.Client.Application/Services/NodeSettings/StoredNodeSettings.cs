@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 using System.Text.RegularExpressions;
 using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 
 /// <summary>
@@ -60,9 +61,13 @@ public sealed partial record StoredNodeSettings
 
     public const int MaxMaxResponseSizeMb = 100;
 
-    // Must be re-pinned in lock-step with LlamaCppReleasePins.PinnedTag — this is a deliberate literal rather than a
-    // reference, because Client.Application must not take a dependency on Providers.LlamaServer (frozen layering).
-    public const string DefaultRecommendedLlamaCppTag = "b10201";
+    // ALIASED, never re-literalled. This is the value the UI shows as "Recommended", and it used to be an independent
+    // string literal that had to be bumped in lock-step with LlamaCppReleasePins.PinnedTag by hand — which is exactly
+    // how it went 509 builds stale while the engine's own pin had moved (F-007, live eval 2026-07-31). The layering
+    // permits the reference: the frozen direction forbids a PROVIDER depending on Client/Application, not the reverse,
+    // and this assembly already references Providers.LlamaServer (see the Options using above). Const-to-const, so it
+    // still inlines as a compile-time constant and stays usable in attributes and switch patterns.
+    public const string DefaultRecommendedLlamaCppTag = LlamaCppReleasePins.PinnedTag;
 
     public const int DefaultOrchestrationIdleTimeoutSeconds = 120;
 
