@@ -48,14 +48,16 @@ internal sealed class ContainerSandboxOptionsValidator : IValidateOptions<Contai
 
         ValidateMountTarget(nameof(ContainerSandboxOptions.WorkspaceMountTarget), options.WorkspaceMountTarget, failures);
         ValidateMountTarget(nameof(ContainerSandboxOptions.ScratchMountTarget), options.ScratchMountTarget, failures);
+        ValidateMountTarget(nameof(ContainerSandboxOptions.TempMountTarget), options.TempMountTarget, failures);
 
         // An N-way sweep, not a pairwise call, and the difference is the whole point. Two targets need one comparison
         // and three need three; adding a fourth by hand is how a pair gets missed. FindOverlap is shared with the
-        // provider's mount broker, which sweeps these two targets together with every engine-generated mount target —
-        // an unbounded list that a fixed set of pairwise calls could never cover.
+        // provider's mount broker, which sweeps these targets together with every engine-generated mount target — an
+        // unbounded list that a fixed set of pairwise calls could never cover.
         if (FindOverlap([
                 (nameof(ContainerSandboxOptions.WorkspaceMountTarget), options.WorkspaceMountTarget),
-                (nameof(ContainerSandboxOptions.ScratchMountTarget), options.ScratchMountTarget)
+                (nameof(ContainerSandboxOptions.ScratchMountTarget), options.ScratchMountTarget),
+                (nameof(ContainerSandboxOptions.TempMountTarget), options.TempMountTarget)
             ]) is { } collision)
         {
             failures.Add($"'{collision.Second}' ('{collision.SecondPath}') and '{collision.First}' ('{collision.FirstPath}') must not "

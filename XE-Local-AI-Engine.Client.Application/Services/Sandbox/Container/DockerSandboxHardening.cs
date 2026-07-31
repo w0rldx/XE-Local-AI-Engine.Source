@@ -35,6 +35,9 @@ internal static class DockerSandboxHardening
 
     internal const string HostNamespaceMode = "host";
 
+    /// <summary>The mount options every engine-created <c>tmpfs</c> carries, and that the read-back then re-checks.</summary>
+    internal static readonly string[] RequiredTmpfsOptions = ["noexec", "nosuid", "nodev"];
+
     /// <summary>
     ///     The Docker network mode that serves a requested policy, or a rejection for one that has no mechanism here.
     ///     <para>
@@ -62,13 +65,24 @@ internal static class DockerSandboxHardening
     }
 
     /// <summary>
-    ///     Mount options for the scratch <c>tmpfs</c>. <c>noexec</c>/<c>nosuid</c>/<c>nodev</c> are set because the
-    ///     scratch area is the only writable place in a read-only-rootfs container and is therefore the only place a
-    ///     dropped payload could land; <c>size=</c> is set because an unbounded <c>tmpfs</c> is host RAM.
+    ///     Mount options for an engine-created <c>tmpfs</c>. <c>noexec</c>/<c>nosuid</c>/<c>nodev</c> are set because a
+    ///     tmpfs is writable and a writable place is where a dropped payload lands; <c>size=</c> is set because an
+    ///     unbounded <c>tmpfs</c> is host RAM.
+    ///     <para>
+    ///         Note what these options are and are not worth here, because the honest accounting is what makes a second
+    ///         <c>tmpfs</c> defensible. They are NOT the container's only writable surface: the workspace bind mount and
+    ///         every engine-generated runtime mount are writable and carry no <c>noexec</c>, and an ELF binary dropped
+    ///         into the workspace was measured to execute. So a <c>noexec</c> <c>tmpfs</c> is strictly weaker than
+    ///         surfaces that already exist, and adding one widens nothing. Nor is <c>size=</c> the only bound on memory:
+    ///         <c>tmpfs</c> pages are charged to the container's memory cgroup, so the existing
+    ///         <see cref="DockerContainerSpecification.MemoryBytes" /> ceiling already caps them — a 1 GB <c>tmpfs</c>
+    ///         against a 256 MB limit was measured to OOM-kill the container at ~254 MB. <c>size=</c> is the second,
+    ///         tighter belt, and it is kept because a per-mount bound fails the write rather than the container.
+    ///     </para>
     /// </summary>
-    internal static string BuildScratchOptions(long sizeBytes)
+    internal static string BuildTmpfsOptions(long sizeBytes)
     {
-        return "rw,noexec,nosuid,nodev,size=" + sizeBytes.ToString(CultureInfo.InvariantCulture);
+        return "rw," + string.Join(',', RequiredTmpfsOptions) + ",size=" + sizeBytes.ToString(CultureInfo.InvariantCulture);
     }
 
     /// <summary>
@@ -95,6 +109,7 @@ internal static class DockerSandboxHardening
         ArgumentNullException.ThrowIfNull(bindMounts);
 
         var scratchBytes = (long)options.ScratchSizeMb * 1024 * 1024;
+        var tempBytes = (long)options.TempSizeMb * 1024 * 1024;
         var memoryMb = requestedLimits?.MemoryMb ?? options.MemoryMb;
         var cpuCount = requestedLimits?.CpuCount ?? options.CpuCount;
         var pidsLimit = requestedLimits?.PidsLimit ?? options.PidsLimit;
@@ -114,9 +129,14 @@ internal static class DockerSandboxHardening
             CapabilitiesToDrop = [DropAllCapabilities],
             SecurityOptions = [NoNewPrivileges],
             ReadOnlyRootFilesystem = true,
+            // Two tmpfs mounts, for two different reasons. Scratch is the writable area the sandbox contract offers a
+            // caller. The temp mount exists because the toolchain's shared-memory path is a compile-time constant that
+            // honours no environment variable — see ContainerSandboxOptions.TempMountTarget for the measured evidence
+            // and the upstream decision that makes it unrelocatable.
             TemporaryFilesystems = new Dictionary<string, string>(StringComparer.Ordinal)
             {
-                [options.ScratchMountTarget] = BuildScratchOptions(scratchBytes)
+                [options.ScratchMountTarget] = BuildTmpfsOptions(scratchBytes),
+                [options.TempMountTarget] = BuildTmpfsOptions(tempBytes)
             },
             BindMounts = bindMounts,
             MemoryBytes = (long)memoryMb * 1024 * 1024,
@@ -293,17 +313,33 @@ internal static class DockerSandboxHardening
             violations.Add("read-only root filesystem: not applied.");
         }
 
+        // Every requested tmpfs, not a named one. The set is engine-owned and has grown once already; a check pinned to
+        // the scratch target would have silently stopped covering the mount that was added beside it.
         foreach (var (target, _) in requested.TemporaryFilesystems)
         {
             if (!observed.TemporaryFilesystems.TryGetValue(target, out var appliedOptions))
             {
-                violations.Add($"tmpfs scratch: '{target}' is absent from the created container.");
+                violations.Add($"tmpfs: '{target}' is absent from the created container.");
                 continue;
             }
 
             if (!appliedOptions.Contains("size=", StringComparison.OrdinalIgnoreCase))
             {
-                violations.Add($"tmpfs scratch: '{target}' has no size bound (options '{appliedOptions}'), so it is host memory.");
+                violations.Add($"tmpfs: '{target}' has no size bound (options '{appliedOptions}'), so it is host memory.");
+            }
+
+            // Checked, not assumed. These options are the whole reason a writable tmpfs is acceptable under §3.8, and
+            // until now only the size bound was read back — a daemon that dropped `noexec` would have produced a
+            // container that passed verification while carrying the one property the mount was justified by. Same
+            // fail-closed rule as everything else here: asking for a flag is not evidence the flag took.
+            var missing = RequiredTmpfsOptions
+                          .Where(option => !HasMountOption(appliedOptions, option))
+                          .ToArray();
+
+            if (missing.Length > 0)
+            {
+                violations.Add($"tmpfs: '{target}' is missing [{string.Join(", ", missing)}] (options '{Describe(appliedOptions)}'), "
+                               + "so it is a writable mount without the restrictions it was created under.");
             }
         }
     }
@@ -366,6 +402,22 @@ internal static class DockerSandboxHardening
             violations.Add($"PID limit: asked for {requested.PidsLimit}, the daemon reports {observed.PidsLimit}"
                            + (observed.PidsLimit == 0 ? " (unlimited)." : "."));
         }
+    }
+
+    /// <summary>
+    ///     Whether a comma-separated mount-option string carries <paramref name="option" /> as a whole option.
+    ///     <para>
+    ///         Tokenized rather than substring-matched, because a substring match on these particular names is wrong in
+    ///         both directions: <c>"noexec"</c> contains <c>"exec"</c>, so looking for the permissive form would find the
+    ///         restrictive one, and an option like <c>"nodevfoo"</c> would satisfy a search for <c>"nodev"</c>. The
+    ///         daemon renders these as a comma-separated list, so the whole-token comparison is the exact one.
+    ///     </para>
+    /// </summary>
+    private static bool HasMountOption(string appliedOptions, string option)
+    {
+        return appliedOptions
+               .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+               .Any(token => string.Equals(token, option, StringComparison.OrdinalIgnoreCase));
     }
 
     private static string Describe(string value)

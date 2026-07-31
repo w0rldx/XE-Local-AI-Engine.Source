@@ -70,6 +70,27 @@ public sealed class ContainerSandboxOptionsValidatorTests
         AssertEx.Contains(string.Join(" ", result.Failures ?? []), "must not overlap");
     }
 
+    [Test]
+    public void Validate_ATemporaryMountThatShadowsTheWorkspace_IsRejected()
+    {
+        // The overlap sweep is N-way precisely so a third target cannot be added without being compared to the other
+        // two. A tmpfs at an ancestor of the workspace would hide the repository the container was created to build,
+        // and the daemon's read-back would still agree, because that is exactly what it was asked for.
+        var result = Validate(Options() with { TempMountTarget = "/workspace/tmp" });
+
+        AssertEx.True(result.Failed);
+        AssertEx.Contains(string.Join(" ", result.Failures ?? []), "must not overlap");
+    }
+
+    [Test]
+    public void Validate_ARelativeTemporaryMountTarget_IsRejected()
+    {
+        var result = Validate(Options() with { TempMountTarget = "tmp" });
+
+        AssertEx.True(result.Failed);
+        AssertEx.Contains(string.Join(" ", result.Failures ?? []), "absolute in-container path");
+    }
+
     private static ValidateOptionsResult Validate(ContainerSandboxOptions options)
     {
         return new ContainerSandboxOptionsValidator().Validate(name: null, options);
