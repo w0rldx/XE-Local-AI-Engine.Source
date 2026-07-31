@@ -151,25 +151,26 @@ internal sealed class DevelopmentCoderModel(
         var response = updates.ToChatResponse();
         liveProgress?.CompleteOutput(response.Usage);
 
-        var usage = response.Usage ?? throw new InvalidOperationException("The Development coder response did not report token usage.");
-        var inputTokens = usage.InputTokenCount ?? throw new InvalidOperationException("The Development coder response did not report input-token usage.");
-        var outputTokens = usage.OutputTokenCount ?? throw new InvalidOperationException("The Development coder response did not report output-token usage.");
-        var accountedTokens = checked(inputTokens + outputTokens);
-        var totalTokens = Math.Max(usage.TotalTokenCount ?? accountedTokens, accountedTokens);
-        if (inputTokens < 0 || outputTokens < 0 || totalTokens < 0 || outputTokens > maxOutputTokens)
-        {
-            throw new InvalidOperationException("The Development coder exceeded the configured output-token limit.");
-        }
+        var usage = response.Usage;
+        var (inputTokens, outputTokens) = DevelopmentAttemptOutputBudget.Accept(usage?.InputTokenCount,
+            usage?.OutputTokenCount,
+            usage?.TotalTokenCount,
+            maxOutputTokens,
+            providerCalls,
+            "coder");
 
         if (isCloud)
         {
             _ = await tools.ApplyPatchAsync(gateway.CloudPatch
-                                            ?? throw new InvalidOperationException("The cloud coder submission did not include a bounded patch."),
+                                            ?? throw new DevelopmentAttemptEvidenceException(DevelopmentAttemptFailureCodes.MissingSubmission,
+                                                "The cloud Development coder submission did not include a bounded patch, so there is nothing to apply to the workspace."),
                 cancellationToken).ConfigureAwait(false);
         }
 
         return new DevelopmentCoderModelResult(gateway.Submission
-                                               ?? throw new InvalidOperationException("The coder attempt ended without a typed implementation submission."),
+                                               ?? throw new DevelopmentAttemptEvidenceException(DevelopmentAttemptFailureCodes.MissingSubmission,
+                                                   "The Development coder stopped without calling submit_implementation, so the attempt produced no evidence to validate. "
+                                                   + "Any workspace changes it made are preserved; re-run the task, or use a model that reliably closes with a tool call."),
             inputTokens,
             outputTokens);
     }
@@ -247,10 +248,16 @@ internal sealed class DevelopmentCoderModel(
             Count("submit_implementation", null);
             if (Submission is not null)
             {
-                throw new InvalidOperationException("The coder submission can be recorded only once.");
+                throw new DevelopmentAttemptEvidenceException(DevelopmentAttemptFailureCodes.DuplicateSubmission,
+                    "The Development coder called submit_implementation more than once. Exactly one submission closes an attempt.");
             }
 
-            ArgumentException.ThrowIfNullOrWhiteSpace(summary);
+            if (string.IsNullOrWhiteSpace(summary))
+            {
+                throw new DevelopmentAttemptEvidenceException(DevelopmentAttemptFailureCodes.MissingSummary,
+                    "The Development coder's submit_implementation call had an empty summary. The summary is the operator-facing record of what changed.");
+            }
+
             Submission = new DevelopmentCoderSubmission(summary,
                 changedFiles ?? [],
                 commandIds ?? [],
@@ -288,7 +295,9 @@ internal sealed class DevelopmentCoderModel(
         {
             if (Interlocked.Increment(ref _toolCalls) > _maxToolCalls)
             {
-                throw new InvalidOperationException("The Development coder exceeded the configured tool-call limit.");
+                throw new DevelopmentAttemptEvidenceException(DevelopmentAttemptFailureCodes.ToolCallBudgetExceeded,
+                    $"The Development coder asked for more than {_maxToolCalls} tool calls. "
+                    + "Give the task a narrower objective, or raise Development:MaxToolCalls.");
             }
 
             _liveProgress?.ToolStarted(toolId, arguments);
