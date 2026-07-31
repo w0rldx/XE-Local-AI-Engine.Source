@@ -2914,6 +2914,14 @@
 			"saved": "Workflow gespeichert.",
 			"defaultName": "Unbenannter Workflow",
 			"deleteHint": "Tipp: Block oder Verbindung auswählen und Entf (oder Rücktaste) drücken, um ihn zu entfernen. Start und Ende können nicht entfernt werden.",
+			"runs": {
+				"title": "Läufe auf diesem Knoten",
+				"description": "Läufe werden auf dem Knoten gehalten, nicht in diesem Browser-Tab. Verbinden Sie sich nach einem Neuladen erneut mit einem Lauf oder brechen Sie ihn ab, um seinen Platz freizugeben.",
+				"cancelAll": "Alle Läufe abbrechen",
+				"cancelledCount": "{{count}} Lauf/Läufe abgebrochen.",
+				"reattachAria": "Erneut mit Lauf verbinden",
+				"cancelAria": "Lauf abbrechen"
+			},
 			"list": {
 				"empty": "Noch keine gespeicherten Workflows. Erstellen Sie einen, um zu beginnen.",
 				"openAria": "Workflow öffnen",
@@ -2999,6 +3007,7 @@
 				"execute": "Der Lauf konnte nicht gestartet werden.",
 				"continue": "Der Lauf konnte nicht fortgesetzt werden.",
 				"cancel": "Der Lauf konnte nicht abgebrochen werden.",
+				"cancelAll": "Die Läufe konnten nicht abgebrochen werden.",
 				"conflict": "Dieser Workflow wurde an anderer Stelle geändert. Laden Sie neu und wenden Sie Ihre Änderungen erneut an."
 			}
 		},

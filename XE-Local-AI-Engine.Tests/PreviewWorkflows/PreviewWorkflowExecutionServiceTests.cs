@@ -24,6 +24,7 @@ public sealed class PreviewWorkflowExecutionServiceTests
             IdleTimeout = TimeSpan.FromMinutes(5),
             MaxRunDuration = TimeSpan.FromMinutes(15),
             SweepInterval = TimeSpan.FromSeconds(30),
+            AbandonedSubscriberGrace = TimeSpan.FromMinutes(5),
             MaxConcurrentRuns = 4,
             MaxOutputBytes = 10 * 1024 * 1024
         };
@@ -429,7 +430,7 @@ public sealed class PreviewWorkflowExecutionServiceTests
         await WaitForAsync(() => publisher.HasRunEvent(PreviewWorkflowHubEvents.RunCompleted), TimeSpan.FromSeconds(5)).ConfigureAwait(false);
         await WaitForAsync(() => service.ActiveRunIds.Count == 0, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
 
-        var snapshot = service.SnapshotBufferedEvents(runId);
+        var snapshot = service.SnapshotBufferedEvents(runId, afterSeq: -1);
 
         string[] expectedMethods =
         [
@@ -461,7 +462,7 @@ public sealed class PreviewWorkflowExecutionServiceTests
         var runId = await service.StartAsync(PreviewGraphBuilder.Linear(), connectionId: null).ConfigureAwait(false);
         await WaitForAsync(() => publisher.HasRunEvent(PreviewWorkflowHubEvents.RunPaused), TimeSpan.FromSeconds(5)).ConfigureAwait(false);
 
-        var snapshot = service.SnapshotBufferedEvents(runId);
+        var snapshot = service.SnapshotBufferedEvents(runId, afterSeq: -1);
         AssertEx.NotEmpty(snapshot);
         AssertEx.Equal(PreviewWorkflowHubEvents.RunStarted, snapshot[0].MethodName, "RunStarted must be the first buffered event.");
         AssertEx.Equal(expected: 0L, SeqOf(snapshot[0]), "RunStarted must be buffered as seq 0.");
@@ -489,7 +490,7 @@ public sealed class PreviewWorkflowExecutionServiceTests
         var runId = await service.StartAsync(PreviewGraphBuilder.Linear(), connectionId: null).ConfigureAwait(false);
         await WaitForAsync(() => publisher.HasRunEvent(PreviewWorkflowHubEvents.RunCompleted), TimeSpan.FromSeconds(5)).ConfigureAwait(false);
 
-        var snapshot = service.SnapshotBufferedEvents(runId);
+        var snapshot = service.SnapshotBufferedEvents(runId, afterSeq: -1);
         AssertEx.Equal(expected: 3, snapshot.Count, "the buffer must be bounded to MaxBufferedEventsPerRun.");
         // The newest events are retained: the last buffered event is the terminal RunCompleted, and the oldest
         // (RunStarted, seq 0) was dropped — its seq is no longer the first entry.
@@ -515,12 +516,182 @@ public sealed class PreviewWorkflowExecutionServiceTests
 
         // Before retention elapses the log is retained (a late subscriber can still catch up), and a sweep is a no-op.
         await service.SweepAsync(CancellationToken.None).ConfigureAwait(false);
-        AssertEx.NotEmpty(service.SnapshotBufferedEvents(runId));
+        AssertEx.NotEmpty(service.SnapshotBufferedEvents(runId, afterSeq: -1));
 
         // After retention elapses the sweep evicts the terminal log.
         time.Advance(TimeSpan.FromSeconds(61));
         await service.SweepAsync(CancellationToken.None).ConfigureAwait(false);
-        AssertEx.Empty(service.SnapshotBufferedEvents(runId));
+        AssertEx.Empty(service.SnapshotBufferedEvents(runId, afterSeq: -1));
+    }
+
+    [Test]
+    public async Task PreviewExec_AbandonedPausedRun_ReleasesItsSlot_AfterGrace()
+    {
+        // F-048, the whole defect: execute → pause → reload. The run parks on Pause (exempt from the idle clock AND
+        // the wall-clock cap, both deliberately) and NOBODY is subscribed, because the reloaded page never learned the
+        // runId. Against the old code the sweep could never touch it and the slot was held until a node restart.
+        var provider = new FakeLocalModelProvider();
+        var publisher = new RecordingPreviewEventPublisher();
+        var time = new AdjustableTimeProvider();
+        var options = DefaultOptions();
+        options.MaxConcurrentRuns = 1;
+        options.AbandonedSubscriberGrace = TimeSpan.FromMinutes(5);
+        var runner = new FakePreviewWorkflowRunner((_, _) =>
+            new ScriptedPreviewRunSession([PreviewWorkflowUpdate.RunPaused("pause", "upstream", "req-1")]));
+
+        await using var service = CreateService(runner, publisher, provider, options, timeProvider: time);
+        _ = await service.StartAsync(PreviewGraphBuilder.Linear(), connectionId: null).ConfigureAwait(false);
+        await WaitForAsync(() => publisher.HasRunEvent(PreviewWorkflowHubEvents.RunPaused), TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+
+        // Well past both the idle timeout (5 min) and the wall-clock cap (15 min): the paused run survives every sweep
+        // that is NOT the abandoned sweep, so this leg pins the pause exemption as still intact.
+        time.Advance(TimeSpan.FromMinutes(4));
+        await service.SweepAsync(CancellationToken.None).ConfigureAwait(false);
+        AssertEx.Equal(expected: 1, service.ActiveRunIds.Count, "a paused run must survive while inside the abandoned grace period.");
+
+        // Past the grace period with still no subscriber → swept, slot released.
+        time.Advance(TimeSpan.FromMinutes(2));
+        await service.SweepAsync(CancellationToken.None).ConfigureAwait(false);
+
+        await WaitForAsync(() => service.ActiveRunIds.Count == 0, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+        AssertEx.Equal(expected: 0, service.ActiveRunIds.Count, "an abandoned paused run must be swept once the grace period elapses.");
+
+        // The slot is genuinely free again: with MaxConcurrentRuns = 1 this start would throw CapReached if the
+        // reservation had leaked with the handle.
+        var replacementRunId = await service.StartAsync(PreviewGraphBuilder.Linear(), connectionId: null).ConfigureAwait(false);
+        AssertEx.True(replacementRunId != Guid.Empty, "the reclaimed slot must accept a new run.");
+    }
+
+    [Test]
+    public async Task PreviewExec_PausedRunWithLiveSubscriber_IsNeverSwept()
+    {
+        // The other half of the contract: the sweep must discriminate on "nobody is watching", NOT on "paused". An
+        // operator staring at a Pause node keeps a subscriber attached, and that run must survive arbitrarily long —
+        // otherwise the fix would have replaced a leak with a new way to kill a legitimate run.
+        var provider = new FakeLocalModelProvider();
+        var publisher = new RecordingPreviewEventPublisher();
+        var time = new AdjustableTimeProvider();
+        var options = DefaultOptions();
+        options.AbandonedSubscriberGrace = TimeSpan.FromMinutes(5);
+        var runner = new FakePreviewWorkflowRunner((_, _) =>
+            new ScriptedPreviewRunSession([PreviewWorkflowUpdate.RunPaused("pause", "upstream", "req-1")]));
+
+        await using var service = CreateService(runner, publisher, provider, options, timeProvider: time);
+        var runId = await service.StartAsync(PreviewGraphBuilder.Linear(), connectionId: null).ConfigureAwait(false);
+        await WaitForAsync(() => publisher.HasRunEvent(PreviewWorkflowHubEvents.RunPaused), TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+
+        service.AddSubscriber(runId, "conn-1");
+
+        // An hour: four times the wall-clock cap and twelve times the grace period.
+        time.Advance(TimeSpan.FromHours(1));
+        await service.SweepAsync(CancellationToken.None).ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 1, service.ActiveRunIds.Count, "a paused run with a live subscriber must never be swept.");
+
+        // ...and the moment that subscriber goes away, the grace period starts from THAT point (not from run start),
+        // so the run survives one more sweep and only then becomes eligible.
+        service.RemoveSubscriber(runId, "conn-1");
+        time.Advance(TimeSpan.FromMinutes(4));
+        await service.SweepAsync(CancellationToken.None).ConfigureAwait(false);
+        AssertEx.Equal(expected: 1, service.ActiveRunIds.Count, "the grace period must restart when the last subscriber leaves.");
+
+        time.Advance(TimeSpan.FromMinutes(2));
+        await service.SweepAsync(CancellationToken.None).ConfigureAwait(false);
+        await WaitForAsync(() => service.ActiveRunIds.Count == 0, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+        AssertEx.Equal(expected: 0, service.ActiveRunIds.Count, "an unsubscribed paused run must be swept after the grace period.");
+    }
+
+    [Test]
+    public async Task PreviewExec_SnapshotFromSeq_ReplaysOnlyNewerEvents_WithoutDuplicates()
+    {
+        // Reattach without duplication: a client that already applied seq 0..2 asks for everything AFTER 2 and must
+        // get a strictly-newer, gap-free tail. A full replay would hand back seq 0 again, which double-applies
+        // accumulating node output on the client.
+        var provider = new FakeLocalModelProvider();
+        var publisher = new RecordingPreviewEventPublisher();
+        var runner = new FakePreviewWorkflowRunner((_, _) =>
+            new ScriptedPreviewRunSession([
+                PreviewWorkflowUpdate.NodeStarted("agent"),
+                PreviewWorkflowUpdate.NodeOutput("agent", "hello"),
+                PreviewWorkflowUpdate.RunCompleted("done")
+            ]));
+
+        await using var service = CreateService(runner, publisher, provider);
+        var runId = await service.StartAsync(PreviewGraphBuilder.Linear(), connectionId: null).ConfigureAwait(false);
+        await WaitForAsync(() => publisher.HasRunEvent(PreviewWorkflowHubEvents.RunCompleted), TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+
+        var full = service.SnapshotBufferedEvents(runId, afterSeq: -1);
+        AssertEx.Equal(expected: 5, full.Count, "the whole log is RunStarted, NodeStarted, NodeOutput, NodeCompleted, RunCompleted.");
+
+        var tail = service.SnapshotBufferedEvents(runId, afterSeq: 2);
+        var tailSeqs = tail.Select(SeqOf).ToList();
+
+        AssertEx.True(tailSeqs.SequenceEqual([3L, 4L]),
+            $"a seq-filtered replay must return ONLY events after the client's high-water-mark. Got: {string.Join(",", tailSeqs)}");
+        AssertEx.Equal(expected: tailSeqs.Count, tailSeqs.Distinct().Count(), "a replay must never repeat a seq.");
+
+        // The terminal event is in the tail, so a reattaching client still learns the run finished.
+        AssertEx.Equal(PreviewWorkflowHubEvents.RunCompleted, tail[^1].MethodName);
+
+        // A client fully caught up asks for nothing more.
+        AssertEx.Empty(service.SnapshotBufferedEvents(runId, afterSeq: 4));
+    }
+
+    [Test]
+    public async Task PreviewExec_ListRuns_ExposesLiveRun_AndGetRunResolvesItById()
+    {
+        // F-049: before this, a runId that left the client's memory was unreachable — no list, no get, no cancel.
+        var provider = new FakeLocalModelProvider();
+        var publisher = new RecordingPreviewEventPublisher();
+        var runner = new FakePreviewWorkflowRunner((_, _) =>
+            new ScriptedPreviewRunSession([PreviewWorkflowUpdate.RunPaused("pause", "upstream", "req-1")]));
+
+        await using var service = CreateService(runner, publisher, provider);
+        var runId = await service.StartAsync(PreviewGraphBuilder.Linear(), connectionId: null).ConfigureAwait(false);
+        await WaitForAsync(() => publisher.HasRunEvent(PreviewWorkflowHubEvents.RunPaused), TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+
+        var listed = service.ListRuns();
+        var run = AssertEx.NotNull(listed.SingleOrDefault(r => r.RunId == runId), "the live run must be discoverable via ListRuns.");
+        AssertEx.Equal(PreviewRunState.Paused, run.State);
+        AssertEx.True(run.IsLive, "a run holding a concurrency slot must report IsLive.");
+        AssertEx.Equal(expected: "pause", run.PausedNodeId, "the paused node must be reported so a reattaching client can show it.");
+        AssertEx.Equal(expected: "req-1", run.PauseRequestId);
+        AssertEx.Equal(expected: 0, run.SubscriberCount, "an abandoned run must report zero subscribers.");
+
+        var fetched = AssertEx.NotNull(service.GetRun(runId), "GetRun must resolve a live run by id.");
+        AssertEx.Equal(runId, fetched.RunId);
+        // LastSeq is what a reattaching client passes back as afterSeq, so it must match the buffered log.
+        AssertEx.Equal(service.SnapshotBufferedEvents(runId, afterSeq: -1).Count - 1L, fetched.LastSeq);
+
+        AssertEx.Null(service.GetRun(Guid.NewGuid()), "an unknown run id must resolve to null (→ 404) so a stale route id is dropped.");
+    }
+
+    [Test]
+    public async Task PreviewExec_CancelAll_ReleasesEverySlot()
+    {
+        // The operator's recovery path once slots have already leaked: cancel-all must free them without a restart.
+        var provider = new FakeLocalModelProvider();
+        var publisher = new RecordingPreviewEventPublisher();
+        var options = DefaultOptions();
+        options.MaxConcurrentRuns = 2;
+        var runner = new FakePreviewWorkflowRunner((_, _) =>
+            new ScriptedPreviewRunSession([PreviewWorkflowUpdate.RunPaused("pause", "x", "req")]));
+
+        await using var service = CreateService(runner, publisher, provider, options);
+        _ = await service.StartAsync(PreviewGraphBuilder.Linear(), connectionId: null).ConfigureAwait(false);
+        _ = await service.StartAsync(PreviewGraphBuilder.Linear(), connectionId: null).ConfigureAwait(false);
+        await WaitForAsync(() => service.ActiveRunIds.Count == 2, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+
+        // The cap is genuinely reached first, so the recovery below is proving something.
+        _ = await AssertEx.ThrowsAsync<PreviewWorkflowCapReachedException>(async () =>
+                              await service.StartAsync(PreviewGraphBuilder.Linear(), connectionId: null).ConfigureAwait(false))
+                          .ConfigureAwait(false);
+
+        var cancelled = await service.CancelAllAsync(CancellationToken.None).ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 2, cancelled);
+        await WaitForAsync(() => service.ActiveRunIds.Count == 0, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+        _ = await service.StartAsync(PreviewGraphBuilder.Linear(), connectionId: null).ConfigureAwait(false);
     }
 
     private static long SeqOf(PreviewWorkflowBufferedEvent bufferedEvent)

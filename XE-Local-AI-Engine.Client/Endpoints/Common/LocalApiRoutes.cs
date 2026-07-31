@@ -426,6 +426,15 @@ public static class LocalApiRoutes
         // surface; persists nothing.
         public const string RunExecute = "preview/runs/execute";
 
+        // Run discovery: GET the runs this node currently knows about (live + still-replayable) and GET one by id.
+        // Without these a runId that left the client's memory — a plain page reload — was unreachable forever.
+        public const string Runs = "preview/runs";
+        public const string RunById = "preview/runs/{runId}";
+
+        // Cancel every live run. The literal segment sits where a run id would, but "cancel-all" is not a Guid so the
+        // two never collide. Operator escape hatch for slots leaked before the abandoned-subscriber sweep reclaims them.
+        public const string RunsCancelAll = "preview/runs/cancel-all";
+
         // Run lifecycle actions, run-scoped. Literal action segments follow the run id.
         public const string RunContinue = "preview/runs/{runId}/continue";
         public const string RunCancel = "preview/runs/{runId}/cancel";

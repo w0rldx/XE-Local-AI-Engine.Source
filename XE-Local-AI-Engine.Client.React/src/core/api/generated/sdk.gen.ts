@@ -29,6 +29,9 @@ import type {
 	BrowseGgufRepositoriesData,
 	BrowseGgufRepositoriesErrors,
 	BrowseGgufRepositoriesResponses,
+	CancelAllPreviewRunsData,
+	CancelAllPreviewRunsErrors,
+	CancelAllPreviewRunsResponses,
 	CancelCudaBuildData,
 	CancelCudaBuildErrors,
 	CancelCudaBuildResponses,
@@ -308,6 +311,9 @@ import type {
 	GetNodeSettingsData,
 	GetNodeSettingsErrors,
 	GetNodeSettingsResponses,
+	GetPreviewRunData,
+	GetPreviewRunErrors,
+	GetPreviewRunResponses,
 	GetPreviewWorkflowData,
 	GetPreviewWorkflowErrors,
 	GetPreviewWorkflowResponses,
@@ -410,6 +416,9 @@ import type {
 	ListNodeChatMessageRevisionsData,
 	ListNodeChatMessageRevisionsErrors,
 	ListNodeChatMessageRevisionsResponses,
+	ListPreviewRunsData,
+	ListPreviewRunsErrors,
+	ListPreviewRunsResponses,
 	ListPreviewWorkflowsData,
 	ListPreviewWorkflowsErrors,
 	ListPreviewWorkflowsResponses,
@@ -635,6 +644,7 @@ import {
 	zBranchNodeChatConversationResponse,
 	zBrowseGgufRepositoriesQuery,
 	zBrowseGgufRepositoriesResponse,
+	zCancelAllPreviewRunsResponse,
 	zCancelCudaBuildResponse,
 	zCancelDevelopmentAttemptPath,
 	zCancelDevelopmentAttemptResponse,
@@ -794,6 +804,8 @@ import {
 	zGetNodeChatMessageFeedbackPath,
 	zGetNodeChatMessageFeedbackResponse,
 	zGetNodeSettingsResponse,
+	zGetPreviewRunPath,
+	zGetPreviewRunResponse,
 	zGetPreviewWorkflowPath,
 	zGetPreviewWorkflowResponse,
 	zGetRunningLocalModelsResponse,
@@ -847,6 +859,7 @@ import {
 	zListNodeChatConversationsResponse,
 	zListNodeChatMessageRevisionsPath,
 	zListNodeChatMessageRevisionsResponse,
+	zListPreviewRunsResponse,
 	zListPreviewWorkflowsResponse,
 	zListRunEnvelopesQuery,
 	zListRunEnvelopesResponse,
@@ -5635,4 +5648,66 @@ export const updateSuggestedPlaybookAction = <ThrowOnError extends boolean = fal
 			"Content-Type": "application/json",
 			...options.headers,
 		},
+	});
+
+export const listPreviewRuns = <ThrowOnError extends boolean = false>(options?: Options<ListPreviewRunsData, ThrowOnError>) =>
+	(options?.client ?? client).get<ListPreviewRunsResponses, ListPreviewRunsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListPreviewRunsResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/preview/runs",
+		...options,
+	});
+
+export const getPreviewRun = <ThrowOnError extends boolean = false>(options: Options<GetPreviewRunData, ThrowOnError>) =>
+	(options.client ?? client).get<GetPreviewRunResponses, GetPreviewRunErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zGetPreviewRunPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetPreviewRunResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/preview/runs/{runId}",
+		...options,
+	});
+
+export const cancelAllPreviewRuns = <ThrowOnError extends boolean = false>(
+	options?: Options<CancelAllPreviewRunsData, ThrowOnError>,
+) =>
+	(options?.client ?? client).post<CancelAllPreviewRunsResponses, CancelAllPreviewRunsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zCancelAllPreviewRunsResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/preview/runs/cancel-all",
+		...options,
 	});

@@ -3050,6 +3050,33 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActio
 		.optional(),
 });
 
+export const zXeLocalAiEngineClientEndpointsPreviewV1PreviewRunSummaryResponse = z.object({
+	runId: z.guid().optional(),
+	state: z.string().optional(),
+	isLive: z.boolean().optional(),
+	startedAtUtc: z.int().optional(),
+	lastSeq: z.int().optional(),
+	subscriberCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	pausedNodeId: z.string().nullish(),
+	pauseRequestId: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsPreviewV1ListPreviewRunsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsPreviewV1PreviewRunSummaryResponse),
+});
+
+export const zXeLocalAiEngineClientEndpointsPreviewV1CancelAllPreviewRunsResponse = z.object({
+	cancelledCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+});
+
 /**
  * Success
  */
@@ -4664,3 +4691,22 @@ export const zUpdateSuggestedPlaybookActionPath = z.object({
  * Success
  */
 export const zUpdateSuggestedPlaybookActionResponse = zXeLocalAiEngineClientEndpointsAgentsV1PlaybookActionResponse;
+
+/**
+ * Success
+ */
+export const zListPreviewRunsResponse = zXeLocalAiEngineClientEndpointsPreviewV1ListPreviewRunsResponse;
+
+export const zGetPreviewRunPath = z.object({
+	runId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zGetPreviewRunResponse = zXeLocalAiEngineClientEndpointsPreviewV1PreviewRunSummaryResponse;
+
+/**
+ * Success
+ */
+export const zCancelAllPreviewRunsResponse = zXeLocalAiEngineClientEndpointsPreviewV1CancelAllPreviewRunsResponse;
