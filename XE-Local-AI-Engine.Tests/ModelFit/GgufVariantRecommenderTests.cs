@@ -192,6 +192,42 @@ public sealed class GgufVariantRecommenderTests
         return new GgufVariantRecommender(selector, probe, NullLogger<GgufVariantRecommender>.Instance);
     }
 
+    [Test]
+    public async Task Annotate_NeverRecommendsASpeculativeDecodingDrafter()
+    {
+        // The live gemma-4-12b shape (F-011): the MTP drafter is BOTH the smallest file and NearLossless-looking, so
+        // under a plain fit-first / quality-first walk it wins outright — the ★ row would be a 0.4 GB non-chat model.
+        var recommender = Build(freeVramBytes: 24 * Gib);
+        var files = new[]
+        {
+            RepoFile("MTP-Q8_0", sizeBytes: 400L * 1024 * 1024),
+            RepoFile("Q4_K_M", 7 * Gib),
+            RepoFile("Q8_0", 11 * Gib)
+        };
+
+        var result = await recommender.AnnotateAsync(files, CancellationToken.None);
+
+        AssertEx.False(IsRecommended(result, "MTP-Q8_0"), "A speculative-decoding drafter must never be the recommended variant.");
+        AssertEx.True(IsRecommended(result, "Q8_0"), "The highest-quality fitting BASE quant is the recommendation.");
+    }
+
+    [Test]
+    public async Task Annotate_DrafterOnlyRepository_RecommendsNothing()
+    {
+        var recommender = Build(freeVramBytes: 24 * Gib);
+        var files = new[]
+        {
+            RepoFile("MTP-Q8_0", sizeBytes: 400L * 1024 * 1024),
+            RepoFile("MTP-BF16", sizeBytes: 800L * 1024 * 1024)
+        };
+
+        var result = await recommender.AnnotateAsync(files, CancellationToken.None);
+
+        AssertEx.Equal(files.Length, result.Count);
+        AssertEx.False(result.Any(static annotation => annotation.IsRecommended),
+            "With nothing but drafters there is no recommendable variant.");
+    }
+
     private static GgufRepoFile RepoFile(string quant, long sizeBytes)
     {
         return new GgufRepoFile($"model-{quant}.gguf",

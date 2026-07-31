@@ -15101,7 +15101,8 @@
           "sizeBytes",
           "qualityTier",
           "fitVerdict",
-          "isRecommended"
+          "isRecommended",
+          "isDraft"
         ],
         "properties": {
           "fileName": {
@@ -15123,6 +15124,9 @@
             "type": "string"
           },
           "isRecommended": {
+            "type": "boolean"
+          },
+          "isDraft": {
             "type": "boolean"
           }
         }

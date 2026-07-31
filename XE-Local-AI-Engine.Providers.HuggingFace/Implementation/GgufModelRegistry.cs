@@ -199,7 +199,8 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
     }
 
     // Best-effort rebuild from the .gguf files on disk when the manifest is unavailable. Metadata not derivable from the
-    // file alone (sha256, source revision, role) is left empty/Unknown — the store re-verifies on the next ensure.
+    // file alone (sha256, source revision) is left empty — the store re-verifies on the next ensure. The role stays
+    // Unknown EXCEPT for a speculative-decoding drafter, which the file name alone identifies (see GgufDraftModel).
     private IReadOnlyList<GgufModelRegistryEntry> Rescan()
     {
         if (!Directory.Exists(_modelsDirectory))
@@ -227,6 +228,16 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
                 continue;
             }
 
+            // A parseable quant alone does NOT make a file a chat model: a speculative-decoding drafter
+            // (mtp-<model>-Q8_0.gguf) parses to Q8_0 like any base quant, and a rescan used to register it as an
+            // ordinary model — a 0.4 GB "Q8_0" sitting beside the real one. Mark its quant and role so it keeps a
+            // distinct identity and stays out of the chat surfaces (the same rule discovery applies to the repo side).
+            var isDraft = GgufDraftModel.IsDraftFile(fileName);
+            if (isDraft)
+            {
+                quant = GgufDraftModel.MarkQuant(quant);
+            }
+
             // A rescanned entry has no recoverable repo/revision; key it by the file stem so it is at least resolvable.
             var modelName = GgufModelName.Format(Path.GetFileNameWithoutExtension(fileName), quant);
             entries.Add(new GgufModelRegistryEntry
@@ -240,7 +251,7 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
                 Sha256 = null,
                 SourceRevision = string.Empty,
                 DownloadedAtUtc = new DateTimeOffset(info.LastWriteTimeUtc, TimeSpan.Zero),
-                Role = GgufRole.Unknown
+                Role = isDraft ? GgufRole.Draft : GgufRole.Unknown
             });
         }
 

@@ -14,5 +14,12 @@ public enum GgufRole
     Chat = 1,
 
     /// <summary>Embedding model.</summary>
-    Embedding = 2
+    Embedding = 2,
+
+    /// <summary>
+    ///     Speculative-decoding draft model (an MTP drafter). Never spawned as a server of its own — it loads INSIDE a
+    ///     chat process via <c>--spec-model</c>, so it must stay out of every chat/embedding surface while remaining
+    ///     selectable as the node's draft model. Recognized by <see cref="GgufDraftModel" />.
+    /// </summary>
+    Draft = 3
 }

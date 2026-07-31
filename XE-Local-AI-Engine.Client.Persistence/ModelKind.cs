@@ -11,7 +11,13 @@ public enum ModelKind
     Unknown = 0,
     Chat = 1,
     Embedding = 2,
-    Reranker = 3
+    Reranker = 3,
+
+    /// <summary>
+    ///     Speculative-decoding draft model (an MTP drafter). Has no standalone chat use — it loads inside a chat
+    ///     process as the drafter — so it is excluded from every chat picker and offered only as the node's draft model.
+    /// </summary>
+    Draft = 4
 
     // Reserved for future growth (append only, do NOT renumber): Vision, CodeCompletion, Moderation.
 }

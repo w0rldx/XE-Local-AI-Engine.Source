@@ -95,12 +95,19 @@ internal static class LocalModelsMapper
     }
 
     /// <summary>
-    ///     Classifies an installed GGUF from its name alone (a fresh GGUF carries no capability probe). Reranker is
-    ///     checked before embedding because a reranker name such as <c>bge-reranker-…</c> also matches the embedding
-    ///     prefix, and the reranker classification is the correct one. Any other name defaults to Chat.
+    ///     Classifies an installed GGUF from its name alone (a fresh GGUF carries no capability probe). A
+    ///     speculative-decoding drafter is checked FIRST: its key carries the exact <c>MTP-</c> quant marker, and left
+    ///     unclassified it would default to Chat and sit in the picker as a 0.4 GB twin of the real model it drafts for.
+    ///     Reranker is then checked before embedding because a reranker name such as <c>bge-reranker-…</c> also matches
+    ///     the embedding prefix, and the reranker classification is the correct one. Any other name defaults to Chat.
     /// </summary>
     private static ModelKind ClassifyGgufKindByName(string modelName)
     {
+        if (ModelKindDetector.IsDraftName(modelName))
+        {
+            return ModelKind.Draft;
+        }
+
         if (ModelKindDetector.IsRerankerName(modelName))
         {
             return ModelKind.Reranker;
