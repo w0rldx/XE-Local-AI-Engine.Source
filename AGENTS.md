@@ -45,6 +45,8 @@ Backend:
 - `dotnet build XE-Local-AI-Engine.slnx --configuration Release --no-restore`
 - `dotnet test XE-Local-AI-Engine.slnx --configuration Release --no-build --max-parallel-test-modules 1`
 
+**The `--configuration Release` in those commands is load-bearing — always finish with it.** Local Debug builds skip analyzer execution (`Directory.Build.targets`; 84s → 10s on the Tests module), so SonarAnalyzer, Meziantou, BannedApiAnalyzers and the `IDExxxx` code-style rules — including the "no bare `TODO`" rule — only fire in Release. Iterate in Debug, but a change is not verified until a Release build passes, or the packaging script will reject what compiled fine for you. `XE_FULL_ANALYSIS=1` forces the full pass in Debug.
+
 Backend tests are TUnit on Microsoft.Testing.Platform. To scope a run, use `--treenode-filter` (not `--filter`). Alternation works: on TUnit 1.58, `/*/*/(QuantLadderTests|DesktopPortStoreTests)/*` discovers 15 tests — the exact union of the two classes' 9 and 6.
 
 Never run a build and a test run concurrently — `dotnet test --no-build` reads `bin/`, and a build in another process rewrites those assemblies mid-run and produces phantom failures (or a phantom green). Two guards exist, and both are already wired into `scripts/run-tests-memory-safe.sh`, `scripts/run-e2e-local.sh`, and `.opencode/scripts/project-validate.sh`:

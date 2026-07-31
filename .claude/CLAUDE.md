@@ -2,7 +2,9 @@
 
 Read `docs/agent-knowledge.md` before your first non-trivial change in this repo. It records the rules, invariants, and traps that reading the code will not tell you — each entry encodes a bug that was already paid for once. Highlights an agent will otherwise hit:
 
-- A bare `TODO`/`FIXME` in a C# comment **fails the build** (Sonar S1135 + warnings-as-errors). Write "follow-up:" instead.
+- **Always finish a backend change with a Release build** — `dotnet build XE-Local-AI-Engine.slnx --configuration Release`. Local Debug builds skip analyzer execution (84s → 10s), so the entire static-analysis wall is Release-only. A green Debug build is not verification.
+- A bare `TODO`/`FIXME` in a C# comment **fails the build** (Sonar S1135 + warnings-as-errors) — but **only in Release**, per the rule above. Write "follow-up:" instead.
+- A green E2E run does **not** typecheck the frontend anymore (the fixture runs `build:e2e`, a bare `vite build`). `pnpm run lint` is the only typecheck.
 - OpenAPI regen without `XE_LAUNCH_MODE=desktop` **silently drops** desktop-only endpoints from the generated client.
 - `aspire stop` is a **no-op** on this stack — use `scripts/dev-stop.sh`, or you leave an orphaned `llama-server` holding a port and VRAM.
 - HostAgent was **deliberately removed** — don't reintroduce it. Docker is off the **inference path** and stays there, but is permitted for **Development Mode execution only** (ADR 0004). Ollama was **not** removed — it's a gated secondary provider; llama.cpp is the default runtime.
