@@ -303,17 +303,24 @@ assert_device_audit() {
 # Step 3 helper. Pick the smallest installed llama.cpp chat model. `/models` mixes local and
 # cloud providers, so a provider filter is mandatory: picking a cloud model would produce a
 # perfectly green chat step that never touched the GPU.
+LOCAL_MODEL_PROVIDER="llamacpp"
+
 pick_chat_model() {
   local records="$1" forced="${2:-}"
-  local line name kind capable
+  local line name kind capable provider
   if [[ -n "${forced}" ]]; then
     printf '%s\n' "${forced}"
     return 0
   fi
   while IFS= read -r line; do
     [[ -n "${line}" ]] || continue
-    IFS='|' read -r name kind capable <<<"${line}"
+    IFS='|' read -r name kind capable provider <<<"${line}"
     [[ "${kind}" == "Chat" ]] || continue
+    # The provider filter is what keeps this smoke honest. `/models` merges Ollama and the cloud
+    # providers into the same list — Ollama sorts FIRST — so without it a node with Ollama
+    # reachable would run the chat turn on Ollama while steps 1-2 audited llama.cpp, and steps 3
+    # and 4 could both pass without the runtime under test ever being exercised.
+    [[ "${provider}" == "${LOCAL_MODEL_PROVIDER}" ]] || continue
     printf '%s\n' "${name}"
     return 0
   done < <(record_values model "${records}")
@@ -321,9 +328,9 @@ pick_chat_model() {
 }
 
 model_is_tool_capable() {
-  local records="$1" wanted="$2" line name kind capable
+  local records="$1" wanted="$2" line name kind capable provider
   while IFS= read -r line; do
-    IFS='|' read -r name kind capable <<<"${line}"
+    IFS='|' read -r name kind capable provider <<<"${line}"
     if [[ "${name}" == "${wanted}" ]]; then
       [[ "${capable}" == "true" ]]
       return
@@ -424,10 +431,16 @@ assert_image_result() {
   return 0
 }
 
+# NOTE the asymmetry with assert_gpu_was_used: that one compares LOWER bounds, so coercing an
+# unreadable value to 0 fails safe. This one compares an UPPER bound, where 0 would PASS. So a
+# non-numeric reading is rejected outright instead of coerced — the safe default for a
+# "did it come back down?" check is "I could not tell, therefore no".
 assert_vram_released() {
-  local baseline after
-  baseline="$(as_int "$1")"
-  after="$(as_int "$2")"
+  local baseline="$1" after="$2"
+  if [[ ! "${baseline}" =~ ^-?[0-9]+$ || ! "${after}" =~ ^-?[0-9]+$ ]]; then
+    step_fail "7-eject" "VRAM readings were not numeric (baseline='${baseline}', after='${after}'); the release could not be verified."
+    return 1
+  fi
   local excess=$((after - baseline))
   log "eject: baselineVram=${baseline}MiB afterEject=${after}MiB excess=${excess}MiB (tolerance ${EJECT_TOLERANCE_MIB}MiB)"
   if [[ "${excess}" -gt "${EJECT_TOLERANCE_MIB}" ]]; then
@@ -446,9 +459,18 @@ gpu_sample_once() {
     --format=csv,noheader,nounits 2>/dev/null | head -n 1
 }
 
+# Prints the used-VRAM reading in MiB, or exits NON-ZERO when nvidia-smi produced no usable
+# number. The distinction is load-bearing and was a real fail-open: `$2+0` turns a failed read
+# into a perfectly valid-looking `0`, and 0 satisfies `^[0-9]+$`, so every downstream guard
+# accepted it. Step 7 compares an UPPER bound (`after - baseline <= tolerance`), so a phantom 0
+# read as "all VRAM was released" and passed the step while an orphaned llama-server was still
+# holding the device. Callers must therefore check the status, never just the string.
 gpu_vram_now() {
   local sample; sample="$(gpu_sample_once)"
-  awk -F', *' 'NR==1 { printf "%d\n", $2+0 }' <<<"${sample}"
+  awk -F', *' '
+    NR==1 && $2 ~ /^[0-9]+$/ { print $2+0; found=1 }
+    END { exit !found }
+  ' <<<"${sample}"
 }
 
 GPU_SAMPLER_PID=""
@@ -529,6 +551,19 @@ for tool in dotnet python3 aspire nvidia-smi awk; do
 done
 [[ -f "${DRIVER}" ]] || prereq_fail "driver not found at ${DRIVER}"
 
+# The thresholds ARE the assertion. Validate them (a non-numeric knob would otherwise abort the
+# run mid-comparison under `set -u`) and ECHO them, so a run weakened by
+# XE_GPU_SMOKE_MIN_UTIL_PERCENT=0 cannot print an unqualified "PASS" with nothing on the record
+# saying the floor was zero.
+for knob in MIN_UTIL_PERCENT MIN_VRAM_RISE_MIB EJECT_TOLERANCE_MIB READY_TIMEOUT_SECONDS GPU_INDEX; do
+  [[ "${!knob}" =~ ^[0-9]+$ ]] || prereq_fail "${knob} must be a non-negative integer, got '${!knob}'."
+done
+[[ "${SAMPLE_INTERVAL}" =~ ^[0-9]+(\.[0-9]+)?$ ]] || prereq_fail "XE_GPU_SMOKE_SAMPLE_INTERVAL must be numeric, got '${SAMPLE_INTERVAL}'."
+log "thresholds minUtil=${MIN_UTIL_PERCENT}% minVramRise=${MIN_VRAM_RISE_MIB}MiB ejectTolerance=${EJECT_TOLERANCE_MIB}MiB"
+if [[ "${MIN_UTIL_PERCENT}" -eq 0 || "${MIN_VRAM_RISE_MIB}" -eq 0 ]]; then
+  warn "a step-4 floor is set to 0 — the load-bearing GPU assertion is DISABLED for this run."
+fi
+
 # A box with no NVIDIA GPU cannot produce any evidence this smoke needs. Refuse rather than
 # "pass" a run whose central assertion is unmeasurable.
 GPU_NAME="$(nvidia-smi --id="${GPU_INDEX}" --query-gpu=name --format=csv,noheader 2>/dev/null | head -n 1)"
@@ -578,7 +613,16 @@ cleanup() {
     log "--keep-running: the AppHost is still up. Stop it with scripts/dev-stop.sh."
   fi
   if [[ -n "${GUARD_STATE}" ]]; then
-    "${GPU_SMOKE_PROJECT_ROOT}/scripts/assembly-guard.sh" verify "${GUARD_STATE}" || status=75
+    # Contamination voids a pass or an assertion failure alike — both describe assemblies that
+    # changed underneath the run. But it must NOT overwrite an interrupt (130) or a
+    # prerequisite/lifecycle status: "re-run it" would send the operator past a Ctrl-C or past a
+    # cleanup that failed to kill an orphaned llama-server, which needs different action.
+    if ! "${GPU_SMOKE_PROJECT_ROOT}/scripts/assembly-guard.sh" verify "${GUARD_STATE}"; then
+      case "${status}" in
+        0|1) status=75 ;;
+        *)   echo "[gpu-smoke] NOTE: the build output also changed during the run, but exit ${status} is the more actionable failure." >&2 ;;
+      esac
+    fi
   fi
   rm -rf -- "${TEMP_ROOT}"
   exit "${status}"
@@ -588,8 +632,10 @@ trap 'exit 130' INT TERM
 
 # The baseline MUST be sampled before the AppHost exists: every VRAM assertion is a delta against
 # it, and WSL2 offers no per-process attribution to subtract afterwards.
-BASELINE_VRAM="$(gpu_vram_now)"
-[[ "${BASELINE_VRAM}" =~ ^[0-9]+$ ]] || prereq_fail "could not read a VRAM baseline from nvidia-smi."
+BASELINE_VRAM="$(gpu_vram_now)" || prereq_fail \
+  "nvidia-smi produced no usable VRAM reading, so no baseline exists. Every VRAM assertion in this
+             smoke is a delta against it; without one, steps 4 and 7 would compare against a phantom
+             zero and pass regardless of what the GPU did."
 log "baseline VRAM ${BASELINE_VRAM}MiB (sampled before the AppHost starts)"
 
 if [[ -z "${NO_GUARD:-}" && -d "${CLIENT_DEBUG_ROOT}" ]]; then
@@ -693,7 +739,9 @@ else
   CHAT_RECORDS="$(drive chat --token "${TOKEN}" --model "${CHAT_MODEL}" \
     --prompt 'Count from 1 to 60, writing each number as a word on its own line. Do not stop early.')" || CHAT_RECORDS=""
   gpu_sampler_stop
-  LOADED_VRAM="$(gpu_vram_now)"
+  # A failed read here is fail-CLOSED (0 makes the rise negative, below the floor), but say so
+  # explicitly rather than letting a phantom zero masquerade as a measurement.
+  LOADED_VRAM="$(gpu_vram_now)" || { warn "no VRAM reading after generation; step 4 will fail on an unmeasurable value."; LOADED_VRAM=0; }
   read -r PEAK_UTIL PEAK_VRAM <<<"$(gpu_sampler_peaks "${SAMPLE_FILE}")"
   log "gpu: collected $(wc -l <"${SAMPLE_FILE}" 2>/dev/null || echo 0) samples at ${SAMPLE_INTERVAL}s"
 
@@ -766,10 +814,18 @@ while IFS= read -r entry; do
   [[ -n "${entry}" ]] || continue
   IFS='|' read -r running_model running_role <<<"${entry}"
   log "ejecting ${running_model} (role=${running_role:-none})"
-  if drive eject --token "${TOKEN}" --model "${running_model}" --role "${running_role}" --force >/dev/null; then
-    EJECTED_ANY="true"
-  else
+  # HTTP 200 is not success here: the endpoint reports an `outcome`, and `timed_out_still_busy`
+  # means the process was LEFT RUNNING. Treating the status code as the verdict would count a
+  # refused eject as a completed one.
+  EJECT_RECORDS="$(drive eject --token "${TOKEN}" --model "${running_model}" --role "${running_role}" --force)" || EJECT_RECORDS=""
+  EJECT_OUTCOME="$(record_value outcome "${EJECT_RECORDS}")"
+  if [[ -z "${EJECT_RECORDS}" ]]; then
     warn "eject of ${running_model} reported an error"
+  elif [[ "${EJECT_OUTCOME}" == *"still_busy"* || "${EJECT_OUTCOME}" == *"timed_out"* ]]; then
+    warn "eject of ${running_model} returned outcome '${EJECT_OUTCOME}' — the process was left running."
+  else
+    log "  outcome=${EJECT_OUTCOME}"
+    EJECTED_ANY="true"
   fi
 done < <(record_values running "${RUNNING_RECORDS}")
 
@@ -777,18 +833,33 @@ if [[ "${RUN_IMAGES}" == "true" ]]; then
   drive eject-images --token "${TOKEN}" >/dev/null || warn "the image runtime eject reported an error"
 fi
 
-if [[ "${EJECTED_ANY}" != "true" && -n "${CHAT_MODEL}" ]]; then
+if [[ -z "${CHAT_MODEL}" ]]; then
+  # Nothing was ever loaded, so there is nothing to prove was released. Verifying a VRAM delta
+  # here would assert only that an idle box stayed idle — a PASS that means nothing.
+  step_fail "7-eject" "no chat model was loaded, so VRAM release could not be exercised at all."
+elif [[ "${EJECTED_ANY}" != "true" ]]; then
   step_fail "7-eject" "no model was resident to eject, yet a chat turn had just run. Either the model was never loaded on the device or the running-model view is wrong."
 else
   # Bounded settle: freeing device memory is not synchronous with the API returning.
-  AFTER_VRAM="${BASELINE_VRAM}"
+  #
+  # An unreadable sample must NOT end the loop. Step 7's comparison is an UPPER bound, so any
+  # phantom-low value satisfies it — that is how a failed nvidia-smi read used to certify "VRAM
+  # released" while a process still held the device. An unreadable sample is therefore treated as
+  # "not settled yet", and if it never becomes readable the step fails on an unmeasurable value.
+  AFTER_VRAM=""
+  VRAM_READABLE="false"
   for _ in $(seq 1 30); do
-    AFTER_VRAM="$(gpu_vram_now)"
-    [[ "${AFTER_VRAM}" =~ ^[0-9]+$ ]] || AFTER_VRAM=999999
-    [[ $((AFTER_VRAM - BASELINE_VRAM)) -le "${EJECT_TOLERANCE_MIB}" ]] && break
+    if AFTER_VRAM="$(gpu_vram_now)"; then
+      VRAM_READABLE="true"
+      [[ $((AFTER_VRAM - BASELINE_VRAM)) -le "${EJECT_TOLERANCE_MIB}" ]] && break
+    else
+      VRAM_READABLE="false"
+    fi
     sleep 1
   done
-  if assert_vram_released "${BASELINE_VRAM}" "${AFTER_VRAM}"; then
+  if [[ "${VRAM_READABLE}" != "true" ]]; then
+    step_fail "7-eject" "nvidia-smi produced no usable VRAM reading after eject, so the release could not be verified. An unmeasurable result is not a pass."
+  elif assert_vram_released "${BASELINE_VRAM}" "${AFTER_VRAM}"; then
     ledger_pass "7-eject"
   fi
 fi

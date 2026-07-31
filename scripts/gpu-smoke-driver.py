@@ -251,8 +251,13 @@ def command_models(args: argparse.Namespace) -> int:
         if not name:
             continue
         kind = item.get("kind") or item.get("detectedKind") or ""
-        # One record per model: name, kind, tool-capability. The shell picks and judges.
-        emit("model", f"{name}|{kind}|{str(bool(item.get('isToolCapable'))).lower()}")
+        # `provider` is REQUIRED downstream, not decoration: this endpoint merges the node-local
+        # GGUF models with Ollama and the cloud providers into ONE items array (Ollama first,
+        # cloud appended), so without it the shell cannot tell which rows belong to the llama.cpp
+        # runtime that steps 1-2 just audited.
+        provider = item.get("provider") or ""
+        # One record per model: name, kind, tool-capability, provider. The shell picks and judges.
+        emit("model", f"{name}|{kind}|{str(bool(item.get('isToolCapable'))).lower()}|{provider}")
     return 0
 
 

@@ -211,9 +211,39 @@ check_contains "held VRAM names the orphan signature" "orphaned-llama-server sig
 assert_vram_released 3353 3385 >/dev/null 2>&1
 check "VRAM returned to baseline passes" "0" "$?"
 
-# Same coercion trap as step 4: junk must not abort the run mid-summary.
+# Step 7 compares an UPPER bound, so coercing an unreadable value to 0 would read as "all VRAM
+# was released" and PASS while a process still held the device. It must fail instead — the
+# opposite of step 4, where coercing to 0 fails safe. An earlier version of this test asserted a
+# PASS here and locked that fail-open in.
 assert_vram_released 3353 "[N/A]" >/dev/null 2>&1
-check "non-numeric post-eject reading does not abort" "0" "$?"
+check "non-numeric post-eject reading FAILS (upper bound must not fail open)" "1" "$?"
+
+assert_vram_released 3353 "" >/dev/null 2>&1
+check "empty post-eject reading fails" "1" "$?"
+
+# A reading BELOW baseline is legitimate — another process can free memory during the run (a live
+# run measured -482 MiB) — so it must still pass. That is exactly why a phantom 0 cannot be
+# detected from the value alone, and why the real guard is gpu_vram_now's EXIT STATUS, tested
+# below, rather than a range check here.
+assert_vram_released 3353 2900 >/dev/null 2>&1
+check "a legitimate below-baseline reading still passes" "0" "$?"
+
+# gpu_vram_now must distinguish "nvidia-smi failed" from "0 MiB used". Returning 0 with a success
+# status is the fail-open that let a broken read certify VRAM as released.
+# These test doubles replace the sourced gpu_sample_once; gpu_vram_now calls them indirectly.
+# shellcheck disable=SC2329
+gpu_sample_once() { return 1; }
+gpu_vram_now >/dev/null 2>&1
+check "gpu_vram_now fails when nvidia-smi produces nothing" "1" "$?"
+# shellcheck disable=SC2329
+gpu_sample_once() { printf '%s\n' "7, [N/A]"; }
+gpu_vram_now >/dev/null 2>&1
+check "gpu_vram_now fails on a non-numeric memory field" "1" "$?"
+# shellcheck disable=SC2329
+gpu_sample_once() { printf '%s\n' "7, 4552"; }
+check "gpu_vram_now returns the reading when valid" "4552" "$(gpu_vram_now)"
+gpu_vram_now >/dev/null 2>&1
+check "gpu_vram_now succeeds when valid" "0" "$?"
 
 echo "== model selection =="
 
@@ -222,11 +252,11 @@ echo "== model selection =="
 pick_chat_model "$(records 'count\t0\n')" "" >/dev/null 2>&1
 check "no models fails model selection" "1" "$?"
 
-embedding_only="$(records 'model\tnomic-embed|Embedding|false\nmodel\tdraft-model|Draft|false\n')"
+embedding_only="$(records 'model\tnomic-embed|Embedding|false|llamacpp\nmodel\tdraft-model|Draft|false|llamacpp\n')"
 pick_chat_model "${embedding_only}" "" >/dev/null 2>&1
 check "embedding/draft-only list fails model selection" "1" "$?"
 
-mixed="$(records 'model\tnomic-embed|Embedding|false\nmodel\tqwen-chat|Chat|true\n')"
+mixed="$(records 'model\tnomic-embed|Embedding|false|llamacpp\nmodel\tqwen-chat|Chat|true|llamacpp\n')"
 check "picks the chat model" "qwen-chat" "$(pick_chat_model "${mixed}" "")"
 check "an explicit --model wins" "forced-model" "$(pick_chat_model "${mixed}" "forced-model")"
 
@@ -234,6 +264,20 @@ model_is_tool_capable "${mixed}" "qwen-chat"
 check "tool-capable model detected" "0" "$?"
 model_is_tool_capable "${mixed}" "nomic-embed"
 check "non-tool-capable model detected" "1" "$?"
+
+# /models merges providers into ONE list with Ollama FIRST. Picking an Ollama or cloud model
+# would run the chat turn on a runtime steps 1-2 never audited, and steps 3-4 could still pass —
+# certifying "the GPU did the work" without touching the llama.cpp runtime under test.
+ollama_first="$(records 'model\tllama3:8b|Chat|true|Ollama\nmodel\tqwen-chat|Chat|true|llamacpp\n')"
+check "skips an Ollama model that sorts first" "qwen-chat" "$(pick_chat_model "${ollama_first}" "")"
+
+cloud_only="$(records 'model\tgpt-5-codex|Chat|true|CodexOAuth\nmodel\tfoundry-model|Chat|true|AzureFoundry\n')"
+pick_chat_model "${cloud_only}" "" >/dev/null 2>&1
+check "a cloud-only list fails model selection" "1" "$?"
+
+no_provider="$(records 'model\tmystery|Chat|true|\n')"
+pick_chat_model "${no_provider}" "" >/dev/null 2>&1
+check "a row with no provider is not selected" "1" "$?"
 
 echo "== sample-file peak extraction =="
 
