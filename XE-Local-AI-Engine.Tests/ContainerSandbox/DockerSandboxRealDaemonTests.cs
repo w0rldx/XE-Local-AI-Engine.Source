@@ -78,6 +78,7 @@ public sealed class DockerSandboxRealDaemonTests
         AssertEx.NotEqual("host", settings.IpcMode);
         AssertEx.NotEqual("host", settings.UtsMode);
         AssertEx.Contains(settings.TemporaryFilesystems[options.ScratchMountTarget], "size=");
+        AssertEx.Contains(settings.TemporaryFilesystems[options.TempMountTarget], "size=");
         AssertEx.Equal((long)options.MemoryMb * 1024 * 1024, settings.MemoryBytes);
         AssertEx.Equal((long)(options.CpuCount * 1_000_000_000d), settings.NanoCpus);
         AssertEx.Equal((long)options.PidsLimit, settings.PidsLimit);
@@ -109,6 +110,26 @@ public sealed class DockerSandboxRealDaemonTests
         // successful --cap-drop ALL looks like from inside.
         AssertEx.Equal("CapEff:\t0000000000000000", await ProbeAsync(fixture, "grep CapEff /proc/self/status"));
         AssertEx.Equal("CapBnd:\t0000000000000000", await ProbeAsync(fixture, "grep CapBnd /proc/self/status"));
+    }
+
+    [Test]
+    public async Task RealDaemon_TheToolchainTemporaryDirectoryIsWritableAndStillRefusesToExecute()
+    {
+        var options = await RequireDaemonAsync();
+        await using var fixture = await ContainerFixture.CreateAsync(options);
+
+        // Two claims, and the mount is only defensible if BOTH hold. Writable, because the .NET runtime puts the
+        // shared-memory files backing a named Mutex under a path it compiles in and no environment variable moves —
+        // without this, the first `dotnet` invocation fails EROFS and the whole validation gate is unreachable.
+        AssertEx.Equal("TMP-WRITABLE",
+            await ProbeAsync(fixture, $"touch {options.TempMountTarget}/probe && echo TMP-WRITABLE"));
+
+        // And still noexec, from inside, where the kernel answers rather than the daemon. A copy of a known-good
+        // binary with the execute bit set is refused, which is what the mount option becoming real looks like.
+        AssertEx.Equal("EXEC-REFUSED",
+            await ProbeAsync(fixture,
+                $"cp /bin/sh {options.TempMountTarget}/payload && chmod +x {options.TempMountTarget}/payload && "
+                + $"{options.TempMountTarget}/payload -c 'echo EXEC-ALLOWED' 2>/dev/null || echo EXEC-REFUSED"));
     }
 
     [Test]
