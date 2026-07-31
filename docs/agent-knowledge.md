@@ -221,7 +221,7 @@ One Kestrel process serves both API and UI: `app.UseStaticFiles()` + `app.MapFal
 
 **This entry said "RTX 4080, 16 GB, sm_89 (Ada)" until 2026-07-26.** The hardware changed; the doc did not. Don't trust a remembered GPU model — read `nvidia-smi` if it matters, exactly as you would for the CUDA version.
 
-Don't hardcode the CUDA minor version — it has already drifted (13.1 → 13.3). Read `nvcc --version` if it matters. **The same applies to the compute arch**: `CudaBuildService` detects it live, but its fallback constant `DefaultCudaArchitectures = "75;86;89"` (`:26`) has **no `120`**, so any detection failure yields a build with no native Blackwell code. If a GPU build is mysteriously slow, check what arch it was actually compiled for.
+Don't hardcode the CUDA minor version — it has already drifted (13.1 → 13.3). Read `nvcc --version` if it matters. **The same applies to the compute arch**: source builds detect it live, while the conservative probe-failure fallback now includes `75;86;89;120`. If a GPU build is mysteriously slow, check what arch it was actually compiled for rather than assuming the fallback was used.
 
 Rest of the box, for sizing assumptions: **AMD Ryzen 9 9950X3D** host, **8 processors exposed to WSL**, **~31 GiB RAM in the VM**. All three are well above the stated consumer target (≈16 GB RAM, 8–16 GB VRAM), so **local benchmark numbers over-report** — never quote them as consumer-hardware figures.
 
@@ -605,7 +605,7 @@ Old notes (and agents who half-remember them) assert these. They are **false tod
 | Stale belief | Reality |
 |---|---|
 | "The WSL dev box has no GPU, so GPU work can't be tested here." | It has an **RTX 5090 (32 GB, sm_120) + CUDA 13.3**, live-verified. GPU paths are testable here. |
-| "The dev box is an RTX 4080 with 16 GB (sm_89 / Ada); build CUDA with `-DCMAKE_CUDA_ARCHITECTURES=89`." | **Wrong since 2026-07-26** — it is an **RTX 5090, 32 GB, sm_120 (Blackwell)**. Read `nvidia-smi`; never hardcode the arch. `CudaBuildService`'s fallback constant still lacks `120`. |
+| "The dev box is an RTX 4080 with 16 GB (sm_89 / Ada); build CUDA with `-DCMAKE_CUDA_ARCHITECTURES=89`." | **Wrong since 2026-07-26** — it is an **RTX 5090, 32 GB, sm_120 (Blackwell)**. Read `nvidia-smi`; never hardcode the arch. The source-build fallback includes `120`, but live detection remains authoritative. |
 | "llama.cpp has native MCP support now, so the app could use it." | The MCP client lives in llama-server's **web UI**, which this app never serves; the backend addition is only the experimental `--ui-mcp-proxy` CORS proxy. The .NET `ModelContextProtocol` client remains the correct integration point, and a browser-side host would move tool execution below the approval/sandbox boundary. See `Plans/2026-07-26-llamacpp-native-mcp-decision.md`. |
 | "Ollama was removed from the app." | Removed only from *Aspire dev orchestration*. It remains a supported, gated, opt-in secondary provider with 50+ live call sites. llama.cpp is the *default*, not the *only*, runtime. |
 | "`dotnet test` reports zero tests — run the native test-host exe instead." | Fixed by the `global.json` MTP runner pin. `dotnet test` works against the whole solution. Native exe still works, but is no longer required. |
