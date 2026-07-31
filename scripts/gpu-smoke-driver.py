@@ -256,8 +256,13 @@ def command_models(args: argparse.Namespace) -> int:
         # cloud appended), so without it the shell cannot tell which rows belong to the llama.cpp
         # runtime that steps 1-2 just audited.
         provider = item.get("provider") or ""
-        # One record per model: name, kind, tool-capability, provider. The shell picks and judges.
-        emit("model", f"{name}|{kind}|{str(bool(item.get('isToolCapable'))).lower()}|{provider}")
+        # sizeBytes lets the shell pick the SMALLEST eligible model. On a box with both a 27B and a
+        # 0.5B installed that is the difference between a smoke someone runs before every RC and
+        # one they skip, and it keeps the run clear of VRAM pressure that would distort step 4.
+        size = item.get("sizeBytes")
+        size = size if isinstance(size, int) and size >= 0 else 0
+        # One record per model: name, kind, tool-capability, provider, size. The shell judges.
+        emit("model", f"{name}|{kind}|{str(bool(item.get('isToolCapable'))).lower()}|{provider}|{size}")
     return 0
 
 

@@ -252,11 +252,11 @@ echo "== model selection =="
 pick_chat_model "$(records 'count\t0\n')" "" >/dev/null 2>&1
 check "no models fails model selection" "1" "$?"
 
-embedding_only="$(records 'model\tnomic-embed|Embedding|false|llamacpp\nmodel\tdraft-model|Draft|false|llamacpp\n')"
+embedding_only="$(records 'model\tnomic-embed|Embedding|false|llamacpp|100\nmodel\tdraft-model|Draft|false|llamacpp|100\n')"
 pick_chat_model "${embedding_only}" "" >/dev/null 2>&1
 check "embedding/draft-only list fails model selection" "1" "$?"
 
-mixed="$(records 'model\tnomic-embed|Embedding|false|llamacpp\nmodel\tqwen-chat|Chat|true|llamacpp\n')"
+mixed="$(records 'model\tnomic-embed|Embedding|false|llamacpp|100\nmodel\tqwen-chat|Chat|true|llamacpp|400\n')"
 check "picks the chat model" "qwen-chat" "$(pick_chat_model "${mixed}" "")"
 check "an explicit --model wins" "forced-model" "$(pick_chat_model "${mixed}" "forced-model")"
 
@@ -265,29 +265,57 @@ check "tool-capable model detected" "0" "$?"
 model_is_tool_capable "${mixed}" "nomic-embed"
 check "non-tool-capable model detected" "1" "$?"
 
+# "smallest" must mean smallest by sizeBytes, not "whatever the API listed first" — otherwise the
+# smoke's runtime depends on API ordering, and a 27B gets picked where a 0.5B would do.
+by_size="$(records 'model\tbig-27b|Chat|true|llamacpp|17000000000\nmodel\tsmall-05b|Chat|true|llamacpp|400000000\nmodel\tmid-9b|Chat|true|llamacpp|6500000000\n')"
+check "picks the smallest by size, not the first listed" "small-05b" "$(pick_chat_model "${by_size}" "")"
+
+# A missing/zero size must not win the comparison and become "smallest" by accident.
+zero_size="$(records 'model\tunknown-size|Chat|true|llamacpp|0\nmodel\tknown-small|Chat|true|llamacpp|400\n')"
+check "a zero size does not masquerade as smallest" "known-small" "$(pick_chat_model "${zero_size}" "")"
+
 # /models merges providers into ONE list with Ollama FIRST. Picking an Ollama or cloud model
 # would run the chat turn on a runtime steps 1-2 never audited, and steps 3-4 could still pass —
 # certifying "the GPU did the work" without touching the llama.cpp runtime under test.
-ollama_first="$(records 'model\tllama3:8b|Chat|true|Ollama\nmodel\tqwen-chat|Chat|true|llamacpp\n')"
+ollama_first="$(records 'model\tllama3:8b|Chat|true|Ollama|100\nmodel\tqwen-chat|Chat|true|llamacpp|400\n')"
 check "skips an Ollama model that sorts first" "qwen-chat" "$(pick_chat_model "${ollama_first}" "")"
 
-cloud_only="$(records 'model\tgpt-5-codex|Chat|true|CodexOAuth\nmodel\tfoundry-model|Chat|true|AzureFoundry\n')"
+cloud_only="$(records 'model\tgpt-5-codex|Chat|true|CodexOAuth|100\nmodel\tfoundry-model|Chat|true|AzureFoundry|100\n')"
 pick_chat_model "${cloud_only}" "" >/dev/null 2>&1
 check "a cloud-only list fails model selection" "1" "$?"
 
-no_provider="$(records 'model\tmystery|Chat|true|\n')"
+no_provider="$(records 'model\tmystery|Chat|true||100\n')"
 pick_chat_model "${no_provider}" "" >/dev/null 2>&1
 check "a row with no provider is not selected" "1" "$?"
 
 echo "== sample-file peak extraction =="
 
 printf '5, 3300\n72, 4552\n11, 3400\n' >"${TEMP_ROOT}/samples"
-check "peaks are the maxima" "72 4552" "$(gpu_sampler_peaks "${TEMP_ROOT}/samples")"
+check "peaks are the maxima, with sample counts" "72 4552 3 3" "$(gpu_sampler_peaks "${TEMP_ROOT}/samples")"
 : >"${TEMP_ROOT}/empty-samples"
 # An empty sample file must yield zeros, which then FAIL the step-4 floors. A sampler that
 # collected nothing must never be mistaken for a GPU that did nothing wrong.
-check "an empty sample file yields zeros" "0 0" "$(gpu_sampler_peaks "${TEMP_ROOT}/empty-samples")"
-check "a missing sample file yields zeros" "0 0" "$(gpu_sampler_peaks "${TEMP_ROOT}/does-not-exist")"
+check "an empty sample file yields zeros" "0 0 0 0" "$(gpu_sampler_peaks "${TEMP_ROOT}/empty-samples")"
+check "a missing sample file yields zeros" "0 0 0 0" "$(gpu_sampler_peaks "${TEMP_ROOT}/does-not-exist")"
+
+# nvidia-smi can report ONE field as "[N/A]" while the other is good. Gating the memory field on
+# the utilisation field being numeric threw away valid VRAM samples and printed peakVram=0 for a
+# GPU holding gigabytes. The fields must be filtered independently.
+printf '[N/A], 4552\n[N/A], 4560\n' >"${TEMP_ROOT}/na-util"
+check "an [N/A] utilisation row keeps the VRAM sample" "0 4560 0 2" "$(gpu_sampler_peaks "${TEMP_ROOT}/na-util")"
+printf '72, [N/A]\n65, [N/A]\n' >"${TEMP_ROOT}/na-vram"
+check "an [N/A] memory row keeps the utilisation sample" "72 0 2 0" "$(gpu_sampler_peaks "${TEMP_ROOT}/na-vram")"
+
+# "unmeasurable" and "zero" are different diagnoses and must not share a message — but BOTH fail,
+# because an absence of evidence is never a pass.
+out="$(assert_gpu_was_used 0 4552 3300 4552 0 2>&1)"; status=$?
+check "unmeasurable utilisation fails" "1" "${status}"
+check_contains "unmeasurable utilisation says so" "UNMEASURABLE" "${out}"
+check_contains "unmeasurable utilisation is not called idle" "absence of evidence" "${out}"
+
+out="$(assert_gpu_was_used 0 4552 3300 4552 5 2>&1)"; status=$?
+check "measured-zero utilisation fails" "1" "${status}"
+check_contains "measured zero keeps the CPU-fallback diagnosis" "silent-CPU-fallback signature" "${out}"
 
 echo "== ledger (the anti-vacuous-pass gate) =="
 

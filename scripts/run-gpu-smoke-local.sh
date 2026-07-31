@@ -88,6 +88,11 @@
 #   3  — an AppHost for this worktree is already running; refusing to reuse or stop it
 #   4  — could not establish whether an AppHost is running; refusing to start one
 #   75 — CONTAMINATED: the build output changed mid-run; the result is void, re-run it
+#   130 — interrupted (Ctrl-C). The AppHost is still torn down; the result is incomplete, not red.
+#
+# Note 1 is deliberately broad: an assertion failure and a vacuous run are both "this run did not
+# earn a pass", and both need the same response (read the summary, which names every step's
+# verdict individually). The summary, not the exit code, is what distinguishes them.
 #
 # A note on nvidia-smi under WSL2
 #   `nvidia-smi --query-compute-apps` reports NOTHING under WSL2 (verified 2026-07-31) — there is
@@ -183,7 +188,16 @@ ledger_finalize() {
     fi
   done
   for step in ${LEDGER_SKIPPED[@]+"${LEDGER_SKIPPED[@]}"}; do
-    ledger_contains "${step}" "${LEDGER_EXPECTED[@]}" || echo "  SKIPPED    ${step}  (not required by these flags)"
+    ledger_contains "${step}" "${LEDGER_EXPECTED[@]}" && continue
+    # An opt-IN step that was simply not requested (6-image) is different from a normally-required
+    # step the operator explicitly switched OFF (5-tool-calling via --no-tools). Both are honest
+    # zeroes, but the second means a feature this smoke normally guarantees went UNVERIFIED, and
+    # the summary must not let that read as routine.
+    if [[ "${step}" == "5-tool-calling" ]]; then
+      echo "  SKIPPED    ${step}  <- DISABLED BY --no-tools; tool calling was NOT verified" >&2
+    else
+      echo "  SKIPPED    ${step}  (opt-in; not requested)"
+    fi
   done
   if [[ "${#FAILURES[@]}" -gt 0 ]]; then
     echo >&2
@@ -300,31 +314,38 @@ assert_device_audit() {
   return 0
 }
 
-# Step 3 helper. Pick the smallest installed llama.cpp chat model. `/models` mixes local and
-# cloud providers, so a provider filter is mandatory: picking a cloud model would produce a
-# perfectly green chat step that never touched the GPU.
+# Step 3 helper. Picks the SMALLEST installed llama.cpp chat model — smallest by sizeBytes, not
+# merely the first row, so the choice does not depend on the API's ordering and the smoke stays
+# fast enough to actually get run. A 27B where a 0.5B would do also risks VRAM pressure that
+# would distort step 4's measurement.
 LOCAL_MODEL_PROVIDER="llamacpp"
 
 pick_chat_model() {
   local records="$1" forced="${2:-}"
-  local line name kind capable provider
+  local line name kind capable provider size
+  local best_name="" best_size=""
   if [[ -n "${forced}" ]]; then
     printf '%s\n' "${forced}"
     return 0
   fi
   while IFS= read -r line; do
     [[ -n "${line}" ]] || continue
-    IFS='|' read -r name kind capable provider <<<"${line}"
+    IFS='|' read -r name kind capable provider size <<<"${line}"
     [[ "${kind}" == "Chat" ]] || continue
     # The provider filter is what keeps this smoke honest. `/models` merges Ollama and the cloud
     # providers into the same list — Ollama sorts FIRST — so without it a node with Ollama
     # reachable would run the chat turn on Ollama while steps 1-2 audited llama.cpp, and steps 3
     # and 4 could both pass without the runtime under test ever being exercised.
     [[ "${provider}" == "${LOCAL_MODEL_PROVIDER}" ]] || continue
-    printf '%s\n' "${name}"
-    return 0
+    size="$(as_int "${size:-0}")"
+    # A missing/zero size must not win the comparison and silently become "smallest".
+    if [[ -z "${best_name}" ]] || { [[ "${size}" -gt 0 ]] && { [[ "${best_size}" -eq 0 ]] || [[ "${size}" -lt "${best_size}" ]]; }; }; then
+      best_name="${name}"
+      best_size="${size}"
+    fi
   done < <(record_values model "${records}")
-  return 1
+  [[ -n "${best_name}" ]] || return 1
+  printf '%s\n' "${best_name}"
 }
 
 model_is_tool_capable() {
@@ -370,15 +391,24 @@ assert_chat_reply() {
 # FAILURE, never a false pass, which is the safe direction for this script to be wrong in.
 # Raise XE_GPU_SMOKE_MIN_UTIL_PERCENT on a busy desktop rather than lowering it.
 assert_gpu_was_used() {
-  local peak_util baseline_vram loaded_vram peak_vram
+  local peak_util baseline_vram loaded_vram peak_vram util_samples
   peak_util="$(as_int "$1")"
   peak_vram="$(as_int "$2")"
   baseline_vram="$(as_int "$3")"
   loaded_vram="$(as_int "$4")"
+  # Absent (older call sites / tests) means "assume utilisation was measurable".
+  util_samples="$(as_int "${5:-1}")"
   local rise=$((loaded_vram - baseline_vram))
-  log "gpu: peakUtil=${peak_util}% baselineVram=${baseline_vram}MiB peakVram=${peak_vram}MiB loadedVram=${loaded_vram}MiB rise=${rise}MiB"
+  log "gpu: peakUtil=${peak_util}% baselineVram=${baseline_vram}MiB peakVram=${peak_vram}MiB loadedVram=${loaded_vram}MiB rise=${rise}MiB utilSamples=${util_samples}"
   local ok=0
-  if [[ "${peak_util}" -lt "${MIN_UTIL_PERCENT}" ]]; then
+  if [[ "${util_samples}" -eq 0 ]]; then
+    # NOT the same as "the GPU did nothing" — nvidia-smi never gave us a usable number (it can
+    # report utilisation as "[N/A]"). Still a failure, because an unmeasurable run is not a pass,
+    # but say what actually happened so nobody debugs a GPU fault that does not exist.
+    step_fail "4-gpu-used" \
+      "GPU utilisation was UNMEASURABLE — nvidia-smi returned no numeric utilisation sample during generation (it can report '[N/A]'). This is not evidence the GPU was idle; it is an absence of evidence, which is not a pass. Check 'nvidia-smi --query-gpu=utilization.gpu --format=csv' on this box."
+    ok=1
+  elif [[ "${peak_util}" -lt "${MIN_UTIL_PERCENT}" ]]; then
     step_fail "4-gpu-used" \
       "peak GPU utilisation was ${peak_util}%, below the ${MIN_UTIL_PERCENT}% floor. The reply was produced without the GPU doing measurable work — this is the silent-CPU-fallback signature."
     ok=1
@@ -493,19 +523,29 @@ gpu_sampler_stop() {
   fi
 }
 
-# Emits "<peakUtil> <peakVram>". A sample file with no usable rows yields "0 0", which fails the
-# step-4 floors rather than being mistaken for a pass.
+# Emits "<peakUtil> <peakVram> <utilSamples> <vramSamples>".
+#
+# The two fields are filtered INDEPENDENTLY. nvidia-smi can report one of them as "[N/A]" while
+# the other is perfectly good — under WSL2 that is a real possibility — and gating the memory
+# field on the utilisation field being numeric threw away valid VRAM samples, printing
+# `peakVram=0MiB` for a GPU genuinely holding gigabytes.
+#
+# The sample COUNTS are what let step 4 distinguish "utilisation was 0" (the GPU did nothing)
+# from "utilisation was unmeasurable" (nvidia-smi told us nothing). Both fail the step — an
+# unmeasurable run is never a pass — but they are different problems and must not share a
+# diagnosis that sends someone hunting a GPU fault that does not exist.
 gpu_sampler_peaks() {
-  # A missing file must still yield "0 0": awk exits non-zero without running END, and an empty
+  # A missing file must still yield zeros: awk exits non-zero without running END, and an empty
   # result would leave the step-4 peaks unset rather than zero — i.e. a sampler that collected
   # nothing could read as "no evidence" instead of failing the floors.
   if [[ ! -f "$1" ]]; then
-    printf '0 0\n'
+    printf '0 0 0 0\n'
     return 0
   fi
   awk -F', *' '
-    $1 ~ /^[0-9]+$/ { if ($1+0 > u) u = $1+0; if ($2+0 > m) m = $2+0 }
-    END { printf "%d %d\n", u+0, m+0 }
+    $1 ~ /^[0-9]+$/ { if ($1+0 > u) u = $1+0; un++ }
+    $2 ~ /^[0-9]+$/ { if ($2+0 > m) m = $2+0; mn++ }
+    END { printf "%d %d %d %d\n", u+0, m+0, un+0, mn+0 }
   ' "$1" 2>/dev/null
 }
 
@@ -742,8 +782,8 @@ else
   # A failed read here is fail-CLOSED (0 makes the rise negative, below the floor), but say so
   # explicitly rather than letting a phantom zero masquerade as a measurement.
   LOADED_VRAM="$(gpu_vram_now)" || { warn "no VRAM reading after generation; step 4 will fail on an unmeasurable value."; LOADED_VRAM=0; }
-  read -r PEAK_UTIL PEAK_VRAM <<<"$(gpu_sampler_peaks "${SAMPLE_FILE}")"
-  log "gpu: collected $(wc -l <"${SAMPLE_FILE}" 2>/dev/null || echo 0) samples at ${SAMPLE_INTERVAL}s"
+  read -r PEAK_UTIL PEAK_VRAM UTIL_SAMPLES VRAM_SAMPLES <<<"$(gpu_sampler_peaks "${SAMPLE_FILE}")"
+  log "gpu: collected $(wc -l <"${SAMPLE_FILE}" 2>/dev/null || echo 0) rows at ${SAMPLE_INTERVAL}s (${UTIL_SAMPLES:-0} usable util, ${VRAM_SAMPLES:-0} usable vram)"
 
   if [[ -z "${CHAT_RECORDS}" ]]; then
     step_fail "3-chat" "the chat stream could not be driven."
@@ -751,7 +791,7 @@ else
     ledger_pass "3-chat"
   fi
 
-  if assert_gpu_was_used "${PEAK_UTIL:-0}" "${PEAK_VRAM:-0}" "${BASELINE_VRAM}" "${LOADED_VRAM:-0}"; then
+  if assert_gpu_was_used "${PEAK_UTIL:-0}" "${PEAK_VRAM:-0}" "${BASELINE_VRAM}" "${LOADED_VRAM:-0}" "${UTIL_SAMPLES:-0}"; then
     ledger_pass "4-gpu-used"
   fi
 fi
