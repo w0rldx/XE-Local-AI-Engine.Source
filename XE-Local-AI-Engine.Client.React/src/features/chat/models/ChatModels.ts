@@ -244,7 +244,14 @@ export interface ModelOption {
 	value: string;
 	label: string;
 	displayName?: string;
+	// GRADED reasoning: the model advertises the Ollama `thinking` capability, i.e. a switchable think:<level>
+	// control. Drives the graded reasoning-effort menu (none/low/medium/high).
 	isReasoningModel?: boolean;
+	// NATIVE reasoning: the model reasons on a channel baked into its chat template with no graded switch (OpenAI
+	// harmony / gpt-oss). Mutually exclusive with `isReasoningModel`. Drives its OWN picker badge, but deliberately
+	// NOT the effort vocabulary — a native model keeps the binary On/Off set, where "on" means "omit the think field
+	// and let the template's built-in reasoning run".
+	isNativeReasoningModel?: boolean;
 	// Whether the model advertises the Ollama `tools` capability. Drives whether the composer offers the
 	// local-tool controls (gated together with the node-wide capability). Undefined on the local-default
 	// option (the runtime picks a concrete model later), so callers treat undefined as "not tool-capable".

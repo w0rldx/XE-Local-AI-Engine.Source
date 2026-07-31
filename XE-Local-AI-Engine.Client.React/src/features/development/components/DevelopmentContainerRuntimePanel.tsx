@@ -3,6 +3,7 @@ import { IconAlertTriangle, IconCircleCheck, IconShieldLock } from "@tabler/icon
 import { useTranslation } from "react-i18next";
 
 import type { XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerRuntimeResponse as ContainerRuntimeStatus } from "@/core/api/generated/types.gen";
+import { isDevelopmentContainerProvider } from "@/features/development/models/DevelopmentModels";
 
 interface DevelopmentContainerRuntimePanelProps {
 	/**
@@ -14,6 +15,11 @@ interface DevelopmentContainerRuntimePanelProps {
 	readonly onConfirm: (daemonId: string) => void;
 	readonly confirming: boolean;
 	readonly confirmError?: string;
+	/**
+	 * The sandbox provider actually resolved for this node. Decides whether this preflight describes the runtime in
+	 * force or one that Development Mode has not moved to yet — the two are opposite claims and cannot both be static.
+	 */
+	readonly sandboxProvider?: string;
 }
 
 /**
@@ -32,8 +38,10 @@ export function DevelopmentContainerRuntimePanel({
 	onConfirm,
 	confirming,
 	confirmError,
+	sandboxProvider,
 }: DevelopmentContainerRuntimePanelProps) {
 	const { t } = useTranslation();
+	const containerProvider = isDevelopmentContainerProvider(sandboxProvider);
 
 	if (!runtime) {
 		return null;
@@ -102,15 +110,20 @@ export function DevelopmentContainerRuntimePanel({
 				) : null}
 
 				{/*
-				 * Phase 1 honesty. The provider exists and is verified, but Development Mode still executes through the
-				 * supervised process sandbox until per-feature provider selection lands, and an operator reading a
-				 * container-runtime banner would otherwise reasonably assume today's runs already use it.
+				 * Read from the resolved provider, not asserted. This sentence used to say container execution was off
+				 * regardless — which was measured false with the container provider live and a container demonstrably
+				 * running, on a screen whose own banner said the runtime was ready.
 				 */}
 				<Text size="xs" c="dimmed" data-testid="development-container-runtime-not-yet-in-use">
-					{t(
-						"pages.development.containerRuntime.notYetInUse",
-						"Container-backed execution is not switched on yet. Today's runs still use the supervised process sandbox; this preflight reports whether the container runtime will be available when they move.",
-					)}
+					{containerProvider
+						? t(
+								"pages.development.containerRuntime.inUse",
+								"Development commands on this node execute inside this container runtime. A failure reported here stops runs; it does not fall back to the host.",
+							)
+						: t(
+								"pages.development.containerRuntime.notYetInUse",
+								"Container-backed execution is not switched on yet. Today's runs still use the supervised process sandbox; this preflight reports whether the container runtime will be available when they move.",
+							)}
 				</Text>
 			</Stack>
 		</Alert>

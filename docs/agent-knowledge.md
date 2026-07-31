@@ -301,7 +301,12 @@ A startup reaper (`StaleLlamaServerReaper`, in `XE-Local-AI-Engine.Providers.Lla
 - **A GPU-variant binary can see ZERO devices and silently run on the CPU — the device audit exists to catch this (AUD4-03).** On this WSL2 box the shipped Vulkan build's `llama-server --list-devices` returns an empty list (no Vulkan ICD), so inference ran 4-thread CPU while the advisor/UI sized models to 16 GB VRAM. `IRuntimeDeviceAudit` (Application) composes the hardware profile + the selected variant + `ILlamaDeviceInventoryProbe` (a cached `--list-devices` parse, per binary path+mtime) into a `RuntimeDeviceAuditState {inferenceBackend, gpuExpected, cpuFallback, reason, remediation}`. **A failed/timed-out probe is "unknown", never "no GPU"** — it must never raise a false CPU-fallback alarm. On `cpuFallback`, `GetEffectiveProfileAsync` degrades the profile to CPU-mode (`VramKnown=false`) so the advisor + capacity gate size against RAM, not phantom VRAM; a `device_fallback` metric + a Warning fire once per binary. The audit is computed lazily on first demand and cached **only when determinate** — an indeterminate probe result ("unknown") is returned uncached so the next call re-probes (latching it would keep capacity/advisor trusting phantom VRAM until restart or a forced refresh; the probe layer likewise never caches failed probes). It is a pure function of the selected binary, so it is deliberately **not** wired per-spawn (zero warm-path cost). The hardware-profile endpoint returns the raw physical profile PLUS the audit block.
 - Verify GitHub asset digests via the Releases API `digest: "sha256:..."` field. There are **no `.sha256` sidecar files** — don't go looking for them.
 - Archive layout is not guaranteed to match `ServerRelativePath = build/bin/llama-server`; the resolver falls back to a recursive search by executable name. This was a real shipped bug — don't hardcode the extraction path.
-- GPU offload requires `--n-gpu-layers` to actually be emitted for non-CPU variants. It was once silently missing: CUDA initialized, zero layers offloaded, model quietly ran on CPU. If you touch `LlamaServerProcessSupervisor.BuildLaunchSpec`, confirm it's still wired.
+- **GPU offload must be *owned* by exactly one mechanism per spawn — and which one depends on the mode.** The original bug was that neither owned it: `--n-gpu-layers` was silently missing on a non-CPU variant, CUDA initialized, zero layers offloaded, and the model quietly ran on CPU. The rule that came out of it ("always emit `-ngl`") is **no longer the whole truth**, and applying it blindly now *breaks* placement, because passing an explicit placement flag disables `--fit` (§llama-server spawn invariants):
+  - **GPU explore** (the ordinary path) emits `--fit on --metrics` and **no `-ngl`/`-ts`/`-ot` at all** — llama.cpp auto-fits placement around the explicit `-c`. Verified live 2026-07-31: the whole launch line was `--fit on --metrics -c 65536 -fa on -ctk q8_0 -ctv q8_0 --jinja --cache-reuse 256`, with the GPU at 91–95% utilisation. A missing `-ngl` here is **correct**, not the old bug.
+  - **Replay** (a frozen inference profile) emits explicit `-ngl`/`-ts`/`-ot` verbatim and deliberately omits `--fit` (`BuildReplayArgs`, `LlamaServerProcessSupervisor.cs:1482`). Here a missing `-ngl` *is* the old bug.
+  - **CPU** emits neither — no `--fit`, no placement args.
+
+  So if you touch `LlamaServerProcessSupervisor.BuildLaunchSpec`, confirm each mode still emits *its own* offload mechanism, and never "restore" `-ngl` to the explore path. The observable check that actually catches the original defect is not the flag but the behaviour: GPU utilisation during generation (see the smoke script, `scripts/run-gpu-smoke-local.sh`).
 - **`LlamaCppSourceBuildRequestValidation.Normalize` must stay IDEMPOTENT — it runs at three layers.** The FluentValidation request validator, `StartLlamaCppSourceBuildEndpoint`, and `LlamaCppSourceBuildService.StartAsync` each normalized the same request. For `source=official` the first pass *writes* the server-selected `Repository`, and the strict "the official repository is selected by the server" rule then rejected that value on the second pass — so **every** official-source build answered 409 `{"reason":"prerequisites"}` from the day the feature was generalized, while custom-source builds worked fine (their normalization was already idempotent). The rule is now "reject any repository that is not the canonical one" and the endpoint no longer pre-normalizes. If you add another normalization layer, `Normalize(Normalize(x)) == Normalize(x)` must hold (`LlamaCppSourceBuildCoreTests.Normalize_*AppliedTwice_IsIdempotent`).
 
 ### stable-diffusion.cpp managed source builds
@@ -326,7 +331,17 @@ A startup reaper (`StaleLlamaServerReaper`, in `XE-Local-AI-Engine.Providers.Lla
 
 Route every writer of per-node state (settings, encrypted credential stores, hardware-profile cache) through **`INodeDataDirectory`** (`XE-Local-AI-Engine.Providers.Abstractions/INodeDataDirectory.cs`), which resolves to `LocalApplicationData` in desktop mode. Writing to `ContentRootPath` breaks on a self-contained desktop build where that directory may not be writable.
 
-> **The bug this prevents, because it's a good one:** a stale dev `node-settings.json` got committed, the Web SDK auto-globbed it into the publish output as Content, and every fresh install was silently pinned to a nonexistent default model — first-run provisioning skipped its download with no error, just a permanently empty model store. A runtime-written JSON file must never be checked in *or* published as Content.
+> **The bug this prevents, because it's a good one:** a stale dev `node-settings.json` got committed, the Web SDK auto-globbed it into the publish output as Content, and every fresh install was silently pinned to a nonexistent default model — first-run provisioning skipped its download with no error, just a permanently empty model store.
+
+**Generalize from that one file: ANY runtime-written path under the project root must be `.gitignore`d the moment it is created.** The Web SDK globs the project directory into publish output as Content, so "committed" and "shipped inside the installer" are the same event here — and neither is announced. This has now happened twice, so treat it as a class, not an anecdote:
+
+| Path | What leaked / would leak |
+|---|---|
+| `node-settings.json` | a dev node's settings pinned every fresh install to a nonexistent model |
+| `XE-Local-AI-Engine.Client/generated-images/` | a tester's generated PNGs shipped inside the installer (~4.5 MB swept in by one `git add -A`, 2026-07-31) |
+| `XE-Local-AI-Engine.Client/development/` | Development Mode engine state (workspaces, task records) |
+
+The checklist when you add a feature that writes next to the app: (1) route it through **`INodeDataDirectory`** if it is per-node state — that is the real fix, because `LocalApplicationData` is outside the glob entirely; (2) if it genuinely must live under the project root, add it to `.gitignore` **in the same commit that introduces the writer**, never later; (3) `git status --short` after the first local run of the feature — an untracked path appearing next to the app is the signal, and it is the only warning you get.
 
 ### Serilog silently severs OTLP log export — `writeToProviders` must stay `true`
 
@@ -346,6 +361,37 @@ Diagnosing it: confirm `OTEL_EXPORTER_OTLP_ENDPOINT` is on the process (`tr '\0'
 - Desktop shutdown needs explicit **SIGHUP** (Linux) and **CTRL_CLOSE_EVENT** (Windows, via `SetConsoleCtrlHandler`, blocking ~4s for graceful `ApplicationStopped`) handlers — .NET's default ConsoleLifetime covers neither, and without them console-close orphans `llama-server` again.
 - Desktop publish is self-contained single-file but **explicitly not trimmed** (`PublishTrimmed=false`) — trimming breaks EF Core / Serilog / FastEndpoints / MEAI reflection wiring.
 - Desktop mode is opt-in via `XE_LAUNCH_MODE=desktop`; off-flag behaviour (headless/Aspire/CI) must stay byte-identical.
+
+### Tool calling has FIVE independent gates, and the UI shows only one of them
+
+Before concluding "tool calling is broken", walk all five. A live evaluation burned most of a session on this: the installed-models row advertised a **`TOOLS`** capability chip, the node's *Enable tools* switch was on, the per-message *Local tools* toggle was on — and the model still answered `NO TOOLS AVAILABLE`, because two of the five gates are invisible from the chat screen.
+
+In evaluation order:
+
+| # | Gate | Where | Visible to the user? |
+|---|---|---|---|
+| 1 | `request.UseLocalTools` | per-message toggle → `NodeChatStreamService.cs:248` | yes, in the composer |
+| 2 | `enableTools` | node setting → `GetEnableToolsAsync`, same line | yes, Node Settings |
+| 3 | `resolution.SupportsTools` | detected **offline from the model's chat template** by `IGgufModelCapabilityResolver` | **this is what the `TOOLS` chip shows** |
+| 4 | `AgentHome:ToolCapableModels` allow-list | `LocalToolOfferProvider.IsToolCapable` | **no** — an operator allow-list, unrelated to gate 3 |
+| 5 | the agent's `AllowedToolNames` | `AgentDefinitionResolver` intersects offered ∩ allowed | **no** — and the seeded **Default Assistant ships with 0 tools** |
+
+The trap is the relationship between 3 and 4. **Gate 3 is a statement about the model; gate 4 is a statement about operator permission.** They come from entirely different sources and are free to disagree, so a `TOOLS` chip is *not* a prediction that tools will be offered — it only means the chat template supports them. A model can be genuinely tool-capable, correctly chipped, and still receive nothing because it is absent from a static allow-list that ships as
+`["qwen3:8b", "bartowski/Qwen2.5-3B-Instruct-GGUF:Q4_K_M"]` — i.e. **none of the models the app's own recommender offers**.
+
+Note the failure is *partial*, which makes it harder to spot than a clean "no tools": a non-allow-listed model still receives `get_current_time` and `calculate` (the whole production `LocalAgentToolRegistry`), while the coder tools, the knowledge-base tools, `spawn_subagent` and **every MCP tool** are dropped. So "tools work" and "tools are broken" can both look true in the same conversation.
+
+### Capability detection is a substring scan of the chat template — know what it can and cannot see
+
+`GgufCapabilityDetector` decides a GGUF's advertised capabilities by scanning `tokenizer.chat_template` for literal substrings: tools from `tool_calls`/`tool_call`/`function_call`/`tools`, reasoning from `<think`/`enable_thinking`/`reasoning_content`. Two consequences that have already bitten:
+
+- **A reasoning model can show no `THINKING` chip and still reason.** Measured on `unsloth/gpt-oss-20b-GGUF:Q5_K_M` (2026-07-31): its 17k-char OpenAI *harmony* template contains **zero** occurrences of all three reasoning markers, but 12 of `<|channel|>` and 4 of `reasoning_effort` — it emits reasoning on an `analysis` channel the detector knows nothing about. Detection says not-capable; the model reasons anyway, because the enforcing gate's false branch (`InvocationAgentFactory`, the `else if (IsReasoningRequested(...))` arm) deliberately **omits** the `think` field and lets the template's baked-in behaviour through. So the chip is a statement about *"is a graded `think:<level>` control available"*, not about *"does this model reason"* — while its label reads "Thinking".
+- **Do not "fix" that by adding harmony markers to the detector.** Flipping such a model to capable moves it into the `if (SupportsThinking)` branch, which writes `think` and, on `none`, sets `enable_thinking=false` via `chat_template_kwargs`. The harmony template has no `enable_thinking` kwarg at all (measured: 0 occurrences) — it takes `reasoning_effort`. The result would be a graded menu whose levels do nothing **and** a broken reasoning-off path. Fix the label or add a distinct capability; do not widen the marker list.
+- The tools marker list includes the bare English word **`tools`**, matched anywhere in the raw template including comments and dead branches. `<think` is a tag prefix; `tools` is not. Treat a `TOOLS` chip as weaker evidence than a `THINKING` one.
+
+Gate 5 catches the rest: the Default Assistant grants zero tools, so even a fully permitted model gets nothing on the default agent. Use the Coder (read-only) agent, or grant tools on the definition, when testing the positive path.
+
+Historical note, so nobody re-introduces it: gate 4 used to be **captured at DI composition** and never re-read, so editing the allow-list did nothing until the node restarted — while gates that read the *same* setting (`GetToolCapableModelsEndpoint`, `OrchestrationResolver`) were already live. It is now read live per offer. Do not "optimize" it back into a constructor field — the read resolves through `CachedNodeSettingsStore`, so it is a memory-cache hit that `SaveAsync` re-primes, not a file read.
 
 ---
 

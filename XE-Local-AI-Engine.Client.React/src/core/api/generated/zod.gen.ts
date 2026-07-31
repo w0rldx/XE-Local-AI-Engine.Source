@@ -263,6 +263,14 @@ export const zXeLocalAiEngineClientEndpointsSchedulerV1UpdateScheduledJobRequest
 	parameters: z.string().nullish(),
 });
 
+export const zXeLocalAiEngineClientEndpointsPreviewV1CancelAllPreviewRunsResponse = z.object({
+	cancelledCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+});
+
 export const zXeLocalAiEngineClientEndpointsPreviewV1PreviewRunRouteRequest = z.record(z.string(), z.never());
 
 export const zXeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowNodeKind = z.enum([
@@ -320,6 +328,25 @@ export const zXeLocalAiEngineClientEndpointsPreviewV1PreviewRunStartedResponse =
 
 export const zXeLocalAiEngineClientEndpointsPreviewV1ExecuteUnsavedPreviewWorkflowRequest = z.object({
 	graph: zXeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraph,
+});
+
+export const zXeLocalAiEngineClientEndpointsPreviewV1PreviewRunSummaryResponse = z.object({
+	runId: z.guid().optional(),
+	state: z.string().optional(),
+	isLive: z.boolean().optional(),
+	startedAtUtc: z.int().optional(),
+	lastSeq: z.int().optional(),
+	subscriberCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	pausedNodeId: z.string().nullish(),
+	pauseRequestId: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsPreviewV1ListPreviewRunsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsPreviewV1PreviewRunSummaryResponse),
 });
 
 export const zXeLocalAiEngineClientEndpointsPreviewV1PreviewWorkflowSummaryResponse = z.object({
@@ -1103,12 +1130,14 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1ModelCatalogInfoResponse =
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	refreshSourceConfigured: z.boolean(),
 });
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryFileResponse = z.object({
 	fileName: z.string(),
 	quant: z.string(),
 	isDynamic: z.boolean(),
+	isDraft: z.boolean(),
 	sizeBytes: z.int(),
 	qualityTier: z.string(),
 	fitVerdict: z.string(),
@@ -1355,6 +1384,7 @@ export const zXeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse = z.
 	detectedKind: z.string(),
 	capabilities: z.array(z.string()),
 	isReasoningCapable: z.boolean(),
+	isNativeReasoningCapable: z.boolean().optional(),
 	isToolCapable: z.boolean(),
 	isOverridden: z.boolean(),
 });
@@ -1627,6 +1657,14 @@ export const zXeLocalAiEngineClientEndpointsLocalChatV1UploadConversationFileReq
 });
 
 export const zXeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentRouteRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsKnowledgeV1DownloadRecommendedEmbeddingResponse = z.object({
+	modelName: z.string(),
+	repoId: z.string(),
+	quant: z.string(),
+	alreadyInstalled: z.boolean(),
+	alreadyInFlight: z.boolean(),
+});
 
 export const zXeLocalAiEngineClientEndpointsKnowledgeV1DownloadRecommendedRerankerResponse = z.object({
 	modelName: z.string(),
@@ -1974,6 +2012,18 @@ export const zXeLocalAiEngineClientEndpointsImagesV1ListImageJobsResponse = z.ob
 	items: z.array(zXeLocalAiEngineClientEndpointsImagesV1ImageJobResponse),
 });
 
+export const zXeLocalAiEngineClientEndpointsImagesV1ImageModelDownloadStatusResponse = z.object({
+	modelName: z.string(),
+	phase: z.string(),
+	completedBytes: z.int().nullish(),
+	totalBytes: z.int().nullish(),
+	sanitizedError: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1ListImageModelDownloadsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsImagesV1ImageModelDownloadStatusResponse),
+});
+
 export const zXeLocalAiEngineClientEndpointsImagesV1ImageModelPartResponse = z.object({
 	role: z.string(),
 	fileName: z.string(),
@@ -1999,6 +2049,7 @@ export const zXeLocalAiEngineClientEndpointsImagesV1RetrieveImageRequest = z.rec
 export const zXeLocalAiEngineClientEndpointsImagesV1StartImageModelDownloadResponse = z.object({
 	modelName: z.string(),
 	accepted: z.boolean(),
+	alreadyInFlight: z.boolean(),
 });
 
 export const zXeLocalAiEngineClientEndpointsImagesV1ImageModelPartDownloadRequest = z.object({
@@ -3206,6 +3257,11 @@ export const zTriggerScheduledJobPath = z.object({
  */
 export const zTriggerScheduledJobResponse = z.void();
 
+/**
+ * Success
+ */
+export const zCancelAllPreviewRunsResponse = zXeLocalAiEngineClientEndpointsPreviewV1CancelAllPreviewRunsResponse;
+
 export const zCancelPreviewRunPath = z.object({
 	runId: z.guid(),
 });
@@ -3280,6 +3336,20 @@ export const zExecuteUnsavedPreviewWorkflowBody = zXeLocalAiEngineClientEndpoint
  * Success
  */
 export const zExecuteUnsavedPreviewWorkflowResponse = zXeLocalAiEngineClientEndpointsPreviewV1PreviewRunStartedResponse;
+
+export const zGetPreviewRunPath = z.object({
+	runId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zGetPreviewRunResponse = zXeLocalAiEngineClientEndpointsPreviewV1PreviewRunSummaryResponse;
+
+/**
+ * Success
+ */
+export const zListPreviewRunsResponse = zXeLocalAiEngineClientEndpointsPreviewV1ListPreviewRunsResponse;
 
 /**
  * Success
@@ -3881,6 +3951,12 @@ export const zGetKnowledgeDocumentResponse = zXeLocalAiEngineClientEndpointsKnow
 /**
  * Success
  */
+export const zDownloadRecommendedEmbeddingResponse =
+	zXeLocalAiEngineClientEndpointsKnowledgeV1DownloadRecommendedEmbeddingResponse;
+
+/**
+ * Success
+ */
 export const zDownloadRecommendedRerankerResponse = zXeLocalAiEngineClientEndpointsKnowledgeV1DownloadRecommendedRerankerResponse;
 
 /**
@@ -3990,6 +4066,18 @@ export const zGetStableDiffusionCppSourceBuildStatusResponse =
 /**
  * Success
  */
+export const zListImageModelDownloadsResponse = zXeLocalAiEngineClientEndpointsImagesV1ListImageModelDownloadsResponse;
+
+export const zStartImageModelDownloadBody = zXeLocalAiEngineClientEndpointsImagesV1StartImageModelDownloadRequest;
+
+/**
+ * Success
+ */
+export const zStartImageModelDownloadResponse = zXeLocalAiEngineClientEndpointsImagesV1StartImageModelDownloadResponse;
+
+/**
+ * Success
+ */
 export const zListImageModelsResponse = zXeLocalAiEngineClientEndpointsImagesV1ListImageModelsResponse;
 
 export const zRemoveStableDiffusionCppSourceBuildBody = zXeLocalAiEngineClientEndpointsImagesV1ImageRuntimeActionRequest;
@@ -4007,13 +4095,6 @@ export const zRetrieveImagePath = z.object({
  * No Content
  */
 export const zRetrieveImageResponse = z.void();
-
-export const zStartImageModelDownloadBody = zXeLocalAiEngineClientEndpointsImagesV1StartImageModelDownloadRequest;
-
-/**
- * Success
- */
-export const zStartImageModelDownloadResponse = zXeLocalAiEngineClientEndpointsImagesV1StartImageModelDownloadResponse;
 
 export const zStartStableDiffusionCppSourceBuildBody =
 	zXeLocalAiEngineClientEndpointsImagesV1StartStableDiffusionCppSourceBuildRequest;

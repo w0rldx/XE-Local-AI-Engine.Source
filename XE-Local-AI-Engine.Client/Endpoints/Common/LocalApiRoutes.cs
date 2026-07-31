@@ -426,6 +426,15 @@ public static class LocalApiRoutes
         // surface; persists nothing.
         public const string RunExecute = "preview/runs/execute";
 
+        // Run discovery: GET the runs this node currently knows about (live + still-replayable) and GET one by id.
+        // Without these a runId that left the client's memory — a plain page reload — was unreachable forever.
+        public const string Runs = "preview/runs";
+        public const string RunById = "preview/runs/{runId}";
+
+        // Cancel every live run. The literal segment sits where a run id would, but "cancel-all" is not a Guid so the
+        // two never collide. Operator escape hatch for slots leaked before the abandoned-subscriber sweep reclaims them.
+        public const string RunsCancelAll = "preview/runs/cancel-all";
+
         // Run lifecycle actions, run-scoped. Literal action segments follow the run id.
         public const string RunContinue = "preview/runs/{runId}/continue";
         public const string RunCancel = "preview/runs/{runId}/cancel";
@@ -455,7 +464,8 @@ public static class LocalApiRoutes
         // Installed image-model registry (GET list).
         public const string Models = "images/models";
 
-        // Image-model weight download (POST start). Fire-and-forget file-set pull; presence surfaces via Models.
+        // Image-model weight downloads: POST starts a detached file-set pull, GET lists every tracked download's phase
+        // (Running/Completed/Cancelled/Failed) so a failure is observable instead of silent.
         public const string ModelDownloads = "images/models/downloads";
 
         // Managed stable-diffusion.cpp runtime and Linux source-build orchestration.
@@ -525,6 +535,10 @@ public static class LocalApiRoutes
         // One-click download of the recommended cross-encoder reranker so an operator can enable KB reranking without
         // hunting for a repo/quant. Body-less POST; a distinct "reranker" literal keeps it off the document-id surface.
         public const string RerankerDownloadRecommended = "knowledge-base/reranker/download-recommended";
+
+        // One-click download of the recommended embedding model. Same shape as the reranker route above, but this one is
+        // load-bearing rather than optional: with no embedding model installed the knowledge base cannot index anything.
+        public const string EmbeddingDownloadRecommended = "knowledge-base/embedding/download-recommended";
 
         // SignalR push hub for indexing status changes. Full path (mapped via MapHub, not the FastEndpoints prefix),
         // mirroring the other local hubs. Each push carries the sanitized document id + status; Operator-gated because

@@ -110,6 +110,9 @@ export function DevelopmentPage() {
 	const capabilityQuery = useDevelopmentCapability();
 	const developmentEnabled = capabilityQuery.data?.enabled === true;
 	const containerRuntime = capabilityQuery.data?.containerRuntime;
+	// The provider the backend actually resolved. Every surface that describes the isolation posture reads it from
+	// here rather than asserting one, so the two providers cannot both be described by the same static sentence.
+	const sandboxProvider = capabilityQuery.data?.sandboxProvider;
 	const confirmContainerRuntimeMutation = useConfirmDevelopmentContainerRuntime();
 	const repositoriesQuery = useDevelopmentRepositories(developmentEnabled);
 	const templatesQuery = useDevelopmentTemplates(developmentEnabled);
@@ -312,6 +315,7 @@ export function DevelopmentPage() {
 				 */}
 				<DevelopmentContainerRuntimePanel
 					runtime={containerRuntime}
+					sandboxProvider={sandboxProvider}
 					onConfirm={(daemonId) => confirmContainerRuntimeMutation.mutate({ body: { daemonId } })}
 					confirming={confirmContainerRuntimeMutation.isPending}
 					confirmError={
@@ -336,6 +340,7 @@ export function DevelopmentPage() {
 						<Accordion.Control>{t("pages.development.newProject", "New Development project")}</Accordion.Control>
 						<Accordion.Panel>
 							<DevelopmentProjectForm
+								sandboxProvider={sandboxProvider}
 								repositories={repositories}
 								repositoriesLoading={repositoriesQuery.isLoading}
 								repositoriesError={

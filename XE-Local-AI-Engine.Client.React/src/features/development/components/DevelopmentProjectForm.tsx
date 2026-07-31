@@ -23,6 +23,7 @@ import {
 	developmentProfileIdForBuildTarget,
 	type DevelopmentRepository,
 	type DevelopmentTemplate,
+	isDevelopmentContainerProvider,
 	isDevelopmentWhitespaceOnlyProfile,
 } from "@/features/development/models/DevelopmentModels";
 
@@ -87,6 +88,11 @@ interface DevelopmentProjectFormProps {
 	readonly onAddTemplate?: (values: RegisterDevelopmentTemplateValues) => Promise<DevelopmentTemplate>;
 	readonly onRemoveTemplate?: (templateId: string) => Promise<void>;
 	readonly onSubmit: (values: DevelopmentProjectFormValues) => void;
+	/**
+	 * The sandbox provider actually resolved for this node. Drives the safety notice and the trust acknowledgement,
+	 * which describe two different isolation postures and must not be hard-coded to either.
+	 */
+	readonly sandboxProvider?: string;
 }
 
 interface TemplateCreationValues {
@@ -128,8 +134,10 @@ export function DevelopmentProjectForm({
 	onAddTemplate,
 	onRemoveTemplate,
 	onSubmit,
+	sandboxProvider,
 }: DevelopmentProjectFormProps) {
 	const { t } = useTranslation();
+	const containerProvider = isDevelopmentContainerProvider(sandboxProvider);
 	const [values, setValues] = useState(initialValues);
 	const [profileConfirmed, setProfileConfirmed] = useState(false);
 	const [confirmedDetectionIdentity, setConfirmedDetectionIdentity] = useState<string | null>(null);
@@ -554,12 +562,21 @@ export function DevelopmentProjectForm({
 							/>
 						</Grid.Col>
 					</Grid>
-					<Alert color="yellow" icon={<IconAlertTriangle size={16} />}>
-						<Text size="sm">
-							{t(
-								"pages.development.form.securityWarning",
-								"Development commands run as your host user. The managed worktree confines application-mediated changes, but it is not OS isolation and repository code may access other host resources.",
-							)}
+					{/*
+					 * Provider-derived, not hard-coded. The two providers put the operator in materially different
+					 * positions, and this notice sits directly on the control they must tick to proceed.
+					 */}
+					<Alert color={containerProvider ? "blue" : "yellow"} icon={<IconAlertTriangle size={16} />}>
+						<Text size="sm" data-testid="development-security-notice">
+							{containerProvider
+								? t(
+										"pages.development.form.securityWarningContainer",
+										"Development commands run inside a hardened container — read-only root filesystem, all capabilities dropped, no host namespaces — with only the managed worktree and runtime directories mounted. Repository code still executes, so register only repositories you trust.",
+									)
+								: t(
+										"pages.development.form.securityWarning",
+										"Development commands run as your host user. The managed worktree confines application-mediated changes, but it is not OS isolation and repository code may access other host resources.",
+									)}
 						</Text>
 					</Alert>
 					<Checkbox
@@ -568,10 +585,17 @@ export function DevelopmentProjectForm({
 							const checked = event.currentTarget.checked;
 							setValues((current) => ({ ...current, trustedRepositoryAcknowledged: checked }));
 						}}
-						label={t(
-							"pages.development.form.trustAcknowledgement",
-							"I trust the selected repository to execute Development commands with my host-user permissions.",
-						)}
+						label={
+							containerProvider
+								? t(
+										"pages.development.form.trustAcknowledgementContainer",
+										"I trust the selected repository to execute Development commands inside this node's container sandbox.",
+									)
+								: t(
+										"pages.development.form.trustAcknowledgement",
+										"I trust the selected repository to execute Development commands with my host-user permissions.",
+									)
+						}
 						data-testid="development-trust-acknowledgement"
 					/>
 					{error ? <div role="alert">{error}</div> : null}

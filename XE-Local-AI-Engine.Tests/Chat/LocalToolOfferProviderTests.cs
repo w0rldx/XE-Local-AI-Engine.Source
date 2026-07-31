@@ -2,11 +2,15 @@ namespace XE_Local_AI_Engine.Tests.Chat;
 
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
+using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Tools;
+using XE_Local_AI_Engine.Client.Services.Capacity.Tools;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -51,6 +55,72 @@ public sealed class LocalToolOfferProviderTests
         var offered = provider.GetOfferedTools("qwen3:8b");
 
         AssertEx.Contains(offered, tool => tool.Name == AgentHomeToolDefinition.ToolName);
+    }
+
+    [Test]
+    public void GetOfferedTools_WhenAllowlistChangesAfterConstruction_TakesEffectWithoutARestart()
+    {
+        // THE regression test for F-001/F-025. The allow-list used to be captured into a HashSet at DI composition, so
+        // an operator could add their model in Node Settings, save successfully, and still be offered no tools until the
+        // node restarted — with no restart hint on that field. The provider now reads INodeRuntimeSettings live on every
+        // offer, so a change between two calls on the SAME instance must be observed.
+        //
+        // The mutable list is the whole point: a Build()-time snapshot would pass a weaker version of this test even
+        // with the old seeded implementation, because construction would capture the already-correct value.
+        var toolCapableModels = new List<string>();
+        var runtimeSettings = Substitute.For<INodeRuntimeSettings>();
+        runtimeSettings.GetToolCapableModels().Returns(_ => toolCapableModels);
+
+        var provider = new LocalToolOfferProvider(new FakeAgentToolRegistry([
+                new LocalChatToolDescriptor(AgentHomeToolDefinition.ToolName, "Runs an agent task.", "{\"type\":\"object\"}", RequiresApproval: true),
+                new LocalChatToolDescriptor("open_url", "Opens a URL.", "{\"type\":\"object\"}", RequiresApproval: false)
+            ]),
+            new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
+            runtimeSettings,
+            allowCloudKnowledgeAccess: false);
+
+        var beforeEdit = provider.GetOfferedTools("unsloth/gemma-4-12b-it-GGUF:Q5_K_M");
+        AssertEx.False(beforeEdit.Any(tool => tool.Name == AgentHomeToolDefinition.ToolName),
+            "A model absent from the allow-list must not be offered the capable-only tools.");
+
+        // The operator adds the model in Node Settings and saves. No restart.
+        toolCapableModels.Add("unsloth/gemma-4-12b-it-GGUF:Q5_K_M");
+
+        var afterEdit = provider.GetOfferedTools("unsloth/gemma-4-12b-it-GGUF:Q5_K_M");
+        AssertEx.Contains(afterEdit, tool => tool.Name == AgentHomeToolDefinition.ToolName,
+            "The allow-list is read live, so an edit must take effect on the very next offer without a node restart.");
+
+        // And the reverse: a removal must also take effect immediately, or the gate could not be tightened at runtime.
+        toolCapableModels.Clear();
+
+        var afterRemoval = provider.GetOfferedTools("unsloth/gemma-4-12b-it-GGUF:Q5_K_M");
+        AssertEx.False(afterRemoval.Any(tool => tool.Name == AgentHomeToolDefinition.ToolName),
+            "Removing a model from the allow-list must withhold the capable-only tools immediately.");
+    }
+
+    [Test]
+    public void GetOfferedToolsForProfile_WhenAllowlistChangesAfterConstruction_TakesEffectWithoutARestart()
+    {
+        // The profile pool is the second decision point reading the same allow-list (the Coder agent's path, which is
+        // where the live evaluation actually observed the failure). Both had to be repointed; this pins the second one.
+        var toolCapableModels = new List<string>();
+        var runtimeSettings = Substitute.For<INodeRuntimeSettings>();
+        runtimeSettings.GetToolCapableModels().Returns(_ => toolCapableModels);
+
+        var provider = new LocalToolOfferProvider(new FakeAgentToolRegistry([
+                new LocalChatToolDescriptor(AgentHomeToolDefinition.ToolName, "Runs an agent task.", "{\"type\":\"object\"}", RequiresApproval: true)
+            ]),
+            new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
+            runtimeSettings,
+            allowCloudKnowledgeAccess: false);
+
+        AssertEx.False(provider.GetOfferedToolsForProfile("some-model").Any(tool => tool.Name == SpawnSubAgentToolDefinition.ToolName),
+            "A non-capable model must not reach the profile-only spawn tool.");
+
+        toolCapableModels.Add("some-model");
+
+        AssertEx.Contains(provider.GetOfferedToolsForProfile("some-model"), tool => tool.Name == SpawnSubAgentToolDefinition.ToolName,
+            "The profile pool reads the allow-list live too.");
     }
 
     [Test]
@@ -303,7 +373,7 @@ public sealed class LocalToolOfferProviderTests
         // arithmetic) plus the merged coder + knowledge tools and the profile-only spawn_subagent.
         var provider = new LocalToolOfferProvider(new LocalAgentToolRegistry(),
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
-            ["qwen3:8b"],
+            StubNodeRuntimeSettings.Create().WithToolCapableModels("qwen3:8b").Build(),
             allowCloudKnowledgeAccess: false);
 
         var offered = provider.GetOfferedToolsForProfile("qwen3:8b");
@@ -334,7 +404,10 @@ public sealed class LocalToolOfferProviderTests
             new LocalChatToolDescriptor("open_url", "Opens a URL.", "{\"type\":\"object\"}", RequiresApproval: false)
         ]);
 
-        return new LocalToolOfferProvider(registry, mcpToolRegistry, toolCapableModels, allowCloudKnowledgeAccess);
+        return new LocalToolOfferProvider(registry,
+            mcpToolRegistry,
+            StubNodeRuntimeSettings.Create().WithToolCapableModels(toolCapableModels).Build(),
+            allowCloudKnowledgeAccess);
     }
 
     private sealed class FakeAgentToolRegistry : IAgentToolRegistry

@@ -244,6 +244,10 @@ export type XeLocalAiEngineClientEndpointsSchedulerV1UpdateScheduledJobRequest =
 	parameters?: string | null;
 };
 
+export type XeLocalAiEngineClientEndpointsPreviewV1CancelAllPreviewRunsResponse = {
+	cancelledCount?: number;
+};
+
 export type XeLocalAiEngineClientEndpointsPreviewV1PreviewRunRouteRequest = {
 	[key: string]: never;
 };
@@ -295,6 +299,21 @@ export type XeLocalAiEngineClientEndpointsPreviewV1PreviewRunStartedResponse = {
 
 export type XeLocalAiEngineClientEndpointsPreviewV1ExecuteUnsavedPreviewWorkflowRequest = {
 	graph: XeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraph;
+};
+
+export type XeLocalAiEngineClientEndpointsPreviewV1PreviewRunSummaryResponse = {
+	runId?: string;
+	state?: string;
+	isLive?: boolean;
+	startedAtUtc?: number;
+	lastSeq?: number;
+	subscriberCount?: number;
+	pausedNodeId?: string | null;
+	pauseRequestId?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsPreviewV1ListPreviewRunsResponse = {
+	items: Array<XeLocalAiEngineClientEndpointsPreviewV1PreviewRunSummaryResponse>;
 };
 
 export type XeLocalAiEngineClientEndpointsPreviewV1ListPreviewWorkflowsResponse = {
@@ -839,6 +858,7 @@ export type XeLocalAiEngineClientEndpointsModelFitV1ModelCatalogInfoResponse = {
 	fetchedAtUtc?: number | null;
 	sourceUrl?: string | null;
 	modelCount: number;
+	refreshSourceConfigured: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsModelFitV1InspectGgufRepositoryResponse = {
@@ -850,6 +870,7 @@ export type XeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryFileResponse =
 	fileName: string;
 	quant: string;
 	isDynamic: boolean;
+	isDraft: boolean;
 	sizeBytes: number;
 	qualityTier: string;
 	fitVerdict: string;
@@ -1096,6 +1117,7 @@ export type XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse = {
 	detectedKind: string;
 	capabilities: Array<string>;
 	isReasoningCapable: boolean;
+	isNativeReasoningCapable?: boolean;
 	isToolCapable: boolean;
 	isOverridden: boolean;
 };
@@ -1353,6 +1375,14 @@ export type XeLocalAiEngineClientEndpointsLocalChatV1UploadConversationFileReque
 
 export type XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentRouteRequest = {
 	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsKnowledgeV1DownloadRecommendedEmbeddingResponse = {
+	modelName: string;
+	repoId: string;
+	quant: string;
+	alreadyInstalled: boolean;
+	alreadyInFlight: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsKnowledgeV1DownloadRecommendedRerankerResponse = {
@@ -1631,6 +1661,18 @@ export type XeLocalAiEngineClientEndpointsImagesV1ListImageJobsResponse = {
 	items: Array<XeLocalAiEngineClientEndpointsImagesV1ImageJobResponse>;
 };
 
+export type XeLocalAiEngineClientEndpointsImagesV1ListImageModelDownloadsResponse = {
+	items: Array<XeLocalAiEngineClientEndpointsImagesV1ImageModelDownloadStatusResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1ImageModelDownloadStatusResponse = {
+	modelName: string;
+	phase: string;
+	completedBytes?: number | null;
+	totalBytes?: number | null;
+	sanitizedError?: string | null;
+};
+
 export type XeLocalAiEngineClientEndpointsImagesV1ListImageModelsResponse = {
 	items: Array<XeLocalAiEngineClientEndpointsImagesV1ImageModelResponse>;
 };
@@ -1658,6 +1700,7 @@ export type XeLocalAiEngineClientEndpointsImagesV1RetrieveImageRequest = {
 export type XeLocalAiEngineClientEndpointsImagesV1StartImageModelDownloadResponse = {
 	modelName: string;
 	accepted: boolean;
+	alreadyInFlight: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsImagesV1StartImageModelDownloadRequest = {
@@ -3127,6 +3170,33 @@ export type TriggerScheduledJobResponses = {
 
 export type TriggerScheduledJobResponse = TriggerScheduledJobResponses[keyof TriggerScheduledJobResponses];
 
+export type CancelAllPreviewRunsData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/preview/runs/cancel-all";
+};
+
+export type CancelAllPreviewRunsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type CancelAllPreviewRunsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsPreviewV1CancelAllPreviewRunsResponse;
+};
+
+export type CancelAllPreviewRunsResponse = CancelAllPreviewRunsResponses[keyof CancelAllPreviewRunsResponses];
+
 export type CancelPreviewRunData = {
 	body?: never;
 	path: {
@@ -3383,6 +3453,62 @@ export type ExecuteUnsavedPreviewWorkflowResponses = {
 
 export type ExecuteUnsavedPreviewWorkflowResponse =
 	ExecuteUnsavedPreviewWorkflowResponses[keyof ExecuteUnsavedPreviewWorkflowResponses];
+
+export type GetPreviewRunData = {
+	body?: never;
+	path: {
+		runId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/preview/runs/{runId}";
+};
+
+export type GetPreviewRunErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetPreviewRunResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsPreviewV1PreviewRunSummaryResponse;
+};
+
+export type GetPreviewRunResponse = GetPreviewRunResponses[keyof GetPreviewRunResponses];
+
+export type ListPreviewRunsData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/preview/runs";
+};
+
+export type ListPreviewRunsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListPreviewRunsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsPreviewV1ListPreviewRunsResponse;
+};
+
+export type ListPreviewRunsResponse = ListPreviewRunsResponses[keyof ListPreviewRunsResponses];
 
 export type GetNodeSettingsData = {
 	body?: never;
@@ -5597,6 +5723,34 @@ export type GetKnowledgeDocumentResponses = {
 
 export type GetKnowledgeDocumentResponse = GetKnowledgeDocumentResponses[keyof GetKnowledgeDocumentResponses];
 
+export type DownloadRecommendedEmbeddingData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/knowledge-base/embedding/download-recommended";
+};
+
+export type DownloadRecommendedEmbeddingErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type DownloadRecommendedEmbeddingResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsKnowledgeV1DownloadRecommendedEmbeddingResponse;
+};
+
+export type DownloadRecommendedEmbeddingResponse =
+	DownloadRecommendedEmbeddingResponses[keyof DownloadRecommendedEmbeddingResponses];
+
 export type DownloadRecommendedRerankerData = {
 	body?: never;
 	path?: never;
@@ -6058,6 +6212,60 @@ export type GetStableDiffusionCppSourceBuildStatusResponses = {
 export type GetStableDiffusionCppSourceBuildStatusResponse =
 	GetStableDiffusionCppSourceBuildStatusResponses[keyof GetStableDiffusionCppSourceBuildStatusResponses];
 
+export type ListImageModelDownloadsData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/images/models/downloads";
+};
+
+export type ListImageModelDownloadsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListImageModelDownloadsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsImagesV1ListImageModelDownloadsResponse;
+};
+
+export type ListImageModelDownloadsResponse = ListImageModelDownloadsResponses[keyof ListImageModelDownloadsResponses];
+
+export type StartImageModelDownloadData = {
+	body: XeLocalAiEngineClientEndpointsImagesV1StartImageModelDownloadRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/images/models/downloads";
+};
+
+export type StartImageModelDownloadErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type StartImageModelDownloadResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsImagesV1StartImageModelDownloadResponse;
+};
+
+export type StartImageModelDownloadResponse = StartImageModelDownloadResponses[keyof StartImageModelDownloadResponses];
+
 export type ListImageModelsData = {
 	body?: never;
 	path?: never;
@@ -6145,33 +6353,6 @@ export type RetrieveImageResponses = {
 };
 
 export type RetrieveImageResponse = RetrieveImageResponses[keyof RetrieveImageResponses];
-
-export type StartImageModelDownloadData = {
-	body: XeLocalAiEngineClientEndpointsImagesV1StartImageModelDownloadRequest;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/images/models/downloads";
-};
-
-export type StartImageModelDownloadErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type StartImageModelDownloadResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsImagesV1StartImageModelDownloadResponse;
-};
-
-export type StartImageModelDownloadResponse = StartImageModelDownloadResponses[keyof StartImageModelDownloadResponses];
 
 export type StartStableDiffusionCppSourceBuildData = {
 	body: XeLocalAiEngineClientEndpointsImagesV1StartStableDiffusionCppSourceBuildRequest;

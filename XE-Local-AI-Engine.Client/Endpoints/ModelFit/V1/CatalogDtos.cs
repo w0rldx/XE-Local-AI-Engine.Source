@@ -22,4 +22,14 @@ public sealed class ModelCatalogInfoResponse
     public string? SourceUrl { get; init; }
 
     public required int ModelCount { get; init; }
+
+    /// <summary>
+    ///     Whether a remote refresh source is configured at all (<c>ModelCatalog:RefreshUrl</c>). When <c>false</c>, the
+    ///     catalog is bundled-only and <c>POST model-fit/catalog/refresh</c> is a guaranteed no-op — it still returns 200
+    ///     with the snapshot in effect, because there is no error to report, but nothing was or could be fetched.
+    ///     The UI must not present that outcome as a successful refresh: no appsettings file ships a
+    ///     <c>ModelCatalog</c> section, so on a stock node this is <c>false</c> and "Refresh catalog" previously showed a
+    ///     green success toast for an action that could never do anything.
+    /// </summary>
+    public required bool RefreshSourceConfigured { get; init; }
 }

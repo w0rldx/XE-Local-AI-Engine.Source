@@ -129,8 +129,10 @@ describe("usePreviewWorkflowHub", () => {
 		usePreviewRunStore.getState().actions.registerRun("run-1");
 		renderHook(() => usePreviewWorkflowHub());
 
-		// After start resolves, the hook re-applies the desired set and joins the active run's group.
-		await waitFor(() => expect(invokeSpy).toHaveBeenCalledWith("Subscribe", "run-1"));
+		// After start resolves, the hook re-applies the desired set and joins the active run's group. afterSeq -1 is
+		// "this tab has applied nothing", which asks the server for the whole retained log — the reattach-after-reload
+		// case, where the runId came from the route and no events have been seen.
+		await waitFor(() => expect(invokeSpy).toHaveBeenCalledWith("Subscribe", "run-1", -1));
 	});
 
 	it("subscribes to a run that becomes active after the connection started", async () => {
@@ -139,13 +141,13 @@ describe("usePreviewWorkflowHub", () => {
 
 		// A new run registered while connected triggers a Subscribe via the store subscription.
 		usePreviewRunStore.getState().actions.registerRun("run-2");
-		await waitFor(() => expect(invokeSpy).toHaveBeenCalledWith("Subscribe", "run-2"));
+		await waitFor(() => expect(invokeSpy).toHaveBeenCalledWith("Subscribe", "run-2", -1));
 	});
 
 	it("unsubscribes from a run when it is removed from the store", async () => {
 		usePreviewRunStore.getState().actions.registerRun("run-1");
 		renderHook(() => usePreviewWorkflowHub());
-		await waitFor(() => expect(invokeSpy).toHaveBeenCalledWith("Subscribe", "run-1"));
+		await waitFor(() => expect(invokeSpy).toHaveBeenCalledWith("Subscribe", "run-1", -1));
 
 		// Clearing the store (page reset) leaves the run's group.
 		usePreviewRunStore.getState().actions.reset();
@@ -155,11 +157,46 @@ describe("usePreviewWorkflowHub", () => {
 	it("re-subscribes to active runs after a reconnect", async () => {
 		usePreviewRunStore.getState().actions.registerRun("run-1");
 		renderHook(() => usePreviewWorkflowHub());
-		await waitFor(() => expect(invokeSpy).toHaveBeenCalledWith("Subscribe", "run-1"));
+		await waitFor(() => expect(invokeSpy).toHaveBeenCalledWith("Subscribe", "run-1", -1));
 		invokeSpy.mockClear();
 
 		// A transient drop + automatic reconnect loses server-side group membership; the hook re-joins every active run.
 		reconnectedCallback?.();
-		await waitFor(() => expect(invokeSpy).toHaveBeenCalledWith("Subscribe", "run-1"));
+		await waitFor(() => expect(invokeSpy).toHaveBeenCalledWith("Subscribe", "run-1", -1));
+	});
+
+	it("resubscribes from the last applied seq so the server does not replay events again", async () => {
+		// Reattach without duplication. This tab has already applied seq 0 and 1; after a reconnect it must ask for
+		// events AFTER 1, not from the start. Replaying from 0 would re-send the accumulating nodeOutput chunks (the
+		// store's dedupe would drop them, but the point is not to ship them at all).
+		usePreviewRunStore.getState().actions.registerRun("run-1");
+		renderHook(() => usePreviewWorkflowHub());
+		await waitFor(() => expect(invokeSpy).toHaveBeenCalledWith("Subscribe", "run-1", -1));
+
+		registeredHandlers.get(previewHubEvents.nodeOutput)?.({
+			eventType: previewHubEvents.nodeOutput,
+			runId: "run-1",
+			nodeId: "agent-1",
+			output: "a",
+			error: null,
+			occurredAtUtc: 1,
+			seq: 0,
+		});
+		registeredHandlers.get(previewHubEvents.nodeOutput)?.({
+			eventType: previewHubEvents.nodeOutput,
+			runId: "run-1",
+			nodeId: "agent-1",
+			output: "b",
+			error: null,
+			occurredAtUtc: 2,
+			seq: 1,
+		});
+		expect(usePreviewRunStore.getState().runs["run-1"]?.lastContiguousSeq).toBe(1);
+
+		invokeSpy.mockClear();
+		reconnectedCallback?.();
+
+		await waitFor(() => expect(invokeSpy).toHaveBeenCalledWith("Subscribe", "run-1", 1));
+		expect(invokeSpy).not.toHaveBeenCalledWith("Subscribe", "run-1", -1);
 	});
 });

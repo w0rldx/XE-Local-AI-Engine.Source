@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat;
 
 using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 /// <summary>
 ///     Maps Ollama model capabilities (or a name heuristic when capabilities are absent) to a
@@ -100,6 +101,17 @@ public static class ModelKindDetector
     public static bool IsRerankerName(string modelName)
     {
         return FromNameHeuristic(modelName) == ModelKind.Reranker;
+    }
+
+    /// <summary>
+    ///     True when the model NAME identifies a speculative-decoding draft model — its registry key carries the draft
+    ///     quant marker (<c>…:MTP-Q8_0</c>) that <see cref="GgufDraftModel" /> stamps on a drafter at discovery/rescan.
+    ///     Unlike the embedding/reranker fragments this is an exact structural marker, not a heuristic, so it cannot
+    ///     misfire on a base model whose name merely mentions MTP (<c>unsloth/Qwen3.6-27B-MTP-GGUF:Q6_K</c>).
+    /// </summary>
+    public static bool IsDraftName(string modelName)
+    {
+        return GgufDraftModel.IsDraftModelName(modelName);
     }
 
     /// <summary>

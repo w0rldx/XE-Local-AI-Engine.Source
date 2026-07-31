@@ -2,13 +2,16 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
 	type CreatePreviewWorkflowInput,
+	cancelAllPreviewRuns,
 	cancelPreviewRun,
 	continuePreviewRun,
 	createPreviewWorkflow,
 	deletePreviewWorkflow,
 	executeSavedPreviewWorkflow,
 	executeUnsavedPreviewWorkflow,
+	getPreviewRun,
 	getPreviewWorkflow,
+	listPreviewRuns,
 	listPreviewWorkflows,
 	type UpdatePreviewWorkflowInput,
 	updatePreviewWorkflow,
@@ -103,7 +106,53 @@ export function useContinuePreviewRun() {
 
 // Cancel an active run. The terminal `preview.run.cancelled` event arrives over the hub.
 export function useCancelPreviewRun() {
+	const queryClient = useQueryClient();
+
 	return useMutation({
 		mutationFn: (runId: string) => cancelPreviewRun(runId),
+		// The runs list is a server-side fact (which runs still hold a slot), unlike the hub-delivered output — so it
+		// IS invalidated after a cancel.
+		onSuccess: () => invalidateRuns(queryClient),
+	});
+}
+
+const previewRunQueryKeys = {
+	all: ["preview", "runs"] as const,
+	list: () => [...previewRunQueryKeys.all, "list"] as const,
+	detail: (runId: string) => [...previewRunQueryKeys.all, "detail", runId] as const,
+};
+
+function invalidateRuns(queryClient: ReturnType<typeof useQueryClient>): Promise<void> {
+	return queryClient.invalidateQueries({ queryKey: previewRunQueryKeys.all });
+}
+
+// Runs the node currently knows about (live + still-replayable). Polled while the panel is mounted so a run that
+// ends, is swept, or is started in another tab shows up without a manual refresh.
+export function usePreviewRuns(enabled = true) {
+	return useQuery({
+		queryKey: previewRunQueryKeys.list(),
+		queryFn: ({ signal }) => listPreviewRuns(signal),
+		refetchInterval: 5_000,
+		enabled,
+	});
+}
+
+// One run by id — used on load to decide whether a runId carried in the route still points at something reattachable.
+// Resolves to null (not an error) when the run is gone, so the caller drops the stale id.
+export function usePreviewRun(runId: string | null) {
+	return useQuery({
+		queryKey: previewRunQueryKeys.detail(runId ?? ""),
+		queryFn: ({ signal }) => getPreviewRun(runId ?? "", signal),
+		enabled: runId !== null,
+	});
+}
+
+// Cancel every live run — the recovery path when leaked slots have made Execute return CapReached 409.
+export function useCancelAllPreviewRuns() {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: () => cancelAllPreviewRuns(),
+		onSuccess: () => invalidateRuns(queryClient),
 	});
 }

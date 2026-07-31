@@ -609,6 +609,9 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
         var floorRank = QuantLadder.FloorRank;
 
         var fitting = files
+                      // A speculative-decoding drafter is not a candidate model: it is a companion loaded inside a chat
+                      // process, and its tiny size would let it out-fit every real quant in the repo.
+                      .Where(static file => !GgufDraftModel.IsDraftQuant(file.Quant))
                       .Select(file => (file, estimate: _estimator.Estimate(file.Quant,
                           file.ParamCount,
                           file.SizeBytes,

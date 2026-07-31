@@ -60,14 +60,20 @@ interface RenderOverrides {
 	onDownloadRecommendedReranker?: () => void;
 	isDownloadRecommendedRerankerPending?: boolean;
 	isRecommendedRerankerInFlight?: boolean;
+	onDownloadRecommendedEmbedding?: () => void;
+	isDownloadRecommendedEmbeddingPending?: boolean;
+	isRecommendedEmbeddingInFlight?: boolean;
 	form?: NodeSettingsFieldsForm;
 	onChange?: ReturnType<typeof vi.fn>;
 	errors?: Record<string, string>;
 	keepWarmModelOptions?: NodeSettingsFieldsCardProps["keepWarmModelOptions"];
 }
 
-function renderCard(overrides: RenderOverrides = {}): { onDownload: () => void; onChange: ReturnType<typeof vi.fn> } {
+function renderCard(
+	overrides: RenderOverrides = {},
+): { onDownload: () => void; onDownloadEmbedding: () => void; onChange: ReturnType<typeof vi.fn> } {
 	const onDownload = overrides.onDownloadRecommendedReranker ?? vi.fn();
+	const onDownloadEmbedding = overrides.onDownloadRecommendedEmbedding ?? vi.fn();
 	const onChange = overrides.onChange ?? vi.fn();
 	render(
 		<MantineProvider>
@@ -83,10 +89,13 @@ function renderCard(overrides: RenderOverrides = {}): { onDownload: () => void; 
 				onDownloadRecommendedReranker={onDownload}
 				isDownloadRecommendedRerankerPending={overrides.isDownloadRecommendedRerankerPending ?? false}
 				isRecommendedRerankerInFlight={overrides.isRecommendedRerankerInFlight ?? false}
+				onDownloadRecommendedEmbedding={onDownloadEmbedding}
+				isDownloadRecommendedEmbeddingPending={overrides.isDownloadRecommendedEmbeddingPending ?? false}
+				isRecommendedEmbeddingInFlight={overrides.isRecommendedEmbeddingInFlight ?? false}
 			/>
 		</MantineProvider>,
 	);
-	return { onDownload, onChange };
+	return { onDownload, onDownloadEmbedding, onChange };
 }
 
 describe("NodeSettingsFieldsCard — keep model warm", () => {
@@ -185,6 +194,43 @@ describe("NodeSettingsFieldsCard — recommended reranker download", () => {
 		renderCard({ isDownloadRecommendedRerankerPending: true });
 
 		expect((screen.getByTestId("node-settings-reranker-download-recommended") as HTMLButtonElement).disabled).toBe(true);
+	});
+});
+
+describe("NodeSettingsFieldsCard — recommended embedding model download", () => {
+	beforeEach(() => {
+		installJsdomEnvironmentMocks();
+		vi.clearAllMocks();
+	});
+
+	afterEach(() => cleanup());
+
+	it("renders the download button and the recommended-model helper line", () => {
+		renderCard();
+
+		expect(screen.getByTestId("node-settings-embedding-download-recommended")).toBeTruthy();
+		// The helper names the recommended model + explains why it's required (human copy resolves — no bare i18n key).
+		expect(screen.getByText(/nomic-embed-text-v1\.5/)).toBeTruthy();
+	});
+
+	it("invokes the download handler once when the button is clicked", () => {
+		const { onDownloadEmbedding } = renderCard();
+
+		fireEvent.click(screen.getByTestId("node-settings-embedding-download-recommended"));
+
+		expect(onDownloadEmbedding).toHaveBeenCalledTimes(1);
+	});
+
+	it("disables the button while the recommended embedding download is in flight (duplicate-guard)", () => {
+		renderCard({ isRecommendedEmbeddingInFlight: true });
+
+		expect((screen.getByTestId("node-settings-embedding-download-recommended") as HTMLButtonElement).disabled).toBe(true);
+	});
+
+	it("disables the button while the download request is pending", () => {
+		renderCard({ isDownloadRecommendedEmbeddingPending: true });
+
+		expect((screen.getByTestId("node-settings-embedding-download-recommended") as HTMLButtonElement).disabled).toBe(true);
 	});
 });
 

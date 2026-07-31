@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 using System.Text.RegularExpressions;
 using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 
 /// <summary>
@@ -60,7 +61,13 @@ public sealed partial record StoredNodeSettings
 
     public const int MaxMaxResponseSizeMb = 100;
 
-    public const string DefaultRecommendedLlamaCppTag = "b9692";
+    // ALIASED, never re-literalled. This is the value the UI shows as "Recommended", and it used to be an independent
+    // string literal that had to be bumped in lock-step with LlamaCppReleasePins.PinnedTag by hand — which is exactly
+    // how it went 509 builds stale while the engine's own pin had moved (F-007, live eval 2026-07-31). The layering
+    // permits the reference: the frozen direction forbids a PROVIDER depending on Client/Application, not the reverse,
+    // and this assembly already references Providers.LlamaServer (see the Options using above). Const-to-const, so it
+    // still inlines as a compile-time constant and stays usable in attributes and switch patterns.
+    public const string DefaultRecommendedLlamaCppTag = LlamaCppReleasePins.PinnedTag;
 
     public const int DefaultOrchestrationIdleTimeoutSeconds = 120;
 
@@ -210,7 +217,7 @@ public sealed partial record StoredNodeSettings
     /// <summary>Worker response-size cap in MiB. Seed: <c>WorkerNode:MaxResponseSizeMb</c>.</summary>
     public int? MaxResponseSizeMb { get; init; }
 
-    /// <summary>The recommended llama.cpp release tag. Seed: <c>LlamaCppReleasePins.PinnedTag</c> ("b9692").</summary>
+    /// <summary>The recommended llama.cpp release tag. Seed: <c>LlamaCppReleasePins.PinnedTag</c> ("b10201").</summary>
     public string? RecommendedLlamaCppTag { get; init; }
 
     /// <summary>Orchestration idle-timeout (seconds, developer-only). Seed: <c>Agent:Orchestration:IdleTimeoutSeconds</c> (120).</summary>

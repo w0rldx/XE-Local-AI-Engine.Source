@@ -196,3 +196,28 @@ public sealed class DownloadRecommendedRerankerResponse
     /// <summary><c>true</c> when an existing download for the same model was rejoined instead of a new one started.</summary>
     public required bool AlreadyInFlight { get; init; }
 }
+
+/// <summary>
+///     Result of the one-click recommended-embedding-model download. Shape-identical to
+///     <see cref="DownloadRecommendedRerankerResponse" /> so the two buttons share one UI idiom, with one semantic
+///     difference worth knowing: <see cref="AlreadyInstalled" /> reports whether the node can embed AT ALL, so
+///     <see cref="ModelName" /> may name a different embedding model the operator already had rather than the
+///     recommended one. <see cref="RepoId" />/<see cref="Quant" /> always describe the recommendation itself.
+/// </summary>
+public sealed class DownloadRecommendedEmbeddingResponse
+{
+    /// <summary>The embedding model that will actually be used — the recommended one, or an already-installed equivalent.</summary>
+    public required string ModelName { get; init; }
+
+    /// <summary>Recommended Hugging Face repository id.</summary>
+    public required string RepoId { get; init; }
+
+    /// <summary>Pinned quant of the recommended embedding model.</summary>
+    public required string Quant { get; init; }
+
+    /// <summary><c>true</c> when a usable embedding model is already installed — no download was started.</summary>
+    public required bool AlreadyInstalled { get; init; }
+
+    /// <summary><c>true</c> when an existing download for the same model was rejoined instead of a new one started.</summary>
+    public required bool AlreadyInFlight { get; init; }
+}

@@ -5,7 +5,7 @@ using XE_Local_AI_Engine.Client.Services.ModelFit.Catalog;
 /// <summary>Translates an application-layer <see cref="ModelCatalogSnapshot" /> into the sanitized catalog-info DTO.</summary>
 internal static class ModelCatalogMapper
 {
-    public static ModelCatalogInfoResponse ToResponse(this ModelCatalogSnapshot snapshot)
+    public static ModelCatalogInfoResponse ToResponse(this ModelCatalogSnapshot snapshot, bool refreshSourceConfigured)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
 
@@ -21,7 +21,8 @@ internal static class ModelCatalogMapper
             },
             FetchedAtUtc = snapshot.FetchedAtUtc?.ToUnixTimeMilliseconds(),
             SourceUrl = snapshot.SourceUrl,
-            ModelCount = snapshot.Document.Models.Count
+            ModelCount = snapshot.Document.Models.Count,
+            RefreshSourceConfigured = refreshSourceConfigured
         };
     }
 }

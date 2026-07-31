@@ -1,5 +1,14 @@
 # 2026-07-26 local-inference evidence summary
 
+> **Historical baseline — do not update the identities below.** This is a dated
+> record of one capture, and every identity in it (source SHAs, llama.cpp tag,
+> binary hashes) is load-bearing *as a record of what was measured*. Rewriting
+> them to match a newer pin would destroy the artifact's meaning. In particular
+> the llama.cpp tag cited here is the tag that was current on 2026-07-26; the
+> engine's live pin is `LlamaCppReleasePins.PinnedTag` and has since moved.
+> Numbers captured under this runtime are **not** comparable to numbers captured
+> under a different one — the capture tool enforces exactly that.
+
 This summary records the evidence produced for the local-inference performance
 plan. It does not broaden the claims made by the machine-readable artifacts in
 `docs/performance/baselines/`.

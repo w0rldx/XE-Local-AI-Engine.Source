@@ -68,13 +68,26 @@ public sealed class QuantLadderTests
     }
 
     [Test]
-    public void IsNativeFormat_TrueForMxFp4_FalseForRequantizableQuants()
+    public void IsNativeFormat_TrueForNativeFp4Formats_FalseForRequantizableQuants()
     {
-        // MXFP4 (gpt-oss's native ~4.25bpw MoE format) is the only native, non-requantizable quant today.
+        // MXFP4 (gpt-oss's native ~4.25bpw MoE format) and NVFP4 (NVIDIA Blackwell-era FP4) are the native,
+        // non-requantizable quants today — re-quantizing either UP to Q6/Q8 wastes space without adding quality.
         AssertEx.True(QuantLadder.IsNativeFormat("MXFP4"), "MXFP4 is a native format.");
         AssertEx.True(QuantLadder.IsNativeFormat("mxfp4"), "IsNativeFormat is case-insensitive.");
+        AssertEx.True(QuantLadder.IsNativeFormat("NVFP4"), "NVFP4 is a native format.");
+        AssertEx.True(QuantLadder.IsNativeFormat("nvfp4"), "IsNativeFormat is case-insensitive for NVFP4 too.");
         AssertEx.False(QuantLadder.IsNativeFormat("Q4_K_M"), "Q4_K_M is a requantizable quant, not native.");
         AssertEx.False(QuantLadder.IsNativeFormat("Q8_0"), "Q8_0 is a requantizable quant, not native.");
+    }
+
+    [Test]
+    public void BytesPerWeight_NvFp4_MatchesMxFp4NativeDensity()
+    {
+        // Measured, not theoretical: s-batman/Ornith-1.0-9B-NVFP4-MTP-GGUF ships MXFP4 and NVFP4 conversions of the
+        // same model from the same converter at byte-identical sizes (5.45 GB each, sampled 2026-07-31).
+        AssertEx.Equal(MemoryFitEstimator.BytesPerWeight("MXFP4"), MemoryFitEstimator.BytesPerWeight("NVFP4"));
+        AssertEx.True(MemoryFitEstimator.BytesPerWeight("NVFP4") < MemoryFitEstimator.BytesPerWeight("Q4_K_M"),
+            "NVFP4 must not fall through to the 4.5bpw unknown-quant default.");
     }
 
     [Test]

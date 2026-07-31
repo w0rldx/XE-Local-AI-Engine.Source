@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import type {
 	XeLocalAiEngineClientEndpointsImagesV1ImageJobResponse as ImageJobResponse,
+	XeLocalAiEngineClientEndpointsImagesV1ImageModelDownloadStatusResponse as ImageModelDownloadStatusResponse,
 	XeLocalAiEngineClientEndpointsImagesV1ImageModelResponse as ImageModelResponse,
 } from "@/core/api/generated";
 
@@ -119,6 +120,42 @@ export function toImageModelView(dto: ImageModelResponse): ImageModelView {
 		kind: dto.kind,
 		sizeBytes: dto.sizeBytes,
 		downloadedAtUtc: dto.downloadedAtUtc,
+	};
+}
+
+// Coarse lifecycle of an image-model weight download, mirroring the backend ImageModelDownloadPhase enum. A download
+// ALWAYS ends in one of the three terminal phases — that is the whole point of the coordinator: a failure that is never
+// reported is indistinguishable from a slow download.
+export const imageModelDownloadPhases = ["Running", "Completed", "Cancelled", "Failed"] as const;
+export type ImageModelDownloadPhase = (typeof imageModelDownloadPhases)[number];
+
+const terminalDownloadPhases = new Set<ImageModelDownloadPhase>(["Completed", "Cancelled", "Failed"]);
+
+export function isTerminalDownloadPhase(phase: ImageModelDownloadPhase): boolean {
+	return terminalDownloadPhases.has(phase);
+}
+
+// Normalizes an arbitrary wire phase into the known union. An unrecognized value is treated as "Running" so a future
+// backend phase never makes the UI declare a live download finished.
+export function toImageModelDownloadPhase(raw: string | null | undefined): ImageModelDownloadPhase {
+	return (imageModelDownloadPhases as readonly string[]).includes(raw ?? "") ? (raw as ImageModelDownloadPhase) : "Running";
+}
+
+export interface ImageModelDownloadView {
+	modelName: string;
+	phase: ImageModelDownloadPhase;
+	completedBytes: number | null;
+	totalBytes: number | null;
+	sanitizedError: string | null;
+}
+
+export function toImageModelDownloadView(dto: ImageModelDownloadStatusResponse): ImageModelDownloadView {
+	return {
+		modelName: dto.modelName,
+		phase: toImageModelDownloadPhase(dto.phase),
+		completedBytes: dto.completedBytes ?? null,
+		totalBytes: dto.totalBytes ?? null,
+		sanitizedError: dto.sanitizedError ?? null,
 	};
 }
 

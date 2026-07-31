@@ -26,6 +26,23 @@ public sealed class PreviewWorkflowExecutionOptions
     public TimeSpan SweepInterval { get; set; } = TimeSpan.FromSeconds(30);
 
     /// <summary>
+    ///     Grace period a run may spend with ZERO live hub subscribers before the sweeper cancels it. This is the ONLY
+    ///     bound a Paused run is subject to: pause is deliberately exempt from <see cref="IdleTimeout" /> and
+    ///     <see cref="MaxRunDuration" /> (a human may take arbitrarily long to press Continue), but "no human is
+    ///     watching at all" is a different condition from "the human is thinking", and only the former may leak a
+    ///     concurrency slot forever. A plain browser reload produces exactly that state: the run id lived only in the
+    ///     old page, so nobody will ever Continue or Cancel it.
+    ///     <para>
+    ///         5 minutes is deliberately conservative — it must never kill a run whose only client is mid-reconnect.
+    ///         A full page reload re-negotiates and re-subscribes within seconds; SignalR's automatic-reconnect
+    ///         schedule gives up long before a minute; the longest legitimate gap is a suspended laptop. Five minutes
+    ///         is an order of magnitude above every one of those, while still bounding a leaked slot to minutes rather
+    ///         than to a node restart. A client that wants a longer window only has to stay subscribed.
+    ///     </para>
+    /// </summary>
+    public TimeSpan AbandonedSubscriberGrace { get; set; } = TimeSpan.FromMinutes(5);
+
+    /// <summary>
     ///     Maximum concurrent runs in the registry. A new run beyond this returns a <c>CapReached</c> 409. Default 4
     ///     keeps node CPU/RAM bounded — preview is a single-operator debugging tool, not a batch executor.
     /// </summary>

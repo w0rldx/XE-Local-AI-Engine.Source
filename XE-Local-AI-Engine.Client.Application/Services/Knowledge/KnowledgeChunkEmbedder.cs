@@ -18,8 +18,15 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
 {
     // Fixed, content-free failure reasons (safe to persist + surface).
+    //
+    // The wording is deliberate. It previously said "Pull the configured embedding model (for example nomic-embed-text)",
+    // which was wrong twice over on a default node: "pull" is Ollama vocabulary and Ollama is a disabled secondary
+    // provider, and "nomic-embed-text" is an Ollama-style name that never appears anywhere in this app's UI. A user who
+    // read it had no way to act on it (F-020, live eval 2026-07-31). It now names the in-app affordance that actually
+    // resolves the failure. Keep it content-free — this string is persisted on the document row and surfaced verbatim.
     private const string EmbeddingUnavailableReason =
-        "The embedding model is not available. Pull the configured embedding model (for example nomic-embed-text) and retry.";
+        "No embedding model is installed, so documents cannot be indexed. Use \"Download recommended embedding model\" "
+        + "in Node Settings, or install an embedding GGUF from Models → Browse Hugging Face, then retry.";
 
     private const string EmbeddingIncompleteReason =
         "The embedding model returned an incomplete result. Ensure the configured embedding model is loaded and retry.";

@@ -4,6 +4,7 @@ import {
 	cancelImageJobMutation,
 	createImageJobMutation,
 	listImageJobsOptions,
+	listImageModelDownloadsOptions,
 	listImageModelsOptions,
 	startImageModelDownloadMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
@@ -12,7 +13,7 @@ import type {
 	XeLocalAiEngineClientEndpointsImagesV1StartImageModelDownloadRequest as StartImageModelDownloadRequest,
 } from "@/core/api/generated";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
-import { toImageJobView, toImageModelView } from "@/features/images/models/ImageModels";
+import { toImageJobView, toImageModelDownloadView, toImageModelView } from "@/features/images/models/ImageModels";
 
 // Server-state for the image feature. Reads use the generated hey-api `*Options()` (shared axios + TanStack
 // AbortSignal wired automatically) with a `select` mapping the optional-field generated response into the strict
@@ -26,6 +27,7 @@ import { toImageJobView, toImageModelView } from "@/features/images/models/Image
 const imageQueryIds = {
 	jobs: "listImageJobs",
 	models: "listImageModels",
+	downloads: "listImageModelDownloads",
 } as const;
 
 /** Builds the partial generated-query-key filter that matches every cached variant of one image endpoint. */
@@ -38,11 +40,24 @@ function invalidate(queryClient: ReturnType<typeof useQueryClient>, operationId:
 	return queryClient.invalidateQueries({ queryKey: imageInvalidationKey(operationId) });
 }
 
+// Tracked image-model weight downloads (in flight + recently finished). This is the surface that makes a FAILED
+// download visible: while one is pending the caller polls, and a Failed phase carries the sanitized reason. Never
+// cached between polls — a stale "Running" would recreate exactly the silent-hang bug this query exists to kill.
+export function useImageModelDownloads(pollWhilePending = false) {
+	return useQuery({
+		...withResponseValidation(listImageModelDownloadsOptions()),
+		select: (data) => (data.items ?? []).map(toImageModelDownloadView),
+		enabled: pollWhilePending,
+		staleTime: 0,
+		refetchInterval: pollWhilePending ? 2_000 : false,
+	});
+}
+
 // Installed image models backing the generation form's model picker + the minimal model manager. staleTime keeps a
 // remount within the session from refetching; the download mutation invalidates this key so a freshly downloaded
-// model appears without a manual refresh. The detached weight download exposes no progress/cancel yet, so
-// while one is in flight the caller passes `pollWhilePending` to enable a modest interval refetch — that is how the
-// freshly-downloaded model surfaces on completion without a manual refresh.
+// model appears without a manual refresh. While a download is in flight the caller passes `pollWhilePending` to
+// enable a modest interval refetch — that is how the freshly-downloaded model surfaces on completion without a
+// manual refresh.
 export function useImageModels(pollWhilePending = false) {
 	return useQuery({
 		...withResponseValidation(listImageModelsOptions()),
@@ -89,8 +104,9 @@ export function useCancelImageJob() {
 	});
 }
 
-// Starts a detached image-model weight download (202 accepted). The full download-progress hub is a follow-up —
-// for now the model manager polls listImageModels for the model appearing, so invalidate that key.
+// Starts a detached image-model weight download (202 accepted). The coordinator then owns the transfer and its terminal
+// phase; the manager polls useImageModelDownloads for the outcome. Both the models list and the downloads list are
+// invalidated so the newly accepted download shows up immediately.
 export function useStartImageModelDownload() {
 	const queryClient = useQueryClient();
 
@@ -99,6 +115,9 @@ export function useStartImageModelDownload() {
 			const options = withResponseValidation(startImageModelDownloadMutation());
 			return await options.mutationFn?.({ body }, undefined as never);
 		},
-		onSuccess: () => invalidate(queryClient, imageQueryIds.models),
+		onSuccess: async () => {
+			await invalidate(queryClient, imageQueryIds.models);
+			await invalidate(queryClient, imageQueryIds.downloads);
+		},
 	});
 }

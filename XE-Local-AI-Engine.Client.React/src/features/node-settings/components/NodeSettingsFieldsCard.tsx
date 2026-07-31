@@ -58,6 +58,14 @@ export interface NodeSettingsFieldsCardProps {
 	// True while the recommended reranker's GGUF download is running (duplicate-guards the button after the request
 	// returns, until the download reaches a terminal phase).
 	readonly isRecommendedRerankerInFlight: boolean;
+	// One-click download of the node's recommended embedding GGUF. Unlike the reranker, the embedding model is not a
+	// node-settings field (nothing to select/save) — the knowledge base just needs one installed to index documents.
+	readonly onDownloadRecommendedEmbedding: () => void;
+	// True while the download-recommended embedding mutation request is in flight (button shows a spinner).
+	readonly isDownloadRecommendedEmbeddingPending: boolean;
+	// True while the recommended embedding model's GGUF download is running (duplicate-guards the button after the
+	// request returns, until the download reaches a terminal phase).
+	readonly isRecommendedEmbeddingInFlight: boolean;
 }
 
 function fieldError(
@@ -84,6 +92,9 @@ export function NodeSettingsFieldsCard({
 	onDownloadRecommendedReranker,
 	isDownloadRecommendedRerankerPending,
 	isRecommendedRerankerInFlight,
+	onDownloadRecommendedEmbedding,
+	isDownloadRecommendedEmbeddingPending,
+	isRecommendedEmbeddingInFlight,
 }: NodeSettingsFieldsCardProps) {
 	const { t } = useTranslation();
 
@@ -143,7 +154,7 @@ export function NodeSettingsFieldsCard({
 						label={t("pages.nodeSettings.fields.defaultModelName.label", "Default model")}
 						description={t(
 							"pages.nodeSettings.fields.defaultModelName.description",
-							"The model used for local chat when none is selected. Leave blank to use the configured default.",
+							"The model used for local chat when none is selected. Leave blank to use the configured default. Applies after the node restarts.",
 						)}
 						value={form.defaultModelName}
 						onChange={(event) => onChange("defaultModelName", event.currentTarget.value)}
@@ -151,7 +162,10 @@ export function NodeSettingsFieldsCard({
 					/>
 					<Switch
 						label={t("pages.nodeSettings.fields.enableTools.label", "Enable tools")}
-						description={t("pages.nodeSettings.fields.enableTools.description", "Allow local chat agents to call tools.")}
+						description={t(
+							"pages.nodeSettings.fields.enableTools.description",
+							"Allow local chat agents to call tools. Changes take effect without restarting the node.",
+						)}
 						checked={form.enableTools}
 						onChange={(event) => onChange("enableTools", event.currentTarget.checked)}
 						data-testid="node-settings-enable-tools"
@@ -160,7 +174,7 @@ export function NodeSettingsFieldsCard({
 						label={t("pages.nodeSettings.fields.toolCapableModels.label", "Tool-capable models")}
 						description={t(
 							"pages.nodeSettings.fields.toolCapableModels.description",
-							"Model names that support tool calling. Press Enter to add each name.",
+							"Model names that support tool calling. Press Enter to add each name. Changes take effect without restarting the node.",
 						)}
 						value={form.toolCapableModels}
 						onChange={(value) => onChange("toolCapableModels", value)}
@@ -179,7 +193,7 @@ export function NodeSettingsFieldsCard({
 					</Group>
 					<NumberInput
 						label={t("pages.nodeSettings.fields.llamaMaxLoadedProcesses.label", "Max loaded llama-server processes")}
-						description={`${t("pages.nodeSettings.fields.allowedRange", "Allowed range")}: ${bounds.llamaMaxLoadedProcesses.min}–${bounds.llamaMaxLoadedProcesses.max}.`}
+						description={`${t("pages.nodeSettings.fields.allowedRange", "Allowed range")}: ${bounds.llamaMaxLoadedProcesses.min}–${bounds.llamaMaxLoadedProcesses.max}. ${t("pages.nodeSettings.fields.llamaMaxLoadedProcesses.description", "Applies after the node restarts.")}`}
 						min={bounds.llamaMaxLoadedProcesses.min}
 						max={bounds.llamaMaxLoadedProcesses.max}
 						allowDecimal={false}
@@ -190,7 +204,7 @@ export function NodeSettingsFieldsCard({
 					/>
 					<NumberInput
 						label={t("pages.nodeSettings.fields.llamaIdleTimeToLiveSeconds.label", "Idle process time-to-live")}
-						description={`${t("pages.nodeSettings.fields.allowedRange", "Allowed range")}: ${bounds.llamaIdleTimeToLiveSeconds.min}–${bounds.llamaIdleTimeToLiveSeconds.max} ${t("pages.nodeSettings.fields.seconds", "seconds")}.`}
+						description={`${t("pages.nodeSettings.fields.allowedRange", "Allowed range")}: ${bounds.llamaIdleTimeToLiveSeconds.min}–${bounds.llamaIdleTimeToLiveSeconds.max} ${t("pages.nodeSettings.fields.seconds", "seconds")}. ${t("pages.nodeSettings.fields.llamaIdleTimeToLiveSeconds.description", "Applies after the node restarts.")}`}
 						suffix={` ${t("pages.nodeSettings.fields.seconds", "seconds")}`}
 						min={bounds.llamaIdleTimeToLiveSeconds.min}
 						max={bounds.llamaIdleTimeToLiveSeconds.max}
@@ -291,7 +305,7 @@ export function NodeSettingsFieldsCard({
 								label={t("pages.nodeSettings.fields.speculativeDraftModel.label", "Draft model")}
 								description={t(
 									"pages.nodeSettings.fields.speculativeDraftModel.description",
-									"An installed chat-capable model used as the drafter. Must share the target model's tokenizer family.",
+									"An installed chat-capable model used as the drafter. Must share the target model's tokenizer family. Applies after the node restarts.",
 								)}
 								placeholder={t("pages.nodeSettings.fields.speculativeDraftModel.placeholder", "Select a draft model")}
 								data={[...draftModelOptions]}
@@ -304,7 +318,7 @@ export function NodeSettingsFieldsCard({
 							/>
 							<NumberInput
 								label={t("pages.nodeSettings.fields.speculativeDraftMaxTokens.label", "Draft tokens per step")}
-								description={`${t("pages.nodeSettings.fields.allowedRange", "Allowed range")}: ${bounds.speculativeDraftMaxTokens.min}–${bounds.speculativeDraftMaxTokens.max}.`}
+								description={`${t("pages.nodeSettings.fields.allowedRange", "Allowed range")}: ${bounds.speculativeDraftMaxTokens.min}–${bounds.speculativeDraftMaxTokens.max}. ${t("pages.nodeSettings.fields.speculativeDraftMaxTokens.description", "Applies after the node restarts.")}`}
 								min={bounds.speculativeDraftMaxTokens.min}
 								max={bounds.speculativeDraftMaxTokens.max}
 								allowDecimal={false}
@@ -329,6 +343,25 @@ export function NodeSettingsFieldsCard({
 						error={fieldError(t, errors, "chatCacheReuse")}
 						data-testid="node-settings-chat-cache-reuse"
 					/>
+					<Group justify="space-between" align="center" wrap="nowrap" gap="md">
+						<Text size="xs" c="dimmed">
+							{t(
+								"pages.nodeSettings.fields.embeddingModel.recommendedHelp",
+								"Required for the knowledge base: without an embedding model, documents cannot be indexed. Recommended: nomic-embed-text-v1.5 (~274 MB).",
+							)}
+						</Text>
+						<Button
+							variant="light"
+							size="xs"
+							leftSection={<IconCloudDownload size={14} />}
+							onClick={onDownloadRecommendedEmbedding}
+							loading={isDownloadRecommendedEmbeddingPending}
+							disabled={isDownloadRecommendedEmbeddingPending || isRecommendedEmbeddingInFlight}
+							data-testid="node-settings-embedding-download-recommended"
+						>
+							{t("pages.nodeSettings.fields.embeddingModel.downloadRecommended", "Download recommended embedding model")}
+						</Button>
+					</Group>
 					<Select
 						label={t("pages.nodeSettings.fields.rerankerModel.label", "Reranker model")}
 						description={t(
@@ -376,7 +409,7 @@ export function NodeSettingsFieldsCard({
 						label={t("pages.nodeSettings.fields.huggingFaceDefaultQuant.label", "Default quantization")}
 						description={t(
 							"pages.nodeSettings.fields.huggingFaceDefaultQuant.description",
-							"Preferred GGUF quantization when downloading from Hugging Face (e.g. Q4_K_M).",
+							"Preferred GGUF quantization when downloading from Hugging Face (e.g. Q4_K_M). Applies after the node restarts.",
 						)}
 						value={form.huggingFaceDefaultQuant}
 						onChange={(event) => onChange("huggingFaceDefaultQuant", event.currentTarget.value)}
@@ -393,7 +426,7 @@ export function NodeSettingsFieldsCard({
 					</Group>
 					<NumberInput
 						label={t("pages.nodeSettings.fields.maxResponseSizeMb.label", "Max response size")}
-						description={`${t("pages.nodeSettings.fields.allowedRange", "Allowed range")}: ${bounds.maxResponseSizeMb.min}–${bounds.maxResponseSizeMb.max} MB.`}
+						description={`${t("pages.nodeSettings.fields.allowedRange", "Allowed range")}: ${bounds.maxResponseSizeMb.min}–${bounds.maxResponseSizeMb.max} MB. ${t("pages.nodeSettings.fields.maxResponseSizeMb.description", "Applies after the node restarts.")}`}
 						suffix=" MB"
 						min={bounds.maxResponseSizeMb.min}
 						max={bounds.maxResponseSizeMb.max}
@@ -508,12 +541,12 @@ export function NodeSettingsFieldsCard({
 						<Text c="dimmed" size="sm">
 							{t(
 								"pages.nodeSettings.fields.advanced.description",
-								"Low-level orchestration and AgentHome limits. Most changes apply after a restart.",
+								"Low-level orchestration and AgentHome limits. The orchestration idle timeout and pending tool-call age apply after a restart; the AgentHome limits apply immediately.",
 							)}
 						</Text>
 						<NumberInput
 							label={t("pages.nodeSettings.fields.orchestrationIdleTimeoutSeconds.label", "Orchestration idle timeout")}
-							description={`${t("pages.nodeSettings.fields.allowedRange", "Allowed range")}: ${bounds.orchestrationIdleTimeoutSeconds.min}–${bounds.orchestrationIdleTimeoutSeconds.max} ${t("pages.nodeSettings.fields.seconds", "seconds")}.`}
+							description={`${t("pages.nodeSettings.fields.allowedRange", "Allowed range")}: ${bounds.orchestrationIdleTimeoutSeconds.min}–${bounds.orchestrationIdleTimeoutSeconds.max} ${t("pages.nodeSettings.fields.seconds", "seconds")}. ${t("pages.nodeSettings.fields.orchestrationIdleTimeoutSeconds.description", "Applies after the node restarts.")}`}
 							suffix={` ${t("pages.nodeSettings.fields.seconds", "seconds")}`}
 							min={bounds.orchestrationIdleTimeoutSeconds.min}
 							max={bounds.orchestrationIdleTimeoutSeconds.max}
@@ -525,7 +558,7 @@ export function NodeSettingsFieldsCard({
 						/>
 						<NumberInput
 							label={t("pages.nodeSettings.fields.agentHomePrepareTimeoutSeconds.label", "AgentHome prepare timeout")}
-							description={`${t("pages.nodeSettings.fields.allowedRange", "Allowed range")}: ${bounds.agentHomeTimeoutSeconds.min}–${bounds.agentHomeTimeoutSeconds.max} ${t("pages.nodeSettings.fields.seconds", "seconds")}.`}
+							description={`${t("pages.nodeSettings.fields.allowedRange", "Allowed range")}: ${bounds.agentHomeTimeoutSeconds.min}–${bounds.agentHomeTimeoutSeconds.max} ${t("pages.nodeSettings.fields.seconds", "seconds")}. ${t("pages.nodeSettings.fields.agentHomePrepareTimeoutSeconds.description", "Changes take effect without restarting the node.")}`}
 							suffix={` ${t("pages.nodeSettings.fields.seconds", "seconds")}`}
 							min={bounds.agentHomeTimeoutSeconds.min}
 							max={bounds.agentHomeTimeoutSeconds.max}
@@ -537,7 +570,7 @@ export function NodeSettingsFieldsCard({
 						/>
 						<NumberInput
 							label={t("pages.nodeSettings.fields.agentHomeCommandTimeoutSeconds.label", "AgentHome command timeout")}
-							description={`${t("pages.nodeSettings.fields.allowedRange", "Allowed range")}: ${bounds.agentHomeTimeoutSeconds.min}–${bounds.agentHomeTimeoutSeconds.max} ${t("pages.nodeSettings.fields.seconds", "seconds")}.`}
+							description={`${t("pages.nodeSettings.fields.allowedRange", "Allowed range")}: ${bounds.agentHomeTimeoutSeconds.min}–${bounds.agentHomeTimeoutSeconds.max} ${t("pages.nodeSettings.fields.seconds", "seconds")}. ${t("pages.nodeSettings.fields.agentHomeCommandTimeoutSeconds.description", "Changes take effect without restarting the node.")}`}
 							suffix={` ${t("pages.nodeSettings.fields.seconds", "seconds")}`}
 							min={bounds.agentHomeTimeoutSeconds.min}
 							max={bounds.agentHomeTimeoutSeconds.max}
@@ -549,7 +582,10 @@ export function NodeSettingsFieldsCard({
 						/>
 						<NumberInput
 							label={t("pages.nodeSettings.fields.agentHomeMaxSelectedFolderBytes.label", "AgentHome max selected folder size")}
-							description={t("pages.nodeSettings.fields.bytesPositive", "A positive number of bytes.")}
+							description={t(
+								"pages.nodeSettings.fields.bytesPositive",
+								"A positive number of bytes. Changes take effect without restarting the node.",
+							)}
 							suffix=" bytes"
 							min={1}
 							allowDecimal={false}
@@ -560,7 +596,10 @@ export function NodeSettingsFieldsCard({
 						/>
 						<NumberInput
 							label={t("pages.nodeSettings.fields.agentHomeMaxPatchBytes.label", "AgentHome max patch size")}
-							description={t("pages.nodeSettings.fields.bytesPositive", "A positive number of bytes.")}
+							description={t(
+								"pages.nodeSettings.fields.bytesPositive",
+								"A positive number of bytes. Changes take effect without restarting the node.",
+							)}
 							suffix=" bytes"
 							min={1}
 							allowDecimal={false}
@@ -571,7 +610,7 @@ export function NodeSettingsFieldsCard({
 						/>
 						<NumberInput
 							label={t("pages.nodeSettings.fields.maxPendingToolCallAgeMinutes.label", "Max pending tool-call age")}
-							description={`${t("pages.nodeSettings.fields.allowedRange", "Allowed range")}: ${bounds.maxPendingToolCallAgeMinutes.min}–${bounds.maxPendingToolCallAgeMinutes.max} ${t("pages.nodeSettings.fields.minutes", "minutes")}.`}
+							description={`${t("pages.nodeSettings.fields.allowedRange", "Allowed range")}: ${bounds.maxPendingToolCallAgeMinutes.min}–${bounds.maxPendingToolCallAgeMinutes.max} ${t("pages.nodeSettings.fields.minutes", "minutes")}. ${t("pages.nodeSettings.fields.maxPendingToolCallAgeMinutes.description", "Applies after the node restarts.")}`}
 							suffix={` ${t("pages.nodeSettings.fields.minutes", "minutes")}`}
 							min={bounds.maxPendingToolCallAgeMinutes.min}
 							max={bounds.maxPendingToolCallAgeMinutes.max}

@@ -196,7 +196,10 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
                 Sha256 = result.Sha256,
                 SourceRevision = string.IsNullOrEmpty(result.ResolvedRevision) ? revision : result.ResolvedRevision,
                 DownloadedAtUtc = DateTimeOffset.UtcNow,
-                Role = request.Role
+                // A speculative-decoding drafter is a draft whatever the caller hinted — the picker offers the whole
+                // repo through one download action, so a drafter arrives on the same Chat/Unknown-role request as the
+                // base weights. The resolved quant carries the marker discovery stamped on it, so it is authoritative.
+                Role = GgufDraftModel.IsDraftQuant(quant) ? GgufRole.Draft : request.Role
             };
 
             await _registry.UpsertAsync(entry, ct).ConfigureAwait(false);
@@ -297,6 +300,7 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
             MaxContextTokens = facts.MaxContextTokens,
             IsToolCapable = facts.IsToolCapable,
             IsReasoningCapable = facts.IsReasoningCapable,
+            IsNativeReasoningCapable = facts.IsNativeReasoningCapable,
             Capabilities = facts.Capabilities
         };
     }
@@ -325,6 +329,7 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
             resolved = new GgufHeaderFacts(ClampContextLength(metadata.ContextLength),
                 capabilities.IsToolCapable,
                 capabilities.IsReasoningCapable,
+                capabilities.IsNativeReasoningCapable,
                 capabilities.Capabilities);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -429,9 +434,14 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
         int? MaxContextTokens,
         bool IsToolCapable,
         bool IsReasoningCapable,
+        bool IsNativeReasoningCapable,
         IReadOnlyList<string> Capabilities)
     {
-        public static GgufHeaderFacts Empty { get; } = new(MaxContextTokens: null, IsToolCapable: false, IsReasoningCapable: false, []);
+        public static GgufHeaderFacts Empty { get; } = new(MaxContextTokens: null,
+            IsToolCapable: false,
+            IsReasoningCapable: false,
+            IsNativeReasoningCapable: false,
+            []);
     }
 
     // The per-file GGUF header inputs the memory-fit estimator consumes (weights param count + KV-cache dimensions),

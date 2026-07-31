@@ -241,7 +241,12 @@ public sealed class MemoryFitEstimator
             "IQ3_XS" => 3.4977d / 8d,
             "IQ3_S" => 3.6606d / 8d,
             "IQ3_M" => 3.7628d / 8d,
-            "MXFP4" => 4.25d / 8d,
+            // NVFP4 is priced at MXFP4's density from measurement, not theory: s-batman/Ornith-1.0-9B-NVFP4-MTP-GGUF
+            // ships MXFP4 and NVFP4 conversions of the SAME model from the SAME converter at byte-identical sizes
+            // (5.45 GB each, sampled 2026-07-31). Cross-repo NVFP4 sizes for one base model vary widely
+            // (Qwen3.6-27B: 16.19 GB vs 19.88 GB) because converters differ in how much they keep at high precision,
+            // so a same-repo pair is the only sound apples-to-apples signal.
+            "MXFP4" or "NVFP4" => 4.25d / 8d,
             "Q4_0" or "Q4_1" => 4.5d / 8d,
             "Q4_K_S" or "Q4_K_M" or "Q4_K" => 4.5d / 8d,
             "IQ4_XS" => 4.4597d / 8d,

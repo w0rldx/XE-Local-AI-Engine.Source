@@ -19,6 +19,11 @@ public sealed class GgufQuantParserTests
     [Arguments("Qwen2.5-7B-Q3_K_XL.gguf", "Q3_K_XL")]
     [Arguments("gpt-oss-20b-MXFP4.gguf", "MXFP4")] // gpt-oss native format — recognized so it is not skipped
     [Arguments("openai_gpt-oss-120b-mxfp4-00001-of-00002.gguf", "MXFP4")] // sharded + lowercase
+    // NVFP4 real filenames, sampled live 2026-07-31. An unrecognized token makes the file fail IsUsableGgufFile, which
+    // makes an NVFP4-only repo vanish from search entirely — so recognition here is a discovery concern, not just sizing.
+    [Arguments("Qwen3.6-27B-NVFP4.gguf", "NVFP4")] // tngtech/Qwen3.6-27B-NVFP4-GGUF
+    [Arguments("ornith-1.0-9b-NVFP4-MTP.gguf", "NVFP4")] // s-batman/Ornith-1.0-9B-NVFP4-MTP-GGUF
+    [Arguments("gpt-oss-20b-nvfp4.gguf", "NVFP4")] // FreedomAISVR/gpt-oss-20B-NVFP4-GGUF — lowercase
     public void TryParse_ExtractsPlainQuant(string fileName, string expected)
     {
         AssertEx.Equal(expected, GgufQuantParser.TryParse(fileName));

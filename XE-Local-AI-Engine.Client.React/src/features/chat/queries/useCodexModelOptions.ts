@@ -18,31 +18,44 @@ import type { ModelOption } from "@/features/chat/models/ChatModels";
 export const CODEX_PROVIDER = "CodexOAuth";
 export const AZURE_FOUNDRY_PROVIDER = "AzureFoundry";
 
-export function toCloudModelOption(modelName: string): ModelOption {
+// Capability flags as the BACKEND reports them for a cloud entry. These used to be hard-coded `true` here, which made
+// the picker advertise capabilities the runtime then denied: the Azure mapper sets IsReasoningCapable = false, yet
+// every Azure deployment still rendered the violet "Reasoning" pill AND — because isCloud is true — got the full
+// six-level Codex effort menu (none/minimal/low/medium/high/xhigh), all of it inert. The effort is not merely ignored;
+// it is structurally unreachable, because InvocationAgentFactory only writes the reasoning side-channel inside
+// `if (definition.SupportsThinking)`. Read the DTO instead of asserting — the backend is the authority for both flags.
+interface CloudModelCapabilities {
+	readonly isReasoningCapable?: boolean;
+	readonly isToolCapable?: boolean;
+}
+
+export function toCloudModelOption(modelName: string, capabilities?: CloudModelCapabilities): ModelOption {
 	return {
 		value: modelName,
 		label: modelName,
 		displayName: modelName,
-		// Codex models support the full OpenAI Responses reasoning.effort vocabulary (none/minimal/low/medium/high/xhigh).
-		isReasoningModel: true,
+		// Codex models support the full OpenAI Responses reasoning.effort vocabulary (none/minimal/low/medium/high/xhigh);
+		// the backend reports IsReasoningCapable = true for them. Defaulting to true keeps the previous behaviour when a
+		// caller supplies no DTO.
+		isReasoningModel: capabilities?.isReasoningCapable ?? true,
 		// Codex (gpt-5.x / OpenAI Responses) supports function tools; the backend capability gate
 		// (CodexProviderCapabilities.SupportsToolCalling) is the authoritative runtime guard.
-		isToolCapable: true,
+		isToolCapable: capabilities?.isToolCapable ?? true,
 		isAvailable: true,
 		isCloud: true,
 		provider: CODEX_PROVIDER,
 	};
 }
 
-export function toAzureFoundryModelOption(deploymentName: string): ModelOption {
+export function toAzureFoundryModelOption(deploymentName: string, capabilities?: CloudModelCapabilities): ModelOption {
 	return {
 		value: deploymentName,
 		label: deploymentName,
 		displayName: deploymentName,
-		// Azure deployments stream through the OpenAI Responses pipeline; the backend capability gate is
-		// authoritative for the actual deployment.
-		isReasoningModel: true,
-		isToolCapable: true,
+		// The backend reports IsReasoningCapable = false for Azure deployments today. Default to false so the picker
+		// cannot advertise a reasoning control the pipeline never reads.
+		isReasoningModel: capabilities?.isReasoningCapable ?? false,
+		isToolCapable: capabilities?.isToolCapable ?? true,
 		isAvailable: true,
 		isCloud: true,
 		provider: AZURE_FOUNDRY_PROVIDER,
@@ -65,10 +78,10 @@ export function useCodexModelOptions(): ModelOption[] {
 		.map((item) => {
 			const name = item.modelName ?? "";
 			if (item.provider === CODEX_PROVIDER) {
-				return toCloudModelOption(name);
+				return toCloudModelOption(name, item);
 			}
 			if (item.provider === AZURE_FOUNDRY_PROVIDER) {
-				return toAzureFoundryModelOption(name);
+				return toAzureFoundryModelOption(name, item);
 			}
 			return undefined;
 		})
