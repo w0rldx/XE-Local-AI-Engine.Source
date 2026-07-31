@@ -23,6 +23,8 @@ public sealed class PreviewWorkflowExecutionOptionsValidator : IValidateOptions<
                                    "PreviewWorkflows:Execution:MaxRunDuration must be greater than zero.")
                                .AppendIf(options.SweepInterval <= TimeSpan.Zero,
                                    "PreviewWorkflows:Execution:SweepInterval must be greater than zero.")
+                               .AppendIf(options.AbandonedSubscriberGrace <= TimeSpan.Zero,
+                                   "PreviewWorkflows:Execution:AbandonedSubscriberGrace must be greater than zero.")
                                .AppendIf(options.MaxConcurrentRuns <= 0,
                                    "PreviewWorkflows:Execution:MaxConcurrentRuns must be greater than zero.")
                                .AppendIf(options.MaxOutputBytes <= 0,

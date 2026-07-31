@@ -70,8 +70,14 @@ export function usePreviewWorkflowHub(): void {
 
 		// Best-effort group join/leave. Only invoked while the hub is Connected (the diff reconcile guards on state and
 		// onreconnected re-runs after a drop), so the connection is up by the time this runs.
+		//
+		// Subscribe carries `afterSeq`: the highest per-run seq this tab has already applied contiguously, so the
+		// server replays only the gap. -1 (a run just registered, e.g. reattached from the route after a reload)
+		// replays the whole retained log. On a RECONNECT this is what stops the server re-sending hundreds of already
+		// applied events; the store's seq dedupe would drop them anyway, but not re-sending is the point.
 		const joinRunGroup = (runId: string): void => {
-			connection.invoke("Subscribe", runId).catch((error: unknown) => {
+			const afterSeq = usePreviewRunStore.getState().runs[runId]?.lastContiguousSeq ?? -1;
+			connection.invoke("Subscribe", runId, afterSeq).catch((error: unknown) => {
 				console.warn("preview workflow hub failed to subscribe to run", runId, error);
 			});
 		};

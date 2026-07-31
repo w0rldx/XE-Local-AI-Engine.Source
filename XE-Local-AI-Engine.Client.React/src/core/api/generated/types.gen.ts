@@ -2567,6 +2567,25 @@ export type XeLocalAiEngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActionR
 	priority?: number;
 };
 
+export type XeLocalAiEngineClientEndpointsPreviewV1PreviewRunSummaryResponse = {
+	runId?: string;
+	state?: string;
+	isLive?: boolean;
+	startedAtUtc?: number;
+	lastSeq?: number;
+	subscriberCount?: number;
+	pausedNodeId?: string | null;
+	pauseRequestId?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsPreviewV1ListPreviewRunsResponse = {
+	items: Array<XeLocalAiEngineClientEndpointsPreviewV1PreviewRunSummaryResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsPreviewV1CancelAllPreviewRunsResponse = {
+	cancelledCount?: number;
+};
+
 export type GetVoiceManifestData = {
 	body?: never;
 	path?: never;
@@ -8448,3 +8467,90 @@ export type UpdateSuggestedPlaybookActionResponses = {
 
 export type UpdateSuggestedPlaybookActionResponse =
 	UpdateSuggestedPlaybookActionResponses[keyof UpdateSuggestedPlaybookActionResponses];
+
+export type ListPreviewRunsData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/preview/runs";
+};
+
+export type ListPreviewRunsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListPreviewRunsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsPreviewV1ListPreviewRunsResponse;
+};
+
+export type ListPreviewRunsResponse = ListPreviewRunsResponses[keyof ListPreviewRunsResponses];
+
+export type GetPreviewRunData = {
+	body?: never;
+	path: {
+		runId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/preview/runs/{runId}";
+};
+
+export type GetPreviewRunErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+};
+
+export type GetPreviewRunResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsPreviewV1PreviewRunSummaryResponse;
+};
+
+export type GetPreviewRunResponse = GetPreviewRunResponses[keyof GetPreviewRunResponses];
+
+export type CancelAllPreviewRunsData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/preview/runs/cancel-all";
+};
+
+export type CancelAllPreviewRunsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type CancelAllPreviewRunsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsPreviewV1CancelAllPreviewRunsResponse;
+};
+
+export type CancelAllPreviewRunsResponse = CancelAllPreviewRunsResponses[keyof CancelAllPreviewRunsResponses];

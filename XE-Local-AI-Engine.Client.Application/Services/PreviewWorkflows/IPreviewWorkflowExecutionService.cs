@@ -35,13 +35,64 @@ public interface IPreviewWorkflowExecutionService
     Task CancelRunsForConnectionAsync(string connectionId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Returns an ordered snapshot copy of the run's buffered events so a client that subscribes AFTER events were
-    ///     published (or after the run finished) can replay and catch up — SignalR does not replay to late group
-    ///     joiners. Returns an empty list for an unknown/evicted run. Each buffered payload is already stamped with its
-    ///     per-run <c>Seq</c>, so a client dedupes an event delivered both via replay and live by that sequence.
+    ///     Cancels EVERY live run and returns how many were cancelled. The operator-facing escape hatch for runs whose
+    ///     ids are no longer reachable from any open page (see <see cref="ListRuns" />), so a leaked concurrency slot
+    ///     never requires a node restart to reclaim.
     /// </summary>
-    IReadOnlyList<PreviewWorkflowBufferedEvent> SnapshotBufferedEvents(Guid runId);
+    Task<int> CancelAllAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Every run the node currently knows about: the live ones plus those whose replay log is still retained
+    ///     (terminal but inside the replay window, so a client that reloads can still recover the result). Ordered
+    ///     oldest-first. This is what makes a run discoverable at all — before it existed, a runId that left the
+    ///     client's memory was unreachable.
+    /// </summary>
+    IReadOnlyList<PreviewRunSnapshot> ListRuns();
+
+    /// <summary>
+    ///     One run by id, live or retained. Returns <see langword="null" /> when the run is neither live nor retained
+    ///     (unknown or evicted) so the caller can answer 404 and the client can drop a stale runId from its route.
+    /// </summary>
+    PreviewRunSnapshot? GetRun(Guid runId);
+
+    /// <summary>
+    ///     Returns an ordered snapshot copy of the run's buffered events with <c>Seq</c> STRICTLY GREATER than
+    ///     <paramref name="afterSeq" />, so a client that subscribes AFTER events were published (or after the run
+    ///     finished) can replay and catch up — SignalR does not replay to late group joiners. Pass <c>-1</c> for a
+    ///     client that has seen nothing (a fresh page) to replay the whole log. Returns an empty list for an
+    ///     unknown/evicted run. Each buffered payload is already stamped with its per-run <c>Seq</c>, so a client
+    ///     dedupes an event delivered both via replay and live by that sequence.
+    /// </summary>
+    IReadOnlyList<PreviewWorkflowBufferedEvent> SnapshotBufferedEvents(Guid runId, long afterSeq);
+
+    /// <summary>
+    ///     Records that a hub connection is now watching a run. Clears the abandoned-subscriber clock, which is the
+    ///     only bound a Paused run is subject to (see <see cref="PreviewWorkflowExecutionOptions.AbandonedSubscriberGrace" />).
+    /// </summary>
+    void AddSubscriber(Guid runId, string connectionId);
+
+    /// <summary>Drops a hub connection from a run's watcher set; the abandoned clock starts when the last one leaves.</summary>
+    void RemoveSubscriber(Guid runId, string connectionId);
+
+    /// <summary>Drops a hub connection from EVERY run's watcher set (called from the hub's <c>OnDisconnectedAsync</c>).</summary>
+    void RemoveSubscriberFromAllRuns(string connectionId);
 }
+
+/// <summary>
+///     A point-in-time view of one preview run for the list/get endpoints. <paramref name="IsLive" /> distinguishes a
+///     run still holding a concurrency slot from one that is merely RETAINED for replay (terminal, inside the replay
+///     window). <paramref name="LastSeq" /> is the highest sequence number buffered so far, so a reattaching client can
+///     ask for only the events it has not seen.
+/// </summary>
+public sealed record PreviewRunSnapshot(
+    Guid RunId,
+    PreviewRunState State,
+    bool IsLive,
+    long StartedAtUtc,
+    long LastSeq,
+    int SubscriberCount,
+    string? PausedNodeId,
+    string? PauseRequestId);
 
 /// <summary>
 ///     One buffered preview event ready for hub replay: the SignalR method name (the event type) and the already

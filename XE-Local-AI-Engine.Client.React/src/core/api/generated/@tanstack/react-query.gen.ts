@@ -19,6 +19,7 @@ import {
 	benchmarkInferenceProfile,
 	branchNodeChatConversation,
 	browseGgufRepositories,
+	cancelAllPreviewRuns,
 	cancelCudaBuild,
 	cancelDevelopmentAttempt,
 	cancelGgufDownload,
@@ -112,6 +113,7 @@ import {
 	getNodeChatConversation,
 	getNodeChatMessageFeedback,
 	getNodeSettings,
+	getPreviewRun,
 	getPreviewWorkflow,
 	getRunningLocalModels,
 	getScheduledJob,
@@ -146,6 +148,7 @@ import {
 	listMcpServers,
 	listNodeChatConversations,
 	listNodeChatMessageRevisions,
+	listPreviewRuns,
 	listPreviewWorkflows,
 	listRunEnvelopes,
 	listRunningModels,
@@ -234,6 +237,8 @@ import type {
 	BranchNodeChatConversationResponse,
 	BrowseGgufRepositoriesData,
 	BrowseGgufRepositoriesResponse,
+	CancelAllPreviewRunsData,
+	CancelAllPreviewRunsResponse,
 	CancelCudaBuildData,
 	CancelCudaBuildResponse,
 	CancelDevelopmentAttemptData,
@@ -430,6 +435,8 @@ import type {
 	GetNodeChatMessageFeedbackResponse,
 	GetNodeSettingsData,
 	GetNodeSettingsResponse,
+	GetPreviewRunData,
+	GetPreviewRunResponse,
 	GetPreviewWorkflowData,
 	GetPreviewWorkflowResponse,
 	GetRunningLocalModelsData,
@@ -500,6 +507,8 @@ import type {
 	ListNodeChatConversationsResponse,
 	ListNodeChatMessageRevisionsData,
 	ListNodeChatMessageRevisionsResponse,
+	ListPreviewRunsData,
+	ListPreviewRunsResponse,
 	ListPreviewWorkflowsData,
 	ListPreviewWorkflowsResponse,
 	ListRunEnvelopesData,
@@ -4962,6 +4971,63 @@ export const updateSuggestedPlaybookActionMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await updateSuggestedPlaybookAction({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const listPreviewRunsQueryKey = (options?: Options<ListPreviewRunsData>) => createQueryKey("listPreviewRuns", options);
+
+export const listPreviewRunsOptions = (options?: Options<ListPreviewRunsData>) =>
+	queryOptions<
+		ListPreviewRunsResponse,
+		AxiosError<DefaultError>,
+		ListPreviewRunsResponse,
+		ReturnType<typeof listPreviewRunsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listPreviewRuns({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listPreviewRunsQueryKey(options),
+	});
+
+export const getPreviewRunQueryKey = (options: Options<GetPreviewRunData>) => createQueryKey("getPreviewRun", options);
+
+export const getPreviewRunOptions = (options: Options<GetPreviewRunData>) =>
+	queryOptions<GetPreviewRunResponse, AxiosError<DefaultError>, GetPreviewRunResponse, ReturnType<typeof getPreviewRunQueryKey>>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getPreviewRun({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getPreviewRunQueryKey(options),
+	});
+
+export const cancelAllPreviewRunsMutation = (
+	options?: Partial<Options<CancelAllPreviewRunsData>>,
+): UseMutationOptions<CancelAllPreviewRunsResponse, AxiosError<DefaultError>, Options<CancelAllPreviewRunsData>> => {
+	const mutationOptions: UseMutationOptions<
+		CancelAllPreviewRunsResponse,
+		AxiosError<DefaultError>,
+		Options<CancelAllPreviewRunsData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await cancelAllPreviewRuns({
 				...options,
 				...fnOptions,
 				throwOnError: true,
