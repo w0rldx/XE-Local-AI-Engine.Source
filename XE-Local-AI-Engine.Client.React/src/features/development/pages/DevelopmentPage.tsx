@@ -27,7 +27,7 @@ import {
 	IconRefresh,
 	IconX,
 } from "@tabler/icons-react";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { DevelopmentContainerRuntimePanel } from "@/features/development/components/DevelopmentContainerRuntimePanel";
@@ -74,6 +74,39 @@ function operationId(): string {
 
 function errorMessage(error: unknown, fallback: string): string {
 	return error instanceof Error ? error.message : fallback;
+}
+
+/**
+ * Splits an engine-authored terminal reason into its stable code and its prose.
+ *
+ * The backend emits `[some_code] Sentence…` for failures it diagnosed itself, and a bare sentence
+ * for everything else. Both render; only the first gets a code chip. Parsing rather than adding a
+ * second wire field keeps this a display concern — an unrecognised shape degrades to plain prose.
+ */
+function splitTerminalReason(reason: string): { code: string | null; message: string } {
+	const match = /^\[([a-z0-9_]+)]\s*(.*)$/s.exec(reason);
+	if (match === null) {
+		return { code: null, message: reason };
+	}
+
+	return { code: match[1] ?? null, message: match[2] ?? "" };
+}
+
+function AttemptTerminalReason({ reason, color }: { reason: string; color: string }) {
+	const { code, message } = splitTerminalReason(reason);
+
+	return (
+		<Group gap="xs" align="flex-start" wrap="nowrap">
+			{code === null ? null : (
+				<Code c={color} data-testid="development-attempt-reason-code">
+					{code}
+				</Code>
+			)}
+			<Text size="sm" c="dimmed">
+				{message}
+			</Text>
+		</Group>
+	);
 }
 
 function statusColor(status?: string): string {
@@ -554,16 +587,35 @@ export function DevelopmentPage() {
 												</Table.Thead>
 												<Table.Tbody>
 													{attempts.map((attempt) => (
-														<Table.Tr key={attempt.id} data-testid={`development-attempt-${attempt.id}`}>
-															<Table.Td>{attempt.role}</Table.Td>
-															<Table.Td>{attempt.modelId}</Table.Td>
-															<Table.Td>{attempt.provider}</Table.Td>
-															<Table.Td>
-																<Badge color={statusColor(attempt.status)}>{attempt.status}</Badge>
-															</Table.Td>
-															<Table.Td>{(attempt.inputTokens ?? 0) + (attempt.outputTokens ?? 0)}</Table.Td>
-															<Table.Td>{attempt.predecessorAttemptId?.slice(0, 8) ?? "—"}</Table.Td>
-														</Table.Tr>
+														<Fragment key={attempt.id}>
+															<Table.Tr data-testid={`development-attempt-${attempt.id}`}>
+																<Table.Td>{attempt.role}</Table.Td>
+																<Table.Td>{attempt.modelId}</Table.Td>
+																<Table.Td>{attempt.provider}</Table.Td>
+																<Table.Td>
+																	<Badge color={statusColor(attempt.status)}>{attempt.status}</Badge>
+																</Table.Td>
+																<Table.Td>{(attempt.inputTokens ?? 0) + (attempt.outputTokens ?? 0)}</Table.Td>
+																<Table.Td>{attempt.predecessorAttemptId?.slice(0, 8) ?? "—"}</Table.Td>
+															</Table.Tr>
+															{/*
+																The reason an attempt ended, on its own full-width row rather than in a
+																column: it is a sentence, and squeezing it into a cell is what keeps it
+																unread. Rendered at all because it previously was not rendered ANYWHERE —
+																the operator saw a red FAILED badge and nothing else, while the engine had
+																already diagnosed the cause and persisted it.
+															*/}
+															{attempt.terminalReason ? (
+																<Table.Tr data-testid={`development-attempt-reason-${attempt.id}`}>
+																	<Table.Td colSpan={6} py="xs">
+																		<AttemptTerminalReason
+																			reason={attempt.terminalReason}
+																			color={statusColor(attempt.status)}
+																		/>
+																	</Table.Td>
+																</Table.Tr>
+															) : null}
+														</Fragment>
 													))}
 												</Table.Tbody>
 											</Table>
