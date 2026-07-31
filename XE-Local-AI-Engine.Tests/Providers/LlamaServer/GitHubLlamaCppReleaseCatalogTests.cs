@@ -14,7 +14,12 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 public sealed class GitHubLlamaCppReleaseCatalogTests
 {
-    private const string Tag = "b9692";
+    // Symbolic, NOT a literal. AssetName() below derives the expected asset name from LlamaCppReleasePins, so a
+    // hardcoded tag here silently desynchronizes from the pin table the moment the pin is bumped: the scripted release
+    // then advertises one tag while the resolver templates another, every ResolveAsset_* case returns a null asset, and
+    // 8 tests fail for a reason that has nothing to do with what they test. That is exactly what the b9692 -> b10201
+    // bump did on 2026-07-31. Keep this bound to the constant.
+    private const string Tag = LlamaCppReleasePins.PinnedTag;
 
     [Test]
     public async Task ResolveAsset_WhenLiveApiReturnsRelease_ParsesAssetNameUrlDigestSize()
@@ -132,7 +137,7 @@ public sealed class GitHubLlamaCppReleaseCatalogTests
     public async Task ResolveAsset_WhenCudaVersionDrifts_StillMatchesByTokens()
     {
         // The pin scheme names win-cuda-12.4; upstream may publish cuda-13.3 for a newer tag. Token match must find it.
-        const string driftedName = "llama-b9692-bin-win-cuda-13.3-x64.zip";
+        const string driftedName = $"llama-{Tag}-bin-win-cuda-13.3-x64.zip";
         var digest = new string('d', 64);
         using var handler = new ScriptedHandler(_ => ReleaseResponse(Tag, (driftedName, $"sha256:{digest}", 5L)));
         using var http = new HttpClient(handler, disposeHandler: false);
@@ -166,7 +171,7 @@ public sealed class GitHubLlamaCppReleaseCatalogTests
     {
         // A token-matching name carrying a path separator (a tampered/garbled live value) must be rejected before it can
         // be returned for download — defense-in-depth against path/URL injection from the live API.
-        const string tamperedName = "llama-b9692-bin-ubuntu-x64-/.tar.gz";
+        const string tamperedName = $"llama-{Tag}-bin-ubuntu-x64-/.tar.gz";
         var digest = new string('e', 64);
         using var handler = new ScriptedHandler(_ => ReleaseResponse(Tag, (tamperedName, $"sha256:{digest}", 5L)));
         using var http = new HttpClient(handler, disposeHandler: false);

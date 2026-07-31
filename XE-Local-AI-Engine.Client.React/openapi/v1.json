@@ -4837,6 +4837,40 @@
         ]
       }
     },
+    "/api/local/v1/knowledge-base/embedding/download-recommended": {
+      "post": {
+        "tags": [
+          "Knowledge-Base"
+        ],
+        "operationId": "downloadRecommendedEmbedding",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsKnowledgeV1DownloadRecommendedEmbeddingResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/knowledge-base/reranker/download-recommended": {
       "post": {
         "tags": [
@@ -12049,7 +12083,8 @@
         "required": [
           "catalogVersion",
           "source",
-          "modelCount"
+          "modelCount",
+          "refreshSourceConfigured"
         ],
         "properties": {
           "catalogVersion": {
@@ -12073,6 +12108,9 @@
           "modelCount": {
             "type": "integer",
             "format": "int32"
+          },
+          "refreshSourceConfigured": {
+            "type": "boolean"
           }
         }
       },
@@ -13743,6 +13781,34 @@
       "XE_Local_AI_EngineClientEndpointsKnowledgeV1KnowledgeDocumentRouteRequest": {
         "type": "object",
         "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsKnowledgeV1DownloadRecommendedEmbeddingResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "modelName",
+          "repoId",
+          "quant",
+          "alreadyInstalled",
+          "alreadyInFlight"
+        ],
+        "properties": {
+          "modelName": {
+            "type": "string"
+          },
+          "repoId": {
+            "type": "string"
+          },
+          "quant": {
+            "type": "string"
+          },
+          "alreadyInstalled": {
+            "type": "boolean"
+          },
+          "alreadyInFlight": {
+            "type": "boolean"
+          }
+        }
       },
       "XE_Local_AI_EngineClientEndpointsKnowledgeV1DownloadRecommendedRerankerResponse": {
         "type": "object",

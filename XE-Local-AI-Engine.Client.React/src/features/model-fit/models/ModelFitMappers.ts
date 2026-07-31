@@ -126,5 +126,6 @@ export function toModelFitCatalogInfo(dto: XeLocalAiEngineClientEndpointsModelFi
 		fetchedAtUtc: dto.fetchedAtUtc ?? null,
 		sourceUrl: dto.sourceUrl ?? null,
 		modelCount: dto.modelCount ?? 0,
+		refreshSourceConfigured: dto.refreshSourceConfigured ?? false,
 	};
 }

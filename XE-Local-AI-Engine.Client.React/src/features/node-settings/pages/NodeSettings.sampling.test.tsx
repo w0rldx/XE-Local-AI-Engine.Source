@@ -66,6 +66,7 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	}),
 	updateLlamaCppRuntimeMutation: () => ({ mutationFn: vi.fn() }),
 	downloadRecommendedRerankerMutation: () => ({ mutationFn: vi.fn() }),
+	downloadRecommendedEmbeddingMutation: () => ({ mutationFn: vi.fn() }),
 }));
 
 vi.mock("@/core/api/ResponseValidation", () => ({

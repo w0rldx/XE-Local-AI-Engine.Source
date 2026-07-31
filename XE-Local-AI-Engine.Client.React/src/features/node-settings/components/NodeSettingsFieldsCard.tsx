@@ -58,6 +58,14 @@ export interface NodeSettingsFieldsCardProps {
 	// True while the recommended reranker's GGUF download is running (duplicate-guards the button after the request
 	// returns, until the download reaches a terminal phase).
 	readonly isRecommendedRerankerInFlight: boolean;
+	// One-click download of the node's recommended embedding GGUF. Unlike the reranker, the embedding model is not a
+	// node-settings field (nothing to select/save) — the knowledge base just needs one installed to index documents.
+	readonly onDownloadRecommendedEmbedding: () => void;
+	// True while the download-recommended embedding mutation request is in flight (button shows a spinner).
+	readonly isDownloadRecommendedEmbeddingPending: boolean;
+	// True while the recommended embedding model's GGUF download is running (duplicate-guards the button after the
+	// request returns, until the download reaches a terminal phase).
+	readonly isRecommendedEmbeddingInFlight: boolean;
 }
 
 function fieldError(
@@ -84,6 +92,9 @@ export function NodeSettingsFieldsCard({
 	onDownloadRecommendedReranker,
 	isDownloadRecommendedRerankerPending,
 	isRecommendedRerankerInFlight,
+	onDownloadRecommendedEmbedding,
+	isDownloadRecommendedEmbeddingPending,
+	isRecommendedEmbeddingInFlight,
 }: NodeSettingsFieldsCardProps) {
 	const { t } = useTranslation();
 
@@ -160,7 +171,7 @@ export function NodeSettingsFieldsCard({
 						label={t("pages.nodeSettings.fields.toolCapableModels.label", "Tool-capable models")}
 						description={t(
 							"pages.nodeSettings.fields.toolCapableModels.description",
-							"Model names that support tool calling. Press Enter to add each name.",
+							"Model names that support tool calling. Press Enter to add each name. Changes take effect without restarting the node.",
 						)}
 						value={form.toolCapableModels}
 						onChange={(value) => onChange("toolCapableModels", value)}
@@ -329,6 +340,25 @@ export function NodeSettingsFieldsCard({
 						error={fieldError(t, errors, "chatCacheReuse")}
 						data-testid="node-settings-chat-cache-reuse"
 					/>
+					<Group justify="space-between" align="center" wrap="nowrap" gap="md">
+						<Text size="xs" c="dimmed">
+							{t(
+								"pages.nodeSettings.fields.embeddingModel.recommendedHelp",
+								"Required for the knowledge base: without an embedding model, documents cannot be indexed. Recommended: nomic-embed-text-v1.5 (~274 MB).",
+							)}
+						</Text>
+						<Button
+							variant="light"
+							size="xs"
+							leftSection={<IconCloudDownload size={14} />}
+							onClick={onDownloadRecommendedEmbedding}
+							loading={isDownloadRecommendedEmbeddingPending}
+							disabled={isDownloadRecommendedEmbeddingPending || isRecommendedEmbeddingInFlight}
+							data-testid="node-settings-embedding-download-recommended"
+						>
+							{t("pages.nodeSettings.fields.embeddingModel.downloadRecommended", "Download recommended embedding model")}
+						</Button>
+					</Group>
 					<Select
 						label={t("pages.nodeSettings.fields.rerankerModel.label", "Reranker model")}
 						description={t(

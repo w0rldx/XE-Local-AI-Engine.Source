@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": "2026.07.1",
-  "updatedAt": "2026-07-10",
+  "catalogVersion": "2026.07.2",
+  "updatedAt": "2026-07-31",
   "models": [
     {
       "id": "qwen3-0.6b",
@@ -114,7 +114,7 @@
       "activeParamsB": null,
       "moe": false,
       "contextLength": 262144,
-      "minLlamaCppTag": "b9692",
+      "minLlamaCppTag": "b10201",
       "releaseDate": "2026-06-10"
     },
     {
@@ -130,7 +130,7 @@
       "activeParamsB": null,
       "moe": false,
       "contextLength": 262144,
-      "minLlamaCppTag": "b9692",
+      "minLlamaCppTag": "b10201",
       "releaseDate": "2026-06-10"
     },
     {
@@ -146,7 +146,7 @@
       "activeParamsB": null,
       "moe": false,
       "contextLength": 262144,
-      "minLlamaCppTag": "b9692",
+      "minLlamaCppTag": "b10201",
       "releaseDate": "2026-06-10",
       "notes": "Strong general-purpose default at the 9B size class."
     },
@@ -163,7 +163,7 @@
       "activeParamsB": null,
       "moe": false,
       "contextLength": 262144,
-      "minLlamaCppTag": "b9692",
+      "minLlamaCppTag": "b10201",
       "releaseDate": "2026-06-10"
     },
     {
@@ -179,7 +179,7 @@
       "activeParamsB": 3.0,
       "moe": true,
       "contextLength": 262144,
-      "minLlamaCppTag": "b9692",
+      "minLlamaCppTag": "b10201",
       "releaseDate": "2026-06-15",
       "notes": "Mixture-of-Experts — can run with experts offloaded to system RAM on 12-24GB GPUs."
     },
@@ -245,7 +245,7 @@
       "activeParamsB": null,
       "moe": false,
       "contextLength": 131072,
-      "minLlamaCppTag": "b9692",
+      "minLlamaCppTag": "b10201",
       "releaseDate": "2026-05-20",
       "notes": "Official Google QAT build; text + vision + audio."
     },
@@ -262,7 +262,7 @@
       "activeParamsB": null,
       "moe": false,
       "contextLength": 131072,
-      "minLlamaCppTag": "b9692",
+      "minLlamaCppTag": "b10201",
       "releaseDate": "2026-05-20"
     },
     {
@@ -278,7 +278,7 @@
       "activeParamsB": 4.0,
       "moe": true,
       "contextLength": 131072,
-      "minLlamaCppTag": "b9692",
+      "minLlamaCppTag": "b10201",
       "releaseDate": "2026-05-25",
       "notes": "Mixture-of-Experts — can run with experts offloaded to system RAM on 12-24GB GPUs."
     },

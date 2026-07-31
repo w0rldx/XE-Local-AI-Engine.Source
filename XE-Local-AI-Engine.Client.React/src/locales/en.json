@@ -1362,7 +1362,7 @@
 				},
 				"toolCapableModels": {
 					"label": "Tool-capable models",
-					"description": "Model names that support tool calling. Press Enter to add each name."
+					"description": "Model names that support tool calling. Press Enter to add each name. Changes take effect without restarting the node."
 				},
 				"runtime": {
 					"title": "Local model runtime",
@@ -1461,6 +1461,14 @@
 					"downloadStarted": "Downloading the recommended reranker ({{model}}).",
 					"downloadInFlight": "The recommended reranker ({{model}}) is already downloading.",
 					"downloadError": "Could not start the recommended reranker download."
+				},
+				"embeddingModel": {
+					"downloadRecommended": "Download recommended embedding model",
+					"recommendedHelp": "Required for the knowledge base: without an embedding model, documents cannot be indexed. Recommended: nomic-embed-text-v1.5 (~274 MB).",
+					"downloadAlreadyInstalled": "The recommended embedding model ({{model}}) is already installed.",
+					"downloadStarted": "Downloading the recommended embedding model ({{model}}).",
+					"downloadInFlight": "The recommended embedding model ({{model}}) is already downloading.",
+					"downloadError": "Could not start the recommended embedding model download."
 				},
 				"usageRates": {
 					"title": "Usage cost rates",
@@ -2557,9 +2565,11 @@
 					},
 					"updatedAt": "Updated {{time}}",
 					"refreshButton": "Refresh catalog",
+					"noRefreshSource": "Bundled catalog only — no refresh source is configured.",
 					"toasts": {
 						"refreshed": "The model catalog was refreshed.",
-						"refreshError": "Could not refresh the model catalog."
+						"refreshError": "Could not refresh the model catalog.",
+						"noRefreshSource": "No catalog refresh source is configured, so the bundled catalog is in use. There is nothing to fetch."
 					}
 				}
 			},
