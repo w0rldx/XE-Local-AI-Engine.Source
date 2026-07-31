@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 
 using System.ComponentModel.DataAnnotations;
+using System.Diagnostics.CodeAnalysis;
 
 /// <summary>
 ///     Configuration for the Development Mode container sandbox (ADR 0004). Every value here is engine-owned: nothing
@@ -62,6 +63,48 @@ public sealed record ContainerSandboxOptions
     /// <summary>Size ceiling of the scratch <c>tmpfs</c>, in megabytes. Bounded so a runaway write cannot consume host RAM.</summary>
     [Range(1, 64 * 1024)]
     public int ScratchSizeMb { get; init; } = 512;
+
+    /// <summary>
+    ///     Absolute in-container path of the bounded <c>tmpfs</c> at the toolchain's fixed temporary directory.
+    ///     <para>
+    ///         This is not a convenience mount and it is not redundant with <see cref="ScratchMountTarget" />. The .NET
+    ///         runtime backs a <em>named</em> <c>Mutex</c> with shared-memory files under a path it computes as
+    ///         <c>/tmp/.dotnet/shm/session&lt;N&gt;</c>, and that path is a compile-time constant in the CoreCLR PAL
+    ///         (<c>TEMP_DIRECTORY_PATH</c> in <c>palinternal.h</c>, consumed by <c>INIT_SharedFilesPath</c>). It does not
+    ///         honour <c>TMPDIR</c>, <c>TMP</c> or <c>TEMP</c> — all three of which the engine already redirects to a
+    ///         writable runtime mount — and dotnet/runtime#49822 closed the request to make it honour them as
+    ///         <em>by design</em>: a global mutex needs a location every process agrees on, so it cannot be per-process
+    ///         configurable. The <c>dotnet</c> CLI takes such a mutex on its first invocation, so with a read-only root
+    ///         filesystem and no writable <c>/tmp</c>, every <c>dotnet</c> command fails <c>EROFS</c> before doing any
+    ///         work. Measured: with this mount absent, restore, build and test all fail identically; with it present,
+    ///         all three pass.
+    ///     </para>
+    ///     <para>
+    ///         The mount must be at <c>/tmp</c> itself, not at the narrower <c>/tmp/.dotnet</c>. The PAL creates its
+    ///         directory by <c>mkdtemp("/tmp/.dotnet.XXXXXX")</c> and renaming into place, so it needs the
+    ///         <em>parent</em> writable; a tmpfs mounted precisely at <c>/tmp/.dotnet</c> was measured to fail with
+    ///         <c>mkdtemp(…) == nullptr; errno == EROFS</c>.
+    ///     </para>
+    /// </summary>
+    // S5443 flags "/tmp" because a publicly-writable directory on a HOST is a symlink/race hazard. This is not a host
+    // path and never resolves on one: it is a mount target inside a container whose root filesystem is read-only, where
+    // the only thing at this path is a private tmpfs this engine creates per container with noexec, nosuid, nodev and a
+    // size bound. Nothing else has a handle to it, it does not survive the container, and the value is not a preference
+    // — it is the path the .NET runtime compiles in, so "use a different directory" is not available. See the summary.
+    [SuppressMessage("Security Hotspot",
+        "S5443:Using publicly writable directories is security-sensitive",
+        Justification = "In-container tmpfs target under a read-only rootfs, not a host directory; the path is fixed by the .NET runtime.")]
+    [Required]
+    public string TempMountTarget { get; init; } = "/tmp";
+
+    /// <summary>
+    ///     Size ceiling of the temporary <c>tmpfs</c>, in megabytes. Deliberately far smaller than
+    ///     <see cref="ScratchSizeMb" />: what lands here is shared-memory files and build-server sockets, and a full
+    ///     restore, Release build and test run was measured to occupy 4 KB of it. The default leaves four orders of
+    ///     magnitude of headroom while keeping the ceiling on the one mount whose contents nothing owns.
+    /// </summary>
+    [Range(1, 64 * 1024)]
+    public int TempSizeMb { get; init; } = 64;
 
     /// <summary>Memory ceiling applied to the container, in megabytes.</summary>
     [Range(64, 1024 * 1024)]

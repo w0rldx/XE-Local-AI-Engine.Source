@@ -179,26 +179,81 @@ public sealed class DockerSandboxHardeningTests
     }
 
     [Test]
-    public void FindViolations_WhenTheScratchTmpfsIsAbsent_RejectsIt()
+    public void FindViolations_WhenATmpfsIsAbsent_RejectsEachOne()
     {
+        // Every requested tmpfs, named individually. A container that came back missing either of them is not the one
+        // that was verified — and the temp mount going missing is the difference between a working toolchain and one
+        // that fails EROFS before doing any work.
         var violations = DockerSandboxHardening.FindViolations(Specification(),
             Conformant() with { TemporaryFilesystems = new Dictionary<string, string>(StringComparer.Ordinal) });
 
-        AssertEx.ContainsSingle(violations, violation => violation.Contains("tmpfs scratch", StringComparison.Ordinal));
+        AssertEx.ContainsSingle(violations,
+            violation => violation.Contains("'/scratch' is absent", StringComparison.Ordinal));
+        AssertEx.ContainsSingle(violations,
+            violation => violation.Contains("'/tmp' is absent", StringComparison.Ordinal));
     }
 
     [Test]
-    public void FindViolations_WhenTheScratchTmpfsIsUnbounded_RejectsIt()
+    public void FindViolations_WhenATmpfsIsUnbounded_RejectsIt()
     {
         // An unbounded tmpfs is host RAM with extra steps, and it is applied without error, so nothing but this check
         // would notice.
         var violations = DockerSandboxHardening.FindViolations(Specification(),
             Conformant() with
             {
-                TemporaryFilesystems = new Dictionary<string, string>(StringComparer.Ordinal) { ["/scratch"] = "rw,noexec" }
+                TemporaryFilesystems = new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["/scratch"] = "rw,noexec,nosuid,nodev",
+                    ["/tmp"] = "rw,noexec,nosuid,nodev,size=1024"
+                }
             });
 
-        AssertEx.ContainsSingle(violations, violation => violation.Contains("no size bound", StringComparison.Ordinal));
+        AssertEx.ContainsSingle(violations,
+            violation => violation.Contains("'/scratch'", StringComparison.Ordinal)
+                         && violation.Contains("no size bound", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public void FindViolations_WhenATmpfsCameBackWithoutTheRestrictionsItWasCreatedUnder_RejectsIt()
+    {
+        // The size bound was checked here long before these options were, which left the mount's whole justification
+        // unverified: a daemon that applied `size=` but dropped `noexec` produced a container that passed. Asking for a
+        // flag has never been evidence the flag took, and that rule now covers the flags too.
+        var violations = DockerSandboxHardening.FindViolations(Specification(),
+            Conformant() with
+            {
+                TemporaryFilesystems = new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["/scratch"] = "rw,nosuid,nodev,size=67108864",
+                    ["/tmp"] = "rw,noexec,nosuid,nodev,size=67108864"
+                }
+            });
+
+        AssertEx.ContainsSingle(violations,
+            violation => violation.Contains("'/scratch'", StringComparison.Ordinal)
+                         && violation.Contains("noexec", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public void FindViolations_WhenAMountOptionOnlyAppearsAsASubstring_DoesNotCountItAsPresent()
+    {
+        // Tokenized, not substring-matched. `noexec` contains `exec`, and `nodevtmpfs` contains `nodev` — a contains
+        // check would accept an option list that carries neither restriction.
+        var violations = DockerSandboxHardening.FindViolations(Specification(),
+            Conformant() with
+            {
+                TemporaryFilesystems = new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["/scratch"] = "rw,noexecfoo,nosuidbar,nodevbaz,size=67108864",
+                    ["/tmp"] = "rw,noexec,nosuid,nodev,size=67108864"
+                }
+            });
+
+        AssertEx.ContainsSingle(violations,
+            violation => violation.Contains("'/scratch'", StringComparison.Ordinal)
+                         && violation.Contains("noexec", StringComparison.Ordinal)
+                         && violation.Contains("nosuid", StringComparison.Ordinal)
+                         && violation.Contains("nodev", StringComparison.Ordinal));
     }
 
     [Test]
@@ -296,9 +351,58 @@ public sealed class DockerSandboxHardeningTests
         AssertEx.Contains(specification.CapabilitiesToDrop, "ALL");
         AssertEx.Contains(specification.SecurityOptions, "no-new-privileges:true");
         AssertEx.Contains(specification.TemporaryFilesystems["/scratch"], "size=");
+        AssertEx.Contains(specification.TemporaryFilesystems["/tmp"], "size=");
         AssertEx.Equal(expected: 512L * 1024 * 1024, specification.MemoryBytes);
         AssertEx.Equal(expected: 2_000_000_000L, specification.NanoCpus);
         AssertEx.Equal(expected: 256L, specification.PidsLimit);
+    }
+
+    [Test]
+    public void BuildSpecification_MountsABoundedTmpfsAtTheToolchainTemporaryDirectory()
+    {
+        // The regression guard for the finding that blocked Development Mode's container provider outright. The .NET
+        // runtime backs a named Mutex with shared-memory files under a path compiled into the CoreCLR PAL, and the
+        // `dotnet` CLI takes such a mutex on its first invocation. The path honours no environment variable — the
+        // engine already redirects TMPDIR/TMP/TEMP elsewhere and the runtime ignores all three — so with a read-only
+        // root filesystem and no tmpfs here, every `dotnet` command failed EROFS before touching the project.
+        //
+        // Asserted at /tmp itself rather than the narrower /tmp/.dotnet on purpose: the PAL creates its directory by
+        // mkdtemp-and-rename, which needs the PARENT writable, and a tmpfs mounted precisely at /tmp/.dotnet was
+        // measured to fail with `mkdtemp(…) == nullptr; errno == EROFS`.
+        var specification = DockerSandboxHardening.BuildSpecification(Options() with { TempSizeMb = 64 },
+            new ResolvedContainerIdentity(UserId: 1000, GroupId: 1000),
+            "xe-dev-test",
+            "sandbox-1",
+            [Mount()]);
+
+        AssertEx.True(specification.TemporaryFilesystems.ContainsKey("/tmp"),
+            "The toolchain temporary directory must be mounted, or no `dotnet` command can run at all. Present: "
+            + string.Join(", ", specification.TemporaryFilesystems.Keys));
+
+        var options = specification.TemporaryFilesystems["/tmp"];
+        AssertEx.Contains(options, "noexec");
+        AssertEx.Contains(options, "nosuid");
+        AssertEx.Contains(options, "nodev");
+        AssertEx.Contains(options, "size=67108864");
+    }
+
+    [Test]
+    public void BuildSpecification_GivesEveryTmpfsTheSameRestrictions()
+    {
+        // The two mounts exist for different reasons but carry one contract between them. Asserted over the whole set
+        // rather than per-name so a third mount cannot be added on weaker terms without this failing.
+        var specification = Specification();
+
+        foreach (var (target, options) in specification.TemporaryFilesystems)
+        {
+            AssertEx.Contains(options, "size=");
+
+            foreach (var required in DockerSandboxHardening.RequiredTmpfsOptions)
+            {
+                AssertEx.True(options.Split(',').Contains(required),
+                    $"tmpfs '{target}' is missing '{required}' (options '{options}').");
+            }
+        }
     }
 
     [Test]
