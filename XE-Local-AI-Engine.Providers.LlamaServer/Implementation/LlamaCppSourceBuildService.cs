@@ -23,7 +23,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
     private const string ManifestFileName = ".source-build-manifest.json";
 
     // Conservative fallback compute-architecture set when nvidia-smi's compute_cap can't be read/validated. [secMED-1]
-    private const string DefaultCudaArchitectures = "75;86;89";
+    private const string DefaultCudaArchitectures = "75;86;89;120";
 
     // -j cap: parallel build jobs are min(nproc, this) to bound peak memory/CPU during the build. [secMED-5]
     private const int MaxBuildJobs = 8;

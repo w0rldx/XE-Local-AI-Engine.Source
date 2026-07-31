@@ -180,7 +180,7 @@ public sealed class CudaBuildServiceTests
         await AssertEx.EventuallyAsync(() => File.Exists(cmakeArgs), TimeSpan.FromSeconds(30));
 
         var capturedArgs = await File.ReadAllTextAsync(cmakeArgs, CancellationToken.None);
-        AssertEx.True(capturedArgs.Contains("-DCMAKE_CUDA_ARCHITECTURES=75;86;89", StringComparison.Ordinal),
+        AssertEx.True(capturedArgs.Contains("-DCMAKE_CUDA_ARCHITECTURES=75;86;89;120", StringComparison.Ordinal),
             "Configure must use the default CUDA architecture set when compute_cap is malformed.");
         AssertEx.False(capturedArgs.Contains("native", StringComparison.Ordinal),
             "The malformed compute_cap must never reach the cmake invocation.");
@@ -203,6 +203,40 @@ public sealed class CudaBuildServiceTests
         // real tree built before this flag existed. $ORIGIN keeps the placed tree self-referential.
         AssertEx.True(allCapturedArgs.Contains("-DCMAKE_BUILD_RPATH_USE_ORIGIN=ON", StringComparison.Ordinal),
             "Configure must emit an $ORIGIN-relative build RUNPATH so the placed runtime stays loadable after relocation.");
+    }
+
+    [Test]
+    public async Task CudaBuildService_WhenComputeCapValid_UsesDetectedArchOnly()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var dir = new TempDir();
+        var stubDir = Path.Combine(dir.Path, "stubs");
+        Directory.CreateDirectory(stubDir);
+        var cmakeArgs = Path.Combine(dir.Path, "cmake-args.txt");
+        WriteGitStub(stubDir, LlamaCppReleasePins.PinnedCudaSourceCommitSha, envDumpPath: null);
+        WriteCmakeStub(stubDir, Path.Combine(dir.Path, "cmake-ran.marker"), argsDumpPath: cmakeArgs);
+        WriteNvidiaSmiStub(stubDir, "12.0");
+
+        using var handler = new ThrowingHandler();
+        using var http = new HttpClient(handler, disposeHandler: false);
+        var (service, _) = CreateService(dir.Path, http);
+        using var restore = PrependPath(stubDir);
+
+        await service.StartAsync(CancellationToken.None);
+        await AssertEx.EventuallyAsync(() => File.Exists(cmakeArgs), TimeSpan.FromSeconds(30));
+
+        var capturedArgs = await File.ReadAllTextAsync(cmakeArgs, CancellationToken.None);
+        AssertEx.True(capturedArgs.Contains("-DCMAKE_CUDA_ARCHITECTURES=120", StringComparison.Ordinal),
+            "Configure must use the detected Blackwell architecture when compute_cap is valid.");
+        AssertEx.False(capturedArgs.Contains("-DCMAKE_CUDA_ARCHITECTURES=75;86;89;120", StringComparison.Ordinal),
+            "A valid compute_cap must remain authoritative instead of widening to the fallback set.");
+
+        await AssertEx.EventuallyAsync(() => service.GetStatus().Terminal, TimeSpan.FromSeconds(30));
+        AssertEx.Equal(CudaBuildPhase.Completed, service.GetStatus().Phase);
     }
 
     [Test]

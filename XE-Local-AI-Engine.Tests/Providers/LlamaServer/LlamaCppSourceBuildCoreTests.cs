@@ -193,10 +193,11 @@ public sealed class LlamaCppSourceBuildCoreTests
     [Test]
     public void ParseCudaArchitectures_DeduplicatesAndSortsStrictCapabilities()
     {
-        AssertEx.Equal("75;86;89", LlamaCppSourceBuildService.ParseCudaArchitectures("8.9\n7.5\n8.6\n8.9\n"));
+        AssertEx.Equal("75;89;120", LlamaCppSourceBuildService.ParseCudaArchitectures("8.9\n7.5\n12.0\n8.9\n"));
     }
 
     [Test]
+    [Arguments("")]
     [Arguments("native")]
     [Arguments("4.9")]
     [Arguments("8.10")]
@@ -205,7 +206,7 @@ public sealed class LlamaCppSourceBuildCoreTests
     [Arguments("999")]
     public void ParseCudaArchitectures_InvalidOrOutOfBounds_FallsBack(string output)
     {
-        AssertEx.Equal("75;86;89", LlamaCppSourceBuildService.ParseCudaArchitectures(output));
+        AssertEx.Equal("75;86;89;120", LlamaCppSourceBuildService.ParseCudaArchitectures(output));
     }
 
     [Test]
