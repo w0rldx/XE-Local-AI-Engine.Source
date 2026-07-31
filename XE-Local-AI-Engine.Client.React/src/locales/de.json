@@ -1648,6 +1648,7 @@
 					"chat": "Chat",
 					"embedding": "Embedding",
 					"reranker": "Reranker",
+					"draft": "Entwurf (spekulative Dekodierung)",
 					"unknown": "Unbekannt"
 				},
 				"capability": {
@@ -1700,6 +1701,8 @@
 					"inspectError": "Die Dateien dieses Repositorys konnten nicht geladen werden.",
 					"noFiles": "Keine herunterladbaren GGUF-Dateien gefunden.",
 					"dynamic": "Dynamisch",
+					"draft": "Entwurfsmodell",
+					"draftHint": "Entwurfsmodell für spekulative Dekodierung – kein Chat-Modell",
 					"recommended": "Empfohlen",
 					"columns": {
 						"quant": "Quantisierung",

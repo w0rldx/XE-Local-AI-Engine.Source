@@ -1110,6 +1110,7 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryFileResponse
 	fileName: z.string(),
 	quant: z.string(),
 	isDynamic: z.boolean(),
+	isDraft: z.boolean(),
 	sizeBytes: z.int(),
 	qualityTier: z.string(),
 	fitVerdict: z.string(),

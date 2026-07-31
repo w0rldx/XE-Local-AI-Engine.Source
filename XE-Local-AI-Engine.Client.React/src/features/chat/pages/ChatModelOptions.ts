@@ -45,6 +45,16 @@ export function toChatModelOptions(models: LocalModelDto[], nodeAvailable: boole
 		.map((model) => toModelOption(model, nodeAvailable));
 }
 
+// Models eligible as the node's speculative-decoding DRAFT model. Two kinds qualify and neither belongs in the chat
+// picker's list alone: a purpose-built drafter (`Draft` — an MTP companion the backend tags from its `MTP-` quant
+// marker) and any installed chat model small enough to draft for a bigger one (the `draft-simple` mode's usual setup).
+// Cloud entries are excluded — a drafter must be a local file the supervisor can pass to `--spec-model`.
+export function toDraftModelOptions(models: LocalModelDto[], nodeAvailable: boolean): ModelOption[] {
+	return models
+		.filter((model) => (model.kind === "Draft" || model.kind === "Chat") && !CLOUD_PROVIDERS.has(model.provider ?? ""))
+		.map((model) => toModelOption(model, nodeAvailable));
+}
+
 // The concrete installed model the runtime will actually resolve for the synthetic "Local default" selection.
 // Mirrors backend LocalDefaultChatModelResolver: the node default (isSelected) when it is an installed chat model,
 // else the fallback `OrderByDescending(modifiedAtUtc).ThenBy(modelName)` pick (newest modified first, then name

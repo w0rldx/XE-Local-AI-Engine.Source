@@ -180,18 +180,28 @@ internal static class ModelFitMapper
         return new InspectGgufRepositoryResponse
         {
             RepoId = detail.RepoId,
-            // Smallest-first so the picker leads with the lightest quant; the UI can re-sort.
-            Files = [.. detail.Files.OrderBy(static file => file.SizeBytes).Select(file => file.ToFileResponse(annotationsByFile.GetValueOrDefault(file.FileName)))]
+            // Base quants first (smallest-first so the picker leads with the lightest), then the speculative-decoding
+            // drafters. A drafter is a fraction of the real weights' size, so a pure size sort put all of them at the
+            // TOP of the ladder — the F-011 defect, where the first three rows of gemma-4-12b were 0.4-0.8 GB drafters.
+            Files =
+            [
+                .. detail.Files
+                         .OrderBy(static file => GgufDraftModel.IsDraftQuant(file.Quant))
+                         .ThenBy(static file => file.SizeBytes)
+                         .Select(file => file.ToFileResponse(annotationsByFile.GetValueOrDefault(file.FileName)))
+            ]
         };
     }
 
     private static GgufRepositoryFileResponse ToFileResponse(this GgufRepoFile file, GgufVariantAnnotation? annotation)
     {
+        var isDraft = GgufDraftModel.IsDraftQuant(file.Quant);
         return new GgufRepositoryFileResponse
         {
             FileName = file.FileName,
             Quant = file.Quant,
             IsDynamic = GgufQuantParser.IsDynamic(file.Quant),
+            IsDraft = isDraft,
             SizeBytes = file.SizeBytes,
             QualityTier = (annotation?.QualityTier ?? GgufQuantQuality.Classify(file.Quant)).ToString(),
             FitVerdict = (annotation?.FitVerdict ?? GgufFitVerdict.Unknown).ToString(),

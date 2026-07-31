@@ -34,6 +34,9 @@ function toGgufRepositoryFile(dto: XeLocalAiEngineClientEndpointsModelFitV1GgufR
 		fileName: dto.fileName ?? "",
 		quant: dto.quant ?? "",
 		isDynamic: dto.isDynamic ?? false,
+		// Default false: an older backend that does not send the flag has no draft concept, so every file it lists is a
+		// base quant — treating an omitted flag as "draft" would hide real quants.
+		isDraft: dto.isDraft ?? false,
 		sizeBytes: dto.sizeBytes ?? 0,
 		// The backend only ever emits the known enum-name values, so a plain cast is safe; defaults cover the
 		// degraded/omitted case (e.g. an old backend or a discovery failure) — Balanced/Unknown are the neutral picks.

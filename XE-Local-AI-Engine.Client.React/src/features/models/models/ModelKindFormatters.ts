@@ -5,7 +5,8 @@
 type Translate = (key: string, fallback: string) => string;
 
 // Effective-kind badge color: chat-capable models stand out (blue), embedding models are visually distinct (grape),
-// reranker (cross-encoder) models get their own hue (orange), and an unclassified/unknown model is muted (gray).
+// reranker (cross-encoder) models get their own hue (orange), speculative-decoding drafters are muted (teal, a
+// companion rather than a runnable model), and an unclassified/unknown model is muted (gray).
 export function kindBadgeColor(kind: string): string {
 	switch (kind) {
 		case "Chat":
@@ -14,6 +15,8 @@ export function kindBadgeColor(kind: string): string {
 			return "grape";
 		case "Reranker":
 			return "orange";
+		case "Draft":
+			return "teal";
 		default:
 			return "gray";
 	}
@@ -28,6 +31,8 @@ export function kindLabel(t: Translate, kind: string): string {
 			return t("pages.models.type.kind.embedding", "Embedding");
 		case "Reranker":
 			return t("pages.models.type.kind.reranker", "Reranker");
+		case "Draft":
+			return t("pages.models.type.kind.draft", "Draft (speculative decoding)");
 		case "Unknown":
 			return t("pages.models.type.kind.unknown", "Unknown");
 		default:

@@ -196,7 +196,10 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
                 Sha256 = result.Sha256,
                 SourceRevision = string.IsNullOrEmpty(result.ResolvedRevision) ? revision : result.ResolvedRevision,
                 DownloadedAtUtc = DateTimeOffset.UtcNow,
-                Role = request.Role
+                // A speculative-decoding drafter is a draft whatever the caller hinted — the picker offers the whole
+                // repo through one download action, so a drafter arrives on the same Chat/Unknown-role request as the
+                // base weights. The resolved quant carries the marker discovery stamped on it, so it is authoritative.
+                Role = GgufDraftModel.IsDraftQuant(quant) ? GgufRole.Draft : request.Role
             };
 
             await _registry.UpsertAsync(entry, ct).ConfigureAwait(false);
