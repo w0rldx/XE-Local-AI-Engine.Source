@@ -18,6 +18,16 @@ const queryClient = new QueryClient({
 			// status except 401/429, so deterministic 400/403/404/500 looked statusless and were retried 3×.
 			retry: shouldRetryQuery,
 			retryDelay: queryRetryDelay,
+			// Without this, staleTime defaults to 0, which makes every mounted query stale the instant it
+			// settles — so the default refetchOnWindowFocus/refetchOnMount refetched the entire page on every
+			// alt-tab back into the app, each response re-running zod validation and producing fresh object
+			// identities that re-rendered (and re-parsed the markdown of) whole conversations.
+			//
+			// 30s matches the value several hooks already set by hand (useImageQueries, useDevelopment,
+			// useGgufDownload, useCodexModelOptions). It does NOT weaken write-path freshness: invalidateQueries
+			// marks a query stale explicitly and still refetches immediately, and live surfaces are pushed over
+			// SignalR rather than polled.
+			staleTime: 30_000,
 		},
 	},
 });
