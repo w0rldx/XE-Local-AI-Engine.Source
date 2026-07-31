@@ -101,11 +101,13 @@ python3 scripts/performance/capture_inference_evidence.py baseline \
   --output artifacts/performance/baseline.json
 ```
 
-After both MAF 1.15 and the MEAI/OpenAI package closure have landed, copy the
-baseline spec, change `capture_id`, `phase`, and the `framework` source/package
-identity to the landed versions, and run it on the same machine with the same
-models, corpus, runtime binary, backend, cache procedure, commands, warmups,
-repeats, and ambient-load policy.
+For every framework servicing branch, copy the last compatible framework/application
+spec, change `capture_id`, `phase`, and the `framework` source/package identity to
+the exact landed MAF, MEAI, OpenAI, and MCP versions, then refresh every declared
+assembly SHA-256. Run it on the same machine with the same models, corpus, runtime
+binary, backend, cache procedure, commands, warmups, repeats, and ambient-load
+policy. Historical artifacts stay immutable; a servicing branch produces a new
+candidate artifact rather than rewriting the prior capture.
 
 ```bash
 python3 scripts/performance/capture_inference_evidence.py baseline \

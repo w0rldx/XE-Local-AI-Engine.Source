@@ -60,11 +60,11 @@
     <PackageVersion Include="Microsoft.Testing.Extensions.TrxReport" Version="2.2.3" />
     <PackageVersion Include="Microsoft.Testing.Platform" Version="2.2.3" />
     <PackageVersion Include="Microsoft.Playwright" Version="1.61.0" />
-    <PackageVersion Include="OllamaSharp" Version="5.4.25" />
+    <PackageVersion Include="OllamaSharp" Version="5.4.30" />
     <PackageVersion Include="TUnit.Playwright" Version="1.58.0" />
-    <PackageVersion Include="Microsoft.Extensions.AI" Version="10.8.1" />
-    <PackageVersion Include="Microsoft.Extensions.AI.Abstractions" Version="10.8.1" />
-    <PackageVersion Include="Microsoft.Extensions.AI.OpenAI" Version="10.8.1" />
+    <PackageVersion Include="Microsoft.Extensions.AI" Version="10.8.3" />
+    <PackageVersion Include="Microsoft.Extensions.AI.Abstractions" Version="10.8.3" />
+    <PackageVersion Include="Microsoft.Extensions.AI.OpenAI" Version="10.8.3" />
     <!-- Transitive only (pulled in by Microsoft.Extensions.AI.OpenAI / Microsoft.Agents.AI.Hosting.OpenAI): pinned
          explicitly, matching the version CentralPackageTransitivePinningEnabled currently resolves, so the plain
          OpenAI SDK's OPENAI001-experimental OpenAIClient(AuthenticationPolicy, OpenAIClientOptions) ctor that
@@ -79,6 +79,8 @@
     <PackageVersion Include="Microsoft.Extensions.Options.DataAnnotations" Version="10.0.9" />
     <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.9" />
     <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.7.0" />
+    <!-- Compatibility cohort: upgrade the stable MAF trio and the Debug-only Hosting/Hosting.OpenAI/DevUI
+         prerelease packages together after verifying their exact matching release set. -->
     <PackageVersion Include="Microsoft.Agents.AI" Version="1.15.0" />
     <PackageVersion Include="Microsoft.Agents.AI.Abstractions" Version="1.15.0" />
     <PackageVersion Include="Microsoft.Agents.AI.Workflows" Version="1.15.0" />
