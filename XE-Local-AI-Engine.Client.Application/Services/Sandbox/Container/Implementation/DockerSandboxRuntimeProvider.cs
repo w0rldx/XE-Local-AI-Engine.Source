@@ -527,7 +527,7 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
     ///     <para>
     ///         The overlap sweep is <em>N-way</em> and shared with startup validation
     ///         (<see cref="ContainerSandboxOptionsValidator.FindOverlap" />). Two configured targets need one
-    ///         comparison; the workspace, the scratch tmpfs and an open-ended list of runtime mounts need every pair,
+    ///         comparison; the workspace, both tmpfs mounts and an open-ended list of runtime mounts need every pair,
     ///         and a mount placed at an ancestor of another silently hides everything the descendant was meant to
     ///         expose — after which the daemon's read-back still agrees, because the daemon was asked for exactly that.
     ///     </para>
@@ -543,7 +543,8 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
         var strict = new List<(string Name, string? Path)>
         {
             (nameof(ContainerSandboxOptions.WorkspaceMountTarget), options.WorkspaceMountTarget),
-            (nameof(ContainerSandboxOptions.ScratchMountTarget), options.ScratchMountTarget)
+            (nameof(ContainerSandboxOptions.ScratchMountTarget), options.ScratchMountTarget),
+            (nameof(ContainerSandboxOptions.TempMountTarget), options.TempMountTarget)
         };
         var overlays = new List<string>();
 
