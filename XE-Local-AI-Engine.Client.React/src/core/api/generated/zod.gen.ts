@@ -2,2028 +2,104 @@
 
 import * as z from "zod";
 
-/**
- * the dto used to send an error response to the client
- */
-export const zFastEndpointsErrorResponse = z.object({
-	statusCode: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional()
-		.default(400),
-	message: z.string().optional().default("One or more errors occurred!"),
-	errors: z.record(z.string(), z.array(z.string())).optional(),
+export const zXeLocalAiEngineClientEndpointsVoiceV1VoiceManifestModelFileDto = z.object({
+	dtype: z.string(),
+	file: z.string(),
+	byteSize: z.int(),
+	sha256: z.string(),
+	downloadUrl: z.string(),
 });
 
-/**
- * the error details object
- */
-export const zFastEndpointsProblemDetailsError = z.object({
-	name: z.string().optional().default("Error or field name"),
-	reason: z.string().optional().default("Error reason"),
-	code: z.string().nullish(),
-	severity: z.string().nullish(),
+export const zXeLocalAiEngineClientEndpointsVoiceV1VoiceManifestModelDto = z.object({
+	id: z.string(),
+	displayName: z.string(),
+	language: z.string(),
+	version: z.string(),
+	files: z.array(zXeLocalAiEngineClientEndpointsVoiceV1VoiceManifestModelFileDto),
 });
 
-/**
- * RFC9457 compatible problem details/ error response class. this can be used by configuring startup like so:
- * app.UseFastEndpoints(c => c.Errors.UseProblemDetails())
- */
-export const zFastEndpointsProblemDetails = z.object({
-	type: z.string().optional().default("https://www.rfc-editor.org/rfc/rfc7231#section-6.5.1"),
-	title: z.string().optional().default("One or more validation errors occurred."),
-	status: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional()
-		.default(400),
-	instance: z.string().optional().default("/api/route"),
-	traceId: z.string().optional().default("0HMPNHL0JHL76:00000001"),
-	detail: z.string().nullish(),
-	errors: z.array(zFastEndpointsProblemDetailsError).optional(),
-});
-
-export const zXeLocalAiEngineAiContractsEnumsInvocationStatus = z.enum([
-	"Pending",
-	"Assigned",
-	"Running",
-	"Completed",
-	"Failed",
-	"Cancelled",
-]);
-
-export const zXeLocalAiEngineClientEndpointsAgentsV1AgentExecutionLogResponse = z.object({
-	id: z.guid(),
-	agentDefinitionId: z.guid(),
-	conversationId: z.guid().nullish(),
-	messageId: z.guid().nullish(),
-	modelName: z.string(),
-	configHash: z.string(),
-	latencyMs: z.int(),
-	promptTokens: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	completionTokens: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	success: z.boolean(),
-	errorClass: z.string().nullish(),
-	createdAtUtc: z.int(),
-});
-
-export const zXeLocalAiEngineClientEndpointsAgentsV1AgentRunEnvelopeResponse = z.object({
-	id: z.guid(),
-	schemaVersion: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	agentDefinitionId: z.guid(),
-	conversationId: z.guid().nullish(),
-	messageId: z.guid().nullish(),
-	invocationId: z.guid().nullish(),
-	requestId: z.guid().nullish(),
-	modelName: z.string(),
-	terminalStatus: z.string(),
-	success: z.boolean(),
-	failureCategory: z.string().nullish(),
-	durationMs: z.int(),
-	promptTokens: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	completionTokens: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	reasoningTokens: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	totalTokens: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	contentChunkCount: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	reasoningChunkCount: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	traceId: z.string().nullish(),
-	startedAtUtc: z.int().nullish(),
-	createdAtUtc: z.int(),
-});
-
-export const zXeLocalAiEngineClientEndpointsAgentsV1AgentTemplateSummary = z.object({
-	slug: z.string(),
+export const zXeLocalAiEngineClientEndpointsVoiceV1VoiceManifestVoiceDto = z.object({
+	id: z.string(),
 	name: z.string(),
-	description: z.string().nullish(),
-	division: z.string(),
-	estimatedPromptTokens: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	hasOriginalTools: z.boolean(),
-	alreadyImported: z.boolean(),
+	language: z.string(),
+	gender: z.string(),
 });
 
-export const zXeLocalAiEngineClientEndpointsAgentsV1AgentUsageProviderTotalsResponse = z.object({
-	provider: z.string(),
-	runCount: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	promptTokens: z.int(),
-	completionTokens: z.int(),
-	reasoningTokens: z.int(),
-	totalTokens: z.int(),
-	estimatedCostUsd: z.number(),
-	currency: z.string(),
-});
-
-export const zXeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryBucketResponse = z.object({
-	modelName: z.string(),
-	provider: z.string(),
-	dayStartUtcMs: z.int(),
-	runCount: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	promptTokens: z.int(),
-	completionTokens: z.int(),
-	reasoningTokens: z.int(),
-	totalTokens: z.int(),
-	estimatedCostUsd: z.number(),
-	currency: z.string(),
-});
-
-export const zXeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryTotalsResponse = z.object({
-	runCount: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	promptTokens: z.int(),
-	completionTokens: z.int(),
-	reasoningTokens: z.int(),
-	totalTokens: z.int(),
-	estimatedCostUsd: z.number(),
-	currency: z.string(),
-});
-
-export const zXeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryResponse = z.object({
-	items: z.array(zXeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryBucketResponse),
-	totals: zXeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryTotalsResponse,
-	byProvider: z.array(zXeLocalAiEngineClientEndpointsAgentsV1AgentUsageProviderTotalsResponse),
-	retentionDays: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-});
-
-export const zXeLocalAiEngineClientEndpointsAgentsV1AnalyzePlaybookRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsAgentsV1ApproveGoldenConversationRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsAgentsV1DeleteAgentDefinitionRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsAgentsV1DeleteGoldenConversationRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsAgentsV1DeletePlaybookActionRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsAgentsV1FeedbackExemplarResponse = z.object({
-	rating: z.string(),
-	comment: z.string(),
-	messageId: z.guid(),
-	conversationId: z.guid(),
-	createdAtUtc: z.int(),
-	truncated: z.boolean(),
-});
-
-export const zXeLocalAiEngineClientEndpointsAgentsV1GetAgentDefinitionRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsAgentsV1GetAgentFeedbackInsightsRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsAgentsV1GetAgentPlaybookMonitorRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsAgentsV1GoldenAssertionDto = z.object({
-	requiredPhrases: z.array(z.string()).optional(),
-	forbiddenPhrases: z.array(z.string()).optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsAgentsV1GoldenHarvestResponse = z.object({
-	thumbsUpScanned: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional(),
-	createdCount: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional(),
-	duplicateCount: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional(),
-	skippedCount: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsAgentsV1GoldenTurnDto = z.object({
-	role: z.string().optional(),
-	text: z.string().optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsAgentsV1CreateGoldenConversationRequest = z.object({
-	title: z.string(),
-	inputTurns: z.array(zXeLocalAiEngineClientEndpointsAgentsV1GoldenTurnDto),
-	assertion: zXeLocalAiEngineClientEndpointsAgentsV1GoldenAssertionDto.nullish(),
-	rubric: z.string().nullish(),
-	enabled: z.boolean().optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsAgentsV1GoldenConversationResponse = z.object({
-	id: z.guid(),
-	agentDefinitionId: z.guid(),
-	title: z.string(),
-	inputTurns: z.array(zXeLocalAiEngineClientEndpointsAgentsV1GoldenTurnDto),
-	assertion: zXeLocalAiEngineClientEndpointsAgentsV1GoldenAssertionDto.nullish(),
-	rubric: z.string().nullish(),
+export const zXeLocalAiEngineClientEndpointsVoiceV1VoiceManifestRemoteFallbackDto = z.object({
 	enabled: z.boolean(),
-	source: z.string(),
-	sourceMessageId: z.guid().nullish(),
-	sourceConversationId: z.guid().nullish(),
-	createdAtUtc: z.int(),
-	updatedAtUtc: z.int(),
-});
-
-export const zXeLocalAiEngineClientEndpointsAgentsV1HarvestGoldenConversationsRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsAgentsV1ImportAgentTemplatesRequest = z.object({
-	slugs: z.array(z.string()).nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsAgentsV1ImportAgentTemplatesResponse = z.object({
-	imported: z.array(z.string()),
-	skippedExisting: z.array(z.string()),
-	unknown: z.array(z.string()),
-});
-
-export const zXeLocalAiEngineClientEndpointsAgentsV1ListAgentExecutionLogsRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsAgentsV1ListAgentExecutionLogsResponse = z.object({
-	items: z.array(zXeLocalAiEngineClientEndpointsAgentsV1AgentExecutionLogResponse),
-});
-
-export const zXeLocalAiEngineClientEndpointsAgentsV1ListAgentPlaybookActionsRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsAgentsV1ListAgentTemplatesResponse = z.object({
-	items: z.array(zXeLocalAiEngineClientEndpointsAgentsV1AgentTemplateSummary),
-});
-
-export const zXeLocalAiEngineClientEndpointsAgentsV1ListGoldenConversationsRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsAgentsV1ListGoldenConversationsResponse = z.object({
-	items: z.array(zXeLocalAiEngineClientEndpointsAgentsV1GoldenConversationResponse),
-});
-
-export const zXeLocalAiEngineClientEndpointsAgentsV1ListRunEnvelopesRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsAgentsV1ListRunEnvelopesResponse = z.object({
-	items: z.array(zXeLocalAiEngineClientEndpointsAgentsV1AgentRunEnvelopeResponse),
-});
-
-export const zXeLocalAiEngineClientEndpointsAgentsV1OverallFeedbackResponse = z.object({
-	total: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	up: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	down: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	downRate: z.number(),
-	meetsThreshold: z.boolean(),
-});
-
-export const zXeLocalAiEngineClientEndpointsAgentsV1PlaybookEvalCaseResultResponse = z.object({
-	goldenCaseId: z.guid().optional(),
-	scoredBy: z.string().optional(),
-	baselinePass: z.boolean().optional(),
-	candidatePass: z.boolean().optional(),
-	regressed: z.boolean().optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsAgentsV1PlaybookEvalResultResponse = z.object({
-	passed: z.boolean().optional(),
-	evaluatedAtUtc: z.int().optional(),
-	actionVersionAtEval: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional(),
-	modelName: z.string().optional(),
-	goldenCaseCount: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional(),
-	goldenCaseTotal: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional(),
-	baselinePassCount: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional(),
-	candidatePassCount: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional(),
-	regressedCaseCount: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional(),
-	improvedCaseCount: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional(),
-	cases: z.array(zXeLocalAiEngineClientEndpointsAgentsV1PlaybookEvalCaseResultResponse).optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsAgentsV1PlaybookRetrievalResponse = z.object({
-	threshold: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional(),
-	topK: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional(),
-	ranker: z.string().optional(),
-	embeddingModel: z.string().nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsAgentsV1SuggestedPlaybookActionRouteRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsAgentsV1ToolCapableModelsResponse = z.object({
-	models: z.array(z.string()),
-});
-
-export const zXeLocalAiEngineClientEndpointsAgentsV1ToolFeedbackResponse = z.object({
-	toolName: z.string(),
-	total: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	up: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	down: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	downRate: z.number(),
-	meetsThreshold: z.boolean(),
-});
-
-export const zXeLocalAiEngineClientEndpointsAgentsV1AgentFeedbackInsightsResponse = z.object({
-	agentDefinitionId: z.guid(),
-	agentName: z.string(),
-	generatedAtUtc: z.int(),
-	minOccurrenceThreshold: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	overall: zXeLocalAiEngineClientEndpointsAgentsV1OverallFeedbackResponse,
-	byTool: z.array(zXeLocalAiEngineClientEndpointsAgentsV1ToolFeedbackResponse),
-	exemplars: z.array(zXeLocalAiEngineClientEndpointsAgentsV1FeedbackExemplarResponse),
-});
-
-export const zXeLocalAiEngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActionRequest = z.object({
-	behavior: z.string().nullish(),
-	triggerCondition: z.string().nullish(),
-	scope: z.string().nullish(),
-	priority: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsApiFoundationV1ValidationProblemProbeRequest = z.object({
-	name: z.string().min(0).max(64),
-});
-
-export const zXeLocalAiEngineClientEndpointsApiFoundationV1ValidationProblemProbeResponse = z.object({
-	name: z.string(),
-});
-
-export const zXeLocalAiEngineClientEndpointsAppUpdateV1AppUpdateStatusResponse = z.object({
-	currentVersion: z.string(),
-	availableVersion: z.string().nullish(),
-	updateAvailable: z.boolean(),
-	authState: z.string(),
-	login: z.string().nullish(),
-	isDesktop: z.boolean(),
-	isOffline: z.boolean(),
-	lastCheckedUtc: z.int().nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsAppUpdateV1ApplyAppUpdateResponse = z.object({
-	applying: z.boolean(),
-});
-
-export const zXeLocalAiEngineClientEndpointsAppUpdateV1GetAppUpdateStatusRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthPollResponse = z.object({
-	state: z.string(),
-	login: z.string().nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthStartResponse = z.object({
-	userCode: z.string(),
-	verificationUri: z.string(),
-	expiresInSeconds: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	intervalSeconds: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-});
-
-export const zXeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthStatusResponse = z.object({
-	authState: z.string(),
-	login: z.string().nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsAuthV1NodeAccessTokenResponse = z.object({
-	accessToken: z.string(),
-	expiresAtUtc: z.iso.datetime({ offset: true }),
-});
-
-export const zXeLocalAiEngineClientEndpointsAuthV1NodeAuthStatusResponse = z.object({
-	setupRequired: z.boolean(),
-	authenticated: z.boolean(),
-});
-
-export const zXeLocalAiEngineClientEndpointsAuthV1NodeChangePasswordRequest = z.object({
-	currentPassword: z.string().min(0).max(256),
-	newPassword: z.string().min(12).max(256),
-});
-
-export const zXeLocalAiEngineClientEndpointsAuthV1NodeLoginRequest = z.object({
-	email: z
-		.email()
-		.min(0)
-		.max(256)
-		.regex(/^[^@]+@[^@]+$/)
-		.nullish(),
-	password: z.string().min(0).max(256),
-});
-
-export const zXeLocalAiEngineClientEndpointsAuthV1NodeMeResponse = z.object({
-	userName: z.string(),
-	roles: z.array(z.string()),
-});
-
-export const zXeLocalAiEngineClientEndpointsAuthV1NodeSetupRequest = z.object({
-	email: z
-		.email()
-		.min(0)
-		.max(256)
-		.regex(/^[^@]+@[^@]+$/),
-	password: z.string().min(12).max(256),
-});
-
-export const zXeLocalAiEngineClientEndpointsCloudCodexV1CodexLoginResponse = z.object({
-	authorizeUrl: z.string(),
-});
-
-export const zXeLocalAiEngineClientEndpointsCloudCodexV1CodexStatusResponse = z.object({
-	signedIn: z.boolean(),
-	accountId: z.string().nullish(),
-	expiresAtUtc: z.iso.datetime({ offset: true }).nullish(),
-	loginPending: z.boolean(),
-});
-
-export const zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryHeaderDto = z.object({
-	name: z.string(),
-	value: z.string().nullish(),
-	isSecret: z.boolean().optional(),
-	hasStoredValue: z.boolean().optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryModelDto = z.object({
-	deploymentName: z.string(),
-	displayLabel: z.string().nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundrySettingsResponse = z.object({
 	endpoint: z.string().nullish(),
-	authMode: z.string(),
-	apiSurface: z.string().optional(),
-	hasStoredApiKey: z.boolean().optional(),
-	models: z.array(zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryModelDto).optional(),
-	headers: z.array(zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryHeaderDto).optional(),
-	additionalAllowedHostSuffixes: z.array(z.string()).optional(),
-	entraTenantId: z.string().nullish(),
-	entraClientId: z.string().nullish(),
-	hasStoredEntraClientSecret: z.boolean().optional(),
-	entraTokenScope: z.string().nullish(),
-	entraSignInMethod: z.string().optional(),
-	entraAuthCodeRedirectUri: z.string().nullish(),
 });
 
-export const zXeLocalAiEngineClientEndpointsCloudSettingsV1CloudSettingsResponse = z.object({
-	providerName: z.string(),
-	azureFoundry: zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundrySettingsResponse.nullish(),
+export const zXeLocalAiEngineClientEndpointsVoiceV1VoiceManifestResponse = z.object({
+	enabled: z.boolean(),
+	models: z.array(zXeLocalAiEngineClientEndpointsVoiceV1VoiceManifestModelDto),
+	voices: z.array(zXeLocalAiEngineClientEndpointsVoiceV1VoiceManifestVoiceDto),
+	defaultVoiceId: z.string(),
+	remoteFallback: zXeLocalAiEngineClientEndpointsVoiceV1VoiceManifestRemoteFallbackDto.nullish(),
 });
 
-export const zXeLocalAiEngineClientEndpointsCloudSettingsV1EntraAuthCodeSignInResponse = z.object({
-	authorizeUrl: z.string(),
-	expiresAtUtc: z.iso.datetime({ offset: true }),
-});
-
-export const zXeLocalAiEngineClientEndpointsCloudSettingsV1EntraAuthCodeSignInStatusResponse = z.object({
-	state: z.string(),
-	expiresAtUtc: z.iso.datetime({ offset: true }).nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsCloudSettingsV1EntraDeviceCodeSignInResponse = z.object({
-	userCode: z.string(),
-	verificationUri: z.string(),
-	expiresAtUtc: z.iso.datetime({ offset: true }),
-});
-
-export const zXeLocalAiEngineClientEndpointsCloudSettingsV1EntraDeviceCodeSignInStatusResponse = z.object({
-	state: z.string(),
-	userCode: z.string().nullish(),
-	verificationUri: z.string().nullish(),
-	expiresAtUtc: z.iso.datetime({ offset: true }).nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsCloudSettingsV1SaveAzureFoundryHeaderRequest = z.object({
-	name: z.string().optional(),
-	value: z.string().nullish(),
-	isSecret: z.boolean().optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsCloudSettingsV1SaveCloudSettingsRequest = z.object({
-	providerName: z.string().optional(),
-	endpoint: z.string().min(1),
-	authMode: z.string().optional(),
-	apiKey: z.string().nullish(),
-	apiSurface: z.string().optional(),
-	models: z.array(zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryModelDto).optional(),
-	headers: z.array(zXeLocalAiEngineClientEndpointsCloudSettingsV1SaveAzureFoundryHeaderRequest).optional(),
-	additionalAllowedHostSuffixes: z.array(z.string()).optional(),
-	entraTenantId: z.string().nullish(),
-	entraClientId: z.string().nullish(),
-	entraClientSecret: z.string().nullish(),
-	entraTokenScope: z.string().nullish(),
-	entraSignInMethod: z.string().optional(),
-	entraAuthCodeRedirectUri: z.string().nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsConnectionV1ConnectionStatusResponse = z.object({
-	state: z.string(),
-	lastError: z.string().nullish(),
-	lastUpdatedAt: z.iso.datetime({ offset: true }).optional(),
-	isPaired: z.boolean().optional(),
-	autoConnectOnStart: z.boolean().optional(),
-	bindingMethod: z.string().nullish(),
-	lastKnownNodeName: z.string().nullish(),
-	tokenExpiresAt: z.iso.datetime({ offset: true }).nullish(),
-	canConnect: z.boolean().optional(),
-	canDisconnect: z.boolean().optional(),
-	canEnableAutoConnect: z.boolean().optional(),
-	canDisableAutoConnect: z.boolean().optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsDevelopmentV1ConfirmDevelopmentContainerRuntimeRequest = z.object({
-	daemonId: z.string().optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsDevelopmentV1CreateDevelopmentProjectRequest = z.object({
-	operationId: z.guid().optional(),
-	selectedFolderId: z.guid().optional(),
-	objective: z.string().optional(),
-	baseBranch: z.string().optional(),
-	taskTitle: z.string().optional(),
-	requirements: z.string().optional(),
-	acceptanceCriteriaJson: z.string().optional(),
-	egressPolicy: z.string().optional(),
-	coderModelId: z.string().optional(),
-	reviewerModelId: z.string().optional(),
-	trustedRepositoryAcknowledged: z.boolean().optional(),
-	maxTokens: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	maxDurationSeconds: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	commandProfileId: z.string().nullish(),
-	buildTarget: z.string().nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsDevelopmentV1CreateDevelopmentRepositoryFromTemplateRequest = z.object({
-	templateId: z.guid().optional(),
-	destinationPath: z.string().optional(),
-	alias: z.string().optional(),
-	baseBranch: z.string().optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentActionRequest = z.object({
-	operationId: z.guid().optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentApplyResponse = z.object({
-	operationId: z.guid().optional(),
-	phase: z.string().optional(),
-	outcome: z.string().optional(),
-	status: z.string().optional(),
-	version: z.int().optional(),
-	sequence: z.int().optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentArtifactRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentArtifactResponse = z.object({
-	id: z.guid().optional(),
-	projectId: z.guid().optional(),
-	taskId: z.guid().optional(),
-	attemptId: z.guid().nullish(),
-	kind: z.string().optional(),
-	contentHash: z.string().optional(),
-	byteCount: z.int().optional(),
-	createdAtUtc: z.int().optional(),
-	baseCommit: z.string().nullish(),
-	subjectHash: z.string().nullish(),
-	changedFilesManifestHash: z.string().nullish(),
-	commandProfileVersion: z.string().nullish(),
-	commandProfileDigest: z.string().nullish(),
-	isValid: z.boolean().optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentArtifactContentResponse = z.object({
-	artifact: zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentArtifactResponse.optional(),
-	content: z.string().optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentAttemptRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentAttemptResponse = z.object({
-	id: z.guid().optional(),
-	taskId: z.guid().optional(),
-	predecessorAttemptId: z.guid().nullish(),
-	role: z.string().optional(),
-	modelId: z.string().optional(),
-	provider: z.string().optional(),
-	status: z.string().optional(),
-	startedAtUtc: z.int().nullish(),
-	endedAtUtc: z.int().nullish(),
-	terminalReason: z.string().nullish(),
-	inputTokens: z.int().nullish(),
-	outputTokens: z.int().nullish(),
-	version: z.int().optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerDaemonResponse = z.object({
-	daemonId: z.string().optional(),
-	serverVersion: z.string().optional(),
-	endpoint: z.string().optional(),
-	confirmedAtUtc: z.iso.datetime({ offset: true }).nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerRuntimeResponse = z.object({
-	ready: z.boolean().optional(),
-	status: z.string().optional(),
-	message: z.string().optional(),
-	requiresOperatorConfirmation: z.boolean().optional(),
-	endpoint: z.string().nullish(),
-	endpointSource: z.string().nullish(),
-	observedDaemon: zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerDaemonResponse.nullish(),
-	pinnedDaemon: zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerDaemonResponse.nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentCapabilityResponse = z.object({
-	enabled: z.boolean().optional(),
-	sandboxProvider: z.string().optional(),
-	containerRuntime: zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerRuntimeResponse.nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentEventResponse = z.object({
-	id: z.guid().optional(),
-	projectId: z.guid().optional(),
-	taskId: z.guid().nullish(),
-	attemptId: z.guid().nullish(),
-	sequence: z.int().optional(),
-	eventType: z.string().optional(),
-	occurredAtUtc: z.int().optional(),
-	operationId: z.guid().nullish(),
-	operationPhase: z.string().nullish(),
-	outcome: z.string().nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentNextActionResponse = z.object({
-	action: z.string().optional(),
-	projectId: z.guid().optional(),
-	taskId: z.guid().optional(),
-	attemptId: z.guid().nullish(),
-	taskStatus: z.string().optional(),
-	role: z.string().nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProfileDetectionRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProfileDetectionResponse = z.object({
-	profileId: z.string().optional(),
-	buildTarget: z.string().nullish(),
-	candidates: z.array(z.string()).optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectResponse = z.object({
-	id: z.guid().optional(),
-	objective: z.string().optional(),
-	selectedFolderId: z.guid().nullish(),
-	repositoryConnectionRequired: z.boolean().optional(),
-	baseBranch: z.string().optional(),
-	status: z.string().optional(),
-	egressPolicy: z.string().optional(),
-	coderModelId: z.string().nullish(),
-	reviewerModelId: z.string().nullish(),
-	maxTokens: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	maxDurationSeconds: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	createdAtUtc: z.int().optional(),
-	updatedAtUtc: z.int().optional(),
-	version: z.int().optional(),
-	commandProfileId: z.string().nullish(),
-	commandProfileBuildTarget: z.string().nullish(),
-	commandProfileDigest: z.string().nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentRepositoryResponse = z.object({
-	id: z.string().optional(),
-	alias: z.string().optional(),
-	availability: z.string().optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentRepositoryFromTemplateResponse = z.object({
-	repository: zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentRepositoryResponse.optional(),
-	templateAlias: z.string().optional(),
-	templateCommit: z.string().optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTaskRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTaskResponse = z.object({
-	id: z.guid().optional(),
-	projectId: z.guid().optional(),
-	title: z.string().optional(),
-	requirements: z.string().optional(),
-	acceptanceCriteriaJson: z.string().optional(),
-	status: z.string().optional(),
-	currentReviewRound: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional(),
-	maxReviewRounds: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional(),
-	blockedReason: z.string().nullish(),
-	approvedSubjectHash: z.string().nullish(),
-	version: z.int().optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTaskDetailResponse = z.object({
-	task: zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTaskResponse.optional(),
-	attempts: z.array(zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentAttemptResponse).optional(),
-	artifacts: z.array(zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentArtifactResponse).optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectDetailResponse = z.object({
-	project: zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectResponse.optional(),
-	tasks: z.array(zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTaskDetailResponse).optional(),
-	events: z.array(zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentEventResponse).optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTemplateRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTemplateResponse = z.object({
-	id: z.string().optional(),
-	alias: z.string().optional(),
-	availability: z.string().optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentArtifactsResponse = z.object({
-	items: z.array(zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentArtifactResponse).optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentEventsResponse = z.object({
-	items: z.array(zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentEventResponse).optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentProjectsResponse = z.object({
-	items: z.array(zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectResponse).optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentRepositoriesResponse = z.object({
-	items: z.array(zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentRepositoryResponse).optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentTemplatesResponse = z.object({
-	templates: z.array(zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTemplateResponse).optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsDevelopmentV1ReconnectDevelopmentRepositoryRequest = z.object({
-	selectedFolderId: z.guid().optional(),
-	expectedVersion: z.int().optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsDevelopmentV1RegisterDevelopmentRepositoryRequest = z.object({
-	alias: z.string().optional(),
-	hostPath: z.string().optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsDevelopmentV1RegisterDevelopmentTemplateRequest = z.object({
-	alias: z.string().optional(),
-	hostPath: z.string().optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsImagesV1CreateImageJobRequest = z.object({
-	modelName: z.string(),
-	prompt: z.string(),
-	negativePrompt: z.string().nullish(),
-	seed: z.string().nullish(),
-	width: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional(),
-	height: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional(),
-	steps: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional(),
-	sampler: z.string().nullish(),
-	cfgScale: z.number().optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsImagesV1GetStableDiffusionCppSourceBuildPrerequisitesRequest = z.record(
-	z.string(),
-	z.never(),
-);
-
-export const zXeLocalAiEngineClientEndpointsImagesV1ImageJobResponse = z.object({
-	id: z.guid(),
-	modelName: z.string(),
-	prompt: z.string(),
-	negativePrompt: z.string().nullish(),
-	seed: z.string(),
-	width: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	height: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	steps: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	sampler: z.string(),
-	cfgScale: z.number(),
-	status: z.string(),
-	createdAtUtc: z.int(),
-	startedAtUtc: z.int().nullish(),
-	completedAtUtc: z.int().nullish(),
-	durationMs: z.int().nullish(),
-	imageId: z.guid().nullish(),
-	sanitizedError: z.string().nullish(),
-	cancellationRequestedAtUtc: z.int().nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsImagesV1ImageJobRouteRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsImagesV1ImageModelDownloadStatusResponse = z.object({
-	modelName: z.string(),
-	phase: z.string(),
-	completedBytes: z.int().nullish(),
-	totalBytes: z.int().nullish(),
-	sanitizedError: z.string().nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsImagesV1ImageModelPartDownloadRequest = z.object({
-	role: z.string(),
-	fileName: z.string(),
-	sha256: z.string().nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsImagesV1ImageModelPartResponse = z.object({
-	role: z.string(),
-	fileName: z.string(),
-	sizeBytes: z.int(),
-});
-
-export const zXeLocalAiEngineClientEndpointsImagesV1ImageModelResponse = z.object({
-	modelName: z.string(),
-	repoId: z.string(),
-	family: z.string(),
-	kind: z.string(),
-	sizeBytes: z.int(),
-	parts: z.array(zXeLocalAiEngineClientEndpointsImagesV1ImageModelPartResponse),
-	downloadedAtUtc: z.int(),
-});
-
-export const zXeLocalAiEngineClientEndpointsImagesV1ImageRuntimeActionRequest = z.object({
-	accepted: z.boolean().nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsImagesV1ImageRuntimeActivityResponse = z.object({
-	activeJobCount: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	spawnReadinessCount: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	residentProcessCount: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	mutationReserved: z.boolean(),
-	evictionReserved: z.boolean(),
-	isBusy: z.boolean(),
-});
-
-export const zXeLocalAiEngineClientEndpointsImagesV1ImageRuntimeBlockedResponse = z.object({
-	reason: z.string(),
-	message: z.string(),
-	activity: zXeLocalAiEngineClientEndpointsImagesV1ImageRuntimeActivityResponse,
-});
-
-export const zXeLocalAiEngineClientEndpointsImagesV1ListImageJobsResponse = z.object({
-	items: z.array(zXeLocalAiEngineClientEndpointsImagesV1ImageJobResponse),
-});
-
-export const zXeLocalAiEngineClientEndpointsImagesV1ListImageModelDownloadsResponse = z.object({
-	items: z.array(zXeLocalAiEngineClientEndpointsImagesV1ImageModelDownloadStatusResponse),
-});
-
-export const zXeLocalAiEngineClientEndpointsImagesV1ListImageModelsResponse = z.object({
-	items: z.array(zXeLocalAiEngineClientEndpointsImagesV1ImageModelResponse),
-});
-
-export const zXeLocalAiEngineClientEndpointsImagesV1RetrieveImageRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBackendDto = z.enum(["cpu", "vulkan", "cuda"]);
-
-export const zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildPrerequisiteItemResponse = z.object({
+export const zXeLocalAiEngineClientEndpointsTutorialStateV1TutorialStateEntryResponse = z.object({
 	key: z.string(),
-	satisfied: z.boolean(),
-	detail: z.string(),
-});
-
-export const zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildPrerequisitesResponse = z.object({
-	backend: zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBackendDto,
-	items: z.array(zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildPrerequisiteItemResponse),
-	canBuild: z.boolean(),
-});
-
-export const zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceRevisionModeDto = z.enum([
-	"enginePinned",
-	"defaultBranch",
-	"explicitCommit",
-]);
-
-export const zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceSelectionDto = z.enum(["official", "custom"]);
-
-export const zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildDescriptorResponse = z.object({
-	buildId: z.guid(),
-	backend: zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBackendDto,
-	source: zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceSelectionDto,
-	repository: z.string(),
-	revisionMode: zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceRevisionModeDto,
-	requestedCommit: z.string().nullish(),
-	resolvedCommit: z.string().nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildStatusResponse = z.object({
-	phase: z.string(),
-	isRunning: z.boolean(),
-	terminal: z.boolean(),
-	logStartSequence: z.int(),
-	logLines: z.array(z.string()),
-	sanitizedError: z.string().nullish(),
-	currentBuild: zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildDescriptorResponse.nullish(),
-	startedAtUtc: z.int().nullish(),
-	completedAtUtc: z.int().nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionInstalledRuntimeValidityDto = z.enum(["active", "invalid"]);
-
-export const zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionInstalledRuntimeResponse = z.object({
-	validity: zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionInstalledRuntimeValidityDto,
-	desiredBackend: zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBackendDto,
-	sourceRepository: z.string(),
-	sourceCommit: z.string(),
-	sourceSelection: zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceSelectionDto,
-	sourceRevisionMode: zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceRevisionModeDto,
-	sourceRequestedCommit: z.string().nullish(),
-	installedAtUtc: z.int(),
-	invalidReason: z.string().nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsImagesV1ImageRuntimeStatusResponse = z.object({
-	managedRuntime: zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionInstalledRuntimeResponse.nullish(),
-	activity: zXeLocalAiEngineClientEndpointsImagesV1ImageRuntimeActivityResponse,
-});
-
-export const zXeLocalAiEngineClientEndpointsImagesV1StartImageModelDownloadRequest = z.object({
-	modelName: z.string(),
-	repoId: z.string(),
-	family: z.string(),
-	kind: z.string().nullish(),
-	revision: z.string().nullish(),
-	parts: z.array(zXeLocalAiEngineClientEndpointsImagesV1ImageModelPartDownloadRequest),
-});
-
-export const zXeLocalAiEngineClientEndpointsImagesV1StartImageModelDownloadResponse = z.object({
-	modelName: z.string(),
-	accepted: z.boolean(),
-	alreadyInFlight: z.boolean(),
-});
-
-export const zXeLocalAiEngineClientEndpointsImagesV1StartStableDiffusionCppSourceBuildRequest = z.object({
-	backend: zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBackendDto,
-	source: zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceSelectionDto,
-	repository: z.string().nullish(),
-	commit: z.string().nullish(),
-	acknowledgeCustomSourceRisk: z.boolean(),
-});
-
-export const zXeLocalAiEngineClientEndpointsImagesV1StartStableDiffusionCppSourceBuildResponse = z.object({
-	started: z.boolean(),
-	status: zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildStatusResponse,
-});
-
-export const zXeLocalAiEngineClientEndpointsKnowledgeV1DownloadRecommendedEmbeddingResponse = z.object({
-	modelName: z.string(),
-	repoId: z.string(),
-	quant: z.string(),
-	alreadyInstalled: z.boolean(),
-	alreadyInFlight: z.boolean(),
-});
-
-export const zXeLocalAiEngineClientEndpointsKnowledgeV1DownloadRecommendedRerankerResponse = z.object({
-	modelName: z.string(),
-	repoId: z.string(),
-	quant: z.string(),
-	alreadyInstalled: z.boolean(),
-	alreadyInFlight: z.boolean(),
-});
-
-export const zXeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentChunkResponse = z.object({
-	chunkIndex: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	headingPath: z.string().nullish(),
-	content: z.string(),
-});
-
-export const zXeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentRouteRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsKnowledgeV1ReindexCorpusResponse = z.object({
-	enqueuedCount: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-});
-
-export const zXeLocalAiEngineClientEndpointsKnowledgeV1SearchKnowledgeRequest = z.object({
-	query: z.string(),
-	limit: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional(),
-	documentId: z.guid().nullish(),
-	expandNeighbors: z.boolean().optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsKnowledgeV1UploadKnowledgeDocumentRequest = z.object({
-	file: z.string().nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsLocalChatV1ArchiveNodeChatConversationRequest = z.object({
-	archived: z.boolean().optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsLocalChatV1BranchNodeChatConversationRequest = z.object({
-	selectedRevisions: z.record(z.string(), z.guid()).nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsLocalChatV1CancelNodeChatMessageRequest = z.object({
-	conversationId: z.guid().min(1),
-	messageId: z.guid().min(1),
-	requestId: z.guid().min(1),
-});
-
-export const zXeLocalAiEngineClientEndpointsLocalChatV1ConversationUploadedFileResponse = z.object({
-	fileId: z.guid(),
-	conversationId: z.guid(),
-	originalFileName: z.string(),
-	mimeType: z.string(),
-	extension: z.string(),
-	sizeBytes: z.int(),
-	extractionStatus: z.string(),
-	extractedChars: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	createdAtUtc: z.int(),
-});
-
-export const zXeLocalAiEngineClientEndpointsLocalChatV1CreateNodeChatConversationRequest = z.object({
-	title: z.string().min(0).max(200).nullish(),
-	userId: z.string().min(0).max(128).nullish(),
-	agentDefinitionId: z.guid().nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsLocalChatV1DeleteConversationUploadRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsLocalChatV1DeleteNodeChatConversationRequest = z.object({
-	purgeImmediately: z.boolean().optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatConversationRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatMessageFeedbackRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsLocalChatV1ListConversationUploadsRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsLocalChatV1ListConversationUploadsResponse = z.object({
-	items: z.array(zXeLocalAiEngineClientEndpointsLocalChatV1ConversationUploadedFileResponse),
-});
-
-export const zXeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatConversationsRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatMessageRevisionsRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatBranchConversationResponse = z.object({
-	sourceConversationId: z.guid(),
-	branchedConversationId: z.guid(),
-	copiedMessageCount: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-});
-
-export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatCancelMessageResponse = z.object({
-	conversationId: z.guid(),
-	messageId: z.guid(),
-	requestId: z.guid(),
 	status: z.string(),
-	cancelled: z.boolean(),
+	atUtc: z.iso.datetime({ offset: true }),
 });
 
-export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationSummaryResponse = z.object({
-	conversationId: z.guid(),
-	title: z.string().nullish(),
-	createdAtUtc: z.int(),
-	lastSeenUtc: z.int(),
-	lastMessagePreview: z.string().nullish(),
-	lastMessageStatus: z.string().nullish(),
-	purged: z.boolean(),
-	origin: z.string(),
-	isPinned: z.boolean(),
-	archived: z.boolean(),
+export const zXeLocalAiEngineClientEndpointsTutorialStateV1TutorialStateResponse = z.object({
+	entries: z.array(zXeLocalAiEngineClientEndpointsTutorialStateV1TutorialStateEntryResponse),
 });
 
-export const zXeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatConversationsResponse = z.object({
-	items: z.array(zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationSummaryResponse),
+export const zXeLocalAiEngineClientEndpointsTutorialStateV1SaveTutorialStateRequest = z.object({
+	key: z.string().optional(),
+	status: z.string().optional(),
 });
 
-export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatDeleteConversationResponse = z.object({
-	conversationId: z.guid(),
-	cancelRequested: z.boolean(),
-	purged: z.boolean(),
-});
-
-export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageFeedbackResponse = z.object({
-	messageId: z.guid(),
-	conversationId: z.guid(),
-	rating: z.string(),
-	comment: z.string().nullish(),
-	createdAtUtc: z.int(),
-	updatedAtUtc: z.int(),
-});
-
-export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatSelectedPathResponse = z.object({
-	conversationId: z.guid(),
-	selectedPath: z.record(z.string(), z.guid()),
-});
-
-export const zXeLocalAiEngineClientEndpointsLocalChatV1PinNodeChatConversationRequest = z.object({
-	isPinned: z.boolean().optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsLocalChatV1RenameNodeChatConversationRequest = z.object({
-	title: z.string().nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsLocalChatV1ResolveToolApprovalRequest = z.object({
-	requestId: z.string().min(1),
-	approved: z.boolean(),
-});
-
-export const zXeLocalAiEngineClientEndpointsLocalChatV1ResolveToolApprovalResponse = z.object({
-	requestId: z.string(),
-	approved: z.boolean(),
-});
-
-export const zXeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatConversationMemoryExcludedRequest = z.object({
-	memoryExcluded: z.boolean().optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatMessageFeedbackRequest = z.object({
-	rating: z.string(),
-	comment: z.string().nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatSelectedPathRequest = z.object({
-	selectedPath: z.record(z.string(), z.guid()).nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsLocalChatV1UploadConversationFileRequest = z.object({
-	file: z.string().nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelResponse = z.object({
-	modelName: z.string(),
-	deleted: z.boolean(),
-});
-
-export const zXeLocalAiEngineClientEndpointsLocalModelsV1GetLocalModelDetailsRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsLocalModelsV1LocalModelDetailsResponse = z.object({
-	modelName: z.string(),
-	maxContextTokens: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	effectiveContextTokens: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	template: z.string().nullish(),
-	system: z.string().nullish(),
-	license: z.string().nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse = z.object({
-	modelName: z.string(),
-	provider: z.string().optional(),
-	sizeBytes: z.int().nullish(),
-	modifiedAtUtc: z.int().nullish(),
-	family: z.string().nullish(),
-	parameterSize: z.string().nullish(),
-	quantizationLevel: z.string().nullish(),
-	isSelected: z.boolean(),
-	kind: z.string(),
-	detectedKind: z.string(),
-	capabilities: z.array(z.string()),
-	isReasoningCapable: z.boolean(),
-	isNativeReasoningCapable: z.boolean().optional(),
-	isToolCapable: z.boolean(),
-	isOverridden: z.boolean(),
-});
-
-export const zXeLocalAiEngineClientEndpointsLocalModelsV1ListLocalModelsResponse = z.object({
-	isAvailable: z.boolean(),
-	selectedModelName: z.string().nullish(),
-	configuredDefaultModelName: z.string().nullish(),
-	error: z.string().nullish(),
-	items: z.array(zXeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse),
-});
-
-export const zXeLocalAiEngineClientEndpointsLocalModelsV1ModelKindResponse = z.object({
-	modelName: z.string(),
-	kind: z.string(),
-	detectedKind: z.string(),
-	capabilities: z.array(z.string()),
-	isOverridden: z.boolean(),
-});
-
-export const zXeLocalAiEngineClientEndpointsLocalModelsV1ResetModelKindRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsLocalModelsV1RunningLocalModelResponse = z.object({
-	modelName: z.string(),
-	sizeBytes: z.int().nullish(),
-	sizeVramBytes: z.int().nullish(),
-	expiresAtUtc: z.int().nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsLocalModelsV1RunningLocalModelsResponse = z.object({
-	isAvailable: z.boolean(),
-	ollamaConfigured: z.boolean(),
-	error: z.string().nullish(),
-	items: z.array(zXeLocalAiEngineClientEndpointsLocalModelsV1RunningLocalModelResponse),
-});
-
-export const zXeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelRequest = z.object({
-	modelName: z.string().min(0).max(100),
-});
-
-export const zXeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelResponse = z.object({
-	selectedModelName: z.string(),
-});
-
-export const zXeLocalAiEngineClientEndpointsLocalModelsV1SetModelKindRequest = z.object({
-	kind: z.string().nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsLocalModelsV1UnloadLocalModelRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsLocalModelsV1UnloadLocalModelResponse = z.object({
-	modelName: z.string(),
-	unloaded: z.boolean(),
-});
-
-export const zXeLocalAiEngineClientEndpointsMcpV1DeleteMcpServerRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsMcpV1GetMcpServerRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsMcpV1GetMcpServerToolsRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsMcpV1McpDiscoveredToolResponse = z.object({
-	name: z.string(),
-	description: z.string().nullish(),
-	requiresApproval: z.boolean(),
-});
-
-export const zXeLocalAiEngineClientEndpointsMcpV1McpServerToolsResponse = z.object({
-	status: z.string(),
-	error: z.string().nullish(),
-	tools: z.array(zXeLocalAiEngineClientEndpointsMcpV1McpDiscoveredToolResponse),
-});
-
-export const zXeLocalAiEngineClientEndpointsMcpV1SetMcpServerEnabledRequest = z.object({
-	enabled: z.boolean().optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsMcpV1ToolCatalogEntryResponse = z.object({
+export const zXeLocalAiEngineClientEndpointsSkillsV1SkillResponse = z.object({
+	id: z.guid(),
 	name: z.string(),
 	description: z.string(),
-	requiresApproval: z.boolean(),
-	source: z.string(),
-	category: z.string(),
-	effectiveRequiresApproval: z.boolean(),
-});
-
-export const zXeLocalAiEngineClientEndpointsMcpV1ToolCatalogResponse = z.object({
-	tools: z.array(zXeLocalAiEngineClientEndpointsMcpV1ToolCatalogEntryResponse),
-});
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1BenchmarkInferenceProfileRequest = z.object({
-	profileId: z.guid(),
-	allowPreSpawnVramPressure: z.boolean().optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1BrowseGgufRepositoriesRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1CancelGgufDownloadRequest = z.object({
-	modelName: z.string(),
-});
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1CancelGgufDownloadResponse = z.object({
-	modelName: z.string(),
-	cancelled: z.boolean(),
-});
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1CudaBuildPrerequisiteItemResponse = z.object({
-	key: z.string(),
-	satisfied: z.boolean(),
-	detail: z.string(),
-});
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1CudaBuildPrerequisitesResponse = z.object({
-	items: z.array(zXeLocalAiEngineClientEndpointsModelFitV1CudaBuildPrerequisiteItemResponse),
-	canBuild: z.boolean(),
-});
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1CudaBuildStatusResponse = z.object({
-	phase: z.string(),
-	isRunning: z.boolean(),
-	terminal: z.boolean(),
-	logLines: z.array(z.string()),
-	sanitizedError: z.string().nullish(),
-	tag: z.string().nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1EjectRunningModelRequest = z.object({
-	modelName: z.string(),
-	role: z.string().nullish(),
-	force: z.boolean().optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1EjectRunningModelResponse = z.object({
-	modelName: z.string(),
-	role: z.string(),
-	outcome: z.string(),
-});
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1EnsureLlamaCppBinaryRequest = z.object({
-	variant: z.string(),
-});
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1ExploreInferenceProfileRequest = z.object({
-	modelName: z.string(),
-	role: z.string().nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1FreezeInferenceProfileRequest = z.object({
-	profileId: z.guid(),
-});
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1GetGgufDownloadStatusRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1GetHardwareProfileRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1GetLlamaCppRuntimeRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1GetLlamaCppSourceBuildPrerequisitesRequest = z.record(
-	z.string(),
-	z.never(),
-);
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1GgufDownloadStatusResponse = z.object({
-	modelName: z.string(),
-	phase: z.string(),
-	completedBytes: z.int().nullish(),
-	totalBytes: z.int().nullish(),
-	sanitizedError: z.string().nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryFileResponse = z.object({
-	fileName: z.string(),
-	quant: z.string(),
-	isDynamic: z.boolean(),
-	sizeBytes: z.int(),
-	qualityTier: z.string(),
-	fitVerdict: z.string(),
-	isRecommended: z.boolean(),
-	isDraft: z.boolean(),
-});
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryResponse = z.object({
-	repoId: z.string(),
-	isGated: z.boolean(),
-	downloads: z.int(),
-	likes: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	lastModifiedAtUtc: z.int(),
-	license: z.string().nullish(),
-	hasUsableGguf: z.boolean(),
-	isTrustedPublisher: z.boolean().optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1BrowseGgufRepositoriesResponse = z.object({
-	items: z.array(zXeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryResponse),
-});
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1HardwareProfileResponse = z.object({
-	totalRamBytes: z.int(),
-	availableRamBytes: z.int(),
-	vramBytes: z.int().nullish(),
-	vramKnown: z.boolean(),
-	gpuVendor: z.string(),
-	gpuAccelAvailable: z.boolean(),
-	cpuCores: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	freeDiskBytes: z.int(),
-	inferenceBackend: z.string().optional(),
-	gpuExpected: z.boolean().optional(),
-	cpuFallback: z.boolean().optional(),
-	cpuFallbackReason: z.string().nullish(),
-	cpuFallbackRemediation: z.string().nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1HfTokenStatusResponse = z.object({
-	hasToken: z.boolean(),
-});
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1InferenceBenchmarkMetricsDto = z.object({
-	role: z.string().nullish(),
-	tokensPerSecond: z.number().nullish(),
-	ppTokensPerSecond: z.number().nullish(),
-	ttftMs: z.number().nullish(),
-	totalLatencyMs: z.number().nullish(),
-	cacheHitRate: z.number().nullish(),
-	toolLoopMs: z.number().nullish(),
-	itemsPerSecond: z.number().nullish(),
-	inputTokensPerSecond: z.number().nullish(),
-	p50LatencyMs: z.number().nullish(),
-	p95LatencyMs: z.number().nullish(),
-	batchSize: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	outputDimension: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	valuesFinite: z.boolean().nullish(),
-	deterministicOutput: z.boolean().nullish(),
-	vramLoadBytes: z.int().nullish(),
-	vramAfterBytes: z.int().nullish(),
-	globalFreeVramLoadBytes: z.int().nullish(),
-	globalFreeVramAfterBytes: z.int().nullish(),
-	processBudgetVramLoadBytes: z.int().nullish(),
-	processBudgetVramAfterBytes: z.int().nullish(),
-	minimumGlobalFreeVramBytes: z.int().nullish(),
-	minimumProcessBudgetVramBytes: z.int().nullish(),
-	peakProcessRamBytes: z.int().nullish(),
-	externalPressureDetected: z.boolean(),
-	runs: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-});
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1InferenceProfileViewDto = z.object({
-	id: z.guid(),
-	modelName: z.string(),
-	role: z.string(),
-	backend: z.string(),
-	llamacppBuild: z.string(),
-	quant: z.string(),
-	ctxSize: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	nGpuLayers: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	tensorSplit: z.string().nullish(),
-	overrideTensor: z.string().nullish(),
-	kvTypeK: z.string().nullish(),
-	kvTypeV: z.string().nullish(),
-	flashAttn: z.boolean(),
-	nParams: z.int().nullish(),
-	isMoe: z.boolean(),
-	expertCount: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	launchPolicyFingerprintVersion: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	launchPolicyFingerprint: z.string().nullish(),
-	globalFreeVramAtFreezeBytes: z.int().nullish(),
-	processBudgetVramAtFreezeBytes: z.int().nullish(),
-	status: z.string(),
-	benchmarkSnapshotId: z.guid().nullish(),
-	createdAtUtc: z.int(),
-	updatedAtUtc: z.int(),
-});
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1BenchmarkInferenceProfileResponse = z.object({
-	snapshotId: z.guid().nullish(),
-	metrics: zXeLocalAiEngineClientEndpointsModelFitV1InferenceBenchmarkMetricsDto.nullish(),
-	profile: zXeLocalAiEngineClientEndpointsModelFitV1InferenceProfileViewDto,
-});
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1InferenceProfileActionResponse = z.object({
-	profile: zXeLocalAiEngineClientEndpointsModelFitV1InferenceProfileViewDto,
-});
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1InspectGgufRepositoryRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1InspectGgufRepositoryResponse = z.object({
-	repoId: z.string(),
-	files: z.array(zXeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryFileResponse),
-});
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1InvalidateInferenceProfileRequest = z.object({
-	profileId: z.guid(),
-});
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1ListGgufDownloadsResponse = z.object({
-	items: z.array(zXeLocalAiEngineClientEndpointsModelFitV1GgufDownloadStatusResponse),
-});
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1ListInferenceProfilesResponse = z.object({
-	items: z.array(zXeLocalAiEngineClientEndpointsModelFitV1InferenceProfileViewDto),
-});
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBackendDto = z.enum(["cpu", "vulkan", "cuda"]);
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildBlockedResponse = z.object({
-	reason: z.string(),
-	message: z.string(),
-	runningProcessCount: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildPrerequisiteItemResponse = z.object({
-	key: z.string(),
-	satisfied: z.boolean(),
-	detail: z.string(),
-});
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildPrerequisitesResponse = z.object({
-	backend: zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBackendDto,
-	items: z.array(zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildPrerequisiteItemResponse),
-	canBuild: z.boolean(),
-});
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceRevisionModeDto = z.enum([
-	"enginePinned",
-	"defaultBranch",
-	"explicitCommit",
-]);
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceSelectionDto = z.enum(["official", "custom"]);
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppInstalledRuntimeResponse = z.object({
-	tag: z.string(),
-	variant: z.string(),
-	asset: z.string(),
-	installedAtUtc: z.int(),
-	isSourceBuild: z.boolean(),
-	sourceRepository: z.string().nullish(),
-	sourceCommit: z.string().nullish(),
-	sourceSelection: zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceSelectionDto.nullish(),
-	sourceRevisionMode: zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceRevisionModeDto.nullish(),
-	sourceRequestedCommit: z.string().nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppRuntimeStatusResponse = z.object({
-	installed: zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppInstalledRuntimeResponse.nullish(),
-	recommendedTag: z.string(),
-	upstreamLatestTag: z.string().nullish(),
-	updateAvailable: z.boolean(),
-	isOffline: z.boolean(),
-	runningProcessCount: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	isSourceBuild: z.boolean(),
-	rebuildAvailable: z.boolean(),
-});
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildDescriptorResponse = z.object({
-	buildId: z.guid(),
-	backend: zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBackendDto,
-	source: zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceSelectionDto,
-	repository: z.string(),
-	revisionMode: zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceRevisionModeDto,
-	requestedCommit: z.string().nullish(),
-	resolvedCommit: z.string().nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildStatusResponse = z.object({
-	phase: z.string(),
-	isRunning: z.boolean(),
-	terminal: z.boolean(),
-	logStartSequence: z.int(),
-	logLines: z.array(z.string()),
-	sanitizedError: z.string().nullish(),
-	currentBuild: zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildDescriptorResponse.nullish(),
-	startedAtUtc: z.int().nullish(),
-	completedAtUtc: z.int().nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppUpdateBlockedResponse = z.object({
-	runningProcessCount: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	message: z.string(),
-});
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppVersionResponse = z.object({
-	version: z.string(),
-	variant: z.string(),
-	isPinnedFallback: z.boolean(),
-	pinnedTag: z.string(),
-});
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1ModelCatalogInfoResponse = z.object({
-	catalogVersion: z.string(),
-	updatedAt: z.string().nullish(),
-	source: z.string(),
-	fetchedAtUtc: z.int().nullish(),
-	sourceUrl: z.string().nullish(),
-	modelCount: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	refreshSourceConfigured: z.boolean(),
-});
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1ModelFitRecommendationResponse = z.object({
-	rank: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	modelName: z.string(),
-	providerModelName: z.string().nullish(),
-	score: z.number(),
-	fitLevel: z.string().nullish(),
-	runMode: z.string().nullish(),
-	quantization: z.string().nullish(),
-	estimatedTokensPerSecond: z.number().nullish(),
-	requiredRamMb: z.number().nullish(),
-	requiredVramMb: z.number().nullish(),
-	contextTokens: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	isInstalled: z.boolean(),
-	pullModelName: z.string().nullish(),
-	releaseDate: z.string().nullish(),
-	isTrustedPublisher: z.boolean().optional(),
-	section: z.string(),
-	tier: z.string().nullish(),
-	catalogId: z.string().nullish(),
-	catalogDisplayName: z.string().nullish(),
-	catalogNotes: z.string().nullish(),
-	expertsOffloaded: z.boolean().optional(),
-	gpuGb: z.number().nullish(),
-	cpuGb: z.number().nullish(),
-	kvQuant: z.string().nullish(),
-	kvQuantEstimatedGb: z.number().nullish(),
-	kvQuantHeadroomGb: z.number().nullish(),
-	kvQuantFits: z.boolean().nullish(),
-	kvQuantRequiresFlashAttention: z.boolean().nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsResponse = z.object({
-	hasCache: z.boolean(),
-	snapshotId: z.guid().nullish(),
-	status: z.string().nullish(),
-	useCase: z.string().nullish(),
-	lastRefreshedAtUtc: z.int().nullish(),
-	recommendations: z.array(zXeLocalAiEngineClientEndpointsModelFitV1ModelFitRecommendationResponse),
-});
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsRequest = z.object({
-	scheduledJobId: z.guid().optional(),
-	useCase: z.string().nullish(),
-	limit: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	quantOverride: z.string().nullish(),
-	ctxTarget: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsResponse = z.object({
-	scheduledJobId: z.guid(),
-});
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1RunningModelResponse = z.object({
-	modelName: z.string(),
-	role: z.string(),
-	isResponsive: z.boolean(),
-	detail: z.string(),
-});
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1ListRunningModelsResponse = z.object({
-	items: z.array(zXeLocalAiEngineClientEndpointsModelFitV1RunningModelResponse),
-});
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1SetHfTokenRequest = z.object({
-	token: z.string().nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1StartCudaBuildResponse = z.object({
-	started: z.boolean(),
-	status: zXeLocalAiEngineClientEndpointsModelFitV1CudaBuildStatusResponse,
-});
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1StartGgufDownloadRequest = z.object({
-	repoId: z.string(),
-	fileName: z.string().nullish(),
-	quant: z.string().nullish(),
-	revision: z.string().nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1StartGgufDownloadResponse = z.object({
-	modelName: z.string(),
-	alreadyInFlight: z.boolean(),
-});
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1StartLlamaCppSourceBuildRequest = z.object({
-	backend: zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBackendDto,
-	source: zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceSelectionDto,
-	repository: z.string().nullish(),
-	commit: z.string().nullish(),
-	acknowledgeCustomSourceRisk: z.boolean(),
-});
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1StartLlamaCppSourceBuildResponse = z.object({
-	started: z.boolean(),
-	status: zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildStatusResponse,
-});
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1UpdateLlamaCppRuntimeRequest = z.object({
-	tag: z.string(),
-	variant: z.string().nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsNodeBindingV1CancelNodeBindingResponse = z.object({
-	cancelled: z.boolean().optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsNodeBindingV1NodeBindingSessionResponse = z.object({
-	deviceCode: z.string(),
-	userCode: z.string(),
-	verificationUri: z.string(),
-	verificationUriComplete: z.string(),
-	expiresAt: z.iso.datetime({ offset: true }).optional(),
-	intervalSeconds: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional(),
-	status: z.string(),
-});
-
-export const zXeLocalAiEngineClientEndpointsNodeBindingV1PollNodeBindingSessionRequest = z.object({
-	deviceCode: z.string(),
-	userCode: z.string(),
-	verificationUri: z.string(),
-	verificationUriComplete: z.string(),
-	expiresAt: z.iso.datetime({ offset: true }).optional(),
-	intervalSeconds: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsNodeBindingV1PollNodeBindingSessionResponse = z.object({
-	status: z.string(),
-	intervalSeconds: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional(),
-	expiresAt: z.iso.datetime({ offset: true }).nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsPreviewV1CancelAllPreviewRunsResponse = z.object({
-	cancelledCount: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsPreviewV1PreviewRunRouteRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsPreviewV1PreviewRunStartedResponse = z.object({
-	runId: z.guid().optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsPreviewV1PreviewRunSummaryResponse = z.object({
-	runId: z.guid().optional(),
-	state: z.string().optional(),
-	isLive: z.boolean().optional(),
-	startedAtUtc: z.int().optional(),
-	lastSeq: z.int().optional(),
-	subscriberCount: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional(),
-	pausedNodeId: z.string().nullish(),
-	pauseRequestId: z.string().nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsPreviewV1ListPreviewRunsResponse = z.object({
-	items: z.array(zXeLocalAiEngineClientEndpointsPreviewV1PreviewRunSummaryResponse),
-});
-
-export const zXeLocalAiEngineClientEndpointsPreviewV1PreviewWorkflowRouteRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsPreviewV1PreviewWorkflowSummaryResponse = z.object({
-	id: z.guid().optional(),
-	name: z.string().optional(),
+	body: z.string(),
+	enabled: z.boolean(),
 	version: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional(),
-	createdAtUtc: z.int().optional(),
-	updatedAtUtc: z.int().optional(),
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	createdAtUtc: z.int(),
+	updatedAtUtc: z.int(),
 });
 
-export const zXeLocalAiEngineClientEndpointsPreviewV1ListPreviewWorkflowsResponse = z.object({
-	items: z.array(zXeLocalAiEngineClientEndpointsPreviewV1PreviewWorkflowSummaryResponse),
+export const zXeLocalAiEngineClientEndpointsSkillsV1CreateSkillRequest = z.object({
+	name: z.string().nullish(),
+	description: z.string().nullish(),
+	body: z.string().nullish(),
 });
 
-export const zXeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobRunsRequest = z.record(z.string(), z.never());
+export const zXeLocalAiEngineClientEndpointsSkillsV1DeleteSkillRequest = z.record(z.string(), z.never());
 
-export const zXeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobsRequest = z.record(z.string(), z.never());
+export const zXeLocalAiEngineClientEndpointsSkillsV1GetSkillRequest = z.record(z.string(), z.never());
 
-export const zXeLocalAiEngineClientEndpointsSchedulerV1ScheduleKind = z.enum(["Cron", "OneShot", "SimpleInterval", "Manual"]);
+export const zXeLocalAiEngineClientEndpointsSkillsV1SkillSummaryResponse = z.object({
+	id: z.guid(),
+	name: z.string(),
+	description: z.string(),
+	enabled: z.boolean(),
+	version: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	createdAtUtc: z.int(),
+	updatedAtUtc: z.int(),
+});
 
-export const zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobActionRequest = z.record(z.string(), z.never());
+export const zXeLocalAiEngineClientEndpointsSkillsV1ListSkillsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsSkillsV1SkillSummaryResponse),
+});
 
-export const zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobCreator = z.enum(["User", "Agent", "System"]);
-
-export const zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobRouteRequest = z.record(z.string(), z.never());
+export const zXeLocalAiEngineClientEndpointsSkillsV1UpdateSkillRequest = z.object({
+	name: z.string().nullish(),
+	description: z.string().nullish(),
+	body: z.string().nullish(),
+	enabled: z.boolean().optional(),
+});
 
 export const zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobRunCancelResponse = z.object({
 	outcome: z.string(),
@@ -2032,64 +108,11 @@ export const zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobRunCancelResp
 
 export const zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobRunRouteRequest = z.record(z.string(), z.never());
 
-export const zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledRunStatus = z.enum([
-	"Queued",
-	"Running",
-	"Succeeded",
-	"Failed",
-	"Cancelled",
-	"TimedOut",
-	"Skipped",
-]);
-
-export const zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledRunTrigger = z.enum(["Schedule", "Manual", "Agent", "System"]);
-
-export const zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobRunResponse = z.object({
-	id: z.guid(),
-	scheduledJobId: z.guid(),
-	templateId: z.string(),
-	triggeredBy: zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledRunTrigger,
-	status: zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledRunStatus,
-	scheduledFireTimeUtc: z.int().nullish(),
-	actualFireTimeUtc: z.int().nullish(),
-	completedAtUtc: z.int().nullish(),
-	durationMs: z.int().nullish(),
-	summary: z.string().nullish(),
-	errorMessage: z.string().nullish(),
-	cancellationRequestedAtUtc: z.int().nullish(),
-	createdAtUtc: z.int(),
-});
-
-export const zXeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobRunsResponse = z.object({
-	items: z.array(zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobRunResponse),
-});
+export const zXeLocalAiEngineClientEndpointsSchedulerV1ScheduleKind = z.enum(["Cron", "OneShot", "SimpleInterval", "Manual"]);
 
 export const zXeLocalAiEngineClientEndpointsSchedulerV1SchedulerMisfirePolicy = z.enum(["Smart", "SkipMissed", "FireOnceNow"]);
 
-export const zXeLocalAiEngineClientEndpointsSchedulerV1CreateScheduledJobRequest = z.object({
-	templateId: z.string(),
-	displayName: z.string(),
-	description: z.string().nullish(),
-	scheduleKind: zXeLocalAiEngineClientEndpointsSchedulerV1ScheduleKind,
-	cronExpression: z.string().nullish(),
-	intervalSeconds: z.int().nullish(),
-	repeatCount: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	startAtUtc: z.int().nullish(),
-	endAtUtc: z.int().nullish(),
-	timeZoneId: z.string().optional(),
-	misfirePolicy: zXeLocalAiEngineClientEndpointsSchedulerV1SchedulerMisfirePolicy.optional(),
-	preventOverlap: z.boolean().optional(),
-	maxRuntimeSeconds: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	parameters: z.string().nullish(),
-});
+export const zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobCreator = z.enum(["User", "Agent", "System"]);
 
 export const zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobResponse = z.object({
 	id: z.guid(),
@@ -2123,9 +146,74 @@ export const zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobResponse = z.
 	deletedAtUtc: z.int().nullish(),
 });
 
+export const zXeLocalAiEngineClientEndpointsSchedulerV1CreateScheduledJobRequest = z.object({
+	templateId: z.string(),
+	displayName: z.string(),
+	description: z.string().nullish(),
+	scheduleKind: zXeLocalAiEngineClientEndpointsSchedulerV1ScheduleKind,
+	cronExpression: z.string().nullish(),
+	intervalSeconds: z.int().nullish(),
+	repeatCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	startAtUtc: z.int().nullish(),
+	endAtUtc: z.int().nullish(),
+	timeZoneId: z.string().optional(),
+	misfirePolicy: zXeLocalAiEngineClientEndpointsSchedulerV1SchedulerMisfirePolicy.optional(),
+	preventOverlap: z.boolean().optional(),
+	maxRuntimeSeconds: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	parameters: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobRouteRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobActionRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledRunTrigger = z.enum(["Schedule", "Manual", "Agent", "System"]);
+
+export const zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledRunStatus = z.enum([
+	"Queued",
+	"Running",
+	"Succeeded",
+	"Failed",
+	"Cancelled",
+	"TimedOut",
+	"Skipped",
+]);
+
+export const zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobRunResponse = z.object({
+	id: z.guid(),
+	scheduledJobId: z.guid(),
+	templateId: z.string(),
+	triggeredBy: zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledRunTrigger,
+	status: zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledRunStatus,
+	scheduledFireTimeUtc: z.int().nullish(),
+	actualFireTimeUtc: z.int().nullish(),
+	completedAtUtc: z.int().nullish(),
+	durationMs: z.int().nullish(),
+	summary: z.string().nullish(),
+	errorMessage: z.string().nullish(),
+	cancellationRequestedAtUtc: z.int().nullish(),
+	createdAtUtc: z.int(),
+});
+
+export const zXeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobRunsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobRunResponse),
+});
+
+export const zXeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobRunsRequest = z.record(z.string(), z.never());
+
 export const zXeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobsResponse = z.object({
 	items: z.array(zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobResponse),
 });
+
+export const zXeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobsRequest = z.record(z.string(), z.never());
 
 export const zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobTemplateResponse = z.object({
 	templateId: z.string(),
@@ -2175,171 +263,112 @@ export const zXeLocalAiEngineClientEndpointsSchedulerV1UpdateScheduledJobRequest
 	parameters: z.string().nullish(),
 });
 
-export const zXeLocalAiEngineClientEndpointsSkillsV1CreateSkillRequest = z.object({
-	name: z.string().nullish(),
-	description: z.string().nullish(),
-	body: z.string().nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsSkillsV1DeleteSkillRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsSkillsV1GetSkillRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsSkillsV1SkillResponse = z.object({
-	id: z.guid(),
-	name: z.string(),
-	description: z.string(),
-	body: z.string(),
-	enabled: z.boolean(),
-	version: z
+export const zXeLocalAiEngineClientEndpointsPreviewV1CancelAllPreviewRunsResponse = z.object({
+	cancelledCount: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	createdAtUtc: z.int(),
-	updatedAtUtc: z.int(),
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
 });
 
-export const zXeLocalAiEngineClientEndpointsSkillsV1SkillSummaryResponse = z.object({
-	id: z.guid(),
-	name: z.string(),
-	description: z.string(),
-	enabled: z.boolean(),
-	version: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	createdAtUtc: z.int(),
-	updatedAtUtc: z.int(),
-});
+export const zXeLocalAiEngineClientEndpointsPreviewV1PreviewRunRouteRequest = z.record(z.string(), z.never());
 
-export const zXeLocalAiEngineClientEndpointsSkillsV1ListSkillsResponse = z.object({
-	items: z.array(zXeLocalAiEngineClientEndpointsSkillsV1SkillSummaryResponse),
-});
-
-export const zXeLocalAiEngineClientEndpointsSkillsV1UpdateSkillRequest = z.object({
-	name: z.string().nullish(),
-	description: z.string().nullish(),
-	body: z.string().nullish(),
-	enabled: z.boolean().optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsTutorialStateV1SaveTutorialStateRequest = z.object({
-	key: z.string().optional(),
-	status: z.string().optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsTutorialStateV1TutorialStateEntryResponse = z.object({
-	key: z.string(),
-	status: z.string(),
-	atUtc: z.iso.datetime({ offset: true }),
-});
-
-export const zXeLocalAiEngineClientEndpointsTutorialStateV1TutorialStateResponse = z.object({
-	entries: z.array(zXeLocalAiEngineClientEndpointsTutorialStateV1TutorialStateEntryResponse),
-});
-
-export const zXeLocalAiEngineClientEndpointsVoiceV1VoiceManifestModelFileDto = z.object({
-	dtype: z.string(),
-	file: z.string(),
-	byteSize: z.int(),
-	sha256: z.string(),
-	downloadUrl: z.string(),
-});
-
-export const zXeLocalAiEngineClientEndpointsVoiceV1VoiceManifestModelDto = z.object({
-	id: z.string(),
-	displayName: z.string(),
-	language: z.string(),
-	version: z.string(),
-	files: z.array(zXeLocalAiEngineClientEndpointsVoiceV1VoiceManifestModelFileDto),
-});
-
-export const zXeLocalAiEngineClientEndpointsVoiceV1VoiceManifestRemoteFallbackDto = z.object({
-	enabled: z.boolean(),
-	endpoint: z.string().nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsVoiceV1VoiceManifestVoiceDto = z.object({
-	id: z.string(),
-	name: z.string(),
-	language: z.string(),
-	gender: z.string(),
-});
-
-export const zXeLocalAiEngineClientEndpointsVoiceV1VoiceManifestResponse = z.object({
-	enabled: z.boolean(),
-	models: z.array(zXeLocalAiEngineClientEndpointsVoiceV1VoiceManifestModelDto),
-	voices: z.array(zXeLocalAiEngineClientEndpointsVoiceV1VoiceManifestVoiceDto),
-	defaultVoiceId: z.string(),
-	remoteFallback: zXeLocalAiEngineClientEndpointsVoiceV1VoiceManifestRemoteFallbackDto.nullish(),
-});
-
-export const zXeLocalAiEngineClientModelsEnumsFailureCategory = z.enum([
-	"Cancelled",
-	"Timeout",
-	"AgentRuntime",
-	"ProviderUnreachable",
-	"Unexpected",
-	"AgentToolCall",
-	"HashMismatch",
-	"ModelUnavailable",
-	"ModelCapabilityUnsupported",
-	"ModelLoadFailed",
-	"ModelNotInstalled",
-	"ContextWindowExceeded",
+export const zXeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowNodeKind = z.enum([
+	"Start",
+	"Agent",
+	"Debug",
+	"Pause",
+	"End",
 ]);
 
-export const zXeLocalAiEngineClientEndpointsInvocationsV1InvocationCurrentResponse = z.object({
-	invocationId: z.guid(),
-	conversationId: z.guid(),
-	status: zXeLocalAiEngineAiContractsEnumsInvocationStatus,
-	modelUsed: z.string().nullish(),
-	startedAt: z.iso.datetime({ offset: true }),
-	lastUpdatedAt: z.iso.datetime({ offset: true }),
-	completedAt: z.iso.datetime({ offset: true }).nullish(),
-	error: z.string().nullish(),
-	failureCategory: zXeLocalAiEngineClientModelsEnumsFailureCategory.nullish(),
-	streamedChunkCount: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	streamedThinkingChunkCount: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	pendingToolCallCount: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	hasPendingApproval: z.boolean(),
-	traceId: z.string().nullish(),
+export const zXeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraphNode = z.object({
+	id: z.string().optional(),
+	kind: zXeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowNodeKind.optional(),
+	label: z.string().nullish(),
+	instructions: z.string().nullish(),
+	model: z.string().nullish(),
+	modelProfile: z.string().nullish(),
+	reasoningEffort: z.string().nullish(),
 });
 
-export const zXeLocalAiEngineClientEndpointsInvocationsV1InvocationHistoryResponse = z.object({
-	invocationId: z.guid(),
-	conversationId: z.guid(),
-	status: zXeLocalAiEngineAiContractsEnumsInvocationStatus,
-	modelUsed: z.string().nullish(),
-	startedAt: z.iso.datetime({ offset: true }),
-	completedAt: z.iso.datetime({ offset: true }),
-	durationMs: z.int(),
-	error: z.string().nullish(),
-	failureCategory: zXeLocalAiEngineClientModelsEnumsFailureCategory.nullish(),
-	streamedChunkCount: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	streamedThinkingChunkCount: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	traceId: z.string().nullish(),
+export const zXeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraphEdge = z.object({
+	sourceId: z.string().optional(),
+	targetId: z.string().optional(),
 });
 
-export const zXeLocalAiEngineClientEndpointsInvocationsV1InvocationMonitorResponse = z.object({
-	current: zXeLocalAiEngineClientEndpointsInvocationsV1InvocationCurrentResponse.nullable(),
-	history: z.array(zXeLocalAiEngineClientEndpointsInvocationsV1InvocationHistoryResponse),
-	historyCapacity: z
+export const zXeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraph = z.object({
+	startText: z.string().optional(),
+	nodes: z.array(zXeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraphNode).optional(),
+	edges: z.array(zXeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraphEdge).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsPreviewV1PreviewWorkflowResponse = z.object({
+	id: z.guid().optional(),
+	name: z.string().optional(),
+	graph: zXeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraph.optional(),
+	version: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	createdAtUtc: z.int().optional(),
+	updatedAtUtc: z.int().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsPreviewV1CreatePreviewWorkflowRequest = z.object({
+	name: z.string(),
+	graph: zXeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraph,
+});
+
+export const zXeLocalAiEngineClientEndpointsPreviewV1PreviewWorkflowRouteRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsPreviewV1PreviewRunStartedResponse = z.object({
+	runId: z.guid().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsPreviewV1ExecuteUnsavedPreviewWorkflowRequest = z.object({
+	graph: zXeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraph,
+});
+
+export const zXeLocalAiEngineClientEndpointsPreviewV1PreviewRunSummaryResponse = z.object({
+	runId: z.guid().optional(),
+	state: z.string().optional(),
+	isLive: z.boolean().optional(),
+	startedAtUtc: z.int().optional(),
+	lastSeq: z.int().optional(),
+	subscriberCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	pausedNodeId: z.string().nullish(),
+	pauseRequestId: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsPreviewV1ListPreviewRunsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsPreviewV1PreviewRunSummaryResponse),
+});
+
+export const zXeLocalAiEngineClientEndpointsPreviewV1PreviewWorkflowSummaryResponse = z.object({
+	id: z.guid().optional(),
+	name: z.string().optional(),
+	version: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	createdAtUtc: z.int().optional(),
+	updatedAtUtc: z.int().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsPreviewV1ListPreviewWorkflowsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsPreviewV1PreviewWorkflowSummaryResponse),
+});
+
+export const zXeLocalAiEngineClientEndpointsPreviewV1UpdatePreviewWorkflowRequest = z.object({
+	name: z.string(),
+	graph: zXeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraph,
+	version: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
@@ -2374,383 +403,6 @@ export const zXeLocalAiEngineClientModelsSamplingOptions = z.object({
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullish(),
-});
-
-export const zXeLocalAiEngineClientPersistenceAgentDefinitionKind = z.enum(["Single", "Orchestrator"]);
-
-export const zXeLocalAiEngineClientEndpointsAgentsV1AgentDefinitionResponse = z.object({
-	id: z.guid(),
-	name: z.string(),
-	description: z.string().nullish(),
-	instructions: z.string(),
-	modelProfile: z.string().nullish(),
-	reasoningEffort: z.string().nullish(),
-	kind: zXeLocalAiEngineClientPersistenceAgentDefinitionKind,
-	allowedToolNames: z.array(z.string()),
-	toolApprovals: z.record(z.string(), z.boolean()),
-	orchestrationTopologyJson: z.string().nullish(),
-	playbookEnabled: z.boolean(),
-	defaultTemporaryChat: z.boolean(),
-	memoryExtractionEnabled: z.boolean(),
-	disableBaseScaffold: z.boolean(),
-	allowedSkillIds: z.array(z.guid()),
-	version: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	createdAtUtc: z.int(),
-	updatedAtUtc: z.int(),
-});
-
-export const zXeLocalAiEngineClientEndpointsAgentsV1CreateAgentDefinitionRequest = z.object({
-	name: z.string().nullish(),
-	description: z.string().nullish(),
-	instructions: z.string().nullish(),
-	modelProfile: z.string().nullish(),
-	reasoningEffort: z.string().nullish(),
-	kind: zXeLocalAiEngineClientPersistenceAgentDefinitionKind.optional(),
-	allowedToolNames: z.array(z.string()).nullish(),
-	toolApprovals: z.record(z.string(), z.boolean()).nullish(),
-	orchestrationTopologyJson: z.string().nullish(),
-	playbookEnabled: z.boolean().optional(),
-	defaultTemporaryChat: z.boolean().optional(),
-	memoryExtractionEnabled: z.boolean().optional(),
-	disableBaseScaffold: z.boolean().optional(),
-	allowedSkillIds: z.array(z.guid()).nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsAgentsV1ListAgentDefinitionsResponse = z.object({
-	items: z.array(zXeLocalAiEngineClientEndpointsAgentsV1AgentDefinitionResponse),
-});
-
-export const zXeLocalAiEngineClientEndpointsAgentsV1UpdateAgentDefinitionRequest = z.object({
-	name: z.string().nullish(),
-	description: z.string().nullish(),
-	instructions: z.string().nullish(),
-	modelProfile: z.string().nullish(),
-	reasoningEffort: z.string().nullish(),
-	kind: zXeLocalAiEngineClientPersistenceAgentDefinitionKind.optional(),
-	allowedToolNames: z.array(z.string()).nullish(),
-	toolApprovals: z.record(z.string(), z.boolean()).nullish(),
-	orchestrationTopologyJson: z.string().nullish(),
-	playbookEnabled: z.boolean().optional(),
-	defaultTemporaryChat: z.boolean().optional(),
-	memoryExtractionEnabled: z.boolean().optional(),
-	disableBaseScaffold: z.boolean().optional(),
-	allowedSkillIds: z.array(z.guid()).nullish(),
-});
-
-export const zXeLocalAiEngineClientPersistenceMcpTransportKind = z.enum(["Stdio", "Http"]);
-
-export const zXeLocalAiEngineClientEndpointsMcpV1CreateMcpServerRequest = z.object({
-	name: z.string().nullish(),
-	description: z.string().nullish(),
-	transportKind: zXeLocalAiEngineClientPersistenceMcpTransportKind.optional(),
-	command: z.string().nullish(),
-	arguments: z.array(z.string()).nullish(),
-	workingDirectory: z.string().nullish(),
-	env: z.record(z.string(), z.string()).nullish(),
-	url: z.string().nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsMcpV1McpServerResponse = z.object({
-	id: z.guid(),
-	name: z.string(),
-	description: z.string().nullish(),
-	transportKind: zXeLocalAiEngineClientPersistenceMcpTransportKind,
-	command: z.string().nullish(),
-	arguments: z.array(z.string()),
-	workingDirectory: z.string().nullish(),
-	env: z.record(z.string(), z.string()),
-	url: z.string().nullish(),
-	enabled: z.boolean(),
-	version: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	createdAtUtc: z.int(),
-	updatedAtUtc: z.int(),
-});
-
-export const zXeLocalAiEngineClientEndpointsMcpV1ListMcpServersResponse = z.object({
-	items: z.array(zXeLocalAiEngineClientEndpointsMcpV1McpServerResponse),
-});
-
-export const zXeLocalAiEngineClientEndpointsMcpV1UpdateMcpServerRequest = z.object({
-	name: z.string().nullish(),
-	description: z.string().nullish(),
-	transportKind: zXeLocalAiEngineClientPersistenceMcpTransportKind.optional(),
-	command: z.string().nullish(),
-	arguments: z.array(z.string()).nullish(),
-	workingDirectory: z.string().nullish(),
-	env: z.record(z.string(), z.string()).nullish(),
-	url: z.string().nullish(),
-});
-
-export const zXeLocalAiEngineClientPersistenceMemoryScope = z.enum(["Procedural", "Failure", "UserPreference", "Project"]);
-
-export const zXeLocalAiEngineClientPersistencePlaybookActionSource = z.enum(["Manual", "Analysis", "Extracted"]);
-
-export const zXeLocalAiEngineClientPersistencePlaybookActionState = z.enum(["Suggested", "Enabled", "Disabled", "Archived"]);
-
-export const zXeLocalAiEngineClientEndpointsAgentsV1CreatePlaybookActionRequest = z.object({
-	state: zXeLocalAiEngineClientPersistencePlaybookActionState.optional(),
-	triggerCondition: z.string().nullish(),
-	behavior: z.string().nullish(),
-	scope: z.string().nullish(),
-	priority: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsAgentsV1PlaybookActionResponse = z.object({
-	id: z.guid(),
-	agentDefinitionId: z.guid(),
-	state: zXeLocalAiEngineClientPersistencePlaybookActionState,
-	source: zXeLocalAiEngineClientPersistencePlaybookActionSource,
-	memoryScope: zXeLocalAiEngineClientPersistenceMemoryScope.nullish(),
-	triggerCondition: z.string().nullish(),
-	behavior: z.string(),
-	scope: z.string().nullish(),
-	priority: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	version: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	createdAtUtc: z.int(),
-	updatedAtUtc: z.int(),
-	sourceFeedbackIds: z.array(z.guid()).nullish(),
-	confidence: z.number().nullish(),
-	evalResult: zXeLocalAiEngineClientEndpointsAgentsV1PlaybookEvalResultResponse.nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsAgentsV1ListPlaybookActionsResponse = z.object({
-	items: z.array(zXeLocalAiEngineClientEndpointsAgentsV1PlaybookActionResponse),
-});
-
-export const zXeLocalAiEngineClientEndpointsAgentsV1UpdatePlaybookActionRequest = z.object({
-	state: zXeLocalAiEngineClientPersistencePlaybookActionState.optional(),
-	triggerCondition: z.string().nullish(),
-	behavior: z.string().nullish(),
-	scope: z.string().nullish(),
-	priority: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional(),
-});
-
-export const zXeLocalAiEngineClientServicesChatNodeChatMessagePart = z.object({
-	kind: z.string().optional(),
-	sequence: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional(),
-	text: z.string().nullish(),
-	toolCallId: z.string().nullish(),
-	name: z.string().nullish(),
-	state: z.string().nullish(),
-	args: z.string().nullish(),
-	result: z.string().nullish(),
-	requiresApproval: z.boolean().nullish(),
-});
-
-export const zXeLocalAiEngineClientServicesChatNodeChatMessageSource = z.object({
-	documentId: z.guid().optional(),
-	chunkId: z.guid().optional(),
-	title: z.string().optional(),
-	section: z.string().nullish(),
-	score: z.number().optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageResponse = z.object({
-	messageId: z.guid(),
-	conversationId: z.guid(),
-	requestId: z.guid().nullish(),
-	sequence: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	role: z.string(),
-	content: z.string(),
-	reasoning: z.string().nullish(),
-	status: z.string(),
-	createdAtUtc: z.int(),
-	updatedAtUtc: z.int(),
-	origin: z.string(),
-	model: z.string().nullish(),
-	error: z.string().nullish(),
-	inputTokens: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	outputTokens: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	totalTokens: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	reasoningTokens: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	parentMessageId: z.guid().nullish(),
-	variantGroupId: z.guid().nullish(),
-	feedbackRating: z.string().nullish(),
-	feedbackComment: z.string().nullish(),
-	parts: z.array(zXeLocalAiEngineClientServicesChatNodeChatMessagePart).nullish(),
-	agentDefinitionId: z.guid().nullish(),
-	agentName: z.string().nullish(),
-	reasoningEffort: z.string().nullish(),
-	generationDurationMs: z.int().nullish(),
-	sources: z.array(zXeLocalAiEngineClientServicesChatNodeChatMessageSource).nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationResponse = z.object({
-	conversationId: z.guid(),
-	title: z.string().nullish(),
-	userId: z.string().nullish(),
-	createdAtUtc: z.int(),
-	lastSeenUtc: z.int(),
-	purged: z.boolean(),
-	origin: z.string(),
-	isPinned: z.boolean(),
-	archived: z.boolean(),
-	branchOfConversationId: z.guid().nullish(),
-	selectedPath: z.record(z.string(), z.guid()).nullish(),
-	memoryExcluded: z.boolean(),
-	messages: z.array(zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageResponse),
-});
-
-export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageRevisionsResponse = z.object({
-	messageId: z.guid(),
-	variantGroupId: z.guid().nullish(),
-	variants: z.array(zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageResponse),
-});
-
-export const zXeLocalAiEngineClientServicesDevelopmentDevelopmentPatchPreviewFile = z.object({
-	path: z.string().optional(),
-	changeType: z.string().optional(),
-	previousPath: z.string().nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentPatchPreviewResponse = z.object({
-	subjectHash: z.string().optional(),
-	patchHash: z.string().optional(),
-	manifestHash: z.string().optional(),
-	expectedResultHash: z.string().optional(),
-	patch: z.string().optional(),
-	changedFiles: z.array(zXeLocalAiEngineClientServicesDevelopmentDevelopmentPatchPreviewFile).optional(),
-});
-
-export const zXeLocalAiEngineClientServicesKnowledgeKnowledgeDocumentStatus = z.enum([
-	"Pending",
-	"Extracting",
-	"Chunking",
-	"Embedding",
-	"Indexed",
-	"Failed",
-]);
-
-export const zXeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentDetailResponse = z.object({
-	documentId: z.guid(),
-	displayName: z.string(),
-	status: zXeLocalAiEngineClientServicesKnowledgeKnowledgeDocumentStatus,
-	failureReason: z.string().nullish(),
-	chunkCount: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	embeddingModel: z.string(),
-	staleModel: z.boolean(),
-	sizeBytes: z.int(),
-	createdAtUtc: z.int(),
-	updatedAtUtc: z.int(),
-	chunks: z.array(zXeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentChunkResponse),
-});
-
-export const zXeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentResponse = z.object({
-	documentId: z.guid(),
-	displayName: z.string(),
-	status: zXeLocalAiEngineClientServicesKnowledgeKnowledgeDocumentStatus,
-	failureReason: z.string().nullish(),
-	chunkCount: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	embeddingModel: z.string(),
-	staleModel: z.boolean(),
-	sizeBytes: z.int(),
-	createdAtUtc: z.int(),
-});
-
-export const zXeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeSearchHitResponse = z.object({
-	documentId: z.guid(),
-	chunkId: z.guid(),
-	title: z.string(),
-	section: z.string().nullish(),
-	content: z.string(),
-	source: z.string(),
-	score: z.number(),
-	chunkIndex: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	documentStatus: zXeLocalAiEngineClientServicesKnowledgeKnowledgeDocumentStatus,
-	servingLastKnownGood: z.boolean(),
-});
-
-export const zXeLocalAiEngineClientEndpointsKnowledgeV1ListKnowledgeDocumentsResponse = z.object({
-	items: z.array(zXeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentResponse),
-});
-
-export const zXeLocalAiEngineClientEndpointsKnowledgeV1SearchKnowledgeResponse = z.object({
-	results: z.array(zXeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeSearchHitResponse),
-});
-
-export const zXeLocalAiEngineClientEndpointsKnowledgeV1UploadKnowledgeDocumentResponse = z.object({
-	documentId: z.guid(),
-	status: zXeLocalAiEngineClientServicesKnowledgeKnowledgeDocumentStatus,
-	deduplicated: z.boolean(),
-});
-
-export const zXeLocalAiEngineClientServicesMonitoringPlaybookMonitorStatus = z.enum([
-	"InsufficientData",
-	"Improved",
-	"Flat",
-	"Regressed",
-]);
-
-export const zXeLocalAiEngineClientEndpointsAgentsV1PlaybookActionMonitorItemResponse = z.object({
-	actionId: z.guid().optional(),
-	enabledAtUtc: z.int().optional(),
-	beforeDownRate: z.number().optional(),
-	afterDownRate: z.number().optional(),
-	afterSampleSize: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional(),
-	status: zXeLocalAiEngineClientServicesMonitoringPlaybookMonitorStatus.optional(),
-	flagged: z.boolean().optional(),
-	facetToolName: z.string().nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsAgentsV1AgentPlaybookMonitorResponse = z.object({
-	items: z.array(zXeLocalAiEngineClientEndpointsAgentsV1PlaybookActionMonitorItemResponse).optional(),
-	retrieval: zXeLocalAiEngineClientEndpointsAgentsV1PlaybookRetrievalResponse.optional(),
 });
 
 export const zXeLocalAiEngineClientServicesNodeSettingsModelRate = z.object({
@@ -3032,1466 +684,2583 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsReques
 	usageRates: z.record(z.string(), zXeLocalAiEngineClientServicesNodeSettingsModelRate).nullish(),
 });
 
-export const zXeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraphEdge = z.object({
-	sourceId: z.string().optional(),
-	targetId: z.string().optional(),
+/**
+ * the error details object
+ */
+export const zFastEndpointsProblemDetailsError = z.object({
+	name: z.string().optional().default("Error or field name"),
+	reason: z.string().optional().default("Error reason"),
+	code: z.string().nullish(),
+	severity: z.string().nullish(),
 });
 
-export const zXeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowNodeKind = z.enum([
-	"Start",
-	"Agent",
-	"Debug",
-	"Pause",
-	"End",
-]);
-
-export const zXeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraphNode = z.object({
-	id: z.string().optional(),
-	kind: zXeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowNodeKind.optional(),
-	label: z.string().nullish(),
-	instructions: z.string().nullish(),
-	model: z.string().nullish(),
-	modelProfile: z.string().nullish(),
-	reasoningEffort: z.string().nullish(),
+/**
+ * RFC9457 compatible problem details/ error response class. this can be used by configuring startup like so:
+ * app.UseFastEndpoints(c => c.Errors.UseProblemDetails())
+ */
+export const zFastEndpointsProblemDetails = z.object({
+	type: z.string().optional().default("https://www.rfc-editor.org/rfc/rfc7231#section-6.5.1"),
+	title: z.string().optional().default("One or more validation errors occurred."),
+	status: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional()
+		.default(400),
+	instance: z.string().optional().default("/api/route"),
+	traceId: z.string().optional().default("0HMPNHL0JHL76:00000001"),
+	detail: z.string().nullish(),
+	errors: z.array(zFastEndpointsProblemDetailsError).optional(),
 });
 
-export const zXeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraph = z.object({
-	startText: z.string().optional(),
-	nodes: z.array(zXeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraphNode).optional(),
-	edges: z.array(zXeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraphEdge).optional(),
+export const zXeLocalAiEngineClientEndpointsNodeBindingV1CancelNodeBindingResponse = z.object({
+	cancelled: z.boolean().optional(),
 });
 
-export const zXeLocalAiEngineClientEndpointsPreviewV1CreatePreviewWorkflowRequest = z.object({
-	name: z.string(),
-	graph: zXeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraph,
-});
-
-export const zXeLocalAiEngineClientEndpointsPreviewV1ExecuteUnsavedPreviewWorkflowRequest = z.object({
-	graph: zXeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraph,
-});
-
-export const zXeLocalAiEngineClientEndpointsPreviewV1PreviewWorkflowResponse = z.object({
-	id: z.guid().optional(),
-	name: z.string().optional(),
-	graph: zXeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraph.optional(),
-	version: z
+export const zXeLocalAiEngineClientEndpointsNodeBindingV1PollNodeBindingSessionResponse = z.object({
+	status: z.string(),
+	intervalSeconds: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.optional(),
-	createdAtUtc: z.int().optional(),
-	updatedAtUtc: z.int().optional(),
+	expiresAt: z.iso.datetime({ offset: true }).nullish(),
 });
 
-export const zXeLocalAiEngineClientEndpointsPreviewV1UpdatePreviewWorkflowRequest = z.object({
-	name: z.string(),
-	graph: zXeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraph,
-	version: z
+export const zXeLocalAiEngineClientEndpointsNodeBindingV1PollNodeBindingSessionRequest = z.object({
+	deviceCode: z.string(),
+	userCode: z.string(),
+	verificationUri: z.string(),
+	verificationUriComplete: z.string(),
+	expiresAt: z.iso.datetime({ offset: true }).optional(),
+	intervalSeconds: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsNodeBindingV1NodeBindingSessionResponse = z.object({
+	deviceCode: z.string(),
+	userCode: z.string(),
+	verificationUri: z.string(),
+	verificationUriComplete: z.string(),
+	expiresAt: z.iso.datetime({ offset: true }).optional(),
+	intervalSeconds: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	status: z.string(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1InferenceBenchmarkMetricsDto = z.object({
+	role: z.string().nullish(),
+	tokensPerSecond: z.number().nullish(),
+	ppTokensPerSecond: z.number().nullish(),
+	ttftMs: z.number().nullish(),
+	totalLatencyMs: z.number().nullish(),
+	cacheHitRate: z.number().nullish(),
+	toolLoopMs: z.number().nullish(),
+	itemsPerSecond: z.number().nullish(),
+	inputTokensPerSecond: z.number().nullish(),
+	p50LatencyMs: z.number().nullish(),
+	p95LatencyMs: z.number().nullish(),
+	batchSize: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	outputDimension: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	valuesFinite: z.boolean().nullish(),
+	deterministicOutput: z.boolean().nullish(),
+	vramLoadBytes: z.int().nullish(),
+	vramAfterBytes: z.int().nullish(),
+	globalFreeVramLoadBytes: z.int().nullish(),
+	globalFreeVramAfterBytes: z.int().nullish(),
+	processBudgetVramLoadBytes: z.int().nullish(),
+	processBudgetVramAfterBytes: z.int().nullish(),
+	minimumGlobalFreeVramBytes: z.int().nullish(),
+	minimumProcessBudgetVramBytes: z.int().nullish(),
+	peakProcessRamBytes: z.int().nullish(),
+	externalPressureDetected: z.boolean(),
+	runs: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 });
 
-/**
- * Success
- */
-export const zListAgentDefinitionsResponse = zXeLocalAiEngineClientEndpointsAgentsV1ListAgentDefinitionsResponse;
-
-export const zCreateAgentDefinitionBody = zXeLocalAiEngineClientEndpointsAgentsV1CreateAgentDefinitionRequest;
-
-/**
- * Success
- */
-export const zCreateAgentDefinitionResponse = zXeLocalAiEngineClientEndpointsAgentsV1AgentDefinitionResponse;
-
-export const zListRunEnvelopesQuery = z.object({
-	conversationId: z.guid().nullish(),
-	limit: z
+export const zXeLocalAiEngineClientEndpointsModelFitV1InferenceProfileViewDto = z.object({
+	id: z.guid(),
+	modelName: z.string(),
+	role: z.string(),
+	backend: z.string(),
+	llamacppBuild: z.string(),
+	quant: z.string(),
+	ctxSize: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	nGpuLayers: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullish(),
-	offset: z
+	tensorSplit: z.string().nullish(),
+	overrideTensor: z.string().nullish(),
+	kvTypeK: z.string().nullish(),
+	kvTypeV: z.string().nullish(),
+	flashAttn: z.boolean(),
+	nParams: z.int().nullish(),
+	isMoe: z.boolean(),
+	expertCount: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullish(),
-});
-
-/**
- * Success
- */
-export const zListRunEnvelopesResponse = zXeLocalAiEngineClientEndpointsAgentsV1ListRunEnvelopesResponse;
-
-/**
- * Success
- */
-export const zListAgentTemplatesResponse = zXeLocalAiEngineClientEndpointsAgentsV1ListAgentTemplatesResponse;
-
-export const zImportAgentTemplatesBody = zXeLocalAiEngineClientEndpointsAgentsV1ImportAgentTemplatesRequest;
-
-/**
- * Success
- */
-export const zImportAgentTemplatesResponse = zXeLocalAiEngineClientEndpointsAgentsV1ImportAgentTemplatesResponse;
-
-/**
- * Success
- */
-export const zGetToolCapableModelsResponse = zXeLocalAiEngineClientEndpointsAgentsV1ToolCapableModelsResponse;
-
-export const zGetAgentUsageSummaryQuery = z.object({
-	fromEpochMs: z.int().nullish(),
-	toEpochMs: z.int().nullish(),
-});
-
-/**
- * Success
- */
-export const zGetAgentUsageSummaryResponse = zXeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryResponse;
-
-export const zDeleteAgentDefinitionPath = z.object({
-	agentDefinitionId: z.guid(),
-});
-
-/**
- * No Content
- */
-export const zDeleteAgentDefinitionResponse = z.void();
-
-export const zGetAgentDefinitionPath = z.object({
-	agentDefinitionId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zGetAgentDefinitionResponse = zXeLocalAiEngineClientEndpointsAgentsV1AgentDefinitionResponse;
-
-export const zUpdateAgentDefinitionBody = zXeLocalAiEngineClientEndpointsAgentsV1UpdateAgentDefinitionRequest;
-
-export const zUpdateAgentDefinitionPath = z.object({
-	agentDefinitionId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zUpdateAgentDefinitionResponse = zXeLocalAiEngineClientEndpointsAgentsV1AgentDefinitionResponse;
-
-export const zListAgentExecutionLogsPath = z.object({
-	agentDefinitionId: z.guid(),
-});
-
-export const zListAgentExecutionLogsQuery = z.object({
-	limit: z
+	launchPolicyFingerprintVersion: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullish(),
-	offset: z
+	launchPolicyFingerprint: z.string().nullish(),
+	globalFreeVramAtFreezeBytes: z.int().nullish(),
+	processBudgetVramAtFreezeBytes: z.int().nullish(),
+	status: z.string(),
+	benchmarkSnapshotId: z.guid().nullish(),
+	createdAtUtc: z.int(),
+	updatedAtUtc: z.int(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1BenchmarkInferenceProfileResponse = z.object({
+	snapshotId: z.guid().nullish(),
+	metrics: zXeLocalAiEngineClientEndpointsModelFitV1InferenceBenchmarkMetricsDto.nullish(),
+	profile: zXeLocalAiEngineClientEndpointsModelFitV1InferenceProfileViewDto,
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1BenchmarkInferenceProfileRequest = z.object({
+	profileId: z.guid(),
+	allowPreSpawnVramPressure: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryResponse = z.object({
+	repoId: z.string(),
+	isGated: z.boolean(),
+	downloads: z.int(),
+	likes: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	lastModifiedAtUtc: z.int(),
+	license: z.string().nullish(),
+	hasUsableGguf: z.boolean(),
+	isTrustedPublisher: z.boolean().optional(),
 });
 
-/**
- * Success
- */
-export const zListAgentExecutionLogsResponse = zXeLocalAiEngineClientEndpointsAgentsV1ListAgentExecutionLogsResponse;
-
-export const zGetAgentFeedbackInsightsPath = z.object({
-	agentDefinitionId: z.guid(),
+export const zXeLocalAiEngineClientEndpointsModelFitV1BrowseGgufRepositoriesResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryResponse),
 });
 
-/**
- * Success
- */
-export const zGetAgentFeedbackInsightsResponse = zXeLocalAiEngineClientEndpointsAgentsV1AgentFeedbackInsightsResponse;
+export const zXeLocalAiEngineClientEndpointsModelFitV1BrowseGgufRepositoriesRequest = z.record(z.string(), z.never());
 
-export const zListGoldenConversationsPath = z.object({
-	agentDefinitionId: z.guid(),
+export const zXeLocalAiEngineClientEndpointsModelFitV1CudaBuildStatusResponse = z.object({
+	phase: z.string(),
+	isRunning: z.boolean(),
+	terminal: z.boolean(),
+	logLines: z.array(z.string()),
+	sanitizedError: z.string().nullish(),
+	tag: z.string().nullish(),
 });
 
-/**
- * Success
- */
-export const zListGoldenConversationsResponse = zXeLocalAiEngineClientEndpointsAgentsV1ListGoldenConversationsResponse;
-
-export const zCreateGoldenConversationBody = zXeLocalAiEngineClientEndpointsAgentsV1CreateGoldenConversationRequest;
-
-export const zCreateGoldenConversationPath = z.object({
-	agentDefinitionId: z.guid(),
+export const zXeLocalAiEngineClientEndpointsModelFitV1CancelGgufDownloadResponse = z.object({
+	modelName: z.string(),
+	cancelled: z.boolean(),
 });
 
-/**
- * Success
- */
-export const zCreateGoldenConversationResponse = zXeLocalAiEngineClientEndpointsAgentsV1GoldenConversationResponse;
-
-export const zHarvestGoldenConversationsPath = z.object({
-	agentDefinitionId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zHarvestGoldenConversationsResponse = zXeLocalAiEngineClientEndpointsAgentsV1GoldenHarvestResponse;
-
-export const zDeleteGoldenConversationPath = z.object({
-	agentDefinitionId: z.guid(),
-	goldenConversationId: z.guid(),
-});
-
-/**
- * No Content
- */
-export const zDeleteGoldenConversationResponse = z.void();
-
-export const zApproveGoldenConversationPath = z.object({
-	agentDefinitionId: z.guid(),
-	goldenConversationId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zApproveGoldenConversationResponse = zXeLocalAiEngineClientEndpointsAgentsV1GoldenConversationResponse;
-
-export const zListAgentPlaybookActionsPath = z.object({
-	agentDefinitionId: z.guid(),
-});
-
-export const zListAgentPlaybookActionsQuery = z.object({
-	scope: zXeLocalAiEngineClientPersistenceMemoryScope.nullish(),
-});
-
-/**
- * Success
- */
-export const zListAgentPlaybookActionsResponse = zXeLocalAiEngineClientEndpointsAgentsV1ListPlaybookActionsResponse;
-
-export const zCreatePlaybookActionBody = zXeLocalAiEngineClientEndpointsAgentsV1CreatePlaybookActionRequest;
-
-export const zCreatePlaybookActionPath = z.object({
-	agentDefinitionId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zCreatePlaybookActionResponse = zXeLocalAiEngineClientEndpointsAgentsV1PlaybookActionResponse;
-
-export const zAnalyzePlaybookPath = z.object({
-	agentDefinitionId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zAnalyzePlaybookResponse = zXeLocalAiEngineClientEndpointsAgentsV1ListPlaybookActionsResponse;
-
-export const zGetAgentPlaybookMonitorPath = z.object({
-	agentDefinitionId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zGetAgentPlaybookMonitorResponse = zXeLocalAiEngineClientEndpointsAgentsV1AgentPlaybookMonitorResponse;
-
-export const zDeletePlaybookActionPath = z.object({
-	agentDefinitionId: z.guid(),
-	actionId: z.guid(),
-});
-
-/**
- * No Content
- */
-export const zDeletePlaybookActionResponse = z.void();
-
-export const zUpdatePlaybookActionBody = zXeLocalAiEngineClientEndpointsAgentsV1UpdatePlaybookActionRequest;
-
-export const zUpdatePlaybookActionPath = z.object({
-	agentDefinitionId: z.guid(),
-	actionId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zUpdatePlaybookActionResponse = zXeLocalAiEngineClientEndpointsAgentsV1PlaybookActionResponse;
-
-export const zRunPlaybookActionEvalPath = z.object({
-	agentDefinitionId: z.guid(),
-	actionId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zRunPlaybookActionEvalResponse = zXeLocalAiEngineClientEndpointsAgentsV1PlaybookActionResponse;
-
-export const zPromoteSuggestedPlaybookActionPath = z.object({
-	agentDefinitionId: z.guid(),
-	actionId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zPromoteSuggestedPlaybookActionResponse = zXeLocalAiEngineClientEndpointsAgentsV1PlaybookActionResponse;
-
-export const zRejectSuggestedPlaybookActionPath = z.object({
-	agentDefinitionId: z.guid(),
-	actionId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zRejectSuggestedPlaybookActionResponse = zXeLocalAiEngineClientEndpointsAgentsV1PlaybookActionResponse;
-
-export const zUpdateSuggestedPlaybookActionBody = zXeLocalAiEngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActionRequest;
-
-export const zUpdateSuggestedPlaybookActionPath = z.object({
-	agentDefinitionId: z.guid(),
-	actionId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zUpdateSuggestedPlaybookActionResponse = zXeLocalAiEngineClientEndpointsAgentsV1PlaybookActionResponse;
-
-/**
- * Success
- */
-export const zApplyAppUpdateResponse = zXeLocalAiEngineClientEndpointsAppUpdateV1ApplyAppUpdateResponse;
-
-export const zGetAppUpdateStatusQuery = z.object({
-	refresh: z.boolean().nullish(),
-});
-
-/**
- * Success
- */
-export const zGetAppUpdateStatusResponse = zXeLocalAiEngineClientEndpointsAppUpdateV1AppUpdateStatusResponse;
-
-export const zNodeChangePasswordBody = zXeLocalAiEngineClientEndpointsAuthV1NodeChangePasswordRequest;
-
-/**
- * No Content
- */
-export const zNodeChangePasswordResponse = z.void();
-
-export const zNodeLoginBody = zXeLocalAiEngineClientEndpointsAuthV1NodeLoginRequest;
-
-/**
- * Success
- */
-export const zNodeLoginResponse = zXeLocalAiEngineClientEndpointsAuthV1NodeAccessTokenResponse;
-
-/**
- * No Content
- */
-export const zNodeLogoutResponse = z.void();
-
-/**
- * Success
- */
-export const zNodeMeResponse = zXeLocalAiEngineClientEndpointsAuthV1NodeMeResponse;
-
-/**
- * Success
- */
-export const zNodeRefreshResponse = zXeLocalAiEngineClientEndpointsAuthV1NodeAccessTokenResponse;
-
-export const zNodeSetupBody = zXeLocalAiEngineClientEndpointsAuthV1NodeSetupRequest;
-
-/**
- * No Content
- */
-export const zNodeSetupResponse = z.void();
-
-/**
- * Success
- */
-export const zNodeAuthStatusResponse = zXeLocalAiEngineClientEndpointsAuthV1NodeAuthStatusResponse;
-
-/**
- * Success
- */
-export const zCancelNodeBindingResponse = zXeLocalAiEngineClientEndpointsNodeBindingV1CancelNodeBindingResponse;
-
-export const zPollNodeBindingBody = zXeLocalAiEngineClientEndpointsNodeBindingV1PollNodeBindingSessionRequest;
-
-/**
- * Success
- */
-export const zPollNodeBindingResponse = zXeLocalAiEngineClientEndpointsNodeBindingV1PollNodeBindingSessionResponse;
-
-/**
- * Success
- */
-export const zStartNodeBindingResponse = zXeLocalAiEngineClientEndpointsNodeBindingV1NodeBindingSessionResponse;
-
-export const zResolveToolApprovalBody = zXeLocalAiEngineClientEndpointsLocalChatV1ResolveToolApprovalRequest;
-
-/**
- * Success
- */
-export const zResolveToolApprovalResponse = zXeLocalAiEngineClientEndpointsLocalChatV1ResolveToolApprovalResponse;
-
-export const zCancelNodeChatMessageBody = zXeLocalAiEngineClientEndpointsLocalChatV1CancelNodeChatMessageRequest;
-
-/**
- * Success
- */
-export const zCancelNodeChatMessageResponse = zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatCancelMessageResponse;
-
-export const zListNodeChatConversationsQuery = z.object({
-	includeArchived: z.boolean(),
-	limit: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-});
-
-/**
- * Success
- */
-export const zListNodeChatConversationsResponse = zXeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatConversationsResponse;
-
-export const zCreateNodeChatConversationBody = zXeLocalAiEngineClientEndpointsLocalChatV1CreateNodeChatConversationRequest;
-
-/**
- * Success
- */
-export const zCreateNodeChatConversationResponse = zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationResponse;
-
-export const zDeleteNodeChatConversationBody = zXeLocalAiEngineClientEndpointsLocalChatV1DeleteNodeChatConversationRequest;
-
-export const zDeleteNodeChatConversationPath = z.object({
-	conversationId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zDeleteNodeChatConversationResponse = zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatDeleteConversationResponse;
-
-export const zGetNodeChatConversationPath = z.object({
-	conversationId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zGetNodeChatConversationResponse = zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationResponse;
-
-export const zArchiveNodeChatConversationBody = zXeLocalAiEngineClientEndpointsLocalChatV1ArchiveNodeChatConversationRequest;
-
-export const zArchiveNodeChatConversationPath = z.object({
-	conversationId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zArchiveNodeChatConversationResponse = zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationResponse;
-
-export const zBranchNodeChatConversationBody = zXeLocalAiEngineClientEndpointsLocalChatV1BranchNodeChatConversationRequest;
-
-export const zBranchNodeChatConversationPath = z.object({
-	conversationId: z.guid(),
-	messageId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zBranchNodeChatConversationResponse = zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatBranchConversationResponse;
-
-export const zSetNodeChatConversationMemoryExcludedBody =
-	zXeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatConversationMemoryExcludedRequest;
-
-export const zSetNodeChatConversationMemoryExcludedPath = z.object({
-	conversationId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zSetNodeChatConversationMemoryExcludedResponse =
-	zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationResponse;
-
-export const zGetNodeChatMessageFeedbackPath = z.object({
-	conversationId: z.guid(),
-	messageId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zGetNodeChatMessageFeedbackResponse = zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageFeedbackResponse;
-
-export const zSetNodeChatMessageFeedbackBody = zXeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatMessageFeedbackRequest;
-
-export const zSetNodeChatMessageFeedbackPath = z.object({
-	conversationId: z.guid(),
-	messageId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zSetNodeChatMessageFeedbackResponse = zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageFeedbackResponse;
-
-export const zListNodeChatMessageRevisionsPath = z.object({
-	conversationId: z.guid(),
-	messageId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zListNodeChatMessageRevisionsResponse = zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageRevisionsResponse;
-
-export const zCreateNodeChatMessageRevisionPath = z.object({
-	conversationId: z.guid(),
-	messageId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zCreateNodeChatMessageRevisionResponse = zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageRevisionsResponse;
-
-export const zPinNodeChatConversationBody = zXeLocalAiEngineClientEndpointsLocalChatV1PinNodeChatConversationRequest;
-
-export const zPinNodeChatConversationPath = z.object({
-	conversationId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zPinNodeChatConversationResponse = zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationResponse;
-
-export const zRenameNodeChatConversationBody = zXeLocalAiEngineClientEndpointsLocalChatV1RenameNodeChatConversationRequest;
-
-export const zRenameNodeChatConversationPath = z.object({
-	conversationId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zRenameNodeChatConversationResponse = zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationResponse;
-
-export const zSetNodeChatSelectedPathBody = zXeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatSelectedPathRequest;
-
-export const zSetNodeChatSelectedPathPath = z.object({
-	conversationId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zSetNodeChatSelectedPathResponse = zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatSelectedPathResponse;
-
-export const zListConversationFilesPath = z.object({
-	conversationId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zListConversationFilesResponse = zXeLocalAiEngineClientEndpointsLocalChatV1ListConversationUploadsResponse;
-
-export const zUploadConversationFileBody = zXeLocalAiEngineClientEndpointsLocalChatV1UploadConversationFileRequest;
-
-export const zUploadConversationFilePath = z.object({
-	conversationId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zUploadConversationFileResponse = zXeLocalAiEngineClientEndpointsLocalChatV1ConversationUploadedFileResponse;
-
-export const zDeleteConversationFilePath = z.object({
-	conversationId: z.guid(),
-	fileId: z.guid(),
-});
-
-/**
- * No Content
- */
-export const zDeleteConversationFileResponse = z.void();
-
-/**
- * Success
- */
-export const zClearCloudSettingsResponse = zXeLocalAiEngineClientEndpointsCloudSettingsV1CloudSettingsResponse;
-
-/**
- * Success
- */
-export const zGetCloudSettingsResponse = zXeLocalAiEngineClientEndpointsCloudSettingsV1CloudSettingsResponse;
-
-export const zSaveCloudSettingsBody = zXeLocalAiEngineClientEndpointsCloudSettingsV1SaveCloudSettingsRequest;
-
-/**
- * Success
- */
-export const zSaveCloudSettingsResponse = zXeLocalAiEngineClientEndpointsCloudSettingsV1CloudSettingsResponse;
-
-/**
- * Success
- */
-export const zEntraAuthCodeSignInResponse = zXeLocalAiEngineClientEndpointsCloudSettingsV1EntraAuthCodeSignInResponse;
-
-/**
- * Success
- */
-export const zEntraAuthCodeStatusResponse = zXeLocalAiEngineClientEndpointsCloudSettingsV1EntraAuthCodeSignInStatusResponse;
-
-/**
- * Success
- */
-export const zEntraDeviceCodeSignInResponse = zXeLocalAiEngineClientEndpointsCloudSettingsV1EntraDeviceCodeSignInResponse;
-
-/**
- * Success
- */
-export const zEntraDeviceCodeStatusResponse = zXeLocalAiEngineClientEndpointsCloudSettingsV1EntraDeviceCodeSignInStatusResponse;
-
-/**
- * Success
- */
-export const zCodexLoginResponse = zXeLocalAiEngineClientEndpointsCloudCodexV1CodexLoginResponse;
-
-/**
- * Success
- */
-export const zCodexLogoutResponse = zXeLocalAiEngineClientEndpointsCloudCodexV1CodexStatusResponse;
-
-/**
- * Success
- */
-export const zCodexStatusResponse = zXeLocalAiEngineClientEndpointsCloudCodexV1CodexStatusResponse;
-
-/**
- * Success
- */
-export const zGetConnectionStatusResponse = zXeLocalAiEngineClientEndpointsConnectionV1ConnectionStatusResponse;
-
-/**
- * Success
- */
-export const zDisableAutoConnectResponse = zXeLocalAiEngineClientEndpointsConnectionV1ConnectionStatusResponse;
-
-/**
- * Success
- */
-export const zEnableAutoConnectResponse = zXeLocalAiEngineClientEndpointsConnectionV1ConnectionStatusResponse;
-
-/**
- * Success
- */
-export const zConnectConnectionResponse = zXeLocalAiEngineClientEndpointsConnectionV1ConnectionStatusResponse;
-
-/**
- * Success
- */
-export const zDisconnectConnectionResponse = zXeLocalAiEngineClientEndpointsConnectionV1ConnectionStatusResponse;
-
-/**
- * Success
- */
-export const zGetDevelopmentCapabilityResponse = zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentCapabilityResponse;
-
-export const zConfirmDevelopmentContainerRuntimeBody =
-	zXeLocalAiEngineClientEndpointsDevelopmentV1ConfirmDevelopmentContainerRuntimeRequest;
-
-/**
- * Success
- */
-export const zConfirmDevelopmentContainerRuntimeResponse =
-	zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerRuntimeResponse;
-
-/**
- * Success
- */
-export const zListDevelopmentProjectsResponse = zXeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentProjectsResponse;
-
-export const zCreateDevelopmentProjectBody = zXeLocalAiEngineClientEndpointsDevelopmentV1CreateDevelopmentProjectRequest;
-
-/**
- * Success
- */
-export const zCreateDevelopmentProjectResponse = zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectDetailResponse;
-
-export const zGetDevelopmentProjectPath = z.object({
-	projectId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zGetDevelopmentProjectResponse = zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectDetailResponse;
-
-export const zListDevelopmentEventsPath = z.object({
-	projectId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zListDevelopmentEventsResponse = zXeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentEventsResponse;
-
-export const zReconnectDevelopmentRepositoryBody =
-	zXeLocalAiEngineClientEndpointsDevelopmentV1ReconnectDevelopmentRepositoryRequest;
-
-export const zReconnectDevelopmentRepositoryPath = z.object({
-	projectId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zReconnectDevelopmentRepositoryResponse =
-	zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectDetailResponse;
-
-export const zGetDevelopmentTaskPath = z.object({
-	projectId: z.guid(),
-	taskId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zGetDevelopmentTaskResponse = zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTaskDetailResponse;
-
-export const zApplyDevelopmentPatchBody = zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentActionRequest;
-
-export const zApplyDevelopmentPatchPath = z.object({
-	projectId: z.guid(),
-	taskId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zApplyDevelopmentPatchResponse = zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentApplyResponse;
-
-export const zListDevelopmentArtifactsPath = z.object({
-	projectId: z.guid(),
-	taskId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zListDevelopmentArtifactsResponse = zXeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentArtifactsResponse;
-
-export const zGetDevelopmentArtifactPath = z.object({
-	projectId: z.guid(),
-	taskId: z.guid(),
-	artifactId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zGetDevelopmentArtifactResponse = zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentArtifactContentResponse;
-
-export const zCancelDevelopmentAttemptPath = z.object({
-	projectId: z.guid(),
-	taskId: z.guid(),
-	attemptId: z.guid(),
-});
-
-/**
- * No Content
- */
-export const zCancelDevelopmentAttemptResponse = z.void();
-
-export const zStartDevelopmentNextActionBody = zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentActionRequest;
-
-export const zStartDevelopmentNextActionPath = z.object({
-	projectId: z.guid(),
-	taskId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zStartDevelopmentNextActionResponse = zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentNextActionResponse;
-
-export const zPreviewDevelopmentPatchBody = zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentActionRequest;
-
-export const zPreviewDevelopmentPatchPath = z.object({
-	projectId: z.guid(),
-	taskId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zPreviewDevelopmentPatchResponse = zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentPatchPreviewResponse;
-
-/**
- * Success
- */
-export const zListDevelopmentRepositoriesResponse =
-	zXeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentRepositoriesResponse;
-
-export const zRegisterDevelopmentRepositoryBody =
-	zXeLocalAiEngineClientEndpointsDevelopmentV1RegisterDevelopmentRepositoryRequest;
-
-/**
- * Success
- */
-export const zRegisterDevelopmentRepositoryResponse = zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentRepositoryResponse;
-
-export const zCreateDevelopmentRepositoryFromTemplateBody =
-	zXeLocalAiEngineClientEndpointsDevelopmentV1CreateDevelopmentRepositoryFromTemplateRequest;
-
-/**
- * Success
- */
-export const zCreateDevelopmentRepositoryFromTemplateResponse =
-	zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentRepositoryFromTemplateResponse;
-
-export const zDetectDevelopmentRepositoryProfilePath = z.object({
-	selectedFolderId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zDetectDevelopmentRepositoryProfileResponse =
-	zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProfileDetectionResponse;
-
-/**
- * Success
- */
-export const zListDevelopmentTemplatesResponse = zXeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentTemplatesResponse;
-
-export const zRegisterDevelopmentTemplateBody = zXeLocalAiEngineClientEndpointsDevelopmentV1RegisterDevelopmentTemplateRequest;
-
-/**
- * Success
- */
-export const zRegisterDevelopmentTemplateResponse = zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTemplateResponse;
-
-export const zRemoveDevelopmentTemplatePath = z.object({
-	templateId: z.guid(),
-});
-
-/**
- * No Content
- */
-export const zRemoveDevelopmentTemplateResponse = z.void();
-
-/**
- * No Content
- */
-export const zUnhandledExceptionProbeResponse = z.void();
-
-export const zValidationProblemProbeBody = zXeLocalAiEngineClientEndpointsApiFoundationV1ValidationProblemProbeRequest;
-
-/**
- * Success
- */
-export const zValidationProblemProbeResponse = zXeLocalAiEngineClientEndpointsApiFoundationV1ValidationProblemProbeResponse;
-
-/**
- * Success
- */
-export const zPollGitHubAuthResponse = zXeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthPollResponse;
-
-/**
- * Success
- */
-export const zSignOutGitHubAuthResponse = zXeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthStatusResponse;
-
-/**
- * Success
- */
-export const zStartGitHubAuthResponse = zXeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthStartResponse;
-
-/**
- * Success
- */
-export const zGetGitHubAuthStatusResponse = zXeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthStatusResponse;
-
-/**
- * Success
- */
-export const zListImageJobsResponse = zXeLocalAiEngineClientEndpointsImagesV1ListImageJobsResponse;
-
-export const zCreateImageJobBody = zXeLocalAiEngineClientEndpointsImagesV1CreateImageJobRequest;
-
-/**
- * Success
- */
-export const zCreateImageJobResponse = zXeLocalAiEngineClientEndpointsImagesV1ImageJobResponse;
-
-export const zGetImageJobPath = z.object({
-	jobId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zGetImageJobResponse = zXeLocalAiEngineClientEndpointsImagesV1ImageJobResponse;
-
-export const zCancelImageJobPath = z.object({
-	jobId: z.guid(),
-});
-
-/**
- * No Content
- */
-export const zCancelImageJobResponse = z.void();
-
-/**
- * Success
- */
-export const zListImageModelsResponse = zXeLocalAiEngineClientEndpointsImagesV1ListImageModelsResponse;
-
-/**
- * Success
- */
-export const zListImageModelDownloadsResponse = zXeLocalAiEngineClientEndpointsImagesV1ListImageModelDownloadsResponse;
-
-export const zStartImageModelDownloadBody = zXeLocalAiEngineClientEndpointsImagesV1StartImageModelDownloadRequest;
-
-/**
- * Success
- */
-export const zStartImageModelDownloadResponse = zXeLocalAiEngineClientEndpointsImagesV1StartImageModelDownloadResponse;
-
-/**
- * Success
- */
-export const zGetImageRuntimeStatusResponse = zXeLocalAiEngineClientEndpointsImagesV1ImageRuntimeStatusResponse;
-
-export const zEjectImageRuntimeBody = zXeLocalAiEngineClientEndpointsImagesV1ImageRuntimeActionRequest;
-
-/**
- * Success
- */
-export const zEjectImageRuntimeResponse = zXeLocalAiEngineClientEndpointsImagesV1ImageRuntimeStatusResponse;
-
-export const zStartStableDiffusionCppSourceBuildBody =
-	zXeLocalAiEngineClientEndpointsImagesV1StartStableDiffusionCppSourceBuildRequest;
-
-/**
- * Success
- */
-export const zStartStableDiffusionCppSourceBuildResponse =
-	zXeLocalAiEngineClientEndpointsImagesV1StartStableDiffusionCppSourceBuildResponse;
-
-export const zCancelStableDiffusionCppSourceBuildBody = zXeLocalAiEngineClientEndpointsImagesV1ImageRuntimeActionRequest;
-
-/**
- * Success
- */
-export const zCancelStableDiffusionCppSourceBuildResponse =
-	zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildStatusResponse;
-
-export const zGetStableDiffusionCppSourceBuildPrerequisitesQuery = z.object({
-	backend: zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBackendDto,
-});
-
-/**
- * Success
- */
-export const zGetStableDiffusionCppSourceBuildPrerequisitesResponse =
-	zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildPrerequisitesResponse;
-
-export const zRemoveStableDiffusionCppSourceBuildBody = zXeLocalAiEngineClientEndpointsImagesV1ImageRuntimeActionRequest;
-
-/**
- * Success
- */
-export const zRemoveStableDiffusionCppSourceBuildResponse = zXeLocalAiEngineClientEndpointsImagesV1ImageRuntimeStatusResponse;
-
-/**
- * Success
- */
-export const zGetStableDiffusionCppSourceBuildStatusResponse =
-	zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildStatusResponse;
-
-export const zRetrieveImagePath = z.object({
-	imageId: z.guid(),
-});
-
-/**
- * No Content
- */
-export const zRetrieveImageResponse = z.void();
-
-/**
- * Success
- */
-export const zGetInvocationMonitorResponse = zXeLocalAiEngineClientEndpointsInvocationsV1InvocationMonitorResponse;
-
-/**
- * Success
- */
-export const zListKnowledgeDocumentsResponse = zXeLocalAiEngineClientEndpointsKnowledgeV1ListKnowledgeDocumentsResponse;
-
-export const zUploadKnowledgeDocumentBody = zXeLocalAiEngineClientEndpointsKnowledgeV1UploadKnowledgeDocumentRequest;
-
-/**
- * Success
- */
-export const zUploadKnowledgeDocumentResponse = zXeLocalAiEngineClientEndpointsKnowledgeV1UploadKnowledgeDocumentResponse;
-
-export const zDeleteKnowledgeDocumentPath = z.object({
-	documentId: z.guid(),
-});
-
-/**
- * No Content
- */
-export const zDeleteKnowledgeDocumentResponse = z.void();
-
-export const zGetKnowledgeDocumentPath = z.object({
-	documentId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zGetKnowledgeDocumentResponse = zXeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentDetailResponse;
-
-export const zReindexKnowledgeDocumentPath = z.object({
-	documentId: z.guid(),
-});
-
-/**
- * No Content
- */
-export const zReindexKnowledgeDocumentResponse = z.void();
-
-/**
- * Success
- */
-export const zDownloadRecommendedEmbeddingResponse =
-	zXeLocalAiEngineClientEndpointsKnowledgeV1DownloadRecommendedEmbeddingResponse;
-
-/**
- * Success
- */
-export const zReindexCorpusResponse = zXeLocalAiEngineClientEndpointsKnowledgeV1ReindexCorpusResponse;
-
-/**
- * Success
- */
-export const zDownloadRecommendedRerankerResponse = zXeLocalAiEngineClientEndpointsKnowledgeV1DownloadRecommendedRerankerResponse;
-
-export const zSearchKnowledgeBody = zXeLocalAiEngineClientEndpointsKnowledgeV1SearchKnowledgeRequest;
-
-/**
- * Success
- */
-export const zSearchKnowledgeResponse = zXeLocalAiEngineClientEndpointsKnowledgeV1SearchKnowledgeResponse;
-
-/**
- * Success
- */
-export const zListMcpServersResponse = zXeLocalAiEngineClientEndpointsMcpV1ListMcpServersResponse;
-
-export const zCreateMcpServerBody = zXeLocalAiEngineClientEndpointsMcpV1CreateMcpServerRequest;
-
-/**
- * Success
- */
-export const zCreateMcpServerResponse = zXeLocalAiEngineClientEndpointsMcpV1McpServerResponse;
-
-export const zDeleteMcpServerPath = z.object({
-	mcpServerId: z.guid(),
-});
-
-/**
- * No Content
- */
-export const zDeleteMcpServerResponse = z.void();
-
-export const zGetMcpServerPath = z.object({
-	mcpServerId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zGetMcpServerResponse = zXeLocalAiEngineClientEndpointsMcpV1McpServerResponse;
-
-export const zUpdateMcpServerBody = zXeLocalAiEngineClientEndpointsMcpV1UpdateMcpServerRequest;
-
-export const zUpdateMcpServerPath = z.object({
-	mcpServerId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zUpdateMcpServerResponse = zXeLocalAiEngineClientEndpointsMcpV1McpServerResponse;
-
-export const zSetMcpServerEnabledBody = zXeLocalAiEngineClientEndpointsMcpV1SetMcpServerEnabledRequest;
-
-export const zSetMcpServerEnabledPath = z.object({
-	mcpServerId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zSetMcpServerEnabledResponse = zXeLocalAiEngineClientEndpointsMcpV1McpServerResponse;
-
-export const zGetMcpServerToolsPath = z.object({
-	mcpServerId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zGetMcpServerToolsResponse = zXeLocalAiEngineClientEndpointsMcpV1McpServerToolsResponse;
-
-/**
- * Success
- */
-export const zGetModelCatalogInfoResponse = zXeLocalAiEngineClientEndpointsModelFitV1ModelCatalogInfoResponse;
-
-/**
- * Success
- */
-export const zRefreshModelCatalogResponse = zXeLocalAiEngineClientEndpointsModelFitV1ModelCatalogInfoResponse;
-
-export const zStartGgufDownloadBody = zXeLocalAiEngineClientEndpointsModelFitV1StartGgufDownloadRequest;
-
-/**
- * Success
- */
-export const zStartGgufDownloadResponse = zXeLocalAiEngineClientEndpointsModelFitV1StartGgufDownloadResponse;
-
-export const zCancelGgufDownloadBody = zXeLocalAiEngineClientEndpointsModelFitV1CancelGgufDownloadRequest;
-
-/**
- * Success
- */
-export const zCancelGgufDownloadResponse = zXeLocalAiEngineClientEndpointsModelFitV1CancelGgufDownloadResponse;
-
-export const zBrowseGgufRepositoriesQuery = z.object({
-	query: z.string().nullish(),
-	limit: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	sort: z.string().nullish(),
-});
-
-/**
- * Success
- */
-export const zBrowseGgufRepositoriesResponse = zXeLocalAiEngineClientEndpointsModelFitV1BrowseGgufRepositoriesResponse;
-
-/**
- * Success
- */
-export const zGetGgufDownloadsResponse = zXeLocalAiEngineClientEndpointsModelFitV1ListGgufDownloadsResponse;
-
-export const zGetGgufDownloadStatusPath = z.object({
+export const zXeLocalAiEngineClientEndpointsModelFitV1CancelGgufDownloadRequest = z.object({
 	modelName: z.string(),
 });
 
-/**
- * Success
- */
-export const zGetGgufDownloadStatusResponse = zXeLocalAiEngineClientEndpointsModelFitV1GgufDownloadStatusResponse;
+export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBackendDto = z.enum(["cpu", "vulkan", "cuda"]);
 
-export const zInspectGgufRepositoryQuery = z.object({
-	repoId: z.string().nullish(),
-});
+export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceSelectionDto = z.enum(["official", "custom"]);
 
-/**
- * Success
- */
-export const zInspectGgufRepositoryResponse = zXeLocalAiEngineClientEndpointsModelFitV1InspectGgufRepositoryResponse;
+export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceRevisionModeDto = z.enum([
+	"enginePinned",
+	"defaultBranch",
+	"explicitCommit",
+]);
 
-export const zGetHardwareProfileQuery = z.object({
-	refresh: z.boolean(),
-});
-
-/**
- * Success
- */
-export const zGetHardwareProfileResponse = zXeLocalAiEngineClientEndpointsModelFitV1HardwareProfileResponse;
-
-/**
- * Success
- */
-export const zGetHfTokenStatusResponse = zXeLocalAiEngineClientEndpointsModelFitV1HfTokenStatusResponse;
-
-export const zSetHfTokenBody = zXeLocalAiEngineClientEndpointsModelFitV1SetHfTokenRequest;
-
-/**
- * Success
- */
-export const zSetHfTokenResponse = zXeLocalAiEngineClientEndpointsModelFitV1HfTokenStatusResponse;
-
-/**
- * Success
- */
-export const zStartCudaBuildResponse = zXeLocalAiEngineClientEndpointsModelFitV1StartCudaBuildResponse;
-
-/**
- * Success
- */
-export const zCancelCudaBuildResponse = zXeLocalAiEngineClientEndpointsModelFitV1CudaBuildStatusResponse;
-
-/**
- * Success
- */
-export const zGetCudaBuildPrerequisitesResponse = zXeLocalAiEngineClientEndpointsModelFitV1CudaBuildPrerequisitesResponse;
-
-/**
- * Success
- */
-export const zRemoveCudaBuildResponse = zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppRuntimeStatusResponse;
-
-/**
- * Success
- */
-export const zGetCudaBuildStatusResponse = zXeLocalAiEngineClientEndpointsModelFitV1CudaBuildStatusResponse;
-
-export const zGetLlamaCppRuntimeQuery = z.object({
-	refresh: z.boolean().nullish(),
-});
-
-/**
- * Success
- */
-export const zGetLlamaCppRuntimeResponse = zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppRuntimeStatusResponse;
-
-export const zStartLlamaCppSourceBuildBody = zXeLocalAiEngineClientEndpointsModelFitV1StartLlamaCppSourceBuildRequest;
-
-/**
- * Success
- */
-export const zStartLlamaCppSourceBuildResponse = zXeLocalAiEngineClientEndpointsModelFitV1StartLlamaCppSourceBuildResponse;
-
-/**
- * Success
- */
-export const zCancelLlamaCppSourceBuildResponse = zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildStatusResponse;
-
-export const zGetLlamaCppSourceBuildPrerequisitesQuery = z.object({
+export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildDescriptorResponse = z.object({
+	buildId: z.guid(),
 	backend: zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBackendDto,
+	source: zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceSelectionDto,
+	repository: z.string(),
+	revisionMode: zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceRevisionModeDto,
+	requestedCommit: z.string().nullish(),
+	resolvedCommit: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildStatusResponse = z.object({
+	phase: z.string(),
+	isRunning: z.boolean(),
+	terminal: z.boolean(),
+	logStartSequence: z.int(),
+	logLines: z.array(z.string()),
+	sanitizedError: z.string().nullish(),
+	currentBuild: zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildDescriptorResponse.nullish(),
+	startedAtUtc: z.int().nullish(),
+	completedAtUtc: z.int().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1EjectRunningModelResponse = z.object({
+	modelName: z.string(),
+	role: z.string(),
+	outcome: z.string(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1EjectRunningModelRequest = z.object({
+	modelName: z.string(),
+	role: z.string().nullish(),
+	force: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppVersionResponse = z.object({
+	version: z.string(),
+	variant: z.string(),
+	isPinnedFallback: z.boolean(),
+	pinnedTag: z.string(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppUpdateBlockedResponse = z.object({
+	runningProcessCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	message: z.string(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1EnsureLlamaCppBinaryRequest = z.object({
+	variant: z.string(),
 });
 
 /**
- * Success
+ * the dto used to send an error response to the client
  */
-export const zGetLlamaCppSourceBuildPrerequisitesResponse =
-	zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildPrerequisitesResponse;
+export const zFastEndpointsErrorResponse = z.object({
+	statusCode: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional()
+		.default(400),
+	message: z.string().optional().default("One or more errors occurred!"),
+	errors: z.record(z.string(), z.array(z.string())).optional(),
+});
 
-/**
- * Success
- */
-export const zRemoveLlamaCppSourceBuildResponse = zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppRuntimeStatusResponse;
+export const zXeLocalAiEngineClientEndpointsModelFitV1InferenceProfileActionResponse = z.object({
+	profile: zXeLocalAiEngineClientEndpointsModelFitV1InferenceProfileViewDto,
+});
 
-/**
- * Success
- */
-export const zGetLlamaCppSourceBuildStatusResponse = zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildStatusResponse;
+export const zXeLocalAiEngineClientEndpointsModelFitV1ExploreInferenceProfileRequest = z.object({
+	modelName: z.string(),
+	role: z.string().nullish(),
+});
 
-export const zUpdateLlamaCppRuntimeBody = zXeLocalAiEngineClientEndpointsModelFitV1UpdateLlamaCppRuntimeRequest;
+export const zXeLocalAiEngineClientEndpointsModelFitV1FreezeInferenceProfileRequest = z.object({
+	profileId: z.guid(),
+});
 
-/**
- * Success
- */
-export const zUpdateLlamaCppRuntimeResponse = zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppVersionResponse;
+export const zXeLocalAiEngineClientEndpointsModelFitV1CudaBuildPrerequisiteItemResponse = z.object({
+	key: z.string(),
+	satisfied: z.boolean(),
+	detail: z.string(),
+});
 
-export const zEnsureLlamaCppBinaryBody = zXeLocalAiEngineClientEndpointsModelFitV1EnsureLlamaCppBinaryRequest;
+export const zXeLocalAiEngineClientEndpointsModelFitV1CudaBuildPrerequisitesResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsModelFitV1CudaBuildPrerequisiteItemResponse),
+	canBuild: z.boolean(),
+});
 
-/**
- * Success
- */
-export const zEnsureLlamaCppBinaryResponse = zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppVersionResponse;
+export const zXeLocalAiEngineClientEndpointsModelFitV1GgufDownloadStatusResponse = z.object({
+	modelName: z.string(),
+	phase: z.string(),
+	completedBytes: z.int().nullish(),
+	totalBytes: z.int().nullish(),
+	sanitizedError: z.string().nullish(),
+});
 
-/**
- * Success
- */
-export const zListInferenceProfilesResponse = zXeLocalAiEngineClientEndpointsModelFitV1ListInferenceProfilesResponse;
+export const zXeLocalAiEngineClientEndpointsModelFitV1ListGgufDownloadsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsModelFitV1GgufDownloadStatusResponse),
+});
 
-export const zBenchmarkInferenceProfileBody = zXeLocalAiEngineClientEndpointsModelFitV1BenchmarkInferenceProfileRequest;
+export const zXeLocalAiEngineClientEndpointsModelFitV1GetGgufDownloadStatusRequest = z.record(z.string(), z.never());
 
-/**
- * Success
- */
-export const zBenchmarkInferenceProfileResponse = zXeLocalAiEngineClientEndpointsModelFitV1BenchmarkInferenceProfileResponse;
+export const zXeLocalAiEngineClientEndpointsModelFitV1HardwareProfileResponse = z.object({
+	totalRamBytes: z.int(),
+	availableRamBytes: z.int(),
+	vramBytes: z.int().nullish(),
+	vramKnown: z.boolean(),
+	gpuVendor: z.string(),
+	gpuAccelAvailable: z.boolean(),
+	cpuCores: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	freeDiskBytes: z.int(),
+	inferenceBackend: z.string().optional(),
+	gpuExpected: z.boolean().optional(),
+	cpuFallback: z.boolean().optional(),
+	cpuFallbackReason: z.string().nullish(),
+	cpuFallbackRemediation: z.string().nullish(),
+});
 
-export const zExploreInferenceProfileBody = zXeLocalAiEngineClientEndpointsModelFitV1ExploreInferenceProfileRequest;
+export const zXeLocalAiEngineClientEndpointsModelFitV1GetHardwareProfileRequest = z.record(z.string(), z.never());
 
-/**
- * Success
- */
-export const zExploreInferenceProfileResponse = zXeLocalAiEngineClientEndpointsModelFitV1InferenceProfileActionResponse;
+export const zXeLocalAiEngineClientEndpointsModelFitV1HfTokenStatusResponse = z.object({
+	hasToken: z.boolean(),
+});
 
-export const zFreezeInferenceProfileBody = zXeLocalAiEngineClientEndpointsModelFitV1FreezeInferenceProfileRequest;
+export const zXeLocalAiEngineClientEndpointsModelFitV1ModelFitRecommendationResponse = z.object({
+	rank: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	modelName: z.string(),
+	providerModelName: z.string().nullish(),
+	score: z.number(),
+	fitLevel: z.string().nullish(),
+	runMode: z.string().nullish(),
+	quantization: z.string().nullish(),
+	estimatedTokensPerSecond: z.number().nullish(),
+	requiredRamMb: z.number().nullish(),
+	requiredVramMb: z.number().nullish(),
+	contextTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	isInstalled: z.boolean(),
+	pullModelName: z.string().nullish(),
+	releaseDate: z.string().nullish(),
+	isTrustedPublisher: z.boolean().optional(),
+	section: z.string(),
+	tier: z.string().nullish(),
+	catalogId: z.string().nullish(),
+	catalogDisplayName: z.string().nullish(),
+	catalogNotes: z.string().nullish(),
+	expertsOffloaded: z.boolean().optional(),
+	gpuGb: z.number().nullish(),
+	cpuGb: z.number().nullish(),
+	kvQuant: z.string().nullish(),
+	kvQuantEstimatedGb: z.number().nullish(),
+	kvQuantHeadroomGb: z.number().nullish(),
+	kvQuantFits: z.boolean().nullish(),
+	kvQuantRequiresFlashAttention: z.boolean().nullish(),
+});
 
-/**
- * Success
- */
-export const zFreezeInferenceProfileResponse = zXeLocalAiEngineClientEndpointsModelFitV1InferenceProfileActionResponse;
-
-export const zInvalidateInferenceProfileBody = zXeLocalAiEngineClientEndpointsModelFitV1InvalidateInferenceProfileRequest;
-
-/**
- * Success
- */
-export const zInvalidateInferenceProfileResponse = zXeLocalAiEngineClientEndpointsModelFitV1InferenceProfileActionResponse;
-
-export const zGetLatestRecommendationsQuery = z.object({
+export const zXeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsResponse = z.object({
+	hasCache: z.boolean(),
+	snapshotId: z.guid().nullish(),
+	status: z.string().nullish(),
 	useCase: z.string().nullish(),
+	lastRefreshedAtUtc: z.int().nullish(),
+	recommendations: z.array(zXeLocalAiEngineClientEndpointsModelFitV1ModelFitRecommendationResponse),
 });
 
-/**
- * Success
- */
-export const zGetLatestRecommendationsResponse = zXeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsResponse;
+export const zXeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsRequest = z.record(z.string(), z.never());
 
-export const zRefreshRecommendationsBody = zXeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsRequest;
+export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppInstalledRuntimeResponse = z.object({
+	tag: z.string(),
+	variant: z.string(),
+	asset: z.string(),
+	installedAtUtc: z.int(),
+	isSourceBuild: z.boolean(),
+	sourceRepository: z.string().nullish(),
+	sourceCommit: z.string().nullish(),
+	sourceSelection: zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceSelectionDto.nullish(),
+	sourceRevisionMode: zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceRevisionModeDto.nullish(),
+	sourceRequestedCommit: z.string().nullish(),
+});
 
-/**
- * Success
- */
-export const zRefreshRecommendationsResponse = zXeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsResponse;
+export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppRuntimeStatusResponse = z.object({
+	installed: zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppInstalledRuntimeResponse.nullish(),
+	recommendedTag: z.string(),
+	upstreamLatestTag: z.string().nullish(),
+	updateAvailable: z.boolean(),
+	isOffline: z.boolean(),
+	runningProcessCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	isSourceBuild: z.boolean(),
+	rebuildAvailable: z.boolean(),
+});
 
-/**
- * Success
- */
-export const zListRunningModelsResponse = zXeLocalAiEngineClientEndpointsModelFitV1ListRunningModelsResponse;
+export const zXeLocalAiEngineClientEndpointsModelFitV1GetLlamaCppRuntimeRequest = z.record(z.string(), z.never());
 
-export const zEjectRunningModelBody = zXeLocalAiEngineClientEndpointsModelFitV1EjectRunningModelRequest;
+export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildPrerequisiteItemResponse = z.object({
+	key: z.string(),
+	satisfied: z.boolean(),
+	detail: z.string(),
+});
 
-/**
- * Success
- */
-export const zEjectRunningModelResponse = zXeLocalAiEngineClientEndpointsModelFitV1EjectRunningModelResponse;
+export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildPrerequisitesResponse = z.object({
+	backend: zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBackendDto,
+	items: z.array(zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildPrerequisiteItemResponse),
+	canBuild: z.boolean(),
+});
 
-/**
- * Success
- */
-export const zListLocalModelsResponse = zXeLocalAiEngineClientEndpointsLocalModelsV1ListLocalModelsResponse;
+export const zXeLocalAiEngineClientEndpointsModelFitV1GetLlamaCppSourceBuildPrerequisitesRequest = z.record(
+	z.string(),
+	z.never(),
+);
 
-/**
- * Success
- */
-export const zGetRunningLocalModelsResponse = zXeLocalAiEngineClientEndpointsLocalModelsV1RunningLocalModelsResponse;
+export const zXeLocalAiEngineClientEndpointsModelFitV1ModelCatalogInfoResponse = z.object({
+	catalogVersion: z.string(),
+	updatedAt: z.string().nullish(),
+	source: z.string(),
+	fetchedAtUtc: z.int().nullish(),
+	sourceUrl: z.string().nullish(),
+	modelCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	refreshSourceConfigured: z.boolean(),
+});
 
-export const zSelectLocalModelBody = zXeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelRequest;
+export const zXeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryFileResponse = z.object({
+	fileName: z.string(),
+	quant: z.string(),
+	isDynamic: z.boolean(),
+	isDraft: z.boolean(),
+	sizeBytes: z.int(),
+	qualityTier: z.string(),
+	fitVerdict: z.string(),
+	isRecommended: z.boolean(),
+});
 
-/**
- * Success
- */
-export const zSelectLocalModelResponse = zXeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelResponse;
+export const zXeLocalAiEngineClientEndpointsModelFitV1InspectGgufRepositoryResponse = z.object({
+	repoId: z.string(),
+	files: z.array(zXeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryFileResponse),
+});
 
-export const zDeleteLocalModelPath = z.object({
+export const zXeLocalAiEngineClientEndpointsModelFitV1InspectGgufRepositoryRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1InvalidateInferenceProfileRequest = z.object({
+	profileId: z.guid(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1ListInferenceProfilesResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsModelFitV1InferenceProfileViewDto),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1RunningModelResponse = z.object({
 	modelName: z.string(),
+	role: z.string(),
+	isResponsive: z.boolean(),
+	detail: z.string(),
 });
 
-/**
- * Success
- */
-export const zDeleteLocalModelResponse = zXeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelResponse;
+export const zXeLocalAiEngineClientEndpointsModelFitV1ListRunningModelsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsModelFitV1RunningModelResponse),
+});
 
-export const zGetLocalModelDetailsPath = z.object({
+export const zXeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsResponse = z.object({
+	scheduledJobId: z.guid(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsRequest = z.object({
+	scheduledJobId: z.guid().optional(),
+	useCase: z.string().nullish(),
+	limit: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	quantOverride: z.string().nullish(),
+	ctxTarget: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildBlockedResponse = z.object({
+	reason: z.string(),
+	message: z.string(),
+	runningProcessCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1SetHfTokenRequest = z.object({
+	token: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1StartCudaBuildResponse = z.object({
+	started: z.boolean(),
+	status: zXeLocalAiEngineClientEndpointsModelFitV1CudaBuildStatusResponse,
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1StartGgufDownloadResponse = z.object({
 	modelName: z.string(),
+	alreadyInFlight: z.boolean(),
 });
 
-/**
- * Success
- */
-export const zGetLocalModelDetailsResponse = zXeLocalAiEngineClientEndpointsLocalModelsV1LocalModelDetailsResponse;
+export const zXeLocalAiEngineClientEndpointsModelFitV1StartGgufDownloadRequest = z.object({
+	repoId: z.string(),
+	fileName: z.string().nullish(),
+	quant: z.string().nullish(),
+	revision: z.string().nullish(),
+});
 
-export const zDeleteModelKindPath = z.object({
+export const zXeLocalAiEngineClientEndpointsModelFitV1StartLlamaCppSourceBuildResponse = z.object({
+	started: z.boolean(),
+	status: zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildStatusResponse,
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1StartLlamaCppSourceBuildRequest = z.object({
+	backend: zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBackendDto,
+	source: zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceSelectionDto,
+	repository: z.string().nullish(),
+	commit: z.string().nullish(),
+	acknowledgeCustomSourceRisk: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1UpdateLlamaCppRuntimeRequest = z.object({
+	tag: z.string(),
+	variant: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientPersistenceMcpTransportKind = z.enum(["Stdio", "Http"]);
+
+export const zXeLocalAiEngineClientEndpointsMcpV1McpServerResponse = z.object({
+	id: z.guid(),
+	name: z.string(),
+	description: z.string().nullish(),
+	transportKind: zXeLocalAiEngineClientPersistenceMcpTransportKind,
+	command: z.string().nullish(),
+	arguments: z.array(z.string()),
+	workingDirectory: z.string().nullish(),
+	env: z.record(z.string(), z.string()),
+	url: z.string().nullish(),
+	enabled: z.boolean(),
+	version: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	createdAtUtc: z.int(),
+	updatedAtUtc: z.int(),
+});
+
+export const zXeLocalAiEngineClientEndpointsMcpV1CreateMcpServerRequest = z.object({
+	name: z.string().nullish(),
+	description: z.string().nullish(),
+	transportKind: zXeLocalAiEngineClientPersistenceMcpTransportKind.optional(),
+	command: z.string().nullish(),
+	arguments: z.array(z.string()).nullish(),
+	workingDirectory: z.string().nullish(),
+	env: z.record(z.string(), z.string()).nullish(),
+	url: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsMcpV1DeleteMcpServerRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsMcpV1GetMcpServerRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsMcpV1McpDiscoveredToolResponse = z.object({
+	name: z.string(),
+	description: z.string().nullish(),
+	requiresApproval: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsMcpV1McpServerToolsResponse = z.object({
+	status: z.string(),
+	error: z.string().nullish(),
+	tools: z.array(zXeLocalAiEngineClientEndpointsMcpV1McpDiscoveredToolResponse),
+});
+
+export const zXeLocalAiEngineClientEndpointsMcpV1GetMcpServerToolsRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsMcpV1ToolCatalogEntryResponse = z.object({
+	name: z.string(),
+	description: z.string(),
+	requiresApproval: z.boolean(),
+	source: z.string(),
+	category: z.string(),
+	effectiveRequiresApproval: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsMcpV1ToolCatalogResponse = z.object({
+	tools: z.array(zXeLocalAiEngineClientEndpointsMcpV1ToolCatalogEntryResponse),
+});
+
+export const zXeLocalAiEngineClientEndpointsMcpV1ListMcpServersResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsMcpV1McpServerResponse),
+});
+
+export const zXeLocalAiEngineClientEndpointsMcpV1SetMcpServerEnabledRequest = z.object({
+	enabled: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsMcpV1UpdateMcpServerRequest = z.object({
+	name: z.string().nullish(),
+	description: z.string().nullish(),
+	transportKind: zXeLocalAiEngineClientPersistenceMcpTransportKind.optional(),
+	command: z.string().nullish(),
+	arguments: z.array(z.string()).nullish(),
+	workingDirectory: z.string().nullish(),
+	env: z.record(z.string(), z.string()).nullish(),
+	url: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelResponse = z.object({
 	modelName: z.string(),
+	deleted: z.boolean(),
 });
 
-/**
- * Success
- */
-export const zDeleteModelKindResponse = zXeLocalAiEngineClientEndpointsLocalModelsV1ModelKindResponse;
+export const zXeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelRequest = z.record(z.string(), z.never());
 
-export const zPutModelKindBody = zXeLocalAiEngineClientEndpointsLocalModelsV1SetModelKindRequest;
-
-export const zPutModelKindPath = z.object({
+export const zXeLocalAiEngineClientEndpointsLocalModelsV1ModelKindResponse = z.object({
 	modelName: z.string(),
+	kind: z.string(),
+	detectedKind: z.string(),
+	capabilities: z.array(z.string()),
+	isOverridden: z.boolean(),
 });
 
-/**
- * Success
- */
-export const zPutModelKindResponse = zXeLocalAiEngineClientEndpointsLocalModelsV1ModelKindResponse;
+export const zXeLocalAiEngineClientEndpointsLocalModelsV1ResetModelKindRequest = z.record(z.string(), z.never());
 
-export const zUnloadLocalModelPath = z.object({
+export const zXeLocalAiEngineClientEndpointsLocalModelsV1LocalModelDetailsResponse = z.object({
 	modelName: z.string(),
+	maxContextTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	effectiveContextTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	template: z.string().nullish(),
+	system: z.string().nullish(),
+	license: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalModelsV1GetLocalModelDetailsRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsLocalModelsV1RunningLocalModelResponse = z.object({
+	modelName: z.string(),
+	sizeBytes: z.int().nullish(),
+	sizeVramBytes: z.int().nullish(),
+	expiresAtUtc: z.int().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalModelsV1RunningLocalModelsResponse = z.object({
+	isAvailable: z.boolean(),
+	ollamaConfigured: z.boolean(),
+	error: z.string().nullish(),
+	items: z.array(zXeLocalAiEngineClientEndpointsLocalModelsV1RunningLocalModelResponse),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse = z.object({
+	modelName: z.string(),
+	provider: z.string().optional(),
+	sizeBytes: z.int().nullish(),
+	modifiedAtUtc: z.int().nullish(),
+	family: z.string().nullish(),
+	parameterSize: z.string().nullish(),
+	quantizationLevel: z.string().nullish(),
+	isSelected: z.boolean(),
+	kind: z.string(),
+	detectedKind: z.string(),
+	capabilities: z.array(z.string()),
+	isReasoningCapable: z.boolean(),
+	isNativeReasoningCapable: z.boolean().optional(),
+	isToolCapable: z.boolean(),
+	isOverridden: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalModelsV1ListLocalModelsResponse = z.object({
+	isAvailable: z.boolean(),
+	selectedModelName: z.string().nullish(),
+	configuredDefaultModelName: z.string().nullish(),
+	error: z.string().nullish(),
+	items: z.array(zXeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalModelsV1SetModelKindRequest = z.object({
+	kind: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelResponse = z.object({
+	selectedModelName: z.string(),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelRequest = z.object({
+	modelName: z.string().min(0).max(100),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalModelsV1UnloadLocalModelResponse = z.object({
+	modelName: z.string(),
+	unloaded: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalModelsV1UnloadLocalModelRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatCancelMessageResponse = z.object({
+	conversationId: z.guid(),
+	messageId: z.guid(),
+	requestId: z.guid(),
+	status: z.string(),
+	cancelled: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalChatV1CancelNodeChatMessageRequest = z.object({
+	conversationId: z.guid().min(1),
+	messageId: z.guid().min(1),
+	requestId: z.guid().min(1),
+});
+
+export const zXeLocalAiEngineClientServicesChatNodeChatMessagePart = z.object({
+	kind: z.string().optional(),
+	sequence: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	text: z.string().nullish(),
+	toolCallId: z.string().nullish(),
+	name: z.string().nullish(),
+	state: z.string().nullish(),
+	args: z.string().nullish(),
+	result: z.string().nullish(),
+	requiresApproval: z.boolean().nullish(),
+});
+
+export const zXeLocalAiEngineClientServicesChatNodeChatMessageSource = z.object({
+	documentId: z.guid().optional(),
+	chunkId: z.guid().optional(),
+	title: z.string().optional(),
+	section: z.string().nullish(),
+	score: z.number().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageResponse = z.object({
+	messageId: z.guid(),
+	conversationId: z.guid(),
+	requestId: z.guid().nullish(),
+	sequence: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	role: z.string(),
+	content: z.string(),
+	reasoning: z.string().nullish(),
+	status: z.string(),
+	createdAtUtc: z.int(),
+	updatedAtUtc: z.int(),
+	origin: z.string(),
+	model: z.string().nullish(),
+	error: z.string().nullish(),
+	inputTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	outputTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	totalTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	reasoningTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	parentMessageId: z.guid().nullish(),
+	variantGroupId: z.guid().nullish(),
+	feedbackRating: z.string().nullish(),
+	feedbackComment: z.string().nullish(),
+	parts: z.array(zXeLocalAiEngineClientServicesChatNodeChatMessagePart).nullish(),
+	agentDefinitionId: z.guid().nullish(),
+	agentName: z.string().nullish(),
+	reasoningEffort: z.string().nullish(),
+	generationDurationMs: z.int().nullish(),
+	sources: z.array(zXeLocalAiEngineClientServicesChatNodeChatMessageSource).nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationResponse = z.object({
+	conversationId: z.guid(),
+	title: z.string().nullish(),
+	userId: z.string().nullish(),
+	createdAtUtc: z.int(),
+	lastSeenUtc: z.int(),
+	purged: z.boolean(),
+	origin: z.string(),
+	isPinned: z.boolean(),
+	archived: z.boolean(),
+	branchOfConversationId: z.guid().nullish(),
+	selectedPath: z.record(z.string(), z.guid()).nullish(),
+	memoryExcluded: z.boolean(),
+	messages: z.array(zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageResponse),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalChatV1CreateNodeChatConversationRequest = z.object({
+	title: z.string().min(0).max(200).nullish(),
+	userId: z.string().min(0).max(128).nullish(),
+	agentDefinitionId: z.guid().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalChatV1DeleteConversationUploadRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatDeleteConversationResponse = z.object({
+	conversationId: z.guid(),
+	cancelRequested: z.boolean(),
+	purged: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalChatV1DeleteNodeChatConversationRequest = z.object({
+	purgeImmediately: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatConversationRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsLocalChatV1ConversationUploadedFileResponse = z.object({
+	fileId: z.guid(),
+	conversationId: z.guid(),
+	originalFileName: z.string(),
+	mimeType: z.string(),
+	extension: z.string(),
+	sizeBytes: z.int(),
+	extractionStatus: z.string(),
+	extractedChars: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	createdAtUtc: z.int(),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalChatV1ListConversationUploadsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsLocalChatV1ConversationUploadedFileResponse),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalChatV1ListConversationUploadsRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationSummaryResponse = z.object({
+	conversationId: z.guid(),
+	title: z.string().nullish(),
+	createdAtUtc: z.int(),
+	lastSeenUtc: z.int(),
+	lastMessagePreview: z.string().nullish(),
+	lastMessageStatus: z.string().nullish(),
+	purged: z.boolean(),
+	origin: z.string(),
+	isPinned: z.boolean(),
+	archived: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatConversationsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationSummaryResponse),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatConversationsRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsLocalChatV1RenameNodeChatConversationRequest = z.object({
+	title: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalChatV1PinNodeChatConversationRequest = z.object({
+	isPinned: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalChatV1ArchiveNodeChatConversationRequest = z.object({
+	archived: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatConversationMemoryExcludedRequest = z.object({
+	memoryExcluded: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatBranchConversationResponse = z.object({
+	sourceConversationId: z.guid(),
+	branchedConversationId: z.guid(),
+	copiedMessageCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalChatV1BranchNodeChatConversationRequest = z.object({
+	selectedRevisions: z.record(z.string(), z.guid()).nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageRevisionsResponse = z.object({
+	messageId: z.guid(),
+	variantGroupId: z.guid().nullish(),
+	variants: z.array(zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageResponse),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatMessageRevisionsRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageFeedbackResponse = z.object({
+	messageId: z.guid(),
+	conversationId: z.guid(),
+	rating: z.string(),
+	comment: z.string().nullish(),
+	createdAtUtc: z.int(),
+	updatedAtUtc: z.int(),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatMessageFeedbackRequest = z.object({
+	rating: z.string(),
+	comment: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatSelectedPathResponse = z.object({
+	conversationId: z.guid(),
+	selectedPath: z.record(z.string(), z.guid()),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatSelectedPathRequest = z.object({
+	selectedPath: z.record(z.string(), z.guid()).nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatMessageFeedbackRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsLocalChatV1ResolveToolApprovalResponse = z.object({
+	requestId: z.string(),
+	approved: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalChatV1ResolveToolApprovalRequest = z.object({
+	requestId: z.string().min(1),
+	approved: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalChatV1UploadConversationFileRequest = z.object({
+	file: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentRouteRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsKnowledgeV1DownloadRecommendedEmbeddingResponse = z.object({
+	modelName: z.string(),
+	repoId: z.string(),
+	quant: z.string(),
+	alreadyInstalled: z.boolean(),
+	alreadyInFlight: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsKnowledgeV1DownloadRecommendedRerankerResponse = z.object({
+	modelName: z.string(),
+	repoId: z.string(),
+	quant: z.string(),
+	alreadyInstalled: z.boolean(),
+	alreadyInFlight: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientServicesKnowledgeKnowledgeDocumentStatus = z.enum([
+	"Pending",
+	"Extracting",
+	"Chunking",
+	"Embedding",
+	"Indexed",
+	"Failed",
+]);
+
+export const zXeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentChunkResponse = z.object({
+	chunkIndex: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	headingPath: z.string().nullish(),
+	content: z.string(),
+});
+
+export const zXeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentDetailResponse = z.object({
+	documentId: z.guid(),
+	displayName: z.string(),
+	status: zXeLocalAiEngineClientServicesKnowledgeKnowledgeDocumentStatus,
+	failureReason: z.string().nullish(),
+	chunkCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	embeddingModel: z.string(),
+	staleModel: z.boolean(),
+	sizeBytes: z.int(),
+	createdAtUtc: z.int(),
+	updatedAtUtc: z.int(),
+	chunks: z.array(zXeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentChunkResponse),
+});
+
+export const zXeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentResponse = z.object({
+	documentId: z.guid(),
+	displayName: z.string(),
+	status: zXeLocalAiEngineClientServicesKnowledgeKnowledgeDocumentStatus,
+	failureReason: z.string().nullish(),
+	chunkCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	embeddingModel: z.string(),
+	staleModel: z.boolean(),
+	sizeBytes: z.int(),
+	createdAtUtc: z.int(),
+});
+
+export const zXeLocalAiEngineClientEndpointsKnowledgeV1ListKnowledgeDocumentsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentResponse),
+});
+
+export const zXeLocalAiEngineClientEndpointsKnowledgeV1ReindexCorpusResponse = z.object({
+	enqueuedCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+});
+
+export const zXeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeSearchHitResponse = z.object({
+	documentId: z.guid(),
+	chunkId: z.guid(),
+	title: z.string(),
+	section: z.string().nullish(),
+	content: z.string(),
+	source: z.string(),
+	score: z.number(),
+	chunkIndex: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	documentStatus: zXeLocalAiEngineClientServicesKnowledgeKnowledgeDocumentStatus,
+	servingLastKnownGood: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsKnowledgeV1SearchKnowledgeResponse = z.object({
+	results: z.array(zXeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeSearchHitResponse),
+});
+
+export const zXeLocalAiEngineClientEndpointsKnowledgeV1SearchKnowledgeRequest = z.object({
+	query: z.string(),
+	limit: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	documentId: z.guid().nullish(),
+	expandNeighbors: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsKnowledgeV1UploadKnowledgeDocumentResponse = z.object({
+	documentId: z.guid(),
+	status: zXeLocalAiEngineClientServicesKnowledgeKnowledgeDocumentStatus,
+	deduplicated: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsKnowledgeV1UploadKnowledgeDocumentRequest = z.object({
+	file: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineAiContractsEnumsInvocationStatus = z.enum([
+	"Pending",
+	"Assigned",
+	"Running",
+	"Completed",
+	"Failed",
+	"Cancelled",
+]);
+
+export const zXeLocalAiEngineClientModelsEnumsFailureCategory = z.enum([
+	"Cancelled",
+	"Timeout",
+	"AgentRuntime",
+	"ProviderUnreachable",
+	"Unexpected",
+	"AgentToolCall",
+	"HashMismatch",
+	"ModelUnavailable",
+	"ModelCapabilityUnsupported",
+	"ModelLoadFailed",
+	"ModelNotInstalled",
+	"ContextWindowExceeded",
+]);
+
+export const zXeLocalAiEngineClientEndpointsInvocationsV1InvocationCurrentResponse = z.object({
+	invocationId: z.guid(),
+	conversationId: z.guid(),
+	status: zXeLocalAiEngineAiContractsEnumsInvocationStatus,
+	modelUsed: z.string().nullish(),
+	startedAt: z.iso.datetime({ offset: true }),
+	lastUpdatedAt: z.iso.datetime({ offset: true }),
+	completedAt: z.iso.datetime({ offset: true }).nullish(),
+	error: z.string().nullish(),
+	failureCategory: zXeLocalAiEngineClientModelsEnumsFailureCategory.nullish(),
+	streamedChunkCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	streamedThinkingChunkCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	pendingToolCallCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	hasPendingApproval: z.boolean(),
+	traceId: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsInvocationsV1InvocationHistoryResponse = z.object({
+	invocationId: z.guid(),
+	conversationId: z.guid(),
+	status: zXeLocalAiEngineAiContractsEnumsInvocationStatus,
+	modelUsed: z.string().nullish(),
+	startedAt: z.iso.datetime({ offset: true }),
+	completedAt: z.iso.datetime({ offset: true }),
+	durationMs: z.int(),
+	error: z.string().nullish(),
+	failureCategory: zXeLocalAiEngineClientModelsEnumsFailureCategory.nullish(),
+	streamedChunkCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	streamedThinkingChunkCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	traceId: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsInvocationsV1InvocationMonitorResponse = z.object({
+	current: zXeLocalAiEngineClientEndpointsInvocationsV1InvocationCurrentResponse.nullable(),
+	history: z.array(zXeLocalAiEngineClientEndpointsInvocationsV1InvocationHistoryResponse),
+	historyCapacity: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1ImageJobRouteRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBackendDto = z.enum(["cpu", "vulkan", "cuda"]);
+
+export const zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceSelectionDto = z.enum(["official", "custom"]);
+
+export const zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceRevisionModeDto = z.enum([
+	"enginePinned",
+	"defaultBranch",
+	"explicitCommit",
+]);
+
+export const zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildDescriptorResponse = z.object({
+	buildId: z.guid(),
+	backend: zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBackendDto,
+	source: zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceSelectionDto,
+	repository: z.string(),
+	revisionMode: zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceRevisionModeDto,
+	requestedCommit: z.string().nullish(),
+	resolvedCommit: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildStatusResponse = z.object({
+	phase: z.string(),
+	isRunning: z.boolean(),
+	terminal: z.boolean(),
+	logStartSequence: z.int(),
+	logLines: z.array(z.string()),
+	sanitizedError: z.string().nullish(),
+	currentBuild: zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildDescriptorResponse.nullish(),
+	startedAtUtc: z.int().nullish(),
+	completedAtUtc: z.int().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1ImageRuntimeActionRequest = z.object({
+	accepted: z.boolean().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1ImageJobResponse = z.object({
+	id: z.guid(),
+	modelName: z.string(),
+	prompt: z.string(),
+	negativePrompt: z.string().nullish(),
+	seed: z.string(),
+	width: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	height: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	steps: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	sampler: z.string(),
+	cfgScale: z.number(),
+	status: z.string(),
+	createdAtUtc: z.int(),
+	startedAtUtc: z.int().nullish(),
+	completedAtUtc: z.int().nullish(),
+	durationMs: z.int().nullish(),
+	imageId: z.guid().nullish(),
+	sanitizedError: z.string().nullish(),
+	cancellationRequestedAtUtc: z.int().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1ImageRuntimeActivityResponse = z.object({
+	activeJobCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	spawnReadinessCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	residentProcessCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	mutationReserved: z.boolean(),
+	evictionReserved: z.boolean(),
+	isBusy: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1ImageRuntimeBlockedResponse = z.object({
+	reason: z.string(),
+	message: z.string(),
+	activity: zXeLocalAiEngineClientEndpointsImagesV1ImageRuntimeActivityResponse,
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1CreateImageJobRequest = z.object({
+	modelName: z.string(),
+	prompt: z.string(),
+	negativePrompt: z.string().nullish(),
+	seed: z.string().nullish(),
+	width: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	height: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	steps: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	sampler: z.string().nullish(),
+	cfgScale: z.number().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionInstalledRuntimeValidityDto = z.enum(["active", "invalid"]);
+
+export const zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionInstalledRuntimeResponse = z.object({
+	validity: zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionInstalledRuntimeValidityDto,
+	desiredBackend: zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBackendDto,
+	sourceRepository: z.string(),
+	sourceCommit: z.string(),
+	sourceSelection: zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceSelectionDto,
+	sourceRevisionMode: zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceRevisionModeDto,
+	sourceRequestedCommit: z.string().nullish(),
+	installedAtUtc: z.int(),
+	invalidReason: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1ImageRuntimeStatusResponse = z.object({
+	managedRuntime: zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionInstalledRuntimeResponse.nullish(),
+	activity: zXeLocalAiEngineClientEndpointsImagesV1ImageRuntimeActivityResponse,
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildPrerequisiteItemResponse = z.object({
+	key: z.string(),
+	satisfied: z.boolean(),
+	detail: z.string(),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildPrerequisitesResponse = z.object({
+	backend: zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBackendDto,
+	items: z.array(zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildPrerequisiteItemResponse),
+	canBuild: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1GetStableDiffusionCppSourceBuildPrerequisitesRequest = z.record(
+	z.string(),
+	z.never(),
+);
+
+export const zXeLocalAiEngineClientEndpointsImagesV1ListImageJobsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsImagesV1ImageJobResponse),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1ImageModelDownloadStatusResponse = z.object({
+	modelName: z.string(),
+	phase: z.string(),
+	completedBytes: z.int().nullish(),
+	totalBytes: z.int().nullish(),
+	sanitizedError: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1ListImageModelDownloadsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsImagesV1ImageModelDownloadStatusResponse),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1ImageModelPartResponse = z.object({
+	role: z.string(),
+	fileName: z.string(),
+	sizeBytes: z.int(),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1ImageModelResponse = z.object({
+	modelName: z.string(),
+	repoId: z.string(),
+	family: z.string(),
+	kind: z.string(),
+	sizeBytes: z.int(),
+	parts: z.array(zXeLocalAiEngineClientEndpointsImagesV1ImageModelPartResponse),
+	downloadedAtUtc: z.int(),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1ListImageModelsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsImagesV1ImageModelResponse),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1RetrieveImageRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsImagesV1StartImageModelDownloadResponse = z.object({
+	modelName: z.string(),
+	accepted: z.boolean(),
+	alreadyInFlight: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1ImageModelPartDownloadRequest = z.object({
+	role: z.string(),
+	fileName: z.string(),
+	sha256: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1StartImageModelDownloadRequest = z.object({
+	modelName: z.string(),
+	repoId: z.string(),
+	family: z.string(),
+	kind: z.string().nullish(),
+	revision: z.string().nullish(),
+	parts: z.array(zXeLocalAiEngineClientEndpointsImagesV1ImageModelPartDownloadRequest),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1StartStableDiffusionCppSourceBuildResponse = z.object({
+	started: z.boolean(),
+	status: zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildStatusResponse,
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1StartStableDiffusionCppSourceBuildRequest = z.object({
+	backend: zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBackendDto,
+	source: zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceSelectionDto,
+	repository: z.string().nullish(),
+	commit: z.string().nullish(),
+	acknowledgeCustomSourceRisk: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerDaemonResponse = z.object({
+	daemonId: z.string().optional(),
+	serverVersion: z.string().optional(),
+	endpoint: z.string().optional(),
+	confirmedAtUtc: z.iso.datetime({ offset: true }).nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerRuntimeResponse = z.object({
+	ready: z.boolean().optional(),
+	status: z.string().optional(),
+	message: z.string().optional(),
+	requiresOperatorConfirmation: z.boolean().optional(),
+	endpoint: z.string().nullish(),
+	endpointSource: z.string().nullish(),
+	observedDaemon: zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerDaemonResponse.nullish(),
+	pinnedDaemon: zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerDaemonResponse.nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentCapabilityResponse = z.object({
+	enabled: z.boolean().optional(),
+	sandboxProvider: z.string().optional(),
+	containerRuntime: zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerRuntimeResponse.nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1ConfirmDevelopmentContainerRuntimeRequest = z.object({
+	daemonId: z.string().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentRepositoryResponse = z.object({
+	id: z.string().optional(),
+	alias: z.string().optional(),
+	availability: z.string().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentRepositoriesResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentRepositoryResponse).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1RegisterDevelopmentRepositoryRequest = z.object({
+	alias: z.string().optional(),
+	hostPath: z.string().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTemplateResponse = z.object({
+	id: z.string().optional(),
+	alias: z.string().optional(),
+	availability: z.string().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentTemplatesResponse = z.object({
+	templates: z.array(zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTemplateResponse).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1RegisterDevelopmentTemplateRequest = z.object({
+	alias: z.string().optional(),
+	hostPath: z.string().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTemplateRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentRepositoryFromTemplateResponse = z.object({
+	repository: zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentRepositoryResponse.optional(),
+	templateAlias: z.string().optional(),
+	templateCommit: z.string().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1CreateDevelopmentRepositoryFromTemplateRequest = z.object({
+	templateId: z.guid().optional(),
+	destinationPath: z.string().optional(),
+	alias: z.string().optional(),
+	baseBranch: z.string().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProfileDetectionResponse = z.object({
+	profileId: z.string().optional(),
+	buildTarget: z.string().nullish(),
+	candidates: z.array(z.string()).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProfileDetectionRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectResponse = z.object({
+	id: z.guid().optional(),
+	objective: z.string().optional(),
+	selectedFolderId: z.guid().nullish(),
+	repositoryConnectionRequired: z.boolean().optional(),
+	baseBranch: z.string().optional(),
+	status: z.string().optional(),
+	egressPolicy: z.string().optional(),
+	coderModelId: z.string().nullish(),
+	reviewerModelId: z.string().nullish(),
+	maxTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	maxDurationSeconds: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	createdAtUtc: z.int().optional(),
+	updatedAtUtc: z.int().optional(),
+	version: z.int().optional(),
+	commandProfileId: z.string().nullish(),
+	commandProfileBuildTarget: z.string().nullish(),
+	commandProfileDigest: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentProjectsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectResponse).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTaskResponse = z.object({
+	id: z.guid().optional(),
+	projectId: z.guid().optional(),
+	title: z.string().optional(),
+	requirements: z.string().optional(),
+	acceptanceCriteriaJson: z.string().optional(),
+	status: z.string().optional(),
+	currentReviewRound: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	maxReviewRounds: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	blockedReason: z.string().nullish(),
+	approvedSubjectHash: z.string().nullish(),
+	version: z.int().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentAttemptResponse = z.object({
+	id: z.guid().optional(),
+	taskId: z.guid().optional(),
+	predecessorAttemptId: z.guid().nullish(),
+	role: z.string().optional(),
+	modelId: z.string().optional(),
+	provider: z.string().optional(),
+	status: z.string().optional(),
+	startedAtUtc: z.int().nullish(),
+	endedAtUtc: z.int().nullish(),
+	terminalReason: z.string().nullish(),
+	inputTokens: z.int().nullish(),
+	outputTokens: z.int().nullish(),
+	version: z.int().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentArtifactResponse = z.object({
+	id: z.guid().optional(),
+	projectId: z.guid().optional(),
+	taskId: z.guid().optional(),
+	attemptId: z.guid().nullish(),
+	kind: z.string().optional(),
+	contentHash: z.string().optional(),
+	byteCount: z.int().optional(),
+	createdAtUtc: z.int().optional(),
+	baseCommit: z.string().nullish(),
+	subjectHash: z.string().nullish(),
+	changedFilesManifestHash: z.string().nullish(),
+	commandProfileVersion: z.string().nullish(),
+	commandProfileDigest: z.string().nullish(),
+	isValid: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTaskDetailResponse = z.object({
+	task: zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTaskResponse.optional(),
+	attempts: z.array(zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentAttemptResponse).optional(),
+	artifacts: z.array(zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentArtifactResponse).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentEventResponse = z.object({
+	id: z.guid().optional(),
+	projectId: z.guid().optional(),
+	taskId: z.guid().nullish(),
+	attemptId: z.guid().nullish(),
+	sequence: z.int().optional(),
+	eventType: z.string().optional(),
+	occurredAtUtc: z.int().optional(),
+	operationId: z.guid().nullish(),
+	operationPhase: z.string().nullish(),
+	outcome: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectDetailResponse = z.object({
+	project: zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectResponse.optional(),
+	tasks: z.array(zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTaskDetailResponse).optional(),
+	events: z.array(zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentEventResponse).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1CreateDevelopmentProjectRequest = z.object({
+	operationId: z.guid().optional(),
+	selectedFolderId: z.guid().optional(),
+	objective: z.string().optional(),
+	baseBranch: z.string().optional(),
+	taskTitle: z.string().optional(),
+	requirements: z.string().optional(),
+	acceptanceCriteriaJson: z.string().optional(),
+	egressPolicy: z.string().optional(),
+	coderModelId: z.string().optional(),
+	reviewerModelId: z.string().optional(),
+	trustedRepositoryAcknowledged: z.boolean().optional(),
+	maxTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	maxDurationSeconds: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	commandProfileId: z.string().nullish(),
+	buildTarget: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTaskRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentNextActionResponse = z.object({
+	action: z.string().optional(),
+	projectId: z.guid().optional(),
+	taskId: z.guid().optional(),
+	attemptId: z.guid().nullish(),
+	taskStatus: z.string().optional(),
+	role: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentActionRequest = z.object({
+	operationId: z.guid().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentAttemptRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentEventsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentEventResponse).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentArtifactsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentArtifactResponse).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentArtifactContentResponse = z.object({
+	artifact: zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentArtifactResponse.optional(),
+	content: z.string().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentArtifactRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientServicesDevelopmentDevelopmentPatchPreviewFile = z.object({
+	path: z.string().optional(),
+	changeType: z.string().optional(),
+	previousPath: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentPatchPreviewResponse = z.object({
+	subjectHash: z.string().optional(),
+	patchHash: z.string().optional(),
+	manifestHash: z.string().optional(),
+	expectedResultHash: z.string().optional(),
+	patch: z.string().optional(),
+	changedFiles: z.array(zXeLocalAiEngineClientServicesDevelopmentDevelopmentPatchPreviewFile).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentApplyResponse = z.object({
+	operationId: z.guid().optional(),
+	phase: z.string().optional(),
+	outcome: z.string().optional(),
+	status: z.string().optional(),
+	version: z.int().optional(),
+	sequence: z.int().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1ReconnectDevelopmentRepositoryRequest = z.object({
+	selectedFolderId: z.guid().optional(),
+	expectedVersion: z.int().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsConnectionV1ConnectionStatusResponse = z.object({
+	state: z.string(),
+	lastError: z.string().nullish(),
+	lastUpdatedAt: z.iso.datetime({ offset: true }).optional(),
+	isPaired: z.boolean().optional(),
+	autoConnectOnStart: z.boolean().optional(),
+	bindingMethod: z.string().nullish(),
+	lastKnownNodeName: z.string().nullish(),
+	tokenExpiresAt: z.iso.datetime({ offset: true }).nullish(),
+	canConnect: z.boolean().optional(),
+	canDisconnect: z.boolean().optional(),
+	canEnableAutoConnect: z.boolean().optional(),
+	canDisableAutoConnect: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryModelDto = z.object({
+	deploymentName: z.string(),
+	displayLabel: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryHeaderDto = z.object({
+	name: z.string(),
+	value: z.string().nullish(),
+	isSecret: z.boolean().optional(),
+	hasStoredValue: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundrySettingsResponse = z.object({
+	endpoint: z.string().nullish(),
+	authMode: z.string(),
+	apiSurface: z.string().optional(),
+	hasStoredApiKey: z.boolean().optional(),
+	models: z.array(zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryModelDto).optional(),
+	headers: z.array(zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryHeaderDto).optional(),
+	additionalAllowedHostSuffixes: z.array(z.string()).optional(),
+	entraTenantId: z.string().nullish(),
+	entraClientId: z.string().nullish(),
+	hasStoredEntraClientSecret: z.boolean().optional(),
+	entraTokenScope: z.string().nullish(),
+	entraSignInMethod: z.string().optional(),
+	entraAuthCodeRedirectUri: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsCloudSettingsV1CloudSettingsResponse = z.object({
+	providerName: z.string(),
+	azureFoundry: zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundrySettingsResponse.nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsCloudSettingsV1EntraAuthCodeSignInResponse = z.object({
+	authorizeUrl: z.string(),
+	expiresAtUtc: z.iso.datetime({ offset: true }),
+});
+
+export const zXeLocalAiEngineClientEndpointsCloudSettingsV1EntraAuthCodeSignInStatusResponse = z.object({
+	state: z.string(),
+	expiresAtUtc: z.iso.datetime({ offset: true }).nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsCloudSettingsV1EntraDeviceCodeSignInResponse = z.object({
+	userCode: z.string(),
+	verificationUri: z.string(),
+	expiresAtUtc: z.iso.datetime({ offset: true }),
+});
+
+export const zXeLocalAiEngineClientEndpointsCloudSettingsV1EntraDeviceCodeSignInStatusResponse = z.object({
+	state: z.string(),
+	userCode: z.string().nullish(),
+	verificationUri: z.string().nullish(),
+	expiresAtUtc: z.iso.datetime({ offset: true }).nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsCloudSettingsV1SaveAzureFoundryHeaderRequest = z.object({
+	name: z.string().optional(),
+	value: z.string().nullish(),
+	isSecret: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsCloudSettingsV1SaveCloudSettingsRequest = z.object({
+	providerName: z.string().optional(),
+	endpoint: z.string().min(1),
+	authMode: z.string().optional(),
+	apiKey: z.string().nullish(),
+	apiSurface: z.string().optional(),
+	models: z.array(zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryModelDto).optional(),
+	headers: z.array(zXeLocalAiEngineClientEndpointsCloudSettingsV1SaveAzureFoundryHeaderRequest).optional(),
+	additionalAllowedHostSuffixes: z.array(z.string()).optional(),
+	entraTenantId: z.string().nullish(),
+	entraClientId: z.string().nullish(),
+	entraClientSecret: z.string().nullish(),
+	entraTokenScope: z.string().nullish(),
+	entraSignInMethod: z.string().optional(),
+	entraAuthCodeRedirectUri: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsCloudCodexV1CodexLoginResponse = z.object({
+	authorizeUrl: z.string(),
+});
+
+export const zXeLocalAiEngineClientEndpointsCloudCodexV1CodexStatusResponse = z.object({
+	signedIn: z.boolean(),
+	accountId: z.string().nullish(),
+	expiresAtUtc: z.iso.datetime({ offset: true }).nullish(),
+	loginPending: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsAuthV1NodeAuthStatusResponse = z.object({
+	setupRequired: z.boolean(),
+	authenticated: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsAuthV1NodeSetupRequest = z.object({
+	email: z
+		.email()
+		.min(0)
+		.max(256)
+		.regex(/^[^@]+@[^@]+$/),
+	password: z.string().min(12).max(256),
+});
+
+export const zXeLocalAiEngineClientEndpointsAuthV1NodeAccessTokenResponse = z.object({
+	accessToken: z.string(),
+	expiresAtUtc: z.iso.datetime({ offset: true }),
+});
+
+export const zXeLocalAiEngineClientEndpointsAuthV1NodeLoginRequest = z.object({
+	email: z
+		.email()
+		.min(0)
+		.max(256)
+		.regex(/^[^@]+@[^@]+$/)
+		.nullish(),
+	password: z.string().min(0).max(256),
+});
+
+export const zXeLocalAiEngineClientEndpointsAuthV1NodeChangePasswordRequest = z.object({
+	currentPassword: z.string().min(0).max(256),
+	newPassword: z.string().min(12).max(256),
+});
+
+export const zXeLocalAiEngineClientEndpointsAuthV1NodeMeResponse = z.object({
+	userName: z.string(),
+	roles: z.array(z.string()),
+});
+
+export const zXeLocalAiEngineClientEndpointsAppUpdateV1ApplyAppUpdateResponse = z.object({
+	applying: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsAppUpdateV1AppUpdateStatusResponse = z.object({
+	currentVersion: z.string(),
+	availableVersion: z.string().nullish(),
+	updateAvailable: z.boolean(),
+	authState: z.string(),
+	login: z.string().nullish(),
+	isDesktop: z.boolean(),
+	isOffline: z.boolean(),
+	lastCheckedUtc: z.int().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsAppUpdateV1GetAppUpdateStatusRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthStatusResponse = z.object({
+	authState: z.string(),
+	login: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthPollResponse = z.object({
+	state: z.string(),
+	login: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthStartResponse = z.object({
+	userCode: z.string(),
+	verificationUri: z.string(),
+	expiresInSeconds: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	intervalSeconds: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+});
+
+export const zXeLocalAiEngineClientEndpointsApiFoundationV1ValidationProblemProbeResponse = z.object({
+	name: z.string(),
+});
+
+export const zXeLocalAiEngineClientEndpointsApiFoundationV1ValidationProblemProbeRequest = z.object({
+	name: z.string().min(0).max(64),
+});
+
+export const zXeLocalAiEngineClientPersistencePlaybookActionState = z.enum(["Suggested", "Enabled", "Disabled", "Archived"]);
+
+export const zXeLocalAiEngineClientPersistencePlaybookActionSource = z.enum(["Manual", "Analysis", "Extracted"]);
+
+export const zXeLocalAiEngineClientPersistenceMemoryScope = z.enum(["Procedural", "Failure", "UserPreference", "Project"]);
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1PlaybookEvalCaseResultResponse = z.object({
+	goldenCaseId: z.guid().optional(),
+	scoredBy: z.string().optional(),
+	baselinePass: z.boolean().optional(),
+	candidatePass: z.boolean().optional(),
+	regressed: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1PlaybookEvalResultResponse = z.object({
+	passed: z.boolean().optional(),
+	evaluatedAtUtc: z.int().optional(),
+	actionVersionAtEval: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	modelName: z.string().optional(),
+	goldenCaseCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	goldenCaseTotal: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	baselinePassCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	candidatePassCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	regressedCaseCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	improvedCaseCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	cases: z.array(zXeLocalAiEngineClientEndpointsAgentsV1PlaybookEvalCaseResultResponse).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1PlaybookActionResponse = z.object({
+	id: z.guid(),
+	agentDefinitionId: z.guid(),
+	state: zXeLocalAiEngineClientPersistencePlaybookActionState,
+	source: zXeLocalAiEngineClientPersistencePlaybookActionSource,
+	memoryScope: zXeLocalAiEngineClientPersistenceMemoryScope.nullish(),
+	triggerCondition: z.string().nullish(),
+	behavior: z.string(),
+	scope: z.string().nullish(),
+	priority: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	version: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	createdAtUtc: z.int(),
+	updatedAtUtc: z.int(),
+	sourceFeedbackIds: z.array(z.guid()).nullish(),
+	confidence: z.number().nullish(),
+	evalResult: zXeLocalAiEngineClientEndpointsAgentsV1PlaybookEvalResultResponse.nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1ListPlaybookActionsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsAgentsV1PlaybookActionResponse),
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1AnalyzePlaybookRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1GoldenTurnDto = z.object({
+	role: z.string().optional(),
+	text: z.string().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1GoldenAssertionDto = z.object({
+	requiredPhrases: z.array(z.string()).optional(),
+	forbiddenPhrases: z.array(z.string()).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1GoldenConversationResponse = z.object({
+	id: z.guid(),
+	agentDefinitionId: z.guid(),
+	title: z.string(),
+	inputTurns: z.array(zXeLocalAiEngineClientEndpointsAgentsV1GoldenTurnDto),
+	assertion: zXeLocalAiEngineClientEndpointsAgentsV1GoldenAssertionDto.nullish(),
+	rubric: z.string().nullish(),
+	enabled: z.boolean(),
+	source: z.string(),
+	sourceMessageId: z.guid().nullish(),
+	sourceConversationId: z.guid().nullish(),
+	createdAtUtc: z.int(),
+	updatedAtUtc: z.int(),
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1ApproveGoldenConversationRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientPersistenceAgentDefinitionKind = z.enum(["Single", "Orchestrator"]);
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1AgentDefinitionResponse = z.object({
+	id: z.guid(),
+	name: z.string(),
+	description: z.string().nullish(),
+	instructions: z.string(),
+	modelProfile: z.string().nullish(),
+	reasoningEffort: z.string().nullish(),
+	kind: zXeLocalAiEngineClientPersistenceAgentDefinitionKind,
+	allowedToolNames: z.array(z.string()),
+	toolApprovals: z.record(z.string(), z.boolean()),
+	orchestrationTopologyJson: z.string().nullish(),
+	playbookEnabled: z.boolean(),
+	defaultTemporaryChat: z.boolean(),
+	memoryExtractionEnabled: z.boolean(),
+	disableBaseScaffold: z.boolean(),
+	allowedSkillIds: z.array(z.guid()),
+	version: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	createdAtUtc: z.int(),
+	updatedAtUtc: z.int(),
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1CreateAgentDefinitionRequest = z.object({
+	name: z.string().nullish(),
+	description: z.string().nullish(),
+	instructions: z.string().nullish(),
+	modelProfile: z.string().nullish(),
+	reasoningEffort: z.string().nullish(),
+	kind: zXeLocalAiEngineClientPersistenceAgentDefinitionKind.optional(),
+	allowedToolNames: z.array(z.string()).nullish(),
+	toolApprovals: z.record(z.string(), z.boolean()).nullish(),
+	orchestrationTopologyJson: z.string().nullish(),
+	playbookEnabled: z.boolean().optional(),
+	defaultTemporaryChat: z.boolean().optional(),
+	memoryExtractionEnabled: z.boolean().optional(),
+	disableBaseScaffold: z.boolean().optional(),
+	allowedSkillIds: z.array(z.guid()).nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1CreateGoldenConversationRequest = z.object({
+	title: z.string(),
+	inputTurns: z.array(zXeLocalAiEngineClientEndpointsAgentsV1GoldenTurnDto),
+	assertion: zXeLocalAiEngineClientEndpointsAgentsV1GoldenAssertionDto.nullish(),
+	rubric: z.string().nullish(),
+	enabled: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1CreatePlaybookActionRequest = z.object({
+	state: zXeLocalAiEngineClientPersistencePlaybookActionState.optional(),
+	triggerCondition: z.string().nullish(),
+	behavior: z.string().nullish(),
+	scope: z.string().nullish(),
+	priority: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1DeleteAgentDefinitionRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1DeleteGoldenConversationRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1DeletePlaybookActionRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1GetAgentDefinitionRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1OverallFeedbackResponse = z.object({
+	total: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	up: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	down: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	downRate: z.number(),
+	meetsThreshold: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1ToolFeedbackResponse = z.object({
+	toolName: z.string(),
+	total: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	up: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	down: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	downRate: z.number(),
+	meetsThreshold: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1FeedbackExemplarResponse = z.object({
+	rating: z.string(),
+	comment: z.string(),
+	messageId: z.guid(),
+	conversationId: z.guid(),
+	createdAtUtc: z.int(),
+	truncated: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1AgentFeedbackInsightsResponse = z.object({
+	agentDefinitionId: z.guid(),
+	agentName: z.string(),
+	generatedAtUtc: z.int(),
+	minOccurrenceThreshold: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	overall: zXeLocalAiEngineClientEndpointsAgentsV1OverallFeedbackResponse,
+	byTool: z.array(zXeLocalAiEngineClientEndpointsAgentsV1ToolFeedbackResponse),
+	exemplars: z.array(zXeLocalAiEngineClientEndpointsAgentsV1FeedbackExemplarResponse),
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1GetAgentFeedbackInsightsRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientServicesMonitoringPlaybookMonitorStatus = z.enum([
+	"InsufficientData",
+	"Improved",
+	"Flat",
+	"Regressed",
+]);
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1PlaybookActionMonitorItemResponse = z.object({
+	actionId: z.guid().optional(),
+	enabledAtUtc: z.int().optional(),
+	beforeDownRate: z.number().optional(),
+	afterDownRate: z.number().optional(),
+	afterSampleSize: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	status: zXeLocalAiEngineClientServicesMonitoringPlaybookMonitorStatus.optional(),
+	flagged: z.boolean().optional(),
+	facetToolName: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1PlaybookRetrievalResponse = z.object({
+	threshold: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	topK: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	ranker: z.string().optional(),
+	embeddingModel: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1AgentPlaybookMonitorResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsAgentsV1PlaybookActionMonitorItemResponse).optional(),
+	retrieval: zXeLocalAiEngineClientEndpointsAgentsV1PlaybookRetrievalResponse.optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1GetAgentPlaybookMonitorRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryBucketResponse = z.object({
+	modelName: z.string(),
+	provider: z.string(),
+	dayStartUtcMs: z.int(),
+	runCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	promptTokens: z.int(),
+	completionTokens: z.int(),
+	reasoningTokens: z.int(),
+	totalTokens: z.int(),
+	estimatedCostUsd: z.number(),
+	currency: z.string(),
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryTotalsResponse = z.object({
+	runCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	promptTokens: z.int(),
+	completionTokens: z.int(),
+	reasoningTokens: z.int(),
+	totalTokens: z.int(),
+	estimatedCostUsd: z.number(),
+	currency: z.string(),
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1AgentUsageProviderTotalsResponse = z.object({
+	provider: z.string(),
+	runCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	promptTokens: z.int(),
+	completionTokens: z.int(),
+	reasoningTokens: z.int(),
+	totalTokens: z.int(),
+	estimatedCostUsd: z.number(),
+	currency: z.string(),
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryBucketResponse),
+	totals: zXeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryTotalsResponse,
+	byProvider: z.array(zXeLocalAiEngineClientEndpointsAgentsV1AgentUsageProviderTotalsResponse),
+	retentionDays: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1ToolCapableModelsResponse = z.object({
+	models: z.array(z.string()),
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1GoldenHarvestResponse = z.object({
+	thumbsUpScanned: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	createdCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	duplicateCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	skippedCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1HarvestGoldenConversationsRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1ImportAgentTemplatesResponse = z.object({
+	imported: z.array(z.string()),
+	skippedExisting: z.array(z.string()),
+	unknown: z.array(z.string()),
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1ImportAgentTemplatesRequest = z.object({
+	slugs: z.array(z.string()).nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1ListAgentDefinitionsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsAgentsV1AgentDefinitionResponse),
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1AgentExecutionLogResponse = z.object({
+	id: z.guid(),
+	agentDefinitionId: z.guid(),
+	conversationId: z.guid().nullish(),
+	messageId: z.guid().nullish(),
+	modelName: z.string(),
+	configHash: z.string(),
+	latencyMs: z.int(),
+	promptTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	completionTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	success: z.boolean(),
+	errorClass: z.string().nullish(),
+	createdAtUtc: z.int(),
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1ListAgentExecutionLogsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsAgentsV1AgentExecutionLogResponse),
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1ListAgentExecutionLogsRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1ListAgentPlaybookActionsRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1AgentTemplateSummary = z.object({
+	slug: z.string(),
+	name: z.string(),
+	description: z.string().nullish(),
+	division: z.string(),
+	estimatedPromptTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	hasOriginalTools: z.boolean(),
+	alreadyImported: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1ListAgentTemplatesResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsAgentsV1AgentTemplateSummary),
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1ListGoldenConversationsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsAgentsV1GoldenConversationResponse),
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1ListGoldenConversationsRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1AgentRunEnvelopeResponse = z.object({
+	id: z.guid(),
+	schemaVersion: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	agentDefinitionId: z.guid(),
+	conversationId: z.guid().nullish(),
+	messageId: z.guid().nullish(),
+	invocationId: z.guid().nullish(),
+	requestId: z.guid().nullish(),
+	modelName: z.string(),
+	terminalStatus: z.string(),
+	success: z.boolean(),
+	failureCategory: z.string().nullish(),
+	durationMs: z.int(),
+	promptTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	completionTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	reasoningTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	totalTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	contentChunkCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	reasoningChunkCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	traceId: z.string().nullish(),
+	startedAtUtc: z.int().nullish(),
+	createdAtUtc: z.int(),
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1ListRunEnvelopesResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsAgentsV1AgentRunEnvelopeResponse),
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1ListRunEnvelopesRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1SuggestedPlaybookActionRouteRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1UpdateAgentDefinitionRequest = z.object({
+	name: z.string().nullish(),
+	description: z.string().nullish(),
+	instructions: z.string().nullish(),
+	modelProfile: z.string().nullish(),
+	reasoningEffort: z.string().nullish(),
+	kind: zXeLocalAiEngineClientPersistenceAgentDefinitionKind.optional(),
+	allowedToolNames: z.array(z.string()).nullish(),
+	toolApprovals: z.record(z.string(), z.boolean()).nullish(),
+	orchestrationTopologyJson: z.string().nullish(),
+	playbookEnabled: z.boolean().optional(),
+	defaultTemporaryChat: z.boolean().optional(),
+	memoryExtractionEnabled: z.boolean().optional(),
+	disableBaseScaffold: z.boolean().optional(),
+	allowedSkillIds: z.array(z.guid()).nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1UpdatePlaybookActionRequest = z.object({
+	state: zXeLocalAiEngineClientPersistencePlaybookActionState.optional(),
+	triggerCondition: z.string().nullish(),
+	behavior: z.string().nullish(),
+	scope: z.string().nullish(),
+	priority: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActionRequest = z.object({
+	behavior: z.string().nullish(),
+	triggerCondition: z.string().nullish(),
+	scope: z.string().nullish(),
+	priority: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
 });
 
 /**
  * Success
  */
-export const zUnloadLocalModelResponse = zXeLocalAiEngineClientEndpointsLocalModelsV1UnloadLocalModelResponse;
+export const zGetVoiceManifestResponse = zXeLocalAiEngineClientEndpointsVoiceV1VoiceManifestResponse;
 
 /**
  * Success
  */
-export const zGetNodeSettingsResponse = zXeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse;
+export const zGetTutorialStateResponse = zXeLocalAiEngineClientEndpointsTutorialStateV1TutorialStateResponse;
 
-export const zSaveNodeSettingsBody = zXeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest;
+export const zSaveTutorialStateBody = zXeLocalAiEngineClientEndpointsTutorialStateV1SaveTutorialStateRequest;
+
+/**
+ * No Content
+ */
+export const zSaveTutorialStateResponse = z.void();
 
 /**
  * Success
  */
-export const zSaveNodeSettingsResponse = zXeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse;
+export const zListSkillsResponse = zXeLocalAiEngineClientEndpointsSkillsV1ListSkillsResponse;
+
+export const zCreateSkillBody = zXeLocalAiEngineClientEndpointsSkillsV1CreateSkillRequest;
 
 /**
  * Success
  */
-export const zListPreviewRunsResponse = zXeLocalAiEngineClientEndpointsPreviewV1ListPreviewRunsResponse;
+export const zCreateSkillResponse = zXeLocalAiEngineClientEndpointsSkillsV1SkillResponse;
+
+export const zDeleteSkillPath = z.object({
+	skillId: z.guid(),
+});
+
+/**
+ * No Content
+ */
+export const zDeleteSkillResponse = z.void();
+
+export const zGetSkillPath = z.object({
+	skillId: z.guid(),
+});
 
 /**
  * Success
  */
-export const zCancelAllPreviewRunsResponse = zXeLocalAiEngineClientEndpointsPreviewV1CancelAllPreviewRunsResponse;
+export const zGetSkillResponse = zXeLocalAiEngineClientEndpointsSkillsV1SkillResponse;
 
-export const zExecuteUnsavedPreviewWorkflowBody = zXeLocalAiEngineClientEndpointsPreviewV1ExecuteUnsavedPreviewWorkflowRequest;
+export const zUpdateSkillBody = zXeLocalAiEngineClientEndpointsSkillsV1UpdateSkillRequest;
+
+export const zUpdateSkillPath = z.object({
+	skillId: z.guid(),
+});
 
 /**
  * Success
  */
-export const zExecuteUnsavedPreviewWorkflowResponse = zXeLocalAiEngineClientEndpointsPreviewV1PreviewRunStartedResponse;
+export const zUpdateSkillResponse = zXeLocalAiEngineClientEndpointsSkillsV1SkillResponse;
 
-export const zGetPreviewRunPath = z.object({
+export const zCancelScheduledJobRunPath = z.object({
 	runId: z.guid(),
 });
 
 /**
  * Success
  */
-export const zGetPreviewRunResponse = zXeLocalAiEngineClientEndpointsPreviewV1PreviewRunSummaryResponse;
+export const zCancelScheduledJobRunResponse = zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobRunCancelResponse;
+
+export const zListScheduledJobsQuery = z.object({
+	includeDeleted: z.boolean(),
+});
+
+/**
+ * Success
+ */
+export const zListScheduledJobsResponse = zXeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobsResponse;
+
+export const zCreateScheduledJobBody = zXeLocalAiEngineClientEndpointsSchedulerV1CreateScheduledJobRequest;
+
+/**
+ * Success
+ */
+export const zCreateScheduledJobResponse = zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobResponse;
+
+export const zDeleteScheduledJobPath = z.object({
+	scheduledJobId: z.guid(),
+});
+
+/**
+ * No Content
+ */
+export const zDeleteScheduledJobResponse = z.void();
+
+export const zGetScheduledJobPath = z.object({
+	scheduledJobId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zGetScheduledJobResponse = zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobResponse;
+
+export const zUpdateScheduledJobBody = zXeLocalAiEngineClientEndpointsSchedulerV1UpdateScheduledJobRequest;
+
+export const zUpdateScheduledJobPath = z.object({
+	scheduledJobId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zUpdateScheduledJobResponse = zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobResponse;
+
+export const zDisableScheduledJobPath = z.object({
+	scheduledJobId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zDisableScheduledJobResponse = zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobResponse;
+
+export const zEnableScheduledJobPath = z.object({
+	scheduledJobId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zEnableScheduledJobResponse = zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobResponse;
+
+export const zGetScheduledJobRunPath = z.object({
+	runId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zGetScheduledJobRunResponse = zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobRunResponse;
+
+export const zListScheduledJobRunsQuery = z.object({
+	status: zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledRunStatus.nullish(),
+	fromUtc: z.int().nullish(),
+	toUtc: z.int().nullish(),
+	scheduledJobId: z.guid().nullish(),
+});
+
+/**
+ * Success
+ */
+export const zListScheduledJobRunsResponse = zXeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobRunsResponse;
+
+/**
+ * Success
+ */
+export const zListScheduledJobTemplatesResponse = zXeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobTemplatesResponse;
+
+export const zTriggerScheduledJobPath = z.object({
+	scheduledJobId: z.guid(),
+});
+
+/**
+ * No Content
+ */
+export const zTriggerScheduledJobResponse = z.void();
+
+/**
+ * Success
+ */
+export const zCancelAllPreviewRunsResponse = zXeLocalAiEngineClientEndpointsPreviewV1CancelAllPreviewRunsResponse;
 
 export const zCancelPreviewRunPath = z.object({
 	runId: z.guid(),
@@ -4561,172 +3330,1403 @@ export const zExecuteSavedPreviewWorkflowPath = z.object({
  */
 export const zExecuteSavedPreviewWorkflowResponse = zXeLocalAiEngineClientEndpointsPreviewV1PreviewRunStartedResponse;
 
-export const zListScheduledJobsQuery = z.object({
-	includeDeleted: z.boolean(),
-});
+export const zExecuteUnsavedPreviewWorkflowBody = zXeLocalAiEngineClientEndpointsPreviewV1ExecuteUnsavedPreviewWorkflowRequest;
 
 /**
  * Success
  */
-export const zListScheduledJobsResponse = zXeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobsResponse;
+export const zExecuteUnsavedPreviewWorkflowResponse = zXeLocalAiEngineClientEndpointsPreviewV1PreviewRunStartedResponse;
 
-export const zCreateScheduledJobBody = zXeLocalAiEngineClientEndpointsSchedulerV1CreateScheduledJobRequest;
-
-/**
- * Success
- */
-export const zCreateScheduledJobResponse = zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobResponse;
-
-export const zDeleteScheduledJobPath = z.object({
-	scheduledJobId: z.guid(),
-});
-
-/**
- * No Content
- */
-export const zDeleteScheduledJobResponse = z.void();
-
-export const zGetScheduledJobPath = z.object({
-	scheduledJobId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zGetScheduledJobResponse = zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobResponse;
-
-export const zUpdateScheduledJobBody = zXeLocalAiEngineClientEndpointsSchedulerV1UpdateScheduledJobRequest;
-
-export const zUpdateScheduledJobPath = z.object({
-	scheduledJobId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zUpdateScheduledJobResponse = zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobResponse;
-
-export const zDisableScheduledJobPath = z.object({
-	scheduledJobId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zDisableScheduledJobResponse = zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobResponse;
-
-export const zEnableScheduledJobPath = z.object({
-	scheduledJobId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zEnableScheduledJobResponse = zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobResponse;
-
-export const zTriggerScheduledJobPath = z.object({
-	scheduledJobId: z.guid(),
-});
-
-/**
- * No Content
- */
-export const zTriggerScheduledJobResponse = z.void();
-
-export const zListScheduledJobRunsQuery = z.object({
-	status: zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledRunStatus.nullish(),
-	fromUtc: z.int().nullish(),
-	toUtc: z.int().nullish(),
-	scheduledJobId: z.guid().nullish(),
-});
-
-/**
- * Success
- */
-export const zListScheduledJobRunsResponse = zXeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobRunsResponse;
-
-export const zGetScheduledJobRunPath = z.object({
+export const zGetPreviewRunPath = z.object({
 	runId: z.guid(),
 });
 
 /**
  * Success
  */
-export const zGetScheduledJobRunResponse = zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobRunResponse;
+export const zGetPreviewRunResponse = zXeLocalAiEngineClientEndpointsPreviewV1PreviewRunSummaryResponse;
 
-export const zCancelScheduledJobRunPath = z.object({
-	runId: z.guid(),
+/**
+ * Success
+ */
+export const zListPreviewRunsResponse = zXeLocalAiEngineClientEndpointsPreviewV1ListPreviewRunsResponse;
+
+/**
+ * Success
+ */
+export const zGetNodeSettingsResponse = zXeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse;
+
+export const zSaveNodeSettingsBody = zXeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest;
+
+/**
+ * Success
+ */
+export const zSaveNodeSettingsResponse = zXeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse;
+
+/**
+ * Success
+ */
+export const zCancelNodeBindingResponse = zXeLocalAiEngineClientEndpointsNodeBindingV1CancelNodeBindingResponse;
+
+export const zPollNodeBindingBody = zXeLocalAiEngineClientEndpointsNodeBindingV1PollNodeBindingSessionRequest;
+
+/**
+ * Success
+ */
+export const zPollNodeBindingResponse = zXeLocalAiEngineClientEndpointsNodeBindingV1PollNodeBindingSessionResponse;
+
+/**
+ * Success
+ */
+export const zStartNodeBindingResponse = zXeLocalAiEngineClientEndpointsNodeBindingV1NodeBindingSessionResponse;
+
+export const zBenchmarkInferenceProfileBody = zXeLocalAiEngineClientEndpointsModelFitV1BenchmarkInferenceProfileRequest;
+
+/**
+ * Success
+ */
+export const zBenchmarkInferenceProfileResponse = zXeLocalAiEngineClientEndpointsModelFitV1BenchmarkInferenceProfileResponse;
+
+export const zBrowseGgufRepositoriesQuery = z.object({
+	query: z.string().nullish(),
+	limit: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	sort: z.string().nullish(),
 });
 
 /**
  * Success
  */
-export const zCancelScheduledJobRunResponse = zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobRunCancelResponse;
+export const zBrowseGgufRepositoriesResponse = zXeLocalAiEngineClientEndpointsModelFitV1BrowseGgufRepositoriesResponse;
 
 /**
  * Success
  */
-export const zListScheduledJobTemplatesResponse = zXeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobTemplatesResponse;
+export const zCancelCudaBuildResponse = zXeLocalAiEngineClientEndpointsModelFitV1CudaBuildStatusResponse;
+
+export const zCancelGgufDownloadBody = zXeLocalAiEngineClientEndpointsModelFitV1CancelGgufDownloadRequest;
 
 /**
  * Success
  */
-export const zListSkillsResponse = zXeLocalAiEngineClientEndpointsSkillsV1ListSkillsResponse;
-
-export const zCreateSkillBody = zXeLocalAiEngineClientEndpointsSkillsV1CreateSkillRequest;
+export const zCancelGgufDownloadResponse = zXeLocalAiEngineClientEndpointsModelFitV1CancelGgufDownloadResponse;
 
 /**
  * Success
  */
-export const zCreateSkillResponse = zXeLocalAiEngineClientEndpointsSkillsV1SkillResponse;
+export const zCancelLlamaCppSourceBuildResponse = zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildStatusResponse;
 
-export const zDeleteSkillPath = z.object({
-	skillId: z.guid(),
+export const zEjectRunningModelBody = zXeLocalAiEngineClientEndpointsModelFitV1EjectRunningModelRequest;
+
+/**
+ * Success
+ */
+export const zEjectRunningModelResponse = zXeLocalAiEngineClientEndpointsModelFitV1EjectRunningModelResponse;
+
+export const zEnsureLlamaCppBinaryBody = zXeLocalAiEngineClientEndpointsModelFitV1EnsureLlamaCppBinaryRequest;
+
+/**
+ * Success
+ */
+export const zEnsureLlamaCppBinaryResponse = zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppVersionResponse;
+
+export const zExploreInferenceProfileBody = zXeLocalAiEngineClientEndpointsModelFitV1ExploreInferenceProfileRequest;
+
+/**
+ * Success
+ */
+export const zExploreInferenceProfileResponse = zXeLocalAiEngineClientEndpointsModelFitV1InferenceProfileActionResponse;
+
+export const zFreezeInferenceProfileBody = zXeLocalAiEngineClientEndpointsModelFitV1FreezeInferenceProfileRequest;
+
+/**
+ * Success
+ */
+export const zFreezeInferenceProfileResponse = zXeLocalAiEngineClientEndpointsModelFitV1InferenceProfileActionResponse;
+
+/**
+ * Success
+ */
+export const zGetCudaBuildPrerequisitesResponse = zXeLocalAiEngineClientEndpointsModelFitV1CudaBuildPrerequisitesResponse;
+
+/**
+ * Success
+ */
+export const zGetCudaBuildStatusResponse = zXeLocalAiEngineClientEndpointsModelFitV1CudaBuildStatusResponse;
+
+/**
+ * Success
+ */
+export const zGetGgufDownloadsResponse = zXeLocalAiEngineClientEndpointsModelFitV1ListGgufDownloadsResponse;
+
+export const zGetGgufDownloadStatusPath = z.object({
+	modelName: z.string(),
+});
+
+/**
+ * Success
+ */
+export const zGetGgufDownloadStatusResponse = zXeLocalAiEngineClientEndpointsModelFitV1GgufDownloadStatusResponse;
+
+export const zGetHardwareProfileQuery = z.object({
+	refresh: z.boolean(),
+});
+
+/**
+ * Success
+ */
+export const zGetHardwareProfileResponse = zXeLocalAiEngineClientEndpointsModelFitV1HardwareProfileResponse;
+
+/**
+ * Success
+ */
+export const zGetHfTokenStatusResponse = zXeLocalAiEngineClientEndpointsModelFitV1HfTokenStatusResponse;
+
+export const zSetHfTokenBody = zXeLocalAiEngineClientEndpointsModelFitV1SetHfTokenRequest;
+
+/**
+ * Success
+ */
+export const zSetHfTokenResponse = zXeLocalAiEngineClientEndpointsModelFitV1HfTokenStatusResponse;
+
+export const zGetLatestRecommendationsQuery = z.object({
+	useCase: z.string().nullish(),
+});
+
+/**
+ * Success
+ */
+export const zGetLatestRecommendationsResponse = zXeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsResponse;
+
+export const zGetLlamaCppRuntimeQuery = z.object({
+	refresh: z.boolean().nullish(),
+});
+
+/**
+ * Success
+ */
+export const zGetLlamaCppRuntimeResponse = zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppRuntimeStatusResponse;
+
+export const zGetLlamaCppSourceBuildPrerequisitesQuery = z.object({
+	backend: zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBackendDto,
+});
+
+/**
+ * Success
+ */
+export const zGetLlamaCppSourceBuildPrerequisitesResponse =
+	zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildPrerequisitesResponse;
+
+/**
+ * Success
+ */
+export const zGetLlamaCppSourceBuildStatusResponse = zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildStatusResponse;
+
+/**
+ * Success
+ */
+export const zGetModelCatalogInfoResponse = zXeLocalAiEngineClientEndpointsModelFitV1ModelCatalogInfoResponse;
+
+export const zInspectGgufRepositoryQuery = z.object({
+	repoId: z.string().nullish(),
+});
+
+/**
+ * Success
+ */
+export const zInspectGgufRepositoryResponse = zXeLocalAiEngineClientEndpointsModelFitV1InspectGgufRepositoryResponse;
+
+export const zInvalidateInferenceProfileBody = zXeLocalAiEngineClientEndpointsModelFitV1InvalidateInferenceProfileRequest;
+
+/**
+ * Success
+ */
+export const zInvalidateInferenceProfileResponse = zXeLocalAiEngineClientEndpointsModelFitV1InferenceProfileActionResponse;
+
+/**
+ * Success
+ */
+export const zListInferenceProfilesResponse = zXeLocalAiEngineClientEndpointsModelFitV1ListInferenceProfilesResponse;
+
+/**
+ * Success
+ */
+export const zListRunningModelsResponse = zXeLocalAiEngineClientEndpointsModelFitV1ListRunningModelsResponse;
+
+/**
+ * Success
+ */
+export const zRefreshModelCatalogResponse = zXeLocalAiEngineClientEndpointsModelFitV1ModelCatalogInfoResponse;
+
+export const zRefreshRecommendationsBody = zXeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsRequest;
+
+/**
+ * Success
+ */
+export const zRefreshRecommendationsResponse = zXeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsResponse;
+
+/**
+ * Success
+ */
+export const zRemoveCudaBuildResponse = zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppRuntimeStatusResponse;
+
+/**
+ * Success
+ */
+export const zRemoveLlamaCppSourceBuildResponse = zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppRuntimeStatusResponse;
+
+/**
+ * Success
+ */
+export const zStartCudaBuildResponse = zXeLocalAiEngineClientEndpointsModelFitV1StartCudaBuildResponse;
+
+export const zStartGgufDownloadBody = zXeLocalAiEngineClientEndpointsModelFitV1StartGgufDownloadRequest;
+
+/**
+ * Success
+ */
+export const zStartGgufDownloadResponse = zXeLocalAiEngineClientEndpointsModelFitV1StartGgufDownloadResponse;
+
+export const zStartLlamaCppSourceBuildBody = zXeLocalAiEngineClientEndpointsModelFitV1StartLlamaCppSourceBuildRequest;
+
+/**
+ * Success
+ */
+export const zStartLlamaCppSourceBuildResponse = zXeLocalAiEngineClientEndpointsModelFitV1StartLlamaCppSourceBuildResponse;
+
+export const zUpdateLlamaCppRuntimeBody = zXeLocalAiEngineClientEndpointsModelFitV1UpdateLlamaCppRuntimeRequest;
+
+/**
+ * Success
+ */
+export const zUpdateLlamaCppRuntimeResponse = zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppVersionResponse;
+
+/**
+ * Success
+ */
+export const zListMcpServersResponse = zXeLocalAiEngineClientEndpointsMcpV1ListMcpServersResponse;
+
+export const zCreateMcpServerBody = zXeLocalAiEngineClientEndpointsMcpV1CreateMcpServerRequest;
+
+/**
+ * Success
+ */
+export const zCreateMcpServerResponse = zXeLocalAiEngineClientEndpointsMcpV1McpServerResponse;
+
+export const zDeleteMcpServerPath = z.object({
+	mcpServerId: z.guid(),
 });
 
 /**
  * No Content
  */
-export const zDeleteSkillResponse = z.void();
+export const zDeleteMcpServerResponse = z.void();
 
-export const zGetSkillPath = z.object({
-	skillId: z.guid(),
+export const zGetMcpServerPath = z.object({
+	mcpServerId: z.guid(),
 });
 
 /**
  * Success
  */
-export const zGetSkillResponse = zXeLocalAiEngineClientEndpointsSkillsV1SkillResponse;
+export const zGetMcpServerResponse = zXeLocalAiEngineClientEndpointsMcpV1McpServerResponse;
 
-export const zUpdateSkillBody = zXeLocalAiEngineClientEndpointsSkillsV1UpdateSkillRequest;
+export const zUpdateMcpServerBody = zXeLocalAiEngineClientEndpointsMcpV1UpdateMcpServerRequest;
 
-export const zUpdateSkillPath = z.object({
-	skillId: z.guid(),
+export const zUpdateMcpServerPath = z.object({
+	mcpServerId: z.guid(),
 });
 
 /**
  * Success
  */
-export const zUpdateSkillResponse = zXeLocalAiEngineClientEndpointsSkillsV1SkillResponse;
+export const zUpdateMcpServerResponse = zXeLocalAiEngineClientEndpointsMcpV1McpServerResponse;
+
+export const zGetMcpServerToolsPath = z.object({
+	mcpServerId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zGetMcpServerToolsResponse = zXeLocalAiEngineClientEndpointsMcpV1McpServerToolsResponse;
 
 /**
  * Success
  */
 export const zGetToolCatalogResponse = zXeLocalAiEngineClientEndpointsMcpV1ToolCatalogResponse;
 
+export const zSetMcpServerEnabledBody = zXeLocalAiEngineClientEndpointsMcpV1SetMcpServerEnabledRequest;
+
+export const zSetMcpServerEnabledPath = z.object({
+	mcpServerId: z.guid(),
+});
+
 /**
  * Success
  */
-export const zGetTutorialStateResponse = zXeLocalAiEngineClientEndpointsTutorialStateV1TutorialStateResponse;
+export const zSetMcpServerEnabledResponse = zXeLocalAiEngineClientEndpointsMcpV1McpServerResponse;
 
-export const zSaveTutorialStateBody = zXeLocalAiEngineClientEndpointsTutorialStateV1SaveTutorialStateRequest;
+export const zDeleteLocalModelPath = z.object({
+	modelName: z.string(),
+});
+
+/**
+ * Success
+ */
+export const zDeleteLocalModelResponse = zXeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelResponse;
+
+export const zDeleteModelKindPath = z.object({
+	modelName: z.string(),
+});
+
+/**
+ * Success
+ */
+export const zDeleteModelKindResponse = zXeLocalAiEngineClientEndpointsLocalModelsV1ModelKindResponse;
+
+export const zPutModelKindBody = zXeLocalAiEngineClientEndpointsLocalModelsV1SetModelKindRequest;
+
+export const zPutModelKindPath = z.object({
+	modelName: z.string(),
+});
+
+/**
+ * Success
+ */
+export const zPutModelKindResponse = zXeLocalAiEngineClientEndpointsLocalModelsV1ModelKindResponse;
+
+export const zGetLocalModelDetailsPath = z.object({
+	modelName: z.string(),
+});
+
+/**
+ * Success
+ */
+export const zGetLocalModelDetailsResponse = zXeLocalAiEngineClientEndpointsLocalModelsV1LocalModelDetailsResponse;
+
+/**
+ * Success
+ */
+export const zGetRunningLocalModelsResponse = zXeLocalAiEngineClientEndpointsLocalModelsV1RunningLocalModelsResponse;
+
+/**
+ * Success
+ */
+export const zListLocalModelsResponse = zXeLocalAiEngineClientEndpointsLocalModelsV1ListLocalModelsResponse;
+
+export const zSelectLocalModelBody = zXeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelRequest;
+
+/**
+ * Success
+ */
+export const zSelectLocalModelResponse = zXeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelResponse;
+
+export const zUnloadLocalModelPath = z.object({
+	modelName: z.string(),
+});
+
+/**
+ * Success
+ */
+export const zUnloadLocalModelResponse = zXeLocalAiEngineClientEndpointsLocalModelsV1UnloadLocalModelResponse;
+
+export const zCancelNodeChatMessageBody = zXeLocalAiEngineClientEndpointsLocalChatV1CancelNodeChatMessageRequest;
+
+/**
+ * Success
+ */
+export const zCancelNodeChatMessageResponse = zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatCancelMessageResponse;
+
+export const zListNodeChatConversationsQuery = z.object({
+	includeArchived: z.boolean(),
+	limit: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+});
+
+/**
+ * Success
+ */
+export const zListNodeChatConversationsResponse = zXeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatConversationsResponse;
+
+export const zCreateNodeChatConversationBody = zXeLocalAiEngineClientEndpointsLocalChatV1CreateNodeChatConversationRequest;
+
+/**
+ * Success
+ */
+export const zCreateNodeChatConversationResponse = zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationResponse;
+
+export const zDeleteConversationFilePath = z.object({
+	conversationId: z.guid(),
+	fileId: z.guid(),
+});
 
 /**
  * No Content
  */
-export const zSaveTutorialStateResponse = z.void();
+export const zDeleteConversationFileResponse = z.void();
+
+export const zDeleteNodeChatConversationBody = zXeLocalAiEngineClientEndpointsLocalChatV1DeleteNodeChatConversationRequest;
+
+export const zDeleteNodeChatConversationPath = z.object({
+	conversationId: z.guid(),
+});
 
 /**
  * Success
  */
-export const zGetVoiceManifestResponse = zXeLocalAiEngineClientEndpointsVoiceV1VoiceManifestResponse;
+export const zDeleteNodeChatConversationResponse = zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatDeleteConversationResponse;
+
+export const zGetNodeChatConversationPath = z.object({
+	conversationId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zGetNodeChatConversationResponse = zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationResponse;
+
+export const zListConversationFilesPath = z.object({
+	conversationId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zListConversationFilesResponse = zXeLocalAiEngineClientEndpointsLocalChatV1ListConversationUploadsResponse;
+
+export const zUploadConversationFileBody = zXeLocalAiEngineClientEndpointsLocalChatV1UploadConversationFileRequest;
+
+export const zUploadConversationFilePath = z.object({
+	conversationId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zUploadConversationFileResponse = zXeLocalAiEngineClientEndpointsLocalChatV1ConversationUploadedFileResponse;
+
+export const zRenameNodeChatConversationBody = zXeLocalAiEngineClientEndpointsLocalChatV1RenameNodeChatConversationRequest;
+
+export const zRenameNodeChatConversationPath = z.object({
+	conversationId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zRenameNodeChatConversationResponse = zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationResponse;
+
+export const zPinNodeChatConversationBody = zXeLocalAiEngineClientEndpointsLocalChatV1PinNodeChatConversationRequest;
+
+export const zPinNodeChatConversationPath = z.object({
+	conversationId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zPinNodeChatConversationResponse = zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationResponse;
+
+export const zArchiveNodeChatConversationBody = zXeLocalAiEngineClientEndpointsLocalChatV1ArchiveNodeChatConversationRequest;
+
+export const zArchiveNodeChatConversationPath = z.object({
+	conversationId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zArchiveNodeChatConversationResponse = zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationResponse;
+
+export const zSetNodeChatConversationMemoryExcludedBody =
+	zXeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatConversationMemoryExcludedRequest;
+
+export const zSetNodeChatConversationMemoryExcludedPath = z.object({
+	conversationId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zSetNodeChatConversationMemoryExcludedResponse =
+	zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationResponse;
+
+export const zBranchNodeChatConversationBody = zXeLocalAiEngineClientEndpointsLocalChatV1BranchNodeChatConversationRequest;
+
+export const zBranchNodeChatConversationPath = z.object({
+	conversationId: z.guid(),
+	messageId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zBranchNodeChatConversationResponse = zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatBranchConversationResponse;
+
+export const zListNodeChatMessageRevisionsPath = z.object({
+	conversationId: z.guid(),
+	messageId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zListNodeChatMessageRevisionsResponse = zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageRevisionsResponse;
+
+export const zCreateNodeChatMessageRevisionPath = z.object({
+	conversationId: z.guid(),
+	messageId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zCreateNodeChatMessageRevisionResponse = zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageRevisionsResponse;
+
+export const zGetNodeChatMessageFeedbackPath = z.object({
+	conversationId: z.guid(),
+	messageId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zGetNodeChatMessageFeedbackResponse = zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageFeedbackResponse;
+
+export const zSetNodeChatMessageFeedbackBody = zXeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatMessageFeedbackRequest;
+
+export const zSetNodeChatMessageFeedbackPath = z.object({
+	conversationId: z.guid(),
+	messageId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zSetNodeChatMessageFeedbackResponse = zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageFeedbackResponse;
+
+export const zSetNodeChatSelectedPathBody = zXeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatSelectedPathRequest;
+
+export const zSetNodeChatSelectedPathPath = z.object({
+	conversationId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zSetNodeChatSelectedPathResponse = zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatSelectedPathResponse;
+
+export const zResolveToolApprovalBody = zXeLocalAiEngineClientEndpointsLocalChatV1ResolveToolApprovalRequest;
+
+/**
+ * Success
+ */
+export const zResolveToolApprovalResponse = zXeLocalAiEngineClientEndpointsLocalChatV1ResolveToolApprovalResponse;
+
+export const zDeleteKnowledgeDocumentPath = z.object({
+	documentId: z.guid(),
+});
+
+/**
+ * No Content
+ */
+export const zDeleteKnowledgeDocumentResponse = z.void();
+
+export const zGetKnowledgeDocumentPath = z.object({
+	documentId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zGetKnowledgeDocumentResponse = zXeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentDetailResponse;
+
+/**
+ * Success
+ */
+export const zDownloadRecommendedEmbeddingResponse =
+	zXeLocalAiEngineClientEndpointsKnowledgeV1DownloadRecommendedEmbeddingResponse;
+
+/**
+ * Success
+ */
+export const zDownloadRecommendedRerankerResponse = zXeLocalAiEngineClientEndpointsKnowledgeV1DownloadRecommendedRerankerResponse;
+
+/**
+ * Success
+ */
+export const zListKnowledgeDocumentsResponse = zXeLocalAiEngineClientEndpointsKnowledgeV1ListKnowledgeDocumentsResponse;
+
+export const zUploadKnowledgeDocumentBody = zXeLocalAiEngineClientEndpointsKnowledgeV1UploadKnowledgeDocumentRequest;
+
+/**
+ * Success
+ */
+export const zUploadKnowledgeDocumentResponse = zXeLocalAiEngineClientEndpointsKnowledgeV1UploadKnowledgeDocumentResponse;
+
+/**
+ * Success
+ */
+export const zReindexCorpusResponse = zXeLocalAiEngineClientEndpointsKnowledgeV1ReindexCorpusResponse;
+
+export const zReindexKnowledgeDocumentPath = z.object({
+	documentId: z.guid(),
+});
+
+/**
+ * No Content
+ */
+export const zReindexKnowledgeDocumentResponse = z.void();
+
+export const zSearchKnowledgeBody = zXeLocalAiEngineClientEndpointsKnowledgeV1SearchKnowledgeRequest;
+
+/**
+ * Success
+ */
+export const zSearchKnowledgeResponse = zXeLocalAiEngineClientEndpointsKnowledgeV1SearchKnowledgeResponse;
+
+/**
+ * Success
+ */
+export const zGetInvocationMonitorResponse = zXeLocalAiEngineClientEndpointsInvocationsV1InvocationMonitorResponse;
+
+export const zCancelImageJobPath = z.object({
+	jobId: z.guid(),
+});
+
+/**
+ * No Content
+ */
+export const zCancelImageJobResponse = z.void();
+
+export const zCancelStableDiffusionCppSourceBuildBody = zXeLocalAiEngineClientEndpointsImagesV1ImageRuntimeActionRequest;
+
+/**
+ * Success
+ */
+export const zCancelStableDiffusionCppSourceBuildResponse =
+	zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildStatusResponse;
+
+/**
+ * Success
+ */
+export const zListImageJobsResponse = zXeLocalAiEngineClientEndpointsImagesV1ListImageJobsResponse;
+
+export const zCreateImageJobBody = zXeLocalAiEngineClientEndpointsImagesV1CreateImageJobRequest;
+
+/**
+ * Success
+ */
+export const zCreateImageJobResponse = zXeLocalAiEngineClientEndpointsImagesV1ImageJobResponse;
+
+export const zEjectImageRuntimeBody = zXeLocalAiEngineClientEndpointsImagesV1ImageRuntimeActionRequest;
+
+/**
+ * Success
+ */
+export const zEjectImageRuntimeResponse = zXeLocalAiEngineClientEndpointsImagesV1ImageRuntimeStatusResponse;
+
+export const zGetImageJobPath = z.object({
+	jobId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zGetImageJobResponse = zXeLocalAiEngineClientEndpointsImagesV1ImageJobResponse;
+
+/**
+ * Success
+ */
+export const zGetImageRuntimeStatusResponse = zXeLocalAiEngineClientEndpointsImagesV1ImageRuntimeStatusResponse;
+
+export const zGetStableDiffusionCppSourceBuildPrerequisitesQuery = z.object({
+	backend: zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBackendDto,
+});
+
+/**
+ * Success
+ */
+export const zGetStableDiffusionCppSourceBuildPrerequisitesResponse =
+	zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildPrerequisitesResponse;
+
+/**
+ * Success
+ */
+export const zGetStableDiffusionCppSourceBuildStatusResponse =
+	zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildStatusResponse;
+
+/**
+ * Success
+ */
+export const zListImageModelDownloadsResponse = zXeLocalAiEngineClientEndpointsImagesV1ListImageModelDownloadsResponse;
+
+export const zStartImageModelDownloadBody = zXeLocalAiEngineClientEndpointsImagesV1StartImageModelDownloadRequest;
+
+/**
+ * Success
+ */
+export const zStartImageModelDownloadResponse = zXeLocalAiEngineClientEndpointsImagesV1StartImageModelDownloadResponse;
+
+/**
+ * Success
+ */
+export const zListImageModelsResponse = zXeLocalAiEngineClientEndpointsImagesV1ListImageModelsResponse;
+
+export const zRemoveStableDiffusionCppSourceBuildBody = zXeLocalAiEngineClientEndpointsImagesV1ImageRuntimeActionRequest;
+
+/**
+ * Success
+ */
+export const zRemoveStableDiffusionCppSourceBuildResponse = zXeLocalAiEngineClientEndpointsImagesV1ImageRuntimeStatusResponse;
+
+export const zRetrieveImagePath = z.object({
+	imageId: z.guid(),
+});
+
+/**
+ * No Content
+ */
+export const zRetrieveImageResponse = z.void();
+
+export const zStartStableDiffusionCppSourceBuildBody =
+	zXeLocalAiEngineClientEndpointsImagesV1StartStableDiffusionCppSourceBuildRequest;
+
+/**
+ * Success
+ */
+export const zStartStableDiffusionCppSourceBuildResponse =
+	zXeLocalAiEngineClientEndpointsImagesV1StartStableDiffusionCppSourceBuildResponse;
+
+/**
+ * Success
+ */
+export const zGetDevelopmentCapabilityResponse = zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentCapabilityResponse;
+
+export const zConfirmDevelopmentContainerRuntimeBody =
+	zXeLocalAiEngineClientEndpointsDevelopmentV1ConfirmDevelopmentContainerRuntimeRequest;
+
+/**
+ * Success
+ */
+export const zConfirmDevelopmentContainerRuntimeResponse =
+	zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerRuntimeResponse;
+
+/**
+ * Success
+ */
+export const zListDevelopmentRepositoriesResponse =
+	zXeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentRepositoriesResponse;
+
+export const zRegisterDevelopmentRepositoryBody =
+	zXeLocalAiEngineClientEndpointsDevelopmentV1RegisterDevelopmentRepositoryRequest;
+
+/**
+ * Success
+ */
+export const zRegisterDevelopmentRepositoryResponse = zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentRepositoryResponse;
+
+/**
+ * Success
+ */
+export const zListDevelopmentTemplatesResponse = zXeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentTemplatesResponse;
+
+export const zRegisterDevelopmentTemplateBody = zXeLocalAiEngineClientEndpointsDevelopmentV1RegisterDevelopmentTemplateRequest;
+
+/**
+ * Success
+ */
+export const zRegisterDevelopmentTemplateResponse = zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTemplateResponse;
+
+export const zRemoveDevelopmentTemplatePath = z.object({
+	templateId: z.guid(),
+});
+
+/**
+ * No Content
+ */
+export const zRemoveDevelopmentTemplateResponse = z.void();
+
+export const zCreateDevelopmentRepositoryFromTemplateBody =
+	zXeLocalAiEngineClientEndpointsDevelopmentV1CreateDevelopmentRepositoryFromTemplateRequest;
+
+/**
+ * Success
+ */
+export const zCreateDevelopmentRepositoryFromTemplateResponse =
+	zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentRepositoryFromTemplateResponse;
+
+export const zDetectDevelopmentRepositoryProfilePath = z.object({
+	selectedFolderId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zDetectDevelopmentRepositoryProfileResponse =
+	zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProfileDetectionResponse;
+
+/**
+ * Success
+ */
+export const zListDevelopmentProjectsResponse = zXeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentProjectsResponse;
+
+export const zCreateDevelopmentProjectBody = zXeLocalAiEngineClientEndpointsDevelopmentV1CreateDevelopmentProjectRequest;
+
+/**
+ * Success
+ */
+export const zCreateDevelopmentProjectResponse = zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectDetailResponse;
+
+export const zGetDevelopmentProjectPath = z.object({
+	projectId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zGetDevelopmentProjectResponse = zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectDetailResponse;
+
+export const zGetDevelopmentTaskPath = z.object({
+	projectId: z.guid(),
+	taskId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zGetDevelopmentTaskResponse = zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTaskDetailResponse;
+
+export const zStartDevelopmentNextActionBody = zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentActionRequest;
+
+export const zStartDevelopmentNextActionPath = z.object({
+	projectId: z.guid(),
+	taskId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zStartDevelopmentNextActionResponse = zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentNextActionResponse;
+
+export const zCancelDevelopmentAttemptPath = z.object({
+	projectId: z.guid(),
+	taskId: z.guid(),
+	attemptId: z.guid(),
+});
+
+/**
+ * No Content
+ */
+export const zCancelDevelopmentAttemptResponse = z.void();
+
+export const zListDevelopmentEventsPath = z.object({
+	projectId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zListDevelopmentEventsResponse = zXeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentEventsResponse;
+
+export const zListDevelopmentArtifactsPath = z.object({
+	projectId: z.guid(),
+	taskId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zListDevelopmentArtifactsResponse = zXeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentArtifactsResponse;
+
+export const zGetDevelopmentArtifactPath = z.object({
+	projectId: z.guid(),
+	taskId: z.guid(),
+	artifactId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zGetDevelopmentArtifactResponse = zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentArtifactContentResponse;
+
+export const zPreviewDevelopmentPatchBody = zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentActionRequest;
+
+export const zPreviewDevelopmentPatchPath = z.object({
+	projectId: z.guid(),
+	taskId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zPreviewDevelopmentPatchResponse = zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentPatchPreviewResponse;
+
+export const zApplyDevelopmentPatchBody = zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentActionRequest;
+
+export const zApplyDevelopmentPatchPath = z.object({
+	projectId: z.guid(),
+	taskId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zApplyDevelopmentPatchResponse = zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentApplyResponse;
+
+export const zReconnectDevelopmentRepositoryBody =
+	zXeLocalAiEngineClientEndpointsDevelopmentV1ReconnectDevelopmentRepositoryRequest;
+
+export const zReconnectDevelopmentRepositoryPath = z.object({
+	projectId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zReconnectDevelopmentRepositoryResponse =
+	zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectDetailResponse;
+
+/**
+ * Success
+ */
+export const zConnectConnectionResponse = zXeLocalAiEngineClientEndpointsConnectionV1ConnectionStatusResponse;
+
+/**
+ * Success
+ */
+export const zDisableAutoConnectResponse = zXeLocalAiEngineClientEndpointsConnectionV1ConnectionStatusResponse;
+
+/**
+ * Success
+ */
+export const zDisconnectConnectionResponse = zXeLocalAiEngineClientEndpointsConnectionV1ConnectionStatusResponse;
+
+/**
+ * Success
+ */
+export const zEnableAutoConnectResponse = zXeLocalAiEngineClientEndpointsConnectionV1ConnectionStatusResponse;
+
+/**
+ * Success
+ */
+export const zGetConnectionStatusResponse = zXeLocalAiEngineClientEndpointsConnectionV1ConnectionStatusResponse;
+
+/**
+ * Success
+ */
+export const zClearCloudSettingsResponse = zXeLocalAiEngineClientEndpointsCloudSettingsV1CloudSettingsResponse;
+
+/**
+ * Success
+ */
+export const zGetCloudSettingsResponse = zXeLocalAiEngineClientEndpointsCloudSettingsV1CloudSettingsResponse;
+
+export const zSaveCloudSettingsBody = zXeLocalAiEngineClientEndpointsCloudSettingsV1SaveCloudSettingsRequest;
+
+/**
+ * Success
+ */
+export const zSaveCloudSettingsResponse = zXeLocalAiEngineClientEndpointsCloudSettingsV1CloudSettingsResponse;
+
+/**
+ * Success
+ */
+export const zEntraAuthCodeSignInResponse = zXeLocalAiEngineClientEndpointsCloudSettingsV1EntraAuthCodeSignInResponse;
+
+/**
+ * Success
+ */
+export const zEntraAuthCodeStatusResponse = zXeLocalAiEngineClientEndpointsCloudSettingsV1EntraAuthCodeSignInStatusResponse;
+
+/**
+ * Success
+ */
+export const zEntraDeviceCodeSignInResponse = zXeLocalAiEngineClientEndpointsCloudSettingsV1EntraDeviceCodeSignInResponse;
+
+/**
+ * Success
+ */
+export const zEntraDeviceCodeStatusResponse = zXeLocalAiEngineClientEndpointsCloudSettingsV1EntraDeviceCodeSignInStatusResponse;
+
+/**
+ * Success
+ */
+export const zCodexLoginResponse = zXeLocalAiEngineClientEndpointsCloudCodexV1CodexLoginResponse;
+
+/**
+ * Success
+ */
+export const zCodexLogoutResponse = zXeLocalAiEngineClientEndpointsCloudCodexV1CodexStatusResponse;
+
+/**
+ * Success
+ */
+export const zCodexStatusResponse = zXeLocalAiEngineClientEndpointsCloudCodexV1CodexStatusResponse;
+
+/**
+ * Success
+ */
+export const zNodeAuthStatusResponse = zXeLocalAiEngineClientEndpointsAuthV1NodeAuthStatusResponse;
+
+export const zNodeSetupBody = zXeLocalAiEngineClientEndpointsAuthV1NodeSetupRequest;
+
+/**
+ * No Content
+ */
+export const zNodeSetupResponse = z.void();
+
+export const zNodeLoginBody = zXeLocalAiEngineClientEndpointsAuthV1NodeLoginRequest;
+
+/**
+ * Success
+ */
+export const zNodeLoginResponse = zXeLocalAiEngineClientEndpointsAuthV1NodeAccessTokenResponse;
+
+/**
+ * Success
+ */
+export const zNodeRefreshResponse = zXeLocalAiEngineClientEndpointsAuthV1NodeAccessTokenResponse;
+
+/**
+ * No Content
+ */
+export const zNodeLogoutResponse = z.void();
+
+export const zNodeChangePasswordBody = zXeLocalAiEngineClientEndpointsAuthV1NodeChangePasswordRequest;
+
+/**
+ * No Content
+ */
+export const zNodeChangePasswordResponse = z.void();
+
+/**
+ * Success
+ */
+export const zNodeMeResponse = zXeLocalAiEngineClientEndpointsAuthV1NodeMeResponse;
+
+/**
+ * Success
+ */
+export const zApplyAppUpdateResponse = zXeLocalAiEngineClientEndpointsAppUpdateV1ApplyAppUpdateResponse;
+
+export const zGetAppUpdateStatusQuery = z.object({
+	refresh: z.boolean().nullish(),
+});
+
+/**
+ * Success
+ */
+export const zGetAppUpdateStatusResponse = zXeLocalAiEngineClientEndpointsAppUpdateV1AppUpdateStatusResponse;
+
+/**
+ * Success
+ */
+export const zGetGitHubAuthStatusResponse = zXeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthStatusResponse;
+
+/**
+ * Success
+ */
+export const zPollGitHubAuthResponse = zXeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthPollResponse;
+
+/**
+ * Success
+ */
+export const zSignOutGitHubAuthResponse = zXeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthStatusResponse;
+
+/**
+ * Success
+ */
+export const zStartGitHubAuthResponse = zXeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthStartResponse;
+
+/**
+ * No Content
+ */
+export const zUnhandledExceptionProbeResponse = z.void();
+
+export const zValidationProblemProbeBody = zXeLocalAiEngineClientEndpointsApiFoundationV1ValidationProblemProbeRequest;
+
+/**
+ * Success
+ */
+export const zValidationProblemProbeResponse = zXeLocalAiEngineClientEndpointsApiFoundationV1ValidationProblemProbeResponse;
+
+export const zAnalyzePlaybookPath = z.object({
+	agentDefinitionId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zAnalyzePlaybookResponse = zXeLocalAiEngineClientEndpointsAgentsV1ListPlaybookActionsResponse;
+
+export const zApproveGoldenConversationPath = z.object({
+	agentDefinitionId: z.guid(),
+	goldenConversationId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zApproveGoldenConversationResponse = zXeLocalAiEngineClientEndpointsAgentsV1GoldenConversationResponse;
+
+/**
+ * Success
+ */
+export const zListAgentDefinitionsResponse = zXeLocalAiEngineClientEndpointsAgentsV1ListAgentDefinitionsResponse;
+
+export const zCreateAgentDefinitionBody = zXeLocalAiEngineClientEndpointsAgentsV1CreateAgentDefinitionRequest;
+
+/**
+ * Success
+ */
+export const zCreateAgentDefinitionResponse = zXeLocalAiEngineClientEndpointsAgentsV1AgentDefinitionResponse;
+
+export const zListGoldenConversationsPath = z.object({
+	agentDefinitionId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zListGoldenConversationsResponse = zXeLocalAiEngineClientEndpointsAgentsV1ListGoldenConversationsResponse;
+
+export const zCreateGoldenConversationBody = zXeLocalAiEngineClientEndpointsAgentsV1CreateGoldenConversationRequest;
+
+export const zCreateGoldenConversationPath = z.object({
+	agentDefinitionId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zCreateGoldenConversationResponse = zXeLocalAiEngineClientEndpointsAgentsV1GoldenConversationResponse;
+
+export const zListAgentPlaybookActionsPath = z.object({
+	agentDefinitionId: z.guid(),
+});
+
+export const zListAgentPlaybookActionsQuery = z.object({
+	scope: zXeLocalAiEngineClientPersistenceMemoryScope.nullish(),
+});
+
+/**
+ * Success
+ */
+export const zListAgentPlaybookActionsResponse = zXeLocalAiEngineClientEndpointsAgentsV1ListPlaybookActionsResponse;
+
+export const zCreatePlaybookActionBody = zXeLocalAiEngineClientEndpointsAgentsV1CreatePlaybookActionRequest;
+
+export const zCreatePlaybookActionPath = z.object({
+	agentDefinitionId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zCreatePlaybookActionResponse = zXeLocalAiEngineClientEndpointsAgentsV1PlaybookActionResponse;
+
+export const zDeleteAgentDefinitionPath = z.object({
+	agentDefinitionId: z.guid(),
+});
+
+/**
+ * No Content
+ */
+export const zDeleteAgentDefinitionResponse = z.void();
+
+export const zGetAgentDefinitionPath = z.object({
+	agentDefinitionId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zGetAgentDefinitionResponse = zXeLocalAiEngineClientEndpointsAgentsV1AgentDefinitionResponse;
+
+export const zUpdateAgentDefinitionBody = zXeLocalAiEngineClientEndpointsAgentsV1UpdateAgentDefinitionRequest;
+
+export const zUpdateAgentDefinitionPath = z.object({
+	agentDefinitionId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zUpdateAgentDefinitionResponse = zXeLocalAiEngineClientEndpointsAgentsV1AgentDefinitionResponse;
+
+export const zDeleteGoldenConversationPath = z.object({
+	agentDefinitionId: z.guid(),
+	goldenConversationId: z.guid(),
+});
+
+/**
+ * No Content
+ */
+export const zDeleteGoldenConversationResponse = z.void();
+
+export const zDeletePlaybookActionPath = z.object({
+	agentDefinitionId: z.guid(),
+	actionId: z.guid(),
+});
+
+/**
+ * No Content
+ */
+export const zDeletePlaybookActionResponse = z.void();
+
+export const zUpdatePlaybookActionBody = zXeLocalAiEngineClientEndpointsAgentsV1UpdatePlaybookActionRequest;
+
+export const zUpdatePlaybookActionPath = z.object({
+	agentDefinitionId: z.guid(),
+	actionId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zUpdatePlaybookActionResponse = zXeLocalAiEngineClientEndpointsAgentsV1PlaybookActionResponse;
+
+export const zGetAgentFeedbackInsightsPath = z.object({
+	agentDefinitionId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zGetAgentFeedbackInsightsResponse = zXeLocalAiEngineClientEndpointsAgentsV1AgentFeedbackInsightsResponse;
+
+export const zGetAgentPlaybookMonitorPath = z.object({
+	agentDefinitionId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zGetAgentPlaybookMonitorResponse = zXeLocalAiEngineClientEndpointsAgentsV1AgentPlaybookMonitorResponse;
+
+export const zGetAgentUsageSummaryQuery = z.object({
+	fromEpochMs: z.int().nullish(),
+	toEpochMs: z.int().nullish(),
+});
+
+/**
+ * Success
+ */
+export const zGetAgentUsageSummaryResponse = zXeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryResponse;
+
+/**
+ * Success
+ */
+export const zGetToolCapableModelsResponse = zXeLocalAiEngineClientEndpointsAgentsV1ToolCapableModelsResponse;
+
+export const zHarvestGoldenConversationsPath = z.object({
+	agentDefinitionId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zHarvestGoldenConversationsResponse = zXeLocalAiEngineClientEndpointsAgentsV1GoldenHarvestResponse;
+
+export const zImportAgentTemplatesBody = zXeLocalAiEngineClientEndpointsAgentsV1ImportAgentTemplatesRequest;
+
+/**
+ * Success
+ */
+export const zImportAgentTemplatesResponse = zXeLocalAiEngineClientEndpointsAgentsV1ImportAgentTemplatesResponse;
+
+export const zListAgentExecutionLogsPath = z.object({
+	agentDefinitionId: z.guid(),
+});
+
+export const zListAgentExecutionLogsQuery = z.object({
+	limit: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	offset: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+});
+
+/**
+ * Success
+ */
+export const zListAgentExecutionLogsResponse = zXeLocalAiEngineClientEndpointsAgentsV1ListAgentExecutionLogsResponse;
+
+/**
+ * Success
+ */
+export const zListAgentTemplatesResponse = zXeLocalAiEngineClientEndpointsAgentsV1ListAgentTemplatesResponse;
+
+export const zListRunEnvelopesQuery = z.object({
+	conversationId: z.guid().nullish(),
+	limit: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	offset: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+});
+
+/**
+ * Success
+ */
+export const zListRunEnvelopesResponse = zXeLocalAiEngineClientEndpointsAgentsV1ListRunEnvelopesResponse;
+
+export const zPromoteSuggestedPlaybookActionPath = z.object({
+	agentDefinitionId: z.guid(),
+	actionId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zPromoteSuggestedPlaybookActionResponse = zXeLocalAiEngineClientEndpointsAgentsV1PlaybookActionResponse;
+
+export const zRejectSuggestedPlaybookActionPath = z.object({
+	agentDefinitionId: z.guid(),
+	actionId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zRejectSuggestedPlaybookActionResponse = zXeLocalAiEngineClientEndpointsAgentsV1PlaybookActionResponse;
+
+export const zRunPlaybookActionEvalPath = z.object({
+	agentDefinitionId: z.guid(),
+	actionId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zRunPlaybookActionEvalResponse = zXeLocalAiEngineClientEndpointsAgentsV1PlaybookActionResponse;
+
+export const zUpdateSuggestedPlaybookActionBody = zXeLocalAiEngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActionRequest;
+
+export const zUpdateSuggestedPlaybookActionPath = z.object({
+	agentDefinitionId: z.guid(),
+	actionId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zUpdateSuggestedPlaybookActionResponse = zXeLocalAiEngineClientEndpointsAgentsV1PlaybookActionResponse;
