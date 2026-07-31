@@ -12,6 +12,34 @@ pnpm install --frozen-lockfile
 pnpm run build
 ```
 
+`pnpm run build` also enforces recursive deployed-script budgets for application, TTS-worker, and ORT `.js`/`.mjs` output and prints the five largest emitted scripts.
+
+## Standalone development server
+
+Start the desktop backend first, then run the frontend from this directory:
+
+```sh
+pnpm install --frozen-lockfile
+pnpm dev
+```
+
+Vite serves the UI at `https://localhost:5173` and proxies `/api`, `/openapi`, and every SignalR hub to `https://localhost:50722`. That is the desktop backend's standard local HTTPS address. To use a different loopback port, set an absolute localhost target:
+
+```sh
+VITE_PROXY_TARGET="https://127.0.0.1:51437" pnpm dev
+```
+
+Non-loopback proxy targets are rejected. The development certificate plugin may prompt for local certificate setup on the first run. Browser developer tools also report common missing accessible names/labels and main-thread tasks lasting at least 100 ms; these checks are development-only and are not included in production bundles.
+
+Before committing, run:
+
+```sh
+pnpm validate
+pnpm test
+pnpm run test:tooling
+pnpm run build
+```
+
 ## OpenAPI client generation
 
 The frontend uses `@hey-api/openapi-ts` to generate a typed Axios client from the committed OpenAPI snapshot at `openapi/v1.json`.
@@ -35,6 +63,14 @@ To regenerate from the committed snapshot only and check for drift:
 ```sh
 pnpm run openapi:check
 ```
+
+To compare a running desktop-mode backend with both the committed snapshot and generated client, supply its absolute specification URL:
+
+```sh
+OPENAPI_SPEC_URL="https://localhost:50722/openapi/local/v1/v1.json" OPENAPI_INSECURE=1 pnpm run openapi:check:live
+```
+
+The live command requires `OPENAPI_SPEC_URL`, normalizes the live document exactly like `openapi:fetch`, compares it byte-for-byte with `openapi/v1.json`, then runs the unchanged snapshot-only generation check. Dynamic top-level loopback `servers` origins are removed during materialization so an isolated backend's allocated port is not contract drift. Fetches time out after 10 seconds and reject documents above 8 MiB. The command does not start or stop the backend.
 
 ### Important files
 

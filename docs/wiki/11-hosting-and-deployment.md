@@ -8,7 +8,7 @@ There are **two distinct ways the node runs**:
 
 | Mode | Entry point | Used for | HTTP/HTTPS | DB + secrets source |
 |------|-------------|----------|------------|---------------------|
-| **Aspire dev / integration** | `XE-Local-AI-Engine.AppHost/AppHost.cs` orchestrates the `app` project | Local development and integration checks via `aspire run` | HTTPS (Kestrel default URLs) | Aspire parameters + env (`XE_NODE_SQLITE_KEY`, SQLite resource) |
+| **Aspire dev / integration** | `XE-Local-AI-Engine.AppHost/AppHost.cs` orchestrates the `app` project | Local development and integration checks via the worktree-scoped `scripts/dev-*.sh` helpers | HTTPS (Kestrel default URLs) | Aspire parameters + env (`XE_NODE_SQLITE_KEY`, SQLite resource) |
 | **Self-contained desktop** | `XE-Local-AI-Engine.Client` binary launched with `XE_LAUNCH_MODE=desktop` | Shipped single-file app a tester double-clicks | Plain HTTP on loopback `127.0.0.1:<auto-port>` | Per-user data dir; connection string + operator key synthesized at startup |
 
 The two paths are deliberately kept **byte-behaviour-identical when the desktop flag is off** — every desktop branch in `Program.cs` is gated and skipped in Aspire/CI/headless runs.
@@ -19,11 +19,24 @@ The two paths are deliberately kept **byte-behaviour-identical when the desktop 
 
 `XE-Local-AI-Engine.AppHost/AppHost.cs` is a thin Aspire orchestration host (`IsAspireHost=true`). The AppHost SDK is 13.4.6. It references only the `Client` project and four hosting packages: `Aspire.Hosting.AppHost` 13.4.6, `Aspire.Hosting.JavaScript` 13.4.6, `Aspire.Hosting.Browsers` 13.4.6-preview.1.26319.6, and `CommunityToolkit.Aspire.Hosting.Sqlite` 13.4.0.
 
-From the repository root, launch it with:
+From the repository root, use the worktree-scoped lifecycle wrappers:
 
 ```bash
-aspire run --apphost XE-Local-AI-Engine.AppHost/XE-Local-AI-Engine.AppHost.csproj
+scripts/dev-start.sh
+scripts/dev-status.sh
+scripts/dev-stop.sh
 ```
+
+Start always uses Aspire isolated mode, so parallel worktrees receive randomized ports and isolated
+user secrets. Status output is an allowlisted projection: resource state/health and query-free URLs,
+not raw environment/properties or dashboard login tokens. Stop is AppHost-qualified and contains a
+bounded Aspire 13.4 snapshot fallback. It anchors the DCP sibling by its exact
+`--monitor <AppHost PID>` token pair, follows the complete descendant closure regardless of process
+name, and revalidates each PID's kernel start time before signalling. Unrelated processes are
+untouched and do not invalidate successful teardown of the selected graph; Aspire
+query/malformed-JSON failures remain nonzero rather than being treated as stopped. For a live
+integration probe, `scripts/aspire-readiness-smoke.sh` starts a fresh instance, uses `aspire wait app`
+for readiness, and traps cleanup through that scoped stop path.
 
 What it wires (`AppHost.cs`):
 

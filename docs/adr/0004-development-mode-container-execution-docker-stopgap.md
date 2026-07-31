@@ -5,6 +5,7 @@
 - **Scope:** Development Mode build/test/lint execution. Nothing else.
 - **Authority:** Decision D0 in `Plans/2026-07-28-dev-mode-container-sandbox-and-command-profiles-plan.md` §2.1, resolved by the operator 2026-07-28. Accepted by the repository owner (`w0rldx`) on 2026-07-29, in the session that drafted it. This record does not reopen that decision; it states it precisely enough to be enforced and to be revisited.
 - **Amends:** `Plans/2026-06-17-runtime-rearchitecture-epic.md` — locked decision 2 (`:46`) and the acceptance criterion at `:29`.
+- **Living implementation status:** [`docs/roadmaps/development-mode-container-status.md`](../roadmaps/development-mode-container-status.md)
 
 ## Context
 
@@ -52,10 +53,8 @@ Stated honestly, including the ones that are costs.
 
 - **Revisiting this is expected, not exceptional.** Docker is recorded as a stopgap. When MXC — or another backend behind the same seam — can supply both isolation and a toolchain, the Development Mode provider should move to it, and this ADR should be superseded rather than quietly widened. Any change to the four boundaries in the Decision section requires a new operator decision rather than an edit to this record.
 
-## Status of the work this record gates
+## Implementation status
 
-`Plans/2026-07-28-dev-mode-container-sandbox-and-command-profiles-plan.md` Slice 3 (the container sandbox provider) was gated on this record and is **unblocked as of 2026-07-29**. Slices 1, 1.5, 2 and 4 are merged and carry no Docker dependency. Slice 5 (the documentation sweep above) was likewise unblocked and **landed first**, on 2026-07-29 (`0b6c544e`), covering sixteen documents including `docs/agent-knowledge.md` — the first file an agent reads, and the reason it was not left to trail.
-
-**Slice 3 status, 2026-07-30.** Phase 1 (S3.1, S3.2, S3.13) is merged; Phase 2 (S3.4, S3.12, plus provider contract fixes) is implemented and **not yet merged**. Development Mode is **not** switched to the container provider: `Development:Sandbox:Provider` is unset by default and falls back to the agent role, and **S3.3 — operator-approved image acquisition — is unbuilt**, so there is no image the flag could be pointed at. Nothing in this record's Decision section has been exercised in anger yet. Two amendments to the plan's §3.8 hardening contract were forced by measurement and are recorded there rather than here, because they refine *how* the narrowness of Decision 5 is enforced without moving it: the "non-root execution" requirement is unsatisfiable on a rootless daemon and is restated as a mapping rule, and an `inspect` read-back is replaced by a create-time probe because it can only echo the uid that was requested, never what that uid maps to.
-
-Two conditions from the plan still stand and are not waived by acceptance: `Plans/PLAN-sandbox-hardening-2026-07-01.md` should ship before or alongside Slice 3 (§8.5), and the OpenSandbox evaluation is recorded as **declined for Slice 3** with flip conditions (§8.8) — accepting Docker here is not an invitation to substitute a different platform without meeting them.
+Implementation progress is intentionally maintained outside this immutable decision record. See the
+[Development Mode container implementation status](../roadmaps/development-mode-container-status.md) for the current
+tree state and the delivery plan for remaining Slice 3 gates.

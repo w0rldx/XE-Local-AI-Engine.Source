@@ -1,13 +1,14 @@
 namespace XE_Local_AI_Engine.Client.Common.Telemetry;
 
 using System.Diagnostics.Metrics;
+using XE_Local_AI_Engine.AI.Contracts.Telemetry;
 
 /// <summary>
 ///     Represents node metrics.
 /// </summary>
 public static class NodeMetrics
 {
-    public const string MeterName = "XE.Node";
+    public const string MeterName = TelemetrySourceNames.Node;
 
     private static readonly Meter Meter = new(MeterName);
 

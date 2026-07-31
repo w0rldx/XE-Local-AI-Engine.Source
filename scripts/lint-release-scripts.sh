@@ -29,8 +29,7 @@
 #   --ps-only      Run PSScriptAnalyzer only (skip shell + spike compile check).
 #   --no-spike     Skip the P0_SPIKE compile check (it costs a build).
 #   --spike-only   Run only the P0_SPIKE compile check.
-#   --pester       Also run the Pester suite over package-tester-win.ps1's pure logic
-#                  (publish/tests). Not on by default: it needs the Pester module.
+#   --pester       Explicitly request the Pester suite (it is already part of the default run).
 #   --pester-only  Run only the Pester suite.
 #   --bootstrap    Install PSScriptAnalyzer (CurrentUser scope) if absent, then lint.
 #                  Network access required. Without this flag, an absent module fails the run.
@@ -55,7 +54,17 @@ SHELL_TARGETS=(
   "publish/linux/run-xe-local-ai-engine.sh"
   "publish/linux/uninstall-xe-local-ai-engine.sh"
   "scripts/generate-release-notes.sh"
+  "scripts/dev-aspire-common.sh"
+  "scripts/dev-start.sh"
+  "scripts/dev-status.sh"
   "scripts/dev-stop.sh"
+  "scripts/aspire-readiness-smoke.sh"
+  "scripts/openapi-live-check.sh"
+  "scripts/tests/coverage-merge.test.sh"
+  "scripts/tests/dev-aspire-helpers.test.sh"
+  "scripts/tests/dev-stop-select.test.sh"
+  "scripts/tests/openapi-live-check.test.sh"
+  "scripts/tests/project-validate-contract.test.sh"
   "scripts/run-tests-memory-safe.sh"
   "scripts/run-e2e-local.sh"
   "scripts/run-agent-framework-validation.sh"
@@ -67,6 +76,17 @@ SHELL_TARGETS=(
   "scripts/assembly-guard.sh"
 )
 
+# Behavioral tests are declared explicitly and cross-checked against discovery below. This makes
+# adding a new test without wiring it into the default gate a loud failure rather than a vacuous
+# green. Keep this list in lexical order to match the glob expansion used for the comparison.
+BEHAVIOR_TESTS=(
+  "scripts/tests/coverage-merge.test.sh"
+  "scripts/tests/dev-aspire-helpers.test.sh"
+  "scripts/tests/dev-stop-select.test.sh"
+  "scripts/tests/openapi-live-check.test.sh"
+  "scripts/tests/project-validate-contract.test.sh"
+)
+
 # Release-path PowerShell scripts.
 PS_TARGETS=(
   "publish/package-tester-win.ps1"
@@ -76,7 +96,8 @@ PS_TARGETS=(
 RUN_SHELL="true"
 RUN_PS="true"
 RUN_SPIKE="true"
-RUN_PESTER="false"
+RUN_PESTER="true"
+RUN_BEHAVIOR="true"
 PESTER_DIR="publish/tests"
 BOOTSTRAP="false"
 PSSA_SETTINGS="${PROJECT_ROOT}/scripts/PSScriptAnalyzerSettings.psd1"
@@ -101,12 +122,12 @@ usage() {
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --shell-only) RUN_PS="false"; RUN_SPIKE="false"; shift ;;
-    --ps-only)    RUN_SHELL="false"; RUN_SPIKE="false"; shift ;;
+    --shell-only) RUN_PS="false"; RUN_SPIKE="false"; RUN_PESTER="false"; RUN_BEHAVIOR="false"; shift ;;
+    --ps-only)    RUN_SHELL="false"; RUN_SPIKE="false"; RUN_PESTER="false"; RUN_BEHAVIOR="false"; shift ;;
     --no-spike)   RUN_SPIKE="false"; shift ;;
-    --spike-only) RUN_SHELL="false"; RUN_PS="false"; shift ;;
+    --spike-only) RUN_SHELL="false"; RUN_PS="false"; RUN_PESTER="false"; RUN_BEHAVIOR="false"; shift ;;
     --pester)     RUN_PESTER="true"; shift ;;
-    --pester-only) RUN_SHELL="false"; RUN_PS="false"; RUN_SPIKE="false"; RUN_PESTER="true"; shift ;;
+    --pester-only) RUN_SHELL="false"; RUN_PS="false"; RUN_SPIKE="false"; RUN_PESTER="true"; RUN_BEHAVIOR="false"; shift ;;
     --bootstrap)  BOOTSTRAP="true"; shift ;;
     --help|-h)    usage; exit 0 ;;
     *)            echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
@@ -295,6 +316,42 @@ if [[ "${RUN_SPIKE}" == "true" ]]; then
       else
         log "Restore build verified: no ${SPIKE_CONSTANT} code remains in bin/."
       fi
+    fi
+  fi
+fi
+
+# ---------------------------------------------------------------------------
+# Behavioral shell tests — part of the default validation, never implicit.
+# ---------------------------------------------------------------------------
+if [[ "${RUN_BEHAVIOR}" == "true" ]]; then
+  discovered_behavior=()
+  while IFS= read -r test_file; do
+    discovered_behavior+=("${test_file#"${PROJECT_ROOT}/"}")
+  done < <(find "${PROJECT_ROOT}/scripts/tests" -maxdepth 1 -type f -name '*.test.sh' -print | LC_ALL=C sort)
+
+  if [[ "${discovered_behavior[*]}" != "${BEHAVIOR_TESTS[*]}" ]]; then
+    echo "[lint] FAIL: scripts/tests/*.test.sh does not match BEHAVIOR_TESTS." >&2
+    printf '[lint]   declared: %s\n' "${BEHAVIOR_TESTS[*]}" >&2
+    printf '[lint]   discovered: %s\n' "${discovered_behavior[*]}" >&2
+    FINDINGS=1
+  else
+    behavior_passed=0
+    log "=== behavioral shell tests (${#BEHAVIOR_TESTS[@]} test(s)) ==="
+    for test_file in "${BEHAVIOR_TESTS[@]}"; do
+      test_output="$("${PROJECT_ROOT}/${test_file}" 2>&1)"
+      test_status=$?
+      printf '%s\n' "${test_output}"
+      expected_pass="$(basename "${test_file}"): PASS"
+      if [[ "${test_status}" -eq 0 ]] && grep -Fxq "${expected_pass}" <<<"${test_output}"; then
+        ((behavior_passed += 1))
+      else
+        echo "[lint] FAIL: ${test_file} exited ${test_status} or omitted '${expected_pass}'." >&2
+        FINDINGS=1
+      fi
+    done
+    log "behavior tests: ${behavior_passed}/${#BEHAVIOR_TESTS[@]} passed"
+    if [[ "${behavior_passed}" -ne "${#BEHAVIOR_TESTS[@]}" ]]; then
+      FINDINGS=1
     fi
   fi
 fi
