@@ -211,6 +211,10 @@ function ValidationFailureAlert({ code, detail }: { readonly code: string; reado
 function ValidationCommandCard({ command }: { readonly command: DevelopmentValidationCommand }) {
 	const { t } = useTranslation();
 	const failed = !command.completed || command.exitCode !== 0;
+	// Only a failing command's captured output is rendered. On a pass it is noise; on a failure it is the ONLY record
+	// of why — the live evaluation had to read the artifact blob out of the API by hand to find `errno == EROFS`,
+	// because the panel showed an exit code and nothing else. It is already sanitized server-side.
+	const capturedOutput = failed ? [command.standardError, command.standardOutput].filter((text) => !!text?.trim()) : [];
 
 	return (
 		<Paper withBorder={true} p="sm" data-testid={`development-validation-command-${command.commandId}`}>
@@ -234,6 +238,18 @@ function ValidationCommandCard({ command }: { readonly command: DevelopmentValid
 				</Group>
 			</Group>
 			{command.testOutcome ? <ValidationTestOutcomeView outcome={command.testOutcome} /> : null}
+			{capturedOutput.length > 0 ? (
+				<Stack gap={4} mt="sm">
+					<Text size="xs" c="dimmed">
+						{t("pages.development.validation.command.capturedOutput", "Captured output")}
+					</Text>
+					<ScrollArea.Autosize mah={220}>
+						<Code block={true} data-testid={`development-validation-command-output-${command.commandId}`}>
+							{capturedOutput.join("\n")}
+						</Code>
+					</ScrollArea.Autosize>
+				</Stack>
+			) : null}
 		</Paper>
 	);
 }
@@ -242,6 +258,18 @@ function ValidationCommandCard({ command }: { readonly command: DevelopmentValid
  * The reachability half of deterministic validation: the report body is an encrypted artifact blob, so the operator
  * only ever sees what this renders. Every terminal state is rendered explicitly — an unreadable or unfetchable report
  * must never look like an empty panel, because "nothing shown" reads as "nothing wrong".
+ *
+ * FAILURE and STALENESS are two axes, and the backend already reports both separately. Keeping them apart is the
+ * whole contract of this view:
+ *
+ * - `report.passed` is the GATE'S VERDICT on the run it describes. A failed run is not missing data; it is the
+ *   answer, and it is authoritative about its own subject forever.
+ * - `artifact.isValid` is CURRENCY — whether the working tree has since moved away from that subject.
+ *
+ * Conflating them is what produced F-056: a failed gate invalidates the approval evidence (correctly — a failed
+ * validation must not stay approvable), which flips `isValid` to false, and the panel then dropped the report and
+ * told the operator "no deterministic validation has run for this task yet" while the timeline beside it read
+ * `ValidationFinalized — Failed`. The most prominent statement on the screen was the false one.
  */
 function ValidationReportView({ artifact }: { readonly artifact: DevelopmentArtifact | null }) {
 	const { t } = useTranslation();
@@ -280,6 +308,29 @@ function ValidationReportView({ artifact }: { readonly artifact: DevelopmentArti
 		);
 	}
 
+	// A report that PASSED but is no longer current is the only case where showing the body would assert something
+	// untrue: its green counts would read as the state of a tree they were never measured against. A report that
+	// FAILED is shown whatever its currency — a failure is a fact about the run, and suppressing it is what left the
+	// operator with no account of the fault at all.
+	const superseded = artifact.isValid === false;
+	if (superseded && report.passed) {
+		return (
+			<Alert
+				color="yellow"
+				icon={<IconAlertTriangle size={16} />}
+				title={t("pages.development.validation.supersededTitle", "This validation result is no longer current")}
+				data-testid="development-validation-superseded"
+			>
+				<Text size="sm">
+					{t(
+						"pages.development.validation.supersededBody",
+						"A validation run passed against an earlier state of this task, but the working tree has moved since. Its counts are not the current result — run deterministic validation again.",
+					)}
+				</Text>
+			</Alert>
+		);
+	}
+
 	return (
 		<Stack gap="sm" data-testid="development-validation-report">
 			<Group justify="space-between" wrap="nowrap" align="flex-start">
@@ -289,8 +340,8 @@ function ValidationReportView({ artifact }: { readonly artifact: DevelopmentArti
 							? t("pages.development.validation.passed", "Validation passed")
 							: t("pages.development.validation.failed", "Validation failed")}
 					</Badge>
-					<Badge variant="outline" color={artifact.isValid === false ? "red" : "green"}>
-						{artifact.isValid === false
+					<Badge variant="outline" color={superseded ? "red" : "green"}>
+						{superseded
 							? t("pages.development.validation.invalidated", "Invalidated")
 							: t("pages.development.validation.current", "Current")}
 					</Badge>
@@ -300,6 +351,15 @@ function ValidationReportView({ artifact }: { readonly artifact: DevelopmentArti
 					{shortHash(report.baseCommit)}
 				</Text>
 			</Group>
+
+			{superseded ? (
+				<Text size="xs" c="dimmed" data-testid="development-validation-failed-invalidated-note">
+					{t(
+						"pages.development.validation.failedInvalidated",
+						"The failed gate invalidated this task's approval evidence, which is why the report is marked invalidated. The failure below is still what happened.",
+					)}
+				</Text>
+			) : null}
 
 			{report.failureCode ? <ValidationFailureAlert code={report.failureCode} detail={report.failureDetail} /> : null}
 
@@ -322,12 +382,15 @@ export function DevelopmentLivePanel({ attempt, live, artifacts, events }: Devel
 	const validationArtifacts = artifacts.filter(
 		(artifact) => artifact.kind === "ValidationReport" || artifact.kind === "ReviewReport",
 	);
-	// The newest report that is still valid. An invalidated report describes a subject the working tree has since moved
-	// away from, so rendering its counts as the current result would be a lie.
+	// The newest validation report, WHATEVER its validity. Selecting on `isValid` was the F-056 defect: a failed gate
+	// invalidates the approval evidence, so every failed report was dropped here and the panel fell through to "no
+	// deterministic validation has run for this task yet" — the report that existed, was fetchable, and named the
+	// fault. Currency is a presentation decision made in ValidationReportView from the report's own verdict; it is
+	// not a reason to refuse to look at the report.
 	const latestValidationReport = useMemo(() => {
 		let latest: DevelopmentArtifact | null = null;
 		for (const artifact of artifacts) {
-			if (artifact.kind !== "ValidationReport" || artifact.isValid === false) {
+			if (artifact.kind !== "ValidationReport") {
 				continue;
 			}
 			if (latest === null || (artifact.createdAtUtc ?? 0) >= (latest.createdAtUtc ?? 0)) {

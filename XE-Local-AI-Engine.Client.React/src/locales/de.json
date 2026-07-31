@@ -116,6 +116,9 @@
 				"noTestsTitle": "Die Validierung hat keine Tests ausgeführt",
 				"current": "Aktuell",
 				"invalidated": "Ungültig",
+				"supersededTitle": "Dieses Validierungsergebnis ist nicht mehr aktuell",
+				"supersededBody": "Ein Validierungslauf war gegen einen früheren Stand dieser Aufgabe erfolgreich, doch das Arbeitsverzeichnis hat sich seitdem geändert. Seine Zahlen sind nicht das aktuelle Ergebnis — führen Sie die deterministische Validierung erneut aus.",
+				"failedInvalidated": "Das fehlgeschlagene Gate hat die Freigabe-Nachweise dieser Aufgabe entwertet, deshalb ist der Bericht als ungültig markiert. Der Fehler unten ist dennoch das, was tatsächlich passiert ist.",
 				"base": "Basis",
 				"evidence": "Gespeicherte Nachweise",
 				"noEvidence": "Noch keine Validierungs- oder Review-Nachweise.",
@@ -147,8 +150,19 @@
 				"command": {
 					"incomplete": "Nicht abgeschlossen",
 					"truncated": "Ausgabe abgeschnitten",
-					"exitCode": "Exit"
+					"exitCode": "Exit",
+					"capturedOutput": "Aufgezeichnete Ausgabe"
 				}
+			},
+			"form": {
+				"securityWarning": "Entwicklungsbefehle laufen unter Ihrem Host-Benutzer. Das verwaltete Arbeitsverzeichnis begrenzt anwendungsvermittelte Änderungen, ist aber keine Betriebssystem-Isolation — Repository-Code kann auf andere Host-Ressourcen zugreifen.",
+				"securityWarningContainer": "Entwicklungsbefehle laufen in einem gehärteten Container — schreibgeschütztes Root-Dateisystem, alle Capabilities entzogen, keine Host-Namespaces — in den nur das verwaltete Arbeitsverzeichnis und die Laufzeitverzeichnisse eingebunden sind. Repository-Code wird weiterhin ausgeführt; registrieren Sie daher nur Repositories, denen Sie vertrauen.",
+				"trustAcknowledgement": "Ich vertraue dem ausgewählten Repository, Entwicklungsbefehle mit meinen Host-Benutzerrechten auszuführen.",
+				"trustAcknowledgementContainer": "Ich vertraue dem ausgewählten Repository, Entwicklungsbefehle in der Container-Sandbox dieses Knotens auszuführen."
+			},
+			"containerRuntime": {
+				"notYetInUse": "Container-gestützte Ausführung ist noch nicht aktiviert. Heutige Läufe nutzen weiterhin die überwachte Prozess-Sandbox; diese Vorprüfung meldet, ob die Container-Laufzeit verfügbar sein wird, wenn sie umgestellt werden.",
+				"inUse": "Entwicklungsbefehle auf diesem Knoten werden in dieser Container-Laufzeit ausgeführt. Ein hier gemeldeter Fehler stoppt Läufe; es gibt keinen Rückfall auf den Host."
 			}
 		},
 		"knowledgeBase": {
