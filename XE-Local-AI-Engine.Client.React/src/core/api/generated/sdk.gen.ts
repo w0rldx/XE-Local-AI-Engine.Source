@@ -389,6 +389,9 @@ import type {
 	ListImageJobsData,
 	ListImageJobsErrors,
 	ListImageJobsResponses,
+	ListImageModelDownloadsData,
+	ListImageModelDownloadsErrors,
+	ListImageModelDownloadsResponses,
 	ListImageModelsData,
 	ListImageModelsErrors,
 	ListImageModelsResponses,
@@ -838,6 +841,7 @@ import {
 	zListGoldenConversationsPath,
 	zListGoldenConversationsResponse,
 	zListImageJobsResponse,
+	zListImageModelDownloadsResponse,
 	zListImageModelsResponse,
 	zListInferenceProfilesResponse,
 	zListKnowledgeDocumentsResponse,
@@ -3829,6 +3833,28 @@ export const retrieveImage = <ThrowOnError extends boolean = false>(options: Opt
 			{ scheme: "bearer", type: "http" },
 		],
 		url: "/api/local/v1/images/{imageId}",
+		...options,
+	});
+
+export const listImageModelDownloads = <ThrowOnError extends boolean = false>(
+	options?: Options<ListImageModelDownloadsData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<ListImageModelDownloadsResponses, ListImageModelDownloadsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListImageModelDownloadsResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/images/models/downloads",
 		...options,
 	});
 

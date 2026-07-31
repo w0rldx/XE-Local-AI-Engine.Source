@@ -2903,6 +2903,8 @@
 					"title": "Download a model",
 					"started": "Download started. The model will appear once ready.",
 					"inFlight": "Download runs in the background; the model appears when ready. Large files can take several minutes.",
+					"failed": "The model download failed.",
+					"progress": "Downloading… {{percent}}%",
 					"error": "Could not start the model download.",
 					"hint": "Single-file (SD1.5-style) weights only. Multi-part models are a follow-up.",
 					"submit": "Download",

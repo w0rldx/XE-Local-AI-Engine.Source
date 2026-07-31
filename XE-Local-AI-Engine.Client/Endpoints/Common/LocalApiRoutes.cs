@@ -455,7 +455,8 @@ public static class LocalApiRoutes
         // Installed image-model registry (GET list).
         public const string Models = "images/models";
 
-        // Image-model weight download (POST start). Fire-and-forget file-set pull; presence surfaces via Models.
+        // Image-model weight downloads: POST starts a detached file-set pull, GET lists every tracked download's phase
+        // (Running/Completed/Cancelled/Failed) so a failure is observable instead of silent.
         public const string ModelDownloads = "images/models/downloads";
 
         // Managed stable-diffusion.cpp runtime and Linux source-build orchestration.

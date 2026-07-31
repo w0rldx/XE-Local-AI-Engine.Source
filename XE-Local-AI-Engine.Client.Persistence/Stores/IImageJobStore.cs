@@ -24,8 +24,20 @@ public interface IImageJobStore
     /// <summary>Transitions a job to <see cref="ImageJobStatus.Generating" /> and records its start time.</summary>
     Task MarkGeneratingAsync(Guid jobId, long startedAtUtc, CancellationToken cancellationToken);
 
-    /// <summary>Marks a job <see cref="ImageJobStatus.Succeeded" />, recording the produced image id, completion time, and duration.</summary>
-    Task MarkSucceededAsync(Guid jobId, Guid imageId, long completedAtUtc, long durationMs, CancellationToken cancellationToken);
+    /// <summary>
+    ///     Marks a job <see cref="ImageJobStatus.Succeeded" />, recording the produced image id, completion time, and
+    ///     duration, and overwriting <see cref="ImageJobView.Width" />/<see cref="ImageJobView.Height" /> with the
+    ///     dimensions of the image that was actually produced. The runtime rounds a requested size up to a multiple of
+    ///     64, so the requested numbers are frequently wrong about the output; a succeeded job must describe the PNG the
+    ///     operator can see, not the request that produced it.
+    /// </summary>
+    Task MarkSucceededAsync(Guid jobId,
+        Guid imageId,
+        long completedAtUtc,
+        long durationMs,
+        int outputWidth,
+        int outputHeight,
+        CancellationToken cancellationToken);
 
     /// <summary>Marks a job <see cref="ImageJobStatus.Failed" /> with a display-safe (already sanitized) error.</summary>
     Task MarkFailedAsync(Guid jobId, string sanitizedError, long completedAtUtc, CancellationToken cancellationToken);

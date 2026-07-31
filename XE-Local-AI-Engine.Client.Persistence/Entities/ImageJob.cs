@@ -29,10 +29,13 @@ internal sealed record class ImageJob
     /// <summary>Diffusion seed (-1 = random at generation time).</summary>
     public long Seed { get; set; }
 
-    /// <summary>Requested output width in pixels.</summary>
+    /// <summary>
+    ///     Output width in pixels: the requested width while the job is pending, replaced by the width of the image that
+    ///     was actually produced once the job succeeds (the runtime rounds up to a multiple of 64, so the two differ).
+    /// </summary>
     public int Width { get; set; }
 
-    /// <summary>Requested output height in pixels.</summary>
+    /// <summary>Output height in pixels; see <see cref="Width" /> for the requested-vs-produced rule.</summary>
     public int Height { get; set; }
 
     /// <summary>Requested sampling steps.</summary>
