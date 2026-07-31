@@ -49,7 +49,7 @@ public interface INodeRuntimeSettings
     /// <summary>The worker response-size cap in MiB (stored &gt; <c>WorkerNode:MaxResponseSizeMb</c> &gt; 10).</summary>
     Task<int> GetMaxResponseSizeMbAsync(CancellationToken cancellationToken = default);
 
-    /// <summary>The recommended llama.cpp release tag (stored &gt; <c>LlamaCppReleasePins.PinnedTag</c> "b9692").</summary>
+    /// <summary>The recommended llama.cpp release tag (stored &gt; <c>LlamaCppReleasePins.PinnedTag</c> "b10201").</summary>
     Task<string> GetRecommendedLlamaCppTagAsync(CancellationToken cancellationToken = default);
 
     /// <summary>The orchestration idle-timeout in seconds (stored &gt; <c>Agent:Orchestration:IdleTimeoutSeconds</c> &gt; 120).</summary>

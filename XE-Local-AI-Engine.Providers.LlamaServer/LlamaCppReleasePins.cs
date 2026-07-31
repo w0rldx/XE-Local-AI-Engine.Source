@@ -49,16 +49,16 @@ public sealed record LlamaCppAssetPin(
 public static class LlamaCppReleasePins
 {
     /// <summary>The recommended-pinned llama.cpp release tag.</summary>
-    public const string PinnedTag = "b9692";
+    public const string PinnedTag = "b10201";
 
     /// <summary>
-    ///     The exact upstream commit SHA the <see cref="PinnedTag" /> tag (<c>b9692</c>) resolves to on
+    ///     The exact upstream commit SHA the <see cref="PinnedTag" /> tag (<c>b10201</c>) resolves to on
     ///     <c>ggml-org/llama.cpp</c>. The in-app CUDA source build verifies the freshly-cloned tree's checked-out
     ///     <c>HEAD</c> equals this and HARD-FAILS before any cmake runs, so a moved tag / hijacked ref can never be built.
     ///     Re-pin this alongside <see cref="PinnedTag" /> when bumping the recommended version
     ///     (<c>git ls-remote https://github.com/ggml-org/llama.cpp refs/tags/&lt;tag&gt;</c>). <c>[secHIGH-1]</c>
     /// </summary>
-    public const string PinnedCudaSourceCommitSha = "f3e182816421c648188b5eab269853bf1531d950";
+    public const string PinnedCudaSourceCommitSha = "8f4646a63ee29f2e0ab971b0290b141938769762";
 
     /// <summary>Backend-neutral alias for the exact source commit behind <see cref="PinnedTag" />.</summary>
     public const string PinnedSourceCommitSha = PinnedCudaSourceCommitSha;
@@ -66,42 +66,43 @@ public static class LlamaCppReleasePins
     private const string WindowsServerPath = "build/bin/llama-server.exe";
     private const string UnixServerPath = "build/bin/llama-server";
 
-    // Keyed by (os, arch, variant). Verified against the b9692 release-assets digest API on 2026-06-17.
+    // Keyed by (os, arch, variant). Verified against the b10201 release-assets digest API on 2026-07-31.
     private static readonly IReadOnlyDictionary<(OSPlatform Os, Architecture Arch, GpuVariant Variant), LlamaCppAssetPin> Pins =
         new Dictionary<(OSPlatform, Architecture, GpuVariant), LlamaCppAssetPin>
         {
             // Windows x64 — the CUDA pin also carries its companion runtime archive (cudart-…); both digests are from
-            // the b9692 release-assets digest API. The cudart asset name is NOT tag-prefixed upstream.
+            // the b10201 release-assets digest API. The cudart asset name is NOT tag-prefixed upstream, and its digest is
+            // unchanged from b9692 because upstream ships the same CUDA 12.4 runtime archive across those releases.
             [(OSPlatform.Windows, Architecture.X64, GpuVariant.Cuda)] =
-                new("llama-b9692-bin-win-cuda-12.4-x64.zip", "a10476e348762d75464a698c2e170e814860f3d5959488cb23234e913ef50bc5", WindowsServerPath,
+                new("llama-b10201-bin-win-cuda-12.4-x64.zip", "0b25fa35df1acb01a7bf0325fe554cbae1d7be39dfd630e979ad5a5ddc66599b", WindowsServerPath,
                     CudartAssetName: "cudart-llama-bin-win-cuda-12.4-x64.zip",
                     CudartSha256: "8c79a9b226de4b3cacfd1f83d24f962d0773be79f1e7b75c6af4ded7e32ae1d6"),
             [(OSPlatform.Windows, Architecture.X64, GpuVariant.Vulkan)] =
-                new("llama-b9692-bin-win-vulkan-x64.zip", "6d241d2e1f5dc351966bc9aca0f50adf230e094706854fc126ca7331b7f478cd", WindowsServerPath),
+                new("llama-b10201-bin-win-vulkan-x64.zip", "7284f987944f0700b0d039b1b2f786302308f1479b8f1d61efa0a0ba35acea42", WindowsServerPath),
             [(OSPlatform.Windows, Architecture.X64, GpuVariant.Cpu)] =
-                new("llama-b9692-bin-win-cpu-x64.zip", "7a285e595c8c6557b53c91da7be88b9f3ff20826a565547dc08fa6c3588e0994", WindowsServerPath),
+                new("llama-b10201-bin-win-cpu-x64.zip", "8b8d4f0f6738e11842dd5250de0736052de41b0ef4de8d3fb119c37335de2833", WindowsServerPath),
 
             // Windows arm64 (CPU floor only)
             [(OSPlatform.Windows, Architecture.Arm64, GpuVariant.Cpu)] =
-                new("llama-b9692-bin-win-cpu-arm64.zip", "66c62a3533e511db334b0ba087efa079c2ea88a01ebe92274d20aef37a92f68b", WindowsServerPath),
+                new("llama-b10201-bin-win-cpu-arm64.zip", "e1b97a489cb66d04f92f53d2c633ede0721c4e26dc0bfdcf7ec6f4e31091f1a8", WindowsServerPath),
 
             // Linux x64 (no prebuilt CUDA exists upstream)
             [(OSPlatform.Linux, Architecture.X64, GpuVariant.Vulkan)] =
-                new("llama-b9692-bin-ubuntu-vulkan-x64.tar.gz", "3c0ebf913bb9b021307b87454485aefdb8961182b637e60b846ea98d53c6274c", UnixServerPath),
+                new("llama-b10201-bin-ubuntu-vulkan-x64.tar.gz", "ac495ca88439c0218a226b01120526aa051ed5adaacc6abe207c753931b03a57", UnixServerPath),
             [(OSPlatform.Linux, Architecture.X64, GpuVariant.Cpu)] =
-                new("llama-b9692-bin-ubuntu-x64.tar.gz", "148a3b157ed347eae27ab4a4702be42ad3e8fe180fb604003ac86fb1886fda56", UnixServerPath),
+                new("llama-b10201-bin-ubuntu-x64.tar.gz", "7a985be324ebbce0de698fe34e830990838fce13ddb90a92c7f87ea2532ba797", UnixServerPath),
 
             // Linux arm64
             [(OSPlatform.Linux, Architecture.Arm64, GpuVariant.Vulkan)] =
-                new("llama-b9692-bin-ubuntu-vulkan-arm64.tar.gz", "d037cb9383e40166b4b410a3fa732b18d7d8e534d0a4fbdc8890599da1f56505", UnixServerPath),
+                new("llama-b10201-bin-ubuntu-vulkan-arm64.tar.gz", "5e350769055d053a204b9d4479af560b3b8e9c71729bb1da8b03f2aa70d19533", UnixServerPath),
             [(OSPlatform.Linux, Architecture.Arm64, GpuVariant.Cpu)] =
-                new("llama-b9692-bin-ubuntu-arm64.tar.gz", "7ba37e66c01d992ebf3bc3972268d1bdd2c304a0aa382ff0dfe2b98ce7db6bdd", UnixServerPath),
+                new("llama-b10201-bin-ubuntu-arm64.tar.gz", "8e001059da48a95bfb17ebab2d7e118ad15878b69840458d7cbbf443591af9e7", UnixServerPath),
 
             // macOS (CPU floor; llama.cpp uses Metal at runtime within the universal build)
             [(OSPlatform.OSX, Architecture.Arm64, GpuVariant.Cpu)] =
-                new("llama-b9692-bin-macos-arm64.tar.gz", "751c2978074d52288682fa74cc8ffddae039e45a816affccb05b08ea4c40f0be", UnixServerPath),
+                new("llama-b10201-bin-macos-arm64.tar.gz", "4c323231709d670d7282ed1efdc4b479831305d7e8a6ba3c18bb0cff2dae401e", UnixServerPath),
             [(OSPlatform.OSX, Architecture.X64, GpuVariant.Cpu)] =
-                new("llama-b9692-bin-macos-x64.tar.gz", "95ef72d64fa16b40e1aeef59cdb3424f768b31cc9a4b490934bd66e7a6fdd7c8", UnixServerPath)
+                new("llama-b10201-bin-macos-x64.tar.gz", "ab3f2f59dbc06914dcceb062a8aef8f56bf303eacfa008cc27f8fb0e9206e1bf", UnixServerPath)
         };
 
     /// <summary>Builds the absolute download URL for a named asset in the given release tag.</summary>
