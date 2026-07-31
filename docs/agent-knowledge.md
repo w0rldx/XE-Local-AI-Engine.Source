@@ -345,6 +345,37 @@ Diagnosing it: confirm `OTEL_EXPORTER_OTLP_ENDPOINT` is on the process (`tr '\0'
 - Desktop publish is self-contained single-file but **explicitly not trimmed** (`PublishTrimmed=false`) — trimming breaks EF Core / Serilog / FastEndpoints / MEAI reflection wiring.
 - Desktop mode is opt-in via `XE_LAUNCH_MODE=desktop`; off-flag behaviour (headless/Aspire/CI) must stay byte-identical.
 
+### Tool calling has FIVE independent gates, and the UI shows only one of them
+
+Before concluding "tool calling is broken", walk all five. A live evaluation burned most of a session on this: the installed-models row advertised a **`TOOLS`** capability chip, the node's *Enable tools* switch was on, the per-message *Local tools* toggle was on — and the model still answered `NO TOOLS AVAILABLE`, because two of the five gates are invisible from the chat screen.
+
+In evaluation order:
+
+| # | Gate | Where | Visible to the user? |
+|---|---|---|---|
+| 1 | `request.UseLocalTools` | per-message toggle → `NodeChatStreamService.cs:248` | yes, in the composer |
+| 2 | `enableTools` | node setting → `GetEnableToolsAsync`, same line | yes, Node Settings |
+| 3 | `resolution.SupportsTools` | detected **offline from the model's chat template** by `IGgufModelCapabilityResolver` | **this is what the `TOOLS` chip shows** |
+| 4 | `AgentHome:ToolCapableModels` allow-list | `LocalToolOfferProvider.IsToolCapable` | **no** — an operator allow-list, unrelated to gate 3 |
+| 5 | the agent's `AllowedToolNames` | `AgentDefinitionResolver` intersects offered ∩ allowed | **no** — and the seeded **Default Assistant ships with 0 tools** |
+
+The trap is the relationship between 3 and 4. **Gate 3 is a statement about the model; gate 4 is a statement about operator permission.** They come from entirely different sources and are free to disagree, so a `TOOLS` chip is *not* a prediction that tools will be offered — it only means the chat template supports them. A model can be genuinely tool-capable, correctly chipped, and still receive nothing because it is absent from a static allow-list that ships as
+`["qwen3:8b", "bartowski/Qwen2.5-3B-Instruct-GGUF:Q4_K_M"]` — i.e. **none of the models the app's own recommender offers**.
+
+Note the failure is *partial*, which makes it harder to spot than a clean "no tools": a non-allow-listed model still receives `get_current_time` and `calculate` (the whole production `LocalAgentToolRegistry`), while the coder tools, the knowledge-base tools, `spawn_subagent` and **every MCP tool** are dropped. So "tools work" and "tools are broken" can both look true in the same conversation.
+
+### Capability detection is a substring scan of the chat template — know what it can and cannot see
+
+`GgufCapabilityDetector` decides a GGUF's advertised capabilities by scanning `tokenizer.chat_template` for literal substrings: tools from `tool_calls`/`tool_call`/`function_call`/`tools`, reasoning from `<think`/`enable_thinking`/`reasoning_content`. Two consequences that have already bitten:
+
+- **A reasoning model can show no `THINKING` chip and still reason.** Measured on `unsloth/gpt-oss-20b-GGUF:Q5_K_M` (2026-07-31): its 17k-char OpenAI *harmony* template contains **zero** occurrences of all three reasoning markers, but 12 of `<|channel|>` and 4 of `reasoning_effort` — it emits reasoning on an `analysis` channel the detector knows nothing about. Detection says not-capable; the model reasons anyway, because the enforcing gate's false branch (`InvocationAgentFactory`, the `else if (IsReasoningRequested(...))` arm) deliberately **omits** the `think` field and lets the template's baked-in behaviour through. So the chip is a statement about *"is a graded `think:<level>` control available"*, not about *"does this model reason"* — while its label reads "Thinking".
+- **Do not "fix" that by adding harmony markers to the detector.** Flipping such a model to capable moves it into the `if (SupportsThinking)` branch, which writes `think` and, on `none`, sets `enable_thinking=false` via `chat_template_kwargs`. The harmony template has no `enable_thinking` kwarg at all (measured: 0 occurrences) — it takes `reasoning_effort`. The result would be a graded menu whose levels do nothing **and** a broken reasoning-off path. Fix the label or add a distinct capability; do not widen the marker list.
+- The tools marker list includes the bare English word **`tools`**, matched anywhere in the raw template including comments and dead branches. `<think` is a tag prefix; `tools` is not. Treat a `TOOLS` chip as weaker evidence than a `THINKING` one.
+
+Gate 5 catches the rest: the Default Assistant grants zero tools, so even a fully permitted model gets nothing on the default agent. Use the Coder (read-only) agent, or grant tools on the definition, when testing the positive path.
+
+Historical note, so nobody re-introduces it: gate 4 used to be **captured at DI composition** and never re-read, so editing the allow-list did nothing until the node restarted — while gates that read the *same* setting (`GetToolCapableModelsEndpoint`, `OrchestrationResolver`) were already live. It is now read live per offer. Do not "optimize" it back into a constructor field — the read resolves through `CachedNodeSettingsStore`, so it is a memory-cache hit that `SaveAsync` re-primes, not a file read.
+
 ---
 
 ## 3. Models, inference, retrieval

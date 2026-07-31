@@ -1334,7 +1334,7 @@
 				"allowedRange": "Allowed range",
 				"seconds": "seconds",
 				"minutes": "minutes",
-				"bytesPositive": "A positive number of bytes.",
+				"bytesPositive": "A positive number of bytes. Changes take effect without restarting the node.",
 				"errors": {
 					"range": "Enter a whole number within the allowed range.",
 					"format": "Must match the format b<number> (e.g. b9692).",
@@ -1354,11 +1354,11 @@
 				},
 				"defaultModelName": {
 					"label": "Default model",
-					"description": "The model used for local chat when none is selected. Leave blank to use the configured default."
+					"description": "The model used for local chat when none is selected. Leave blank to use the configured default. Applies after the node restarts."
 				},
 				"enableTools": {
 					"label": "Enable tools",
-					"description": "Allow local chat agents to call tools."
+					"description": "Allow local chat agents to call tools. Changes take effect without restarting the node."
 				},
 				"toolCapableModels": {
 					"label": "Tool-capable models",
@@ -1369,10 +1369,12 @@
 					"tagHint": "The recommended llama.cpp version is managed in the llama.cpp runtime updates card above."
 				},
 				"llamaMaxLoadedProcesses": {
-					"label": "Max loaded llama-server processes"
+					"label": "Max loaded llama-server processes",
+					"description": "Applies after the node restarts."
 				},
 				"llamaIdleTimeToLiveSeconds": {
-					"label": "Idle process time-to-live"
+					"label": "Idle process time-to-live",
+					"description": "Applies after the node restarts."
 				},
 				"keepModelWarm": {
 					"enabledLabel": "Keep a model warm",
@@ -1394,27 +1396,31 @@
 				},
 				"huggingFaceDefaultQuant": {
 					"label": "Default quantization",
-					"description": "Preferred GGUF quantization when downloading from Hugging Face (e.g. Q4_K_M)."
+					"description": "Preferred GGUF quantization when downloading from Hugging Face (e.g. Q4_K_M). Applies after the node restarts."
 				},
 				"worker": {
 					"title": "Worker limits"
 				},
 				"maxResponseSizeMb": {
-					"label": "Max response size"
+					"label": "Max response size",
+					"description": "Applies after the node restarts."
 				},
 				"advanced": {
 					"title": "Advanced (developer)",
-					"description": "Low-level orchestration and AgentHome limits. Most changes apply after a restart.",
+					"description": "Low-level orchestration and AgentHome limits. The orchestration idle timeout and pending tool-call age apply after a restart; the AgentHome limits apply immediately.",
 					"samplingNote": "Sampling defaults are configured per message during a chat."
 				},
 				"orchestrationIdleTimeoutSeconds": {
-					"label": "Orchestration idle timeout"
+					"label": "Orchestration idle timeout",
+					"description": "Applies after the node restarts."
 				},
 				"agentHomePrepareTimeoutSeconds": {
-					"label": "AgentHome prepare timeout"
+					"label": "AgentHome prepare timeout",
+					"description": "Changes take effect without restarting the node."
 				},
 				"agentHomeCommandTimeoutSeconds": {
-					"label": "AgentHome command timeout"
+					"label": "AgentHome command timeout",
+					"description": "Changes take effect without restarting the node."
 				},
 				"agentHomeMaxSelectedFolderBytes": {
 					"label": "AgentHome max selected folder size"
@@ -1423,7 +1429,8 @@
 					"label": "AgentHome max patch size"
 				},
 				"maxPendingToolCallAgeMinutes": {
-					"label": "Max pending tool-call age"
+					"label": "Max pending tool-call age",
+					"description": "Applies after the node restarts."
 				},
 				"speculativeMode": {
 					"label": "Speculative decoding",
@@ -1439,12 +1446,13 @@
 				},
 				"speculativeDraftModel": {
 					"label": "Draft model",
-					"description": "An installed chat-capable model used as the drafter. Must share the target model's tokenizer family.",
+					"description": "An installed chat-capable model used as the drafter. Must share the target model's tokenizer family. Applies after the node restarts.",
 					"placeholder": "Select a draft model",
 					"empty": "No installed chat models"
 				},
 				"speculativeDraftMaxTokens": {
-					"label": "Draft tokens per step"
+					"label": "Draft tokens per step",
+					"description": "Applies after the node restarts."
 				},
 				"chatCacheReuse": {
 					"label": "Prompt cache reuse",
