@@ -176,8 +176,21 @@ export function useModelRecommendations(): UseModelRecommendationsResult {
 
 	const handleRefreshCatalog = (): void => {
 		refreshCatalogMutation.mutate(undefined, {
-			onSuccess: () =>
-				toast.success(t("pages.modelFit.recommendations.catalog.toasts.refreshed", "The model catalog was refreshed.")),
+			// The node may have no configured live-refresh source (ModelCatalogOptions.RefreshUrl unset), in which case the
+			// endpoint still returns 200 with the unchanged bundled snapshot. Only claim the catalog was refreshed when the
+			// response says a refresh source actually exists; otherwise say plainly that there was nothing to fetch.
+			onSuccess: (data) => {
+				if (data?.refreshSourceConfigured) {
+					toast.success(t("pages.modelFit.recommendations.catalog.toasts.refreshed", "The model catalog was refreshed."));
+				} else {
+					toast.info(
+						t(
+							"pages.modelFit.recommendations.catalog.toasts.noRefreshSource",
+							"No catalog refresh source is configured, so the bundled catalog is in use. There is nothing to fetch.",
+						),
+					);
+				}
+			},
 			onError: (error) =>
 				toast.error(
 					errorMessage(error, t("pages.modelFit.recommendations.catalog.toasts.refreshError", "Could not refresh the model catalog.")),

@@ -839,6 +839,7 @@ export type XeLocalAiEngineClientEndpointsModelFitV1ModelCatalogInfoResponse = {
 	fetchedAtUtc?: number | null;
 	sourceUrl?: string | null;
 	modelCount: number;
+	refreshSourceConfigured: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsModelFitV1InspectGgufRepositoryResponse = {
@@ -1353,6 +1354,14 @@ export type XeLocalAiEngineClientEndpointsLocalChatV1UploadConversationFileReque
 
 export type XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentRouteRequest = {
 	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsKnowledgeV1DownloadRecommendedEmbeddingResponse = {
+	modelName: string;
+	repoId: string;
+	quant: string;
+	alreadyInstalled: boolean;
+	alreadyInFlight: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsKnowledgeV1DownloadRecommendedRerankerResponse = {
@@ -5596,6 +5605,34 @@ export type GetKnowledgeDocumentResponses = {
 };
 
 export type GetKnowledgeDocumentResponse = GetKnowledgeDocumentResponses[keyof GetKnowledgeDocumentResponses];
+
+export type DownloadRecommendedEmbeddingData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/knowledge-base/embedding/download-recommended";
+};
+
+export type DownloadRecommendedEmbeddingErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type DownloadRecommendedEmbeddingResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsKnowledgeV1DownloadRecommendedEmbeddingResponse;
+};
+
+export type DownloadRecommendedEmbeddingResponse =
+	DownloadRecommendedEmbeddingResponses[keyof DownloadRecommendedEmbeddingResponses];
 
 export type DownloadRecommendedRerankerData = {
 	body?: never;

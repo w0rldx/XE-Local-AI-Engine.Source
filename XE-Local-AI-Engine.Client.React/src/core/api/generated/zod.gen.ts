@@ -1103,6 +1103,7 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1ModelCatalogInfoResponse =
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	refreshSourceConfigured: z.boolean(),
 });
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryFileResponse = z.object({
@@ -1627,6 +1628,14 @@ export const zXeLocalAiEngineClientEndpointsLocalChatV1UploadConversationFileReq
 });
 
 export const zXeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentRouteRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsKnowledgeV1DownloadRecommendedEmbeddingResponse = z.object({
+	modelName: z.string(),
+	repoId: z.string(),
+	quant: z.string(),
+	alreadyInstalled: z.boolean(),
+	alreadyInFlight: z.boolean(),
+});
 
 export const zXeLocalAiEngineClientEndpointsKnowledgeV1DownloadRecommendedRerankerResponse = z.object({
 	modelName: z.string(),
@@ -3877,6 +3886,12 @@ export const zGetKnowledgeDocumentPath = z.object({
  * Success
  */
 export const zGetKnowledgeDocumentResponse = zXeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentDetailResponse;
+
+/**
+ * Success
+ */
+export const zDownloadRecommendedEmbeddingResponse =
+	zXeLocalAiEngineClientEndpointsKnowledgeV1DownloadRecommendedEmbeddingResponse;
 
 /**
  * Success

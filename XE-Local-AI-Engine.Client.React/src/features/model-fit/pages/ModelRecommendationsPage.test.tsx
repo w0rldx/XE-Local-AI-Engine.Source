@@ -221,6 +221,7 @@ const catalogInfo = {
 	fetchedAtUtc: 1_700_000_000_000,
 	sourceUrl: "https://example.test/catalog.json",
 	modelCount: 42,
+	refreshSourceConfigured: true,
 };
 
 const hardwareProfile = {
@@ -502,9 +503,11 @@ describe("ModelRecommendationsPage", () => {
 			);
 		});
 
-		it("shows a success toast when the catalog refresh mutation succeeds", () => {
+		it("shows a success toast when the catalog refresh mutation succeeds with a configured refresh source", () => {
 			const refreshCatalog = makeMutation({
-				mutate: vi.fn((_variables, options?: { onSuccess?: () => void }) => options?.onSuccess?.()),
+				mutate: vi.fn((_variables, options?: { onSuccess?: (data: { refreshSourceConfigured: boolean }) => void }) =>
+					options?.onSuccess?.({ refreshSourceConfigured: true }),
+				),
 			});
 			hooksMock.useModelFitCatalog.mockReturnValue(makeQuery(catalogInfo));
 			hooksMock.useRefreshModelFitCatalog.mockReturnValue(refreshCatalog);
@@ -514,6 +517,40 @@ describe("ModelRecommendationsPage", () => {
 			fireEvent.click(screen.getByTestId("model-fit-catalog-refresh-button"));
 
 			expect(toastMock.success).toHaveBeenCalledWith(expect.stringContaining("catalog"));
+			expect(toastMock.info).not.toHaveBeenCalled();
+		});
+
+		it("shows a neutral info toast instead of a success toast when no refresh source is configured", () => {
+			const refreshCatalog = makeMutation({
+				mutate: vi.fn((_variables, options?: { onSuccess?: (data: { refreshSourceConfigured: boolean }) => void }) =>
+					options?.onSuccess?.({ refreshSourceConfigured: false }),
+				),
+			});
+			hooksMock.useModelFitCatalog.mockReturnValue(makeQuery(catalogInfo));
+			hooksMock.useRefreshModelFitCatalog.mockReturnValue(refreshCatalog);
+
+			renderPage();
+
+			fireEvent.click(screen.getByTestId("model-fit-catalog-refresh-button"));
+
+			expect(toastMock.info).toHaveBeenCalledWith(expect.stringContaining("no"));
+			expect(toastMock.success).not.toHaveBeenCalled();
+		});
+
+		it("shows the 'bundled catalog only' note in the footer when no refresh source is configured", () => {
+			hooksMock.useModelFitCatalog.mockReturnValue(makeQuery({ ...catalogInfo, refreshSourceConfigured: false }));
+
+			renderPage();
+
+			expect(screen.getByTestId("model-fit-catalog-no-refresh-source")).toBeTruthy();
+		});
+
+		it("hides the 'bundled catalog only' note in the footer when a refresh source is configured", () => {
+			hooksMock.useModelFitCatalog.mockReturnValue(makeQuery(catalogInfo));
+
+			renderPage();
+
+			expect(screen.queryByTestId("model-fit-catalog-no-refresh-source")).toBeNull();
 		});
 	});
 });

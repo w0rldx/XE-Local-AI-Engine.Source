@@ -156,6 +156,10 @@ export interface ModelFitCatalogInfo {
 	readonly fetchedAtUtc: number | null;
 	readonly sourceUrl: string | null;
 	readonly modelCount: number;
+	// False when the node has no configured live-refresh source (ModelCatalogOptions.RefreshUrl is unset), so
+	// "Refresh catalog" cannot fetch anything new and the bundled snapshot is authoritative. The UI must not report a
+	// refresh as successful when this is false.
+	readonly refreshSourceConfigured: boolean;
 }
 
 export { modelFitUseCaseSchema };

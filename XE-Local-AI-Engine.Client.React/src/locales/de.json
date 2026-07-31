@@ -1362,7 +1362,7 @@
 				},
 				"toolCapableModels": {
 					"label": "Tool-fähige Modelle",
-					"description": "Modellnamen, die Tool-Aufrufe unterstützen. Enter drücken, um jeden Namen hinzuzufügen."
+					"description": "Modellnamen, die Tool-Aufrufe unterstützen. Enter drücken, um jeden Namen hinzuzufügen. Änderungen werden ohne Neustart des Knotens wirksam."
 				},
 				"runtime": {
 					"title": "Lokale Modell-Laufzeit",
@@ -1461,6 +1461,14 @@
 					"downloadStarted": "Der empfohlene Reranker ({{model}}) wird heruntergeladen.",
 					"downloadInFlight": "Der empfohlene Reranker ({{model}}) wird bereits heruntergeladen.",
 					"downloadError": "Der Download des empfohlenen Rerankers konnte nicht gestartet werden."
+				},
+				"embeddingModel": {
+					"downloadRecommended": "Empfohlenes Embedding-Modell herunterladen",
+					"recommendedHelp": "Erforderlich für die Wissensdatenbank: Ohne Embedding-Modell können Dokumente nicht indexiert werden. Empfohlen: nomic-embed-text-v1.5 (~274 MB).",
+					"downloadAlreadyInstalled": "Das empfohlene Embedding-Modell ({{model}}) ist bereits installiert.",
+					"downloadStarted": "Das empfohlene Embedding-Modell ({{model}}) wird heruntergeladen.",
+					"downloadInFlight": "Das empfohlene Embedding-Modell ({{model}}) wird bereits heruntergeladen.",
+					"downloadError": "Der Download des empfohlenen Embedding-Modells konnte nicht gestartet werden."
 				},
 				"usageRates": {
 					"title": "Kostenraten der Nutzung",
@@ -2557,9 +2565,11 @@
 					},
 					"updatedAt": "Aktualisiert {{time}}",
 					"refreshButton": "Katalog aktualisieren",
+					"noRefreshSource": "Nur gebündelter Katalog – es ist keine Aktualisierungsquelle konfiguriert.",
 					"toasts": {
 						"refreshed": "Der Modellkatalog wurde aktualisiert.",
-						"refreshError": "Der Modellkatalog konnte nicht aktualisiert werden."
+						"refreshError": "Der Modellkatalog konnte nicht aktualisiert werden.",
+						"noRefreshSource": "Es ist keine Quelle für die Katalogaktualisierung konfiguriert. Der gebündelte Katalog wird verwendet, es gibt nichts abzurufen."
 					}
 				}
 			},

@@ -164,6 +164,9 @@ import type {
 	DisconnectConnectionData,
 	DisconnectConnectionErrors,
 	DisconnectConnectionResponses,
+	DownloadRecommendedEmbeddingData,
+	DownloadRecommendedEmbeddingErrors,
+	DownloadRecommendedEmbeddingResponses,
 	DownloadRecommendedRerankerData,
 	DownloadRecommendedRerankerErrors,
 	DownloadRecommendedRerankerResponses,
@@ -715,6 +718,7 @@ import {
 	zDisableScheduledJobPath,
 	zDisableScheduledJobResponse,
 	zDisconnectConnectionResponse,
+	zDownloadRecommendedEmbeddingResponse,
 	zDownloadRecommendedRerankerResponse,
 	zEjectImageRuntimeBody,
 	zEjectImageRuntimeResponse,
@@ -3365,6 +3369,28 @@ export const getKnowledgeDocument = <ThrowOnError extends boolean = false>(
 			{ scheme: "bearer", type: "http" },
 		],
 		url: "/api/local/v1/knowledge-base/documents/{documentId}",
+		...options,
+	});
+
+export const downloadRecommendedEmbedding = <ThrowOnError extends boolean = false>(
+	options?: Options<DownloadRecommendedEmbeddingData, ThrowOnError>,
+) =>
+	(options?.client ?? client).post<DownloadRecommendedEmbeddingResponses, DownloadRecommendedEmbeddingErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zDownloadRecommendedEmbeddingResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/knowledge-base/embedding/download-recommended",
 		...options,
 	});
 

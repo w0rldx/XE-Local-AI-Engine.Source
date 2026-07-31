@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 
 import type { SaveNodeSettingsResponse } from "@/core/api/generated";
 import {
+	downloadRecommendedEmbeddingMutation,
 	downloadRecommendedRerankerMutation,
 	getNodeSettingsOptions,
 	getNodeSettingsQueryKey,
@@ -208,6 +209,71 @@ export function NodeSettings() {
 		});
 	};
 
+	// One-click recommended-embedding download. The embedding model is not a node-settings field (there is nothing to
+	// select/save) — it just needs to be installed for the knowledge base to index documents at all. Progress reuses
+	// the same GgufDownload feed and in-flight tracking as the reranker download above.
+	const [recommendedEmbeddingModelName, setRecommendedEmbeddingModelName] = useState<string | null>(null);
+
+	const isRecommendedEmbeddingInFlight =
+		recommendedEmbeddingModelName !== null && inFlightDownloads.includes(recommendedEmbeddingModelName);
+	const embeddingInFlight = useMemo(
+		() => (isRecommendedEmbeddingInFlight && recommendedEmbeddingModelName !== null ? [recommendedEmbeddingModelName] : []),
+		[isRecommendedEmbeddingInFlight, recommendedEmbeddingModelName],
+	);
+
+	const downloadRecommendedEmbedding = useMutation({
+		...withResponseValidation(downloadRecommendedEmbeddingMutation()),
+		onSuccess: (response) => {
+			setRecommendedEmbeddingModelName(response.modelName);
+			if (response.alreadyInstalled) {
+				toast.info(
+					t(
+						"pages.nodeSettings.fields.embeddingModel.downloadAlreadyInstalled",
+						"The recommended embedding model ({{model}}) is already installed.",
+						{
+							model: response.modelName,
+						},
+					),
+				);
+				return;
+			}
+			// Mark in-flight immediately so the button duplicate-guards and the progress panel appears without waiting for
+			// the first SignalR push (markInFlight is idempotent, so an already-in-flight rejoin is a no-op).
+			markInFlight(response.modelName);
+			toast.info(
+				response.alreadyInFlight
+					? t(
+							"pages.nodeSettings.fields.embeddingModel.downloadInFlight",
+							"The recommended embedding model ({{model}}) is already downloading.",
+							{
+								model: response.modelName,
+							},
+						)
+					: t(
+							"pages.nodeSettings.fields.embeddingModel.downloadStarted",
+							"Downloading the recommended embedding model ({{model}}).",
+							{
+								model: response.modelName,
+							},
+						),
+			);
+		},
+		onError: (error) =>
+			toast.error(
+				runtimeErrorMessage(
+					error,
+					t(
+						"pages.nodeSettings.fields.embeddingModel.downloadError",
+						"Could not start the recommended embedding model download.",
+					),
+				),
+			),
+	});
+
+	const handleDownloadRecommendedEmbedding = (): void => {
+		downloadRecommendedEmbedding.mutate({});
+	};
+
 	useEffect(() => {
 		if (settings?.maxMessageRequestTimeoutSeconds !== undefined) {
 			setTimeoutSeconds(settings.maxMessageRequestTimeoutSeconds);
@@ -399,10 +465,13 @@ export function NodeSettings() {
 					onDownloadRecommendedReranker={handleDownloadRecommendedReranker}
 					isDownloadRecommendedRerankerPending={downloadRecommendedReranker.isPending}
 					isRecommendedRerankerInFlight={isRecommendedRerankerInFlight}
+					onDownloadRecommendedEmbedding={handleDownloadRecommendedEmbedding}
+					isDownloadRecommendedEmbeddingPending={downloadRecommendedEmbedding.isPending}
+					isRecommendedEmbeddingInFlight={isRecommendedEmbeddingInFlight}
 				/>
 
 				<DownloadProgressPanel
-					inFlight={rerankerInFlight}
+					inFlight={[...rerankerInFlight, ...embeddingInFlight]}
 					downloadStatuses={rerankerDownloadStatuses}
 					onCancel={handleCancelRerankerDownload}
 					cancellingModelName={cancelGgufDownloadMutation.isPending ? (cancelGgufDownloadMutation.variables ?? null) : null}

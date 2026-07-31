@@ -64,6 +64,7 @@ import {
 	disableAutoConnect,
 	disableScheduledJob,
 	disconnectConnection,
+	downloadRecommendedEmbedding,
 	downloadRecommendedReranker,
 	ejectImageRuntime,
 	ejectRunningModel,
@@ -328,6 +329,8 @@ import type {
 	DisableScheduledJobResponse,
 	DisconnectConnectionData,
 	DisconnectConnectionResponse,
+	DownloadRecommendedEmbeddingData,
+	DownloadRecommendedEmbeddingResponse,
 	DownloadRecommendedRerankerData,
 	DownloadRecommendedRerankerResponse,
 	EjectImageRuntimeData,
@@ -2811,6 +2814,30 @@ export const getKnowledgeDocumentOptions = (options: Options<GetKnowledgeDocumen
 		},
 		queryKey: getKnowledgeDocumentQueryKey(options),
 	});
+
+export const downloadRecommendedEmbeddingMutation = (
+	options?: Partial<Options<DownloadRecommendedEmbeddingData>>,
+): UseMutationOptions<
+	DownloadRecommendedEmbeddingResponse,
+	AxiosError<DefaultError>,
+	Options<DownloadRecommendedEmbeddingData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		DownloadRecommendedEmbeddingResponse,
+		AxiosError<DefaultError>,
+		Options<DownloadRecommendedEmbeddingData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await downloadRecommendedEmbedding({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
 
 export const downloadRecommendedRerankerMutation = (
 	options?: Partial<Options<DownloadRecommendedRerankerData>>,

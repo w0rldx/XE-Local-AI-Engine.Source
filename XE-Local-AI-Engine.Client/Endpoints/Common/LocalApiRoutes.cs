@@ -526,6 +526,10 @@ public static class LocalApiRoutes
         // hunting for a repo/quant. Body-less POST; a distinct "reranker" literal keeps it off the document-id surface.
         public const string RerankerDownloadRecommended = "knowledge-base/reranker/download-recommended";
 
+        // One-click download of the recommended embedding model. Same shape as the reranker route above, but this one is
+        // load-bearing rather than optional: with no embedding model installed the knowledge base cannot index anything.
+        public const string EmbeddingDownloadRecommended = "knowledge-base/embedding/download-recommended";
+
         // SignalR push hub for indexing status changes. Full path (mapped via MapHub, not the FastEndpoints prefix),
         // mirroring the other local hubs. Each push carries the sanitized document id + status; Operator-gated because
         // subscribers see which documents are being indexed.

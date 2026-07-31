@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Coder.Tools;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
@@ -107,7 +108,7 @@ public sealed class CoderAgentSendIntersectionTests
         // merge, never via the registry.
         var offerProvider = new LocalToolOfferProvider(new LocalAgentToolRegistry(),
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
-            [capableModel],
+            StubNodeRuntimeSettings.Create().WithToolCapableModels(capableModel).Build(),
             allowCloudKnowledgeAccess: false);
 
         store = Substitute.For<IAgentDefinitionStore>();
