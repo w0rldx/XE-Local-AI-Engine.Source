@@ -11,7 +11,12 @@ vi.mock("react-i18next", () => ({
 import { DevelopmentContainerRuntimePanel } from "@/features/development/components/DevelopmentContainerRuntimePanel";
 import type { XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerRuntimeResponse as ContainerRuntimeStatus } from "@/core/api/generated/types.gen";
 
-function renderPanel(runtime: ContainerRuntimeStatus | undefined, onConfirm = vi.fn(), confirmError?: string) {
+function renderPanel(
+	runtime: ContainerRuntimeStatus | undefined,
+	onConfirm = vi.fn(),
+	confirmError?: string,
+	sandboxProvider?: string,
+) {
 	render(
 		<MantineProvider>
 			<DevelopmentContainerRuntimePanel
@@ -19,6 +24,7 @@ function renderPanel(runtime: ContainerRuntimeStatus | undefined, onConfirm = vi
 				onConfirm={onConfirm}
 				confirming={false}
 				confirmError={confirmError}
+				sandboxProvider={sandboxProvider}
 			/>
 		</MantineProvider>,
 	);
@@ -127,14 +133,24 @@ describe("DevelopmentContainerRuntimePanel", () => {
 		);
 	});
 
-	it("states that container-backed execution is not yet in use", () => {
+	it("states that container-backed execution is not yet in use under the process provider", () => {
 		// Phase 1 honesty check. Without this line an operator reading a green container-runtime banner would
 		// reasonably conclude their Development Mode runs are already containerised. They are not.
-		renderPanel({ ready: true, status: "ready", message: "ok", requiresOperatorConfirmation: false });
+		renderPanel({ ready: true, status: "ready", message: "ok", requiresOperatorConfirmation: false }, vi.fn(), undefined, "process");
 
 		expect(screen.getByTestId("development-container-runtime-not-yet-in-use").textContent).toContain(
 			"not switched on yet",
 		);
+	});
+
+	it("stops claiming container execution is off once the container provider is the one in force", () => {
+		// F-058: this sentence was hard-coded, so with `Development:Sandbox:Provider=docker` live and a container
+		// demonstrably running it told the operator the opposite of what the same screen's banner said.
+		renderPanel({ ready: true, status: "ready", message: "ok", requiresOperatorConfirmation: false }, vi.fn(), undefined, "docker");
+
+		const note = screen.getByTestId("development-container-runtime-not-yet-in-use").textContent ?? "";
+		expect(note).not.toContain("not switched on yet");
+		expect(note).toContain("execute inside this container runtime");
 	});
 
 	it("renders nothing when the capability response carries no container runtime", () => {

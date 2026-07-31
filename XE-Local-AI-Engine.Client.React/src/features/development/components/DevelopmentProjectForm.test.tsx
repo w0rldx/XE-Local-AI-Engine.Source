@@ -481,4 +481,40 @@ describe("DevelopmentProjectForm", () => {
 		expect(await screen.findByText("The repository registration response was incomplete.")).toBeTruthy();
 		expect(screen.getByRole("dialog")).toBeTruthy();
 	});
+
+	it("describes the isolation posture of the provider actually in force, on the control being consented to", () => {
+		// F-058. Both strings were hard-coded to the process posture. Under the container provider the notice on the
+		// trust checkbox was false in the UNSAFE direction — it claimed weaker isolation than was in force, on the
+		// exact control the operator ticks to proceed. Asserting both directions is the point: a fix that simply
+		// reworded the sentence would still be wrong for one of the two providers.
+		const renderForm = (sandboxProvider?: string) =>
+			render(
+				<MantineProvider>
+					<DevelopmentProjectForm
+						repositories={[]}
+						repositoriesLoading={false}
+						isRegistering={false}
+						isSubmitting={false}
+						onRegister={vi.fn()}
+						onSubmit={vi.fn()}
+						sandboxProvider={sandboxProvider}
+					/>
+				</MantineProvider>,
+			);
+
+		// The test id sits on the checkbox input, whose textContent is empty — the acknowledgement wording lives in the
+		// rendered label, which is the thing the operator actually reads.
+		renderForm("process");
+		expect(screen.getByTestId("development-security-notice").textContent).toContain("run as your host user");
+		expect(screen.getByText(/host-user permissions/)).toBeTruthy();
+
+		cleanup();
+
+		renderForm("docker");
+		const containerNotice = screen.getByTestId("development-security-notice").textContent ?? "";
+		expect(containerNotice).not.toContain("run as your host user");
+		expect(containerNotice).toContain("hardened container");
+		expect(screen.getByText(/container sandbox/)).toBeTruthy();
+		expect(screen.queryByText(/host-user permissions/)).toBeNull();
+	});
 });
