@@ -1668,6 +1668,7 @@ export type XeLocalAiEngineClientEndpointsImagesV1RetrieveImageRequest = {
 export type XeLocalAiEngineClientEndpointsImagesV1StartImageModelDownloadResponse = {
 	modelName: string;
 	accepted: boolean;
+	alreadyInFlight: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsImagesV1StartImageModelDownloadRequest = {
@@ -2566,6 +2567,18 @@ export type XeLocalAiEngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActionR
 	triggerCondition?: string | null;
 	scope?: string | null;
 	priority?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1ImageModelDownloadStatusResponse = {
+	modelName: string;
+	phase: string;
+	completedBytes?: number | null;
+	totalBytes?: number | null;
+	sanitizedError?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1ListImageModelDownloadsResponse = {
+	items: Array<XeLocalAiEngineClientEndpointsImagesV1ImageModelDownloadStatusResponse>;
 };
 
 export type GetVoiceManifestData = {
@@ -6183,6 +6196,33 @@ export type RetrieveImageResponses = {
 };
 
 export type RetrieveImageResponse = RetrieveImageResponses[keyof RetrieveImageResponses];
+
+export type ListImageModelDownloadsData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/images/models/downloads";
+};
+
+export type ListImageModelDownloadsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListImageModelDownloadsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsImagesV1ListImageModelDownloadsResponse;
+};
+
+export type ListImageModelDownloadsResponse = ListImageModelDownloadsResponses[keyof ListImageModelDownloadsResponses];
 
 export type StartImageModelDownloadData = {
 	body: XeLocalAiEngineClientEndpointsImagesV1StartImageModelDownloadRequest;

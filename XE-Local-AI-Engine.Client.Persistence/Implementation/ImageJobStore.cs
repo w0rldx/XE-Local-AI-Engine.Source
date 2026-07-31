@@ -75,7 +75,13 @@ public sealed class ImageJobStore(NodeChatDbContext dbContext) : IImageJobStore
         _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task MarkSucceededAsync(Guid jobId, Guid imageId, long completedAtUtc, long durationMs, CancellationToken cancellationToken)
+    public async Task MarkSucceededAsync(Guid jobId,
+        Guid imageId,
+        long completedAtUtc,
+        long durationMs,
+        int outputWidth,
+        int outputHeight,
+        CancellationToken cancellationToken)
     {
         var entity = await LoadTrackedAsync(jobId, cancellationToken).ConfigureAwait(false);
         if (entity is null)
@@ -87,6 +93,15 @@ public sealed class ImageJobStore(NodeChatDbContext dbContext) : IImageJobStore
         entity.ImageId = imageId;
         entity.CompletedAtUtc = completedAtUtc;
         entity.DurationMs = durationMs;
+
+        // Replace the requested dimensions with the produced ones so the job row describes the PNG that exists. Guarded
+        // against a non-positive value so a runtime that could not determine its output never blanks the row.
+        if (outputWidth > 0 && outputHeight > 0)
+        {
+            entity.Width = outputWidth;
+            entity.Height = outputHeight;
+        }
+
         _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 

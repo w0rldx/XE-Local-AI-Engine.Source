@@ -141,11 +141,17 @@ internal sealed class StableDiffusionCppRuntime : IImageRuntime
             throw new StableDiffusionRuntimeException("The image runtime reported completion but returned no image data.");
         }
 
+        // Report the dimensions of the bytes we actually got back, NOT the requested ones: sd-server rounds the latent
+        // grid up to a multiple of 64, so a requested 100x512 arrives as 128x512. Echoing the request here made every
+        // consumer (job card, stored image metadata) state a false fact about the produced PNG. The request is only the
+        // fallback for a payload whose header cannot be read.
+        var produced = PngImageDimensions.TryRead(bytes);
+
         return new ImageGenerationResult
         {
             ImageBytes = bytes,
-            Width = request.Width,
-            Height = request.Height,
+            Width = produced?.Width ?? request.Width,
+            Height = produced?.Height ?? request.Height,
             Seed = state.Seed ?? request.Seed,
             Format = "png",
             Duration = Stopwatch.GetElapsedTime(startedTimestamp)

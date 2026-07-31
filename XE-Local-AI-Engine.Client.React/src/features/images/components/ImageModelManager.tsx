@@ -6,7 +6,7 @@ import { useTranslation } from "react-i18next";
 import { ApiError } from "@/core/api/errors/ApiError";
 import { toast } from "@/core/ui/notifications/Toast";
 import type { ImageModelView } from "@/features/images/models/ImageModels";
-import { useStartImageModelDownload } from "@/features/images/queries/useImageQueries";
+import { useImageModelDownloads, useStartImageModelDownload } from "@/features/images/queries/useImageQueries";
 
 // Diffusion families the download form offers. Must match the backend ImageModelFamily enum names (parsed
 // case-insensitively). Step 1 targets SD1.5 (single-file); the others are admitted but need extra parts — the minimal
@@ -31,22 +31,49 @@ interface ImageModelManagerProps {
 	onPendingDownloadChange?: (pending: boolean) => void;
 }
 
-// Minimal image-model management (kept intentionally minimal — full download-progress UI is a follow-up). Lists installed
-// image models and offers a detached "download model" action (202 accepted) that starts a single-file (Diffusion-part)
-// weight download. The backend exposes no progress or cancel yet, so the UI sets expectations instead: once a download
-// starts we track the target model name, disable the trigger, and show an indeterminate progress bar with copy telling
-// the tester it runs in the background. The page polls listImageModels while pending; when the model appears in the
-// list the pending state clears and the bar disappears.
+// Minimal image-model management. Lists installed image models and offers a "download model" action (202 accepted) that
+// starts a single-file (Diffusion-part) weight download. The download itself runs on the backend coordinator, which
+// records a terminal phase for every attempt; while one is pending this component polls that status so a FAILED
+// download surfaces its reason instead of leaving the operator watching an indeterminate bar forever (F-031).
 export function ImageModelManager({ models, isLoading, onPendingDownloadChange }: ImageModelManagerProps) {
 	const { t } = useTranslation();
 	const [draft, setDraft] = useState<DownloadDraft>(emptyDraft);
 	const [pendingModelName, setPendingModelName] = useState<string | null>(null);
+	const [downloadError, setDownloadError] = useState<string | null>(null);
 	const downloadMutation = useStartImageModelDownload();
 
 	const canSubmit = draft.repoId.trim().length > 0 && draft.fileName.trim().length > 0 && draft.modelName.trim().length > 0;
 	const isDownloadPending = pendingModelName !== null;
 
-	// Clear the pending indicator once the downloaded model surfaces in the polled list.
+	const downloadsQuery = useImageModelDownloads(isDownloadPending);
+	const pendingDownload = downloadsQuery.data?.find((entry) => entry.modelName === pendingModelName);
+
+	// Real percentage once the source reported a content length; null keeps the indeterminate bar.
+	const downloadPercent =
+		pendingDownload?.totalBytes != null && pendingDownload.totalBytes > 0 && pendingDownload.completedBytes != null
+			? Math.min(100, Math.round((pendingDownload.completedBytes / pendingDownload.totalBytes) * 100))
+			: null;
+
+	// Resolve the pending download the moment the backend reports a terminal phase. A failure raises a toast AND leaves
+	// an inline reason on the card; a success/cancel just clears the indicator. Without this the UI could only ever
+	// observe success (the model appearing), which is precisely why a typo used to hang forever.
+	useEffect(() => {
+		if (pendingModelName === null || pendingDownload === undefined) {
+			return;
+		}
+		if (pendingDownload.phase === "Failed") {
+			setDownloadError(pendingDownload.sanitizedError ?? t("pages.images.models.download.failed", "The model download failed."));
+			toast.error(pendingDownload.sanitizedError ?? t("pages.images.models.download.failed", "The model download failed."));
+			setPendingModelName(null);
+			return;
+		}
+		if (pendingDownload.phase === "Completed" || pendingDownload.phase === "Cancelled") {
+			setPendingModelName(null);
+		}
+	}, [pendingDownload, pendingModelName, t]);
+
+	// Belt-and-braces: clear the indicator once the downloaded model surfaces in the polled list, even if the status
+	// registry was lost (a node restart drops it) and the terminal phase above never arrives.
 	useEffect(() => {
 		if (pendingModelName !== null && models.some((model) => model.modelName === pendingModelName)) {
 			setPendingModelName(null);
@@ -63,6 +90,7 @@ export function ImageModelManager({ models, isLoading, onPendingDownloadChange }
 			return;
 		}
 		const modelName = draft.modelName.trim();
+		setDownloadError(null);
 		downloadMutation.mutate(
 			{
 				modelName,
@@ -161,14 +189,27 @@ export function ImageModelManager({ models, isLoading, onPendingDownloadChange }
 				<Alert variant="light" color="gray" data-testid="image-model-download-hint">
 					{t("pages.images.models.download.hint", "Single-file (SD1.5-style) weights only. Multi-part models are a follow-up.")}
 				</Alert>
+				{downloadError !== null ? (
+					<Alert variant="light" color="red" data-testid="image-model-download-error">
+						{downloadError}
+					</Alert>
+				) : null}
 				{isDownloadPending ? (
 					<Stack gap={4} data-testid="image-model-download-progress">
-						<Progress value={100} striped={true} animated={true} size="sm" />
+						<Progress
+							value={downloadPercent ?? 100}
+							striped={true}
+							animated={true}
+							size="sm"
+							data-testid="image-model-download-bar"
+						/>
 						<Text size="xs" c="dimmed">
-							{t(
-								"pages.images.models.download.inFlight",
-								"Download runs in the background; the model appears when ready. Large files can take several minutes.",
-							)}
+							{downloadPercent === null
+								? t(
+										"pages.images.models.download.inFlight",
+										"Download runs in the background; the model appears when ready. Large files can take several minutes.",
+									)
+								: t("pages.images.models.download.progress", "Downloading… {{percent}}%", { percent: downloadPercent })}
 						</Text>
 					</Stack>
 				) : null}

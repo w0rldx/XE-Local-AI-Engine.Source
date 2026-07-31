@@ -2903,6 +2903,8 @@
 					"title": "Modell herunterladen",
 					"started": "Download gestartet. Das Modell erscheint, sobald es bereit ist.",
 					"inFlight": "Der Download läuft im Hintergrund; das Modell erscheint, sobald es bereit ist. Große Dateien können mehrere Minuten dauern.",
+					"failed": "Der Modell-Download ist fehlgeschlagen.",
+					"progress": "Wird heruntergeladen… {{percent}} %",
 					"error": "Der Modell-Download konnte nicht gestartet werden.",
 					"hint": "Nur Einzeldatei-Gewichte (SD1.5-Stil). Mehrteilige Modelle folgen später.",
 					"submit": "Herunterladen",
