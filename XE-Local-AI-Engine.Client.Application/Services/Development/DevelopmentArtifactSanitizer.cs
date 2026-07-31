@@ -7,6 +7,44 @@ internal static partial class DevelopmentArtifactSanitizer
 {
     private const string RedactedPath = "[REDACTED:development-path]";
 
+    /// <summary>
+    ///     How many trailing path segments a GENERIC redaction keeps, and how many leading ones it always destroys.
+    ///     <para>
+    ///         Measured cost of keeping none: a container running under a read-only root filesystem fails every
+    ///         <c>dotnet</c> invocation with <c>mkdir("/tmp/.dotnet/shm/session1", …) == -1; errno == EROFS</c>. The
+    ///         generic pass replaced the whole path, leaving a message that says a <c>mkdir</c> failed on a read-only
+    ///         filesystem without saying WHICH directory — for a fault whose entire diagnosis is which directory. The
+    ///         report was stored, rendered, and useless.
+    ///     </para>
+    ///     <para>
+    ///         Keeping the trailing two segments is deliberately not "keep the path". Host IDENTITY lives in the
+    ///         LEADING segments — <c>/home/&lt;user&gt;</c>, <c>/Users/&lt;user&gt;</c>, <c>C:\Users\&lt;user&gt;</c>,
+    ///         <c>/mnt/c/Users/&lt;user&gt;</c>, <c>/run/user/&lt;uid&gt;</c> — so at least the first two are always
+    ///         replaced, whatever the path's depth, and a path too shallow to have a tail left over after that is
+    ///         redacted whole. <c>/etc/passwd</c> and <c>/home/dev</c> therefore still collapse to the bare marker.
+    ///     </para>
+    ///     <para>
+    ///         What survives is a RELATIVE tail, which is the same class of information the targeted pass above
+    ///         already preserves for engine roots (see the lookbehind comment) — a tail carries no host layout, only
+    ///         the leaf of whatever the command was touching. This is the conservative half of the fix: the fault
+    ///         becomes identifiable without the redaction becoming optional.
+    ///     </para>
+    /// </summary>
+    private const int PreservedTailSegments = 2;
+
+    private const int AlwaysRedactedLeadingSegments = 2;
+
+    private static readonly char[] PathSeparators = ['/', '\\'];
+
+    /// <summary>
+    ///     Segments whose IMMEDIATE successor names a principal (a user account or a uid), wherever they appear in the
+    ///     path. The preserved tail may never begin at or before that successor. This is what makes the redaction depth-
+    ///     independent: <c>/home/&lt;user&gt;</c> puts the principal second, <c>/run/user/&lt;uid&gt;</c> third, and WSL's
+    ///     <c>/mnt/c/Users/&lt;user&gt;</c> fourth — a purely positional rule preserved the last of those verbatim.
+    /// </summary>
+    private static readonly HashSet<string> IdentityContainerSegments =
+        new(StringComparer.OrdinalIgnoreCase) { "home", "Users", "user" };
+
     [GeneratedRegex(@"(?<![A-Za-z0-9])![A-Za-z][A-Za-z0-9]{11,}(?![A-Za-z0-9])", RegexOptions.ExplicitCapture, 2000)]
     private static partial Regex BarePasswordLikeValueRegex();
 
@@ -25,6 +63,65 @@ internal static partial class DevelopmentArtifactSanitizer
 
     [GeneratedRegex(@"\\\\[^\s\\/]+[\\/][^\s\x00-\x1F\""'<>|]+", RegexOptions.ExplicitCapture, 2000)]
     private static partial Regex UncAbsolutePathRegex();
+
+    /// <summary>
+    ///     Replaces one matched absolute path with the marker plus, where the path is deep enough for the remainder to
+    ///     carry no host identity, its trailing segments. See <see cref="PreservedTailSegments" /> for why.
+    /// </summary>
+    internal static string RedactAbsolutePath(string value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+
+        // A trailing separator would otherwise consume one of the walk-back steps below on an empty segment.
+        var trimmed = value.TrimEnd(PathSeparators);
+        var trailingSeparators = value[trimmed.Length..];
+        var segments = trimmed.Split(PathSeparators, StringSplitOptions.RemoveEmptyEntries);
+
+        // A Windows drive letter is not a segment that can name anybody: counting "C:" would shift the identity
+        // segment of "C:\Users\<user>\..." into the preserved tail, which is the one thing this must never do.
+        var namedSegmentCount = segments.Length > 0 && segments[0].Length == 2 && segments[0][1] == ':' && char.IsAsciiLetter(segments[0][0])
+            ? segments.Length - 1
+            : segments.Length;
+
+        // A POSITIONAL rule alone is not enough, because identity is not always in the first two segments. On this very
+        // box (WSL2) `/mnt/c/Users/<user>` puts the username FOURTH, and `/run/user/<uid>` puts the uid THIRD — so the
+        // positional rule happily preserved `[REDACTED]/Users/<user>`, leaking exactly what it set out to destroy.
+        // Anchor on the CONTAINER instead: whatever segment follows a home-directory container names a principal, so the
+        // preserved tail may never begin at or before it, at any depth.
+        var driveOffset = segments.Length - namedSegmentCount;
+        var minimumTailStart = AlwaysRedactedLeadingSegments;
+        for (var index = 0; index < segments.Length; index++)
+        {
+            if (!IdentityContainerSegments.Contains(segments[index]))
+            {
+                continue;
+            }
+
+            // The principal is index + 1; the tail must start strictly after it. Expressed in NAMED-segment space so a
+            // leading drive letter cannot shift the boundary.
+            minimumTailStart = Math.Max(minimumTailStart, index - driveOffset + 2);
+        }
+
+        var available = namedSegmentCount - minimumTailStart;
+        var keep = Math.Min(PreservedTailSegments, available);
+        if (keep <= 0)
+        {
+            return RedactedPath;
+        }
+
+        var cut = trimmed.Length;
+        for (var index = 0; index < keep; index++)
+        {
+            cut = trimmed.LastIndexOfAny(PathSeparators, cut - 1);
+            if (cut <= 0)
+            {
+                return RedactedPath;
+            }
+        }
+
+        // The original separator run is kept verbatim so a Windows tail still reads as a Windows tail.
+        return RedactedPath + trimmed[cut..] + trailingSeparators;
+    }
 
     /// <summary>
     ///     The roots a Development artifact's targeted redaction must cover: the three HOST roots, plus every root the
@@ -135,9 +232,12 @@ internal static partial class DevelopmentArtifactSanitizer
                 StringComparison.OrdinalIgnoreCase);
         }
 
-        sanitized = WindowsAbsolutePathRegex().Replace(sanitized, RedactedPath);
-        sanitized = UncAbsolutePathRegex().Replace(sanitized, RedactedPath);
-        sanitized = UnixAbsolutePathRegex().Replace(sanitized, RedactedPath);
+        // MatchEvaluator rather than a constant: the replacement keeps the path's trailing segments when the path is
+        // deep enough for them to be layout-free. Regex.Replace does not re-scan replacement text, so a marker written
+        // by an earlier pass is never re-matched by a later one.
+        sanitized = WindowsAbsolutePathRegex().Replace(sanitized, static match => RedactAbsolutePath(match.Value));
+        sanitized = UncAbsolutePathRegex().Replace(sanitized, static match => RedactAbsolutePath(match.Value));
+        sanitized = UnixAbsolutePathRegex().Replace(sanitized, static match => RedactAbsolutePath(match.Value));
 
         var scan = MemoryProposalSecretScanner.Scan(string.Empty,
             string.Empty,

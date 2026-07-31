@@ -19,20 +19,21 @@ internal static class AddNodeModelCapabilitiesAndMcpExtensions
         ArgumentNullException.ThrowIfNull(configuration);
 
         builder.Services.AddSingleton<ILocalChatRuntimePackageBuilder, LocalChatRuntimePackageBuilder>();
-        // LocalToolOfferProvider is a singleton with a synchronous hot offer path, so its tool-capable allow-list is
-        // SEEDED once here from INodeRuntimeSettings (migrated AgentHome:ToolCapableModels, stored > seed > default)
-        // rather than re-read per offer. The blocking accessor read runs once at singleton construction; a runtime edit
-        // applies on the next process restart.
+        // LocalToolOfferProvider takes INodeRuntimeSettings itself and reads the migrated AgentHome:ToolCapableModels
+        // allow-list LIVE on each offer (see LocalToolOfferProvider.IsToolCapable). It used to be seeded here once, which
+        // meant an operator could add their model in Node Settings, save successfully, and still get no tools until the
+        // node restarted — with no restart hint on that field (F-001/F-025). Do NOT re-introduce the seed: the read goes
+        // through CachedNodeSettingsStore (a memory-cache hit that SaveAsync re-primes), and two other consumers of this
+        // same setting already read it live per request.
         builder.Services.AddSingleton<ILocalToolOfferProvider>(sp =>
         {
-            var runtimeSettings = sp.GetRequiredService<INodeRuntimeSettings>();
-            var toolCapableModels = runtimeSettings.GetToolCapableModels();
             // Seed the knowledge-tool cloud-locality gate from KnowledgeBase:AllowCloudModelAccess (default false):
             // knowledge tools are offered only to node-local models unless the operator explicitly opts a cloud model in.
+            // This one IS a genuine appsettings knob (not a node setting), so seeding it here is correct.
             var knowledgeOptions = sp.GetRequiredService<IOptions<KnowledgeBaseOptions>>().Value;
             return new LocalToolOfferProvider(sp.GetRequiredService<IAgentToolRegistry>(),
                 sp.GetRequiredService<IMcpToolRegistry>(),
-                toolCapableModels,
+                sp.GetRequiredService<INodeRuntimeSettings>(),
                 knowledgeOptions.AllowCloudModelAccess);
         });
         // MCP tool extensibility. The connection manager owns the MCP client lifecycle and republishes the dynamic

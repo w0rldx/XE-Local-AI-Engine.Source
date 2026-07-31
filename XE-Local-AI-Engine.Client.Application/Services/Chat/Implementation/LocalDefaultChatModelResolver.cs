@@ -87,6 +87,13 @@ public sealed class LocalDefaultChatModelResolver(
     private static bool IsExcludedFromChat(IReadOnlyDictionary<string, ModelClassificationRecord> index,
         string modelName)
     {
+        // A speculative-decoding drafter is structurally excluded, ahead of every override: it is a partial model that
+        // only runs inside another process's --spec-model slot, so no operator override can make it chat-eligible.
+        if (ModelKindDetector.IsDraftName(modelName))
+        {
+            return true;
+        }
+
         if (IsPersistedNonChat(index, modelName))
         {
             return true;
@@ -116,7 +123,7 @@ public sealed class LocalDefaultChatModelResolver(
         }
 
         var effectiveKind = record.OverrideKind ?? record.DetectedKind;
-        return effectiveKind is ModelKind.Embedding or ModelKind.Reranker;
+        return effectiveKind is ModelKind.Embedding or ModelKind.Reranker or ModelKind.Draft;
     }
 
     /// <summary>
@@ -130,6 +137,6 @@ public sealed class LocalDefaultChatModelResolver(
     {
         return index.TryGetValue(modelName, out var record)
                && record.OverrideKind is { } overrideKind
-               && overrideKind is not (ModelKind.Embedding or ModelKind.Reranker);
+               && overrideKind is not (ModelKind.Embedding or ModelKind.Reranker or ModelKind.Draft);
     }
 }

@@ -56,6 +56,8 @@ public sealed class GgufVariantRecommender : IGgufVariantRecommender
             verdicts[i] = ClassifyFit(files[i].SizeBytes, freeVramBytes);
         }
 
+        // A speculative-decoding drafter is never THE recommended variant: it is a companion to the base weights, not a
+        // usable chat model, and being the smallest high-quality-looking file in the repo it would otherwise win outright.
         var recommendedIndex = PickRecommendedIndex(files, tiers, verdicts);
 
         var annotations = new GgufVariantAnnotation[files.Count];
@@ -108,23 +110,34 @@ public sealed class GgufVariantRecommender : IGgufVariantRecommender
     // quality tier among them wins (ties broken by larger size). Otherwise the best Tight file wins by the same order.
     // When free VRAM is known but nothing fits, the smallest file wins. When VRAM is unknown (no probe ran), a SweetSpot
     // file is preferred, then a Balanced one, and failing both the median file by size is chosen.
+    // Speculative-decoding drafters are excluded from every branch: a drafter is a companion of the base weights, not a
+    // runnable chat model, and being both tiny and high-quality-looking it would otherwise win the fit-first ordering
+    // outright. Returns -1 (no recommendation) when the repo lists nothing BUT drafters.
     private static int PickRecommendedIndex(IReadOnlyList<GgufRepoFile> files,
         IReadOnlyList<GgufQuantTier> tiers,
         IReadOnlyList<GgufFitVerdict> verdicts)
     {
-        var fits = IndicesWith(verdicts, GgufFitVerdict.Fits);
+        var selectable = Enumerable.Range(start: 0, files.Count)
+                                   .Where(i => !GgufDraftModel.IsDraftQuant(files[i].Quant))
+                                   .ToList();
+        if (selectable.Count == 0)
+        {
+            return -1;
+        }
+
+        var fits = IndicesWith(selectable, verdicts, GgufFitVerdict.Fits);
         if (fits.Count > 0)
         {
             return BestByTierThenSize(files, tiers, fits);
         }
 
-        var tight = IndicesWith(verdicts, GgufFitVerdict.Tight);
+        var tight = IndicesWith(selectable, verdicts, GgufFitVerdict.Tight);
         if (tight.Count > 0)
         {
             return BestByTierThenSize(files, tiers, tight);
         }
 
-        var wontFit = IndicesWith(verdicts, GgufFitVerdict.WontFit);
+        var wontFit = IndicesWith(selectable, verdicts, GgufFitVerdict.WontFit);
         if (wontFit.Count > 0)
         {
             // Nothing fits on a known GPU → the least-bad option is the smallest file.
@@ -132,20 +145,20 @@ public sealed class GgufVariantRecommender : IGgufVariantRecommender
         }
 
         // No probe: every verdict is Unknown. Prefer the quality sweet-spot, then the balanced default.
-        var sweetSpot = IndicesWithTier(tiers, GgufQuantTier.SweetSpot);
+        var sweetSpot = IndicesWithTier(selectable, tiers, GgufQuantTier.SweetSpot);
         if (sweetSpot.Count > 0)
         {
             return sweetSpot.OrderByDescending(i => files[i].SizeBytes).First();
         }
 
-        var balanced = IndicesWithTier(tiers, GgufQuantTier.Balanced);
+        var balanced = IndicesWithTier(selectable, tiers, GgufQuantTier.Balanced);
         if (balanced.Count > 0)
         {
             return balanced.OrderByDescending(i => files[i].SizeBytes).First();
         }
 
         // No sweet-spot/balanced file → the median by size (a conservative middle pick).
-        var bySize = Enumerable.Range(0, files.Count).OrderBy(i => files[i].SizeBytes).ToList();
+        var bySize = selectable.OrderBy(i => files[i].SizeBytes).ToList();
         return bySize[bySize.Count / 2];
     }
 
@@ -159,31 +172,15 @@ public sealed class GgufVariantRecommender : IGgufVariantRecommender
                .First();
     }
 
-    private static List<int> IndicesWith(IReadOnlyList<GgufFitVerdict> verdicts, GgufFitVerdict verdict)
+    // Both index filters walk the pre-filtered `candidates` set (drafters already removed) rather than every file, so
+    // no branch can reintroduce a drafter.
+    private static List<int> IndicesWith(IReadOnlyList<int> candidates, IReadOnlyList<GgufFitVerdict> verdicts, GgufFitVerdict verdict)
     {
-        var result = new List<int>();
-        for (var i = 0; i < verdicts.Count; i++)
-        {
-            if (verdicts[i] == verdict)
-            {
-                result.Add(i);
-            }
-        }
-
-        return result;
+        return [.. candidates.Where(i => verdicts[i] == verdict)];
     }
 
-    private static List<int> IndicesWithTier(IReadOnlyList<GgufQuantTier> tiers, GgufQuantTier tier)
+    private static List<int> IndicesWithTier(IReadOnlyList<int> candidates, IReadOnlyList<GgufQuantTier> tiers, GgufQuantTier tier)
     {
-        var result = new List<int>();
-        for (var i = 0; i < tiers.Count; i++)
-        {
-            if (tiers[i] == tier)
-            {
-                result.Add(i);
-            }
-        }
-
-        return result;
+        return [.. candidates.Where(i => tiers[i] == tier)];
     }
 }

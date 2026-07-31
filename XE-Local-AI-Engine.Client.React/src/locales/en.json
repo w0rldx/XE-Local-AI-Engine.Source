@@ -116,6 +116,9 @@
 				"noTestsTitle": "Validation executed no tests",
 				"current": "Current",
 				"invalidated": "Invalidated",
+				"supersededTitle": "This validation result is no longer current",
+				"supersededBody": "A validation run passed against an earlier state of this task, but the working tree has moved since. Its counts are not the current result — run deterministic validation again.",
+				"failedInvalidated": "The failed gate invalidated this task's approval evidence, which is why the report is marked invalidated. The failure below is still what happened.",
 				"base": "base",
 				"evidence": "Stored evidence",
 				"noEvidence": "No validation or review evidence yet.",
@@ -147,8 +150,19 @@
 				"command": {
 					"incomplete": "Did not complete",
 					"truncated": "Output truncated",
-					"exitCode": "exit"
+					"exitCode": "exit",
+					"capturedOutput": "Captured output"
 				}
+			},
+			"form": {
+				"securityWarning": "Development commands run as your host user. The managed worktree confines application-mediated changes, but it is not OS isolation and repository code may access other host resources.",
+				"securityWarningContainer": "Development commands run inside a hardened container — read-only root filesystem, all capabilities dropped, no host namespaces — with only the managed worktree and runtime directories mounted. Repository code still executes, so register only repositories you trust.",
+				"trustAcknowledgement": "I trust the selected repository to execute Development commands with my host-user permissions.",
+				"trustAcknowledgementContainer": "I trust the selected repository to execute Development commands inside this node's container sandbox."
+			},
+			"containerRuntime": {
+				"notYetInUse": "Container-backed execution is not switched on yet. Today's runs still use the supervised process sandbox; this preflight reports whether the container runtime will be available when they move.",
+				"inUse": "Development commands on this node execute inside this container runtime. A failure reported here stops runs; it does not fall back to the host."
 			}
 		},
 		"knowledgeBase": {
@@ -746,6 +760,7 @@
 			"loadingHistory": "Loading local chat history…",
 			"loadingMessages": "Loading messages…",
 			"modelUnavailable": "Unavailable",
+			"nativeReasoningLabel": "Native reasoning",
 			"reasoningLabel": "Reasoning",
 			"retryConnection": "Retry",
 			"stop": "Stop",
@@ -1334,7 +1349,7 @@
 				"allowedRange": "Allowed range",
 				"seconds": "seconds",
 				"minutes": "minutes",
-				"bytesPositive": "A positive number of bytes.",
+				"bytesPositive": "A positive number of bytes. Changes take effect without restarting the node.",
 				"errors": {
 					"range": "Enter a whole number within the allowed range.",
 					"format": "Must match the format b<number> (e.g. b9692).",
@@ -1354,25 +1369,27 @@
 				},
 				"defaultModelName": {
 					"label": "Default model",
-					"description": "The model used for local chat when none is selected. Leave blank to use the configured default."
+					"description": "The model used for local chat when none is selected. Leave blank to use the configured default. Applies after the node restarts."
 				},
 				"enableTools": {
 					"label": "Enable tools",
-					"description": "Allow local chat agents to call tools."
+					"description": "Allow local chat agents to call tools. Changes take effect without restarting the node."
 				},
 				"toolCapableModels": {
 					"label": "Tool-capable models",
-					"description": "Model names that support tool calling. Press Enter to add each name."
+					"description": "Model names that support tool calling. Press Enter to add each name. Changes take effect without restarting the node."
 				},
 				"runtime": {
 					"title": "Local model runtime",
 					"tagHint": "The recommended llama.cpp version is managed in the llama.cpp runtime updates card above."
 				},
 				"llamaMaxLoadedProcesses": {
-					"label": "Max loaded llama-server processes"
+					"label": "Max loaded llama-server processes",
+					"description": "Applies after the node restarts."
 				},
 				"llamaIdleTimeToLiveSeconds": {
-					"label": "Idle process time-to-live"
+					"label": "Idle process time-to-live",
+					"description": "Applies after the node restarts."
 				},
 				"keepModelWarm": {
 					"enabledLabel": "Keep a model warm",
@@ -1394,27 +1411,31 @@
 				},
 				"huggingFaceDefaultQuant": {
 					"label": "Default quantization",
-					"description": "Preferred GGUF quantization when downloading from Hugging Face (e.g. Q4_K_M)."
+					"description": "Preferred GGUF quantization when downloading from Hugging Face (e.g. Q4_K_M). Applies after the node restarts."
 				},
 				"worker": {
 					"title": "Worker limits"
 				},
 				"maxResponseSizeMb": {
-					"label": "Max response size"
+					"label": "Max response size",
+					"description": "Applies after the node restarts."
 				},
 				"advanced": {
 					"title": "Advanced (developer)",
-					"description": "Low-level orchestration and AgentHome limits. Most changes apply after a restart.",
+					"description": "Low-level orchestration and AgentHome limits. The orchestration idle timeout and pending tool-call age apply after a restart; the AgentHome limits apply immediately.",
 					"samplingNote": "Sampling defaults are configured per message during a chat."
 				},
 				"orchestrationIdleTimeoutSeconds": {
-					"label": "Orchestration idle timeout"
+					"label": "Orchestration idle timeout",
+					"description": "Applies after the node restarts."
 				},
 				"agentHomePrepareTimeoutSeconds": {
-					"label": "AgentHome prepare timeout"
+					"label": "AgentHome prepare timeout",
+					"description": "Changes take effect without restarting the node."
 				},
 				"agentHomeCommandTimeoutSeconds": {
-					"label": "AgentHome command timeout"
+					"label": "AgentHome command timeout",
+					"description": "Changes take effect without restarting the node."
 				},
 				"agentHomeMaxSelectedFolderBytes": {
 					"label": "AgentHome max selected folder size"
@@ -1423,7 +1444,8 @@
 					"label": "AgentHome max patch size"
 				},
 				"maxPendingToolCallAgeMinutes": {
-					"label": "Max pending tool-call age"
+					"label": "Max pending tool-call age",
+					"description": "Applies after the node restarts."
 				},
 				"speculativeMode": {
 					"label": "Speculative decoding",
@@ -1439,12 +1461,13 @@
 				},
 				"speculativeDraftModel": {
 					"label": "Draft model",
-					"description": "An installed chat-capable model used as the drafter. Must share the target model's tokenizer family.",
+					"description": "An installed chat-capable model used as the drafter. Must share the target model's tokenizer family. Applies after the node restarts.",
 					"placeholder": "Select a draft model",
 					"empty": "No installed chat models"
 				},
 				"speculativeDraftMaxTokens": {
-					"label": "Draft tokens per step"
+					"label": "Draft tokens per step",
+					"description": "Applies after the node restarts."
 				},
 				"chatCacheReuse": {
 					"label": "Prompt cache reuse",
@@ -1461,6 +1484,14 @@
 					"downloadStarted": "Downloading the recommended reranker ({{model}}).",
 					"downloadInFlight": "The recommended reranker ({{model}}) is already downloading.",
 					"downloadError": "Could not start the recommended reranker download."
+				},
+				"embeddingModel": {
+					"downloadRecommended": "Download recommended embedding model",
+					"recommendedHelp": "Required for the knowledge base: without an embedding model, documents cannot be indexed. Recommended: nomic-embed-text-v1.5 (~274 MB).",
+					"downloadAlreadyInstalled": "The recommended embedding model ({{model}}) is already installed.",
+					"downloadStarted": "Downloading the recommended embedding model ({{model}}).",
+					"downloadInFlight": "The recommended embedding model ({{model}}) is already downloading.",
+					"downloadError": "Could not start the recommended embedding model download."
 				},
 				"usageRates": {
 					"title": "Usage cost rates",
@@ -1632,12 +1663,14 @@
 					"chat": "Chat",
 					"embedding": "Embedding",
 					"reranker": "Reranker",
+					"draft": "Draft (speculative decoding)",
 					"unknown": "Unknown"
 				},
 				"capability": {
 					"tools": "Tools",
 					"vision": "Vision",
-					"thinking": "Thinking"
+					"thinking": "Thinking",
+					"nativeReasoning": "Native reasoning"
 				},
 				"overrideLabel": "Override type",
 				"reset": "Reset to detected"
@@ -1684,6 +1717,8 @@
 					"inspectError": "Could not load this repository's files.",
 					"noFiles": "No downloadable GGUF files found.",
 					"dynamic": "Dynamic",
+					"draft": "Draft model",
+					"draftHint": "Speculative-decoding drafter — not a chat model",
 					"recommended": "Recommended",
 					"columns": {
 						"quant": "Quant",
@@ -2557,9 +2592,11 @@
 					},
 					"updatedAt": "Updated {{time}}",
 					"refreshButton": "Refresh catalog",
+					"noRefreshSource": "Bundled catalog only — no refresh source is configured.",
 					"toasts": {
 						"refreshed": "The model catalog was refreshed.",
-						"refreshError": "Could not refresh the model catalog."
+						"refreshError": "Could not refresh the model catalog.",
+						"noRefreshSource": "No catalog refresh source is configured, so the bundled catalog is in use. There is nothing to fetch."
 					}
 				}
 			},
@@ -2869,6 +2906,8 @@
 					"title": "Download a model",
 					"started": "Download started. The model will appear once ready.",
 					"inFlight": "Download runs in the background; the model appears when ready. Large files can take several minutes.",
+					"failed": "The model download failed.",
+					"progress": "Downloading… {{percent}}%",
 					"error": "Could not start the model download.",
 					"hint": "Single-file (SD1.5-style) weights only. Multi-part models are a follow-up.",
 					"submit": "Download",
@@ -2896,6 +2935,14 @@
 			"saved": "Workflow saved.",
 			"defaultName": "Untitled workflow",
 			"deleteHint": "Tip: select a block or connection and press Delete (or Backspace) to remove it. Start and End cannot be removed.",
+			"runs": {
+				"title": "Runs on this node",
+				"description": "Runs are held on the node, not in this browser tab. Reattach to follow a run again after a reload, or cancel it to free its slot.",
+				"cancelAll": "Cancel all runs",
+				"cancelledCount": "Cancelled {{count}} run(s).",
+				"reattachAria": "Reattach to run",
+				"cancelAria": "Cancel run"
+			},
 			"list": {
 				"empty": "No saved workflows yet. Create one to get started.",
 				"openAria": "Open workflow",
@@ -2981,6 +3028,7 @@
 				"execute": "Could not start the run.",
 				"continue": "Could not continue the run.",
 				"cancel": "Could not cancel the run.",
+				"cancelAll": "Could not cancel the runs.",
 				"conflict": "This workflow changed elsewhere. Reload and reapply your edits."
 			}
 		},

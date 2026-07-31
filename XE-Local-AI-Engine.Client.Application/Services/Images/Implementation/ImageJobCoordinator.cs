@@ -295,7 +295,12 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
                              .ConfigureAwait(false);
 
             var durationMs = (long)result.Duration.TotalMilliseconds;
-            await RunStoreAsync(store => store.MarkSucceededAsync(jobId, imageId, NowUnixMs(), durationMs, CancellationToken.None), jobId, "mark succeeded").ConfigureAwait(false);
+            // The runtime reports the dimensions of the PNG it actually produced (rounded up to a multiple of 64), which
+            // is what the job row must record — the requested size is not what the operator can see.
+            await RunStoreAsync(store => store.MarkSucceededAsync(jobId, imageId, NowUnixMs(), durationMs, result.Width, result.Height, CancellationToken.None),
+                           jobId,
+                           "mark succeeded")
+                .ConfigureAwait(false);
             PushStatus(jobId, ImageJobStatus.Succeeded, queuePosition: null, elapsedMs: durationMs, imageId: imageId, sanitizedError: null, isInitialOrTerminal: true);
         }
         catch (OperationCanceledException)

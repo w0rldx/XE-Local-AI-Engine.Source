@@ -67,6 +67,65 @@ public sealed class StableDiffusionCppRuntimeTests
         AssertEx.Contains(progress.Reports, report => report.Phase == ImageGenPhase.Completed);
     }
 
+    /// <summary>
+    ///     F-030: sd-server rounds a requested latent grid up to a multiple of 64, so a requested 100x512 comes back as a
+    ///     128x512 PNG. The result must describe the bytes that arrived, not the request that was sent — echoing the
+    ///     request made the job card state a false fact about its own output.
+    /// </summary>
+    [Test]
+    public async Task Generate_RuntimeRoundedTheSize_ReportsTheProducedDimensionsNotTheRequestedOnes()
+    {
+        var png = PngWithHeader(width: 128, height: 512);
+        var base64 = Convert.ToBase64String(png);
+        using var handler = new RuntimeHandler((_, route) => route switch
+        {
+            "img_gen" => Json(HttpStatusCode.Accepted, """{"id":"job-1","status":"queued"}"""),
+            _ => Json(HttpStatusCode.OK, "{\"status\":\"completed\",\"result\":{\"images\":[{\"b64_json\":\"" + base64 + "\",\"seed\":7}]}}")
+        });
+        using var http = new HttpClient(handler, disposeHandler: false);
+        var runtime = new StableDiffusionCppRuntime(new FakeImageServerSupervisor(BaseAddress), new SdServerJobClient(http));
+
+        var request = Request() with { Width = 100, Height = 512 };
+        var result = await runtime.GenerateAsync(request, new RecordingProgress(), CancellationToken.None);
+
+        AssertEx.Equal(expected: 128, result.Width, "The result must report the produced width (128), not the requested one (100).");
+        AssertEx.Equal(expected: 512, result.Height);
+    }
+
+    /// <summary>A payload with no readable PNG header falls back to the requested size rather than reporting nonsense.</summary>
+    [Test]
+    public async Task Generate_UnreadableImageHeader_FallsBackToTheRequestedDimensions()
+    {
+        var base64 = Convert.ToBase64String(new byte[] { 1, 2, 3, 4 });
+        using var handler = new RuntimeHandler((_, route) => route switch
+        {
+            "img_gen" => Json(HttpStatusCode.Accepted, """{"id":"job-1","status":"queued"}"""),
+            _ => Json(HttpStatusCode.OK, "{\"status\":\"completed\",\"result\":{\"images\":[{\"b64_json\":\"" + base64 + "\",\"seed\":7}]}}")
+        });
+        using var http = new HttpClient(handler, disposeHandler: false);
+        var runtime = new StableDiffusionCppRuntime(new FakeImageServerSupervisor(BaseAddress), new SdServerJobClient(http));
+
+        var result = await runtime.GenerateAsync(Request() with { Width = 100, Height = 512 }, new RecordingProgress(), CancellationToken.None);
+
+        AssertEx.Equal(expected: 100, result.Width);
+        AssertEx.Equal(expected: 512, result.Height);
+    }
+
+    // A minimal but structurally valid PNG prefix: 8-byte signature, then the IHDR chunk whose first two fields are the
+    // big-endian width and height. Only the header is read, so no pixel data is needed.
+    private static byte[] PngWithHeader(uint width, uint height)
+    {
+        var bytes = new List<byte>(new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A });
+        bytes.AddRange([0x00, 0x00, 0x00, 0x0D]);
+        bytes.AddRange([0x49, 0x48, 0x44, 0x52]);
+        bytes.AddRange(BitConverter.GetBytes(width).Reverse());
+        bytes.AddRange(BitConverter.GetBytes(height).Reverse());
+
+        // Bit depth / colour type / compression / filter / interlace — present so the chunk is well-formed.
+        bytes.AddRange([0x08, 0x02, 0x00, 0x00, 0x00]);
+        return bytes.ToArray();
+    }
+
     [Test]
     public async Task Generate_CancelWhileQueued_CallsHttpCancel_NoRestart()
     {

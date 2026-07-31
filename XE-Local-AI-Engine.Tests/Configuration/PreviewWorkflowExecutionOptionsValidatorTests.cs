@@ -43,6 +43,16 @@ public sealed class PreviewWorkflowExecutionOptionsValidatorTests
     }
 
     [Test]
+    public void Validate_WhenAbandonedSubscriberGraceIsNotPositive_ReturnsFailure()
+    {
+        // Zero would make every run eligible for the abandoned sweep the instant it starts (a run has no subscriber
+        // until the client's first Subscribe), so it must fail fast rather than silently kill every run.
+        var result = _validator.Validate(name: null, Valid(o => o.AbandonedSubscriberGrace = TimeSpan.Zero));
+
+        AssertFailureContains(result, "AbandonedSubscriberGrace");
+    }
+
+    [Test]
     [Arguments(0)]
     [Arguments(-1)]
     public void Validate_WhenMaxConcurrentRunsIsNotPositive_ReturnsFailure(int value)

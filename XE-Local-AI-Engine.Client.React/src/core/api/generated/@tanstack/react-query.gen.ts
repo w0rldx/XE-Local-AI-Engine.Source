@@ -19,6 +19,7 @@ import {
 	benchmarkInferenceProfile,
 	branchNodeChatConversation,
 	browseGgufRepositories,
+	cancelAllPreviewRuns,
 	cancelCudaBuild,
 	cancelDevelopmentAttempt,
 	cancelGgufDownload,
@@ -64,6 +65,7 @@ import {
 	disableAutoConnect,
 	disableScheduledJob,
 	disconnectConnection,
+	downloadRecommendedEmbedding,
 	downloadRecommendedReranker,
 	ejectImageRuntime,
 	ejectRunningModel,
@@ -111,6 +113,7 @@ import {
 	getNodeChatConversation,
 	getNodeChatMessageFeedback,
 	getNodeSettings,
+	getPreviewRun,
 	getPreviewWorkflow,
 	getRunningLocalModels,
 	getScheduledJob,
@@ -138,6 +141,7 @@ import {
 	listDevelopmentTemplates,
 	listGoldenConversations,
 	listImageJobs,
+	listImageModelDownloads,
 	listImageModels,
 	listInferenceProfiles,
 	listKnowledgeDocuments,
@@ -145,6 +149,7 @@ import {
 	listMcpServers,
 	listNodeChatConversations,
 	listNodeChatMessageRevisions,
+	listPreviewRuns,
 	listPreviewWorkflows,
 	listRunEnvelopes,
 	listRunningModels,
@@ -233,6 +238,8 @@ import type {
 	BranchNodeChatConversationResponse,
 	BrowseGgufRepositoriesData,
 	BrowseGgufRepositoriesResponse,
+	CancelAllPreviewRunsData,
+	CancelAllPreviewRunsResponse,
 	CancelCudaBuildData,
 	CancelCudaBuildResponse,
 	CancelDevelopmentAttemptData,
@@ -328,6 +335,8 @@ import type {
 	DisableScheduledJobResponse,
 	DisconnectConnectionData,
 	DisconnectConnectionResponse,
+	DownloadRecommendedEmbeddingData,
+	DownloadRecommendedEmbeddingResponse,
 	DownloadRecommendedRerankerData,
 	DownloadRecommendedRerankerResponse,
 	EjectImageRuntimeData,
@@ -427,6 +436,8 @@ import type {
 	GetNodeChatMessageFeedbackResponse,
 	GetNodeSettingsData,
 	GetNodeSettingsResponse,
+	GetPreviewRunData,
+	GetPreviewRunResponse,
 	GetPreviewWorkflowData,
 	GetPreviewWorkflowResponse,
 	GetRunningLocalModelsData,
@@ -482,6 +493,8 @@ import type {
 	ListGoldenConversationsResponse,
 	ListImageJobsData,
 	ListImageJobsResponse,
+	ListImageModelDownloadsData,
+	ListImageModelDownloadsResponse,
 	ListImageModelsData,
 	ListImageModelsResponse,
 	ListInferenceProfilesData,
@@ -497,6 +510,8 @@ import type {
 	ListNodeChatConversationsResponse,
 	ListNodeChatMessageRevisionsData,
 	ListNodeChatMessageRevisionsResponse,
+	ListPreviewRunsData,
+	ListPreviewRunsResponse,
 	ListPreviewWorkflowsData,
 	ListPreviewWorkflowsResponse,
 	ListRunEnvelopesData,
@@ -1082,6 +1097,26 @@ export const triggerScheduledJobMutation = (
 	return mutationOptions;
 };
 
+export const cancelAllPreviewRunsMutation = (
+	options?: Partial<Options<CancelAllPreviewRunsData>>,
+): UseMutationOptions<CancelAllPreviewRunsResponse, AxiosError<DefaultError>, Options<CancelAllPreviewRunsData>> => {
+	const mutationOptions: UseMutationOptions<
+		CancelAllPreviewRunsResponse,
+		AxiosError<DefaultError>,
+		Options<CancelAllPreviewRunsData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await cancelAllPreviewRuns({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
 export const cancelPreviewRunMutation = (
 	options?: Partial<Options<CancelPreviewRunData>>,
 ): UseMutationOptions<CancelPreviewRunResponse, AxiosError<DefaultError>, Options<CancelPreviewRunData>> => {
@@ -1269,6 +1304,43 @@ export const executeUnsavedPreviewWorkflowMutation = (
 	};
 	return mutationOptions;
 };
+
+export const getPreviewRunQueryKey = (options: Options<GetPreviewRunData>) => createQueryKey("getPreviewRun", options);
+
+export const getPreviewRunOptions = (options: Options<GetPreviewRunData>) =>
+	queryOptions<GetPreviewRunResponse, AxiosError<DefaultError>, GetPreviewRunResponse, ReturnType<typeof getPreviewRunQueryKey>>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getPreviewRun({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getPreviewRunQueryKey(options),
+	});
+
+export const listPreviewRunsQueryKey = (options?: Options<ListPreviewRunsData>) => createQueryKey("listPreviewRuns", options);
+
+export const listPreviewRunsOptions = (options?: Options<ListPreviewRunsData>) =>
+	queryOptions<
+		ListPreviewRunsResponse,
+		AxiosError<DefaultError>,
+		ListPreviewRunsResponse,
+		ReturnType<typeof listPreviewRunsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listPreviewRuns({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listPreviewRunsQueryKey(options),
+	});
 
 export const getNodeSettingsQueryKey = (options?: Options<GetNodeSettingsData>) => createQueryKey("getNodeSettings", options);
 
@@ -2812,6 +2884,30 @@ export const getKnowledgeDocumentOptions = (options: Options<GetKnowledgeDocumen
 		queryKey: getKnowledgeDocumentQueryKey(options),
 	});
 
+export const downloadRecommendedEmbeddingMutation = (
+	options?: Partial<Options<DownloadRecommendedEmbeddingData>>,
+): UseMutationOptions<
+	DownloadRecommendedEmbeddingResponse,
+	AxiosError<DefaultError>,
+	Options<DownloadRecommendedEmbeddingData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		DownloadRecommendedEmbeddingResponse,
+		AxiosError<DefaultError>,
+		Options<DownloadRecommendedEmbeddingData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await downloadRecommendedEmbedding({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
 export const downloadRecommendedRerankerMutation = (
 	options?: Partial<Options<DownloadRecommendedRerankerData>>,
 ): UseMutationOptions<
@@ -3133,6 +3229,48 @@ export const getStableDiffusionCppSourceBuildStatusOptions = (options?: Options<
 		queryKey: getStableDiffusionCppSourceBuildStatusQueryKey(options),
 	});
 
+export const listImageModelDownloadsQueryKey = (options?: Options<ListImageModelDownloadsData>) =>
+	createQueryKey("listImageModelDownloads", options);
+
+export const listImageModelDownloadsOptions = (options?: Options<ListImageModelDownloadsData>) =>
+	queryOptions<
+		ListImageModelDownloadsResponse,
+		AxiosError<DefaultError>,
+		ListImageModelDownloadsResponse,
+		ReturnType<typeof listImageModelDownloadsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listImageModelDownloads({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listImageModelDownloadsQueryKey(options),
+	});
+
+export const startImageModelDownloadMutation = (
+	options?: Partial<Options<StartImageModelDownloadData>>,
+): UseMutationOptions<StartImageModelDownloadResponse, AxiosError<DefaultError>, Options<StartImageModelDownloadData>> => {
+	const mutationOptions: UseMutationOptions<
+		StartImageModelDownloadResponse,
+		AxiosError<DefaultError>,
+		Options<StartImageModelDownloadData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await startImageModelDownload({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
 export const listImageModelsQueryKey = (options?: Options<ListImageModelsData>) => createQueryKey("listImageModels", options);
 
 export const listImageModelsOptions = (options?: Options<ListImageModelsData>) =>
@@ -3193,26 +3331,6 @@ export const retrieveImageOptions = (options: Options<RetrieveImageData>) =>
 		},
 		queryKey: retrieveImageQueryKey(options),
 	});
-
-export const startImageModelDownloadMutation = (
-	options?: Partial<Options<StartImageModelDownloadData>>,
-): UseMutationOptions<StartImageModelDownloadResponse, AxiosError<DefaultError>, Options<StartImageModelDownloadData>> => {
-	const mutationOptions: UseMutationOptions<
-		StartImageModelDownloadResponse,
-		AxiosError<DefaultError>,
-		Options<StartImageModelDownloadData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await startImageModelDownload({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
 
 export const startStableDiffusionCppSourceBuildMutation = (
 	options?: Partial<Options<StartStableDiffusionCppSourceBuildData>>,

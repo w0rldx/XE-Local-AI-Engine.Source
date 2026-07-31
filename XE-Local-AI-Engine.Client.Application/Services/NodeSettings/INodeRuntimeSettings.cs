@@ -49,7 +49,7 @@ public interface INodeRuntimeSettings
     /// <summary>The worker response-size cap in MiB (stored &gt; <c>WorkerNode:MaxResponseSizeMb</c> &gt; 10).</summary>
     Task<int> GetMaxResponseSizeMbAsync(CancellationToken cancellationToken = default);
 
-    /// <summary>The recommended llama.cpp release tag (stored &gt; <c>LlamaCppReleasePins.PinnedTag</c> "b9692").</summary>
+    /// <summary>The recommended llama.cpp release tag (stored &gt; <c>LlamaCppReleasePins.PinnedTag</c> "b10201").</summary>
     Task<string> GetRecommendedLlamaCppTagAsync(CancellationToken cancellationToken = default);
 
     /// <summary>The orchestration idle-timeout in seconds (stored &gt; <c>Agent:Orchestration:IdleTimeoutSeconds</c> &gt; 120).</summary>
@@ -94,9 +94,17 @@ public interface INodeRuntimeSettings
     /// <summary>The knowledge-base reranker model name (stored &gt; off), or <see langword="null" /> when reranking is disabled.</summary>
     Task<string?> GetRerankerModelNameAsync(CancellationToken cancellationToken = default);
 
-    // Synchronous twins for the composition/startup path only (DI factory seeds + singleton constructors). These read
-    // the stored settings synchronously to avoid blocking on async file I/O during host startup, which starves the
-    // thread pool. Request-time consumers must use the async getters above.
+    // Synchronous twins for the composition/startup path (DI factory seeds + singleton constructors) and for
+    // request-time call sites that are structurally synchronous. These read the stored settings synchronously to avoid
+    // blocking on async file I/O during host startup, which starves the thread pool.
+    //
+    // Prefer the async getters. Use a sync twin at request time ONLY when the call site cannot be made async without
+    // rippling through an interface — the live example is LocalToolOfferProvider.IsToolCapable, whose whole offer seam
+    // is synchronous by design. That is safe because the read resolves through CachedNodeSettingsStore, where Load is an
+    // IMemoryCache.TryGetValue hit and SaveAsync invalidates AND re-primes the entry; the file is touched only on a cold
+    // first read. What is NOT acceptable is a sync twin on a per-TOKEN path, or capturing the result in a singleton
+    // field to avoid the read — the latter is what silently required a node restart before an edit took effect
+    // (F-001/F-025).
 
     /// <inheritdoc cref="GetDefaultModelNameAsync" />
     string GetDefaultModelName();

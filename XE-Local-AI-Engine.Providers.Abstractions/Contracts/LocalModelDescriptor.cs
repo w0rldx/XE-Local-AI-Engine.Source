@@ -36,8 +36,17 @@ public sealed record LocalModelDescriptor
     public bool IsReasoningCapable { get; init; }
 
     /// <summary>
-    ///     The Ollama-style capability tokens (for example <c>completion</c>, <c>tools</c>, <c>thinking</c>) detected for
-    ///     the model. Empty when no capabilities could be determined.
+    ///     Whether the model reasons NATIVELY: its chat template bakes reasoning onto its own channel with no graded
+    ///     <c>think:&lt;level&gt;</c> switch (the OpenAI harmony family, e.g. gpt-oss). Distinct from — and mutually
+    ///     exclusive with — <see cref="IsReasoningCapable" />: a native model must NOT be routed into the graded path,
+    ///     which would send a <c>think</c> field its template ignores and an <c>enable_thinking</c> kwarg it does not
+    ///     have. Defaults to <see langword="false" />.
+    /// </summary>
+    public bool IsNativeReasoningCapable { get; init; }
+
+    /// <summary>
+    ///     The Ollama-style capability tokens (for example <c>completion</c>, <c>tools</c>, <c>thinking</c>,
+    ///     <c>native_reasoning</c>) detected for the model. Empty when no capabilities could be determined.
     /// </summary>
     public IReadOnlyList<string> Capabilities { get; init; } = [];
 }

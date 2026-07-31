@@ -250,7 +250,7 @@ public sealed class OrchestrationResolverTests
         // knowledge tools WOULD be offered but for the per-participant locality gate.
         var offerProvider = new LocalToolOfferProvider(new LocalAgentToolRegistry(),
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
-            [ToolCapableModel, CloudParticipantModel],
+            StubNodeRuntimeSettings.Create().WithToolCapableModels(ToolCapableModel, CloudParticipantModel).Build(),
             allowCloudKnowledgeAccess);
         var runtimeSettings = StubNodeRuntimeSettings.Create().WithToolCapableModels(ToolCapableModel, CloudParticipantModel).Build();
 

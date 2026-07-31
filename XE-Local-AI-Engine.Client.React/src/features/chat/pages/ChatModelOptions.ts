@@ -19,9 +19,13 @@ export function toModelOption(model: LocalModelDto, nodeAvailable: boolean): Mod
 	return {
 		value: modelName,
 		label: modelName,
-		// Per-model capabilities (Ollama `/api/show`): thinking → reasoning menu; tools → local-tool controls.
+		// Per-model capabilities (Ollama `/api/show`): thinking → graded reasoning menu; tools → local-tool controls.
+		// `isNativeReasoningCapable` is the SECOND, distinct reasoning capability (harmony/gpt-oss): it renders its own
+		// picker badge but keeps the binary On/Off effort vocabulary, so it is deliberately NOT folded into
+		// `isReasoningModel` — doing so would route the model into the graded think:<level> path it cannot honor.
 		// Coalesce the optional generated booleans to false so a model that omits them is treated as not capable.
 		isReasoningModel: model.isReasoningCapable ?? false,
+		isNativeReasoningModel: model.isNativeReasoningCapable ?? false,
 		isToolCapable: model.isToolCapable ?? false,
 		isAvailable: nodeAvailable,
 		statusLabel: statusLabel.length > 0 ? statusLabel : undefined,
@@ -42,6 +46,16 @@ const CLOUD_PROVIDERS = new Set(["CodexOAuth", "AzureFoundry"]);
 export function toChatModelOptions(models: LocalModelDto[], nodeAvailable: boolean): ModelOption[] {
 	return models
 		.filter((model) => model.kind === "Chat" && !CLOUD_PROVIDERS.has(model.provider ?? ""))
+		.map((model) => toModelOption(model, nodeAvailable));
+}
+
+// Models eligible as the node's speculative-decoding DRAFT model. Two kinds qualify and neither belongs in the chat
+// picker's list alone: a purpose-built drafter (`Draft` — an MTP companion the backend tags from its `MTP-` quant
+// marker) and any installed chat model small enough to draft for a bigger one (the `draft-simple` mode's usual setup).
+// Cloud entries are excluded — a drafter must be a local file the supervisor can pass to `--spec-model`.
+export function toDraftModelOptions(models: LocalModelDto[], nodeAvailable: boolean): ModelOption[] {
+	return models
+		.filter((model) => (model.kind === "Draft" || model.kind === "Chat") && !CLOUD_PROVIDERS.has(model.provider ?? ""))
 		.map((model) => toModelOption(model, nodeAvailable));
 }
 
@@ -82,11 +96,13 @@ export function resolveLocalDefaultModelName(models: LocalModelDto[]): string | 
 // reasoning/tool controls as picking that concrete model directly. Coalesces the optional generated booleans to false.
 export function resolveLocalDefaultModelCapabilities(models: LocalModelDto[]): {
 	isReasoningModel: boolean;
+	isNativeReasoningModel: boolean;
 	isToolCapable: boolean;
 } {
 	const resolved = resolveLocalDefaultModel(models);
 	return {
 		isReasoningModel: resolved?.isReasoningCapable ?? false,
+		isNativeReasoningModel: resolved?.isNativeReasoningCapable ?? false,
 		isToolCapable: resolved?.isToolCapable ?? false,
 	};
 }

@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Services.AgentHome.Tools;
 using XE_Local_AI_Engine.Client.Services.Capacity.Tools;
 using XE_Local_AI_Engine.Client.Services.Coder.Tools;
 using XE_Local_AI_Engine.Client.Services.Knowledge.Tools;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Implementation;
 
 internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
@@ -29,17 +30,19 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
     private readonly IReadOnlyList<string> _builtinNames;
     private readonly IReadOnlyList<AllowedToolDto> _builtinWithoutAgentHome;
     private readonly IMcpToolRegistry _mcpToolRegistry;
+
+    // Read LIVE per offer, not captured at construction. See IsToolCapable for why.
+    private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly AllowedToolDto _spawnOfferDto;
-    private readonly HashSet<string> _toolCapableModels;
 
     public LocalToolOfferProvider(IAgentToolRegistry toolRegistry,
         IMcpToolRegistry mcpToolRegistry,
-        IReadOnlyList<string> toolCapableModels,
+        INodeRuntimeSettings runtimeSettings,
         bool allowCloudKnowledgeAccess)
     {
         ArgumentNullException.ThrowIfNull(toolRegistry);
         _mcpToolRegistry = mcpToolRegistry ?? throw new ArgumentNullException(nameof(mcpToolRegistry));
-        ArgumentNullException.ThrowIfNull(toolCapableModels);
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         _allowCloudKnowledgeAccess = allowCloudKnowledgeAccess;
 
         var builtinDescriptors = toolRegistry.GetLocalChatToolDescriptors();
@@ -147,10 +150,53 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
             SpawnSubAgentToolDefinition.ToolName
         ];
 
-        // The migrated AgentHome:ToolCapableModels allow-list, seeded once at construction from INodeRuntimeSettings at
-        // the composition root (this provider is a singleton with a synchronous hot offer path, so the set is captured
-        // here rather than re-read per offer). A runtime edit applies on the next process restart.
-        _toolCapableModels = new HashSet<string>(toolCapableModels, StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    ///     Whether the migrated <c>AgentHome:ToolCapableModels</c> allow-list admits <paramref name="activeModelId" />,
+    ///     read LIVE from <see cref="INodeRuntimeSettings" /> on every offer. A null/unknown model id is never capable.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         This used to be a <c>HashSet</c> captured at DI composition, with the rationale "singleton + synchronous
+    ///         hot path, so a runtime edit applies on the next process restart". That produced a P1: an operator added
+    ///         their model in Node Settings, saved successfully, and tool calling still silently returned nothing —
+    ///         with no restart hint on the field, unlike four of its neighbours (F-001/F-025, live eval 2026-07-31).
+    ///     </para>
+    ///     <para>
+    ///         The seeded design was also internally inconsistent, which is what made it user-visible rather than merely
+    ///         stale: two OTHER consumers of this same setting already re-read it live per request —
+    ///         <c>GetToolCapableModelsEndpoint</c> (which is what the Agents page displays) and
+    ///         <c>OrchestrationResolver.BuildToolCapableSetAsync</c>. So the UI showed the model as tool-capable while
+    ///         this seam denied it. Re-reading here removes the outlier rather than introducing a new pattern.
+    ///     </para>
+    ///     <para>
+    ///         The cost is not a file read. <c>INodeRuntimeSettings</c> resolves through <c>CachedNodeSettingsStore</c>,
+    ///         whose synchronous <c>Load</c> is an <c>IMemoryCache.TryGetValue</c> hit, and whose <c>SaveAsync</c>
+    ///         invalidates AND re-primes the entry — so the read after an operator edit is already warm. This runs once
+    ///         per turn (or once per orchestration participant), not per token, and the method already does a live
+    ///         per-call read of the MCP registry a few lines below.
+    ///     </para>
+    /// </remarks>
+    private bool IsToolCapable(string? activeModelId)
+    {
+        if (activeModelId is null)
+        {
+            return false;
+        }
+
+        // Ordinal, case-SENSITIVE, matching the allow-list's documented exact-match contract (a model differing only by
+        // case is not capable) and the identical HashSet construction in OrchestrationResolver.BuildToolCapableSetAsync.
+        var toolCapableModels = _runtimeSettings.GetToolCapableModels();
+        for (var index = 0; index < toolCapableModels.Count; index++)
+        {
+            if (string.Equals(toolCapableModels[index], activeModelId, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public IReadOnlyList<AllowedToolDto> GetOfferedTools(string? activeModelId, bool isCloudModel = false)
@@ -159,7 +205,7 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         // null/unknown model id is treated as not capable, so those tools are withheld rather than offered to a model
         // that cannot drive them. The MCP part is read live and sorted so the same catalog state yields a byte-identical
         // offer (stable config hash).
-        var capable = activeModelId is not null && _toolCapableModels.Contains(activeModelId);
+        var capable = IsToolCapable(activeModelId);
         if (!capable)
         {
             // The non-capable variant already excludes the knowledge tools (they are capable-only), so it needs no
@@ -192,7 +238,7 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         // The profile-intersection pool: the whole offer PLUS spawn_subagent (so a profile that opts in via
         // AllowedToolNames resolves it), still capability-gated. A non-tool-capable model gets the whole offer's
         // non-capable variant and NO spawn tool, so the opt-in cannot bypass the capability gate.
-        var capable = activeModelId is not null && _toolCapableModels.Contains(activeModelId);
+        var capable = IsToolCapable(activeModelId);
         if (!capable)
         {
             return _builtinWithoutAgentHome;

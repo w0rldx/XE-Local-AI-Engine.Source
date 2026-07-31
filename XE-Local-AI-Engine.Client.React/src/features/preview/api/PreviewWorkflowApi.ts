@@ -4,6 +4,9 @@ import { axiosInstance } from "@/core/api/axios/AxiosInstance";
 import { ApiError } from "@/core/api/errors/ApiError";
 import { buildLocalApiUrl } from "@/core/api/utils/LocalApiUrl";
 import {
+	type CancelAllPreviewRunsResponse,
+	cancelAllPreviewRunsResponseSchema,
+	listPreviewRunsResponseSchema,
 	listPreviewWorkflowsResponseSchema,
 	type PreviewWorkflowDetail,
 	previewWorkflowDetailSchema,
@@ -11,6 +14,8 @@ import {
 	type PreviewWorkflowSummary,
 	type PreviewRunStartedResponse,
 	previewRunStartedResponseSchema,
+	type PreviewRunSummary,
+	previewRunSummarySchema,
 } from "@/features/preview/models/PreviewWorkflowModels";
 
 // Hand-wrapped REST surface for the Open Canvas (Preview) endpoints. The generated hey-api SDK does NOT yet
@@ -93,6 +98,36 @@ export async function continuePreviewRun(runId: string, signal?: GenericAbortSig
 	// Empty object body → axios sets `Content-Type: application/json`, avoiding the FastEndpoints 415 on a body-less
 	// route-only POST (the backend binder tolerates the missing body too; this keeps raw-fetch clients working).
 	await axiosInstance.post(buildLocalApiUrl(`preview/runs/${runId}/continue`), {}, { signal });
+}
+
+// Every run the node currently knows about — live ones plus terminal ones still inside the replay window. This is
+// the only way a run whose id left this tab's memory (a plain page reload) is reachable at all: before it existed an
+// orphaned run held its concurrency slot with no way to find or cancel it.
+export async function listPreviewRuns(signal?: GenericAbortSignal): Promise<PreviewRunSummary[]> {
+	const response = await axiosInstance.get(buildLocalApiUrl("preview/runs"), { signal });
+	return listPreviewRunsResponseSchema.parse(response.data).items;
+}
+
+// One run by id. Returns null on 404 (unknown or evicted) so a caller reattaching from a runId in the route can drop
+// a stale id instead of showing an error for a run the operator can no longer act on.
+export async function getPreviewRun(runId: string, signal?: GenericAbortSignal): Promise<PreviewRunSummary | null> {
+	try {
+		const response = await axiosInstance.get(buildLocalApiUrl(`preview/runs/${runId}`), { signal });
+		return previewRunSummarySchema.parse(response.data);
+	} catch (error) {
+		if (error instanceof ApiError && error.statusCode === 404) {
+			return null;
+		}
+		throw error;
+	}
+}
+
+// Cancel every live run. The operator's recovery path once runs have leaked their concurrency slots — without it the
+// only way back from a CapReached 409 on an unreachable run was restarting the node.
+export async function cancelAllPreviewRuns(signal?: GenericAbortSignal): Promise<CancelAllPreviewRunsResponse> {
+	// Empty object body → axios sets `Content-Type: application/json` (same reason as the run-control POSTs above).
+	const response = await axiosInstance.post(buildLocalApiUrl("preview/runs/cancel-all"), {}, { signal });
+	return cancelAllPreviewRunsResponseSchema.parse(response.data);
 }
 
 // Request cancellation of an active run. 409 wrong state is a real error (surfaced as ApiError); 202 accepted. A

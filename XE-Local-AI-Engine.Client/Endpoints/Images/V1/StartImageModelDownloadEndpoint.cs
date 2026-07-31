@@ -3,20 +3,20 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Images.V1;
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.Images;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
 
 /// <summary>
-///     FastEndpoints handler that begins an image-model file-set download (POST images/models/downloads). Mirrors the
-///     GGUF start-download endpoint minimally: it validates the requested file-set, kicks
-///     <see cref="IImageModelStore.EnsureModelAsync" /> on a DETACHED task (the store is a singleton, safe to capture past
-///     the request scope), and returns 202 immediately. Progress/cancel are deferred (follow-up: a download coordinator +
-///     hub); presence surfaces via <c>GET images/models</c>. No path/token is accepted or returned. Operator-gated.
+///     FastEndpoints handler that begins an image-model file-set download (POST images/models/downloads). It validates
+///     the requested file-set, hands it to <see cref="IImageModelDownloadCoordinator" /> (which owns the detached
+///     transfer plus its status registry), and returns 202 immediately. The download's outcome — including failure — is
+///     observable via <c>GET images/models/downloads</c>; presence of the finished model surfaces via
+///     <c>GET images/models</c>. No path/token is accepted or returned. Operator-gated.
 /// </summary>
-public sealed class StartImageModelDownloadEndpoint(IImageModelStore modelStore, ILogger<StartImageModelDownloadEndpoint> logger)
+public sealed class StartImageModelDownloadEndpoint(IImageModelDownloadCoordinator downloadCoordinator)
     : Endpoint<StartImageModelDownloadRequest, StartImageModelDownloadResponse>
 {
-    private readonly IImageModelStore _modelStore = modelStore ?? throw new ArgumentNullException(nameof(modelStore));
-    private readonly ILogger<StartImageModelDownloadEndpoint> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly IImageModelDownloadCoordinator _downloadCoordinator = downloadCoordinator ?? throw new ArgumentNullException(nameof(downloadCoordinator));
 
     public override void Configure()
     {
@@ -104,35 +104,16 @@ public sealed class StartImageModelDownloadEndpoint(IImageModelStore modelStore,
             Revision = string.IsNullOrWhiteSpace(req.Revision) ? null : req.Revision.Trim()
         };
 
-        // Fire-and-forget: the download outlives this request. The detached task owns its own logging; the request token
-        // is NOT captured (it is cancelled the instant the 202 is written).
-        _ = RunDownloadDetachedAsync(request);
+        // The coordinator owns the detached transfer and records its terminal phase, so a failure is reported rather
+        // than logged and forgotten. The request token is deliberately not involved — it is cancelled the instant the
+        // 202 is written, while the download outlives this request.
+        var ticket = _downloadCoordinator.Start(request);
 
         await Send.ResultAsync(Results.Accepted(uri: null, new StartImageModelDownloadResponse
         {
-            ModelName = request.ModelName,
-            Accepted = true
+            ModelName = ticket.ModelName,
+            Accepted = true,
+            AlreadyInFlight = ticket.AlreadyInFlight
         })).ConfigureAwait(false);
-    }
-
-    // Detached, self-contained download run: owns its own CTS + logging, swallows failures (logged) so a background pull
-    // never surfaces as an unobserved task fault. Progress is dropped (no coordinator yet — follow-up); presence is
-    // observed via the models list. The store is a singleton, so capturing it past the request scope is safe.
-    private async Task RunDownloadDetachedAsync(ImageModelRequest request)
-    {
-        using var cts = new CancellationTokenSource();
-        try
-        {
-            await _modelStore.EnsureModelAsync(request, progress: null, cts.Token).ConfigureAwait(false);
-            _logger.LogInformation("Image model download completed for {ModelName}.", request.ModelName);
-        }
-        catch (OperationCanceledException)
-        {
-            _logger.LogInformation("Image model download cancelled for {ModelName}.", request.ModelName);
-        }
-        catch (Exception exception)
-        {
-            _logger.LogError(exception, "Image model download failed for {ModelName}.", request.ModelName);
-        }
     }
 }

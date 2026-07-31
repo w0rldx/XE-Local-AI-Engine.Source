@@ -34,6 +34,14 @@ export function CatalogInfoCard({ catalog, onRefresh, isRefreshing }: CatalogInf
 							})}
 						</Text>
 					) : null}
+					{!catalog.refreshSourceConfigured && (
+						<Text size="sm" c="dimmed" data-testid="model-fit-catalog-no-refresh-source">
+							{t(
+								"pages.modelFit.recommendations.catalog.noRefreshSource",
+								"Bundled catalog only — no refresh source is configured.",
+							)}
+						</Text>
+					)}
 				</Group>
 				<Button
 					variant="default"

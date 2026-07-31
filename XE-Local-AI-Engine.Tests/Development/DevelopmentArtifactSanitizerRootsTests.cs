@@ -48,18 +48,98 @@ public sealed class DevelopmentArtifactSanitizerRootsTests
     }
 
     [Test]
-    public void Sanitize_WithHostRootsOnly_LosesTheFileAndLineEntirely()
+    public void Sanitize_WithHostRootsOnly_KeepsTheLeafButLosesTheRepositoryRelativePrefix()
     {
-        // The defect, reproduced. Container-internal paths never match a host root, so the targeted pass is a silent
-        // no-op and the generic pattern swallows the whole diagnostic. Nothing errors — the evidence just stops saying
-        // which file failed, which is why this needed a test rather than a code read.
+        // Container-internal paths never match a host root, so the targeted pass is a silent no-op here and the
+        // GENERIC pattern handles the diagnostic instead. That used to swallow it whole; it now keeps the trailing
+        // segments, so the file and line survive even on the degraded path — this is the F-057 remedy, and asserting
+        // it here is what stops the two passes from being confused for one another.
         var sanitized = DevelopmentArtifactSanitizer.Sanitize(Evidence(ContainerBuildReport),
             RepositoryRoot,
             HostWorkspace,
             HostRuntime);
 
-        AssertEx.False(sanitized.StandardOutput.Contains("Calculator.cs", StringComparison.Ordinal), sanitized.StandardOutput);
-        AssertEx.False(sanitized.StandardOutput.Contains("(17,32)", StringComparison.Ordinal), sanitized.StandardOutput);
+        AssertEx.Contains(sanitized.StandardOutput, "Calculator.cs(17,32): error CS1002: ; expected");
+
+        // The targeted pass is still the one worth having: it preserves the whole repository-relative path, while the
+        // generic fallback keeps only a two-segment tail. "/src/Lib/Calculator.cs" survives one and not the other.
+        AssertEx.False(sanitized.StandardOutput.Contains("/src/Lib/Calculator.cs", StringComparison.Ordinal), sanitized.StandardOutput);
+        AssertEx.False(sanitized.StandardOutput.Contains("/workspace", StringComparison.Ordinal), sanitized.StandardOutput);
+    }
+
+    /// <summary>
+    ///     F-057, as measured live: every <c>dotnet</c> command in the container gate died on a read-only <c>/tmp</c>,
+    ///     and the stored report named no directory at all, so the one token that identified the fault was the one
+    ///     token the sanitizer had removed.
+    /// </summary>
+    [Test]
+    public void Sanitize_OnAReadOnlyFilesystemFailure_KeepsTheDirectoryThatIdentifiesTheFault()
+    {
+        const string Erofs = """
+                             System.IO.IOException: The system cannot open the device or file specified. : 'NuGet-Migrations'.
+                             One or more system calls failed: mkdir("/tmp/.dotnet/shm/session1", AllUsers_ReadWriteExecute) == -1; errno == EROFS;
+                             """;
+
+        var sanitized = DevelopmentArtifactSanitizer.Sanitize(Evidence(Erofs),
+            DevelopmentArtifactSanitizer.ResolveProtectedRoots(RepositoryRoot, Session(Mapped())));
+
+        // Actionable: which directory, and on which filesystem semantics it failed.
+        AssertEx.Contains(sanitized.StandardOutput, "shm/session1");
+        AssertEx.Contains(sanitized.StandardOutput, "errno == EROFS");
+
+        // And the leading segments — the only part that can carry host layout — are still gone.
+        AssertEx.False(sanitized.StandardOutput.Contains("/tmp/", StringComparison.Ordinal), sanitized.StandardOutput);
+        AssertEx.Contains(sanitized.StandardOutput, "[REDACTED:development-path]");
+    }
+
+    /// <summary>
+    ///     The conservative half of the same change: a tail is kept only where there is a tail LEFT once the leading
+    ///     two named segments are destroyed. Anything shallower — which is exactly the shape a home directory, a
+    ///     mount point or a UNC share root has — is still redacted whole.
+    /// </summary>
+    [Test]
+    public void Sanitize_KeepsNoTailForPathsShallowEnoughToNameTheHostOrItsUser()
+    {
+        var sanitized = DevelopmentArtifactSanitizer.SanitizeText(
+            "could not read /home/dev or /etc/passwd or C:\\Users\\operator\\report.txt or \\\\fileserver\\share\\notes.txt",
+            RepositoryRoot);
+
+        AssertEx.False(sanitized.Contains("/home/dev", StringComparison.Ordinal), sanitized);
+        AssertEx.False(sanitized.Contains("passwd", StringComparison.Ordinal), sanitized);
+
+        // The Windows drive letter must not count as a segment, or "operator" — the user name — lands in the tail.
+        AssertEx.False(sanitized.Contains("operator", StringComparison.Ordinal), sanitized);
+        AssertEx.Contains(sanitized, "report.txt");
+
+        // A UNC share: the server and the share name are the identity, the leaf is not.
+        AssertEx.False(sanitized.Contains("fileserver", StringComparison.Ordinal), sanitized);
+        AssertEx.False(sanitized.Contains("share", StringComparison.Ordinal), sanitized);
+        AssertEx.Contains(sanitized, "notes.txt");
+    }
+
+    /// <summary>
+    ///     A principal is named by whatever follows a home-directory CONTAINER, and that is not always the second
+    ///     segment — so a purely positional "destroy the first two" rule leaks at other depths. Both of these were
+    ///     verified to leak before the container anchor was added, and both are reachable on the box this engine is
+    ///     developed on: WSL2 mounts the Windows profile at <c>/mnt/c/Users/&lt;user&gt;</c> (principal FOURTH), and the
+    ///     rootless Docker socket lives under <c>/run/user/&lt;uid&gt;</c> (principal THIRD).
+    /// </summary>
+    [Test]
+    public void Sanitize_RedactsThePrincipalAtAnyDepth_NotJustTheSecondSegment()
+    {
+        var sanitized = DevelopmentArtifactSanitizer.SanitizeText(
+            "denied /mnt/c/Users/operator and /mnt/c/Users/operator/projects and /run/user/1000/docker.sock",
+            RepositoryRoot);
+
+        // The Windows account name is the identity here, and it sits FOURTH.
+        AssertEx.False(sanitized.Contains("operator", StringComparison.Ordinal), sanitized);
+
+        // The uid is the identity here, and it sits THIRD.
+        AssertEx.False(sanitized.Contains("1000", StringComparison.Ordinal), sanitized);
+
+        // Still diagnosable: the leaf that says WHAT was touched survives.
+        AssertEx.Contains(sanitized, "docker.sock");
+        AssertEx.Contains(sanitized, "projects");
     }
 
     [Test]

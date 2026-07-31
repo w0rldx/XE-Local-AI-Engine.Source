@@ -426,3 +426,7 @@ XE-Local-AI-Engine.Client/knowledge-base/
 
 # Dev-runtime node-DB backup snapshots (NodeDbBackupService writes here when NodeData:Directory is content-root-relative)
 XE-Local-AI-Engine.Client/backups/
+
+# Runtime state written next to the app during local runs (never product content).
+XE-Local-AI-Engine.Client/generated-images/
+XE-Local-AI-Engine.Client/development/

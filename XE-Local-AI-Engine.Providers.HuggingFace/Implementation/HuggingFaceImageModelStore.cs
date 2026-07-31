@@ -111,39 +111,50 @@ internal sealed class HuggingFaceImageModelStore : IImageModelStore
             var resolvedRevision = revision;
             long totalBytes = 0;
 
-            foreach (var partRequest in request.Parts)
+            try
             {
-                EnsureSafeFileName(partRequest.FileName);
-
-                // Hard containment guard: every part lands under {ModelsDirectory}/{safe-model-dir}/, never outside it.
-                var relativePath = $"{modelDirectory}/{partRequest.FileName}";
-                var destinationPath = GgufFilePath.ResolveContainedPath(_options.ModelsDirectory, relativePath);
-
-                var result = await _downloadClient.DownloadAsync(request.RepoId,
-                    partRequest.FileName,
-                    revision,
-                    request.ModelName,
-                    destinationPath,
-                    expectedSizeBytes: 0,
-                    partRequest.Sha256,
-                    progress,
-                    ct).ConfigureAwait(false);
-
-                if (!string.IsNullOrEmpty(result.ResolvedRevision))
+                foreach (var partRequest in request.Parts)
                 {
-                    resolvedRevision = result.ResolvedRevision;
+                    EnsureSafeFileName(partRequest.FileName);
+
+                    // Hard containment guard: every part lands under {ModelsDirectory}/{safe-model-dir}/, never outside it.
+                    var relativePath = $"{modelDirectory}/{partRequest.FileName}";
+                    var destinationPath = GgufFilePath.ResolveContainedPath(_options.ModelsDirectory, relativePath);
+
+                    var result = await _downloadClient.DownloadAsync(request.RepoId,
+                        partRequest.FileName,
+                        revision,
+                        request.ModelName,
+                        destinationPath,
+                        expectedSizeBytes: 0,
+                        partRequest.Sha256,
+                        progress,
+                        ct).ConfigureAwait(false);
+
+                    if (!string.IsNullOrEmpty(result.ResolvedRevision))
+                    {
+                        resolvedRevision = result.ResolvedRevision;
+                    }
+
+                    totalBytes += result.SizeBytes;
+                    parts.Add(new ImageModelPart
+                    {
+                        Role = partRequest.Role,
+                        FileName = partRequest.FileName,
+                        LocalPath = result.LocalPath,
+                        SizeBytes = result.SizeBytes,
+                        // Only the verified hash — the discovery digest we passed was used for verification, never echoed.
+                        Sha256 = result.Sha256
+                    });
                 }
-
-                totalBytes += result.SizeBytes;
-                parts.Add(new ImageModelPart
-                {
-                    Role = partRequest.Role,
-                    FileName = partRequest.FileName,
-                    LocalPath = result.LocalPath,
-                    SizeBytes = result.SizeBytes,
-                    // Only the verified hash — the discovery digest we passed was used for verification, never echoed.
-                    Sha256 = result.Sha256
-                });
+            }
+            catch
+            {
+                // A download that never wrote a byte (a mistyped weight file 404s) still left the model's directory
+                // behind, so a failed attempt accumulated an orphan empty folder under models/images/. Remove it — but
+                // ONLY when empty, so a partially-transferred .part file survives for the next attempt to resume from.
+                TryDeleteEmptyDirectory(modelDirectory);
+                throw;
             }
 
             var entry = new ImageModelRegistryEntry
@@ -238,6 +249,25 @@ internal sealed class HuggingFaceImageModelStore : IImageModelStore
 
         var segment = builder.ToString().Trim('.');
         return string.IsNullOrEmpty(segment) ? "model" : segment;
+    }
+
+    // Removes the model's own subdirectory when a failed download left it empty. Non-recursive by construction: an empty
+    // directory is all that is deleted, so a resumable .part file (or any already-downloaded part of a multi-part set)
+    // keeps the directory alive. Best-effort — cleanup must never mask the download failure that triggered it.
+    private void TryDeleteEmptyDirectory(string modelDirectorySegment)
+    {
+        try
+        {
+            var directory = GgufFilePath.ResolveContainedPath(_options.ModelsDirectory, modelDirectorySegment);
+            if (Directory.Exists(directory) && !Directory.EnumerateFileSystemEntries(directory).Any())
+            {
+                Directory.Delete(directory);
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            _logger.LogDebug(exception, "Could not remove the empty image-model directory after a failed download.");
+        }
     }
 
     private static void TryDeleteFile(string path)

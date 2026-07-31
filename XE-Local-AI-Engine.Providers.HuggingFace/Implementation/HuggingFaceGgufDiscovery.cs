@@ -10,6 +10,9 @@ using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 ///     searches GGUF repos by the requested order (trending by default; filtering out repos with no usable <c>.gguf</c>)
 ///     and inspects a single repo's actual files, populating per-file quant/size/integrity + GGUF header metadata. Each
 ///     summary is tagged with a soft <see cref="GgufPublisherTrust" /> publisher-trust flag (never an exclusion gate).
+///     Two companion families are handled: an <c>mmproj</c> projector is dropped outright (<see cref="IsProjectorFile" />),
+///     while a speculative-decoding drafter is KEPT but re-identified (<see cref="GgufDraftModel" />) — it is a real,
+///     downloadable file the <c>draft-*</c> speculative modes need, it just is not a base-model quant.
 /// </summary>
 /// <remarks>
 ///     Considered-and-deferred perf idea (follow-up: revisit if inspection latency is still a problem after bounded
@@ -116,8 +119,12 @@ internal sealed partial class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscove
                 continue;
             }
 
-            // Non-null by IsUsableGgufFile (which requires a parseable quant); re-parsed here to capture the token.
-            usable.Add((file, GgufQuantParser.TryParse(file.FileName)!));
+            // Non-null by IsUsableGgufFile (which requires a parseable quant); re-parsed here to capture the token. A
+            // speculative-decoding drafter (an "MTP/" companion) parses to the SAME token as the base weights it drafts
+            // for, so its quant is marked (Q8_0 → MTP-Q8_0) — otherwise the repo's quant list carries the label twice,
+            // once for a 0.4 GB drafter and once for the 11.8 GB real model, and both map to the same registry key.
+            var quant = GgufQuantParser.TryParse(file.FileName)!;
+            usable.Add((file, GgufDraftModel.IsDraftFile(file.FileName) ? GgufDraftModel.MarkQuant(quant) : quant));
         }
 
         usable = GroupShards(usable);

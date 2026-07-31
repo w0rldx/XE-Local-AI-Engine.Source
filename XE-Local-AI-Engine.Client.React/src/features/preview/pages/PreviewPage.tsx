@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import { ApiError } from "@/core/api/errors/ApiError";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { toast } from "@/core/ui/notifications/Toast";
+import { ActiveRunsPanel } from "@/features/preview/components/ActiveRunsPanel";
 import { PreviewActiveRunContext } from "@/features/preview/components/PreviewActiveRunContext";
 import { WorkflowCanvas } from "@/features/preview/components/WorkflowCanvas";
 import { WorkflowList } from "@/features/preview/components/WorkflowList";
@@ -17,12 +18,15 @@ import type {
 	PreviewWorkflowSummary,
 } from "@/features/preview/models/PreviewWorkflowModels";
 import {
+	useCancelAllPreviewRuns,
 	useCancelPreviewRun,
 	useContinuePreviewRun,
 	useCreatePreviewWorkflow,
 	useDeletePreviewWorkflow,
 	useExecuteSavedPreviewWorkflow,
 	useExecuteUnsavedPreviewWorkflow,
+	usePreviewRun,
+	usePreviewRuns,
 	usePreviewWorkflow,
 	usePreviewWorkflows,
 	useUpdatePreviewWorkflow,
@@ -47,7 +51,16 @@ const EMPTY_GRAPH: PreviewWorkflowGraph = {
 	edges: [],
 };
 
-export function PreviewPage() {
+interface PreviewPageProps {
+	// The runId carried in the route's search params. On load this is what a reloaded tab reattaches to — the run
+	// itself lives on the node, so the id in the URL is the whole of what has to survive the reload.
+	readonly routeRunId?: string | null;
+	// Writes the active runId back into the route (null clears it). Supplied by the route component; omitted in tests
+	// and anywhere the page is rendered outside the router.
+	readonly onRouteRunIdChange?: (runId: string | null) => void;
+}
+
+export function PreviewPage({ routeRunId = null, onRouteRunIdChange }: PreviewPageProps = {}) {
 	const { t } = useTranslation();
 	const { confirm } = useConfirm();
 
@@ -81,6 +94,14 @@ export function PreviewPage() {
 	const executeUnsavedMutation = useExecuteUnsavedPreviewWorkflow();
 	const continueMutation = useContinuePreviewRun();
 	const cancelMutation = useCancelPreviewRun();
+	const cancelAllMutation = useCancelAllPreviewRuns();
+
+	// Runs the NODE knows about — the only place a run orphaned by a reload is visible. Polled only while the list is
+	// showing (the panel lives there), so an open canvas does not pay for it.
+	const runsQuery = usePreviewRuns(canvasTarget === null);
+	// Does the runId carried in the route still point at something? null (a 404) means "gone", so the stale id is
+	// dropped out of the route rather than left there advertising a run nobody can act on.
+	const routeRunQuery = usePreviewRun(routeRunId);
 
 	// On unmount: close the canvas and clear ALL run output so a reload/navigation starts EMPTY (decision: the
 	// run-output store is empty on mount; nothing is persisted).
@@ -90,6 +111,56 @@ export function PreviewPage() {
 			runActions.reset();
 		};
 	}, [closeCanvas, runActions]);
+
+	// Reattach. The run lives on the node and the server keeps a seq-numbered replay log for exactly this case, so
+	// registering the runId is all it takes: the hub hook joins the run's group and asks for every event after the
+	// highest seq this tab has applied (-1 for a fresh page → the whole log), and the store's seq dedupe makes a
+	// replayed-and-live event apply exactly once. Before this, the runId lived only in page state and a reload lost
+	// the run permanently — including the result of a run the operator had already paid GPU time for.
+	useEffect(() => {
+		if (routeRunId === null) {
+			return;
+		}
+		runActions.registerRun(routeRunId);
+		setActiveRunId(routeRunId);
+	}, [routeRunId, runActions]);
+
+	// A runId in the route that the node no longer knows about is stale (swept, cancelled, or past the replay
+	// window) — clear it so the URL stops pointing at nothing.
+	useEffect(() => {
+		if (routeRunId !== null && routeRunQuery.isSuccess && routeRunQuery.data === null) {
+			onRouteRunIdChange?.(null);
+		}
+	}, [routeRunId, routeRunQuery.isSuccess, routeRunQuery.data, onRouteRunIdChange]);
+
+	const handleReattach = useCallback(
+		(runId: string) => {
+			runActions.registerRun(runId);
+			setActiveRunId(runId);
+			onRouteRunIdChange?.(runId);
+		},
+		[onRouteRunIdChange, runActions],
+	);
+
+	const handleCancelRun = useCallback(
+		(runId: string) => {
+			cancelMutation.mutate(runId, {
+				onSuccess: () => runActions.markCancelled(runId),
+				onError: (error) => toast.error(errorMessage(error, t("pages.preview.errors.cancel", "Could not cancel the run."))),
+			});
+		},
+		[cancelMutation, runActions, t],
+	);
+
+	const handleCancelAll = useCallback(() => {
+		cancelAllMutation.mutate(undefined, {
+			onSuccess: (result) =>
+				toast.success(
+					t("pages.preview.runs.cancelledCount", "Cancelled {{count}} run(s).", { count: result.cancelledCount }),
+				),
+			onError: (error) => toast.error(errorMessage(error, t("pages.preview.errors.cancelAll", "Could not cancel the runs."))),
+		});
+	}, [cancelAllMutation, t]);
 
 	const workflows = useMemo(() => workflowsQuery.data ?? [], [workflowsQuery.data]);
 
@@ -141,6 +212,10 @@ export function PreviewPage() {
 			const onStarted = (runId: string): void => {
 				runActions.registerRun(runId);
 				setActiveRunId(runId);
+				// Put the runId in the URL so a reload can reattach to this run instead of abandoning it. This is the
+				// half of the fix that lives in the client: the server already keeps the replay log, but nothing could
+				// reach it once the id existed only in page state.
+				onRouteRunIdChange?.(runId);
 			};
 			const onExecuteError = (error: unknown): void =>
 				toast.error(errorMessage(error, t("pages.preview.errors.execute", "Could not start the run.")));
@@ -158,7 +233,7 @@ export function PreviewPage() {
 			}
 			executeUnsavedMutation.mutate(graph, onResult);
 		},
-		[canvasTarget, detailQuery.data, executeSavedMutation, executeUnsavedMutation, runActions, t],
+		[canvasTarget, detailQuery.data, executeSavedMutation, executeUnsavedMutation, onRouteRunIdChange, runActions, t],
 	);
 
 	const handleContinue = useCallback(() => {
@@ -298,12 +373,21 @@ export function PreviewPage() {
 				) : workflowsQuery.isLoading ? (
 					<Loader data-testid="preview-list-loading" />
 				) : (
-					<WorkflowList
-						workflows={workflows}
-						isMutating={deleteMutation.isPending}
-						onOpen={openWorkflow}
-						onDelete={handleDelete}
-					/>
+					<Stack gap="lg">
+						<ActiveRunsPanel
+							runs={runsQuery.data ?? []}
+							isCancelling={cancelMutation.isPending || cancelAllMutation.isPending}
+							onReattach={handleReattach}
+							onCancel={handleCancelRun}
+							onCancelAll={handleCancelAll}
+						/>
+						<WorkflowList
+							workflows={workflows}
+							isMutating={deleteMutation.isPending}
+							onOpen={openWorkflow}
+							onDelete={handleDelete}
+						/>
+					</Stack>
 				)}
 			</Box>
 		</Stack>

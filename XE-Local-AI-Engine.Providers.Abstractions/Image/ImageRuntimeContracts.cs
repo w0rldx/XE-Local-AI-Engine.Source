@@ -86,10 +86,14 @@ public sealed record ImageGenerationResult
     /// <summary>The decoded image bytes (PNG). The caller persists these through the encrypted-at-rest blob store.</summary>
     public required ReadOnlyMemory<byte> ImageBytes { get; init; }
 
-    /// <summary>Output width in pixels.</summary>
+    /// <summary>
+    ///     Width in pixels of the image that was actually produced — read from the returned payload, NOT echoed from the
+    ///     request. Runtimes round the requested size (stable-diffusion.cpp snaps up to a multiple of 64), so this can
+    ///     legitimately differ from <see cref="ImageGenerationRequest.Width" />.
+    /// </summary>
     public required int Width { get; init; }
 
-    /// <summary>Output height in pixels.</summary>
+    /// <summary>Height in pixels of the image that was actually produced; see <see cref="Width" />.</summary>
     public required int Height { get; init; }
 
     /// <summary>The seed actually used (the server-resolved value when the request asked for a random seed).</summary>

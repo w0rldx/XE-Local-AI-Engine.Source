@@ -29,6 +29,9 @@ import type {
 	BrowseGgufRepositoriesData,
 	BrowseGgufRepositoriesErrors,
 	BrowseGgufRepositoriesResponses,
+	CancelAllPreviewRunsData,
+	CancelAllPreviewRunsErrors,
+	CancelAllPreviewRunsResponses,
 	CancelCudaBuildData,
 	CancelCudaBuildErrors,
 	CancelCudaBuildResponses,
@@ -164,6 +167,9 @@ import type {
 	DisconnectConnectionData,
 	DisconnectConnectionErrors,
 	DisconnectConnectionResponses,
+	DownloadRecommendedEmbeddingData,
+	DownloadRecommendedEmbeddingErrors,
+	DownloadRecommendedEmbeddingResponses,
 	DownloadRecommendedRerankerData,
 	DownloadRecommendedRerankerErrors,
 	DownloadRecommendedRerankerResponses,
@@ -305,6 +311,9 @@ import type {
 	GetNodeSettingsData,
 	GetNodeSettingsErrors,
 	GetNodeSettingsResponses,
+	GetPreviewRunData,
+	GetPreviewRunErrors,
+	GetPreviewRunResponses,
 	GetPreviewWorkflowData,
 	GetPreviewWorkflowErrors,
 	GetPreviewWorkflowResponses,
@@ -386,6 +395,9 @@ import type {
 	ListImageJobsData,
 	ListImageJobsErrors,
 	ListImageJobsResponses,
+	ListImageModelDownloadsData,
+	ListImageModelDownloadsErrors,
+	ListImageModelDownloadsResponses,
 	ListImageModelsData,
 	ListImageModelsErrors,
 	ListImageModelsResponses,
@@ -407,6 +419,9 @@ import type {
 	ListNodeChatMessageRevisionsData,
 	ListNodeChatMessageRevisionsErrors,
 	ListNodeChatMessageRevisionsResponses,
+	ListPreviewRunsData,
+	ListPreviewRunsErrors,
+	ListPreviewRunsResponses,
 	ListPreviewWorkflowsData,
 	ListPreviewWorkflowsErrors,
 	ListPreviewWorkflowsResponses,
@@ -632,6 +647,7 @@ import {
 	zBranchNodeChatConversationResponse,
 	zBrowseGgufRepositoriesQuery,
 	zBrowseGgufRepositoriesResponse,
+	zCancelAllPreviewRunsResponse,
 	zCancelCudaBuildResponse,
 	zCancelDevelopmentAttemptPath,
 	zCancelDevelopmentAttemptResponse,
@@ -715,6 +731,7 @@ import {
 	zDisableScheduledJobPath,
 	zDisableScheduledJobResponse,
 	zDisconnectConnectionResponse,
+	zDownloadRecommendedEmbeddingResponse,
 	zDownloadRecommendedRerankerResponse,
 	zEjectImageRuntimeBody,
 	zEjectImageRuntimeResponse,
@@ -790,6 +807,8 @@ import {
 	zGetNodeChatMessageFeedbackPath,
 	zGetNodeChatMessageFeedbackResponse,
 	zGetNodeSettingsResponse,
+	zGetPreviewRunPath,
+	zGetPreviewRunResponse,
 	zGetPreviewWorkflowPath,
 	zGetPreviewWorkflowResponse,
 	zGetRunningLocalModelsResponse,
@@ -834,6 +853,7 @@ import {
 	zListGoldenConversationsPath,
 	zListGoldenConversationsResponse,
 	zListImageJobsResponse,
+	zListImageModelDownloadsResponse,
 	zListImageModelsResponse,
 	zListInferenceProfilesResponse,
 	zListKnowledgeDocumentsResponse,
@@ -843,6 +863,7 @@ import {
 	zListNodeChatConversationsResponse,
 	zListNodeChatMessageRevisionsPath,
 	zListNodeChatMessageRevisionsResponse,
+	zListPreviewRunsResponse,
 	zListPreviewWorkflowsResponse,
 	zListRunEnvelopesQuery,
 	zListRunEnvelopesResponse,
@@ -1437,6 +1458,28 @@ export const triggerScheduledJob = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
+export const cancelAllPreviewRuns = <ThrowOnError extends boolean = false>(
+	options?: Options<CancelAllPreviewRunsData, ThrowOnError>,
+) =>
+	(options?.client ?? client).post<CancelAllPreviewRunsResponses, CancelAllPreviewRunsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zCancelAllPreviewRunsResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/preview/runs/cancel-all",
+		...options,
+	});
+
 export const cancelPreviewRun = <ThrowOnError extends boolean = false>(options: Options<CancelPreviewRunData, ThrowOnError>) =>
 	(options.client ?? client).post<CancelPreviewRunResponses, CancelPreviewRunErrors, ThrowOnError>({
 		requestValidator: async (data) =>
@@ -1640,6 +1683,46 @@ export const executeUnsavedPreviewWorkflow = <ThrowOnError extends boolean = fal
 			"Content-Type": "application/json",
 			...options.headers,
 		},
+	});
+
+export const getPreviewRun = <ThrowOnError extends boolean = false>(options: Options<GetPreviewRunData, ThrowOnError>) =>
+	(options.client ?? client).get<GetPreviewRunResponses, GetPreviewRunErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zGetPreviewRunPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetPreviewRunResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/preview/runs/{runId}",
+		...options,
+	});
+
+export const listPreviewRuns = <ThrowOnError extends boolean = false>(options?: Options<ListPreviewRunsData, ThrowOnError>) =>
+	(options?.client ?? client).get<ListPreviewRunsResponses, ListPreviewRunsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListPreviewRunsResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/preview/runs",
+		...options,
 	});
 
 export const getNodeSettings = <ThrowOnError extends boolean = false>(options?: Options<GetNodeSettingsData, ThrowOnError>) =>
@@ -3368,6 +3451,28 @@ export const getKnowledgeDocument = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
+export const downloadRecommendedEmbedding = <ThrowOnError extends boolean = false>(
+	options?: Options<DownloadRecommendedEmbeddingData, ThrowOnError>,
+) =>
+	(options?.client ?? client).post<DownloadRecommendedEmbeddingResponses, DownloadRecommendedEmbeddingErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zDownloadRecommendedEmbeddingResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/knowledge-base/embedding/download-recommended",
+		...options,
+	});
+
 export const downloadRecommendedReranker = <ThrowOnError extends boolean = false>(
 	options?: Options<DownloadRecommendedRerankerData, ThrowOnError>,
 ) =>
@@ -3737,6 +3842,54 @@ export const getStableDiffusionCppSourceBuildStatus = <ThrowOnError extends bool
 		...options,
 	});
 
+export const listImageModelDownloads = <ThrowOnError extends boolean = false>(
+	options?: Options<ListImageModelDownloadsData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<ListImageModelDownloadsResponses, ListImageModelDownloadsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListImageModelDownloadsResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/images/models/downloads",
+		...options,
+	});
+
+export const startImageModelDownload = <ThrowOnError extends boolean = false>(
+	options: Options<StartImageModelDownloadData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<StartImageModelDownloadResponses, StartImageModelDownloadErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zStartImageModelDownloadBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zStartImageModelDownloadResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/images/models/downloads",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
 export const listImageModels = <ThrowOnError extends boolean = false>(options?: Options<ListImageModelsData, ThrowOnError>) =>
 	(options?.client ?? client).get<ListImageModelsResponses, ListImageModelsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
@@ -3804,32 +3957,6 @@ export const retrieveImage = <ThrowOnError extends boolean = false>(options: Opt
 		],
 		url: "/api/local/v1/images/{imageId}",
 		...options,
-	});
-
-export const startImageModelDownload = <ThrowOnError extends boolean = false>(
-	options: Options<StartImageModelDownloadData, ThrowOnError>,
-) =>
-	(options.client ?? client).post<StartImageModelDownloadResponses, StartImageModelDownloadErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: zStartImageModelDownloadBody,
-					path: z.never().optional(),
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zStartImageModelDownloadResponse.parseAsync(data),
-		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
-		],
-		url: "/api/local/v1/images/models/downloads",
-		...options,
-		headers: {
-			"Content-Type": "application/json",
-			...options.headers,
-		},
 	});
 
 export const startStableDiffusionCppSourceBuild = <ThrowOnError extends boolean = false>(

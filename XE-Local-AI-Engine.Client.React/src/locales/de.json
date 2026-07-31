@@ -116,6 +116,9 @@
 				"noTestsTitle": "Die Validierung hat keine Tests ausgeführt",
 				"current": "Aktuell",
 				"invalidated": "Ungültig",
+				"supersededTitle": "Dieses Validierungsergebnis ist nicht mehr aktuell",
+				"supersededBody": "Ein Validierungslauf war gegen einen früheren Stand dieser Aufgabe erfolgreich, doch das Arbeitsverzeichnis hat sich seitdem geändert. Seine Zahlen sind nicht das aktuelle Ergebnis — führen Sie die deterministische Validierung erneut aus.",
+				"failedInvalidated": "Das fehlgeschlagene Gate hat die Freigabe-Nachweise dieser Aufgabe entwertet, deshalb ist der Bericht als ungültig markiert. Der Fehler unten ist dennoch das, was tatsächlich passiert ist.",
 				"base": "Basis",
 				"evidence": "Gespeicherte Nachweise",
 				"noEvidence": "Noch keine Validierungs- oder Review-Nachweise.",
@@ -147,8 +150,19 @@
 				"command": {
 					"incomplete": "Nicht abgeschlossen",
 					"truncated": "Ausgabe abgeschnitten",
-					"exitCode": "Exit"
+					"exitCode": "Exit",
+					"capturedOutput": "Aufgezeichnete Ausgabe"
 				}
+			},
+			"form": {
+				"securityWarning": "Entwicklungsbefehle laufen unter Ihrem Host-Benutzer. Das verwaltete Arbeitsverzeichnis begrenzt anwendungsvermittelte Änderungen, ist aber keine Betriebssystem-Isolation — Repository-Code kann auf andere Host-Ressourcen zugreifen.",
+				"securityWarningContainer": "Entwicklungsbefehle laufen in einem gehärteten Container — schreibgeschütztes Root-Dateisystem, alle Capabilities entzogen, keine Host-Namespaces — in den nur das verwaltete Arbeitsverzeichnis und die Laufzeitverzeichnisse eingebunden sind. Repository-Code wird weiterhin ausgeführt; registrieren Sie daher nur Repositories, denen Sie vertrauen.",
+				"trustAcknowledgement": "Ich vertraue dem ausgewählten Repository, Entwicklungsbefehle mit meinen Host-Benutzerrechten auszuführen.",
+				"trustAcknowledgementContainer": "Ich vertraue dem ausgewählten Repository, Entwicklungsbefehle in der Container-Sandbox dieses Knotens auszuführen."
+			},
+			"containerRuntime": {
+				"notYetInUse": "Container-gestützte Ausführung ist noch nicht aktiviert. Heutige Läufe nutzen weiterhin die überwachte Prozess-Sandbox; diese Vorprüfung meldet, ob die Container-Laufzeit verfügbar sein wird, wenn sie umgestellt werden.",
+				"inUse": "Entwicklungsbefehle auf diesem Knoten werden in dieser Container-Laufzeit ausgeführt. Ein hier gemeldeter Fehler stoppt Läufe; es gibt keinen Rückfall auf den Host."
 			}
 		},
 		"knowledgeBase": {
@@ -746,6 +760,7 @@
 			"loadingHistory": "Lokaler Chat-Verlauf wird geladen…",
 			"loadingMessages": "Nachrichten werden geladen…",
 			"modelUnavailable": "Nicht verfügbar",
+			"nativeReasoningLabel": "Natives Reasoning",
 			"reasoningLabel": "Reasoning",
 			"retryConnection": "Erneut versuchen",
 			"stop": "Stopp",
@@ -1334,7 +1349,7 @@
 				"allowedRange": "Zulässiger Bereich",
 				"seconds": "Sekunden",
 				"minutes": "Minuten",
-				"bytesPositive": "Eine positive Anzahl an Bytes.",
+				"bytesPositive": "Eine positive Anzahl an Bytes. Änderungen werden ohne Neustart des Knotens wirksam.",
 				"errors": {
 					"range": "Bitte eine ganze Zahl innerhalb des zulässigen Bereichs eingeben.",
 					"format": "Muss dem Format b<Zahl> entsprechen (z. B. b9692).",
@@ -1354,25 +1369,27 @@
 				},
 				"defaultModelName": {
 					"label": "Standardmodell",
-					"description": "Das Modell, das für den lokalen Chat verwendet wird, wenn keines ausgewählt ist. Leer lassen, um den konfigurierten Standard zu verwenden."
+					"description": "Das Modell, das für den lokalen Chat verwendet wird, wenn keines ausgewählt ist. Leer lassen, um den konfigurierten Standard zu verwenden. Wird nach einem Neustart des Knotens wirksam."
 				},
 				"enableTools": {
 					"label": "Tools aktivieren",
-					"description": "Lokale Chat-Agenten dürfen Tools aufrufen."
+					"description": "Lokale Chat-Agenten dürfen Tools aufrufen. Änderungen werden ohne Neustart des Knotens wirksam."
 				},
 				"toolCapableModels": {
 					"label": "Tool-fähige Modelle",
-					"description": "Modellnamen, die Tool-Aufrufe unterstützen. Enter drücken, um jeden Namen hinzuzufügen."
+					"description": "Modellnamen, die Tool-Aufrufe unterstützen. Enter drücken, um jeden Namen hinzuzufügen. Änderungen werden ohne Neustart des Knotens wirksam."
 				},
 				"runtime": {
 					"title": "Lokale Modell-Laufzeit",
 					"tagHint": "Die empfohlene llama.cpp-Version wird in der Karte für llama.cpp-Laufzeit-Updates oben verwaltet."
 				},
 				"llamaMaxLoadedProcesses": {
-					"label": "Max. geladene llama-server-Prozesse"
+					"label": "Max. geladene llama-server-Prozesse",
+					"description": "Wird nach einem Neustart des Knotens wirksam."
 				},
 				"llamaIdleTimeToLiveSeconds": {
-					"label": "Leerlauf-Prozess-Lebensdauer"
+					"label": "Leerlauf-Prozess-Lebensdauer",
+					"description": "Wird nach einem Neustart des Knotens wirksam."
 				},
 				"keepModelWarm": {
 					"enabledLabel": "Modell warmhalten",
@@ -1394,27 +1411,31 @@
 				},
 				"huggingFaceDefaultQuant": {
 					"label": "Standard-Quantisierung",
-					"description": "Bevorzugte GGUF-Quantisierung beim Herunterladen von Hugging Face (z. B. Q4_K_M)."
+					"description": "Bevorzugte GGUF-Quantisierung beim Herunterladen von Hugging Face (z. B. Q4_K_M). Wird nach einem Neustart des Knotens wirksam."
 				},
 				"worker": {
 					"title": "Worker-Limits"
 				},
 				"maxResponseSizeMb": {
-					"label": "Maximale Antwortgröße"
+					"label": "Maximale Antwortgröße",
+					"description": "Wird nach einem Neustart des Knotens wirksam."
 				},
 				"advanced": {
 					"title": "Erweitert (Entwickler)",
-					"description": "Low-Level-Orchestrierung und AgentHome-Limits. Die meisten Änderungen werden nach einem Neustart wirksam.",
+					"description": "Low-Level-Orchestrierung und AgentHome-Limits. Der Orchestrierungs-Leerlauf-Timeout und die ausstehende Tool-Aufruf-Dauer werden nach einem Neustart wirksam; die AgentHome-Limits gelten sofort.",
 					"samplingNote": "Sampling-Standardwerte werden pro Nachricht im Chat konfiguriert."
 				},
 				"orchestrationIdleTimeoutSeconds": {
-					"label": "Orchestrierungs-Leerlauf-Timeout"
+					"label": "Orchestrierungs-Leerlauf-Timeout",
+					"description": "Wird nach einem Neustart des Knotens wirksam."
 				},
 				"agentHomePrepareTimeoutSeconds": {
-					"label": "AgentHome-Vorbereitungs-Timeout"
+					"label": "AgentHome-Vorbereitungs-Timeout",
+					"description": "Änderungen werden ohne Neustart des Knotens wirksam."
 				},
 				"agentHomeCommandTimeoutSeconds": {
-					"label": "AgentHome-Befehls-Timeout"
+					"label": "AgentHome-Befehls-Timeout",
+					"description": "Änderungen werden ohne Neustart des Knotens wirksam."
 				},
 				"agentHomeMaxSelectedFolderBytes": {
 					"label": "AgentHome max. ausgewählte Ordnergröße"
@@ -1423,7 +1444,8 @@
 					"label": "AgentHome max. Patch-Größe"
 				},
 				"maxPendingToolCallAgeMinutes": {
-					"label": "Max. ausstehende Tool-Aufruf-Dauer"
+					"label": "Max. ausstehende Tool-Aufruf-Dauer",
+					"description": "Wird nach einem Neustart des Knotens wirksam."
 				},
 				"speculativeMode": {
 					"label": "Spekulatives Decoding",
@@ -1439,12 +1461,13 @@
 				},
 				"speculativeDraftModel": {
 					"label": "Entwurfsmodell",
-					"description": "Ein installiertes chatfähiges Modell als Entwurfsmodell. Muss zur Tokenizer-Familie des Zielmodells passen.",
+					"description": "Ein installiertes chatfähiges Modell als Entwurfsmodell. Muss zur Tokenizer-Familie des Zielmodells passen. Wird nach einem Neustart des Knotens wirksam.",
 					"placeholder": "Entwurfsmodell auswählen",
 					"empty": "Keine installierten Chat-Modelle"
 				},
 				"speculativeDraftMaxTokens": {
-					"label": "Entwurfstoken pro Schritt"
+					"label": "Entwurfstoken pro Schritt",
+					"description": "Wird nach einem Neustart des Knotens wirksam."
 				},
 				"chatCacheReuse": {
 					"label": "Prompt-Cache-Wiederverwendung",
@@ -1461,6 +1484,14 @@
 					"downloadStarted": "Der empfohlene Reranker ({{model}}) wird heruntergeladen.",
 					"downloadInFlight": "Der empfohlene Reranker ({{model}}) wird bereits heruntergeladen.",
 					"downloadError": "Der Download des empfohlenen Rerankers konnte nicht gestartet werden."
+				},
+				"embeddingModel": {
+					"downloadRecommended": "Empfohlenes Embedding-Modell herunterladen",
+					"recommendedHelp": "Erforderlich für die Wissensdatenbank: Ohne Embedding-Modell können Dokumente nicht indexiert werden. Empfohlen: nomic-embed-text-v1.5 (~274 MB).",
+					"downloadAlreadyInstalled": "Das empfohlene Embedding-Modell ({{model}}) ist bereits installiert.",
+					"downloadStarted": "Das empfohlene Embedding-Modell ({{model}}) wird heruntergeladen.",
+					"downloadInFlight": "Das empfohlene Embedding-Modell ({{model}}) wird bereits heruntergeladen.",
+					"downloadError": "Der Download des empfohlenen Embedding-Modells konnte nicht gestartet werden."
 				},
 				"usageRates": {
 					"title": "Kostenraten der Nutzung",
@@ -1632,12 +1663,14 @@
 					"chat": "Chat",
 					"embedding": "Embedding",
 					"reranker": "Reranker",
+					"draft": "Entwurf (spekulative Dekodierung)",
 					"unknown": "Unbekannt"
 				},
 				"capability": {
 					"tools": "Werkzeuge",
 					"vision": "Bild",
-					"thinking": "Denken"
+					"thinking": "Denken",
+					"nativeReasoning": "Natives Denken"
 				},
 				"overrideLabel": "Typ überschreiben",
 				"reset": "Auf erkannt zurücksetzen"
@@ -1684,6 +1717,8 @@
 					"inspectError": "Die Dateien dieses Repositorys konnten nicht geladen werden.",
 					"noFiles": "Keine herunterladbaren GGUF-Dateien gefunden.",
 					"dynamic": "Dynamisch",
+					"draft": "Entwurfsmodell",
+					"draftHint": "Entwurfsmodell für spekulative Dekodierung – kein Chat-Modell",
 					"recommended": "Empfohlen",
 					"columns": {
 						"quant": "Quantisierung",
@@ -2557,9 +2592,11 @@
 					},
 					"updatedAt": "Aktualisiert {{time}}",
 					"refreshButton": "Katalog aktualisieren",
+					"noRefreshSource": "Nur gebündelter Katalog – es ist keine Aktualisierungsquelle konfiguriert.",
 					"toasts": {
 						"refreshed": "Der Modellkatalog wurde aktualisiert.",
-						"refreshError": "Der Modellkatalog konnte nicht aktualisiert werden."
+						"refreshError": "Der Modellkatalog konnte nicht aktualisiert werden.",
+						"noRefreshSource": "Es ist keine Quelle für die Katalogaktualisierung konfiguriert. Der gebündelte Katalog wird verwendet, es gibt nichts abzurufen."
 					}
 				}
 			},
@@ -2869,6 +2906,8 @@
 					"title": "Modell herunterladen",
 					"started": "Download gestartet. Das Modell erscheint, sobald es bereit ist.",
 					"inFlight": "Der Download läuft im Hintergrund; das Modell erscheint, sobald es bereit ist. Große Dateien können mehrere Minuten dauern.",
+					"failed": "Der Modell-Download ist fehlgeschlagen.",
+					"progress": "Wird heruntergeladen… {{percent}} %",
 					"error": "Der Modell-Download konnte nicht gestartet werden.",
 					"hint": "Nur Einzeldatei-Gewichte (SD1.5-Stil). Mehrteilige Modelle folgen später.",
 					"submit": "Herunterladen",
@@ -2896,6 +2935,14 @@
 			"saved": "Workflow gespeichert.",
 			"defaultName": "Unbenannter Workflow",
 			"deleteHint": "Tipp: Block oder Verbindung auswählen und Entf (oder Rücktaste) drücken, um ihn zu entfernen. Start und Ende können nicht entfernt werden.",
+			"runs": {
+				"title": "Läufe auf diesem Knoten",
+				"description": "Läufe werden auf dem Knoten gehalten, nicht in diesem Browser-Tab. Verbinden Sie sich nach einem Neuladen erneut mit einem Lauf oder brechen Sie ihn ab, um seinen Platz freizugeben.",
+				"cancelAll": "Alle Läufe abbrechen",
+				"cancelledCount": "{{count}} Lauf/Läufe abgebrochen.",
+				"reattachAria": "Erneut mit Lauf verbinden",
+				"cancelAria": "Lauf abbrechen"
+			},
 			"list": {
 				"empty": "Noch keine gespeicherten Workflows. Erstellen Sie einen, um zu beginnen.",
 				"openAria": "Workflow öffnen",
@@ -2981,6 +3028,7 @@
 				"execute": "Der Lauf konnte nicht gestartet werden.",
 				"continue": "Der Lauf konnte nicht fortgesetzt werden.",
 				"cancel": "Der Lauf konnte nicht abgebrochen werden.",
+				"cancelAll": "Die Läufe konnten nicht abgebrochen werden.",
 				"conflict": "Dieser Workflow wurde an anderer Stelle geändert. Laden Sie neu und wenden Sie Ihre Änderungen erneut an."
 			}
 		},

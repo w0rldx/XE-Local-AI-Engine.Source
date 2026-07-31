@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Coder.Tools;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -115,6 +116,9 @@ public sealed class CoderOfferSeamTests
         // through the merge inside LocalToolOfferProvider, never through the registry.
         var registry = new LocalAgentToolRegistry();
         var mcpRegistry = new McpToolRegistry(NullLogger<McpToolRegistry>.Instance);
-        return new LocalToolOfferProvider(registry, mcpRegistry, toolCapableModels, allowCloudKnowledgeAccess: false);
+        return new LocalToolOfferProvider(registry,
+            mcpRegistry,
+            StubNodeRuntimeSettings.Create().WithToolCapableModels(toolCapableModels).Build(),
+            allowCloudKnowledgeAccess: false);
     }
 }

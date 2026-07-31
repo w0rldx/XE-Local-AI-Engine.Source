@@ -1,5 +1,10 @@
 # Lane 4 scheduling experiment: corrected no-change decision
 
+> **Historical baseline — do not update the identities below.** The llama.cpp
+> tag, model hashes and binary SHA-256 recorded here describe the runtime this
+> experiment actually ran on. They are evidence, not configuration. The engine's
+> live pin is `LlamaCppReleasePins.PinnedTag` and has since moved past this tag.
+
 Source `88bd2353` was recaptured with the schema-2 scheduling harness, managed
 llama.cpp b9692 CUDA build, pinned Nomic embedding model, and pinned BGE
 reranker. The sanitized machine-readable result is

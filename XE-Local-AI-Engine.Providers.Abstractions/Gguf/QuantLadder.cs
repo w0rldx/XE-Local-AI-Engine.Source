@@ -87,16 +87,19 @@ public static class QuantLadder
     }
 
     /// <summary>
-    ///     <see langword="true" /> when <paramref name="quant" /> is a native, non-requantizable GGUF format. Today that is
-    ///     MXFP4 (gpt-oss ships its MoE weights natively at ~4.25 bits/weight): re-quantizing such a model UP to a higher
-    ///     nominal quant (Q6/Q8/…) only wastes space without adding quality — the weights are already at their trained
-    ///     precision — so the advisor must never prefer a higher-quality requant over the native file. The advisor uses
-    ///     this to cap the recommendable quality of a repo that ships a native format at the native file itself.
+    ///     <see langword="true" /> when <paramref name="quant" /> is a native, non-requantizable GGUF format — today MXFP4
+    ///     (gpt-oss ships its MoE weights natively at ~4.25 bits/weight) and NVFP4 (NVIDIA's Blackwell-era FP4; llama.cpp
+    ///     carries <c>GGML_TYPE_NVFP4</c> with sm_120-tuned kernels). Re-quantizing such a model UP to a higher nominal
+    ///     quant (Q6/Q8/…) only wastes space without adding quality — the weights are already at their trained precision —
+    ///     so the advisor must never prefer a higher-quality requant over the native file. The advisor uses this to cap
+    ///     the recommendable quality of a repo that ships a native format at the native file itself.
     /// </summary>
     public static bool IsNativeFormat(string quant)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(quant);
-        return string.Equals(Normalize(quant), "MXFP4", StringComparison.OrdinalIgnoreCase);
+        var normalized = Normalize(quant);
+        return string.Equals(normalized, "MXFP4", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(normalized, "NVFP4", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

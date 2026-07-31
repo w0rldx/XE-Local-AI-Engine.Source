@@ -23,12 +23,16 @@ path labels. The command fails while any Linux or Windows user-home path remains
 
 ```bash
 BASELINE_WORKTREE=/absolute/path/to/a/clean/e67d6697-worktree
+# The runtime dir is named for whichever llama.cpp tag the capture ran on. Resolve
+# it from the source of truth rather than pasting a literal, which goes stale.
+LLAMACPP_TAG=$(grep -oP 'PinnedTag\s*=\s*"\K[^"]+' \
+  XE-Local-AI-Engine.Providers.LlamaServer/LlamaCppReleasePins.cs)
 
 python3 scripts/performance/capture_inference_evidence.py sanitize \
   --input artifacts/performance/baseline-cuda.raw.json \
   --output docs/performance/baselines/2026-07-26-e67d6697-cuda.json \
   --replace "$PWD/.tmp/perf-models=\$MODEL_ROOT" \
-  --replace "$PWD/.tmp/llama.cpp-b9692=\$RUNTIME_ROOT" \
+  --replace "$PWD/.tmp/llama.cpp-$LLAMACPP_TAG=\$RUNTIME_ROOT" \
   --replace "$BASELINE_WORKTREE=\$BASELINE_REPO"
 ```
 

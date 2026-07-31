@@ -82,6 +82,39 @@ export const previewRunStartedResponseSchema = z.object({
 
 export type PreviewRunStartedResponse = z.infer<typeof previewRunStartedResponseSchema>;
 
+// One run as reported by the run-discovery endpoints (GET preview/runs, GET preview/runs/{runId}) — mirrors
+// PreviewRunSummaryResponse. These exist so a runId that is no longer in this tab's memory (a plain page
+// reload) is still reachable: without them an orphaned run held its concurrency slot with no way to find,
+// reattach to, or cancel it. `isLive` false means the run is terminal but its event log is still retained, so
+// a reattaching client can replay the result. `lastSeq` is the highest buffered sequence number; a client
+// passes it back as the hub's `afterSeq` to receive only what it has not already applied. `state` is the
+// backend PreviewRunState enum NAME.
+export const previewRunStates = ["Running", "Paused", "Completing", "Completed", "Cancelled", "Faulted"] as const;
+
+export const previewRunSummarySchema = z.object({
+	runId: z.string(),
+	state: z.enum(previewRunStates),
+	isLive: z.boolean(),
+	startedAtUtc: z.number(),
+	lastSeq: z.number(),
+	subscriberCount: z.number(),
+	pausedNodeId: z.string().nullish(),
+	pauseRequestId: z.string().nullish(),
+});
+
+export type PreviewRunSummary = z.infer<typeof previewRunSummarySchema>;
+
+export const listPreviewRunsResponseSchema = z.object({
+	items: z.array(previewRunSummarySchema),
+});
+
+// Response of POST preview/runs/cancel-all — how many live runs were cancelled.
+export const cancelAllPreviewRunsResponseSchema = z.object({
+	cancelledCount: z.number(),
+});
+
+export type CancelAllPreviewRunsResponse = z.infer<typeof cancelAllPreviewRunsResponseSchema>;
+
 // --- SignalR run-update event payloads ---
 // EVERY event carries `runId` (Guid on the wire → string here) — that is the cross-run contamination
 // guard (a single hub connection may drive several runs). Payloads are untrusted wire data, so every

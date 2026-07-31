@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 
 import type { SaveNodeSettingsResponse } from "@/core/api/generated";
 import {
+	downloadRecommendedEmbeddingMutation,
 	downloadRecommendedRerankerMutation,
 	getNodeSettingsOptions,
 	getNodeSettingsQueryKey,
@@ -15,7 +16,7 @@ import {
 import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
 import { toast } from "@/core/ui/notifications/Toast";
-import { toChatModelOptions } from "@/features/chat/pages/ChatModelOptions";
+import { toChatModelOptions, toDraftModelOptions } from "@/features/chat/pages/ChatModelOptions";
 import { DownloadProgressPanel } from "@/features/models/components/DownloadProgressPanel";
 import { useActiveGgufDownloads, useCancelGgufDownload } from "@/features/models/queries/useGgufDownload";
 import { useGgufBrowseStore } from "@/features/models/stores/GgufBrowseStore";
@@ -76,11 +77,13 @@ export function NodeSettings() {
 	const [fieldErrors, setFieldErrors] = useState<Readonly<Record<string, string>>>({});
 	const fieldBounds = useMemo(() => toNodeSettingsFieldBounds(settings), [settings]);
 
-	// Installed chat-capable models offered as the speculative draft model (value = model name, resolved server-side).
+	// Models offered as the speculative draft model (value = model name, resolved server-side). Purpose-built MTP
+	// drafters are `Draft`-kind and so are absent from the chat list — they must be offered HERE, which is the only
+	// place they are usable at all.
 	const { data: localModels } = useQuery(withResponseValidation(listLocalModelsOptions()));
 	const draftModelOptions = useMemo(
 		() =>
-			toChatModelOptions(localModels?.items ?? [], localModels?.isAvailable ?? false).map((option) => ({
+			toDraftModelOptions(localModels?.items ?? [], localModels?.isAvailable ?? false).map((option) => ({
 				value: option.value,
 				label: option.label,
 			})),
@@ -206,6 +209,71 @@ export function NodeSettings() {
 			onError: (error) =>
 				toast.error(runtimeErrorMessage(error, t("pages.models.gguf.download.cancelError", "Could not cancel the download."))),
 		});
+	};
+
+	// One-click recommended-embedding download. The embedding model is not a node-settings field (there is nothing to
+	// select/save) — it just needs to be installed for the knowledge base to index documents at all. Progress reuses
+	// the same GgufDownload feed and in-flight tracking as the reranker download above.
+	const [recommendedEmbeddingModelName, setRecommendedEmbeddingModelName] = useState<string | null>(null);
+
+	const isRecommendedEmbeddingInFlight =
+		recommendedEmbeddingModelName !== null && inFlightDownloads.includes(recommendedEmbeddingModelName);
+	const embeddingInFlight = useMemo(
+		() => (isRecommendedEmbeddingInFlight && recommendedEmbeddingModelName !== null ? [recommendedEmbeddingModelName] : []),
+		[isRecommendedEmbeddingInFlight, recommendedEmbeddingModelName],
+	);
+
+	const downloadRecommendedEmbedding = useMutation({
+		...withResponseValidation(downloadRecommendedEmbeddingMutation()),
+		onSuccess: (response) => {
+			setRecommendedEmbeddingModelName(response.modelName);
+			if (response.alreadyInstalled) {
+				toast.info(
+					t(
+						"pages.nodeSettings.fields.embeddingModel.downloadAlreadyInstalled",
+						"The recommended embedding model ({{model}}) is already installed.",
+						{
+							model: response.modelName,
+						},
+					),
+				);
+				return;
+			}
+			// Mark in-flight immediately so the button duplicate-guards and the progress panel appears without waiting for
+			// the first SignalR push (markInFlight is idempotent, so an already-in-flight rejoin is a no-op).
+			markInFlight(response.modelName);
+			toast.info(
+				response.alreadyInFlight
+					? t(
+							"pages.nodeSettings.fields.embeddingModel.downloadInFlight",
+							"The recommended embedding model ({{model}}) is already downloading.",
+							{
+								model: response.modelName,
+							},
+						)
+					: t(
+							"pages.nodeSettings.fields.embeddingModel.downloadStarted",
+							"Downloading the recommended embedding model ({{model}}).",
+							{
+								model: response.modelName,
+							},
+						),
+			);
+		},
+		onError: (error) =>
+			toast.error(
+				runtimeErrorMessage(
+					error,
+					t(
+						"pages.nodeSettings.fields.embeddingModel.downloadError",
+						"Could not start the recommended embedding model download.",
+					),
+				),
+			),
+	});
+
+	const handleDownloadRecommendedEmbedding = (): void => {
+		downloadRecommendedEmbedding.mutate({});
 	};
 
 	useEffect(() => {
@@ -399,10 +467,13 @@ export function NodeSettings() {
 					onDownloadRecommendedReranker={handleDownloadRecommendedReranker}
 					isDownloadRecommendedRerankerPending={downloadRecommendedReranker.isPending}
 					isRecommendedRerankerInFlight={isRecommendedRerankerInFlight}
+					onDownloadRecommendedEmbedding={handleDownloadRecommendedEmbedding}
+					isDownloadRecommendedEmbeddingPending={downloadRecommendedEmbedding.isPending}
+					isRecommendedEmbeddingInFlight={isRecommendedEmbeddingInFlight}
 				/>
 
 				<DownloadProgressPanel
-					inFlight={rerankerInFlight}
+					inFlight={[...rerankerInFlight, ...embeddingInFlight]}
 					downloadStatuses={rerankerDownloadStatuses}
 					onCancel={handleCancelRerankerDownload}
 					cancellingModelName={cancelGgufDownloadMutation.isPending ? (cancelGgufDownloadMutation.variables ?? null) : null}

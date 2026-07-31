@@ -59,6 +59,9 @@ const { generatedMock } = vi.hoisted(() => ({
 		// One-click recommended-reranker download mutation.
 		downloadRecommendedRerankerMutation: vi.fn(),
 		downloadRerankerFn: vi.fn(),
+		// One-click recommended-embedding download mutation.
+		downloadRecommendedEmbeddingMutation: vi.fn(),
+		downloadEmbeddingFn: vi.fn(),
 	},
 }));
 
@@ -80,6 +83,7 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	getLlamaCppSourceBuildStatusOptions: generatedMock.getLlamaCppSourceBuildStatusOptions,
 	updateLlamaCppRuntimeMutation: generatedMock.updateLlamaCppRuntimeMutation,
 	downloadRecommendedRerankerMutation: generatedMock.downloadRecommendedRerankerMutation,
+	downloadRecommendedEmbeddingMutation: generatedMock.downloadRecommendedEmbeddingMutation,
 }));
 
 // The recommended-reranker download progress reuses the shared GgufDownload feed (SignalR hub + cancel mutation).
@@ -210,6 +214,15 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 			alreadyInFlight: false,
 		});
 		generatedMock.downloadRecommendedRerankerMutation.mockReturnValue({ mutationFn: generatedMock.downloadRerankerFn });
+		// Recommended-embedding download: default resolves to a fresh start (not installed, not already in flight).
+		generatedMock.downloadEmbeddingFn.mockResolvedValue({
+			modelName: "nomic-embed-text-v1.5",
+			repoId: "nomic-ai/nomic-embed-text-v1.5-GGUF",
+			quant: "Q4_K_M",
+			alreadyInstalled: false,
+			alreadyInFlight: false,
+		});
+		generatedMock.downloadRecommendedEmbeddingMutation.mockReturnValue({ mutationFn: generatedMock.downloadEmbeddingFn });
 		// The HF token draft lives in a store that survives a remount — reset it so each test starts blank.
 		useHfTokenStore.setState({ tokenDraft: "" });
 		// Developer mode persists in a store across tests — reset to off so dev-gating tests start from a known state.
@@ -482,5 +495,40 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 		await waitFor(() => expect(toastMock.info).toHaveBeenCalled());
 		expect(screen.queryByTestId("model-fit-download-card")).toBeNull();
 		expect((screen.getByTestId("node-settings-reranker-download-recommended") as HTMLButtonElement).disabled).toBe(false);
+	});
+
+	// One-click recommended-embedding download: response-state handling. Mirrors the reranker download above — the
+	// embedding model is not a node-settings field, so this only exercises the button + shared progress feed.
+	it("downloads the recommended embedding model on a fresh start — shows progress and duplicate-guards the button", async () => {
+		renderPage();
+		const button = await screen.findByTestId("node-settings-embedding-download-recommended");
+
+		fireEvent.click(button);
+
+		await waitFor(() => expect(generatedMock.downloadEmbeddingFn).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(screen.getByTestId("model-fit-download-card")).toBeTruthy());
+		expect(screen.getByTestId("model-fit-download-row-nomic-embed-text-v1.5")).toBeTruthy();
+		expect((screen.getByTestId("node-settings-embedding-download-recommended") as HTMLButtonElement).disabled).toBe(true);
+		expect(toastMock.info).toHaveBeenCalled();
+	});
+
+	it("shows an already-installed notice and no progress panel when the embedding model is already installed", async () => {
+		generatedMock.downloadEmbeddingFn.mockResolvedValueOnce({
+			modelName: "nomic-embed-text-v1.5",
+			repoId: "nomic-ai/nomic-embed-text-v1.5-GGUF",
+			quant: "Q4_K_M",
+			alreadyInstalled: true,
+			alreadyInFlight: false,
+		});
+
+		renderPage();
+		const button = await screen.findByTestId("node-settings-embedding-download-recommended");
+
+		fireEvent.click(button);
+
+		await waitFor(() => expect(generatedMock.downloadEmbeddingFn).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(toastMock.info).toHaveBeenCalled());
+		expect(screen.queryByTestId("model-fit-download-card")).toBeNull();
+		expect((screen.getByTestId("node-settings-embedding-download-recommended") as HTMLButtonElement).disabled).toBe(false);
 	});
 });

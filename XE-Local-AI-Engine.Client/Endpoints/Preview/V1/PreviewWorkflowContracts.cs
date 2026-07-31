@@ -61,6 +61,31 @@ public sealed record PreviewWorkflowResponse(
 /// <summary>Execute response — the new run id the client subscribes to over the hub.</summary>
 public sealed record PreviewRunStartedResponse(Guid RunId);
 
+/// <summary>
+///     One run as seen by the discovery endpoints. <c>IsLive</c> is true while the run still holds a concurrency slot;
+///     a false value means the run is terminal but its event log is still retained, so a reattaching client can replay
+///     the result. <c>LastSeq</c> is the highest buffered sequence number, which a client passes back as the hub's
+///     <c>afterSeq</c> to receive only what it has not already applied.
+/// </summary>
+public sealed record PreviewRunSummaryResponse(
+    Guid RunId,
+    string State,
+    bool IsLive,
+    long StartedAtUtc,
+    long LastSeq,
+    int SubscriberCount,
+    string? PausedNodeId,
+    string? PauseRequestId);
+
+/// <summary>Response for <c>GET preview/runs</c>.</summary>
+public sealed class ListPreviewRunsResponse
+{
+    public required IReadOnlyList<PreviewRunSummaryResponse> Items { get; init; }
+}
+
+/// <summary>Response for <c>POST preview/runs/cancel-all</c> — how many live runs were cancelled.</summary>
+public sealed record CancelAllPreviewRunsResponse(int CancelledCount);
+
 /// <summary>Maps Application contracts to wire responses.</summary>
 internal static class PreviewWorkflowResponseMapper
 {
@@ -72,5 +97,21 @@ internal static class PreviewWorkflowResponseMapper
     public static PreviewWorkflowResponse ToResponse(this PreviewWorkflowDetail detail)
     {
         return new PreviewWorkflowResponse(detail.Id, detail.Name, detail.Graph, detail.Version, detail.CreatedAtUtc, detail.UpdatedAtUtc);
+    }
+
+    public static PreviewRunSummaryResponse ToResponse(this PreviewRunSnapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+
+        // State goes over the wire as its enum NAME so the client reads a stable string, matching how the graph's
+        // node kinds serialize.
+        return new PreviewRunSummaryResponse(snapshot.RunId,
+            snapshot.State.ToString(),
+            snapshot.IsLive,
+            snapshot.StartedAtUtc,
+            snapshot.LastSeq,
+            snapshot.SubscriberCount,
+            snapshot.PausedNodeId,
+            snapshot.PauseRequestId);
     }
 }

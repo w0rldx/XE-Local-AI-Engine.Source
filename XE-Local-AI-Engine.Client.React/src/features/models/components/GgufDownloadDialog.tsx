@@ -161,6 +161,11 @@ export function GgufDownloadDialog({ repository, onClose, onConfirm, onConfirmDe
 																	{t("pages.models.gguf.download.dynamic", "Dynamic")}
 																</Badge>
 															) : null}
+															{file.isDraft ? (
+																<Badge color="gray" variant="light" size="sm" data-testid={`gguf-draft-${file.quant}`}>
+																	{t("pages.models.gguf.download.draft", "Draft model")}
+																</Badge>
+															) : null}
 															{file.isRecommended ? (
 																<Badge
 																	color="blue"
@@ -174,7 +179,12 @@ export function GgufDownloadDialog({ repository, onClose, onConfirm, onConfirmDe
 															) : null}
 														</Group>
 														<Text size="xs" c="dimmed">
-															{t(`pages.models.gguf.download.quality.${qualityTierLabelKey[file.qualityTier]}`, file.qualityTier)}
+															{file.isDraft
+																? t(
+																	"pages.models.gguf.download.draftHint",
+																	"Speculative-decoding drafter — not a chat model",
+																  )
+																: t(`pages.models.gguf.download.quality.${qualityTierLabelKey[file.qualityTier]}`, file.qualityTier)}
 														</Text>
 													</Stack>
 												</Table.Td>

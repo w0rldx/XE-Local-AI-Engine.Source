@@ -53,7 +53,10 @@ internal static class LocalModelsMapper
     ///     WITHOUT an <c>/api/show</c> probe — a downloaded GGUF in the chat picker has a completion head by
     ///     construction. Reasoning/tool support and the capability tokens are detected offline from the model's GGUF
     ///     chat template (carried on the descriptor by the store); a model whose template could not be read defaults to
-    ///     the safe no-tools/no-reasoning classification (a non-tool model is never offered tools). An embedding-only
+    ///     the safe no-tools/no-reasoning classification (a non-tool model is never offered tools). Reasoning surfaces as
+    ///     TWO mutually exclusive flags: <see cref="LocalModelResponse.IsReasoningCapable" /> (graded — a
+    ///     <c>think:&lt;level&gt;</c> control exists) and <see cref="LocalModelResponse.IsNativeReasoningCapable" />
+    ///     (the model reasons on a template-baked channel with no graded switch). An embedding-only
     ///     GGUF is recognized offline from its name (<see cref="ModelKindDetector.IsEmbeddingName" />, matching
     ///     EMBED/NOMIC-EMBED/BGE-… fragments) and tagged <see cref="ModelKind.Embedding" />; a reranker
     ///     (cross-encoder) GGUF is recognized from its name (<see cref="ModelKindDetector.IsRerankerName" />, matching
@@ -82,6 +85,7 @@ internal static class LocalModelsMapper
                        DetectedKind = kind.ToString(),
                        Capabilities = descriptor.Capabilities,
                        IsReasoningCapable = descriptor.IsReasoningCapable,
+                       IsNativeReasoningCapable = descriptor.IsNativeReasoningCapable,
                        IsToolCapable = descriptor.IsToolCapable,
                        IsOverridden = false
                    };
@@ -91,12 +95,19 @@ internal static class LocalModelsMapper
     }
 
     /// <summary>
-    ///     Classifies an installed GGUF from its name alone (a fresh GGUF carries no capability probe). Reranker is
-    ///     checked before embedding because a reranker name such as <c>bge-reranker-…</c> also matches the embedding
-    ///     prefix, and the reranker classification is the correct one. Any other name defaults to Chat.
+    ///     Classifies an installed GGUF from its name alone (a fresh GGUF carries no capability probe). A
+    ///     speculative-decoding drafter is checked FIRST: its key carries the exact <c>MTP-</c> quant marker, and left
+    ///     unclassified it would default to Chat and sit in the picker as a 0.4 GB twin of the real model it drafts for.
+    ///     Reranker is then checked before embedding because a reranker name such as <c>bge-reranker-…</c> also matches
+    ///     the embedding prefix, and the reranker classification is the correct one. Any other name defaults to Chat.
     /// </summary>
     private static ModelKind ClassifyGgufKindByName(string modelName)
     {
+        if (ModelKindDetector.IsDraftName(modelName))
+        {
+            return ModelKind.Draft;
+        }
+
         if (ModelKindDetector.IsRerankerName(modelName))
         {
             return ModelKind.Reranker;
