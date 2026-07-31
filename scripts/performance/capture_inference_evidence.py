@@ -22,10 +22,13 @@ import signal
 import statistics
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import xml.etree.ElementTree as ET
+from decimal import Decimal, InvalidOperation
 from datetime import datetime, timezone
+from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
@@ -81,6 +84,15 @@ FRAMEWORK_PACKAGE_NAMES = {
     "openai_version": "OpenAI",
     "mcp_version": "ModelContextProtocol",
 }
+POLICY_SCHEMA_VERSION = "1.0"
+POLICY_FIELDS = {"schema_version", "policy_id", "allowed_identity_changes", "rules"}
+POLICY_REQUIRED_FIELDS = {"schema_version", "policy_id", "rules"}
+POLICY_RULE_FIELDS = {"id", "command", "metric", "statistic", "kind", "threshold_percent"}
+POLICY_SAFE_TOKEN_PATTERN = re.compile(r"^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$")
+POLICY_SAFE_TOKEN_MAX_LENGTH = 128
+ALLOWED_IDENTITY_CHANGES = {"framework", "runtime"}
+POLICY_STATISTICS = {"median", "p95"}
+POLICY_RULE_KINDS = {"minimum_improvement_percent", "maximum_regression_percent"}
 
 
 class CaptureError(RuntimeError):
@@ -106,6 +118,36 @@ def write_json(path: Path, value: Any) -> None:
     temp = path.with_suffix(path.suffix + ".tmp")
     temp.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     temp.replace(path)
+
+
+def write_json_atomic(path: Path, value: Any) -> None:
+    """Durably replace one JSON verdict without exposing a partially written file."""
+    temporary_path: Path | None = None
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as stream:
+            temporary_path = Path(stream.name)
+            json.dump(value, stream, indent=2, sort_keys=True, allow_nan=False)
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary_path, path)
+        temporary_path = None
+    except (OSError, TypeError, ValueError) as exc:
+        raise CaptureError("Could not write gate verdict to the requested destination") from exc
+    finally:
+        if temporary_path is not None:
+            try:
+                temporary_path.unlink(missing_ok=True)
+            except OSError:
+                pass
 
 
 def sha256_file(path: Path) -> str:
@@ -138,6 +180,31 @@ def require_string(obj: dict[str, Any], key: str, context: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise CaptureError(f"{context}.{key} must be a non-empty string")
     return value
+
+
+def is_finite_number(value: Any) -> bool:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return False
+    try:
+        return Decimal(str(value)).is_finite()
+    except (InvalidOperation, OverflowError, ValueError):
+        return False
+
+
+def is_sha256(value: Any) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) == 64
+        and all(character in "0123456789abcdef" for character in value)
+    )
+
+
+def is_safe_policy_token(value: Any) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) <= POLICY_SAFE_TOKEN_MAX_LENGTH
+        and POLICY_SAFE_TOKEN_PATTERN.fullmatch(value) is not None
+    )
 
 
 def verify_identity(label: str, entry: dict[str, Any]) -> dict[str, Any]:
@@ -1125,6 +1192,549 @@ def framework_identity_projection(artifact: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def verified_runtime_identity_projection(artifact: dict[str, Any]) -> dict[str, Any]:
+    runtime = artifact.get("verified_identity", {}).get("runtime")
+    if not isinstance(runtime, dict) or runtime.get("sha256_verified") is not True:
+        raise CaptureError("Artifact lacks verified runtime identity")
+    if any(
+        not isinstance(runtime.get(key), str) or not runtime[key].strip()
+        for key in ("tag", "provenance", "backend")
+    ) or not is_sha256(runtime.get("sha256")):
+        raise CaptureError("Artifact lacks verified runtime identity")
+    dependencies = runtime.get("runtime_local_dependencies")
+    if not isinstance(dependencies, dict) or not is_sha256(dependencies.get("manifest_sha256")):
+        raise CaptureError("Artifact lacks verified runtime dependency identity")
+    auxiliaries = runtime.get("auxiliary_binaries", [])
+    if not isinstance(auxiliaries, list):
+        raise CaptureError("Artifact has invalid verified auxiliary runtime identities")
+    projected_auxiliaries: list[dict[str, Any]] = []
+    for auxiliary in auxiliaries:
+        if (
+            not isinstance(auxiliary, dict)
+            or auxiliary.get("sha256_verified") is not True
+            or not isinstance(auxiliary.get("name"), str)
+            or not auxiliary["name"].strip()
+            or not is_sha256(auxiliary.get("sha256"))
+        ):
+            raise CaptureError("Artifact has invalid verified auxiliary runtime identities")
+        auxiliary_dependencies = auxiliary.get("runtime_local_dependencies")
+        if not isinstance(auxiliary_dependencies, dict) or not is_sha256(
+            auxiliary_dependencies.get("manifest_sha256")
+        ):
+            raise CaptureError("Artifact lacks verified auxiliary runtime dependency identity")
+        projected_auxiliaries.append({
+            "name": auxiliary["name"],
+            "sha256": auxiliary["sha256"],
+            "dependency_manifest_sha256": auxiliary_dependencies["manifest_sha256"],
+        })
+    return {
+        "tag": runtime["tag"],
+        "provenance": runtime["provenance"],
+        "backend": runtime["backend"],
+        "sha256": runtime["sha256"],
+        "dependency_manifest_sha256": dependencies["manifest_sha256"],
+        "auxiliary_binaries": projected_auxiliaries,
+    }
+
+
+def verified_framework_identity_projection(artifact: dict[str, Any]) -> dict[str, Any]:
+    projected = framework_identity_projection(artifact)
+    framework_identity = artifact["verified_identity"]["framework"]
+    required = framework_identity.get("required")
+    if not isinstance(required, bool) or framework_identity.get("verified") is not True:
+        raise CaptureError("Artifact lacks a valid verified framework identity decision")
+    declaration = projected["declaration"]
+    if any(
+        not isinstance(declaration.get(key), str) or not declaration[key].strip()
+        for key in ("source_commit", "maf_version", "meai_version", "openai_version")
+    ):
+        raise CaptureError("Artifact contains an incomplete framework declaration")
+    if "mcp_version" in declaration and (
+        not isinstance(declaration["mcp_version"], str) or not declaration["mcp_version"].strip()
+    ):
+        raise CaptureError("Artifact contains an incomplete framework declaration")
+    command_trees = framework_identity["command_trees"]
+    if required is False:
+        if command_trees != []:
+            raise CaptureError("Artifact has framework command trees when framework verification is not required")
+        return {"required": False, **projected}
+    if not command_trees:
+        raise CaptureError("Artifact lacks verified framework command-tree identity")
+    for command_tree in command_trees:
+        if (
+            not isinstance(command_tree, dict)
+            or not isinstance(command_tree.get("command"), str)
+            or not command_tree["command"].strip()
+            or not isinstance(command_tree.get("git_head"), str)
+            or not command_tree["git_head"].strip()
+            or command_tree.get("git_head_verified") is not True
+            or command_tree.get("git_clean") is not True
+            or command_tree.get("declared_versions_verified") is not True
+        ):
+            raise CaptureError("Artifact contains incomplete verified framework command-tree identity")
+        pins = command_tree.get("central_package_pins")
+        assemblies = command_tree.get("assemblies")
+        if (
+            not isinstance(pins, dict)
+            or pins.get("sha256_verified") is not True
+            or not is_sha256(pins.get("sha256"))
+            or not isinstance(assemblies, list)
+            or not assemblies
+            or not all(
+                isinstance(assembly, dict)
+                and assembly.get("sha256_verified") is True
+                and isinstance(assembly.get("name"), str)
+                and bool(assembly["name"].strip())
+                and is_sha256(assembly.get("sha256"))
+                for assembly in assemblies
+            )
+        ):
+            raise CaptureError("Artifact contains unverified framework file identities")
+    return {"required": True, **projected}
+
+
+def immutable_gate_identity_projection(artifact: dict[str, Any]) -> dict[str, Any]:
+    verified_identity = artifact.get("verified_identity")
+    host = artifact.get("host")
+    if not isinstance(verified_identity, dict) or not isinstance(host, dict):
+        raise CaptureError("Artifact lacks verified immutable identity")
+    models = verified_identity.get("models")
+    corpus = verified_identity.get("corpus")
+    if (
+        not isinstance(models, list)
+        or not models
+        or not all(
+            isinstance(model, dict)
+            and model.get("sha256_verified") is True
+            and all(
+                isinstance(model.get(key), str) and bool(model[key].strip())
+                for key in ("name", "role", "quant")
+            )
+            and is_sha256(model.get("sha256"))
+            for model in models
+        )
+        or not isinstance(corpus, dict)
+        or corpus.get("sha256_verified") is not True
+        or not isinstance(corpus.get("name"), str)
+        or not corpus["name"].strip()
+        or not is_sha256(corpus.get("sha256"))
+    ):
+        raise CaptureError("Artifact lacks verified model or corpus identity")
+    for optional_key in ("repository", "revision"):
+        if any(
+            optional_key in model
+            and (not isinstance(model[optional_key], str) or not model[optional_key].strip())
+            for model in models
+        ):
+            raise CaptureError("Artifact contains an incomplete model identity")
+    if "revision" in corpus and (
+        not isinstance(corpus["revision"], str) or not corpus["revision"].strip()
+    ):
+        raise CaptureError("Artifact contains an incomplete corpus identity")
+    if (
+        any(
+            not isinstance(host.get(key), str) or not host[key].strip()
+            for key in ("os", "kernel", "architecture", "cpu")
+        )
+        or isinstance(host.get("logical_cpu_count"), bool)
+        or not isinstance(host.get("logical_cpu_count"), int)
+        or host["logical_cpu_count"] <= 0
+    ):
+        raise CaptureError("Artifact lacks complete machine identity")
+    runtime_devices = host.get("runtime_devices")
+    if (
+        not isinstance(runtime_devices, dict)
+        or not isinstance(runtime_devices.get("argv"), list)
+        or not runtime_devices["argv"]
+        or not all(isinstance(argument, str) and argument for argument in runtime_devices["argv"])
+        or not isinstance(runtime_devices.get("available"), bool)
+        or (
+            runtime_devices.get("exit_code") is not None
+            and (
+                isinstance(runtime_devices["exit_code"], bool)
+                or not isinstance(runtime_devices["exit_code"], int)
+            )
+        )
+        or not isinstance(runtime_devices.get("stdout"), str)
+        or not isinstance(runtime_devices.get("stderr"), str)
+    ):
+        raise CaptureError("Artifact lacks complete runtime device identity")
+    return {
+        "models": [
+            {
+                key: model.get(key)
+                for key in ("name", "role", "quant", "repository", "revision", "sha256")
+                if key in model
+            }
+            for model in models
+        ],
+        "corpus": {
+            key: corpus.get(key)
+            for key in ("name", "revision", "sha256")
+            if key in corpus
+        },
+        "machine": {
+            key: host.get(key)
+            for key in ("os", "kernel", "architecture", "cpu", "logical_cpu_count")
+        },
+        "devices": runtime_devices,
+    }
+
+
+def artifact_commands(artifact: dict[str, Any], side: str) -> tuple[list[dict[str, Any]] | None, dict[str, Any] | None]:
+    commands = artifact.get("commands")
+    if not isinstance(commands, list) or not commands:
+        return None, {"reason": "artifact.malformed", "side": side}
+    names: set[str] = set()
+    checked: list[dict[str, Any]] = []
+    for command in commands:
+        if not isinstance(command, dict):
+            return None, {"reason": "artifact.malformed", "side": side}
+        name = command.get("name")
+        if not isinstance(name, str) or not name.strip():
+            return None, {"reason": "artifact.malformed", "side": side}
+        argv_sha256 = command.get("argv_sha256")
+        if (
+            not isinstance(argv_sha256, str)
+            or len(argv_sha256) != 64
+            or any(character not in "0123456789abcdef" for character in argv_sha256)
+        ):
+            return None, {"reason": "artifact.malformed", "side": side}
+        if name in names:
+            return None, {"reason": "artifact.duplicate_command_name", "side": side}
+        names.add(name)
+        checked.append(command)
+    return checked, None
+
+
+def validate_policy(policy: dict[str, Any]) -> tuple[str | None, list[str] | None, list[dict[str, Any]] | None]:
+    policy_id = policy.get("policy_id") if is_safe_policy_token(policy.get("policy_id")) else None
+    if not POLICY_REQUIRED_FIELDS.issubset(policy) or not set(policy).issubset(POLICY_FIELDS):
+        return policy_id, None, None
+    if policy.get("schema_version") != POLICY_SCHEMA_VERSION:
+        return policy_id, None, None
+    if policy_id is None:
+        return None, None, None
+    allowed = policy.get("allowed_identity_changes", [])
+    if not isinstance(allowed, list) or any(not isinstance(item, str) for item in allowed):
+        return policy_id, None, None
+    if len(set(allowed)) != len(allowed) or any(item not in ALLOWED_IDENTITY_CHANGES for item in allowed):
+        return policy_id, None, None
+    rules = policy.get("rules")
+    if not isinstance(rules, list) or not rules:
+        return policy_id, None, None
+    rule_ids: set[str] = set()
+    checked_rules: list[dict[str, Any]] = []
+    for rule in rules:
+        if not isinstance(rule, dict) or set(rule) != POLICY_RULE_FIELDS:
+            return policy_id, None, None
+        rule_id = rule.get("id")
+        threshold = rule.get("threshold_percent")
+        if (
+            not is_safe_policy_token(rule_id)
+            or rule_id in rule_ids
+            or not is_safe_policy_token(rule.get("command"))
+            or not is_safe_policy_token(rule.get("metric"))
+            or rule.get("statistic") not in POLICY_STATISTICS
+            or rule.get("kind") not in POLICY_RULE_KINDS
+            or not is_finite_number(threshold)
+            or threshold < 0
+        ):
+            return policy_id, None, None
+        rule_ids.add(rule_id)
+        checked_rules.append(rule)
+    return policy_id, allowed, checked_rules
+
+
+def gate_identity(
+    baseline: dict[str, Any],
+    candidate: dict[str, Any],
+    allowed_changes: list[str],
+) -> dict[str, Any]:
+    try:
+        baseline_framework = verified_framework_identity_projection(baseline)
+        candidate_framework = verified_framework_identity_projection(candidate)
+        baseline_runtime = verified_runtime_identity_projection(baseline)
+        candidate_runtime = verified_runtime_identity_projection(candidate)
+        baseline_identity = immutable_gate_identity_projection(baseline)
+        candidate_identity = immutable_gate_identity_projection(candidate)
+    except (CaptureError, AttributeError, KeyError, TypeError):
+        return {
+            "status": "unevaluable",
+            "reason": "identity.unverified",
+            "allowed_changes": allowed_changes,
+            "changed_dimensions": [],
+        }
+
+    projections = {
+        "models": (baseline_identity["models"], candidate_identity["models"]),
+        "corpus": (baseline_identity["corpus"], candidate_identity["corpus"]),
+        "runtime": (baseline_runtime, candidate_runtime),
+        "framework": (baseline_framework, candidate_framework),
+        "machine": (baseline_identity["machine"], candidate_identity["machine"]),
+        "devices": (baseline_identity["devices"], candidate_identity["devices"]),
+    }
+    changed = [name for name, (before, after) in projections.items() if before != after]
+    undeclared = [name for name in changed if name not in allowed_changes]
+    if undeclared:
+        return {
+            "status": "unevaluable",
+            "reason": "identity.undeclared_mismatch",
+            "allowed_changes": allowed_changes,
+            "changed_dimensions": changed,
+        }
+    return {
+        "status": "passed",
+        "reason": "identity.declared_comparable" if changed else "identity.matched",
+        "allowed_changes": allowed_changes,
+        "changed_dimensions": changed,
+    }
+
+
+def unevaluable_rule(rule: dict[str, Any], reason: str) -> dict[str, Any]:
+    return {
+        "id": rule["id"],
+        "command": rule["command"],
+        "metric": rule["metric"],
+        "statistic": rule["statistic"],
+        "kind": rule["kind"],
+        "threshold_percent": rule["threshold_percent"],
+        "reason": reason,
+        "passed": False,
+    }
+
+
+def evaluate_policy_rule(
+    rule: dict[str, Any],
+    baseline_commands: dict[str, dict[str, Any]],
+    candidate_commands: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    name = rule["command"]
+    if name not in baseline_commands or name not in candidate_commands:
+        return unevaluable_rule(rule, "rule.command_missing")
+    baseline_command = baseline_commands[name]
+    candidate_command = candidate_commands[name]
+    if baseline_command.get("argv_sha256") != candidate_command.get("argv_sha256"):
+        return unevaluable_rule(rule, "identity.undeclared_mismatch")
+    baseline_aggregates = baseline_command.get("aggregates")
+    candidate_aggregates = candidate_command.get("aggregates")
+    if not isinstance(baseline_aggregates, dict) or not isinstance(candidate_aggregates, dict):
+        return unevaluable_rule(rule, "rule.metric_missing")
+    metric = rule["metric"]
+    if metric not in baseline_aggregates or metric not in candidate_aggregates:
+        return unevaluable_rule(rule, "rule.metric_missing")
+    baseline_metric = baseline_aggregates[metric]
+    candidate_metric = candidate_aggregates[metric]
+    if not isinstance(baseline_metric, dict) or not isinstance(candidate_metric, dict):
+        return unevaluable_rule(rule, "rule.statistic_missing")
+    statistic = rule["statistic"]
+    if statistic not in baseline_metric or statistic not in candidate_metric:
+        return unevaluable_rule(rule, "rule.statistic_missing")
+    baseline_value = baseline_metric[statistic]
+    candidate_value = candidate_metric[statistic]
+    if (
+        isinstance(baseline_value, bool)
+        or isinstance(candidate_value, bool)
+        or not isinstance(baseline_value, (int, float))
+        or not isinstance(candidate_value, (int, float))
+    ):
+        return unevaluable_rule(rule, "rule.value_non_finite")
+    if not is_finite_number(baseline_value) or not is_finite_number(candidate_value):
+        return unevaluable_rule(rule, "rule.value_non_finite")
+    if baseline_value <= 0 or candidate_value <= 0:
+        return unevaluable_rule(rule, "rule.value_zero_or_negative")
+    try:
+        baseline_fraction = Fraction(Decimal(str(baseline_value)))
+        candidate_fraction = Fraction(Decimal(str(candidate_value)))
+        threshold_fraction = Fraction(Decimal(str(rule["threshold_percent"])))
+        boundary_left = candidate_fraction * 100
+        boundary_right = baseline_fraction * (100 + threshold_fraction)
+        delta_fraction = ((candidate_fraction / baseline_fraction) - 1) * 100
+    except (InvalidOperation, OverflowError, ZeroDivisionError):
+        return unevaluable_rule(rule, "rule.value_non_finite")
+    threshold = rule["threshold_percent"]
+    passed = (
+        boundary_left >= boundary_right
+        if rule["kind"] == "minimum_improvement_percent"
+        else boundary_left <= boundary_right
+    )
+    try:
+        delta: int | float = (
+            delta_fraction.numerator
+            if delta_fraction.denominator == 1
+            else float(delta_fraction)
+        )
+        json.dumps(delta, allow_nan=False)
+    except (OverflowError, TypeError, ValueError):
+        return unevaluable_rule(rule, "rule.value_non_finite")
+    if not is_finite_number(delta):
+        return unevaluable_rule(rule, "rule.value_non_finite")
+    return {
+        "id": rule["id"],
+        "command": name,
+        "metric": metric,
+        "statistic": statistic,
+        "kind": rule["kind"],
+        "threshold_percent": threshold,
+        "baseline_value": baseline_value,
+        "candidate_value": candidate_value,
+        "delta_percent": delta,
+        "reason": "rule.passed" if passed else "rule.threshold_rejected",
+        "passed": passed,
+    }
+
+
+def gate_artifacts(
+    baseline_path: Path,
+    candidate_path: Path,
+    policy_path: Path,
+    output_path: Path,
+) -> int:
+    hashes: dict[str, str] = {}
+    for name, path in (("baseline_sha256", baseline_path), ("candidate_sha256", candidate_path), ("policy_sha256", policy_path)):
+        try:
+            hashes[name] = sha256_file(path)
+        except OSError as exc:
+            raise CaptureError("Could not read and hash all gate inputs") from exc
+
+    policy_id: str | None = None
+    identity = {
+        "status": "unevaluable",
+        "reason": "policy.malformed",
+        "allowed_changes": [],
+        "changed_dimensions": [],
+    }
+    rule_results: list[dict[str, Any]] = []
+    exit_code = 2
+
+    def load_gate_input(path: Path) -> dict[str, Any] | None:
+        try:
+            return load_json(path)
+        except CaptureError:
+            return None
+
+    baseline = load_gate_input(baseline_path)
+    candidate = load_gate_input(candidate_path)
+    policy = load_gate_input(policy_path)
+
+    if isinstance(policy, dict):
+        candidate_policy_id = policy.get("policy_id")
+        policy_id = candidate_policy_id if isinstance(candidate_policy_id, str) else None
+        policy_id, allowed_changes, rules = validate_policy(policy)
+    else:
+        allowed_changes = rules = None
+
+    if allowed_changes is not None and rules is not None:
+        if not isinstance(baseline, dict) or not isinstance(candidate, dict):
+            invalid_side = "baseline" if not isinstance(baseline, dict) else "candidate"
+            identity = {
+                "status": "unevaluable",
+                "reason": "artifact.malformed",
+                "side": invalid_side,
+                "allowed_changes": allowed_changes,
+                "changed_dimensions": [],
+            }
+            rule_results = [unevaluable_rule(rule, "artifact.malformed") for rule in rules]
+        elif (
+            baseline.get("schema_version") != SCHEMA_VERSION
+            or candidate.get("schema_version") != SCHEMA_VERSION
+            or baseline.get("kind") != "inference-benchmark-evidence"
+            or candidate.get("kind") != "inference-benchmark-evidence"
+        ):
+            identity = {
+                "status": "unevaluable",
+                "reason": "artifact.malformed",
+                "allowed_changes": allowed_changes,
+                "changed_dimensions": [],
+            }
+            rule_results = [unevaluable_rule(rule, "artifact.malformed") for rule in rules]
+        else:
+            baseline_command_list, baseline_error = artifact_commands(baseline, "baseline")
+            candidate_command_list, candidate_error = artifact_commands(candidate, "candidate")
+            artifact_error = baseline_error or candidate_error
+            if artifact_error is not None:
+                identity = {
+                    "status": "unevaluable",
+                    **artifact_error,
+                    "allowed_changes": allowed_changes,
+                    "changed_dimensions": [],
+                }
+                rule_results = [
+                    unevaluable_rule(rule, artifact_error["reason"])
+                    for rule in rules
+                ]
+            else:
+                assert baseline_command_list is not None and candidate_command_list is not None
+                baseline_commands = {item["name"]: item for item in baseline_command_list}
+                candidate_commands = {item["name"]: item for item in candidate_command_list}
+                baseline_names = set(baseline_commands)
+                candidate_names = set(candidate_commands)
+                command_names_differ = baseline_names != candidate_names
+                command_argv_differ = not command_names_differ and any(
+                    baseline_commands[name]["argv_sha256"]
+                    != candidate_commands[name]["argv_sha256"]
+                    for name in baseline_names
+                )
+                if command_names_differ or command_argv_differ:
+                    identity = {
+                        "status": "unevaluable",
+                        "reason": "identity.undeclared_mismatch",
+                        "allowed_changes": allowed_changes,
+                        "changed_dimensions": [
+                            "command_names" if command_names_differ else "command_argv"
+                        ],
+                    }
+                    rule_results = []
+                    for rule in rules:
+                        referenced_command_missing = (
+                            rule["command"] not in baseline_commands
+                            or rule["command"] not in candidate_commands
+                        )
+                        rule_results.append(
+                            unevaluable_rule(
+                                rule,
+                                "rule.command_missing"
+                                if referenced_command_missing
+                                else "identity.undeclared_mismatch",
+                            )
+                        )
+                else:
+                    identity = gate_identity(baseline, candidate, allowed_changes)
+                    if identity["status"] != "passed":
+                        rule_results = [
+                            unevaluable_rule(rule, identity["reason"])
+                            for rule in rules
+                        ]
+                    else:
+                        rule_results = [
+                            evaluate_policy_rule(rule, baseline_commands, candidate_commands)
+                            for rule in rules
+                        ]
+                        if any(
+                            result["reason"] not in {"rule.passed", "rule.threshold_rejected"}
+                            for result in rule_results
+                        ):
+                            exit_code = 2
+                        elif any(not result["passed"] for result in rule_results):
+                            exit_code = 3
+                        else:
+                            exit_code = 0
+
+    status = "passed" if exit_code == 0 else "rejected" if exit_code == 3 else "unevaluable"
+    verdict = {
+        "schema_version": POLICY_SCHEMA_VERSION,
+        "kind": "inference-comparison-verdict",
+        "policy_id": policy_id,
+        "status": status,
+        "passed": exit_code == 0,
+        "identity": identity,
+        "rules": rule_results,
+        "hashes": hashes,
+    }
+    write_json_atomic(output_path, verdict)
+    return exit_code
+
+
 def compare_artifacts(baseline_path: Path, candidate_path: Path, output_path: Path) -> None:
     baseline = load_json(baseline_path)
     candidate = load_json(candidate_path)
@@ -1217,6 +1827,11 @@ def build_parser() -> argparse.ArgumentParser:
     compare.add_argument("--baseline", type=Path, required=True)
     compare.add_argument("--candidate", type=Path, required=True)
     compare.add_argument("--output", type=Path, required=True)
+    gate = subparsers.add_parser("gate")
+    gate.add_argument("--baseline", type=Path, required=True)
+    gate.add_argument("--candidate", type=Path, required=True)
+    gate.add_argument("--policy", type=Path, required=True)
+    gate.add_argument("--output", type=Path, required=True)
     sanitize = subparsers.add_parser("sanitize")
     sanitize.add_argument("--input", type=Path, required=True)
     sanitize.add_argument("--output", type=Path, required=True)
@@ -1233,6 +1848,13 @@ def main() -> int:
             capture_fit(args.spec.resolve(), args.output.resolve())
         elif args.command == "compare":
             compare_artifacts(args.baseline.resolve(), args.candidate.resolve(), args.output.resolve())
+        elif args.command == "gate":
+            return gate_artifacts(
+                args.baseline.resolve(),
+                args.candidate.resolve(),
+                args.policy.resolve(),
+                args.output.resolve(),
+            )
         else:
             sanitize_artifact(args.input.resolve(), args.output.resolve(), args.replace)
     except CaptureError as exc:
