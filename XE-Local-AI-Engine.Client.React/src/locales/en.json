@@ -116,6 +116,9 @@
 				"noTestsTitle": "Validation executed no tests",
 				"current": "Current",
 				"invalidated": "Invalidated",
+				"supersededTitle": "This validation result is no longer current",
+				"supersededBody": "A validation run passed against an earlier state of this task, but the working tree has moved since. Its counts are not the current result — run deterministic validation again.",
+				"failedInvalidated": "The failed gate invalidated this task's approval evidence, which is why the report is marked invalidated. The failure below is still what happened.",
 				"base": "base",
 				"evidence": "Stored evidence",
 				"noEvidence": "No validation or review evidence yet.",
@@ -147,8 +150,19 @@
 				"command": {
 					"incomplete": "Did not complete",
 					"truncated": "Output truncated",
-					"exitCode": "exit"
+					"exitCode": "exit",
+					"capturedOutput": "Captured output"
 				}
+			},
+			"form": {
+				"securityWarning": "Development commands run as your host user. The managed worktree confines application-mediated changes, but it is not OS isolation and repository code may access other host resources.",
+				"securityWarningContainer": "Development commands run inside a hardened container — read-only root filesystem, all capabilities dropped, no host namespaces — with only the managed worktree and runtime directories mounted. Repository code still executes, so register only repositories you trust.",
+				"trustAcknowledgement": "I trust the selected repository to execute Development commands with my host-user permissions.",
+				"trustAcknowledgementContainer": "I trust the selected repository to execute Development commands inside this node's container sandbox."
+			},
+			"containerRuntime": {
+				"notYetInUse": "Container-backed execution is not switched on yet. Today's runs still use the supervised process sandbox; this preflight reports whether the container runtime will be available when they move.",
+				"inUse": "Development commands on this node execute inside this container runtime. A failure reported here stops runs; it does not fall back to the host."
 			}
 		},
 		"knowledgeBase": {

@@ -56,6 +56,29 @@ export function isDevelopmentWhitespaceOnlyProfile(profileId?: string | null): b
 	return (profileId ?? developmentCommandProfileIds.genericGit) === developmentCommandProfileIds.genericGit;
 }
 
+/**
+ * The sandbox providers Development Mode can execute on, as `DevelopmentCapabilityResponse.SandboxProvider` reports
+ * them. These are a backend contract, not a display value.
+ */
+export const developmentSandboxProviders = {
+	fake: "fake",
+	process: "process",
+	container: "docker",
+} as const;
+
+/**
+ * True when Development commands execute inside a container rather than as the invoking host user.
+ *
+ * The isolation posture an operator is asked to consent to differs between the two providers, and ADR 0004 Decision 5
+ * rests on them being able to tell which one is in force. A hard-coded sentence cannot: under the container provider
+ * the process-provider wording ("commands run as your host user") is false in the UNSAFE direction — it describes the
+ * isolation as weaker than it is, on the exact control the operator is ticking. Unknown or absent resolves to the
+ * process posture, which is the conservative reading: it claims the weaker isolation, never the stronger one.
+ */
+export function isDevelopmentContainerProvider(sandboxProvider?: string | null): boolean {
+	return sandboxProvider === developmentSandboxProviders.container;
+}
+
 export interface DevelopmentRepository {
 	readonly id: string;
 	readonly alias: string;
