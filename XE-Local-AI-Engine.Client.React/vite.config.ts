@@ -4,9 +4,10 @@ import { devtools } from "@tanstack/devtools-vite";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import viteReact from "@vitejs/plugin-react";
 import UnoCSS from "unocss/vite";
-import { defineConfig, normalizePath, type ProxyOptions } from "vite";
+import { defineConfig, loadEnv, normalizePath, type ProxyOptions } from "vite";
 import { viteStaticCopy } from "vite-plugin-static-copy";
 
+import signalrProxyPaths from "./config/signalr-proxy-paths.json";
 import aspNetCoreDevelopmentCertificate from "./vite-plugins/aspnetcore-development-certificate";
 import tablerDevelopmentBugfix from "./vite-plugins/tabler-development-bugfix";
 import fs from "node:fs";
@@ -63,14 +64,11 @@ const coverageThresholds =
 			}
 		: undefined;
 
+const defaultProxyTarget = "https://localhost:50722";
 const localProxyHosts = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
 
-function requireLocalProxyTarget(value: string | undefined): string {
-	if (!value) {
-		throw new Error("VITE_PROXY_TARGET is required when running the XE local dev server.");
-	}
-
-	const target = new URL(value);
+function resolveLocalProxyTarget(value: string | undefined): string {
+	const target = new URL(value || defaultProxyTarget);
 	if (target.protocol !== "http:" && target.protocol !== "https:") {
 		throw new Error("VITE_PROXY_TARGET must use http or https.");
 	}
@@ -98,7 +96,9 @@ function localProxy(target: string, websocket = false): ProxyOptions {
 }
 
 export default defineConfig(({ command, mode }) => {
-	const proxyTarget = command === "serve" && mode !== "test" ? requireLocalProxyTarget(process.env.VITE_PROXY_TARGET) : undefined;
+	const environment = { ...loadEnv(mode, process.cwd(), ""), ...process.env };
+	const proxyTarget =
+		command === "serve" && mode !== "test" ? resolveLocalProxyTarget(environment.VITE_PROXY_TARGET) : undefined;
 
 	return {
 		base: "/",
@@ -146,16 +146,7 @@ export default defineConfig(({ command, mode }) => {
 						// plain HTTP. A hub missing here connects via the ws:false "/api" entry, whose mishandled upgrade
 						// attempts wedge Vite's WebSocket proxy and stall the other (correctly-proxied) hubs too — so EVERY
 						// hub mapped in Program.cs (LocalApiRoutes) must be listed. Keep this set in sync with MapHub<…>.
-						"/api/local/v1/chat/hub": localProxy(proxyTarget, true),
-						"/api/local/v1/scheduler/hub": localProxy(proxyTarget, true),
-						"/api/local/v1/preview/hub": localProxy(proxyTarget, true),
-						"/api/local/v1/model-fit/gguf/downloads/hub": localProxy(proxyTarget, true),
-						"/api/local/v1/model-fit/llamacpp/cuda-build/hub": localProxy(proxyTarget, true),
-						"/api/local/v1/model-fit/llamacpp/source-build/hub": localProxy(proxyTarget, true),
-						"/api/local/v1/knowledge-base/hub": localProxy(proxyTarget, true),
-						"/api/local/v1/images/hub": localProxy(proxyTarget, true),
-						"/api/local/v1/images/runtime/source-build/hub": localProxy(proxyTarget, true),
-						"/api/local/v1/development/hub": localProxy(proxyTarget, true),
+						...Object.fromEntries(signalrProxyPaths.map((hubPath) => [hubPath, localProxy(proxyTarget, true)])),
 						"/api": localProxy(proxyTarget),
 						"/openapi": {
 							target: proxyTarget,

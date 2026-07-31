@@ -14,10 +14,9 @@ import {
 import type { OrchestrationTopology } from "@/features/agents/models/OrchestrationTopologyModels";
 import { isModelToolCapable } from "@/features/agents/models/ToolCapability";
 
-export interface AgentModelOption {
-	value: string;
-	label: string;
-}
+import type { AgentModelOption } from "./AgentDefinitionForm.types";
+
+export type { AgentModelOption } from "./AgentDefinitionForm.types";
 
 // Imperative handle exposing submit() so a host (the dialog footer's Save button) can trigger the form's own
 // validate-then-submit. The footer button calls submit(); validation stays in the form.

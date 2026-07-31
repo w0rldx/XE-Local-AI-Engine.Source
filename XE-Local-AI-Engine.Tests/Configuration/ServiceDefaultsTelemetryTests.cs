@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using OpenTelemetry;
 using OpenTelemetry.Metrics;
+using XE_Local_AI_Engine.AI.Contracts.Telemetry;
 using XE_Local_AI_Engine.Tests.Testing;
 
 // Composition contract for AddServiceDefaults (ServiceDefaults/Extensions.cs):
@@ -31,7 +32,7 @@ public sealed class ServiceDefaultsTelemetryTests
 
     // Must match the Meter name in XE_Local_AI_Engine.AI.Agent.Chat.ProviderCallBudgetChatClient. This name is added to
     // the WithMetrics AddMeter list so the agent's provider-round / budget counters are actually exported.
-    private const string AgentBudgetMeterName = "XE.LocalAiEngine.AI.Agent";
+    private const string AgentBudgetMeterName = TelemetrySourceNames.Agent;
 
     [Test]
     public void ConfigureOpenTelemetry_RegistersAgentBudgetMeter_SoItsInstrumentsAreExported()

@@ -29,7 +29,8 @@
 #
 # Prerequisites (all checked up front, each with an actionable failure message):
 #   - .NET SDK matching global.json
-#   - pnpm + node          — the fixture runs `pnpm install --frozen-lockfile` and `pnpm run build`
+#   - pnpm + node          — this runner executes the frontend lint/typecheck prerequisite; the
+#                            fixture runs `pnpm install --frozen-lockfile` and `pnpm run build:e2e`
 #                            in XE-Local-AI-Engine.Client.React and serves the built dist from the
 #                            .NET host (XEReactClientFixture). No vite dev server is involved.
 #   - pwsh                  — Playwright's browser installer ships as playwright.ps1 only.
@@ -125,6 +126,14 @@ fi
   || prereq_fail "React client not found at ${FRONTEND_DIR}. The fixture builds the SPA in-place and serves
              its dist/ from the .NET host; without it every test fails at fixture init."
 
+if [[ "${LIST_ONLY}" != "true" ]]; then
+  log "=== Frontend prerequisite (install + lint/typecheck) ==="
+  (
+    cd "${FRONTEND_DIR}" || exit 1
+    pnpm install --frozen-lockfile && pnpm run lint
+  ) || fail "React lint/typecheck failed; E2E would otherwise build with bare Vite and hide this defect."
+fi
+
 if ! command -v pwsh >/dev/null 2>&1; then
   prereq_fail "pwsh not on PATH. Playwright ships its browser installer as playwright.ps1 only.
              Install a contained copy with:
@@ -200,7 +209,7 @@ if [[ -n "${FILTER}" ]]; then
 fi
 
 log "=== Running E2E suite ==="
-log "First run is slow: the fixture does a full 'pnpm install --frozen-lockfile' + 'pnpm run build'."
+log "First run is slow: the fixture does 'pnpm install --frozen-lockfile' + 'pnpm run build:e2e'."
 OUT_FILE="$(mktemp -t xe-e2e-XXXXXX.log)"
 GUARD_STATE=""
 # The log has to survive every exit path below (the guards and the failure diagnosis all grep it),
@@ -245,11 +254,9 @@ fi
 
 if [[ "${STATUS}" -ne 0 ]]; then
   echo
-  # Highest-frequency false alarm: the fixture's `pnpm run build` runs `tsc --noEmit` + biome +
-  # stylelint before vite. ANY type or lint error in the React client fails XEReactClientFixture
-  # init, which fails every SPA-dependent test at once (~62 of 64) in a couple of seconds. That is
-  # a broken frontend, not 62 broken E2E tests — say so instead of sending people to traces.
-  if grep -q "Process 'pnpm run build' exited with code" "${OUT_FILE}" 2>/dev/null; then
+# The runner already completed frontend lint/typecheck before the fixture's intentionally bare
+# build:e2e. A fixture build failure here is therefore a Vite/bundling failure, not hidden lint.
+  if grep -q "Process 'pnpm run build:e2e' exited with code" "${OUT_FILE}" 2>/dev/null; then
     log "ROOT CAUSE: the React client failed to build, so the E2E fixture could not serve the SPA."
     log "Every SPA-dependent test failed at fixture init — this is NOT 62 independent test failures."
     log "Reproduce and fix it directly:"

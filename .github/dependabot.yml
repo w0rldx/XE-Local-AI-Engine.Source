@@ -1,0 +1,56 @@
+version: 2
+updates:
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Berlin
+    target-branch: develop
+    open-pull-requests-limit: 3
+    groups:
+      aspire-coupled:
+        patterns:
+          - "Aspire.*"
+          - "CommunityToolkit.Aspire.*"
+      agent-ai-coupled:
+        patterns:
+          - "Microsoft.Agents.*"
+          - "Microsoft.Extensions.AI*"
+      nuget-remaining:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - "Aspire.*"
+          - "CommunityToolkit.Aspire.*"
+          - "Microsoft.Agents.*"
+          - "Microsoft.Extensions.AI*"
+
+  - package-ecosystem: npm
+    directory: /XE-Local-AI-Engine.Client.React
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:30"
+      timezone: Europe/Berlin
+    target-branch: develop
+    open-pull-requests-limit: 3
+    groups:
+      npm-weekly:
+        patterns:
+          - "*"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "07:00"
+      timezone: Europe/Berlin
+    target-branch: develop
+    open-pull-requests-limit: 2
+    groups:
+      actions-weekly:
+        patterns:
+          - "*"

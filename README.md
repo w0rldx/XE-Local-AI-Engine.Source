@@ -107,6 +107,16 @@ The repository validation wrapper mirrors these commands:
 bash .opencode/scripts/project-validate.sh --scope changed --base develop --serial
 ```
 
+Use `--scope smoke` for the deliberately small Debug startup/API/frontend probe. It is not a
+substitute for the complete Release gates. Before merging or packaging, run `--scope full`; after
+the Release backend/frontend/script gates pass, it starts an isolated desktop backend and compares
+the live OpenAPI document with the committed generated frontend client.
+
+`--scope coverage` collects each backend test project into an isolated current-run Cobertura report,
+deduplicates source lines across the reports, and enforces the committed
+`scripts/backend-coverage-baseline.txt` ratchet before running the frontend coverage check. The
+90.50% floor was set from a guarded 91.00% measurement, leaving 0.50 percentage points of headroom.
+
 > **`--scope changed` diffs against `develop`.** It used to default to `main`, which this repository does not have, so
 > the script fell back to `git diff HEAD~1` and validated a *single commit* instead of your whole branch — reporting
 > green while never touching most of your changes. The default is now `develop`; pass `--base <branch>` to override it.
@@ -122,8 +132,17 @@ bash .opencode/scripts/project-validate.sh --scope e2e --confirm-e2e --serial
 Use Aspire for local development and integration checks.
 
 ```bash
-aspire run --apphost XE-Local-AI-Engine.AppHost/XE-Local-AI-Engine.AppHost.csproj
+scripts/dev-start.sh          # always --isolated and scoped to this worktree's AppHost
+scripts/dev-status.sh         # filtered status; secrets and dashboard tokens are omitted
+scripts/dev-stop.sh           # stops only this worktree's registered AppHost
+
+# Bounded integration smoke; refuses to reuse an existing instance and always cleans up its own.
+scripts/aspire-readiness-smoke.sh
 ```
+
+These wrappers make parallel worktrees safe. Do not use `aspire stop --all`; it crosses checkout
+boundaries. See [`scripts/README-dev-stop.md`](scripts/README-dev-stop.md) for the Aspire 13.4
+fallback and cleanup contract.
 
 ## Self-contained desktop run
 
