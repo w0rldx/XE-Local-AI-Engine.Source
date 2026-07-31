@@ -29,12 +29,17 @@ It is **off by default**. When the override env var is unset, acquisition behave
 
 ## Step 1 — Build a CUDA `llama-server`
 
-Build the **same llama.cpp version the engine is pinned to** where practical (current pin: tag `b9692`; check `LlamaCppReleasePins.PinnedTag`). Mismatched versions usually work but are not guaranteed.
+Build the **same llama.cpp version the engine is pinned to**. This is not a nicety: a pin older than a model's architecture produces a GPU runtime that simply refuses to load that model. Read the tag out of the source rather than copying one from this page — a literal here goes stale silently, and this runbook has already shipped an unusable tag once.
 
 ```bash
+# Resolve the engine's pinned tag from the source of truth. Run from the repo root.
+LLAMACPP_TAG=$(grep -oP 'PinnedTag\s*=\s*"\K[^"]+' \
+  XE-Local-AI-Engine.Providers.LlamaServer/LlamaCppReleasePins.cs)
+echo "engine pin: $LLAMACPP_TAG"     # non-empty, looks like bNNNNN
+
 git clone https://github.com/ggml-org/llama.cpp.git
 cd llama.cpp
-git checkout b9692                 # match the engine's pinned tag when possible
+git checkout "$LLAMACPP_TAG"       # match the engine's pinned tag
 cmake -B build -DGGML_CUDA=ON -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release -t llama-server -j
 # → build/bin/llama-server
