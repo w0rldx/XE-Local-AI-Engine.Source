@@ -36,6 +36,15 @@ internal static partial class DevelopmentArtifactSanitizer
 
     private static readonly char[] PathSeparators = ['/', '\\'];
 
+    /// <summary>
+    ///     Segments whose IMMEDIATE successor names a principal (a user account or a uid), wherever they appear in the
+    ///     path. The preserved tail may never begin at or before that successor. This is what makes the redaction depth-
+    ///     independent: <c>/home/&lt;user&gt;</c> puts the principal second, <c>/run/user/&lt;uid&gt;</c> third, and WSL's
+    ///     <c>/mnt/c/Users/&lt;user&gt;</c> fourth — a purely positional rule preserved the last of those verbatim.
+    /// </summary>
+    private static readonly HashSet<string> IdentityContainerSegments =
+        new(StringComparer.OrdinalIgnoreCase) { "home", "Users", "user" };
+
     [GeneratedRegex(@"(?<![A-Za-z0-9])![A-Za-z][A-Za-z0-9]{11,}(?![A-Za-z0-9])", RegexOptions.ExplicitCapture, 2000)]
     private static partial Regex BarePasswordLikeValueRegex();
 
@@ -74,7 +83,27 @@ internal static partial class DevelopmentArtifactSanitizer
             ? segments.Length - 1
             : segments.Length;
 
-        var keep = Math.Min(PreservedTailSegments, namedSegmentCount - AlwaysRedactedLeadingSegments);
+        // A POSITIONAL rule alone is not enough, because identity is not always in the first two segments. On this very
+        // box (WSL2) `/mnt/c/Users/<user>` puts the username FOURTH, and `/run/user/<uid>` puts the uid THIRD — so the
+        // positional rule happily preserved `[REDACTED]/Users/<user>`, leaking exactly what it set out to destroy.
+        // Anchor on the CONTAINER instead: whatever segment follows a home-directory container names a principal, so the
+        // preserved tail may never begin at or before it, at any depth.
+        var driveOffset = segments.Length - namedSegmentCount;
+        var minimumTailStart = AlwaysRedactedLeadingSegments;
+        for (var index = 0; index < segments.Length; index++)
+        {
+            if (!IdentityContainerSegments.Contains(segments[index]))
+            {
+                continue;
+            }
+
+            // The principal is index + 1; the tail must start strictly after it. Expressed in NAMED-segment space so a
+            // leading drive letter cannot shift the boundary.
+            minimumTailStart = Math.Max(minimumTailStart, index - driveOffset + 2);
+        }
+
+        var available = namedSegmentCount - minimumTailStart;
+        var keep = Math.Min(PreservedTailSegments, available);
         if (keep <= 0)
         {
             return RedactedPath;

@@ -117,6 +117,31 @@ public sealed class DevelopmentArtifactSanitizerRootsTests
         AssertEx.Contains(sanitized, "notes.txt");
     }
 
+    /// <summary>
+    ///     A principal is named by whatever follows a home-directory CONTAINER, and that is not always the second
+    ///     segment — so a purely positional "destroy the first two" rule leaks at other depths. Both of these were
+    ///     verified to leak before the container anchor was added, and both are reachable on the box this engine is
+    ///     developed on: WSL2 mounts the Windows profile at <c>/mnt/c/Users/&lt;user&gt;</c> (principal FOURTH), and the
+    ///     rootless Docker socket lives under <c>/run/user/&lt;uid&gt;</c> (principal THIRD).
+    /// </summary>
+    [Test]
+    public void Sanitize_RedactsThePrincipalAtAnyDepth_NotJustTheSecondSegment()
+    {
+        var sanitized = DevelopmentArtifactSanitizer.SanitizeText(
+            "denied /mnt/c/Users/operator and /mnt/c/Users/operator/projects and /run/user/1000/docker.sock",
+            RepositoryRoot);
+
+        // The Windows account name is the identity here, and it sits FOURTH.
+        AssertEx.False(sanitized.Contains("operator", StringComparison.Ordinal), sanitized);
+
+        // The uid is the identity here, and it sits THIRD.
+        AssertEx.False(sanitized.Contains("1000", StringComparison.Ordinal), sanitized);
+
+        // Still diagnosable: the leaf that says WHAT was touched survives.
+        AssertEx.Contains(sanitized, "docker.sock");
+        AssertEx.Contains(sanitized, "projects");
+    }
+
     [Test]
     public void Sanitize_OnHostOutputUnderTheProcessProvider_KeepsTheFileAndLineToo()
     {
