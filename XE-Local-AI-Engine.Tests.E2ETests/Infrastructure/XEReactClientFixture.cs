@@ -86,8 +86,13 @@ public sealed class XEReactClientFixture : IAsyncInitializer, IAsyncDisposable
                 await RunProcessAsync("pnpm", "install --frozen-lockfile", clientDir, timeoutMs: 300_000).ConfigureAwait(false);
             }
 
+            // "build:e2e" is a bare `vite build`; the default "build" script prefixes it with tsc --noEmit +
+            // biome + stylelint. The fixture only consumes dist/, never the lint output, and project-validate.sh
+            // already runs `pnpm run lint` over the same tree — so paying for it here was 20-45s of duplicated
+            // work per run. NOTE: this means a type error no longer fails at fixture init; the frontend lint gate
+            // is now solely `pnpm run lint` (run it before cutting an RC).
             await RunProcessAsync("pnpm",
-                "run build",
+                "run build:e2e",
                 clientDir,
                 timeoutMs: 300_000,
                 new Dictionary<string, string>
