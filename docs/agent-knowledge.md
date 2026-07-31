@@ -236,11 +236,28 @@ Rest of the box, for sizing assumptions: **AMD Ryzen 9 9950X3D** host, **8 proce
 
 No Secret Service daemon (`org.freedesktop.secrets was not provided by any .service files`). MSAL/Azure.Identity token-cache persistence throws `MsalCachePersistenceException`, which **Azure.Identity re-wraps as `AuthenticationFailedException`** — so a handler catching only `CredentialUnavailableException` never sees it. When touching Entra/Azure auth here, walk the `InnerException` chain. Consequence: such sign-ins are in-memory-only on this box and don't survive restart.
 
-### `aspire stop` is a no-op — do not trust it
+### Aspire 13.4 stop needs a worktree-scoped fallback
 
 Every Aspire resource runs as a DCP-owned process in its own process group, detached from the AppHost/CLI's process tree, so `aspire stop`'s tree-kill can't reach it (upstream Aspire CLI bug; fixed only in 13.5+, still preview). A killed session therefore leaves an **orphaned `llama-server` holding its port and GPU VRAM** — it runs under `setsid`, so a parent SIGKILL doesn't touch it.
 
-**Use `scripts/dev-stop.sh`** to bring the stack fully down. It targets only same-session/AppHost-descendant processes plus `llama-server` matched under the app's own binaries root, so it won't kill an unrelated Ollama.
+**Use `scripts/dev-start.sh`, `scripts/dev-status.sh`, and `scripts/dev-stop.sh`.** They bind every
+operation to the canonical AppHost path for the current checkout; start always uses `--isolated`.
+The stop fallback snapshots that exact AppHost, its exact-path Aspire ancestor, the DCP sibling
+whose command line contains the exact `--monitor <AppHost PID>` token pair, and the complete
+descendant closure before stopping. It records `/proc` start times and revalidates identity before every
+signal, so separately-sessioned descendants remain attributable without treating a shared
+login/session SID or a reused PID as ownership. Aspire query failures and malformed JSON fail
+closed; they are never equivalent to "not running". A descendant `llama-server` is owned and
+cleaned. Never restore the old global `llama-server` kill: managed binaries are shared across
+worktrees, so an already-orphaned executable-path match cannot prove ownership. Processes outside
+the selected graph are untouched and do not make scoped teardown fail; success proves only the
+exact registration and selected graph are gone. Never use
+`aspire stop --all` during parallel development.
+
+Aspire JSON is sensitive operational data. `aspire ps` includes the dashboard login token, while
+`aspire describe` can include environment values, connection strings, and sensitive resource
+properties. `scripts/dev-status.sh` deliberately projects a small allowlist and strips URL query
+strings. Do not replace it with raw JSON output in logs or validation transcripts.
 
 A startup reaper (`StaleLlamaServerReaper`, in `XE-Local-AI-Engine.Providers.LlamaServer/Implementation/`) also kills leftovers under the managed binaries root on next launch, so an orphan won't block a restart. `StaleImageServerReaper` does the same for image-gen.
 

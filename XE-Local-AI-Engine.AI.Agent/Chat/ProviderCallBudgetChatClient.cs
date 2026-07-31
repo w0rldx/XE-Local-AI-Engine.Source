@@ -4,6 +4,7 @@ using System.Diagnostics.Metrics;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
+using XE_Local_AI_Engine.AI.Contracts.Telemetry;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
@@ -23,7 +24,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 /// </summary>
 internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
 {
-    private static readonly Meter Meter = new("XE.LocalAiEngine.AI.Agent", "1.0.0");
+    private static readonly Meter Meter = new(TelemetrySourceNames.Agent, "1.0.0");
     private static readonly Counter<long> ProviderRoundsCounter = Meter.CreateCounter<long>("xe.agent.provider_rounds", description: "Raw provider rounds observed at the budget boundary.");
     private static readonly Counter<long> MessagesDroppedCounter = Meter.CreateCounter<long>("xe.agent.budget.messages_dropped", description: "History messages dropped by per-round budgeting.");
 

@@ -1,11 +1,10 @@
 /**
  * dependency-cruiser configuration — architecture boundary gate for the React app.
  *
- * Policy: "green now, tighten later". The gate (`pnpm validate`) exits 0 today.
- * dependency-cruiser's exit code counts only `error`-severity violations; `warn`/`info`
- * violations are printed but do NOT fail the gate. Rules that surface known existing
- * architecture debt are therefore `warn` (visible, tracked) until the debt is paid down,
- * at which point they should be promoted to `error`. See QUALITY-GATE.md.
+ * Policy: "green now, no new debt". Native error-severity rules fail immediately, while
+ * `scripts/CheckDependencyBaseline.mjs` rejects any rule/from/to fingerprint absent from
+ * the committed warn baseline. Paying debt down needs no config edit; broad warning promotion can wait
+ * until the corresponding baseline reaches zero. See QUALITY-GATE.md.
  *
  * `.cjs` (not `.js`) because package.json declares `"type": "module"`.
  */

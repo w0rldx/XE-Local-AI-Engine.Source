@@ -112,11 +112,11 @@ The wrapper mirrors the raw commands and parallelises independent trees. Invoke 
 | `backend` | restore + `build -c Release` + `test` on `XE-Local-AI-Engine.slnx` |
 | `frontend` | `pnpm install --frozen-lockfile` + `lint` + `test` + `build` |
 | `e2e` | **ask-gated**: pre-gate backend+frontend, then build + `dotnet test` the E2E project **with `-p:RunE2ETests=true`** (required — without it the csproj is a plain library and zero tests are discovered; the runner also fails the lane if zero tests run). Refuses to run without `--confirm-e2e` |
-| `smoke` | fast backend+frontend subset; adds E2E smoke only with `--confirm-e2e` |
-| `coverage` | backend `--collect:"XPlat Code Coverage"` + frontend `test:coverage:check` (threshold gate) |
+| `smoke` | focused Debug backend startup/DevUI tests + three frontend contract tests; adds E2E only with `--confirm-e2e` |
+| `coverage` | per-test-project backend Cobertura collection + deduplicated committed ratchet; frontend `test:coverage:check` threshold gate |
 | `scripts` | shellcheck + PSScriptAnalyzer over the packaging scripts, plus a build-only compile check of the `#if P0_SPIKE` code. Runs in `full`; takes seconds. See below |
 | `changed` | auto-detects backend/frontend from `git diff` vs `--base` (default `develop`); `*.cs/*.csproj/*.slnx/Directory.*/global.json` → backend, frontend dir → frontend |
-| `full` | backend + frontend + release-script lint, + E2E if `--confirm-e2e` |
+| `full` | backend + frontend + release-script/Pester gates, then a live desktop-backend OpenAPI comparison; + E2E if `--confirm-e2e` |
 | `setup` | OpenCode meta-validation (`validate-no-legacy.sh`, `validate-opencode.ts`, JSON config sanity) — project-agnostic |
 
 The everyday loop is `--scope changed --serial`; E2E is deliberately behind `--confirm-e2e` because it builds the React client and launches browsers and so may need browser/runtime setup not present in every environment.
@@ -125,14 +125,27 @@ The everyday loop is `--scope changed --serial`; E2E is deliberately behind `--c
 
 Both exist because GitHub Actions is disabled, so anything not reachable from a local command is not reachable at all.
 
-- **[`scripts/run-e2e-local.sh`](../../scripts/run-e2e-local.sh)** — opt-in local runner for the Playwright suite. Nothing invokes it automatically; run it by hand before cutting a tester RC. Over `--scope e2e` it adds Playwright **browser installation** (via `playwright.ps1`, so it needs `pwsh`), which was the actual reason the lane could not be run cold. `--list` enumerates without running, `--filter` accepts a TUnit/MTP tree-node expression. Exit codes: `0` pass, `1` tests failed or the run was vacuous, `2` a prerequisite/usage error, `75` build contamination (**void; rerun**). No external services needed — FakeOllama plus the in-process host, so no `llama-server` and no `scripts/dev-stop.sh`.
-- **[`scripts/lint-release-scripts.sh`](../../scripts/lint-release-scripts.sh)** — shellcheck + PSScriptAnalyzer over the packaging scripts, wired in as `--scope scripts`. With Actions disabled, `publish/package-tester-win.ps1` is the entire release path, so it gets static analysis of its own. A **missing linter exits 2** rather than passing silently. `--pester` additionally runs [`publish/tests/package-tester-win.Tests.ps1`](../../publish/tests/package-tester-win.Tests.ps1) (opt-in, needs the Pester module), which covers the script's parsing and gate logic — including the vulnerability-JSON handling that no linter has a rule for.
+- **[`scripts/run-e2e-local.sh`](../../scripts/run-e2e-local.sh)** — opt-in local runner for the Playwright suite. Nothing invokes it automatically; run it by hand before cutting a tester RC. It performs a frozen frontend install plus `pnpm run lint` before the fixture's intentionally bare Vite `build:e2e`, installs Playwright browsers (via `playwright.ps1`, so it needs `pwsh`), and rejects zero-test or missing-summary runs. `--list` enumerates without running; `--filter` accepts a TUnit/MTP tree-node expression. Exit codes: `0` pass, `1` tests failed or the run was vacuous, `2` a prerequisite/usage error, `75` build contamination (**void; rerun**). No external services needed — FakeOllama plus the in-process host, so no `llama-server` and no `scripts/dev-stop.sh`.
+- **[`scripts/lint-release-scripts.sh`](../../scripts/lint-release-scripts.sh)** — shellcheck + PSScriptAnalyzer over the packaging scripts, wired in as `--scope scripts`. With Actions disabled, `publish/package-tester-win.ps1` is the entire release path, so it gets static analysis and its [`publish/tests/package-tester-win.Tests.ps1`](../../publish/tests/package-tester-win.Tests.ps1) Pester suite on every default run. A **missing linter or test module exits 2** rather than passing silently.
 
 > **A zero-test run is a failure, not a pass.** Both runners enforce this, as does `--scope e2e`. The E2E project sets `IsTestProject=false`/`OutputType=Library` unless `-p:RunE2ETests=true` is passed, so without it `dotnet test` discovers nothing and exits **0**. Never read a green E2E run without checking that a non-zero number of tests actually ran.
 
-> **A mass E2E failure is usually one broken frontend.** The fixture runs `pnpm run build`, which starts with `tsc --noEmit`, so a single type error fails most tests at fixture init. Check the build before reading traces; use `--list` for the current test count.
+> **The frontend prerequisite is explicit.** The standalone runner executes `pnpm run lint` before
+> E2E because the fixture uses bare `pnpm run build:e2e`; do not infer type/lint correctness from a
+> green Vite build alone. Use `--list` for the current discovered-test count.
 
-> Note: `scope_smoke` / `scope_backend_smoke` currently invoke the *full* `dotnet test` (not a reduced subset) — the "smoke" backend body is identical to the full backend body in `project-validate.sh`. Treat backend smoke as a full backend run today.
+`scope_smoke` is intentionally not a full gate: it targets the backend application-startup and
+Debug DevUI hosting classes plus three frontend localization/API/navigation tests. Use `backend` or
+`full` for the complete Release analyzer and test gates. A successful `full` run also launches a
+temporary desktop-mode backend, waits for `/health/ready`, runs `pnpm openapi:check:live`, and kills
+only the process group it started.
+
+`scope_coverage` creates a unique run directory, requires a nonzero MTP summary from each non-E2E
+test project, and writes each project to its own Cobertura subdirectory so reports cannot overwrite
+one another. `scripts/merge-cobertura.py` deduplicates `(filename, line)` entries across
+only those current-run reports and enforces `scripts/backend-coverage-baseline.txt`. The committed
+90.50% floor was measured at 91.00% (116,975/128,545 unique source lines), retaining 0.50 points of
+headroom. The frontend coverage threshold remains enforced by its existing command.
 
 ## Continuous integration — dormant
 
@@ -180,7 +193,7 @@ Two gates ride the packaging path rather than any test suite:
 
 ## Coverage gates
 
-- **Backend**: `--collect:"XPlat Code Coverage"` into `.tmp/validate-logs/coverage/` (collection; no hard solution-wide threshold enforced in the script).
+- **Backend**: MTP-native `--coverage --coverage-output-format cobertura`, with a unique current-run directory and one output subdirectory per non-E2E test project. The validator requires every run to execute tests, merges all reports by unique source line, and fails below the committed 90.50% baseline.
 - **Frontend**: Vitest v8 coverage. Thresholds are **only** enforced when `VITEST_COVERAGE_CHECK=true` (the `test:coverage:check` script). Current bar in `vite.config.ts`: branches 35, functions 34, lines 39, statements 38. Generated/locale/test/route-tree files are excluded from coverage (`vite.config.ts:13-20, 101-115`).
 
 ## RC evidence requirements
@@ -188,7 +201,7 @@ Two gates ride the packaging path rather than any test suite:
 The README's "RC readiness status" section is the contract: **do not mark release or documentation work complete until matching validation evidence is available.** Required evidence:
 
 - the canonical packager's frontend, backend, vulnerability, and package-gate transcript,
-- a clean `scripts/lint-release-scripts.sh` result (`--pester` is additional, opt-in coverage when Pester is installed),
+- a clean default `scripts/lint-release-scripts.sh` result, including the mandatory Pester suite,
 - a non-vacuous `scripts/run-e2e-local.sh` result with no exit-75 contamination,
 - generated schema/sample-manifest validation, including a clean `openapi:check`,
 - pinned runtime binary and package checksums (llama.cpp release pins; see [Local Runtime & Providers](03-local-runtime-and-providers.md)),
@@ -213,7 +226,7 @@ retained transcript their operating status is unknown. See [Hosting & Deployment
 - New persistence entity surface change → re-check the `NegativeFence` compile fence still builds.
 - New WorkerHub outbound call → assert it through `RecordingHubMessageSender` and confirm no secret crosses the boundary ([Security & Privacy](12-security-and-privacy.md)).
 - New backend behavior that touches a model → drive it through `FakeOllama` (script the response) rather than a live runtime; only flip `RUN_LOCAL_INTEGRATION=true` for fidelity runs.
-- React change → run `pnpm run lint` + `pnpm test`; if you touched API calls, run `pnpm run openapi:check` yourself — nothing else will catch the drift until the release packager runs it.
+- React change → run `pnpm run lint` + `pnpm test`; if you touched API calls, run the fast snapshot-only `pnpm run openapi:check`. The full validator additionally compares against a freshly launched desktop backend.
 - Before claiming done: backend + frontend transcripts green and uncontaminated, `openapi:check` clean, and (for RC) the complete draft/hash/desktop smoke evidence captured.
 
 ## Related pages

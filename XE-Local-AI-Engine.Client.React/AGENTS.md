@@ -35,17 +35,22 @@ For failures, stop and report the failing command/output before attempting fixes
 
 Backend:
 
-- `dotnet restore C0re.slnx`
-- `dotnet build C0re.slnx --configuration Release --no-restore`
-- `dotnet test --project C0re.Tests.IntegrationTests --configuration Release`
+- `dotnet restore XE-Local-AI-Engine.slnx`
+- `dotnet build XE-Local-AI-Engine.slnx --configuration Release --no-restore`
+- `dotnet test XE-Local-AI-Engine.slnx --configuration Release --no-build --max-parallel-test-modules 1`
+
+The Release configuration and serial test-module setting are required. Use the repository build lock and assembly guard described by the root `AGENTS.md`; never overlap a backend build with `dotnet test --no-build`.
 
 Frontend:
 
-- `cd C0re.Client.React.Web`
-- `pnpm ci`
+- `cd XE-Local-AI-Engine.Client.React`
+- `pnpm install --frozen-lockfile`
 - `pnpm run lint`
 - `pnpm test`
+- `pnpm run test:tooling`
 - `pnpm run build`
+
+`pnpm validate` additionally runs Knip, the SignalR proxy synchronization check, and the dependency architecture baseline. Backend contract changes must run `pnpm openapi:check`; a running desktop backend can be checked with `OPENAPI_SPEC_URL=<absolute-spec-url> pnpm openapi:check:live`.
 
 E2E is ask-gated unless the task specifically targets E2E behavior.
 
