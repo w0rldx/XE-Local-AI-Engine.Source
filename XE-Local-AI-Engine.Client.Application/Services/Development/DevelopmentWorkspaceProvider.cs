@@ -11,15 +11,42 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
 {
     private const string RuntimeProfile = "development-local";
     private const int WorkspaceManifestVersion = 2;
+
+    /// <summary>
+    ///     The in-sandbox root the per-task runtime directories are requested at. A <em>requested</em> path: the process
+    ///     provider identity-maps and reports the host path instead, and only a provider with a mount layer places
+    ///     anything here. Chosen to sit outside the workspace and the scratch tmpfs so it cannot shadow either.
+    /// </summary>
+    private const string RuntimeMountRoot = "/xe-runtime";
+
+    /// <summary>
+    ///     <c>.git/config</c> named in the sandbox-path namespace, whose root IS the workspace. A provider with a mount
+    ///     layer derives the real target from the host path (it is inside the trusted workspace, so the engine must not
+    ///     have to know what that workspace is called inside the sandbox); this is the neutral spelling of the same
+    ///     place.
+    /// </summary>
+    private const string GitConfigSandboxPath = "/.git/config";
+
+    /// <summary>
+    ///     The per-task runtime subdirectories a build needs, and the reason D9 is satisfied at zero cost.
+    ///     <para>
+    ///         <c>workspace.json</c> — the workspace CONTROL MANIFEST — sits directly in <c>RuntimePath</c>, and D9
+    ///         requires it to be unreachable from inside any sandbox. Mounting these four named subdirectories rather
+    ///         than their parent is what keeps it out. Nothing inside a sandbox needs it: every accessor is host-side in
+    ///         <see cref="PrepareAsync" /> and runs before the sandbox exists.
+    ///     </para>
+    /// </summary>
+    private static readonly string[] RuntimeDirectoryNames = ["home", "tmp", "nuget", "dotnet"];
+
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly INodeDataDirectory _dataDirectory;
     private readonly DevelopmentOptions _options;
-    private readonly ISandboxRuntimeProvider _sandbox;
+    private readonly IDevelopmentSandboxRuntimeProvider _sandbox;
     private readonly TimeProvider _timeProvider;
 
     public DevelopmentWorkspaceProvider(INodeDataDirectory dataDirectory,
-        ISandboxRuntimeProvider sandbox,
+        IDevelopmentSandboxRuntimeProvider sandbox,
         IOptions<DevelopmentOptions> options,
         TimeProvider timeProvider)
     {
@@ -65,6 +92,17 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
             snapshot.TaskId.ToString("N"));
         Directory.CreateDirectory(Path.GetDirectoryName(worktreePath)!);
         Directory.CreateDirectory(runtimePath);
+
+        // Created HERE and not only in DevelopmentWorkspaceTools, which runs after this method returns. A provider with
+        // a mount layer binds these directories at create time, and a bind source the daemon has to invent is created
+        // with the DAEMON's ownership — under a rootful daemon that is root, and the container then cannot write its
+        // own HOME. The tools' own EnsureRuntimeDirectories stays: it is what keeps a directly constructed tools
+        // instance working, and creating an existing directory costs nothing.
+        foreach (var name in RuntimeDirectoryNames)
+        {
+            Directory.CreateDirectory(Path.Combine(runtimePath, name));
+        }
+
         var workspaceManifestPath = Path.Combine(runtimePath, "workspace.json");
 
         var git = new HostGitRunner(_options.MaxAttemptDurationSeconds);
@@ -82,10 +120,12 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
             EnsureGitSuccess(resolve, "The configured base branch could not be resolved.");
             baseCommit = resolve.StandardOutput.Trim();
 
-            var create = await git.RunAsync(canonicalRepositoryRoot,
-                AgentHomeGit.Arguments("worktree", "add", "--detach", worktreePath, baseCommit),
+            await CreateStandaloneWorkspaceAsync(git,
+                canonicalRepositoryRoot,
+                worktreePath,
+                snapshot.BaseBranch,
+                baseCommit,
                 cancellationToken).ConfigureAwait(false);
-            EnsureGitSuccess(create, "The managed Development worktree could not be created.");
             await WriteWorkspaceManifestAsync(workspaceManifestPath,
                 new WorkspaceManifest(WorkspaceManifestVersion,
                     identity,
@@ -105,6 +145,13 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
 
             baseCommit = manifest.BaseCommit;
         }
+
+        // BEFORE the first host-side Git command touches a workspace a previous attempt could have written to. The
+        // validation below runs `rev-parse` and `symbolic-ref` on the HOST with this workspace as the working
+        // directory, so a repository-local exec-bearing key would be executing here, not in the sandbox. Also covers
+        // the freshly cloned case, where it is a cheap no-op — the clone's own config already contains nothing but the
+        // preserved keys once `origin` has been removed.
+        DevelopmentWorkspaceGitConfig.RestoreMinimal(worktreePath);
 
         await ValidatePreservedWorktreeAsync(git,
             worktreePath,
@@ -154,7 +201,8 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
             TrustedHostWorkspace = new SandboxTrustedHostWorkspace
             {
                 RootPath = worktreePath
-            }
+            },
+            Mounts = BuildMounts(runtimePath, worktreePath)
         }, cancellationToken).ConfigureAwait(false);
 
         return new DevelopmentWorkspaceSession(snapshot.ProjectId,
@@ -165,6 +213,55 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
             worktreePath,
             runtimePath,
             handle);
+    }
+
+    /// <summary>
+    ///     The engine-generated mounts this feature needs beyond the workspace itself.
+    ///     <para>
+    ///         The four runtime subdirectories are named individually rather than by mounting their parent, and that is
+    ///         the whole of D9's control-state exclusion: <c>workspace.json</c> lives in the parent and stays outside
+    ///         every sandbox because the parent is never mounted.
+    ///     </para>
+    ///     <para>
+    ///         <c>.git/config</c> is requested READ-ONLY, and only from a provider that advertises
+    ///         <see cref="SandboxProviderCapabilities.SupportsReadOnlyMounts" />. It is a nested file mount layered over
+    ///         the read-write workspace: the work tree stays writable so the agent can edit, <c>.git/index</c> stays
+    ///         writable so <c>git apply --index</c> still works, and <c>.git/config</c> becomes both unwritable and
+    ///         unremovable — a filter driver that cannot be DEFINED cannot run, whatever an in-tree
+    ///         <c>.gitattributes</c> selects.
+    ///     </para>
+    ///     <para>
+    ///         The capability gate is not defensive coding. A provider with no mount layer fails a read-only request
+    ///         closed rather than serving it writable, so requesting it unconditionally would kill Development Mode
+    ///         outright on the process provider it runs on today — which is exactly why the engine-side rewrite in
+    ///         <see cref="DevelopmentWorkspaceGitConfig" /> exists as the provider-independent half rather than as a
+    ///         belt-and-braces extra.
+    ///     </para>
+    /// </summary>
+    private IReadOnlyList<SandboxMount> BuildMounts(string runtimePath, string worktreePath)
+    {
+        var mounts = RuntimeDirectoryNames
+                     .Select(name => new SandboxMount
+                     {
+                         HostPath = Path.Combine(runtimePath, name),
+                         SandboxPath = RuntimeMountRoot + "/" + name,
+                         ReadOnly = false
+                     })
+                     .ToList();
+
+        var gitConfigPath = Path.Combine(worktreePath, ".git", "config");
+        if ((_sandbox.Capabilities & SandboxProviderCapabilities.SupportsReadOnlyMounts) != SandboxProviderCapabilities.None
+            && File.Exists(gitConfigPath))
+        {
+            mounts.Add(new SandboxMount
+            {
+                HostPath = gitConfigPath,
+                SandboxPath = GitConfigSandboxPath,
+                ReadOnly = true
+            });
+        }
+
+        return mounts;
     }
 
     private static void ValidateBaseBranch(string baseBranch)
@@ -187,6 +284,107 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
         }
     }
 
+    /// <summary>
+    ///     Creates the managed workspace as an engine-owned standalone clone (decision D8), replacing
+    ///     <c>git worktree add --detach</c>.
+    ///     <para>
+    ///         A linked worktree's <c>.git</c> is a pointer <em>file</em> into the trusted source repository, so binding
+    ///         the workspace into a container either breaks git outright or hands the container the user's real
+    ///         repository — refs, config, objects and <c>hooks</c>, which is host-side arbitrary code execution. A clone
+    ///         owns its own <c>.git</c>, so the workspace is self-contained and the trusted source repository is not
+    ///         reachable from it.
+    ///     </para>
+    ///     <para>
+    ///         Three steps here are not optional, and each one fails an assertion that would otherwise pass silently:
+    ///         a clone leaves HEAD <em>attached</em> to the cloned branch, so it must be detached or both this provider's
+    ///         own <c>symbolic-ref</c> check and <c>DevelopmentWorkspaceTools.EnsureWorkspaceInvariantAsync</c> reject
+    ///         it after the first catalog command; a clone <em>inherits</em> <c>origin</c> pointing at the trusted source
+    ///         repository, which is a live named path straight back to the thing that is supposed to be unreachable
+    ///         (Slice 2 gets this for free by discarding <c>.git</c>, and this path deliberately cannot); and the result
+    ///         must still be standing on the base commit that was resolved before the clone.
+    ///     </para>
+    /// </summary>
+    private static async Task CreateStandaloneWorkspaceAsync(HostGitRunner git,
+        string canonicalRepositoryRoot,
+        string worktreePath,
+        string baseBranch,
+        string baseCommit,
+        CancellationToken cancellationToken)
+    {
+        var parent = Path.GetDirectoryName(worktreePath)
+                     ?? throw new DevelopmentWorkspaceSecurityException("The managed Development workspace path has no parent directory.");
+        try
+        {
+            var clone = await git.RunAsync(parent,
+                AgentHomeGit.Arguments([.. StandaloneGitClone.Arguments(canonicalRepositoryRoot, worktreePath, baseBranch)]),
+                cancellationToken).ConfigureAwait(false);
+            EnsureGitSuccess(clone, "The managed Development workspace could not be cloned.");
+
+            if (!StandaloneGitClone.IsStandalone(worktreePath))
+            {
+                throw new DevelopmentWorkspaceSecurityException("The managed Development workspace clone does not own a standalone Git directory.");
+            }
+
+            // Detaching onto the pre-resolved base commit rather than the clone's own tip is also what closes the
+            // window between resolving the base branch and cloning it. If the source branch moved in between, the
+            // shallow clone does not contain the recorded commit at all and this fails outright instead of silently
+            // producing a workspace standing on a different base than the one persisted in the manifest.
+            var detach = await git.RunAsync(worktreePath,
+                AgentHomeGit.Arguments("checkout", "--detach", baseCommit),
+                cancellationToken).ConfigureAwait(false);
+            EnsureGitSuccess(detach, "The managed Development workspace could not be detached onto its base commit.");
+
+            var removeOrigin = await git.RunAsync(worktreePath,
+                AgentHomeGit.Arguments("remote", "remove", "origin"),
+                cancellationToken).ConfigureAwait(false);
+            EnsureGitSuccess(removeOrigin, "The managed Development workspace inherited remote could not be removed.");
+
+            var remotes = await git.RunAsync(worktreePath,
+                AgentHomeGit.Arguments("remote"),
+                cancellationToken).ConfigureAwait(false);
+            EnsureGitSuccess(remotes, "The managed Development workspace remotes could not be listed.");
+            if (!string.IsNullOrWhiteSpace(remotes.StandardOutput))
+            {
+                throw new DevelopmentWorkspaceSecurityException("The managed Development workspace must not reference any Git remote.");
+            }
+
+            var head = await git.RunAsync(worktreePath,
+                AgentHomeGit.Arguments("rev-parse", "--verify", "HEAD^{commit}"),
+                cancellationToken).ConfigureAwait(false);
+            EnsureGitSuccess(head, "The managed Development workspace HEAD could not be resolved.");
+            if (!string.Equals(head.StandardOutput.Trim(), baseCommit, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new DevelopmentWorkspaceSecurityException("The managed Development workspace clone does not stand on its resolved base commit.");
+            }
+        }
+        catch
+        {
+            // Only reachable when the workspace directory did not exist before this call, so removing it cannot destroy
+            // a preserved workspace. Leaving a half-cloned tree behind would be worse than none: the next attempt takes
+            // the preserved-workspace branch and trusts it.
+            StandaloneGitClone.TryDelete(worktreePath);
+            throw;
+        }
+    }
+
+    /// <summary>
+    ///     Re-validates a workspace that survived a restart. ADR 0001 decision 3 requires the workspace and its diff to
+    ///     be preserved, so this runs on the reuse path as well as immediately after creation.
+    ///     <para>
+    ///         The <c>--git-common-dir</c> check <em>inverted</em> its meaning under D8. It used to assert the
+    ///         workspace's common directory <em>equals</em> the trusted source repository's, which is what proved the
+    ///         workspace was a linked worktree of the bound repository. A standalone clone must assert the opposite: the
+    ///         common directory resolves <em>inside</em> the workspace, and is explicitly <em>not</em> the trusted
+    ///         source's. The negative is stated separately on purpose — a change that silently re-pointed the workspace
+    ///         at the source repository would otherwise satisfy the first clause by accident on a host where the two
+    ///         paths coincide, and this is exactly the condition D8 exists to prevent.
+    ///     </para>
+    ///     <para>
+    ///         <c>rev-parse --git-common-dir</c> prints a <em>relative</em> <c>.git</c> in a clone (it printed an
+    ///         absolute path for a linked worktree), which needs no new plumbing:
+    ///         <see cref="ResolveGitPathAsync" /> already resolves against the working directory.
+    ///     </para>
+    /// </summary>
     private static async Task ValidatePreservedWorktreeAsync(HostGitRunner git,
         string worktreePath,
         string trustedCommonGitDirectory,
@@ -210,7 +408,9 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
         EnsureGitSuccess(head, "The preserved Development worktree HEAD could not be resolved.");
 
         if (!PathEquals(topLevel, canonicalWorktree)
-            || !PathEquals(commonGitDirectory, trustedCommonGitDirectory)
+            || !PathEquals(commonGitDirectory, Path.Combine(canonicalWorktree, ".git"))
+            || PathEquals(commonGitDirectory, trustedCommonGitDirectory)
+            || !StandaloneGitClone.IsStandalone(canonicalWorktree)
             || !string.Equals(head.StandardOutput.Trim(), baseCommit, StringComparison.OrdinalIgnoreCase))
         {
             throw new DevelopmentWorkspaceSecurityException("The preserved Development worktree no longer matches its exact trusted base.");

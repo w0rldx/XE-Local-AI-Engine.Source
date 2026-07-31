@@ -25,10 +25,10 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
         };
 
     private readonly ILogger<AgentHomePatchService> _logger;
-    private readonly ISandboxRuntimeProvider _provider;
+    private readonly IAgentSandboxRuntimeProvider _provider;
     private readonly INodeRuntimeSettings _runtimeSettings;
 
-    public AgentHomePatchService(ISandboxRuntimeProvider provider,
+    public AgentHomePatchService(IAgentSandboxRuntimeProvider provider,
         INodeRuntimeSettings runtimeSettings,
         ILogger<AgentHomePatchService> logger)
     {

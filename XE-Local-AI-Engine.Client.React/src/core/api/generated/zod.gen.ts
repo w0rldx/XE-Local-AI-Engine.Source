@@ -2049,7 +2049,8 @@ export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerRun
 
 export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentCapabilityResponse = z.object({
 	enabled: z.boolean().optional(),
-	containerRuntime: zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerRuntimeResponse.optional(),
+	sandboxProvider: z.string().optional(),
+	containerRuntime: zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerRuntimeResponse.nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsDevelopmentV1ConfirmDevelopmentContainerRuntimeRequest = z.object({

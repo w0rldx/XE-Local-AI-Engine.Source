@@ -170,14 +170,14 @@ internal sealed class DevelopmentValidationRunner : IDevelopmentValidationRunner
 
     private readonly IDevelopmentEvidenceService _evidence;
     private readonly DevelopmentOptions _options;
-    private readonly ISandboxRuntimeProvider _sandbox;
+    private readonly IDevelopmentSandboxRuntimeProvider _sandbox;
     private readonly IDevelopmentStore _store;
     private readonly TimeProvider _timeProvider;
     private readonly IDevelopmentWorkspaceProvider _workspaceProvider;
 
     public DevelopmentValidationRunner(IDevelopmentStore store,
         IDevelopmentWorkspaceProvider workspaceProvider,
-        ISandboxRuntimeProvider sandbox,
+        IDevelopmentSandboxRuntimeProvider sandbox,
         IDevelopmentEvidenceService evidence,
         IOptions<DevelopmentOptions> options,
         TimeProvider timeProvider)
@@ -226,11 +226,9 @@ internal sealed class DevelopmentValidationRunner : IDevelopmentValidationRunner
                 _ = await tools.RunCommandAsync(commandId, timeout.Token).ConfigureAwait(false);
             }
 
+            var protectedRoots = DevelopmentArtifactSanitizer.ResolveProtectedRoots(repository.RepositoryRoot, session);
             var commands = tools.CommandEvidence
-                                .Select(command => DevelopmentArtifactSanitizer.Sanitize(command,
-                                    repository.RepositoryRoot,
-                                    session.HostWorktreePath,
-                                    session.RuntimePath))
+                                .Select(command => DevelopmentArtifactSanitizer.Sanitize(command, protectedRoots))
                                 .ToArray();
             var verdict = DevelopmentValidationVerdict.Evaluate(profile, commands);
             var passed = verdict.Passed;

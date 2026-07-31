@@ -31,14 +31,14 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
     private readonly IDevelopmentAttemptLiveBroker? _liveBroker;
     private readonly DevelopmentOptions _options;
     private readonly IDevelopmentPatchEvidenceService _patchEvidence;
-    private readonly ISandboxRuntimeProvider _sandbox;
+    private readonly IDevelopmentSandboxRuntimeProvider _sandbox;
     private readonly IDevelopmentStore _store;
     private readonly IDevelopmentWorkspaceProvider _workspaceProvider;
     private readonly TimeProvider _timeProvider;
 
     public DevelopmentCoderAttemptRunner(IDevelopmentStore store,
         IDevelopmentWorkspaceProvider workspaceProvider,
-        ISandboxRuntimeProvider sandbox,
+        IDevelopmentSandboxRuntimeProvider sandbox,
         IDevelopmentPatchEvidenceService patchEvidence,
         IDevelopmentArtifactBlobStore blobStore,
         IDevelopmentCoderModel coderModel,

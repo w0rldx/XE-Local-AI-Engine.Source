@@ -260,7 +260,7 @@ public sealed class AgentHomeManifestServiceTests : IDisposable
 
     private static AgentHomeManifestService CreateService(string rootPath,
         TimeProvider clock,
-        ISandboxRuntimeProvider provider,
+        IAgentSandboxRuntimeProvider provider,
         int staleSeconds = 1800)
     {
         var options = Options.Create(new AgentHomeOptions

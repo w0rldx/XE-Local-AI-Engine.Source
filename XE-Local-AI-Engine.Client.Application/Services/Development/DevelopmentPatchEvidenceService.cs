@@ -7,7 +7,6 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
-using XE_Local_AI_Engine.Client.Services.Sandbox;
 
 internal sealed record DevelopmentChangedFile(string Path, string ChangeType, string? PreviousPath = null);
 
@@ -26,15 +25,24 @@ internal interface IDevelopmentPatchEvidenceService
     Task<DevelopmentPatchEvidence> ExportAsync(DevelopmentWorkspaceSession session, CancellationToken cancellationToken = default);
 }
 
+/// <summary>
+///     Exports the final patch subject for a Development attempt.
+///     <para>
+///         Takes NO sandbox provider, deliberately. Every Git command below runs on the HOST against the managed
+///         worktree (see <see cref="RunGitExactAsync" />) rather than inside the attempt's sandbox, because the subject
+///         hash the operator approves must be produced by the engine's own trusted Git, not by whatever the sandboxed
+///         attempt could influence. It carried an unused <c>ISandboxRuntimeProvider</c> parameter until the per-feature
+///         seam landed; that only ever advertised a dependency this service does not have.
+///     </para>
+/// </summary>
 internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenceService
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly DevelopmentOptions _options;
 
-    public DevelopmentPatchEvidenceService(ISandboxRuntimeProvider sandbox, IOptions<DevelopmentOptions> options)
+    public DevelopmentPatchEvidenceService(IOptions<DevelopmentOptions> options)
     {
-        ArgumentNullException.ThrowIfNull(sandbox);
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
     }
@@ -43,6 +51,15 @@ internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenc
     {
         ArgumentNullException.ThrowIfNull(session);
         cancellationToken.ThrowIfCancellationRequested();
+
+        // Immediately before the first HOST-side Git command, and the ordering is the control. `reset` refreshes the
+        // index and `add -A` runs clean filters, so a repository-local `core.fsmonitor` or `filter.<driver>.clean` in
+        // the workspace's own .git/config executes HERE, on the machine running the engine — and the standalone clone
+        // (S3.4) is what made that file agent-writable inside the jail. AgentHomeGit's -c pins close fsmonitor but
+        // cannot close filter drivers, whose names are arbitrary; removing the definitions closes both without
+        // enumerating any key. No meaningful TOCTOU: the attempt has finished and no agent command is in flight.
+        DevelopmentWorkspaceGitConfig.RestoreMinimal(session.HostWorktreePath);
+
         _ = await RunGitExactAsync(session,
             ["reset", "--mixed", "--quiet", "HEAD", "--"],
             maxOutputBytes: 4096,

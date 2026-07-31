@@ -21,10 +21,10 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
 
     private readonly ISensitiveFileExclusionService _exclusionService;
     private readonly ILogger<AgentHomeWorkspaceService> _logger;
-    private readonly ISandboxRuntimeProvider _provider;
+    private readonly IAgentSandboxRuntimeProvider _provider;
     private readonly INodeRuntimeSettings _runtimeSettings;
 
-    public AgentHomeWorkspaceService(ISandboxRuntimeProvider provider,
+    public AgentHomeWorkspaceService(IAgentSandboxRuntimeProvider provider,
         ISensitiveFileExclusionService exclusionService,
         INodeRuntimeSettings runtimeSettings,
         ILogger<AgentHomeWorkspaceService> logger)

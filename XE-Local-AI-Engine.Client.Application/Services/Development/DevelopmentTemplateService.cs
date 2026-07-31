@@ -137,7 +137,7 @@ internal sealed class DevelopmentTemplateService(
             // whatever the failed clone left behind. Only remove what this call created.
             if (created)
             {
-                TryDelete(destination);
+                StandaloneGitClone.TryDelete(destination);
             }
 
             throw;
@@ -159,24 +159,26 @@ internal sealed class DevelopmentTemplateService(
         var parent = Path.GetDirectoryName(destination)
                      ?? throw new DevelopmentWorkspaceSecurityException("The destination path has no parent directory.");
 
-        // file:// rather than a plain path on purpose: git SILENTLY IGNORES --depth for a local-path clone ("warning:
-        // --depth is ignored in local clones; use file:// instead") and hardlinks the whole object store instead, which
-        // is exactly the shared-objects coupling this design exists to avoid.
+        // The transport, the flag set and the standalone assertion are shared with the managed workspace (S3.4) via
+        // StandaloneGitClone — including the reason file:// is mandatory: given a plain local path git SILENTLY IGNORES
+        // --depth ("warning: --depth is ignored in local clones; use file:// instead") and hardlinks the whole object
+        // store instead, which is exactly the shared-objects coupling this design exists to avoid.
         var clone = await git.RunAsync(parent,
-            AgentHomeGit.Arguments("clone", "--depth", "1", "--no-recurse-submodules", "--no-tags",
-                new Uri(templateRoot).AbsoluteUri, destination),
+            AgentHomeGit.Arguments([.. StandaloneGitClone.Arguments(templateRoot, destination)]),
             cancellationToken).ConfigureAwait(false);
         EnsureGitSuccess(clone, "The template could not be cloned.");
 
-        // Dropping .git is what severs the template: it removes the inherited origin (so a stray push cannot land in
-        // the template), the template's history, and any shared object state.
-        var clonedGitDirectory = Path.Combine(destination, ".git");
-        if (!Directory.Exists(clonedGitDirectory))
+        if (!StandaloneGitClone.IsStandalone(destination))
         {
             throw new DevelopmentWorkspaceSecurityException("The template clone did not produce a standalone Git directory.");
         }
 
-        Directory.Delete(clonedGitDirectory, recursive: true);
+        // Where the two paths part company, and they must. Dropping .git is what severs the template: it removes the
+        // inherited origin (so a stray push cannot land in the template), the template's history, and any shared object
+        // state. The managed workspace deliberately does NOT do this — it keeps the cloned history and detaches onto
+        // the recorded base commit, because a fabricated initial commit would make its patch unappliable by
+        // construction.
+        Directory.Delete(Path.Combine(destination, ".git"), recursive: true);
 
         var init = await git.RunAsync(destination,
             AgentHomeGit.Arguments("init", "--initial-branch", baseBranch),
@@ -337,21 +339,6 @@ internal sealed class DevelopmentTemplateService(
         if (result.ExitCode != 0)
         {
             throw new DevelopmentTemplateMaterializationException(message);
-        }
-    }
-
-    private static void TryDelete(string path)
-    {
-        try
-        {
-            if (Directory.Exists(path))
-            {
-                Directory.Delete(path, recursive: true);
-            }
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            // Best-effort cleanup; the original failure is the one worth reporting.
         }
     }
 

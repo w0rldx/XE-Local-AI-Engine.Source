@@ -27,24 +27,39 @@ internal sealed class ContainerSandboxOptionsValidator : IValidateOptions<Contai
                          + "A tag names whatever the registry last pushed, not the bytes the operator approved (plan D7).");
         }
 
-        if (options.UserId is 0)
+        // Deliberately NOT rejecting UID/GID 0 here. Whether zero is root depends on the daemon, and this validator
+        // runs at startup with no daemon in reach: under a rootless daemon container UID 0 is the invoking user's own
+        // unprivileged host account and is the only identity that can use an engine-generated bind mount, while under
+        // a rootful one it is host root. A startup rejection would therefore refuse a correct configuration on one
+        // machine and accept nothing extra on the other. The check has moved to where the answer is knowable —
+        // DockerSandboxRuntimeProvider probes the daemon before it resolves the identity, and refuses UID 0 against a
+        // daemon that is not verified rootless. Negative values are still rejected, by the Range data annotation.
+        //
+        // What IS answerable without a daemon is whether the two halves of the identity agree about which mapping they
+        // live in. Under a rootless daemon 0 names the invoking user; pairing a 0 with a non-zero id straddles two
+        // different host accounts, so the container would not own what it creates whichever daemon runs it.
+        if (options.UserId is not null && options.GroupId is not null && (options.UserId is 0) != (options.GroupId is 0))
         {
-            failures.Add($"'{nameof(ContainerSandboxOptions.UserId)}' must not be 0. §3.8 requires non-root execution with an explicit UID.");
-        }
-
-        if (options.GroupId is 0)
-        {
-            failures.Add($"'{nameof(ContainerSandboxOptions.GroupId)}' must not be 0. §3.8 requires non-root execution with an explicit GID.");
+            failures.Add($"'{nameof(ContainerSandboxOptions.UserId)}' and '{nameof(ContainerSandboxOptions.GroupId)}' must both be 0 "
+                         + "or neither. 0 is meaningful only against a rootless daemon, where it maps to the invoking user's own "
+                         + "host account; mixing it with a subordinate id splits the identity across two host accounts and the "
+                         + "container would not own what it creates.");
         }
 
         ValidateMountTarget(nameof(ContainerSandboxOptions.WorkspaceMountTarget), options.WorkspaceMountTarget, failures);
         ValidateMountTarget(nameof(ContainerSandboxOptions.ScratchMountTarget), options.ScratchMountTarget, failures);
 
-        if (Overlaps(options.WorkspaceMountTarget, options.ScratchMountTarget))
+        // An N-way sweep, not a pairwise call, and the difference is the whole point. Two targets need one comparison
+        // and three need three; adding a fourth by hand is how a pair gets missed. FindOverlap is shared with the
+        // provider's mount broker, which sweeps these two targets together with every engine-generated mount target —
+        // an unbounded list that a fixed set of pairwise calls could never cover.
+        if (FindOverlap([
+                (nameof(ContainerSandboxOptions.WorkspaceMountTarget), options.WorkspaceMountTarget),
+                (nameof(ContainerSandboxOptions.ScratchMountTarget), options.ScratchMountTarget)
+            ]) is { } collision)
         {
-            failures.Add($"'{nameof(ContainerSandboxOptions.ScratchMountTarget)}' ('{options.ScratchMountTarget}') and "
-                         + $"'{nameof(ContainerSandboxOptions.WorkspaceMountTarget)}' ('{options.WorkspaceMountTarget}') must not overlap — "
-                         + "one would shadow the other and the resulting container would not be the one that was verified.");
+            failures.Add($"'{collision.Second}' ('{collision.SecondPath}') and '{collision.First}' ('{collision.FirstPath}') must not "
+                         + "overlap — one would shadow the other and the resulting container would not be the one that was verified.");
         }
 
         if (!TryParseApiVersion(options.MinimumApiVersion, out _))
@@ -110,6 +125,37 @@ internal sealed class ContainerSandboxOptionsValidator : IValidateOptions<Contai
         {
             failures.Add($"'{propertyName}' must not be the container root '/'.");
         }
+    }
+
+    /// <summary>
+    ///     Sweeps every pair in <paramref name="targets" /> and returns the first collision, or <see langword="null" />
+    ///     when no target shadows another. Two container paths collide when they are equal or when one is an ancestor
+    ///     of the other — a mount at an ancestor hides everything the descendant was supposed to expose, and the
+    ///     container the daemon then reads back is not the one that was verified.
+    ///     <para>
+    ///         Shared rather than duplicated, because the two callers sweep different sets: startup validation sweeps
+    ///         the configured option targets with no daemon in reach, while the provider sweeps those PLUS every
+    ///         engine-generated mount target for one create. The rule must be the same in both or a mount that startup
+    ///         would have refused becomes reachable at create time.
+    ///     </para>
+    /// </summary>
+    internal static (string First, string FirstPath, string Second, string SecondPath)? FindOverlap(
+        IReadOnlyList<(string Name, string? Path)> targets)
+    {
+        ArgumentNullException.ThrowIfNull(targets);
+
+        for (var outer = 0; outer < targets.Count; outer++)
+        {
+            for (var inner = outer + 1; inner < targets.Count; inner++)
+            {
+                if (Overlaps(targets[outer].Path, targets[inner].Path))
+                {
+                    return (targets[outer].Name, targets[outer].Path!, targets[inner].Name, targets[inner].Path!);
+                }
+            }
+        }
+
+        return null;
     }
 
     private static bool Overlaps(string? first, string? second)

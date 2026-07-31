@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.ContainerSandbox;
 
+using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -34,6 +35,43 @@ public sealed class DockerSandboxHardeningTests
         // Docker's own default. An unset User means root, so an empty read-back is the single most likely way this
         // guarantee is lost in practice and must not read as "nothing to check".
         var violations = DockerSandboxHardening.FindViolations(Specification(), Conformant() with { User = string.Empty });
+
+        AssertEx.Contains(violations, violation => violation.Contains("non-root user", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public void FindViolations_AgainstARootlessDaemon_AcceptsUidZeroBecauseItIsNotHostRoot()
+    {
+        // The §3.8 rule as written is inverted under a rootless daemon: container uid 0 maps to the INVOKING USER's
+        // unprivileged host account, and it is the only identity that can use an engine-generated bind mount there
+        // (measured on Engine 29.6.1 rootless: --user 1000:1000 could not create a file in the mount at all). It still
+        // has every capability dropped, no-new-privileges set and a read-only rootfs.
+        var specification = Specification() with { User = "0:0" };
+
+        AssertEx.Empty(DockerSandboxHardening.FindViolations(specification,
+            Conformant() with { User = "0:0" },
+            daemonIsRootless: true));
+    }
+
+    [Test]
+    public void FindViolations_AgainstARootfulDaemon_StillRejectsUidZero()
+    {
+        // The relaxation is scoped to the daemon that earns it, and to nothing else.
+        var specification = Specification() with { User = "0:0" };
+        var violations = DockerSandboxHardening.FindViolations(specification, Conformant() with { User = "0:0" });
+
+        AssertEx.ContainsSingle(violations, violation => violation.Contains("non-root user", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public void FindViolations_AnUnsetUserIsRejectedEvenAgainstARootlessDaemon()
+    {
+        // An empty User is Docker's default, i.e. "nobody decided". Rootless makes uid 0 acceptable as a CHOICE; it
+        // does not make the absence of a choice acceptable.
+        var specification = Specification() with { User = string.Empty };
+        var violations = DockerSandboxHardening.FindViolations(specification,
+            Conformant() with { User = string.Empty },
+            daemonIsRootless: true);
 
         AssertEx.Contains(violations, violation => violation.Contains("non-root user", StringComparison.Ordinal));
     }
@@ -261,6 +299,62 @@ public sealed class DockerSandboxHardeningTests
         AssertEx.Equal(expected: 512L * 1024 * 1024, specification.MemoryBytes);
         AssertEx.Equal(expected: 2_000_000_000L, specification.NanoCpus);
         AssertEx.Equal(expected: 256L, specification.PidsLimit);
+    }
+
+    [Test]
+    public void BuildSpecification_WhenUnrestrictedEgressIsAskedFor_UsesTheDefaultBridgeRatherThanNone()
+    {
+        var specification = DockerSandboxHardening.BuildSpecification(Options(),
+            new ResolvedContainerIdentity(UserId: 1000, GroupId: 1000),
+            "xe-dev-test",
+            "sandbox-1",
+            [Mount()],
+            requestedLimits: null,
+            SandboxNetworkPolicy.Unrestricted);
+
+        AssertEx.Equal("bridge", specification.NetworkMode);
+        // Everything else the contract requires is unchanged: only egress moved.
+        AssertEx.True(specification.ReadOnlyRootFilesystem);
+        AssertEx.Contains(specification.CapabilitiesToDrop, "ALL");
+        AssertEx.Contains(specification.SecurityOptions, "no-new-privileges:true");
+    }
+
+    [Test]
+    public void FindViolations_VerifiesTheRequestedNetworkModeRatherThanAssumingNone()
+    {
+        // The read-back must follow what was asked for. Pinning it to "none" would fail every legitimate Unrestricted
+        // create; leaving it unchecked would let a daemon silently substitute one policy for another.
+        var bridge = DockerSandboxHardening.BuildSpecification(Options(),
+            new ResolvedContainerIdentity(UserId: 1000, GroupId: 1000),
+            "xe-dev-test",
+            "sandbox-1",
+            [Mount()],
+            requestedLimits: null,
+            SandboxNetworkPolicy.Unrestricted);
+
+        AssertEx.Empty(DockerSandboxHardening.FindViolations(bridge, Conformant() with { NetworkMode = "bridge" }));
+        AssertEx.ContainsSingle(DockerSandboxHardening.FindViolations(bridge, Conformant() with { NetworkMode = "none" }),
+            violation => violation.Contains("network mode", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public void FindViolations_TheHostNetworkIsRejectedEvenWhenItIsWhatWasAskedFor()
+    {
+        // Unconditional by design: no requested policy makes sharing the host's network stack acceptable, and it is
+        // the one mode that would put the daemon socket that created the container within its reach.
+        var specification = Specification() with { NetworkMode = "host" };
+        var violations = DockerSandboxHardening.FindViolations(specification, Conformant() with { NetworkMode = "host" });
+
+        AssertEx.ContainsSingle(violations, violation => violation.Contains("host network namespace", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public async Task ResolveNetworkMode_ARestrictedEgressAllowListIsFailClosedRejected()
+    {
+        var exception = await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(
+            () => Task.FromResult(DockerSandboxHardening.ResolveNetworkMode(SandboxNetworkPolicy.Restricted)));
+
+        AssertEx.Contains(exception.Message, "no mechanism");
     }
 
     internal static ContainerSandboxOptions Options()
