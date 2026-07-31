@@ -60,7 +60,9 @@ public sealed partial record StoredNodeSettings
 
     public const int MaxMaxResponseSizeMb = 100;
 
-    public const string DefaultRecommendedLlamaCppTag = "b9692";
+    // Must be re-pinned in lock-step with LlamaCppReleasePins.PinnedTag — this is a deliberate literal rather than a
+    // reference, because Client.Application must not take a dependency on Providers.LlamaServer (frozen layering).
+    public const string DefaultRecommendedLlamaCppTag = "b10201";
 
     public const int DefaultOrchestrationIdleTimeoutSeconds = 120;
 
@@ -210,7 +212,7 @@ public sealed partial record StoredNodeSettings
     /// <summary>Worker response-size cap in MiB. Seed: <c>WorkerNode:MaxResponseSizeMb</c>.</summary>
     public int? MaxResponseSizeMb { get; init; }
 
-    /// <summary>The recommended llama.cpp release tag. Seed: <c>LlamaCppReleasePins.PinnedTag</c> ("b9692").</summary>
+    /// <summary>The recommended llama.cpp release tag. Seed: <c>LlamaCppReleasePins.PinnedTag</c> ("b10201").</summary>
     public string? RecommendedLlamaCppTag { get; init; }
 
     /// <summary>Orchestration idle-timeout (seconds, developer-only). Seed: <c>Agent:Orchestration:IdleTimeoutSeconds</c> (120).</summary>

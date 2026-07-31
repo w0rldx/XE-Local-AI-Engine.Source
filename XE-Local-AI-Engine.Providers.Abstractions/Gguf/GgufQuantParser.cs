@@ -27,11 +27,15 @@ public static partial class GgufQuantParser
     //   legacy:   Q4_0, Q4_1, Q5_0, Q5_1 ; ARM: Q4_0_4_4/4_8/8_8
     //   IQ:       IQ1_S/M, IQ2_XXS/XS/S/M, IQ3_XXS/XS/S/M, IQ4_XS/NL
     //   floats:   F16/FP16, BF16, F32/FP32, F64
-    //   native:   MXFP4 (gpt-oss ships its MoE weights natively at this format — recognized so it is not skipped)
+    //   native:   MXFP4, NVFP4 (models ship weights natively at these formats — recognized so they are not skipped).
+    //             An UNRECOGNIZED token is not merely mis-priced: the file fails IsUsableGgufFile, so a repo whose files
+    //             all use it disappears from search behind "No GGUF repositories matched that search". Verified live
+    //             2026-07-31 against tngtech/Qwen3.6-27B-NVFP4-GGUF (invisible) and
+    //             s-batman/Ornith-1.0-9B-NVFP4-MTP-GGUF (visible, but its NVFP4 file silently absent from the picker).
     //   Unsloth:  an optional UD- prefix on any of the above (UD-Q4_K_XL, UD-IQ2_M, ...)
     // Verified live 2026-06-18 against bartowski/unsloth GGUF filenames (incl. multi-part -00001-of-00002 suffixes).
     [GeneratedRegex(
-        @"(?<![A-Za-z0-9])(?<dynamic>UD[-_])?(?<quant>IQ[1-4]_(?:XXS|XS|S|M|NL)|Q[2-8]_K_(?:XL|S|M|L)|Q[2-8]_K|Q4_0_(?:4_4|4_8|8_8)|Q[2-8]_[01]|MXFP4|BF16|FP16|FP32|F16|F32|F64)(?![A-Za-z0-9])",
+        @"(?<![A-Za-z0-9])(?<dynamic>UD[-_])?(?<quant>IQ[1-4]_(?:XXS|XS|S|M|NL)|Q[2-8]_K_(?:XL|S|M|L)|Q[2-8]_K|Q4_0_(?:4_4|4_8|8_8)|Q[2-8]_[01]|MXFP4|NVFP4|BF16|FP16|FP32|F16|F32|F64)(?![A-Za-z0-9])",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture,
         matchTimeoutMilliseconds: 2000)]
     private static partial Regex QuantRegex();
