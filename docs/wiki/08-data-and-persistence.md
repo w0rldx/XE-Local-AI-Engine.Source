@@ -156,7 +156,7 @@ Migrations live in `Migrations/` and upgrade the existing SQLite schemas in plac
 | `20260711002326_AddBenchmarkProfileRevisionBinding` | Bind `model_fit_benchmarks` to an inference-profile revision: `profile_id` (+ index) plus captured launch flags (`flash_attn`, `kv_type_v`) |
 | `20260713170221_RepairAndUniqueMessageSequence` | Repair duplicate/gapped message sequences (data SQL) + a **unique** index on `messages (conversation_id, sequence)` enforcing one message per ordinal per conversation |
 | `20260713204544_AddChatMaintenanceState` | `chat_maintenance_state` (unencrypted key/value durable flags for one-shot DB maintenance; see the content-encryption reclamation marker below) |
-| `20260714144229_AddAgentRunEnvelopeColumns` | Run-envelope columns on `agent_execution_logs` (`record_kind`, `schema_version`, `invocation_id`, `request_id`, `terminal_status`, `trace_id`, `content_chunk_count`, `reasoning_chunk_count`) — the durable per-invocation run envelope shares the table with adaptive-memory diagnostics (MED-007 / R4) |
+| `20260714144229_AddAgentRunEnvelopeColumns` | Run-envelope columns on `agent_execution_logs` (`record_kind`, `schema_version`, `invocation_id`, `request_id`, `terminal_status`, `trace_id`, `content_chunk_count`, `reasoning_chunk_count`) — the durable per-invocation run envelope shares the table with adaptive-memory diagnostics, discriminated by `record_kind` |
 | `20260714161306_AddRunEnvelopeDurabilityColumns` | Envelope durability columns (`reasoning_tokens`, `started_at_utc`, `total_tokens`) + a **unique filtered** index `ix_agent_execution_logs_envelope_message_id` on `message_id` (`WHERE record_kind = 1`), so there is at most one envelope row per assistant message |
 | `20260718023348_DropApprovedUtilityImages` | Removes the obsolete container utility-image allow-list table after model recommendation moved fully in-process |
 | `20260718143054_AddAgentExecutionLogProvider` | Adds provider attribution to agent execution logs |
@@ -166,7 +166,7 @@ Migrations live in `Migrations/` and upgrade the existing SQLite schemas in plac
 | `20260726203016_AddKnowledgeVectorIdentity` | Canonical knowledge vector identity (`resolved model + transform/version + width`) on documents/vectors; all pre-existing projections are explicitly tagged `legacy:unversioned` so they remain source-preserved but stale until reindexed |
 | `20260728184839_AddDevelopmentCommandProfile` | Snapshots the code-owned Development command profile on each project and binds artifacts to its digest |
 
-(Counted on disk at the baseline: **43 migration implementation files** — 41 timestamped plus 2
+(Counted on disk: **45 migration implementation files** — 43 timestamped plus 2
 untimestamped chat-schema migrations — and **2 model snapshots**. Per-migration `.Designer.cs` files
 are not included in that implementation count.)
 

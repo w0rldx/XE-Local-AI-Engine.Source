@@ -18,7 +18,7 @@ Test stack at a glance: **TUnit 1.58.0** on **Microsoft.Testing.Platform (MTP)**
 |---|---|---|---|---|
 | `XE-Local-AI-Engine.Tests` | Backend integration (in-process host via `WebApplicationFactory<Program>`) | TUnit + NSubstitute | The whole node host: endpoints, hubs, auth, chat, agents, scheduler, model-fit, capacity, MCP, providers, memory, shutdown, and development mode | [Architecture](01-architecture-overview.md), [API & Hubs](09-api-and-hubs.md) |
 | `XE-Local-AI-Engine.AI.Agent.Tests` | Unit/component for the agent runtime | TUnit + NSubstitute | MAF/MEAI wiring: `Chat/`, `Eval/`, `Invocation/`, `Tools/`, `PreviewWorkflows/`, plus project smoke tests | [Agent Mode](04-agent-mode.md), [Chat](05-chat.md) |
-| `XE-Local-AI-Engine.Client.Persistence.Tests` | Persistence + EF migration tests | TUnit | SQLite stores with selected encrypted fields, AEAD cipher, schema-focused migration tests (23 `*MigrationTests.cs` files vs 43 migration implementations on disk, not strictly 1:1), and the `NegativeFence/` compile-fence | [Data & Persistence](08-data-and-persistence.md) |
+| `XE-Local-AI-Engine.Client.Persistence.Tests` | Persistence + EF migration tests | TUnit | SQLite stores with selected encrypted fields, AEAD cipher, schema-focused migration tests (23 `*MigrationTests.cs` files vs 45 migration implementations on disk, not strictly 1:1), and the `NegativeFence/` compile-fence | [Data & Persistence](08-data-and-persistence.md) |
 | `XE-Local-AI-Engine.Tests.E2ETests` | Browser E2E | Playwright + TUnit.Playwright | Real Chromium against the in-process host serving the real built React SPA (19 `*E2ETests.cs`: Chat, Agents, Scheduler, Models, NodeSettings, Dashboard, smoke, viewport, …) | [React Client](10-react-client.md), [Hosting](11-hosting-and-deployment.md) |
 | `XE-Local-AI-Engine.Testing.FakeOllama` | Support library (not a test suite) | — | In-memory fake Ollama HTTP server + deterministic embeddings, so backend tests never need a real model runtime | [Local Runtime & Providers](03-local-runtime-and-providers.md) |
 | `XE-Local-AI-Engine.Client.Testing` | Support library | — | Outbound-event recorders + `RecordingHubMessageSender` to assert what the node *would* send over WorkerHub without a real platform | [API & Hubs](09-api-and-hubs.md), [Security & Privacy](12-security-and-privacy.md) |
@@ -31,7 +31,7 @@ React unit/component tests live **inside** the client tree (`XE-Local-AI-Engine.
 
 These suites landed with the 2026-06-24…27 subsystems and are confirmed present in the tree (counts left qualitative on purpose):
 
-- **Inference optimizer / per-machine tuning** (`XE-Local-AI-Engine.Tests`): `Inference/InferenceProfileResolverTests.cs`, `Inference/InferenceProfileServiceTests.cs`, `Inference/MachineKeyProviderTests.cs`, and the provider-side `Providers/LlamaServer/LlamaListDevicesVramProbeTests.cs` (the real `--list-devices` VRAM probe). See [Local Runtime & Providers](03-local-runtime-and-providers.md).
+- **Inference optimizer / per-machine tuning** (`XE-Local-AI-Engine.Tests`): `Inference/InferenceProfileResolverTests.cs`, `Inference/InferenceProfileServiceTests.cs`, `Inference/MachineKeyProviderTests.cs`, and the provider-side `Providers/LlamaServer/LlamaListDevicesProcessVramBudgetProbeTests.cs` and `Providers/LlamaServer/LlamaDeviceInventoryProbeTests.cs` (the two `--list-devices` consumers: the process VRAM-budget figure and the structured device inventory). See [Local Runtime & Providers](03-local-runtime-and-providers.md).
 - **Inference profile operator endpoints**: `Endpoints/ModelFit/V1/InferenceProfileEndpointTests.cs` (explore / benchmark / freeze). See [API & Hubs](09-api-and-hubs.md).
 - **GGUF quant recommendation / quant ladder**: `ModelFit/GgufVariantRecommenderTests.cs`, `ModelFit/QuantLadderTests.cs` (quality-tier + hardware-fit + recommended-variant logic). See [Model Fit](07-model-fit.md).
 - **Client voice runtime**: `Voice/VoiceManifestEndpointTests.cs` (config-only backend voice manifest; the TTS engine itself is browser-side). See [React Client](10-react-client.md).
@@ -51,11 +51,11 @@ This is the heaviest suite and the heart of validation. `TestingWebAppFactory.cs
 ### `XE-Local-AI-Engine.Client.Persistence.Tests` — migrations & the negative fence
 
 Schema-focused EF migrations have dedicated `*MigrationTests.cs` files that apply the migration to a
-fresh SQLite DB and assert the resulting shape — 23 such files for 43 migration implementations
-(41 timestamped + 2 untimestamped), so coverage is intentionally not 1:1. The file follows the migration
+fresh SQLite DB and assert the resulting shape — 23 such files for 45 migration implementations
+(43 timestamped + 2 untimestamped), so coverage is intentionally not 1:1. The file follows the migration
 name rather than always taking an `Add*` prefix (for example, `NodeChatOriginMigrationTests.cs` and
-`NodeMessageLifecycleMigrationTests.cs`). `NodeAeadCipher` and persistence encryption are tested
-directly. The `NegativeFence/` folder is a separate **compile-only** project
+`NodeMessageLifecycleMigrationTests.cs`). The AEAD cipher (`INodeAeadCipher` → `AesGcmNodeAeadCipher`)
+and persistence encryption are tested directly. The `NegativeFence/` folder is a separate **compile-only** project
 (`XE-Local-AI-Engine.Client.Persistence.NegativeFence`) whose `Program.cs` constructs a `NodeMessage`;
 it guards a compile-time visibility/constructibility contract rather than runtime behavior. See
 [Data & Persistence](08-data-and-persistence.md).
@@ -64,7 +64,7 @@ it guards a compile-time visibility/constructibility contract rather than runtim
 
 The E2E harness is the highest-fidelity path: a real browser drives the real SPA served by the real host.
 
-- `Infrastructure/XEReactClientFixture.cs` runs `pnpm install --frozen-lockfile` then `pnpm run build` of the actual React client (serialising across fixtures behind a `BuildLock`, one retry on transient pnpm contention), then copies `dist/` into a temp web-root that the host serves at `/` via `UseWebRoot` — same-origin, no `/app` prefix (`XEReactClientFixture.cs:60-115`). This is why E2E is slow and ask-gated: it builds the frontend.
+- `Infrastructure/XEReactClientFixture.cs` runs `pnpm install --frozen-lockfile` then **`pnpm run build:e2e`** — a bare `vite build` that deliberately does **not** typecheck — of the actual React client (serialising across fixtures behind a `BuildLock`, one retry on transient pnpm contention), then copies `dist/` into a temp web-root that the host serves at `/` via `UseWebRoot` — same-origin, no `/app` prefix. This is why E2E is slow and ask-gated: it builds the frontend. **It is not `pnpm run build`, so a green E2E run does not prove the frontend typechecks** — `pnpm run lint` is the only typecheck; see the runner note below.
 - `Infrastructure/XENodeE2EWebApplicationFactory.cs` boots the host and seeds a single admin (`AdminEmail`/`AdminPassword`); `StubTokenStore.cs` stands in for credential storage.
 - `Common/XEE2ETestBase.cs` is the per-test base: headless Chromium (set `HEADED=true` for a visible browser), `--ignore-certificate-errors`, Playwright tracing that is **saved only on failure** to `test-results/traces/*.zip`, real password login in `[Before(Test)]` so the context holds the HttpOnly refresh cookie, and `ResetWorkerEventDispatcher()` before each test to stop a completed invocation leaking into another test's empty-state assertion (`XEE2ETestBase.cs:50-133`).
 - `Common/BrowserParallelLimit.cs` (`[ParallelLimiter<BrowserParallelLimit>]`) bounds concurrent browsers so CI/WSL2 runners don't thrash.
@@ -121,14 +121,15 @@ The wrapper mirrors the raw commands and parallelises independent trees. Invoke 
 
 The everyday loop is `--scope changed --serial`; E2E is deliberately behind `--confirm-e2e` because it builds the React client and launches browsers and so may need browser/runtime setup not present in every environment.
 
-### The two standalone runners
+### The three standalone runners
 
-Both exist because GitHub Actions is disabled, so anything not reachable from a local command is not reachable at all.
+All three exist because GitHub Actions is disabled, so anything not reachable from a local command is not reachable at all.
 
 - **[`scripts/run-e2e-local.sh`](../../scripts/run-e2e-local.sh)** — opt-in local runner for the Playwright suite. Nothing invokes it automatically; run it by hand before cutting a tester RC. It performs a frozen frontend install plus `pnpm run lint` before the fixture's intentionally bare Vite `build:e2e`, installs Playwright browsers (via `playwright.ps1`, so it needs `pwsh`), and rejects zero-test or missing-summary runs. `--list` enumerates without running; `--filter` accepts a TUnit/MTP tree-node expression. Exit codes: `0` pass, `1` tests failed or the run was vacuous, `2` a prerequisite/usage error, `75` build contamination (**void; rerun**). No external services needed — FakeOllama plus the in-process host, so no `llama-server` and no `scripts/dev-stop.sh`.
 - **[`scripts/lint-release-scripts.sh`](../../scripts/lint-release-scripts.sh)** — shellcheck + PSScriptAnalyzer over the packaging scripts, wired in as `--scope scripts`. With Actions disabled, `publish/package-tester-win.ps1` is the entire release path, so it gets static analysis and its [`publish/tests/package-tester-win.Tests.ps1`](../../publish/tests/package-tester-win.Tests.ps1) Pester suite on every default run. A **missing linter or test module exits 2** rather than passing silently.
+- **[`scripts/run-gpu-smoke-local.sh`](../../scripts/run-gpu-smoke-local.sh)** — opt-in **live GPU smoke** against a real, locally started node. Nothing invokes it automatically; run it by hand before cutting a tester RC or after touching the inference/runtime path. It owns the AppHost lifecycle (`dev-start.sh` → `aspire wait app` → `dev-stop.sh`), discovers the port from `dev-status.sh --json` (it changes on every restart), and asserts in order: the installed llama.cpp identity, the `IRuntimeDeviceAudit` verdict, a real streamed chat turn, **that the GPU actually did the work** (nvidia-smi utilisation during generation plus a VRAM rise over a pre-host baseline), a real tool call, optionally image generation (`--images`), and that eject returns VRAM to baseline. Every step must record a verdict, so "nothing ran" can never read as green. **This is the only gate that proves the GPU did the work** — a correct reply proves nothing, because a CPU fallback answers correctly, just slowly (measured on the dev box: GPU 72% / +1199 MiB VRAM versus CPU-fallback 11% / +0 MiB, identical correct answer). Exit codes: `0` pass, `1` the product failed a judged step (always with a `=== Summary ===`), **`5` an infrastructure abort where nothing was judged and no summary prints** (AppHost never became healthy, base URL undiscoverable, auth failed) — so a wrapper can treat 1 as "product says no" and 5 as "fix the machine and re-run"; `3` an instance is already running, `4` could not tell, `2` a missing prerequisite (including "this box has no NVIDIA GPU"), `75` contamination (**void; rerun**), `130` interrupted. Its refuse-to-pass logic is itself tested without a GPU by `scripts/tests/gpu-smoke.test.sh`.
 
-> **A zero-test run is a failure, not a pass.** Both runners enforce this, as does `--scope e2e`. The E2E project sets `IsTestProject=false`/`OutputType=Library` unless `-p:RunE2ETests=true` is passed, so without it `dotnet test` discovers nothing and exits **0**. Never read a green E2E run without checking that a non-zero number of tests actually ran.
+> **A zero-test run is a failure, not a pass.** All three runners enforce this, as does `--scope e2e` — the GPU smoke's equivalent is that a step which records no verdict fails the run. The E2E project sets `IsTestProject=false`/`OutputType=Library` unless `-p:RunE2ETests=true` is passed, so without it `dotnet test` discovers nothing and exits **0**. Never read a green E2E run without checking that a non-zero number of tests actually ran.
 
 > **The frontend prerequisite is explicit.** The standalone runner executes `pnpm run lint` before
 > E2E because the fixture uses bare `pnpm run build:e2e`; do not infer type/lint correctness from a
@@ -203,6 +204,9 @@ The README's "RC readiness status" section is the contract: **do not mark releas
 - the canonical packager's frontend, backend, vulnerability, and package-gate transcript,
 - a clean default `scripts/lint-release-scripts.sh` result, including the mandatory Pester suite,
 - a non-vacuous `scripts/run-e2e-local.sh` result with no exit-75 contamination,
+- a passing `scripts/run-gpu-smoke-local.sh` run on a GPU box — the only evidence that the GPU actually
+  did the work rather than a silent CPU fallback; an exit 5 is an infrastructure abort in which nothing
+  was judged, so it is not evidence either way and the run must be repeated,
 - generated schema/sample-manifest validation, including a clean `openapi:check`,
 - pinned runtime binary and package checksums (llama.cpp release pins; see [Local Runtime & Providers](03-local-runtime-and-providers.md)),
 - the matching `v<version>` source tag on the exact packaged commit,
@@ -222,7 +226,7 @@ retained transcript their operating status is unknown. See [Hosting & Deployment
 ## Maintainer checklist
 
 - Use `--treenode-filter`, never `--filter`, when targeting individual MTP tests.
-- New EF migration → add a `<Name>MigrationTests.cs` in `Client.Persistence.Tests`. Coverage is not strictly 1:1 today (23 test files for 43 migration implementations), but any migration that changes table/column/index shape should ship its test.
+- New EF migration → add a `<Name>MigrationTests.cs` in `Client.Persistence.Tests`. Coverage is not strictly 1:1 today (23 test files for 45 migration implementations), but any migration that changes table/column/index shape should ship its test.
 - New persistence entity surface change → re-check the `NegativeFence` compile fence still builds.
 - New WorkerHub outbound call → assert it through `RecordingHubMessageSender` and confirm no secret crosses the boundary ([Security & Privacy](12-security-and-privacy.md)).
 - New backend behavior that touches a model → drive it through `FakeOllama` (script the response) rather than a live runtime; only flip `RUN_LOCAL_INTEGRATION=true` for fidelity runs.

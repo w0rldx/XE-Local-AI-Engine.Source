@@ -15,8 +15,8 @@ Model-fit is the node's **box-aware GGUF recommendation advisor**: given the ope
 | Quant ladder + quality tier (single source of truth) | `XE-Local-AI-Engine.Providers.Abstractions/Gguf/QuantLadder.cs` · `GgufQuantQuality.cs` |
 | GGUF variant recommender (quant picker) | `…/Services/ModelFit/Gguf/GgufVariantRecommender.cs` (`IGgufVariantRecommender`) |
 | Inference Optimizer orchestrator | `…/Services/Inference/InferenceProfileService.cs` (`IInferenceProfileService`) |
-| Hardware profiler (provider seam impl) | `XE-Local-AI-Engine.Providers.Capabilities/HardwareProfiler.cs` |
-| Live free-VRAM probe | `XE-Local-AI-Engine.Providers.LlamaServer/Implementation/LlamaListDevicesVramProbe.cs` (`IAvailableVramProbe`) |
+| Hardware profiler (provider seam impl) | `XE-Local-AI-Engine.Providers.Capabilities/Implementation/HardwareProfiler.cs` |
+| Process VRAM-budget probe | `XE-Local-AI-Engine.Providers.LlamaServer/Implementation/LlamaListDevicesProcessVramBudgetProbe.cs` (`IProcessVramBudgetProbe`) |
 | Quartz handler | `XE-Local-AI-Engine.Client.Application/Services/Scheduler/Handlers/ModelRecommendationCheckHandler.cs` |
 | Local endpoints | `XE-Local-AI-Engine.Client/Endpoints/ModelFit/V1/` |
 | Route constants | `XE-Local-AI-Engine.Client/Endpoints/Common/LocalApiRoutes.cs:253` (`ModelFit`) |
@@ -81,7 +81,7 @@ When the operator inspects a repo's selectable GGUF files, the picker no longer 
 `AnnotateAsync` produces one `GgufVariantAnnotation(fileName, tier, verdict, isRecommended)` per file:
 
 - **Quality tier** — `GgufQuantQuality.Classify(file.Quant)` (the ladder above).
-- **Hardware-fit verdict** — `GgufFitVerdict` (`Unknown` / `WontFit` / `Tight` / `Fits`). It resolves the active backend exactly as the inference profiler does (`IGpuVariantSelector` → `InferenceBackends.FromVariant`), probes **free VRAM once** via `IAvailableVramProbe` (`LlamaListDevicesVramProbe`, [page 03 §2.5](03-local-runtime-and-providers.md#25-inference-profiles--per-machine-tuning)), then compares on-disk size + a runtime-headroom margin (`max(15% of size, ~1 GiB)` — the header-free fast path approximates the unmeasured KV/overhead) against free VRAM. A missing GPU/probe degrades every verdict to `Unknown`; the picker **never 500s** over absent hardware.
+- **Hardware-fit verdict** — `GgufFitVerdict` (`Unknown` / `WontFit` / `Tight` / `Fits`). It resolves the active backend exactly as the inference profiler does (`IGpuVariantSelector` → `InferenceBackends.FromVariant`), probes the **process-local VRAM budget once** via `IProcessVramBudgetProbe` (`LlamaListDevicesProcessVramBudgetProbe`, [page 03 §2.5](03-local-runtime-and-providers.md#25-inference-profiles--per-machine-tuning)) — note the name is load-bearing: on WDDM/Windows `--list-devices` reports the *calling process's residency budget*, not system-wide free VRAM, so anything needing global admission semantics reads `HardwareProfile.AvailableVramBytes` instead — then compares on-disk size + a runtime-headroom margin (`max(15% of size, ~1 GiB)` — the header-free fast path approximates the unmeasured KV/overhead) against free VRAM. A missing GPU/probe degrades every verdict to `Unknown`; the picker **never 500s** over absent hardware.
 - **Recommended pick** — when some files **fit**, the highest quality tier among them wins (ties → larger size); else the best `Tight` file by the same order; else (known GPU, nothing fits) the smallest file; else (VRAM unknown — no probe) the quality **SweetSpot** is preferred, then `Balanced`, then the median by size.
 
 ## Inference Optimizer (operator surface)
@@ -97,7 +97,7 @@ These are exposed as four body-carrying POST actions plus a collection GET — s
 
 ## The hardware profiler
 
-`HardwareProfiler` (`Providers.Capabilities/HardwareProfiler.cs`, implements `IHardwareProfiler`) produces a sanitized `HardwareProfile` aggregate (RAM / VRAM / GPU vendor / CPU cores / free disk — **no machine identifiers**). It is a Singleton with a `volatile` cached profile; `GetProfileAsync(forceRefresh, ct)` serves the cache unless `forceRefresh` is set (lock-free — the probe is read-only/idempotent).
+`HardwareProfiler` (`Providers.Capabilities/Implementation/HardwareProfiler.cs`, implements `IHardwareProfiler`) produces a sanitized `HardwareProfile` aggregate (RAM / VRAM / GPU vendor / CPU cores / free disk — **no machine identifiers**). It is a Singleton with a `volatile` cached profile; `GetProfileAsync(forceRefresh, ct)` serves the cache unless `forceRefresh` is set (lock-free — the probe is read-only/idempotent).
 
 Probing logic (`ProbeAsync`):
 
@@ -165,7 +165,7 @@ Routes under `model-fit/*` (`LocalApiRoutes.ModelFit`, mapped in `Endpoints/Mode
 | `GgufBrowse` / `GgufInspect` | `model-fit/gguf/browse` · `…/inspect` | `BrowseGgufRepositoriesEndpoint` · `InspectGgufRepositoryEndpoint` | HF GGUF discovery + per-repo quant/size inspection. **Inspect** annotates each file with quality tier + fit verdict + the ★ recommended variant (`IGgufVariantRecommender`). |
 | `Download` / `DownloadCancel` | `model-fit/download` · `…/cancel` | `StartGgufDownloadEndpoint` · `CancelGgufDownloadEndpoint` | Background, cancellable, keyed by model name. |
 | `Running` / `RunningEject` | `model-fit/running` · `…/eject` | `ListRunningModelsEndpoint` · `EjectRunningModelEndpoint` | Running llama-server processes; eject tree-kills one. |
-| `LlamaCppVersion` / `LlamaCppRuntime` / `LlamaCppUpdate` | `model-fit/llamacpp/version` · `…/runtime` · `…/update` | `GetLlamaCppVersionEndpoint` · `GetLlamaCppRuntimeEndpoint` · `UpdateLlamaCppRuntimeEndpoint` (+ `EnsureLlamaCppBinaryEndpoint`) | Pinned/resolved binary version, dynamic-runtime status, operator-initiated install/update. |
+| `LlamaCppVersion` / `LlamaCppRuntime` / `LlamaCppUpdate` | `model-fit/llamacpp/version` · `…/runtime` · `…/update` | `EnsureLlamaCppBinaryEndpoint` (a **POST** on `…/version`) · `GetLlamaCppRuntimeEndpoint` · `UpdateLlamaCppRuntimeEndpoint` | Pinned/resolved binary version, dynamic-runtime status, operator-initiated install/update. There is no `GetLlamaCppVersionEndpoint`: resolving the version can install the binary, so the route is a POST. |
 | `HfToken` | `model-fit/hf-token` | `GetHfTokenStatusEndpoint` · `SetHfTokenEndpoint` | **GET reports presence only** — the token is never returned (security gate). |
 | `Profiles` + `ProfilesExplore` / `ProfilesBenchmark` / `ProfilesFreeze` / `ProfilesInvalidate` | `model-fit/profiles` · `…/profiles/{explore,benchmark,freeze,invalidate}` | `ListInferenceProfilesEndpoint` · `Explore`/`Benchmark`/`Freeze`/`InvalidateInferenceProfileEndpoint` | Inference Optimizer (`IInferenceProfileService`). Collection GET lists every persisted node-local profile (**machine key omitted**). The four actions are **body-carrying POSTs** (target in the body, never a route param) so the POST always has a body — sidesteps the FastEndpoints 415-on-bodyless-POST issue. |
 

@@ -29,8 +29,10 @@ The repository is being prepared for an RC release. Release documentation and va
   filesystem and network access. The Process sandbox and Agent Home controls constrain application-mediated paths and bytes; they are not an operating-system security boundary. Set
   `Development:Enabled=false` as an emergency switch when that execution posture is not intended. MXC remains future provider work.
   [ADR 0004](docs/adr/0004-development-mode-container-execution-docker-stopgap.md) (accepted 2026-07-29) moves this feature's execution onto a **Docker container provider**, behind the same provider seam and as an
-  interim step ahead of MXC. That work is in progress; when it lands, **a running Docker daemon becomes a hard requirement for Development Mode** — there is deliberately no unisolated fallback, so a machine without one
-  gets no Development Mode rather than a quietly weaker one. Docker stays scoped to this feature: chat, embeddings, model acquisition and image generation never require it.
+  interim step ahead of MXC. That provider has **shipped and is opt-in**: set `Development:Sandbox:Provider=docker` to select it. Leave it unset — as the shipped configuration does — and Development Mode keeps running on
+  the process provider exactly as described above. On a node that *does* select it, **a running Docker daemon is a hard requirement** — there is deliberately no unisolated fallback, so a machine without one gets no
+  Development Mode rather than a quietly weaker one. Docker stays scoped to this feature: chat, embeddings, model acquisition and image generation never require it. See
+  [Development Mode container implementation status](docs/roadmaps/development-mode-container-status.md) for the maintained record of what is implemented.
 - **MCP tool extensibility** — registered MCP servers whose live tool snapshots are offered to agents through the local tool registry (`Services/Mcp`, `src/features/mcp`).
 - **Tests and fixtures** — backend/client persistence tests, integration-style tests, E2E harness, and FakeOllama in-process test server.
 
@@ -73,7 +75,7 @@ Component-specific notes:
 - Node.js compatible with `XE-Local-AI-Engine.Client.React/package.json`
 - pnpm via Corepack or a local install
 - A GPU with current drivers is optional; the app self-provisions its llama.cpp runtime and GGUF models at first run. (Neither Docker nor Ollama is required to build or run the engine — llama.cpp is the local runtime and inference needs only a driver; see [docs/wiki/03-local-runtime-and-providers.md](docs/wiki/03-local-runtime-and-providers.md).)
-- Docker: **not required today.** It becomes a prerequisite for **Development Mode only** — and only for that feature — once its container execution lands ([ADR 0004](docs/adr/0004-development-mode-container-execution-docker-stopgap.md)); that work is in progress, not shipped. At that point Development Mode will need a running daemon, plus its data root inside the WSL2 filesystem on Windows, and its real-daemon integration tests will need one too (without a daemon they report as blocked or skipped-with-reason, never as a pass). Nothing else in the app gains a Docker dependency.
+- Docker: **not required by default.** The container provider for **Development Mode only** ([ADR 0004](docs/adr/0004-development-mode-container-execution-docker-stopgap.md)) has shipped, but it is **opt-in and off unless you configure it**: it activates only when you set `Development:Sandbox:Provider=docker`, and the shipped `appsettings.json` leaves that key unset. On a node that does set it, Development Mode needs a running daemon, plus its data root inside the WSL2 filesystem on Windows; the real-daemon integration tests need one too (without a daemon they report as blocked or skipped-with-reason, never as a pass). Nothing else in the app gains a Docker dependency. See [Development Mode container implementation status](docs/roadmaps/development-mode-container-status.md).
 
 ### Common commands
 
@@ -144,6 +146,12 @@ These wrappers make parallel worktrees safe. Do not use `aspire stop --all`; it 
 boundaries. See [`scripts/README-dev-stop.md`](scripts/README-dev-stop.md) for the Aspire 13.4
 fallback and cleanup contract.
 
+`dev-start.sh` also owns the node operator secret. On first use it mints a per-checkout, owner-only
+`XE-Local-AI-Engine.AppHost/.data/node.key` (never tracked) and passes it to Aspire's required
+`node-sqlite-key` parameter; later runs reuse it, so encrypted dev data stays readable. If it mints a
+key next to dev data written under a *different* secret, it says so and names what to delete — that
+data cannot be decrypted and the node will otherwise crash on the first read.
+
 ## Self-contained desktop run
 
 The host can be published as a **single self-contained executable** (the .NET runtime is bundled — no prerequisite
@@ -213,8 +221,11 @@ evidence was produced, retained, or made available for the documentation baselin
 Required evidence includes:
 
 - the canonical packager's frontend, backend, vulnerability, and package-gate transcript,
-- a clean `scripts/lint-release-scripts.sh` result,
+- a clean default `scripts/lint-release-scripts.sh` result, including its mandatory Pester suite,
 - a non-vacuous Playwright E2E run (`scripts/run-e2e-local.sh`) with no exit-75 contamination,
+- a passing live GPU smoke run (`scripts/run-gpu-smoke-local.sh`) on a GPU box — the only gate that
+  proves the GPU did the work, since a CPU fallback answers correctly, just slowly; treat exit 5 as an
+  infrastructure abort where nothing was judged, not a product failure,
 - generated schema/sample-manifest validation, including a clean `openapi:check`,
 - pinned runtime binary and package checksums,
 - the matching `v<version>` source tag on the exact packaged commit,
@@ -223,8 +234,9 @@ Required evidence includes:
   and successful verification of all five remote assets during `-PublishDraft`, and
 - confirmation that the unchanged draft was published in the tester repository.
 
-Run `scripts/lint-release-scripts.sh`; add `--pester` when the packaging machine has the Pester
-module and record that result separately. See [Testing & Validation](docs/wiki/13-testing-and-validation.md)
+Run `scripts/lint-release-scripts.sh`. **The Pester suite is part of that default run, not an add-on** —
+`--pester` only requests it explicitly, and a missing Pester module is a hard failure, never a silent skip
+(a skipped test suite must never read as a pass). See [Testing & Validation](docs/wiki/13-testing-and-validation.md)
 and [the release guide](publish/README.md) for the full sequence.
 
 Standalone OS-package distribution (MSI/deb/rpm) is deferred: under the runtime re-architecture the app self-provisions its llama.cpp runtime and GGUF models at first run, so there is no installer bundle to validate. A future packaging effort would be its own plan.

@@ -10,12 +10,12 @@ capture the engine's `gen_ai` traces and metrics for usage inspection or post-ho
 
 The engine instruments every chat/agent turn with OpenTelemetry: `gen_ai` spans (provider round, budget, cancellation
 status) and metrics (token counts, duration) from meters `XE.Node`, `XE.LocalAiEngine.AI.Agent`, and
-`Microsoft.Extensions.AI*` (`ConfigureOpenTelemetry`, `XE-Local-AI-Engine.ServiceDefaults/Extensions.cs:51-99`). That
+`Microsoft.Extensions.AI*` (`ConfigureOpenTelemetry`, `XE-Local-AI-Engine.ServiceDefaults/Extensions.cs`). That
 instrumentation runs **unconditionally**, in every hosting mode — but an **OTLP exporter is only attached when
 `OTEL_EXPORTER_OTLP_ENDPOINT` is set**:
 
 ```csharp
-// XE-Local-AI-Engine.ServiceDefaults/Extensions.cs:107-115
+// AddOpenTelemetryExporters — XE-Local-AI-Engine.ServiceDefaults/Extensions.cs
 private void AddOpenTelemetryExporters()
 {
     var useOtlpExporter = !string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]);
@@ -51,7 +51,7 @@ export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317   # gRPC; use :4318 + /
 ```
 
 Nothing else needs to change — the meters/sources are already wired (`ConfigureOpenTelemetry`,
-`XE-Local-AI-Engine.ServiceDefaults/Extensions.cs:51-99`); setting the endpoint is the only switch.
+`XE-Local-AI-Engine.ServiceDefaults/Extensions.cs`); setting the endpoint is the only switch.
 
 ### Minimal local-collector recipe (no Aspire required)
 
@@ -94,7 +94,7 @@ The MEAI `OpenTelemetryChatClient` would otherwise honor the ambient `OTEL_INSTR
 variable when left unset — and Aspire dev injects that variable as `true` — so the pipeline sets
 `EnableSensitiveData` **explicitly** from `CaptureSensitiveContent` (bound from config section `Agent:Telemetry`) so
 the environment can never re-enable capture behind the operator's back
-(`XE-Local-AI-Engine.AI.Agent/DependencyInjection/AgentServiceCollectionExtensions.cs:130-156`). If an operator does
+(`DecorateChatClientPipeline` in `XE-Local-AI-Engine.AI.Agent/DependencyInjection/AgentServiceCollectionExtensions.cs`). If an operator does
 turn it on, the engine logs a prominent startup warning naming the setting.
 
 **Bottom line:** setting `OTEL_EXPORTER_OTLP_ENDPOINT` exports the shape of activity (spans, token counts, durations,

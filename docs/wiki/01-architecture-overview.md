@@ -26,8 +26,11 @@ loop, and the model runtime supervisor — lives inside the `XE-Local-AI-Engine.
 > stopgap ahead of MXC. It changes nothing above: the engine is still one process, and inference, model
 > acquisition, embedding and image generation carry no container dependency. The provider is chosen
 > **per feature** — AgentHome and Coder stay on the process sandbox provider. The container provider
-> itself is Slice 3 of the dev-mode plan and is **in progress**, so read the ADR rather than the tree
-> for what is decided.
+> itself has **shipped and is opt-in**: `Development:Sandbox:Provider=docker` selects it, and the
+> shipped config sets no `Development:Sandbox` key, so a default node still runs Development Mode on
+> the process provider. Read the ADR for what is *decided* and
+> [Development Mode container implementation status](../roadmaps/development-mode-container-status.md)
+> for what is *built* — that page is canonical and this one deliberately does not restate it.
 
 | Concern | Where it lives | Evidence |
 |---|---|---|
@@ -126,17 +129,20 @@ daemon means no Development Mode, deliberately, so the isolation posture cannot 
 installed. Repository-supplied container configuration is rejected wholesale (engine-generated canonical mounts,
 operator-approved digest-pinned images, no socket or device mounts, no repository Dockerfile builds); on Linux,
 Docker-socket access is root-equivalent, and the ADR documents that rather than mitigating it. Docker is recorded
-as a **stopgap**, not a replacement for MXC, and does not close the seam. The work is Slice 3 of
-`Plans/2026-07-28-dev-mode-container-sandbox-and-command-profiles-plan.md` and is **in progress** — until it lands,
-the paragraph above describes what actually executes.
+as a **stopgap**, not a replacement for MXC, and does not close the seam. That provider has **shipped as an opt-in
+choice, not the default**: `Development:Sandbox:Provider=docker` selects it, and because the shipped config sets no
+`Development:Sandbox` key, a default node still executes exactly as the paragraph above describes. See
+[Development Mode container implementation status](../roadmaps/development-mode-container-status.md) for the
+maintained implemented/not-implemented breakdown — this page does not track it.
 
-**Where the code and the decisions live.** Backend: 16 endpoints in `Client/Endpoints/Development/V1/DevelopmentEndpoints.cs`
+**Where the code and the decisions live.** Backend: 21 endpoints in `Client/Endpoints/Development/V1/DevelopmentEndpoints.cs`
 (routes on `LocalApiRoutes.Development`), services under `Client.Application/Services/Development/`, live attempt output over
-`DevelopmentAttemptHub` — all in [API & Hubs](09-api-and-hubs.md). Schema: migrations `AddDevelopmentModeFoundation` and
-`BindDevelopmentProjectsToSelectedFolders`, followed by `AddDevelopmentCommandProfile`
-([Data & Persistence](08-data-and-persistence.md)). Frontend:
-`Client.React/src/features/development/` at route `/development` ([React Client](10-react-client.md)). Two accepted ADRs record
-the non-obvious decisions:
+`DevelopmentAttemptHub` — all in [API & Hubs](09-api-and-hubs.md). Schema: five migrations — `AddDevelopmentModeFoundation`,
+`BindDevelopmentProjectsToSelectedFolders`, `AddDevelopmentCommandProfile`, `AddDevelopmentAttemptCommandProfile` and
+`AddDevelopmentTemplates` ([Data & Persistence](08-data-and-persistence.md)). Frontend:
+`Client.React/src/features/development/` at route `/development` ([React Client](10-react-client.md)); an attempt that ends
+without a verdict renders its `terminalReason`, so a failed attempt names *why* it stopped rather than showing an empty
+result. Three accepted ADRs record the non-obvious decisions:
 
 - [ADR 0001 — restart recovery uses replacement attempts](../adr/0001-development-mode-restart-recovery.md): an attempt found
   `Running` at restart is marked `Interrupted` exactly once and continued only through a **new** attempt pointing at it; the
@@ -145,6 +151,9 @@ the non-obvious decisions:
 - [ADR 0002 — cloud authorization uses `ChatOptions.AdditionalProperties`](../adr/0002-development-cloud-egress-carrier.md): the
   carrier that authorizes every raw cloud round, including the function-result follow-up round created inside
   `FunctionInvokingChatClient`. Version-aware against the pinned `Microsoft.Extensions.AI` 10.7.0 — re-verify it when that pin moves.
+- [ADR 0004 — Development Mode container execution (Docker stopgap)](../adr/0004-development-mode-container-execution-docker-stopgap.md):
+  the scoped Docker permission described above, as a stopgap ahead of MXC. Its living implementation-status companion is
+  [Development Mode container implementation status](../roadmaps/development-mode-container-status.md).
 
 Command execution is selected from the code-owned `dotnet-slnx`, `dotnet-csproj`, or `generic-git`
 profiles. The React project-creation form requires confirmation before it submits a detected
@@ -256,8 +265,10 @@ deliberately **defined inside the provider** so the supervisor depends only on i
 `Client.Application` (preserving the one-way arrow). The in-project `DefaultInferenceProfileResolver`
 (`Implementation/DefaultInferenceProfileResolver.cs`) always returns explore-mode so the provider self-satisfies;
 the real DB-backed implementation in `Client.Application` (replays a frozen profile or triggers explore) is
-DI-injected over it. A real `--list-devices` available-VRAM probe (`Implementation/LlamaListDevicesVramProbe.cs`)
-feeds the resolver. See [Local Runtime & Providers](03-local-runtime-and-providers.md).
+DI-injected over it. Two real `--list-devices` consumers sit alongside it: the process VRAM-budget probe
+(`Implementation/LlamaListDevicesProcessVramBudgetProbe.cs`, `IProcessVramBudgetProbe`) and the structured
+device-inventory probe (`Implementation/LlamaDeviceInventoryProbe.cs`, `ILlamaDeviceInventoryProbe`) behind the
+runtime device audit. See [Local Runtime & Providers](03-local-runtime-and-providers.md).
 
 ### Per-send model routing
 Because llama.cpp is **spawn-per-model** (one process/port per model, unlike Ollama's hot-swap behind one
@@ -349,7 +360,7 @@ From `Client/Program.cs`, the host performs a deterministic startup before servi
    static files, health checks, `LocalApiSecurityMiddleware`, auth, FastEndpoints, hubs, (dev) Scalar +
    Agent DevUI, SPA fallback.
 
-Persistence specifics (selected per-column encryption, 43 migration implementations plus 2 model
+Persistence specifics (selected per-column encryption, 45 migration implementations plus 2 model
 snapshots, and recovery services) are covered in
 [Data & Persistence](08-data-and-persistence.md).
 
