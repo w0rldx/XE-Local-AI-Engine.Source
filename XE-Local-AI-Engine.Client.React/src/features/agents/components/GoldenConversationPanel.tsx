@@ -3,6 +3,7 @@ import { IconAlertTriangle, IconCheck, IconPlus, IconSparkles, IconTrash, IconX 
 import { useCallback, useReducer, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { toast } from "@/core/ui/notifications/Toast";
 import {
@@ -31,10 +32,6 @@ interface GoldenConversationPanelProps {
 	agentName: string;
 	// FE-static capability gate (folded under agentManagement). When false the panel renders nothing.
 	enabled: boolean;
-}
-
-function errorMessage(error: unknown, fallback: string): string {
-	return error instanceof Error ? error.message : fallback;
 }
 
 // The cap for each create-request field, surfaced in the "too long" validation message.
@@ -102,7 +99,7 @@ export function GoldenConversationPanel({ agentDefinitionId, agentName, enabled 
 					),
 				);
 			},
-			onError: (error) => toast.error(errorMessage(error, t("pages.agents.golden.errors.harvest", "Could not harvest golden cases."))),
+			onError: (error) => toast.error(apiErrorMessage(error, t("pages.agents.golden.errors.harvest", "Could not harvest golden cases."))),
 		});
 	}, [harvestMutation, t]);
 
@@ -110,7 +107,7 @@ export function GoldenConversationPanel({ agentDefinitionId, agentName, enabled 
 		(goldenCase: GoldenConversation) => {
 			approveMutation.mutate(goldenCase.id, {
 				onError: (error) =>
-					toast.error(errorMessage(error, t("pages.agents.golden.errors.approve", "Could not approve the golden case."))),
+					toast.error(apiErrorMessage(error, t("pages.agents.golden.errors.approve", "Could not approve the golden case."))),
 			});
 		},
 		[approveMutation, t],
@@ -137,7 +134,7 @@ export function GoldenConversationPanel({ agentDefinitionId, agentName, enabled 
 			if (confirmed) {
 				deleteMutation.mutate(goldenCase.id, {
 					onError: (error) =>
-						toast.error(errorMessage(error, t("pages.agents.golden.errors.delete", "Could not delete the golden case."))),
+						toast.error(apiErrorMessage(error, t("pages.agents.golden.errors.delete", "Could not delete the golden case."))),
 				});
 			}
 		},
@@ -149,7 +146,7 @@ export function GoldenConversationPanel({ agentDefinitionId, agentName, enabled 
 	}
 
 	const createError = createMutation.error
-		? errorMessage(createMutation.error, t("pages.agents.golden.errors.save", "Could not save the golden case."))
+		? apiErrorMessage(createMutation.error, t("pages.agents.golden.errors.save", "Could not save the golden case."))
 		: undefined;
 
 	return (
@@ -213,7 +210,7 @@ export function GoldenConversationPanel({ agentDefinitionId, agentName, enabled 
 
 				{goldenQuery.error ? (
 					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="golden-list-error">
-						{errorMessage(goldenQuery.error, t("pages.agents.golden.errors.load", "Could not load golden cases."))}
+						{apiErrorMessage(goldenQuery.error, t("pages.agents.golden.errors.load", "Could not load golden cases."))}
 					</Alert>
 				) : null}
 

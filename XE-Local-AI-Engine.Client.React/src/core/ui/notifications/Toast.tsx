@@ -1,5 +1,6 @@
 import { IconAlertTriangle, IconCircleCheck, IconCircleX, IconInfoCircle } from "@tabler/icons-react";
 import { notifications } from "@mantine/notifications";
+import { t } from "i18next";
 import type { ToastConfig, ToastOptions, ToastProgressOptions, ToastType } from "@/core/ui/notifications/Toast.types";
 
 // Default auto-close duration (ms) for finalized toasts. Mirrors the ThemeProvider's <Notifications autoClose={5000} />
@@ -26,6 +27,21 @@ const toastConfigByType: Record<ToastType, ToastConfig> = {
 	},
 };
 
+// Last-ditch guard against a toast with nothing in it. A caller that derives its message from a server failure can
+// legitimately end up with "" — ApiError resolves its message to an empty string when the response carried no detail,
+// title or domain message — and Mantine happily renders the coloured card, the icon and the dismiss button around no
+// text at all. A signal that says nothing is worse than the generic sentence, so substitute it. A toast that carries a
+// title is left alone: the title already says something, and a body appended under it would be noise.
+function resolveMessage(type: ToastType, message: string, title?: string): string {
+	if (message.trim().length > 0 || (title !== undefined && title.trim().length > 0)) {
+		return message;
+	}
+
+	return type === "success" || type === "info"
+		? t("notifications.emptyMessage", "Done.")
+		: t("errorMessages.defaultErrorMessage", "An error occurred");
+}
+
 function show(type: ToastType, message: string, options?: ToastOptions) {
 	const { color, icon } = toastConfigByType[type];
 
@@ -35,7 +51,7 @@ function show(type: ToastType, message: string, options?: ToastOptions) {
 	// `autoClose`, so a progress→success/error finalize turns into an auto-dismissing toast instead of staying stuck on
 	// screen. When no toast with this id exists, `update` is a no-op and the values from `show` stand.
 	const payload = {
-		message,
+		message: resolveMessage(type, message, options?.title),
 		color,
 		icon,
 		loading: false,

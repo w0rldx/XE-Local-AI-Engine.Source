@@ -753,6 +753,11 @@ export type XeLocalAiEngineClientEndpointsModelFitV1HardwareProfileResponse = {
 	cpuFallback?: boolean;
 	cpuFallbackReason?: string | null;
 	cpuFallbackRemediation?: string | null;
+	backendUndeterminedReason?: string | null;
+	gpuOffloadedLayers?: number | null;
+	gpuTotalLayers?: number | null;
+	gpuOffloadModelName?: string | null;
+	gpuOffloadRole?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsModelFitV1GetHardwareProfileRequest = {

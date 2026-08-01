@@ -2,6 +2,7 @@ import { Alert, Group, Loader, Text } from "@mantine/core";
 import { IconAlertTriangle, IconInfoCircle } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
+import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { RecommendationSnapshot } from "@/features/model-fit/components/RecommendationSnapshot";
 import type { ModelFitLatestRecommendations, ModelFitRecommendation } from "@/features/model-fit/models/ModelFitModels";
 
@@ -12,10 +13,6 @@ interface RecommendationsResultsProps {
 	readonly latest: ModelFitLatestRecommendations | undefined;
 	readonly onDownload: (recommendation: ModelFitRecommendation) => void;
 	readonly downloadingModelName: string | null;
-}
-
-function errorMessage(error: unknown, fallback: string): string {
-	return error instanceof Error ? error.message : fallback;
 }
 
 // The results region of the advisor card: renders exactly one of the loading spinner, the load-error alert, the
@@ -36,7 +33,7 @@ export function RecommendationsResults({ isLoading, error, hasCache, latest, onD
 	if (error) {
 		return (
 			<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="model-fit-recommendations-error">
-				{errorMessage(error, t("pages.modelFit.recommendations.errors.load", "Could not load recommendations."))}
+				{apiErrorMessage(error, t("pages.modelFit.recommendations.errors.load", "Could not load recommendations."))}
 			</Alert>
 		);
 	}

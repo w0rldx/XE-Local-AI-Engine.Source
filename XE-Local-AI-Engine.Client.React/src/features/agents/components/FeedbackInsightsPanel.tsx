@@ -2,6 +2,7 @@ import { Alert, Badge, Group, Loader, Paper, Stack, Table, Text } from "@mantine
 import { IconAlertTriangle, IconThumbDown, IconThumbUp } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
+import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import type { FeedbackExemplar, OverallFeedback, ToolFeedbackBreakdown } from "@/features/agents/models/FeedbackInsightsModels";
 import { useFeedbackInsights } from "@/features/agents/queries/useFeedbackInsights";
 
@@ -12,10 +13,6 @@ interface FeedbackInsightsPanelProps {
 	agentName: string;
 	// FE-static capability gate (folded under agentManagement). When false the panel renders nothing.
 	enabled: boolean;
-}
-
-function errorMessage(error: unknown, fallback: string): string {
-	return error instanceof Error ? error.message : fallback;
 }
 
 // Render a fraction (0..1) as a whole-percent string for display.
@@ -66,7 +63,7 @@ export function FeedbackInsightsPanel({ agentDefinitionId, agentName, enabled }:
 
 				{insightsQuery.error ? (
 					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="feedback-insights-error">
-						{errorMessage(insightsQuery.error, t("pages.agents.insights.errors.load", "Could not load feedback insights."))}
+						{apiErrorMessage(insightsQuery.error, t("pages.agents.insights.errors.load", "Could not load feedback insights."))}
 					</Alert>
 				) : null}
 

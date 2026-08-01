@@ -129,4 +129,25 @@ describe("node auth pages", () => {
 		expect(await screen.findByText(/Password needs/)).toBeTruthy();
 		expect(authApiMock.setupNodeAuth).not.toHaveBeenCalled();
 	});
+
+	// The literal first screen of a fresh install. `errors` is recomputed on every render including the first, so
+	// without a touched gate the operator was greeted by two red validation errors for fields they had not typed in.
+	it("shows no validation errors before the operator has touched a field", () => {
+		renderWithProviders(<Setup />);
+
+		expect(screen.queryByText(resolveKey("auth.setup.validationEmail"))).toBeNull();
+		expect(screen.queryByText(resolveKey("auth.setup.validationPasswordRequired"))).toBeNull();
+		// Still not submittable — the gate hides the message, it does not weaken the check.
+		expect((screen.getByRole("button", { name: "Create admin" }) as HTMLButtonElement).disabled).toBe(true);
+	});
+
+	it("shows a field's validation error once that field has been touched", () => {
+		renderWithProviders(<Setup />);
+
+		fireEvent.change(screen.getByLabelText(/^Email/), { target: { value: "not-an-email" } });
+
+		expect(screen.getByText(resolveKey("auth.setup.validationEmail"))).toBeTruthy();
+		// A field the operator has still not touched stays quiet.
+		expect(screen.queryByText(resolveKey("auth.setup.validationPasswordRequired"))).toBeNull();
+	});
 });

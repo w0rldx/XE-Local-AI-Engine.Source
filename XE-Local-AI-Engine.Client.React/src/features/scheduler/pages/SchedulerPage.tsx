@@ -3,6 +3,7 @@ import { IconDeviceFloppy, IconX } from "@tabler/icons-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { useUnsavedChangesGuard } from "@/core/ui/hooks/useUnsavedChangesGuard";
@@ -34,8 +35,6 @@ import {
 	useUpdateScheduledJob,
 } from "@/features/scheduler/queries/useScheduler";
 import { useSchedulerManagementStore } from "@/features/scheduler/stores/SchedulerManagementStore";
-
-const errorMessage = (error: unknown, fallback: string): string => (error instanceof Error ? error.message : fallback);
 
 export function SchedulerPage() {
 	const { t } = useTranslation();
@@ -104,7 +103,7 @@ export function SchedulerPage() {
 
 	const submitError =
 		createMutation.error || updateMutation.error
-			? errorMessage(
+			? apiErrorMessage(
 					createMutation.error ?? updateMutation.error,
 					t("pages.scheduler.errors.save", "Could not save the scheduled job."),
 				)
@@ -146,7 +145,7 @@ export function SchedulerPage() {
 			if (confirmed) {
 				deleteMutation.mutate(
 					{ path: { scheduledJobId: job.id } },
-					{ onError: (error) => toast.error(errorMessage(error, t("pages.scheduler.errors.delete", "Could not delete the scheduled job."))) },
+					{ onError: (error) => toast.error(apiErrorMessage(error, t("pages.scheduler.errors.delete", "Could not delete the scheduled job."))) },
 				);
 			}
 		},
@@ -157,7 +156,7 @@ export function SchedulerPage() {
 		(job: ScheduledJob) => {
 			triggerMutation.mutate(
 				{ path: { scheduledJobId: job.id } },
-				{ onError: (error) => toast.error(errorMessage(error, t("pages.scheduler.errors.trigger", "Could not trigger the job."))) },
+				{ onError: (error) => toast.error(apiErrorMessage(error, t("pages.scheduler.errors.trigger", "Could not trigger the job."))) },
 			);
 		},
 		[triggerMutation, t],
@@ -167,7 +166,7 @@ export function SchedulerPage() {
 		(job: ScheduledJob, enabled: boolean) => {
 			enableMutation.mutate(
 				{ id: job.id, enabled },
-				{ onError: (error) => toast.error(errorMessage(error, t("pages.scheduler.errors.enable", "Could not change the job state."))) },
+				{ onError: (error) => toast.error(apiErrorMessage(error, t("pages.scheduler.errors.enable", "Could not change the job state."))) },
 			);
 		},
 		[enableMutation, t],
@@ -177,7 +176,7 @@ export function SchedulerPage() {
 		(run: ScheduledJobRun) => {
 			cancelMutation.mutate(
 				{ path: { runId: run.id } },
-				{ onError: (error) => toast.error(errorMessage(error, t("pages.scheduler.errors.cancel", "Could not cancel the run."))) },
+				{ onError: (error) => toast.error(apiErrorMessage(error, t("pages.scheduler.errors.cancel", "Could not cancel the run."))) },
 			);
 		},
 		[cancelMutation, t],
@@ -275,7 +274,7 @@ export function SchedulerPage() {
 					isLoading={jobsQuery.isLoading}
 					error={
 						jobsQuery.error
-							? errorMessage(jobsQuery.error, t("pages.scheduler.errors.load", "Could not load scheduled jobs."))
+							? apiErrorMessage(jobsQuery.error, t("pages.scheduler.errors.load", "Could not load scheduled jobs."))
 							: undefined
 					}
 					isMutating={isMutating}
@@ -293,7 +292,7 @@ export function SchedulerPage() {
 					isCancelling={cancelMutation.isPending}
 					error={
 						runsQuery.error
-							? errorMessage(runsQuery.error, t("pages.scheduler.errors.loadRuns", "Could not load run history."))
+							? apiErrorMessage(runsQuery.error, t("pages.scheduler.errors.loadRuns", "Could not load run history."))
 							: undefined
 					}
 					selectedRunId={selectedRunId}
@@ -308,7 +307,7 @@ export function SchedulerPage() {
 					isLoading={runQuery.isLoading}
 					error={
 						runQuery.error
-							? errorMessage(runQuery.error, t("pages.scheduler.errors.loadRun", "Could not load the run."))
+							? apiErrorMessage(runQuery.error, t("pages.scheduler.errors.loadRun", "Could not load the run."))
 							: undefined
 					}
 					opened={selectedRunId !== null}

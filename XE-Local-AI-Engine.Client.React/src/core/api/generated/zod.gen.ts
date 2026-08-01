@@ -1017,6 +1017,19 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1HardwareProfileResponse = 
 	cpuFallback: z.boolean().optional(),
 	cpuFallbackReason: z.string().nullish(),
 	cpuFallbackRemediation: z.string().nullish(),
+	backendUndeterminedReason: z.string().nullish(),
+	gpuOffloadedLayers: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	gpuTotalLayers: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	gpuOffloadModelName: z.string().nullish(),
+	gpuOffloadRole: z.string().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1GetHardwareProfileRequest = z.record(z.string(), z.never());

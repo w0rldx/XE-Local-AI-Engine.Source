@@ -3,6 +3,7 @@ import { IconAlertTriangle } from "@tabler/icons-react";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { toast } from "@/core/ui/notifications/Toast";
 import { type AgentTemplateSummary, isOverTokenBudget } from "@/features/agents/models/AgentTemplateModels";
@@ -11,10 +12,6 @@ import { useAgentTemplates, useImportAgentTemplates } from "@/features/agents/qu
 interface AgentTemplateGalleryProps {
 	opened: boolean;
 	onClose: () => void;
-}
-
-function errorMessage(error: unknown, fallback: string): string {
-	return error instanceof Error ? error.message : fallback;
 }
 
 // Groups the flat summary list by division, preserving first-seen division order so the gallery sections are stable.
@@ -74,7 +71,7 @@ export function AgentTemplateGallery({ opened, onClose }: AgentTemplateGalleryPr
 					setSelected([]);
 				},
 				onError: (error) =>
-					toast.error(errorMessage(error, t("pages.agents.templates.importError", "Could not import the selected agents."))),
+					toast.error(apiErrorMessage(error, t("pages.agents.templates.importError", "Could not import the selected agents."))),
 			},
 		);
 	}, [importMutation, selected, t]);
@@ -121,7 +118,7 @@ export function AgentTemplateGallery({ opened, onClose }: AgentTemplateGalleryPr
 
 				{templatesQuery.error ? (
 					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="agent-template-error">
-						{errorMessage(templatesQuery.error, t("pages.agents.templates.loadError", "Could not load starter agents."))}
+						{apiErrorMessage(templatesQuery.error, t("pages.agents.templates.loadError", "Could not load starter agents."))}
 					</Alert>
 				) : null}
 

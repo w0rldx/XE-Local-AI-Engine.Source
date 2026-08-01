@@ -3,6 +3,7 @@ import { IconAlertTriangle, IconBolt, IconInfoCircle, IconPlayerPlay, IconSettin
 import { Fragment, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { toast } from "@/core/ui/notifications/Toast";
 import { ProfileMetricsCard } from "@/features/model-fit/components/ProfileMetricsCard";
 import {
@@ -26,10 +27,6 @@ const statusColor: Record<InferenceProfileStatus, string> = {
 	frozen: "green",
 	stale: "gray",
 };
-
-function errorMessage(error: unknown, fallback: string): string {
-	return error instanceof Error ? error.message : fallback;
-}
 
 // The Inference Optimizer operator surface. Lists the tuned llama.cpp launch profiles this node explored,
 // benchmarked, and froze, plus an explore control to create a new one. It surfaces OUTCOMES ONLY — a status chip and
@@ -76,7 +73,7 @@ export function InferenceProfilePanel() {
 					setModelName("");
 				},
 				onError: (error) =>
-					toast.error(errorMessage(error, t("pages.modelFit.inferenceProfiles.explore.error", "Could not start exploration."))),
+					toast.error(apiErrorMessage(error, t("pages.modelFit.inferenceProfiles.explore.error", "Could not start exploration."))),
 			},
 		);
 	};
@@ -90,7 +87,7 @@ export function InferenceProfilePanel() {
 					toast.success(t("pages.modelFit.inferenceProfiles.actions.benchmarkSuccess", "Benchmarked {{model}}.", { model: profile.modelName }));
 				},
 				onError: (error) =>
-					toast.error(errorMessage(error, t("pages.modelFit.inferenceProfiles.actions.benchmarkError", "Could not benchmark the profile."))),
+					toast.error(apiErrorMessage(error, t("pages.modelFit.inferenceProfiles.actions.benchmarkError", "Could not benchmark the profile."))),
 			},
 		);
 	};
@@ -102,7 +99,7 @@ export function InferenceProfilePanel() {
 				onSuccess: () =>
 					toast.success(t("pages.modelFit.inferenceProfiles.actions.freezeSuccess", "Froze {{model}}.", { model: profile.modelName })),
 				onError: (error) =>
-					toast.error(errorMessage(error, t("pages.modelFit.inferenceProfiles.actions.freezeError", "Could not freeze the profile."))),
+					toast.error(apiErrorMessage(error, t("pages.modelFit.inferenceProfiles.actions.freezeError", "Could not freeze the profile."))),
 			},
 		);
 	};
@@ -114,7 +111,7 @@ export function InferenceProfilePanel() {
 				onSuccess: () =>
 					toast.success(t("pages.modelFit.inferenceProfiles.actions.invalidateSuccess", "Invalidated {{model}}.", { model: profile.modelName })),
 				onError: (error) =>
-					toast.error(errorMessage(error, t("pages.modelFit.inferenceProfiles.actions.invalidateError", "Could not invalidate the profile."))),
+					toast.error(apiErrorMessage(error, t("pages.modelFit.inferenceProfiles.actions.invalidateError", "Could not invalidate the profile."))),
 			},
 		);
 	};
@@ -186,7 +183,7 @@ export function InferenceProfilePanel() {
 
 				{profilesQuery.error ? (
 					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="inference-profile-error">
-						{errorMessage(profilesQuery.error, t("pages.modelFit.inferenceProfiles.error", "Could not load inference profiles."))}
+						{apiErrorMessage(profilesQuery.error, t("pages.modelFit.inferenceProfiles.error", "Could not load inference profiles."))}
 					</Alert>
 				) : null}
 

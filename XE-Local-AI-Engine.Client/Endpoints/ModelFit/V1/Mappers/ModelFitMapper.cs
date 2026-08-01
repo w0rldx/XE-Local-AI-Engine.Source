@@ -74,8 +74,9 @@ internal static class ModelFitMapper
             // is_trusted_publisher per model; when the blob predates that emit we derive it from the model name so
             // pre-existing snapshots still flag trust until the next refresh.
             IsTrustedPublisher = ExtractIsTrustedPublisher(record.DiagnosticsJson, record.ModelName),
-            // Catalog-lane fields (locked decision D1/D2/D3), extracted from the same diagnostics blob. A pre-existing
-            // snapshot row (predating the catalog lane) has none of these keys and defaults to the "explore" section.
+            // Catalog-lane fields (curated catalog, explore section, MoE expert offload), extracted from the same
+            // diagnostics blob. A pre-existing snapshot row (predating the catalog lane) has none of these keys and
+            // defaults to the "explore" section.
             Section = ExtractString(record.DiagnosticsJson, "section") ?? "explore",
             Tier = ExtractString(record.DiagnosticsJson, "tier"),
             CatalogId = ExtractString(record.DiagnosticsJson, "catalog_id"),
@@ -139,7 +140,12 @@ internal static class ModelFitMapper
             GpuExpected = audit.GpuExpected,
             CpuFallback = audit.CpuFallback,
             CpuFallbackReason = audit.Reason,
-            CpuFallbackRemediation = audit.Remediation
+            CpuFallbackRemediation = audit.Remediation,
+            BackendUndeterminedReason = audit.BackendUndeterminedReason,
+            GpuOffloadedLayers = audit.LayerPlacement?.OffloadedLayers,
+            GpuTotalLayers = audit.LayerPlacement?.TotalLayers,
+            GpuOffloadModelName = audit.LayerPlacement?.ModelName,
+            GpuOffloadRole = audit.LayerPlacement?.Role.ToWireString()
         };
     }
 

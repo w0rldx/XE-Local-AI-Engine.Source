@@ -5,6 +5,7 @@ import type { TFunction } from "i18next";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { getAgentUsageSummaryOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { UsageDailyChart } from "@/features/usage-dashboard/components/UsageDailyChart";
@@ -27,7 +28,7 @@ import {
 const FALLBACK_RETENTION_DAYS = 30;
 
 function errorMessage(error: unknown, t: TFunction): string {
-	return error instanceof Error ? error.message : t("pages.usage.loadError", "Usage summary could not be loaded.");
+	return apiErrorMessage(error, t("pages.usage.loadError", "Usage summary could not be loaded."));
 }
 
 // Skeleton stand-in shown while the first summary loads, so the page keeps its shape instead of collapsing.

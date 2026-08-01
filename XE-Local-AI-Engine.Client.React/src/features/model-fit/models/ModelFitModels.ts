@@ -133,6 +133,18 @@ export interface HardwareProfile {
 	readonly cpuFallback: boolean;
 	readonly cpuFallbackReason: string | null;
 	readonly cpuFallbackRemediation: string | null;
+	// Set only when inferenceBackend is "unknown" because the device probe could not complete. Distinct from
+	// cpuFallback: nobody proved the GPU is unused, but nobody proved it is used either, and model sizing on this page
+	// still assumes the VRAM is usable. Without it a wedged driver looks exactly like a healthy machine.
+	readonly backendUndeterminedReason: string | null;
+	// Measured GPU layer placement from the most recent observed model load, read from llama.cpp's own load banner.
+	// Null until a model has been loaded and observed. offloaded < total means the GPU IS in use but part of the model
+	// runs from system RAM (much slower) — a distinct state from cpuFallback, never folded into it. The model name and
+	// role are carried so the figures are never attributed to the wrong model on a multi-model node.
+	readonly gpuOffloadedLayers: number | null;
+	readonly gpuTotalLayers: number | null;
+	readonly gpuOffloadModelName: string | null;
+	readonly gpuOffloadRole: string | null;
 }
 
 // Reserved scheduler template id the refresh-now action fires. The refresh endpoint triggers an EXISTING

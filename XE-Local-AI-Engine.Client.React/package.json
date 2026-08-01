@@ -70,7 +70,6 @@
 		"remark-gfm": "^4.0.1",
 		"rrweb": "2.0.1",
 		"strip-markdown": "^6.0.0",
-		"vite-plugin-static-copy": "^4.1.1",
 		"zod": "^4.4.3",
 		"zustand": "^5.0.14"
 	},
@@ -100,7 +99,7 @@
 		"fake-indexeddb": "^6.2.5",
 		"jsdom": "^27.4.0",
 		"knip": "6.15.0",
-		"postcss": "^8.5.16",
+		"postcss": "^8.5.23",
 		"postcss-preset-mantine": "^1.18.0",
 		"postcss-simple-vars": "^7.0.1",
 		"stylelint": "^17.14.0",
@@ -108,6 +107,7 @@
 		"typescript": "^6.0.3",
 		"unocss": "^66.7.3",
 		"vite": "^8.1.0",
+		"vite-plugin-static-copy": "^4.1.1",
 		"vitest": "^4.1.9"
 	},
 	"optionalDependencies": {

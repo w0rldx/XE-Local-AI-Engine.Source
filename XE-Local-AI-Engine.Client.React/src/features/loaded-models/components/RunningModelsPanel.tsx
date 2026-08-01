@@ -2,6 +2,7 @@ import { Alert, Badge, Button, Card, Group, Loader, Stack, Table, Text, Title } 
 import { IconAlertTriangle, IconPlayerEject, IconServer2 } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
+import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import type { RunningModel } from "@/features/loaded-models/models/RunningModelsModels";
 
 interface RunningModelsPanelProps {
@@ -10,10 +11,6 @@ interface RunningModelsPanelProps {
 	error: unknown;
 	onEject: (model: RunningModel) => void;
 	ejectingModelName: string | null;
-}
-
-function errorMessage(error: unknown, fallback: string): string {
-	return error instanceof Error ? error.message : fallback;
 }
 
 // Live list of running (loaded) llama.cpp models with a per-row eject action. Server state is owned by the page's
@@ -39,7 +36,7 @@ export function RunningModelsPanel({ runningModels, isLoading, error, onEject, e
 
 				{error ? (
 					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="model-fit-running-error">
-						{errorMessage(error, t("pages.loadedModels.llamaCpp.error", "Could not load running models."))}
+						{apiErrorMessage(error, t("pages.loadedModels.llamaCpp.error", "Could not load running models."))}
 					</Alert>
 				) : null}
 

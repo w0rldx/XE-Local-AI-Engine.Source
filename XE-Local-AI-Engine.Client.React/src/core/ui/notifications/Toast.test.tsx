@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 // Mock Mantine at the call boundary so the open-or-update lifecycle is asserted without a real DOM/provider.
 const notificationsMock = vi.hoisted(() => ({ show: vi.fn(), update: vi.fn() }));
 vi.mock("@mantine/notifications", () => ({ notifications: notificationsMock }));
+// i18next is not initialized in unit tests; resolve to the inline default the way the app's react-i18next mocks do.
+vi.mock("i18next", () => ({ t: (key: string, fallback?: string) => fallback ?? key }));
 
 import { toast } from "@/core/ui/notifications/Toast";
 
@@ -53,5 +55,41 @@ describe("toast", () => {
 		toast.info("hi", { id: "info-1", autoClose: 1234 });
 
 		expect(notificationsMock.update.mock.calls[0]?.[0]?.autoClose).toBe(1234);
+	});
+
+	// Regression guard: callers derive a toast message from a server failure, and ApiError deliberately resolves its
+	// message to "" when the response carried no detail, message or title. Passed straight through, Mantine renders a
+	// coloured, iconed, dismissable notification containing no text at all — a signal that says nothing.
+	it("substitutes a generic message rather than firing an empty error toast", () => {
+		toast.error("");
+
+		expect(notificationsMock.show.mock.calls[0]?.[0]?.message).toBe("An error occurred");
+	});
+
+	it("treats a whitespace-only message as empty", () => {
+		toast.warn("   ");
+
+		expect(notificationsMock.show.mock.calls[0]?.[0]?.message).toBe("An error occurred");
+	});
+
+	it("uses the neutral substitute for success and info, which an error sentence would misdescribe", () => {
+		toast.success("");
+		toast.info("");
+
+		expect(notificationsMock.show.mock.calls[0]?.[0]?.message).toBe("Done.");
+		expect(notificationsMock.show.mock.calls[1]?.[0]?.message).toBe("Done.");
+	});
+
+	// A titled toast already says something, so an appended generic body would be noise rather than a rescue.
+	it("leaves an empty message alone when a title carries the text", () => {
+		toast.error("", { title: "Pull failed" });
+
+		expect(notificationsMock.show.mock.calls[0]?.[0]?.message).toBe("");
+	});
+
+	it("does not touch a message that has content", () => {
+		toast.error("Could not pull x.");
+
+		expect(notificationsMock.show.mock.calls[0]?.[0]?.message).toBe("Could not pull x.");
 	});
 });

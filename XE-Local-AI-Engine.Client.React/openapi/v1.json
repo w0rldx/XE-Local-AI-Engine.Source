@@ -11937,6 +11937,28 @@
           "cpuFallbackRemediation": {
             "type": "string",
             "nullable": true
+          },
+          "backendUndeterminedReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "gpuOffloadedLayers": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "gpuTotalLayers": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "gpuOffloadModelName": {
+            "type": "string",
+            "nullable": true
+          },
+          "gpuOffloadRole": {
+            "type": "string",
+            "nullable": true
           }
         }
       },

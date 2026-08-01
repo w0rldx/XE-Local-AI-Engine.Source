@@ -52,7 +52,7 @@ describe("ModelSelectorCard", () => {
 	});
 
 	it("surfaces the no-chat-models hint when only the local default is offered (all chat models filtered out)", async () => {
-		// The strict picker filter (decision D3) drops embedding/unknown models, so a node with none leaves only the
+		// The strict picker filter drops embedding and unknown-kind models, so a node with none leaves only the
 		// local-default option. The dropdown must explain that, not just show a bare list.
 		renderWithProviders(
 			<ModelSelectorCard modelOptions={[localDefaultOption()]} selectedModel={localDefaultModelValue} onModelChange={vi.fn()} />,

@@ -115,6 +115,11 @@ export function toHardwareProfile(dto: XeLocalAiEngineClientEndpointsModelFitV1H
 		cpuFallback: dto.cpuFallback ?? false,
 		cpuFallbackReason: dto.cpuFallbackReason ?? null,
 		cpuFallbackRemediation: dto.cpuFallbackRemediation ?? null,
+		backendUndeterminedReason: dto.backendUndeterminedReason ?? null,
+		gpuOffloadedLayers: dto.gpuOffloadedLayers ?? null,
+		gpuTotalLayers: dto.gpuTotalLayers ?? null,
+		gpuOffloadModelName: dto.gpuOffloadModelName ?? null,
+		gpuOffloadRole: dto.gpuOffloadRole ?? null,
 	};
 }
 

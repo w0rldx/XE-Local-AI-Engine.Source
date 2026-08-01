@@ -21,6 +21,7 @@ import { useCallback, useEffect, useMemo, useReducer, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
+import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import type { ClearCloudSettingsResponse, SaveCloudSettingsResponse } from "@/core/api/generated";
 import {
 	clearCloudSettingsMutation,
@@ -49,7 +50,7 @@ import {
 type CloudSettings = SaveCloudSettingsResponse;
 
 function errorMessage(error: unknown): string {
-	return error instanceof Error ? error.message : "Unexpected cloud settings error";
+	return apiErrorMessage(error, "Unexpected cloud settings error");
 }
 
 // Always show at least one (blank) deployment row so the user has somewhere to type on a fresh connection.

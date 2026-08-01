@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "@/i18n";
 
 import type { GetInvocationMonitorResponse } from "@/core/api/generated";
+import { NetworkError } from "@/core/api/errors/NetworkError";
 
 const { generatedMock } = vi.hoisted(() => ({
 	generatedMock: {
@@ -88,6 +89,17 @@ describe("Invocations (generated hey-api data layer)", () => {
 		expect(await screen.findByText("No invocation is currently assigned or running.")).toBeTruthy();
 		expect(screen.getByText("No completed invocations recorded yet.")).toBeTruthy();
 		expect(screen.getByText("Idle")).toBeTruthy();
+	});
+
+	// The monitor's error Alert used to read `error.message` directly. A request that never reached the node arrives as
+	// a NetworkError whose message is deliberately EMPTY — so the page rendered a red Alert with nothing in it, which
+	// says less than the untranslated literal it replaced. Routed through apiErrorMessage it names the actual failure.
+	it("names the unreachable node instead of rendering an empty alert when the request never lands", async () => {
+		generatedMock.monitorFn.mockRejectedValue(new NetworkError());
+
+		renderWithProviders(<Invocations />);
+
+		expect(await screen.findByText("Can't reach the node. Check that it's running and try again.")).toBeTruthy();
 	});
 
 	it("refreshes monitor data through the generated query function", async () => {

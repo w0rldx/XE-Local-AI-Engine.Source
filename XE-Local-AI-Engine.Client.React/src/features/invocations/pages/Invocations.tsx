@@ -21,6 +21,7 @@ import type { TFunction } from "i18next";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
+import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { getInvocationMonitorOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { toInvocationMonitor } from "@/features/invocations/models/InvocationMonitorMappers";
@@ -35,10 +36,12 @@ import {
 	sortInvocationHistory,
 } from "@/features/invocations/models/InvocationMonitorModel";
 
+// Routed through the canonical helper rather than reading `error.message` directly: a request that never reached the
+// node arrives as a NetworkError whose message is deliberately empty, so the raw read rendered a BLANK alert where it
+// used to at least say something. apiErrorMessage answers that case with the localized "can't reach the node"
+// sentence and keeps the server's own text for every other failure.
 function errorMessage(error: unknown, t: TFunction): string {
-	return error instanceof Error
-		? error.message
-		: t("pages.invocations.monitor.loadError", "Invocation monitor data could not be loaded.");
+	return apiErrorMessage(error, t("pages.invocations.monitor.loadError", "Invocation monitor data could not be loaded."));
 }
 
 // Copyable W3C trace id (AUD4-19) so a failed run's "See local logs" row correlates with the exported trace. Renders

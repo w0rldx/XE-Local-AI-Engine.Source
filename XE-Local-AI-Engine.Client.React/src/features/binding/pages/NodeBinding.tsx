@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import type { PollNodeBindingResponse, StartNodeBindingResponse } from "@/core/api/generated";
 import {
 	cancelNodeBindingMutation,
@@ -27,7 +28,7 @@ function statusColor(status: string): "blue" | "green" | "orange" | "red" {
 }
 
 function errorMessage(error: unknown): string {
-	return error instanceof Error ? error.message : "Unexpected binding error";
+	return apiErrorMessage(error, "Unexpected binding error");
 }
 
 function formatDate(value: string): string {

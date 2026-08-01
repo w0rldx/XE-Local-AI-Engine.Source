@@ -3,6 +3,7 @@ import { IconAlertTriangle, IconPlayerEject, IconServer } from "@tabler/icons-re
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { toast } from "@/core/ui/notifications/Toast";
 import { formatExpiresIn, formatLoadedModelSize } from "@/features/loaded-models/components/LoadedModelsFormatters";
@@ -15,10 +16,6 @@ import { useEjectRunningModel, useRunningModels } from "@/features/loaded-models
 // The "Expires in" countdown is derived against the current time, but the list only refetches on the poll cadence
 // (several seconds). A lightweight 1s tick keeps the countdown visibly live between polls without refetching.
 const countdownTickIntervalMs = 1000;
-
-function errorMessage(error: unknown, fallback: string): string {
-	return error instanceof Error ? error.message : fallback;
-}
 
 export function LoadedModelsPage() {
 	const { t } = useTranslation();
@@ -70,7 +67,7 @@ export function LoadedModelsPage() {
 						modelName,
 					}),
 				),
-			onError: (error) => toast.error(errorMessage(error, t("pages.loadedModels.eject.error", "Could not eject the model."))),
+			onError: (error) => toast.error(apiErrorMessage(error, t("pages.loadedModels.eject.error", "Could not eject the model."))),
 		});
 	};
 
@@ -139,7 +136,7 @@ export function LoadedModelsPage() {
 					}
 				},
 				onError: (error) =>
-					toast.error(errorMessage(error, t("pages.loadedModels.llamaCpp.ejectError", "Could not eject the model."))),
+					toast.error(apiErrorMessage(error, t("pages.loadedModels.llamaCpp.ejectError", "Could not eject the model."))),
 			},
 		);
 	};
@@ -179,7 +176,7 @@ export function LoadedModelsPage() {
 
 						{loadedModelsQuery.error ? (
 							<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="loaded-models-error">
-								{errorMessage(loadedModelsQuery.error, t("pages.loadedModels.errors.load", "Could not load loaded models."))}
+								{apiErrorMessage(loadedModelsQuery.error, t("pages.loadedModels.errors.load", "Could not load loaded models."))}
 							</Alert>
 						) : null}
 
