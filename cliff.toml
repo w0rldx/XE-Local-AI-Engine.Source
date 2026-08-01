@@ -50,13 +50,33 @@ commit_parsers = [
   { message = "^fix", group = "Bug Fixes" },
   { message = "^perf", group = "Performance" },
   { message = "^refactor", group = "Refactor" },
-  { message = "^docs", group = "Documentation" },
+  # `docs` and `test` were grouped ("Documentation" / "Testing") until 0.1.0-rc.4.2.
+  # They are skipped now because this body is TESTER-facing: over the rc.4.0..HEAD
+  # range they contribute 73 + 46 entries about wiki pages, ADRs, plan files and
+  # test scaffolding, none of which a tester can act on. To restore either section,
+  # swap `skip = true` back to the group name in the comment above it.
+  # This is a statement about the RELEASE BODY's audience, not about the value of the work:
+  # documentation changes a tester can actually use belong in CHANGELOG.md, which is written
+  # by hand for exactly that reason.
+  { message = "^docs", skip = true },       # was: group = "Documentation"
   { message = "^i18n", group = "Localization" },
-  { message = "^test", group = "Testing" },
+  { message = "^test", skip = true },       # was: group = "Testing"
   { message = "^style", group = "Styling" },
   { message = "^build", group = "Build System" },
   { message = "^ci", group = "CI" },
   # Noise we never want in user-facing release notes:
+  # `omx(...)` (agent-team auto-checkpoints) and `task: ...` (internal work-item
+  # commits) parse as VALID conventional commits with types `omx` / `task`, so
+  # neither `filter_unconventional` nor the merge rules below drop them — they fell
+  # through to the catch-all and buried the body under ~95 entries. Skip explicitly.
+  { message = "^omx", skip = true },
+  { message = "^task", skip = true },
+  # Six internal remediation-item commits from the rc.4.0..HEAD range, whose subjects are
+  # conventional-shaped ("MED-007: ...") and so fell through to the catch-all too. The IDs
+  # are internal coordinates — "MED-007" tells a tester nothing. Matched as an EXACT
+  # alternation on purpose: a broad `^R[0-9]` or `^MED-` would silently swallow a real
+  # future commit, which is a worse failure than six junk lines. Extend the list literally.
+  { message = "^(RR3-2|R4|R8|MED-004|MED-007|MED-011):", skip = true },
   { message = "^chore\\(release\\)", skip = true },
   { message = "^chore\\(build\\): .*version", skip = true },
   { message = "^chore\\(version\\)", skip = true },
