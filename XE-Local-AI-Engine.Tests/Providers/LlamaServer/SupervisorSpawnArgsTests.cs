@@ -167,6 +167,70 @@ public sealed class SupervisorSpawnArgsTests
         AssertEx.Equal(expected: 4096, runtimeInfo.EffectiveContextTokens);
     }
 
+    [Test]
+    [Arguments(ModelRole.Embedding, "nomic-embed")]
+    [Arguments(ModelRole.Reranker, "bge-reranker-v2-m3")]
+    public async Task EnsureRunning_PooledRole_PinsPhysicalBatchToTheContext(ModelRole role, string modelName)
+    {
+        // REGRESSION (capture run 2026-08-01): a pooled embedding/rerank forward pass is non-causal, so llama-server
+        // REJECTS — never splits — any single input longer than n_ubatch, with
+        // `500 "input (N tokens) is too large to process. increase the physical batch size (current batch size: 512)"`.
+        // llama.cpp defaults n_ubatch to 512, so the real usable input was 512 tokens, NOT the -c we ask for (2048) and
+        // not the window the model advertises. The knowledge-base chunker sizes chunks against the model's CONTEXT
+        // window, so ordinary 2000-char markdown chunks (~520-680 real tokens) blew straight past the silent ceiling and
+        // EVERY knowledge-base document failed to index on a default node. Measured live against
+        // nomic-embed-text-v1.5.Q4_K_M: 11 of 12 consecutive real markdown chunks rejected at the default, 0 of 12 with
+        // these flags. Pinning -b/-ub to the context is what makes the advertised window actually usable.
+        var launcher = new FakeProcessLauncher();
+        await using var supervisor = NewSupervisor(launcher);
+
+        await supervisor.EnsureRunningAsync(modelName, role, CancellationToken.None);
+
+        AssertEx.True(launcher.Launches.TryDequeue(out var spec));
+
+        var context = spec!.Arguments[IndexOf(spec.Arguments, "-c") + 1];
+        AssertEx.Equal(context, spec.Arguments[IndexOf(spec.Arguments, "-ub") + 1]);
+
+        // -b (logical) must be >= -ub (physical); pinning both to the context satisfies that at any context size.
+        AssertEx.Equal(context, spec.Arguments[IndexOf(spec.Arguments, "-b") + 1]);
+    }
+
+    [Test]
+    public async Task EnsureRunning_ChatRole_DoesNotPinPhysicalBatch()
+    {
+        // Chat is deliberately EXCLUDED from the batch pinning above: a causal decode splits across micro-batches
+        // correctly, so raising its batch is a memory/throughput trade-off rather than a correctness fix — and --fit
+        // owns that decision. Pinning it here would silently enlarge every chat spawn's compute buffers.
+        var launcher = new FakeProcessLauncher();
+        await using var supervisor = NewSupervisor(launcher);
+
+        await supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.True(launcher.Launches.TryDequeue(out var spec));
+        AssertEx.False(spec!.Arguments.Contains("-ub"), "A chat spawn must not pin the physical batch size.");
+        AssertEx.False(spec.Arguments.Contains("-b"), "A chat spawn must not pin the logical batch size.");
+    }
+
+    [Test]
+    public async Task EnsureRunning_PooledRole_FrozenProfileReplay_PinsBatchToTheReplayedContext()
+    {
+        // A replay owns its own -c, so the pooled-role batch must follow THAT context rather than the policy default —
+        // otherwise a replayed embedding server advertises a context it cannot actually embed into.
+        var launcher = new FakeProcessLauncher();
+        var frozen = ResolvedLaunchArguments.Replay(ctxSize: 8192, nGpuLayers: 24, kvTypeK: "q8_0", kvTypeV: "q8_0", flashAttn: true);
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            variantSelector: new FakeVariantSelector(GpuVariant.Cuda),
+            profileResolver: new FakeInferenceProfileResolver(frozen));
+
+        await supervisor.EnsureRunningAsync("nomic-embed", ModelRole.Embedding, CancellationToken.None);
+
+        AssertEx.True(launcher.Launches.TryDequeue(out var spec));
+        AssertEx.Equal(expected: 1, CountOf(spec!.Arguments, "-c"));
+        AssertEx.Equal("8192", spec.Arguments[IndexOf(spec.Arguments, "-c") + 1]);
+        AssertEx.Equal("8192", spec.Arguments[IndexOf(spec.Arguments, "-ub") + 1]);
+        AssertEx.Equal("8192", spec.Arguments[IndexOf(spec.Arguments, "-b") + 1]);
+    }
+
     private static void AssertChatBindsLocalhost(LlamaServerLaunchSpec spec)
     {
         var hostIndex = IndexOf(spec.Arguments, "--host");

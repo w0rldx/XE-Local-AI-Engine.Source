@@ -31,6 +31,15 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
     private const string EmbeddingIncompleteReason =
         "The embedding model returned an incomplete result. Ensure the configured embedding model is loaded and retry.";
 
+    // A REACHABLE embedding server that REJECTED the request is a different failure from "no embedding model is
+    // installed", and reporting it as the latter sends the user to install a model they already have. This was the live
+    // symptom: llama-server rejected every full-size chunk (its physical batch defaulted to 512 tokens, below the chunk
+    // budget) and the user was told to install an embedding GGUF that was installed, loaded, and serving on the GPU.
+    // The provider layer translates a non-2xx into an HttpRequestException carrying the status, which is what separates
+    // the two cases here. Content-free: the server's own diagnostic goes to the log, never into this persisted reason.
+    private const string EmbeddingRejectedReason =
+        "The embedding model is installed but rejected the request. Check the node logs for the server's response, then retry.";
+
     private readonly KnowledgeBaseOptions _options;
     private readonly ILocalModelProviderResolver _providerResolver;
     private readonly IEmbeddingModelResolver _embeddingModelResolver;
@@ -101,6 +110,13 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
             try
             {
                 generated = await generator.GenerateAsync(batch, options: null, cancellationToken).ConfigureAwait(false);
+            }
+            catch (HttpRequestException exception) when (exception.StatusCode is not null)
+            {
+                // The server ANSWERED, with a non-2xx. It is reachable and the model is loaded, so the "install a model"
+                // remediation is wrong here. Carry the exception so the ingestion service can log the server's own
+                // diagnostic (see KnowledgeIngestionService's failure logging).
+                throw new KnowledgeIngestionException(EmbeddingRejectedReason, exception);
             }
             catch (Exception exception) when (exception is HttpRequestException or IOException or OllamaException or InvalidOperationException)
             {

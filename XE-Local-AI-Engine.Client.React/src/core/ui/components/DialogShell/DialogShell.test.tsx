@@ -47,6 +47,30 @@ describe("DialogShell", () => {
 		cleanup();
 	});
 
+	// REGRESSION (capture run 2026-08-01): the test id landed on Mantine's Modal ROOT — a zero-size portal wrapper that
+	// Playwright resolves but reports as `hidden` — so `waitFor({ state: "visible" })` timed out against a dialog that
+	// was plainly on screen. It must land on the visible dialog card instead.
+	it("puts data-testid on the visible modal content, not the zero-size portal root", () => {
+		renderWithProviders(
+			<DialogShell opened={true} onClose={vi.fn()} title="Editor" data-testid="sample-dialog">
+				<div>body</div>
+			</DialogShell>,
+		);
+
+		const target = screen.getByTestId("sample-dialog");
+		expect(target.classList.contains("mantine-Modal-content")).toBe(true);
+		expect(target.classList.contains("mantine-Modal-root")).toBe(false);
+
+		// The dialog's own content must live inside the tagged element, so a scoped `within(...)` query works.
+		expect(within(target).getByText("body")).toBeTruthy();
+
+		// The tagged element IS the dialog. Pinned because the E2E onboarding test used to chain
+		// `GetByTestId(...).GetByRole(Dialog)` to escape the un-hittable portal root — with the id on the content that
+		// descent would find nothing, so the chain had to go. If Mantine ever moves role="dialog" off the content
+		// section, this fails here rather than as a mystifying E2E timeout.
+		expect(target.getAttribute("role")).toBe("dialog");
+	});
+
 	it("shows a fullscreen toggle that flips between fullscreen and exit-fullscreen", () => {
 		renderWithProviders(
 			<DialogShell opened={true} onClose={vi.fn()} title="Editor">

@@ -22,6 +22,11 @@ export interface IDialogShellProps extends Omit<ModalProps, "title" | "withClose
 	confirmCloseWhen?: boolean;
 	/** Optional sticky footer (e.g. Save/Cancel actions) pinned to the bottom of the scroll area. */
 	footer?: ReactNode;
+	/**
+	 * Test id for the dialog. Declared explicitly (rather than left to Mantine's prop spread) because it is routed to
+	 * the Modal's `content` section instead of its root — see the destructuring comment below for why that matters.
+	 */
+	"data-testid"?: string;
 	/** Modal content. */
 	children: ReactNode;
 }
@@ -55,6 +60,14 @@ export function DialogShell({
 	transitionProps,
 	radius,
 	onExitTransitionEnd,
+	// A test id given to a dialog must identify the VISIBLE dialog, not Mantine's portal wrapper. Mantine spreads any
+	// unrecognized prop onto the Modal ROOT, which is a zero-size portal container: Playwright resolves the element but
+	// reports it `hidden`, so `waitFor({ state: "visible" })` times out against a dialog that is plainly on screen
+	// (live-observed on `onboarding-welcome-dialog`). Mantine 9's Styles API `attributes` prop lets us put the id on the
+	// `content` section — the actual dialog card — instead, with no DOM changes. Intercepted here so every DialogShell
+	// call site is correct by construction rather than each having to remember.
+	"data-testid": testId,
+	attributes,
 	...modalProps
 }: IDialogShellProps) {
 	const { t } = useTranslation();
@@ -121,6 +134,7 @@ export function DialogShell({
 			}}
 			onClose={handleClose}
 			onExitTransitionEnd={handleExitTransitionEnd}
+			attributes={testId ? { ...attributes, content: { "data-testid": testId, ...attributes?.content } } : attributes}
 			{...modalProps}
 		>
 			<DialogTextTitleBar
