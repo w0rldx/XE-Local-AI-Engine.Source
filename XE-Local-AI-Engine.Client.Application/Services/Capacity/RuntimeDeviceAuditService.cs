@@ -22,6 +22,7 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
     private readonly ILogger<RuntimeDeviceAuditService> _logger;
     private readonly IGpuVariantSelector _variantSelector;
     private readonly ICudaManagedBuildSignal? _managedCudaSignal;
+    private readonly ILlamaLayerPlacementReport? _layerPlacementReport;
 
     // Serializes the (rare) first compute + any force-refresh so a concurrent burst runs the device probe at most once.
     private readonly SemaphoreSlim _computeGate = new(initialCount: 1, maxCount: 1);
@@ -37,7 +38,8 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
         IGpuVariantSelector variantSelector,
         ILlamaDeviceInventoryProbe deviceProbe,
         ILogger<RuntimeDeviceAuditService> logger,
-        ICudaManagedBuildSignal? managedCudaSignal = null)
+        ICudaManagedBuildSignal? managedCudaSignal = null,
+        ILlamaLayerPlacementReport? layerPlacementReport = null)
     {
         _hardwareProfiler = hardwareProfiler ?? throw new ArgumentNullException(nameof(hardwareProfiler));
         _variantSelector = variantSelector ?? throw new ArgumentNullException(nameof(variantSelector));
@@ -46,6 +48,9 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
         // Optional so the test seam (and a provider-only host) can omit it; when absent the stamp is a constant, so the
         // memo behaves exactly as before (no signal-driven invalidation). The composition root injects the real singleton.
         _managedCudaSignal = managedCudaSignal;
+
+        // Also optional, and read live on every audit rather than memoized — see RuntimeDeviceAuditState.LayerPlacement.
+        _layerPlacementReport = layerPlacementReport;
     }
 
     /// <summary>Disposes the compute gate. Invoked by the container on shutdown (the service is a singleton).</summary>
@@ -61,7 +66,7 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
         // against; an adopt/remove bumps the stamp and can flip the selected variant, so a mismatch forces a re-compute.
         if (!forceRefresh && _cached is { } cached && CurrentSignalVersion() == Volatile.Read(ref _cachedSignalVersion))
         {
-            return cached;
+            return WithLivePlacement(cached);
         }
 
         await _computeGate.WaitAsync(ct).ConfigureAwait(false);
@@ -70,7 +75,7 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
             // Re-check under the gate — a concurrent caller may have computed it while we waited.
             if (!forceRefresh && _cached is { } current && CurrentSignalVersion() == Volatile.Read(ref _cachedSignalVersion))
             {
-                return current;
+                return WithLivePlacement(current);
             }
 
             var (state, fallbackReasonCode, determinate, signalVersion) = await ComputeAsync(ct).ConfigureAwait(false);
@@ -88,12 +93,28 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
             }
 
             EmitIfFallbackChanged(state, fallbackReasonCode);
-            return state;
+            return WithLivePlacement(state);
         }
         finally
         {
             _computeGate.Release();
         }
+    }
+
+    /// <summary>
+    ///     Stamps the CURRENT measured layer placement onto an audit. The device audit is memoized per binary, but
+    ///     placement changes every time a different model loads, so it must never be frozen into the memo — the memo
+    ///     stores the device decision alone and this re-reads the live report on the way out.
+    /// </summary>
+    private RuntimeDeviceAuditState WithLivePlacement(RuntimeDeviceAuditState state)
+    {
+        var placement = _layerPlacementReport?.Current;
+        return placement is null && state.LayerPlacement is null
+            ? state
+            : state with
+            {
+                LayerPlacement = placement
+            };
     }
 
     private long CurrentSignalVersion()
@@ -162,15 +183,28 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
 
         var (reason, remediation) = cpuFallback ? BuildFallbackText(raw.GpuVendor, variant, cpuVariant) : (null, (string?)null);
 
+        var backend = ResolveInferenceBackend(variant, inventory);
         return new RuntimeDeviceAuditState
         {
-            InferenceBackend = ResolveInferenceBackend(variant, inventory),
+            InferenceBackend = backend,
             GpuExpected = gpuExpected,
             CpuFallback = cpuFallback,
             Reason = reason,
             Remediation = remediation,
+            BackendUndeterminedReason = backend == "unknown" ? BuildUndeterminedText(variant) : null,
             Devices = [.. inventory.Devices.Select(static device => new RuntimeAuditDevice(device.Name, device.TotalBytes, device.FreeBytes))]
         };
+    }
+
+    // The device probe neither succeeded nor proved a fallback. Everything downstream — the capacity gate, the model
+    // advisor's VRAM budget — is sized against a GPU nobody confirmed is reachable, so the operator has to be told
+    // that this is an unanswered question rather than a clean bill of health.
+    private static string BuildUndeterminedText(GpuVariant variant)
+    {
+        return $"The {VariantName(variant)} llama.cpp runtime is selected, but listing its GPU devices did not complete "
+               + "(the probe timed out or the binary could not be started), so whether inference will use the GPU is unknown. "
+               + "Model sizing on this page still assumes the GPU's VRAM is usable. A wedged or busy GPU driver is the usual "
+               + "cause; refreshing the hardware profile re-runs the probe.";
     }
 
     // The backend inference actually runs on: a GPU variant that enumerated devices is that variant; a GPU variant with
@@ -244,6 +278,11 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
         _lastEmittedSignature = signature;
         if (!state.CpuFallback)
         {
+            if (state.BackendUndeterminedReason is { } undetermined)
+            {
+                _logger.LogWarning("Runtime device audit could not determine the inference backend: {Reason}", undetermined);
+            }
+
             return;
         }
 

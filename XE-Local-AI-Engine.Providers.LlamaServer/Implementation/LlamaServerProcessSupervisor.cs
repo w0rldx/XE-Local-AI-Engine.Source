@@ -35,6 +35,13 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     // is not a transient crash, so retrying it many times only multiplies the kill/reload thrash.
     private const string ReadinessTimeoutMarker = "LlamaServer.ReadinessTimeout";
 
+    // The lowest llama.cpp log verbosity (-lv) that emits the model-load layer-placement banner. Measured against the
+    // server default of 3, which prints an 11-line startup carrying no placement information at all. Level 4 adds ~213
+    // startup lines per spawn (logged at Information — that IS the placement evidence) and ~22 lines per request
+    // (demoted to Debug once serving, so the sink absorbs roughly nothing). The next level up is the per-tensor debug
+    // firehose: ~1250 startup lines and ~1650 lines PER REQUEST, which no sink policy makes affordable.
+    private const string PlacementProbeLogVerbosity = "4";
+
     /// <summary>Poll cadence for observing that a freshly spawned process exited during its readiness wait.</summary>
     private static readonly TimeSpan ProcessExitPollInterval = TimeSpan.FromMilliseconds(250);
 
@@ -83,6 +90,10 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     // AUD4-06: the process-wide GPU-load admission gate. GPU-backed spawns serialize their spawn-through-readiness window
     // through it (shared with the image supervisor) so two --fit loads never read the same free-VRAM snapshot at once.
     private readonly IGpuModelLoadAdmission _loadAdmission;
+
+    // Node-wide record of measured GPU layer placement. Written here as models load, read by the operator-facing
+    // runtime device audit; the composition root injects the singleton both sides share.
+    private readonly ILlamaLayerPlacementReport _layerPlacementReport;
     private int _disposed;
     private int _runtimeMutationActivityCount;
 
@@ -104,7 +115,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         IGpuModelLoadAdmission? loadAdmission = null,
         ILlamaCppSourceBuildActivity? sourceBuildActivity = null,
         ILlamaFitParamsRunner? fitParamsRunner = null,
-        IProcessContextAllocationResolver? allocationResolver = null)
+        IProcessContextAllocationResolver? allocationResolver = null,
+        ILlamaLayerPlacementReport? layerPlacementReport = null)
     {
         _binaryManager = binaryManager ?? throw new ArgumentNullException(nameof(binaryManager));
         _variantSelector = variantSelector ?? throw new ArgumentNullException(nameof(variantSelector));
@@ -125,6 +137,10 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         _loadAdmission = loadAdmission ?? new NoOpGpuModelLoadAdmission();
         _sourceBuildActivity = sourceBuildActivity ?? new LlamaCppSourceBuildActivity();
         _fitParamsRunner = fitParamsRunner ?? new LlamaFitParamsProcessRunner();
+
+        // A private instance keeps a provider-only host (or a test) self-satisfying; the composition root injects the
+        // shared singleton so what this supervisor observes is what the runtime audit reports.
+        _layerPlacementReport = layerPlacementReport ?? new LlamaLayerPlacementReport();
 
         _reaperLoop = Task.Run(() => ReapIdleLoopAsync(_shutdownCts.Token));
     }
@@ -824,6 +840,16 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
 
             ILlamaServerProcessHandle? handle = null;
             var automaticCapture = applyLaunchPolicy ? new BoundedStartupCapture() : null;
+
+            // Latches llama.cpp's layer-placement banner out of the streamed startup output. It is deliberately NOT
+            // read off automaticCapture: that buffer is bounded, and at the verbosity the banner requires it is
+            // printed around line 155 — outside any small window.
+            var placementSniffer = applyLaunchPolicy ? new LayerPlacementSniffer() : null;
+
+            // Flipped once this child is serving, to demote its (raised-verbosity) request chatter to Debug. It stays
+            // false for the whole load, and forever on a spawn that never reaches readiness, so the placement banner
+            // and every failure message are still logged at Information.
+            var servingWindow = new DiagnosticVerbosityWindow();
             try
             {
                 var spec = BuildLaunchSpec(key, binary.ServerExecutablePath, modelFilePath, port, variant, resolved,
@@ -838,8 +864,31 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                     };
                 }
 
+                // Raise log verbosity just enough to make llama.cpp print how many layers actually landed on the GPU.
+                // At the server default the whole startup is 11 lines and says nothing about placement, so a model
+                // whose weights spilled into system RAM is indistinguishable from one that fully fit.
+                //
+                // EVERY GPU spawn pays this, deliberately. Placement under auto-fit is decided against the FREE VRAM at
+                // load time, so the same model can be fully resident when loaded alone and partly resident when loaded
+                // beside two others — measuring once and reusing the answer would report a number that is no longer
+                // true. Each spawn is a fresh process, so each gets a fresh reading. The sink cost is paid back by
+                // demoting this child's request chatter to Debug once it is serving (see servingWindow).
+                //
+                // The operator-profiling path is skipped because it already raises verbosity to maximum below.
+                if (fitParamsCapture is null
+                    && placementSniffer is not null
+                    && variant != GpuVariant.Cpu
+                    && !HasVerbosityArgument(spec.Arguments))
+                {
+                    spec = spec with
+                    {
+                        Arguments = [.. spec.Arguments, "-lv", PlacementProbeLogVerbosity],
+                        ShouldDemoteForwardedLines = servingWindow.IsServing
+                    };
+                }
+
                 // Operator profiling spawns capture both pipes; the normal path leaves the sink null (spec unchanged).
-                if (startupCapture is not null || automaticCapture is not null)
+                if (startupCapture is not null || automaticCapture is not null || placementSniffer is not null)
                 {
                     spec = spec with
                     {
@@ -847,6 +896,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                         {
                             startupCapture?.Invoke(line);
                             automaticCapture?.Add(line);
+                            placementSniffer?.Add(line);
                         }
                     };
                 }
@@ -892,6 +942,12 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                 await WaitForReadyOrExitAsync(handle, spec.BaseAddress, readinessTimeout, ct).ConfigureAwait(false);
                 _logger.LogInformation("llama-server ready for model {ModelName} role {Role} (pid {ProcessId}) after {ElapsedMs:F0} ms (readiness budget {BudgetSeconds:F0}s).",
                     key.ModelName, key.Role, handle.ProcessId, (_timeProvider.GetUtcNow() - readyStartedUtc).TotalMilliseconds, readinessTimeout.TotalSeconds);
+
+                RecordObservedLayerPlacement(key, variant, placementSniffer);
+
+                // The load window is over and the banner has been read. From here the child's raised-verbosity output
+                // is per-request chatter nobody asked to persist, so drop it to Debug.
+                servingWindow.MarkServing();
 
                 // Publish helper output only for the candidate that actually reached readiness. If the optimized
                 // production policy failed and the safe plan retried, output from the failed candidate must not be frozen.
@@ -1008,27 +1064,138 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
 
     private sealed record LaunchPlanSet(ProcessContextAllocation? Allocation, List<LlamaServerLaunchPlan?> Candidates);
 
+    /// <summary>
+    ///     Publishes a sniffed layer-placement observation once the process is genuinely serving. Recording only after
+    ///     readiness keeps a candidate that printed a banner and then failed to start out of the operator-facing report.
+    ///     A partial offload is logged as a warning: the model serves, but a share of its layers run from system RAM.
+    /// </summary>
+    private void RecordObservedLayerPlacement(ProcessKey key, GpuVariant variant, LayerPlacementSniffer? sniffer)
+    {
+        if (sniffer is null || !sniffer.TryGetObservation(out var offloaded, out var total))
+        {
+            return;
+        }
+
+        _layerPlacementReport.Record(key.Role, variant, key.ModelName, offloaded, total);
+
+        if (offloaded < total)
+        {
+            _logger.LogWarning(
+                "llama-server placed {Offloaded}/{Total} of model {ModelName} role {Role} layers on the GPU; the remainder runs from system RAM, which is substantially slower.",
+                offloaded, total, key.ModelName, key.Role);
+            return;
+        }
+
+        _logger.LogInformation("llama-server placed all {Total} layers of model {ModelName} role {Role} on the GPU.",
+            total, key.ModelName, key.Role);
+    }
+
+    /// <summary>Whether the argument vector already sets a log verbosity, in which case the caller must not add one.</summary>
+    private static bool HasVerbosityArgument(IReadOnlyList<string> arguments)
+    {
+        return arguments.Any(static argument =>
+            argument is "-v" or "--verbose" or "--log-verbose" or "-lv" or "--verbosity" or "--log-verbosity");
+    }
+
+    /// <summary>
+    ///     One spawn's "is this child serving yet" latch. The launcher reads it per forwarded line via
+    ///     <see cref="IsServing" /> to decide Information vs Debug; the supervisor flips it exactly once, after
+    ///     readiness. A spawn that never becomes ready never flips it, so a failed load's diagnostics stay at
+    ///     Information where an operator will actually see them.
+    /// </summary>
+    private sealed class DiagnosticVerbosityWindow
+    {
+        private volatile bool _serving;
+
+        public Func<bool> IsServing => () => _serving;
+
+        public void MarkServing()
+        {
+            _serving = true;
+        }
+    }
+
+    /// <summary>
+    ///     Scans streamed startup output for llama.cpp's layer-placement banner and latches the first match. Both server
+    ///     pipes invoke <see cref="Add" /> concurrently; once a value is latched the hot path is a single volatile read,
+    ///     so the remaining (verbose) lines cost no regex.
+    /// </summary>
+    private sealed class LayerPlacementSniffer
+    {
+        private readonly Lock _gate = new();
+        private int _offloaded;
+        private volatile int _total;
+
+        public void Add(string line)
+        {
+            if (_total > 0)
+            {
+                return;
+            }
+
+            if (!LlamaLayerOffloadBanner.TryParse(line, out var offloaded, out var total))
+            {
+                return;
+            }
+
+            lock (_gate)
+            {
+                if (_total > 0)
+                {
+                    return;
+                }
+
+                _offloaded = offloaded;
+                _total = total;
+            }
+        }
+
+        public bool TryGetObservation(out int offloaded, out int total)
+        {
+            lock (_gate)
+            {
+                offloaded = _offloaded;
+                total = _total;
+                return total > 0;
+            }
+        }
+    }
+
+    /// <summary>
+    ///     Bounded startup diagnostics for <see cref="LlamaStartupFailureClassifier" />, retaining the MOST RECENT
+    ///     lines rather than the first ones.
+    /// </summary>
+    /// <remarks>
+    ///     Keeping the first N was safe only while the child ran at its default verbosity, where the whole startup is
+    ///     about 11 lines and everything fits. It is not safe now that GPU spawns raise verbosity to read the placement
+    ///     banner: measured against a real allocation failure, a default-verbosity startup put the "out of memory" text
+    ///     at line 11 of 18, and the same failure at the raised verbosity put it at line 179 of 186 — behind roughly
+    ///     170 lines of model-loader metadata. A first-N window would have captured only that metadata and classified
+    ///     the failure as Other, silently disabling the context down-tier retry. Failure output is always at the END of
+    ///     a failed startup at either verbosity, so a last-N window classifies both identically.
+    /// </remarks>
     private sealed class BoundedStartupCapture
     {
         private const int MaximumCharacters = 16 * 1024;
         private const int MaximumLines = 64;
         private readonly Lock _gate = new();
-        private readonly List<string> _lines = [];
+        private readonly Queue<string> _lines = new();
         private int _characters;
 
         public void Add(string line)
         {
+            // A single pathological line cannot be allowed to evict the whole window, so cap the line itself first.
+            var captured = line.Length <= MaximumCharacters ? line : line[..MaximumCharacters];
+
             lock (_gate)
             {
-                if (_lines.Count >= MaximumLines || _characters >= MaximumCharacters)
-                {
-                    return;
-                }
-
-                var remaining = MaximumCharacters - _characters;
-                var captured = line.Length <= remaining ? line : line[..remaining];
-                _lines.Add(captured);
+                _lines.Enqueue(captured);
                 _characters += captured.Length;
+
+                while (_lines.Count > MaximumLines || (_characters > MaximumCharacters && _lines.Count > 1))
+                {
+                    _characters -= _lines.Dequeue().Length;
+                }
             }
         }
 
@@ -1690,13 +1857,28 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         }
     }
 
-    /// <summary>Tree-kills + disposes a process and releases its port. Caller holds the admission gate.</summary>
+    /// <summary>
+    ///     Tree-kills + disposes a process, retires its measured layer placement, and releases its port. Caller holds
+    ///     the admission gate.
+    /// </summary>
+    /// <remarks>
+    ///     This is the ONLY place a process leaves <see cref="_processes" />, so it is also the only place the layer
+    ///     placement has to be retired: cap-admission eviction, the idle reaper, exited-process pruning, operator
+    ///     eject (drained and forced), wedged-process respawn, the pre-respawn reap of a dead entry, the profiling
+    ///     teardown, and shutdown all funnel through here.
+    /// </remarks>
     private void TeardownProcess(ProcessKey key, RunningProcess running)
     {
         if (!_processes.TryRemove(new KeyValuePair<ProcessKey, RunningProcess>(key, running)))
         {
             return; // Already removed by a concurrent path.
         }
+
+        // The measured placement described THIS process. Once it is gone the reading is history — and because the
+        // report ranks any partial reading above every full one, leaving it behind would keep telling an operator that
+        // a model they unloaded is running partly from system RAM, for the rest of the app's lifetime and even while
+        // the model actually loaded is fully GPU-resident.
+        _layerPlacementReport.Remove(key.Role, key.ModelName);
 
         try
         {

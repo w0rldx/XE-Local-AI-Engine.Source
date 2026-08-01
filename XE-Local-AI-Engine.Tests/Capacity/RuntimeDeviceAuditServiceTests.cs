@@ -87,6 +87,47 @@ public sealed class RuntimeDeviceAuditServiceTests
         AssertEx.True(state.GpuExpected);
         AssertEx.False(state.CpuFallback);
         AssertEx.Equal("unknown", state.InferenceBackend);
+
+        // "unknown" must not be silent. Without an operator-facing explanation a wedged driver or an overrun probe is
+        // indistinguishable from health: CpuFallback stays false (correctly) and the UI would show nothing at all.
+        var undetermined = AssertEx.NotNull(state.BackendUndeterminedReason);
+        AssertEx.True(undetermined.Length > 0);
+    }
+
+    [Test]
+    public void BuildState_WhenBackendIsKnown_CarriesNoUndeterminedReason()
+    {
+        var working = RuntimeDeviceAuditService.BuildState(GpuProfile(GpuVendor.Nvidia), GpuVariant.Cuda, WithDevices(GpuVariant.Cuda));
+        AssertEx.Null(working.BackendUndeterminedReason);
+
+        var fallback = RuntimeDeviceAuditService.BuildState(GpuProfile(GpuVendor.Nvidia), GpuVariant.Vulkan, LlamaDeviceInventory.Empty(GpuVariant.Vulkan));
+        AssertEx.True(fallback.CpuFallback);
+        AssertEx.Null(fallback.BackendUndeterminedReason);
+    }
+
+    [Test]
+    public async Task GetAudit_StampsLayerPlacement_AndTracksItAcrossTheMemoizedAudit()
+    {
+        // Placement changes as models load, while the device audit is memoized per binary. A placement frozen into the
+        // memo would report the first model that ever loaded, forever.
+        var report = new LlamaLayerPlacementReport();
+        using var service = BuildService(GpuProfile(GpuVendor.Nvidia), GpuVariant.Cuda, WithDevices(GpuVariant.Cuda), report);
+
+        var beforeAnyLoad = await service.GetAuditAsync(forceRefresh: false, CancellationToken.None);
+        AssertEx.Null(beforeAnyLoad.LayerPlacement);
+
+        report.Record(ModelRole.Chat, GpuVariant.Cuda, "qwen3-14b", offloadedLayers: 38, totalLayers: 49);
+
+        var afterLoad = await service.GetAuditAsync(forceRefresh: false, CancellationToken.None);
+        var placement = AssertEx.NotNull(afterLoad.LayerPlacement);
+        AssertEx.Equal("qwen3-14b", placement.ModelName);
+        AssertEx.Equal(expected: 38, placement.OffloadedLayers);
+        AssertEx.Equal(expected: 49, placement.TotalLayers);
+
+        // A partial offload is NOT a CPU fallback — the GPU is in use, just not for every layer. Conflating them would
+        // make the existing fallback banner claim the GPU is unused.
+        AssertEx.False(afterLoad.CpuFallback);
+        AssertEx.Equal("cuda", afterLoad.InferenceBackend);
     }
 
     [Test]
@@ -184,14 +225,21 @@ public sealed class RuntimeDeviceAuditServiceTests
         };
     }
 
-    private static RuntimeDeviceAuditService BuildService(HardwareProfile raw, GpuVariant variant, LlamaDeviceInventory inventory)
+    private static RuntimeDeviceAuditService BuildService(HardwareProfile raw,
+        GpuVariant variant,
+        LlamaDeviceInventory inventory,
+        ILlamaLayerPlacementReport? layerPlacementReport = null)
     {
         var probe = Substitute.For<ILlamaDeviceInventoryProbe>();
         probe.GetDeviceInventoryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(inventory));
-        return BuildService(raw, variant, probe);
+        return BuildService(raw, variant, probe, layerPlacementReport: layerPlacementReport);
     }
 
-    private static RuntimeDeviceAuditService BuildService(HardwareProfile raw, GpuVariant variant, ILlamaDeviceInventoryProbe probe, ICudaManagedBuildSignal? signal = null)
+    private static RuntimeDeviceAuditService BuildService(HardwareProfile raw,
+        GpuVariant variant,
+        ILlamaDeviceInventoryProbe probe,
+        ICudaManagedBuildSignal? signal = null,
+        ILlamaLayerPlacementReport? layerPlacementReport = null)
     {
         var profiler = Substitute.For<IHardwareProfiler>();
         profiler.GetProfileAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(raw));
@@ -199,7 +247,7 @@ public sealed class RuntimeDeviceAuditServiceTests
         var selector = Substitute.For<IGpuVariantSelector>();
         selector.SelectVariantAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(variant));
 
-        return new RuntimeDeviceAuditService(profiler, selector, probe, NullLogger<RuntimeDeviceAuditService>.Instance, signal);
+        return new RuntimeDeviceAuditService(profiler, selector, probe, NullLogger<RuntimeDeviceAuditService>.Instance, signal, layerPlacementReport);
     }
 
     [Test]

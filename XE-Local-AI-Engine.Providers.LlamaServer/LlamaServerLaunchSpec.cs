@@ -45,4 +45,17 @@ internal sealed record LlamaServerLaunchSpec(
     ///     sites are unaffected.
     /// </summary>
     public Action<string>? StartupCapture { get; init; }
+
+    /// <summary>
+    ///     Optional predicate consulted per forwarded line to decide whether it is logged at Debug instead of
+    ///     Information. <see langword="null" /> (every operator-driven spawn) means Information, exactly as before.
+    /// </summary>
+    /// <remarks>
+    ///     Set only when the SUPERVISOR raised the child's log verbosity for its own measurement rather than because an
+    ///     operator asked for verbose output. Those extra lines exist to be read in-process by the placement sniffer;
+    ///     persisting them would multiply the serving log for a diagnostic nobody requested. The predicate stays false
+    ///     until the process is serving, so the whole load window — including the layer-placement banner and every
+    ///     failure message — is still logged at Information; only steady-state request chatter is demoted.
+    /// </remarks>
+    public Func<bool>? ShouldDemoteForwardedLines { get; init; }
 }
