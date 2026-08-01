@@ -260,7 +260,7 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
             request.Parts,
             request.GenerationDurationMs,
             requiredCurrentStatuses: NodeChatMessageTransitions.TerminalizeSources(request.Status),
-            // Durable run envelope written atomically with the terminal row (R4): both commit or roll back together.
+            // Durable run envelope written atomically with the terminal row: both commit or roll back together.
             // Upsert: the pump's authoritative terminalize is the winning outcome, so it enriches/overwrites any thin
             // envelope a prior cancel wrote for this message (see RunEnvelopeWriteMode), keeping envelope status == row status.
             envelope: request.Envelope,
@@ -465,7 +465,7 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
 
                 // When a run envelope must be written, the message UPDATE, the envelope insert, and the conversation touch
                 // run in ONE transaction so the terminal row and its content-free envelope commit or roll back together
-                // (R4: no swallowed best-effort write — an envelope failure fails/retries the terminalize like
+                // (no swallowed best-effort write — an envelope failure fails/retries the terminalize like
                 // any persistence failure). Non-terminal updates (flush / queued / streaming) keep the prior
                 // single-statement autocommit path unchanged, so the hot streaming path is untouched.
                 var writeEnvelope = envelope is not null && IsTerminalStatus(nextStatus);

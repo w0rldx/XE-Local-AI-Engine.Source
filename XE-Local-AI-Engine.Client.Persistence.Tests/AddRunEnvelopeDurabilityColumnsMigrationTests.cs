@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     Verifies the <c>AddRunEnvelopeDurabilityColumns</c> migration (R4): it adds the v2 lifecycle columns
+///     Verifies the <c>AddRunEnvelopeDurabilityColumns</c> migration: it adds the v2 lifecycle columns
 ///     (reasoning/total tokens + started_at_utc) and the filtered UNIQUE index that makes the run envelope idempotent on
 ///     the assistant message id, on both an upgrade from the preceding migration and a fresh migrate-to-head; drops them
 ///     on rollback; and leaves no model/snapshot drift.

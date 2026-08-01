@@ -1432,7 +1432,7 @@ public sealed class NodeChatStreamServiceTests
         AssertEx.Equal(assistantMessageId, terminalRequest.Correlation.MessageId);
         AssertEx.Equal(requestId, terminalRequest.Correlation.RequestId);
         // The pre-ownership teardown must carry a run envelope so the terminal row gets its durable envelope in the same
-        // transaction (R4) — otherwise this is the one live path writing a terminal without an atomic envelope.
+        // transaction — otherwise this is the one live path writing a terminal without an atomic envelope.
         AssertEx.NotNull(terminalRequest.Envelope, "A pre-ownership interrupted terminalize must carry a run envelope.");
     }
 

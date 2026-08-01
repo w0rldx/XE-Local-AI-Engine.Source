@@ -150,7 +150,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                 table: "knowledge_documents",
                 column: "status");
 
-            // M5 (hand-added — see plan section 6): FTS5 external-content index over the plaintext chunk table plus the
+            // Hand-added: EF Core cannot scaffold FTS5. An external-content index over the plaintext chunk table plus the
             // three sync triggers. External content keeps only the inverted index here; the chunk text stays canonical in
             // knowledge_document_chunks, aligned by its integer rowid alias (content_rowid). That rowid is stable across a
             // database vacuum; if node-chat.db is ever vacuumed, rebuild the index with the fts5 'rebuild' command.

@@ -117,8 +117,8 @@ public static class RecommendationJsonParser
             // mapper can surface them as "newer model" and "publisher trust" signals without new columns/migrations.
             wroteAny |= CopyProperty(model, "release_date", writer);
             wroteAny |= CopyProperty(model, "is_trusted_publisher", writer);
-            // Catalog-lane fields (locked decision D1/D2/D3) ride the same diagnostics extensibility seam — additive,
-            // no new columns. Absent for a pre-existing (explore-only) snapshot row.
+            // Catalog-lane fields (curated catalog, explore section, MoE expert offload) ride the same diagnostics
+            // extensibility seam — additive, no new columns. Absent for a pre-existing (explore-only) snapshot row.
             wroteAny |= CopyProperty(model, "section", writer);
             wroteAny |= CopyProperty(model, "tier", writer);
             wroteAny |= CopyProperty(model, "catalog_id", writer);

@@ -506,7 +506,7 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
 
         if (request.TrustedHostWorkspace is null)
         {
-            // Phase 1 creates exactly one engine-generated mount, and it is the workspace. Without it the container
+            // This provider creates exactly one engine-generated mount, and it is the workspace. Without it the container
             // would have nothing to act on, and a container with no workspace is not a sandbox, it is an idle process.
             throw new SandboxCapabilityNotSupportedException(
                 "The docker sandbox provider requires an engine-managed trusted host workspace on the create request.");

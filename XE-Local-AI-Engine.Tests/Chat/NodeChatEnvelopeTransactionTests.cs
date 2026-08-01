@@ -13,7 +13,7 @@ using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Real-SQLite transaction/rollback and purge-race coverage for the atomic run-envelope write (R4). The
+///     Real-SQLite transaction/rollback and purge-race coverage for the atomic run-envelope write. The
 ///     terminalize message UPDATE and its content-free envelope INSERT commit or roll back together, and a conversation
 ///     purge racing a terminalize can never strand an orphaned envelope carrying the conversation's plaintext ids —
 ///     whichever operation the per-conversation lock hierarchy lets win.

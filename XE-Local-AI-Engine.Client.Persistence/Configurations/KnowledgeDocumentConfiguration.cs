@@ -8,8 +8,8 @@ internal sealed class KnowledgeDocumentConfiguration : IEntityTypeConfiguration<
 {
     public void Configure(EntityTypeBuilder<KnowledgeDocument> builder)
     {
-        // Prefixed with knowledge_ to avoid colliding with the shared node-chat schema (the plan's bare `documents`
-        // name would clash) — this table lives in the same node-chat database as the conversation tables.
+        // Prefixed with knowledge_ to avoid colliding with the node-chat `documents` table — this table lives in the
+        // same node-chat database as the conversation tables.
         builder.ToTable("knowledge_documents");
         builder.HasKey(entity => entity.DocumentId);
 

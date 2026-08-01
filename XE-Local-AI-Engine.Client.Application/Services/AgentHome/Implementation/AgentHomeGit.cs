@@ -57,11 +57,13 @@ internal static class AgentHomeGit
     ///         <c>git add</c>. <c>core.attributesfile=/dev/null</c> only disables the <em>global</em> attributes file —
     ///         in-tree <c>.gitattributes</c> outranks it — and git has no command-line flag that disables attribute
     ///         processing, so it is not closable from here. Two things close it instead, and both live outside this
-    ///         class: S3.5 binds <c>&lt;workspace&gt;/.git/config</c> read-only into the container, and a filter driver
-    ///         that cannot be <em>defined</em> cannot run whatever the in-tree <c>.gitattributes</c> selects; and Lane C
-    ///         rewrites that file to a known-good minimal config immediately before each host-side git invocation, which
-    ///         is provider-independent and therefore also covers the process provider Development still runs on until
-    ///         S3.12. The second one matters because S3.4 <em>introduced</em> this exposure rather than inheriting it:
+    ///         class: the container provider binds <c>&lt;workspace&gt;/.git/config</c> read-only into the container, and
+    ///         a filter driver that cannot be <em>defined</em> cannot run whatever the in-tree <c>.gitattributes</c>
+    ///         selects; and the engine rewrites that file to a known-good minimal config immediately before each
+    ///         host-side git invocation, which is provider-independent and therefore also covers the process provider
+    ///         Development runs on when the container provider is not enabled. The second one matters because the
+    ///         standalone clone <em>introduced</em> this
+    ///         exposure rather than inheriting it:
     ///         the previous linked worktree had a pointer-<em>file</em> <c>.git</c>, so a workspace-confined write could
     ///         not reach repository-local config at all.
     ///     </para>

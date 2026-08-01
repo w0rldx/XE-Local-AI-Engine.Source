@@ -56,8 +56,9 @@ internal sealed class McpClientFactory : IMcpClientFactory
         // Never let a stdio MCP server inherit the node's full process environment — it can hold secrets such as
         // XE_NODE_SQLITE_KEY when env-provisioned. ModelContextProtocol 1.4.0 defaults InheritEnvironmentVariables to
         // true; force it off and seed only the SDK's minimal default set (PATH/HOME/etc.), then overlay the per-server
-        // configured variables on top. (Scope is the MCP transport only; the pinned native llama/sd launchers are
-        // deliberately NOT scrubbed here, per docs/agent-knowledge §runtime.)
+        // configured variables on top. (Scope is the MCP transport only — the pinned native llama/sd launchers are
+        // deliberately NOT scrubbed, because they are engine-authored launches of binaries this node installed rather
+        // than operator-configured third-party executables. Do not "helpfully" extend this scrub to them.)
         var environment = StdioClientTransportOptions.GetDefaultEnvironmentVariables();
         foreach (var pair in record.Environment)
         {

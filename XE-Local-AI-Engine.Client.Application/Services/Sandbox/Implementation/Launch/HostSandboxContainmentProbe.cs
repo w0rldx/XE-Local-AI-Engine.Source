@@ -71,9 +71,9 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
     {
         if (!OperatingSystem.IsLinux())
         {
-            // Linux is the primary (and, for this hardening pass, only) enforcement target. Windows Job Object support
-            // is spec'd in the plan of record but deliberately not built here, so a Windows host contains nothing and
-            // must advertise nothing.
+            // Linux is the only enforcement target that shipped. The Windows Job Object containment path was designed
+            // but deliberately not built, so a Windows host contains nothing and must advertise nothing. This is a live
+            // containment gap on Windows, not a temporary state of this file.
             const string reason = "the host is not Linux (the Windows Job Object path is not implemented)";
             return SandboxContainment.None with
             {

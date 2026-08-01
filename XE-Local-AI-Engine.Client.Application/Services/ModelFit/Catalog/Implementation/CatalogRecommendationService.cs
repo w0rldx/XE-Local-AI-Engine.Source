@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
 ///     Default <see cref="ICatalogRecommendationService" />. For each catalog entry surviving the use-case + arch-tag
-///     filter, inspects its GGUF repo (<see cref="IHuggingFaceGgufDiscovery.InspectRepoAsync" />, R1-cached), walks the
+///     filter, inspects its GGUF repo (<see cref="IHuggingFaceGgufDiscovery.InspectRepoAsync" />, TTL-cached), walks the
 ///     quant ladder with <see cref="MemoryFitEstimator" /> — passing <see cref="MoeFacts" /> built from the entry's
 ///     curated <c>activeParamsB</c> (preferred over the header's expert fields, which are not always present on every
 ///     quantized file) — and keeps the highest-quality quant at or below the requested ceiling that fits. Bounded

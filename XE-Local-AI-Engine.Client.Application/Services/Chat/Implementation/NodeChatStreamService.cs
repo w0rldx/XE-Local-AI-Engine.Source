@@ -415,7 +415,7 @@ public sealed class NodeChatStreamService(
             // runner's true terminal (Completed/Failed/Cancelled) so persistence follows the runner's lifecycle,
             // not the client connection's. A genuine user cancel already tripped runCancellation via the registry.
             //
-            // DECISION (handoff #2): because the run keeps going, RunInvocationAsync also holds the collision-slot
+            // DECISION: because the run keeps going, RunInvocationAsync also holds the collision-slot
             // lease until the runner finishes, so a disconnected mid-run turn keeps the slot alive. Accepted as-is
             // for single-user local — at most one queued turn waits, then both persist correctly. If contended
             // multi-session local ever matters, add an explicit disconnect->cancel path distinct from this SSE
