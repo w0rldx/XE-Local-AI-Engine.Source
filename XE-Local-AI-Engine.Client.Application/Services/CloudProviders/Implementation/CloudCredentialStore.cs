@@ -93,7 +93,7 @@ public sealed class CloudCredentialStore : ICloudCredentialStore, IDisposable
         await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await File.WriteAllBytesAsync(_credentialsPath, protectedPayload, cancellationToken).ConfigureAwait(false);
+            await WriteProtectedPayloadAsync(protectedPayload, cancellationToken).ConfigureAwait(false);
             ApplyPlatformFileSecurity();
         }
         finally
@@ -403,6 +403,43 @@ public sealed class CloudCredentialStore : ICloudCredentialStore, IDisposable
         if (connection.AdditionalAllowedHostSuffixes.Any(suffix => !AzureFoundryEndpoints.ValidateHostSuffix(suffix)))
         {
             throw new ArgumentException("A stored allowed host suffix is not a valid domain suffix.", paramName);
+        }
+    }
+
+    /// <summary>
+    ///     Writes the protected blob, creating the file 0600 on *nix in the same syscall that creates it.
+    ///     <para>
+    ///         <c>File.WriteAllBytesAsync</c> creates at the process umask — 0644 on a default Linux/macOS box — and
+    ///         <see cref="ApplyPlatformFileSecurity" /> then narrows it, leaving a window in which any other local user
+    ///         can read the file. Passing <see cref="FileStreamOptions.UnixCreateMode" /> closes the window by making
+    ///         the mode part of the create. This mirrors <c>DesktopBootstrap.TryCreateNewSecretFile</c>, which already
+    ///         does exactly this for <c>node.key</c>.
+    ///     </para>
+    ///     <para>
+    ///         <c>UnixCreateMode</c> applies only when the file is created, so <see cref="ApplyPlatformFileSecurity" />
+    ///         still runs afterwards: it narrows a file left behind at 0644 by an older build, and it is the only thing
+    ///         that applies the Windows ACL.
+    ///     </para>
+    /// </summary>
+    private async Task WriteProtectedPayloadAsync(byte[] protectedPayload, CancellationToken cancellationToken)
+    {
+        var options = new FileStreamOptions
+        {
+            Mode = FileMode.Create,
+            Access = FileAccess.Write,
+            Share = FileShare.None,
+            Options = FileOptions.Asynchronous
+        };
+
+        if (!OperatingSystem.IsWindows())
+        {
+            options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+        }
+
+        var stream = new FileStream(_credentialsPath, options);
+        await using (stream.ConfigureAwait(false))
+        {
+            await stream.WriteAsync(protectedPayload, cancellationToken).ConfigureAwait(false);
         }
     }
 

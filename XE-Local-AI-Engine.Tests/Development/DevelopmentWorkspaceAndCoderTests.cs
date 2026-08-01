@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Development;
 
 using System.Diagnostics;
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Text;
 using Microsoft.Extensions.AI;
@@ -162,6 +163,279 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         _ = await tools.WriteFileAsync("large.txt", "0123456789abcdefg").ConfigureAwait(false);
 
         await AssertEx.ThrowsAsync<InvalidDataException>(() => tools.ReadFileAsync("large.txt"));
+    }
+
+    /// <summary>
+    ///     Development Mode's read tools apply the same secret exclusion the AgentHome copy and the Coder reader already
+    ///     apply. Before this, path containment plus three protected prefixes were the only guard, so a registered
+    ///     repository's <c>.env</c> was a single <c>read_file</c> away from the attempt prompt — and Development Mode has
+    ///     cloud role routing, so it would have left the machine.
+    ///     <para>
+    ///         This closes the ONE-STEP path only. Development Mode also executes the repository's own build and test
+    ///         commands, and a test that prints <c>.env</c> puts those bytes into captured stdout, which reaches the same
+    ///         attempt context. A hostile repository's secrets are not made safe by this; only the trivial route is shut.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task ReadFile_WhenPathNamesASecretFile_RefusesWithoutReadingIt()
+    {
+        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var data = Path.Combine(_root, "read-exclusion-data");
+        Directory.CreateDirectory(data);
+        var options = Options.Create(OptionsValue());
+        var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
+
+        using var sandbox = CreateSandbox();
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System);
+        var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
+        var tools = new DevelopmentWorkspaceTools(sandbox, session, options, GenericProfile);
+
+        const string secret = "AWS_SECRET_ACCESS_KEY=devmodesentinelvalue";
+        _ = await tools.WriteFileAsync(".env", secret + "\n").ConfigureAwait(false);
+        _ = await tools.WriteFileAsync("deploy/node.key", secret + "\n").ConfigureAwait(false);
+        _ = await tools.WriteFileAsync("certs/server.pem", secret + "\n").ConfigureAwait(false);
+        _ = await tools.WriteFileAsync("secrets/nested/file.txt", secret + "\n").ConfigureAwait(false);
+
+        foreach (var path in new[] { ".env", "deploy/node.key", "certs/server.pem" })
+        {
+            var rejection = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => tools.ReadFileAsync(path));
+            AssertEx.False(rejection.Message.Contains("devmodesentinelvalue", StringComparison.Ordinal),
+                "the refusal must not echo the content it refused to read");
+        }
+
+        // An ordinary source file under an ordinary directory is untouched — the guard must not cost the coder its job.
+        _ = await tools.WriteFileAsync("src/feature.cs", "// ordinary source\n").ConfigureAwait(false);
+        AssertEx.Contains(await tools.ReadFileAsync("src/feature.cs").ConfigureAwait(false), "ordinary source");
+        AssertEx.Contains(await tools.ReadFileAsync("secrets/nested/file.txt").ConfigureAwait(false), "devmodesentinelvalue");
+    }
+
+    /// <summary>
+    ///     The read gate uses the SECRET predicate, not the broader workspace-copy filter. Build output is skipped by
+    ///     the copy because it is generated and heavy, not because it is confidential — and reading it is a primary
+    ///     reason Development Mode exists: <c>obj/project.assets.json</c> is what you open when a restore fails.
+    ///     Gating reads on the copy filter refused all of this while protecting nothing.
+    /// </summary>
+    [Test]
+    public async Task ReadFile_WhenPathIsGeneratedBuildOutput_StillReadsIt()
+    {
+        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var data = Path.Combine(_root, "build-output-read-data");
+        Directory.CreateDirectory(data);
+        var options = Options.Create(OptionsValue());
+        var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
+
+        using var sandbox = CreateSandbox();
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System);
+        var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
+        var tools = new DevelopmentWorkspaceTools(sandbox, session, options, GenericProfile);
+
+        string[] buildOutputs =
+        [
+            "obj/project.assets.json",
+            "bin/Debug/net10.0/app.deps.json",
+            "node_modules/left-pad/index.js",
+            "dist/main.js",
+            "coverage/report.txt"
+        ];
+
+        foreach (var path in buildOutputs)
+        {
+            _ = await tools.WriteFileAsync(path, "restore diagnostic for " + path + "\n").ConfigureAwait(false);
+            AssertEx.Contains(await tools.ReadFileAsync(path).ConfigureAwait(false), "restore diagnostic for " + path);
+        }
+    }
+
+    /// <summary>
+    ///     Closing the read gate alone left a two-step bypass: rename and copy are the only patch operations that move
+    ///     bytes the model has never seen, so <c>rename from .env to notes.txt</c> followed by
+    ///     <c>read_file("notes.txt")</c> reproduced the exact leak the gate had just closed.
+    ///     <para>
+    ///         Only the SOURCE side is gated. Creating <c>.env.example</c> — which matches the <c>.env.*</c> rule and
+    ///         would be refused by a destination-side check — stays legal, because a creation has no secret source.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task ApplyPatch_RejectsRenamingFromASecretButStillAllowsCreatingOne()
+    {
+        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var data = Path.Combine(_root, "rename-bypass-data");
+        Directory.CreateDirectory(data);
+        var options = Options.Create(OptionsValue());
+        var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
+
+        using var sandbox = CreateSandbox();
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System);
+        var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
+        var tools = new DevelopmentWorkspaceTools(sandbox, session, options, GenericProfile);
+        _ = await tools.WriteFileAsync(".env", "AWS_SECRET_ACCESS_KEY=renamebypasssentinel\n").ConfigureAwait(false);
+
+        const string renameOut = """
+                                 diff --git a/.env b/notes.txt
+                                 similarity index 100%
+                                 rename from .env
+                                 rename to notes.txt
+                                 """ + "\n";
+        const string copyOut = """
+                               diff --git a/.env b/notes.txt
+                               similarity index 100%
+                               copy from .env
+                               copy to notes.txt
+                               """ + "\n";
+
+        foreach (var patch in new[] { renameOut, copyOut })
+        {
+            _ = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => tools.ApplyPatchAsync(patch));
+        }
+
+        // The secret did not move, and the readable name it was aimed at does not exist.
+        AssertEx.False(File.Exists(Path.Combine(session.HostWorktreePath, "notes.txt")), "the rename must not have landed");
+        AssertEx.True(File.Exists(Path.Combine(session.HostWorktreePath, ".env")), "the secret must still be where it was");
+
+        // Creating a .env.* file is ordinary work and stays legal: there is no secret source to leak.
+        const string createExample = """
+                                     diff --git a/.env.example b/.env.example
+                                     new file mode 100644
+                                     index 0000000..7898192
+                                     --- /dev/null
+                                     +++ b/.env.example
+                                     @@ -0,0 +1 @@
+                                     +AWS_SECRET_ACCESS_KEY=
+                                     """ + "\n";
+
+        _ = await tools.ApplyPatchAsync(createExample).ConfigureAwait(false);
+        AssertEx.True(File.Exists(Path.Combine(session.HostWorktreePath, ".env.example")),
+            "creating a .env.* file has no secret source and must remain allowed");
+    }
+
+    /// <summary>
+    ///     Closing <c>read_file</c> while leaving <c>search_text</c> open would be a half-fix: grep returns the MATCHED
+    ///     CONTENT, so <c>search_text("AWS_SECRET")</c> was the same one-step read of <c>.env</c> by another name. The
+    ///     exclusions are passed to grep itself so the bytes never enter its output, with an in-process post-filter
+    ///     behind that.
+    /// </summary>
+    [Test]
+    public async Task SearchAndList_ExcludeSecretFilesButStillReturnOrdinaryContent()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            Skip.Test("The assertion runs real find/grep inside the process sandbox.");
+            return;
+        }
+
+        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var data = Path.Combine(_root, "search-exclusion-data");
+        Directory.CreateDirectory(data);
+        var options = Options.Create(OptionsValue());
+        var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
+
+        using var sandbox = CreateSandbox();
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System);
+        var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
+        var tools = new DevelopmentWorkspaceTools(sandbox, session, options, GenericProfile);
+
+        const string sentinel = "devmodesentinelvalue";
+        _ = await tools.WriteFileAsync(".env", "AWS_SECRET_ACCESS_KEY=" + sentinel + "\n").ConfigureAwait(false);
+        _ = await tools.WriteFileAsync("deploy/node.key", sentinel + "\n").ConfigureAwait(false);
+        _ = await tools.WriteFileAsync("src/feature.cs", "// " + sentinel + " is referenced here\n").ConfigureAwait(false);
+        _ = await tools.WriteFileAsync("obj/project.assets.json", "{ \"note\": \"" + sentinel + "\" }\n").ConfigureAwait(false);
+
+        var matches = await tools.SearchTextAsync(sentinel, path: null).ConfigureAwait(false);
+        AssertEx.False(matches.Contains(".env", StringComparison.Ordinal), "search_text must not surface .env");
+        AssertEx.False(matches.Contains("node.key", StringComparison.Ordinal), "search_text must not surface node.key");
+        AssertEx.Contains(matches, "src/feature.cs");
+
+        // Build output is not a credential: it must remain searchable.
+        AssertEx.Contains(matches, "obj/project.assets.json");
+
+        var listing = await tools.ListFilesAsync(path: null).ConfigureAwait(false);
+        AssertEx.False(listing.Contains(".env", StringComparison.Ordinal), "list_files must not advertise .env");
+        AssertEx.False(listing.Contains("node.key", StringComparison.Ordinal), "list_files must not advertise node.key");
+        AssertEx.Contains(listing, "src/feature.cs");
+        AssertEx.Contains(listing, "obj/project.assets.json");
+
+        // Git internals are dropped from the listing because Confine already refuses them as a tool argument, and a
+        // fresh worktree's .git would otherwise consume the whole MaxChangedFiles budget.
+        AssertEx.False(listing.Contains(".git/", StringComparison.Ordinal), "list_files must not advertise Git internals");
+    }
+
+    /// <summary>
+    ///     The listing tool must not be able to spend its whole output budget on trees it is going to discard anyway.
+    ///     <para>
+    ///         <c>find</c>'s raw output is truncated at <see cref="DevelopmentOptions.MaxCommandOutputBytes" /> BEFORE
+    ///         the suppression filter runs, so a managed workspace is a standalone clone whose <c>.git</c> alone can
+    ///         outrun that cap: every surviving line then named a suppressed path, the filter dropped all of them, and
+    ///         <c>list_files</c> answered with nothing while the workspace was full of actionable files. Whether it
+    ///         happened at all depended on the order the filesystem handed the root's entries back, which is why the
+    ///         suppressed trees below are created LAST — on this fixture's filesystem that puts them first in the
+    ///         traversal, so the truncation deterministically lands on the files that matter.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task ListFiles_WhenSuppressedTreesOutrunTheOutputCap_StillReturnsTheActionableFiles()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            Skip.Test("The assertion runs real find inside the process sandbox.");
+            return;
+        }
+
+        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var data = Path.Combine(_root, "list-truncation-data");
+        Directory.CreateDirectory(data);
+
+        // Deliberately small so the suppressed bulk below outruns it many times over.
+        const int OutputCap = 8 * 1024;
+        var options = Options.Create(OptionsValue(maxCommandOutputBytes: OutputCap));
+        var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
+
+        using var sandbox = CreateSandbox();
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System);
+        var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
+        var tools = new DevelopmentWorkspaceTools(sandbox, session, options, GenericProfile);
+
+        // The files the agent is actually there to work on, spread across several root entries.
+        var actionable = new[] { "src/feature.cs", "docs/design.md", "tests/FeatureTests.cs", "tools/build.sh" };
+        foreach (var relative in actionable)
+        {
+            var target = Path.Combine(session.HostWorktreePath, relative);
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            await File.WriteAllTextAsync(target, "// content\n").ConfigureAwait(false);
+        }
+
+        // Git metadata on its own exceeds the cap, and so does a credential directory — the two suppression sources
+        // the prune list is derived from.
+        var gitBulk = FillWithBulk(Path.Combine(session.HostWorktreePath, ".git", "objects", "xe"), "development-mode-bulk-object");
+        var secretBulk = FillWithBulk(Path.Combine(session.HostWorktreePath, ".aws"), "development-mode-bulk-credential");
+        AssertEx.True(gitBulk > OutputCap, "the Git metadata must outrun the output cap for this to reproduce");
+        AssertEx.True(secretBulk > OutputCap, "the credential directory must outrun the output cap for this to reproduce");
+
+        var listing = await tools.ListFilesAsync(path: null).ConfigureAwait(false);
+
+        foreach (var relative in actionable)
+        {
+            AssertEx.Contains(listing, relative);
+        }
+
+        AssertEx.False(listing.Contains(".git/", StringComparison.Ordinal), "list_files must not advertise Git internals");
+        AssertEx.False(listing.Contains(".aws/", StringComparison.Ordinal), "list_files must not advertise a credential directory");
+    }
+
+    /// <summary>
+    ///     Fills <paramref name="directory" /> with enough entries to blow past any sane command-output cap, and
+    ///     returns the number of bytes their paths occupy in <c>find</c>'s output.
+    /// </summary>
+    private static int FillWithBulk(string directory, string namePrefix)
+    {
+        Directory.CreateDirectory(directory);
+        var bytes = 0;
+        for (var index = 0; index < 400; index++)
+        {
+            var name = $"{namePrefix}-{index.ToString("D4", CultureInfo.InvariantCulture)}.dat";
+            File.WriteAllText(Path.Combine(directory, name), "x");
+            bytes += name.Length + 1;
+        }
+
+        return bytes;
     }
 
     [Test]

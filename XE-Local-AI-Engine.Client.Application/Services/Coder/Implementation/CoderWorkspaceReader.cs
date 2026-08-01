@@ -136,6 +136,18 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
             return "read_file rejected: a file path is required (the workspace root is not a file).";
         }
 
+        // The secret post-filter list_files and search_text already apply in spirit. Today the workspace copy filter
+        // has already kept a secret out of the jail, so this is unreachable for an AgentHome-provisioned sandbox — but
+        // it stops being unreachable the moment the reader is pointed at a workspace that was preserved rather than
+        // copied, and the other two read paths would still have been guarded while this one was not.
+        //
+        // Gates on IsSecret, not the broader copy filter: a preserved workspace legitimately contains build output,
+        // and refusing to read bin/obj/node_modules would cost an agent real capability while protecting nothing.
+        if (IsSecretRelativePath(confined.RelativePath))
+        {
+            return $"read_file rejected: '{confined.RelativePath}' is excluded because files with that name commonly hold credentials.";
+        }
+
         var handle = await TryConnectAsync(cancellationToken).ConfigureAwait(false);
         if (handle is null)
         {
@@ -346,6 +358,11 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
         // Defense in depth behind the grep/find-level exclusion: drop any entry whose path contains an excluded
         // segment, so a secret can never leak through even if the invocation-level prune missed it.
         return relativePath.Split('/').Any(segment => segment.Length > 0 && _exclusionService.IsExcluded(segment, isDirectory: false));
+    }
+
+    private bool IsSecretRelativePath(string relativePath)
+    {
+        return relativePath.Split('/').Any(segment => segment.Length > 0 && _exclusionService.IsSecret(segment));
     }
 
     private bool IsExcludedMatchLine(string matchLine)
