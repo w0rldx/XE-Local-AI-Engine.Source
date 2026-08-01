@@ -9,6 +9,48 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 public sealed class DevelopmentWorkflowE2ETests : XEE2ETestBase
 {
     /// <summary>
+    ///     Passes the one-time Development Mode disclosure that gates this route, the way an operator does:
+    ///     tick the understanding checkbox, then continue.
+    ///     <para>
+    ///         DevelopmentConsentGate renders the dialog INSTEAD of the page while unacknowledged, so nothing
+    ///         behind it exists in the DOM until this runs. Acknowledgement lives in localStorage, and
+    ///         Playwright gives every test a fresh browser context, so the gate is present on every test —
+    ///         this is therefore unconditional on purpose. A "dismiss it if it happens to be there" helper
+    ///         would silently stop exercising the gate the day it regressed.
+    ///     </para>
+    ///     <para>
+    ///         Clicking through rather than seeding the localStorage key is deliberate: the gate is a blocking
+    ///         disclosure an operator cannot skip, so a suite that bypassed it would no longer cover the path a
+    ///         real operator takes — and would not notice if acknowledging ever stopped unblocking the page.
+    ///     </para>
+    /// </summary>
+    private async Task AcknowledgeDevelopmentConsentAsync()
+    {
+        // Keyed on the accept button, NOT on the gate's own `development-consent-dialog` id: that attribute is
+        // passed to DialogShell, which does not forward unknown props to the DOM, so it never reaches the page.
+        // (The component's unit test locates the dialog by its title text for the same reason.)
+        var accept = Page.GetByTestId("development-consent-accept");
+        await Expect(accept).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
+        {
+            Timeout = 10_000
+        }).ConfigureAwait(false);
+
+        // Continue stays disabled until the checkbox is ticked; checking it first is what makes the click land.
+        await Page.GetByTestId("development-consent-checkbox").CheckAsync().ConfigureAwait(false);
+        await accept.ClickAsync().ConfigureAwait(false);
+
+        // The gate is gone AND the page behind it rendered — the two halves of "acknowledging unblocks".
+        await Expect(accept).ToHaveCountAsync(0, new LocatorAssertionsToHaveCountOptions
+        {
+            Timeout = 10_000
+        }).ConfigureAwait(false);
+        await Expect(Page.GetByTestId("development-open-register-repository")).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
+        {
+            Timeout = 10_000
+        }).ConfigureAwait(false);
+    }
+
+    /// <summary>
     ///     Registers <paramref name="repositoryRoot" /> through the Development page's "Register repository"
     ///     dialog and leaves it selected in the project form's repository picker.
     ///     <para>
@@ -53,6 +95,8 @@ public sealed class DevelopmentWorkflowE2ETests : XEE2ETestBase
             {
                 WaitUntil = WaitUntilState.NetworkIdle
             }).ConfigureAwait(false);
+
+            await AcknowledgeDevelopmentConsentAsync().ConfigureAwait(false);
 
             await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions
             {
@@ -197,6 +241,8 @@ public sealed class DevelopmentWorkflowE2ETests : XEE2ETestBase
             {
                 WaitUntil = WaitUntilState.NetworkIdle
             }).ConfigureAwait(false);
+
+            await AcknowledgeDevelopmentConsentAsync().ConfigureAwait(false);
 
             await RegisterRepositoryAsync(repositoryRoot).ConfigureAwait(false);
 
