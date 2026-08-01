@@ -12,10 +12,10 @@ namespace XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 ///             per-row badge.</item>
 ///         </list>
 ///         Keeping both facets in one table means the quant knowledge is defined once. Quality is NOT a strict function
-///         of bytes-per-weight across families (an I-quant beats a same-bit K-quant), so the order is the curated quality
-///         ranking; <see cref="MemoryFitEstimator" /> supplies the size term separately. Note the rank and the tier
-///         deliberately diverge for the IQ4 family: IQ4_NL/IQ4_XS rank near Q4 on quality but are graded the conservative
-///         <see cref="GgufQuantTier.Small" /> for the picker.
+///         of bytes-per-weight across families (an I-quant beats a same-bit K-quant, and a native FP4 format beats a
+///         wider requant), so the order is the curated quality ranking; <see cref="MemoryFitEstimator" /> supplies the
+///         size term separately. Note the rank and the tier deliberately diverge for the IQ4 family: IQ4_NL/IQ4_XS rank
+///         near Q4 on quality but are graded the conservative <see cref="GgufQuantTier.Small" /> for the picker.
 ///     </para>
 /// </summary>
 /// <remarks>Pure and stateless. Rank 0 is the best quality; larger ranks are progressively more compressed.</remarks>
@@ -38,6 +38,14 @@ public static class QuantLadder
         ("Q6_K", GgufQuantTier.NearLossless),
         ("Q5_K_M", GgufQuantTier.SweetSpot),
         ("Q5_K_S", GgufQuantTier.SweetSpot),
+        // Native FP4 (see IsNativeFormat): trained precision, not a lossy requant, so both rank ABOVE Q4_K_M despite
+        // sizing narrower than it (4.25 vs 4.5 bits/weight) — the same rank-vs-bytes divergence the IQ4 family shows.
+        // Omitting them was a live defect: an off-ladder label takes UnknownRank (just below Q4_K_M), which is exactly
+        // one step past the "recommended" gate, so a native-FP4 repo was demoted to "Can run" however well it fit.
+        // NVFP4 leads MXFP4 because it carries finer scale granularity (a 16-element block with an FP8 scale against
+        // MXFP4's 32-element block with a power-of-two scale) at the same measured on-disk density.
+        ("NVFP4", GgufQuantTier.Balanced),
+        ("MXFP4", GgufQuantTier.Balanced),
         ("Q4_K_M", GgufQuantTier.Balanced),
         ("IQ4_NL", GgufQuantTier.Small),
         ("Q4_K_S", GgufQuantTier.Balanced),

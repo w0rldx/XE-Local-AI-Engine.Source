@@ -23,6 +23,14 @@ public sealed class ProcessContextAllocationResolver(
 {
     private const int MaximumAutomaticDownTiers = 2;
 
+    /// <summary>
+    ///     The largest window the chat fallback will select when no tier fits with the model's weights resident. Kept in
+    ///     step with the application's default conversation window (<c>ConversationContextBudgetOptions.DefaultContextTokens</c>,
+    ///     8192) so the conversation budgeter's reserved output floor and always-keep turns still leave usable room for a
+    ///     system prompt, tool definitions, and history.
+    /// </summary>
+    private const int FallbackContextCeilingTokens = 8192;
+
     private readonly ConcurrentDictionary<string, HardwareAllocationContext> _hardwareAllocationContexts =
         new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, Lazy<Task<ProcessContextAllocation?>>> _cache = new(StringComparer.Ordinal);
@@ -193,8 +201,64 @@ public sealed class ProcessContextAllocationResolver(
             }
         }
 
-        var minimum = CapAndAlign(candidates[^1], trainCeiling);
-        return BuildAllocation(key, contentIdentity, minimum, trainCeiling, source, variant, profile, facts, processGpuBudget);
+        var fallback = ResolveFallbackContextTokens(role, candidates, facts, trainCeiling, variant, profile, processGpuBudget);
+        return BuildAllocation(key, contentIdentity, fallback, trainCeiling, source, variant, profile, facts, processGpuBudget);
+    }
+
+    /// <summary>
+    ///     The window to launch with when no tier fits the stable budgets with the model's weights resident.
+    ///     <para>
+    ///         That situation does not mean the model cannot run: llama.cpp splits layers across the GPU and system RAM
+    ///         (and memory-maps the rest from disk) rather than refusing to launch, and the weights term that overflowed
+    ///         does not shrink with the context window — so collapsing to the smallest tier buys nothing and costs
+    ///         everything. At 2048 tokens the conversation budgeter's reserved output floor claims half the window, the
+    ///         agent scaffold alone overflows the always-keep set, and every send fails with a context-budget error that
+    ///         reads as an application bug rather than an oversized model.
+    ///     </para>
+    ///     <para>
+    ///         So the fallback walks down from the default conversation window instead, keeping the largest tier whose
+    ///         window-scaled cost — the KV cache plus its share of the safety margin, i.e. everything the estimate adds
+    ///         over a zero-context estimate — still fits the combined GPU + RAM budget the split placement draws on. It
+    ///         never selects ABOVE that ceiling (no tier fit, so this is a degraded launch, not an opportunity), and it
+    ///         still bottoms out at the smallest tier on a host that cannot hold even the KV cache. Auxiliary roles carry
+    ///         a single configured window rather than a ladder, so they are returned unchanged.
+    ///     </para>
+    /// </summary>
+    private int ResolveFallbackContextTokens(
+        ModelRole role,
+        IReadOnlyList<int> candidates,
+        GgufModelFootprintFacts facts,
+        int? trainCeiling,
+        GpuVariant variant,
+        HardwareProfile profile,
+        long? processGpuBudget)
+    {
+        var smallest = CapAndAlign(candidates[^1], trainCeiling);
+        if (role != ModelRole.Chat)
+        {
+            return smallest;
+        }
+
+        var estimation = BuildEstimationContext(variant, profile, processGpuBudget);
+        var weightsOnlyBytes = Estimate(facts, contextTokens: 0, estimation.Profile).EstimatedBytes;
+        var combinedBudget = estimation.GpuBudget + estimation.RamBudget;
+
+        foreach (var candidate in LlamaServerLaunchPolicyOptions.ChatContextTiers)
+        {
+            if (candidate > FallbackContextCeilingTokens)
+            {
+                continue;
+            }
+
+            var context = CapAndAlign(candidate, trainCeiling);
+            var windowBytes = Estimate(facts, context, estimation.Profile).EstimatedBytes - weightsOnlyBytes;
+            if (windowBytes <= combinedBudget)
+            {
+                return context;
+            }
+        }
+
+        return smallest;
     }
 
     private ProcessContextAllocation BuildAllocation(
@@ -208,21 +272,11 @@ public sealed class ProcessContextAllocationResolver(
         GgufModelFootprintFacts facts,
         long? processGpuBudget)
     {
-        var useGpu = variant != GpuVariant.Cpu
-                     && profile is { GpuAccelAvailable: true, VramKnown: true }
-                     && processGpuBudget is > 0;
-        var gpuBudget = useGpu ? UsableGpuBudget(processGpuBudget!.Value) : 0;
-        var ramBudget = UsableRamBudget(profile.TotalRamBytes);
-        var estimationProfile = profile with
-        {
-            VramKnown = useGpu,
-            GpuAccelAvailable = useGpu,
-            VramBytes = useGpu ? gpuBudget : null,
-            AvailableVramBytes = null,
-            AvailableRamBytes = ramBudget
-        };
+        var estimation = BuildEstimationContext(variant, profile, processGpuBudget);
+        var useGpu = estimation.UseGpu;
+        var gpuBudget = estimation.GpuBudget;
 
-        var estimate = Estimate(facts, contextTokens, estimationProfile);
+        var estimate = Estimate(facts, contextTokens, estimation.Profile);
         ResourceFootprint footprint;
         ProcessPlacementMode placement;
         if (!useGpu)
@@ -252,6 +306,33 @@ public sealed class ProcessContextAllocationResolver(
         }
 
         return new ProcessContextAllocation(contextTokens, trainCeiling, source, placement, footprint, contentIdentity, key);
+    }
+
+    /// <summary>
+    ///     The reserve-adjusted budgets this resolver scores against, plus the synthetic profile that pins the estimator
+    ///     to exactly those budgets. The process GPU budget has already been probed per backend and had the reserve taken
+    ///     off it, so the raw free-VRAM reading is cleared from the profile: the estimator prefers a free-VRAM figure
+    ///     when one is present, and leaving it here would silently score against a global reading this resolver has
+    ///     deliberately narrowed to a per-process one.
+    /// </summary>
+    private static EstimationContext BuildEstimationContext(GpuVariant variant, HardwareProfile profile, long? processGpuBudget)
+    {
+        var useGpu = variant != GpuVariant.Cpu
+                     && profile is { GpuAccelAvailable: true, VramKnown: true }
+                     && processGpuBudget is > 0;
+        var gpuBudget = useGpu ? UsableGpuBudget(processGpuBudget!.Value) : 0;
+        var ramBudget = UsableRamBudget(profile.TotalRamBytes);
+        return new EstimationContext(useGpu,
+            gpuBudget,
+            ramBudget,
+            profile with
+            {
+                VramKnown = useGpu,
+                GpuAccelAvailable = useGpu,
+                VramBytes = useGpu ? gpuBudget : null,
+                AvailableVramBytes = null,
+                AvailableRamBytes = ramBudget
+            });
     }
 
     private MemoryFitEstimate Estimate(GgufModelFootprintFacts facts, int contextTokens, HardwareProfile profile)
@@ -357,6 +438,8 @@ public sealed class ProcessContextAllocationResolver(
             _options.ContextSafetyMarginTokens);
         return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));
     }
+
+    private readonly record struct EstimationContext(bool UseGpu, long GpuBudget, long RamBudget, HardwareProfile Profile);
 
     private sealed record HardwareAllocationContext(
         string ContentIdentity,

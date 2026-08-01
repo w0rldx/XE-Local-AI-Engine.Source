@@ -66,6 +66,22 @@ public sealed class ModelFitRefreshServiceTests
     }
 
     [Test]
+    public async Task Advisor_Recommend_ScoresAgainstFreeVram_NotTotalVram()
+    {
+        // The advisor's score is estimated / fit-budget, and the fit budget is free VRAM when the probe measured it. A
+        // 16 GiB card with 8 GiB already resident has half the room, so the same model must score twice as high — it
+        // consumes twice the share of what is actually available. This score was derived from a second, inline copy of
+        // the budget expression that still read TOTAL VRAM, so it disagreed with the fit verdicts beside it.
+        var totalOnly = await ScoreForProfileAsync(GpuProfile(16 * Gb));
+        var withFreeReading = await ScoreForProfileAsync(GpuProfile(16 * Gb, availableVramBytes: 8 * Gb));
+
+        AssertEx.True(withFreeReading > totalOnly,
+            "a card with half its VRAM already resident must score the same model higher, not identically.");
+        AssertEx.True(Math.Abs(withFreeReading - (2 * totalOnly)) <= 0.2d,
+            $"halving the budget must double the score (total-only {totalOnly}, free {withFreeReading}).");
+    }
+
+    [Test]
     public async Task Advisor_Recommend_DefaultsQ4KM_RespectsOverride()
     {
         var discovery = Substitute.For<IHuggingFaceGgufDiscovery>();
@@ -464,6 +480,26 @@ public sealed class ModelFitRefreshServiceTests
         AssertEx.Contains(rawJson!, "is_trusted_publisher");
     }
 
+    // Runs one recommend refresh for a single fitting repo and returns the persisted row's score.
+    private static async Task<double> ScoreForProfileAsync(HardwareProfile profile)
+    {
+        var snapshotStore = new InMemoryModelFitSnapshotStore();
+        var recommendationStore = new InMemoryModelFitRecommendationStore();
+        var discovery = Substitute.For<IHuggingFaceGgufDiscovery>();
+        discovery.SearchAsync(Arg.Any<GgufSearchQuery>(), Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult<IReadOnlyList<GgufRepoSummary>>([Summary("org/tiny-GGUF")]));
+        discovery.InspectRepoAsync("org/tiny-GGUF", Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult(Detail("org/tiny-GGUF", File("Q4_K_M", paramCount: 1_000_000_000L))));
+
+        var advisor = BuildAdvisor(snapshotStore, recommendationStore, discovery, profile);
+        var result = await advisor.RefreshAsync(Request(), reportProgress: null, CancellationToken.None);
+
+        AssertEx.Equal(ModelFitRunStatus.Succeeded, result.Status);
+        var rows = recommendationStore.RowsFor(snapshotStore.Snapshots.Values.Single().Id);
+        AssertEx.Equal(expected: 1, rows.Count, "the model must still fit — a dropped row would make the score vacuous.");
+        return rows[0].Score;
+    }
+
     private static ModelFitRefreshRequest Request(string? quantOverride = null)
     {
         return new ModelFitRefreshRequest(ModelFitOperation.Recommend, "coding", Limit: 5, quantOverride);
@@ -531,13 +567,14 @@ public sealed class ModelFitRefreshServiceTests
             ContextLength: 8192);
     }
 
-    private static HardwareProfile GpuProfile(long vramBytes)
+    private static HardwareProfile GpuProfile(long vramBytes, long? availableVramBytes = null)
     {
         return new HardwareProfile
         {
             TotalRamBytes = 64 * Gb,
             AvailableRamBytes = 48 * Gb,
             VramBytes = vramBytes,
+            AvailableVramBytes = availableVramBytes,
             VramKnown = true,
             GpuVendor = GpuVendor.Nvidia,
             GpuAccelAvailable = true,

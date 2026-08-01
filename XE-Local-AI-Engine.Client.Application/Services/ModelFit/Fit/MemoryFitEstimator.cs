@@ -15,7 +15,8 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 ///     is wrong for families like Qwen3 that pin <c>head_dim = 128</c>), and interleaved sliding-window attention (Gemma
 ///     family) caps the window-limited layers' KV at the window instead of the full context. The budget is the GPU VRAM
 ///     when GPU acceleration is available and VRAM was measured (<see cref="HardwareProfile.GpuAccelAvailable" /> &amp;&amp;
-///     <see cref="HardwareProfile.VramKnown" />); otherwise the node's available RAM (the CPU-mode degrade rule). It
+///     <see cref="HardwareProfile.VramKnown" />) — free VRAM (<see cref="HardwareProfile.AvailableVramBytes" />) when the
+///     probe supplied it, total dedicated VRAM otherwise; and the node's available RAM in CPU mode (the degrade rule). It
 ///     performs no GGUF parsing — every header input is supplied by the Hugging Face GGUF discovery per-file DTO. A model
 ///     fits iff <c>total ≤ budget</c>.
 /// </summary>
@@ -137,8 +138,8 @@ public sealed class MemoryFitEstimator
         var approximate = paramCount is not > 0 || kv.HeadDimDerived;
         var confidence = approximate ? FitConfidence.Approximate : FitConfidence.Exact;
 
-        var useGpu = profile is { GpuAccelAvailable: true, VramKnown: true } && profile.VramBytes is > 0;
-        var budgetBytes = useGpu ? profile.VramBytes!.Value : profile.AvailableRamBytes;
+        var useGpu = UsesGpuBudget(profile);
+        var budgetBytes = ResolveFitBudgetBytes(profile);
         var mode = useGpu ? FitMode.Gpu : FitMode.Cpu;
 
         // Apply the safety margin to the model-driven terms (weights + KV) only, then add the fixed runtime overhead.
@@ -182,10 +183,27 @@ public sealed class MemoryFitEstimator
     }
 
     /// <summary>
-    ///     Given the fitting candidates for ONE model repo, drops any candidate that is a higher-nominal-quality REQUANT
-    ///     of a model that also ships a native, non-requantizable format (MXFP4 — gpt-oss). Re-quantizing native 4-bit
-    ///     weights up to Q6/Q8 only wastes space without adding quality, so the native file caps the repo's recommendable
-    ///     quality: any non-native candidate ranked strictly HIGHER quality than the best native one is dropped. When no
+    ///     The memory budget an estimate for <paramref name="profile" /> is scored against: the GPU budget in GPU mode
+    ///     (free VRAM when the probe supplied it, total dedicated VRAM otherwise) and the node's available RAM under the
+    ///     CPU degrade rule. Exposed so a caller that presents or normalizes a fit figure uses the IDENTICAL number this
+    ///     estimator scored against. Two callers previously re-derived this expression inline and one of them was missed
+    ///     when the GPU budget moved from total to free VRAM, so the advisor's score silently disagreed with its own fit
+    ///     verdicts; there is now one definition and no way to drift.
+    /// </summary>
+    public static long ResolveFitBudgetBytes(HardwareProfile profile)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        return UsesGpuBudget(profile) ? ResolveGpuBudgetBytes(profile) : profile.AvailableRamBytes;
+    }
+
+    /// <summary>
+    ///     Given the fitting candidates for ONE model repo, drops any candidate that is a pointless REQUANT of a model
+    ///     that also ships a native, non-requantizable format (MXFP4 / NVFP4). The weights are already at their trained
+    ///     precision, so re-encoding them at a higher nominal quality, or at the same 4-bit width in a lossy K-quant,
+    ///     buys nothing and costs disk and memory. The best native file therefore caps the repo on BOTH axes: a
+    ///     non-native candidate is dropped when it ranks strictly higher quality than that native file, and also when it
+    ///     is no denser-packed than it (<see cref="BytesPerWeight" /> at or above the native's). What survives is every
+    ///     native file plus the genuinely smaller lower-quality quants a tight box still needs (Q3_K_M, Q2_K, …). When no
     ///     native-format candidate is present the list is returned unchanged. Pure and generic so both advisor lanes
     ///     share one guard (lower <paramref name="rankOf" /> == higher quality, per <see cref="QuantLadder.QualityRank" />).
     /// </summary>
@@ -197,21 +215,20 @@ public sealed class MemoryFitEstimator
         ArgumentNullException.ThrowIfNull(quantOf);
         ArgumentNullException.ThrowIfNull(rankOf);
 
-        var nativeRanks = candidates
-                          .Where(candidate => QuantLadder.IsNativeFormat(quantOf(candidate)))
-                          .Select(rankOf)
-                          .ToList();
+        var natives = candidates
+                      .Where(candidate => QuantLadder.IsNativeFormat(quantOf(candidate)))
+                      .ToList();
 
-        if (nativeRanks.Count == 0)
+        if (natives.Count == 0)
         {
             return candidates; // no native-format file in the repo — nothing to guard.
         }
 
-        // The best (lowest-rank == highest-quality) native file caps the recommendable quality. Keep every native-format
-        // file plus every non-native file that is NOT a higher-quality requant (rank at or below the native's quality).
-        var threshold = nativeRanks.Min();
+        var rankThreshold = natives.Min(rankOf);
+        var densityThreshold = natives.Min(candidate => DensityOf(quantOf(candidate)));
         return candidates
-               .Where(candidate => QuantLadder.IsNativeFormat(quantOf(candidate)) || rankOf(candidate) >= threshold)
+               .Where(candidate => QuantLadder.IsNativeFormat(quantOf(candidate))
+                                   || (rankOf(candidate) >= rankThreshold && DensityOf(quantOf(candidate)) < densityThreshold))
                .ToList();
     }
 
@@ -259,6 +276,33 @@ public sealed class MemoryFitEstimator
             "F32" or "FP32" => 32d / 8d,
             _ => 4.5d / 8d
         };
+    }
+
+    // Whether an estimate for this profile is scored against the GPU budget rather than the CPU/RAM degrade budget.
+    private static bool UsesGpuBudget(HardwareProfile profile)
+    {
+        return profile is { GpuAccelAvailable: true, VramKnown: true } && profile.VramBytes is > 0;
+    }
+
+    /// <summary>
+    ///     The GPU-mode fit budget: free VRAM when it was measured, otherwise total dedicated VRAM. Free VRAM is the
+    ///     direct analogue of the CPU mode's <see cref="HardwareProfile.AvailableRamBytes" /> and is what the launcher
+    ///     actually has to place layers into — a desktop compositor, browser, and any warm sub-agent server routinely
+    ///     hold 1.5–2.5 GB of a 16 GB card before the first model loads. Budgeting against TOTAL VRAM instead scored
+    ///     models as fitting that then demand-page to host RAM on WDDM: no error, no OOM, just a multiple-times
+    ///     slowdown, which reads as "the app is broken" rather than "the model is too big". Falls back to total when
+    ///     free VRAM is unavailable (only NVIDIA reports it) or reads as non-positive, so a missing or nonsensical
+    ///     probe never collapses the budget to zero and drops every model.
+    /// </summary>
+    private static long ResolveGpuBudgetBytes(HardwareProfile profile)
+    {
+        return profile.AvailableVramBytes is > 0 ? profile.AvailableVramBytes.Value : profile.VramBytes!.Value;
+    }
+
+    // Bytes-per-weight of a possibly Unsloth-Dynamic-prefixed label, for the native-format guard's width comparison.
+    private static double DensityOf(string quant)
+    {
+        return BytesPerWeight(GgufQuantParser.StripDynamicPrefix(quant.Trim()));
     }
 
     private static long EstimateWeightsBytes(string quant, long? paramCount, long fileSizeBytes)
