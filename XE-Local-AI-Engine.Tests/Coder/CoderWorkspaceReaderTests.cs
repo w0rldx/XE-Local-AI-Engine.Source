@@ -164,6 +164,10 @@ public sealed class CoderWorkspaceReaderTests : IDisposable
     public async Task ReadFile_WhenBinary_RefusesAndWhenLarge_Truncates()
     {
         using var provider = CreateProvider();
+
+        // Under "bin/" on purpose. The read gate deliberately uses the SECRET predicate rather than the broader copy
+        // filter, so build output stays readable — if this file ever comes back refused as "excluded" instead of as
+        // "binary", a read path has been wired to the copy filter again.
         await SeedWorkspaceFileAsync(provider, "bin/data.bin", "abc\0def");
         var oversize = string.Join('\n', Enumerable.Range(1, 5000).Select(i => $"line {i}"));
         await SeedWorkspaceFileAsync(provider, "src/big.txt", oversize);
@@ -501,6 +505,41 @@ public sealed class CoderWorkspaceReaderTests : IDisposable
 
         AssertEx.Contains(results[0], "hello");
         AssertEx.Contains(results[1], "hello");
+    }
+
+    /// <summary>
+    ///     <c>list_files</c> and <c>search_text</c> both run the exclusion post-filter; <c>read_file</c> did not.
+    ///     <para>
+    ///         This is defence in depth rather than a live hole: today the only AgentHome provisioning path COPIES the
+    ///         selected folder, and the copy filter already keeps an excluded file out of the jail, so the file this
+    ///         test seeds cannot occur in production. It stops being unreachable the moment the reader is pointed at a
+    ///         workspace that was preserved rather than copied — which is exactly what the Development workspace
+    ///         provider already builds. The test seeds the file directly to prove the guard, not the provisioning.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task ReadFile_WhenPathNamesASecretFile_RefusesEvenThoughTheCopyFilterUsuallyPreventsIt()
+    {
+        using var provider = CreateProvider();
+        await SeedWorkspaceFileAsync(provider, "deploy/node.key", "coderreadersentinel");
+        await SeedWorkspaceFileAsync(provider, "src/Program.cs", "coderreadersentinel");
+        var reader = CreateReader(provider);
+
+        var rejected = await reader.ReadFileAsync(new ReadFileToolRequest
+        {
+            Path = "deploy/node.key"
+        });
+
+        AssertEx.Contains(rejected, "read_file rejected");
+        AssertEx.False(rejected.Contains("coderreadersentinel", StringComparison.Ordinal),
+            "the refusal must not echo the content it refused to read");
+
+        // An ordinary source file still reads.
+        AssertEx.Contains(await reader.ReadFileAsync(new ReadFileToolRequest
+        {
+            Path = "src/Program.cs"
+        }),
+            "coderreadersentinel");
     }
 
     // ---- harness ----
