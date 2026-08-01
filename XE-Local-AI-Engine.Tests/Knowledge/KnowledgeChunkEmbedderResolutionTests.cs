@@ -104,6 +104,50 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
     }
 
     [Test]
+    public async Task EmbedAsync_WhenServerAnswersWithNon2xx_ReportsRejection_NotMissingModel()
+    {
+        // REGRESSION (capture run 2026-08-01): llama-server rejected every full-size chunk with a 500, and the user was
+        // told "No embedding model is installed ... install an embedding GGUF" — while the model was installed, loaded,
+        // and serving on the GPU. A REACHABLE server that answered is a different failure from an absent model, and
+        // conflating them sends the user to fix something that is not broken.
+        var provider = new CapturingProvider(Descriptor(ConfiguredName))
+        {
+            GenerateFailureStatus = System.Net.HttpStatusCode.InternalServerError
+        };
+        var embedder = CreateEmbedder(provider);
+
+        var exception = await AssertEx.ThrowsAsync<KnowledgeIngestionException>(() =>
+            embedder.EmbedAsync(["chunk one"], CancellationToken.None)).ConfigureAwait(false);
+
+        AssertEx.True(exception.Reason.Contains("rejected the request", StringComparison.Ordinal),
+            $"Reason should say the server rejected the request, got: {exception.Reason}");
+        AssertEx.False(exception.Reason.Contains("No embedding model is installed", StringComparison.Ordinal),
+            "A server that answered must NOT be reported as a missing embedding model.");
+
+        // The transport detail must survive on the exception chain so the ingestion service can log it — the reason
+        // itself stays content-free and fixed, because it is persisted on the document row.
+        AssertEx.NotNull(exception.InnerException);
+    }
+
+    [Test]
+    public async Task EmbedAsync_WhenProviderIsUnreachable_StillReportsMissingModel()
+    {
+        // The counterpart: no status means the server never answered, so "install / start an embedding model" IS the
+        // correct remediation. This pins that the split above did not swallow the original case.
+        var provider = new CapturingProvider(Descriptor(ConfiguredName))
+        {
+            ThrowOnGenerate = true
+        };
+        var embedder = CreateEmbedder(provider);
+
+        var exception = await AssertEx.ThrowsAsync<KnowledgeIngestionException>(() =>
+            embedder.EmbedAsync(["chunk one"], CancellationToken.None)).ConfigureAwait(false);
+
+        AssertEx.True(exception.Reason.Contains("No embedding model is installed", StringComparison.Ordinal),
+            $"An unreachable provider should still report the missing-model remediation, got: {exception.Reason}");
+    }
+
+    [Test]
     public async Task ResolveEmbeddingContextWindowAsync_WhenResolvedModelAdvertisesAWindow_ReturnsIt()
     {
         var provider = new CapturingProvider(Descriptor(ConfiguredName, maxContextTokens: 2048));
@@ -176,6 +220,13 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
 
         public bool ThrowOnGenerate { get; init; }
 
+        /// <summary>
+        ///     When set, <c>GenerateAsync</c> throws a status-carrying <see cref="HttpRequestException" /> — the shape the
+        ///     llama.cpp provider translates a llama-server non-2xx into. Distinct from <see cref="ThrowOnGenerate" />,
+        ///     which models an unreachable provider (no status).
+        /// </summary>
+        public System.Net.HttpStatusCode? GenerateFailureStatus { get; init; }
+
         // Width of each produced vector, by position; the last entry repeats when more vectors than entries are generated.
         // Defaults to the shipped nomic width so the resolution tests are unaffected; overridden to exercise arbitrary and
         // inconsistent widths.
@@ -186,7 +237,7 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
         public IEmbeddingGenerator<string, Embedding<float>> CreateEmbeddingGenerator(LocalModelSelection selection)
         {
             LastSelectedModelName = selection.ModelName;
-            return new FixedEmbeddingGenerator(ThrowOnGenerate, VectorDimensions);
+            return new FixedEmbeddingGenerator(ThrowOnGenerate, VectorDimensions, GenerateFailureStatus);
         }
 
         public Task<IReadOnlyList<LocalModelDescriptor>> ListModelsAsync(CancellationToken ct)
@@ -212,12 +263,22 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
         public Task UnloadModelAsync(string modelName, CancellationToken ct) =>
             throw new NotSupportedException();
 
-        private sealed class FixedEmbeddingGenerator(bool throwOnGenerate, IReadOnlyList<int> dimensions) : IEmbeddingGenerator<string, Embedding<float>>
+        private sealed class FixedEmbeddingGenerator(bool throwOnGenerate,
+            IReadOnlyList<int> dimensions,
+            System.Net.HttpStatusCode? failureStatus = null) : IEmbeddingGenerator<string, Embedding<float>>
         {
             public Task<GeneratedEmbeddings<Embedding<float>>> GenerateAsync(IEnumerable<string> values,
                 EmbeddingGenerationOptions? options = null,
                 CancellationToken cancellationToken = default)
             {
+                if (failureStatus is { } status)
+                {
+                    throw new HttpRequestException(
+                        "The llama-server embedding endpoint returned HTTP 500: input (678 tokens) is too large to process.",
+                        inner: null,
+                        status);
+                }
+
                 if (throwOnGenerate)
                 {
                     throw new HttpRequestException("fake embedding transport failure");
