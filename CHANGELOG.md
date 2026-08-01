@@ -51,6 +51,40 @@ creating it on HEAD is the operator's release-time step, and the packager refuse
 
 - Development Mode: a default-on, node-local coding workflow with engine-owned detached Git worktrees, deterministic
   validation, independent review, hash-bound evidence, and an explicit final host apply.
+- Development Mode **container sandbox** — a Docker daemon wrapper, container runtime provider and daemon preflight;
+  per-feature provider selection through role interfaces (AgentHome and Coder cannot acquire a container requirement,
+  because the type system forbids it); a provider-neutral mount broker; per-task runtime roots mounted with
+  sandbox-resolved paths emitted; copy-into served through the workspace bind mount; an engine-owned standalone clone
+  for the managed workspace; and the provider *actually in force* reported on the capability endpoint. It is **opt-in**:
+  `Development:Sandbox:Provider` ships unset, so Development Mode still runs on the process provider until an operator
+  names the container one. ADR 0004 accepts this as an **optional** Docker dependency for Development Mode execution
+  only — Docker remains off the inference path.
+- Development Mode **per-project command profiles**: build/test/lint commands configured per project and snapshotted
+  onto the attempt, so an evidence record is bound to the commands that actually ran, with the profile confirmation
+  shown on the register path too.
+- Development Mode can **create a project from a template repository**, with a template picker, destination and
+  registry in the UI.
+- Development Mode **structured test-result adapters**: validation output is parsed into visible pass/fail counts
+  rather than left as a log a human has to read.
+- Development Mode renders the **attempt terminal reason** in the UI, so a run that stops says why it stopped.
+- The selected local model is **kept warm** rather than evicted between turns, with safeguards on the keep-alive path.
+- **Template-native reasoning** is detected as a second reasoning capability, alongside the flag-driven kind.
+- The in-app CUDA source build targets **Blackwell**: the fallback architecture list is `75;86;89;120`, so a 50-series
+  card still gets a usable binary when compute-capability detection returns nothing.
+- llama.cpp pinned to **b10201** (CUDA source commit `8f4646a6`, all ten asset SHA256 digests re-verified). The old
+  b9692 pin predated the gemma4, qwen35 and qwen35moe architectures and could not load three of the four
+  current-generation models tested. **NVFP4** quants are now recognized by the GGUF parser and priced at MXFP4's
+  measured density — an unrecognized token failed `IsUsableGgufFile`, so a repository shipping only NVFP4 vanished
+  from search entirely.
+- The hardware profile reports **measured GPU layer placement** — read from llama.cpp's own model-load banner on every
+  GPU load rather than inferred — and warns when only part of a model fits on the GPU. The card reads
+  "Layers on GPU · 38 / 49", or "Not measured yet" before any model has loaded, never a misleading zero. Partial
+  offload is kept distinct from a full CPU fallback end to end, with its own field, alert and colour, so neither
+  warning can speak for the other: a CPU fallback means the GPU is not being used at all, while a partial offload means
+  the GPU *is* in use but part of the model is served from system RAM — correct, and several times slower.
+- Context is allocated from the model's measured resources rather than a fixed request.
+- Inference profiles are bound to launch identity, so a frozen profile is never replayed against a different runtime.
+- Knowledge base: a Nomic **Matryoshka** vector identity, applied only for `nomic-embed-text-v1.5`.
 - Generalized llama.cpp **managed source builds** — build a llama-server from source (official or custom repository)
   as a first-class managed runtime, with provenance tracking and lifecycle recovery.
 - Linux stable-diffusion.cpp **managed source builds** for CPU, Vulkan, and CUDA — including official pinned or
@@ -97,6 +131,64 @@ creating it on HEAD is the operator's release-time step, and the packager refuse
 
 ### Fixed
 
+- **A new Linux + NVIDIA user hit four dead ends on first run.** The knowledge base could not index anything, because
+  there was no in-app way to obtain an embedding model and the failure told the user to "pull" an Ollama-style model on
+  a llama.cpp-default product — there is now a one-click recommended-embedding download beside the reranker one, and the
+  failure message names the button. Tool calling stayed withheld even after the allowlist was corrected, because
+  `LocalToolOfferProvider` captured `AgentHome:ToolCapableModels` at DI composition and never re-read it, so the UI
+  showed a model as tool-capable while the offer seam denied it; the setting is now read live, as its own help text
+  already claimed. The model catalog's architecture gate failed **open** exactly where it exists to fail closed — all 41
+  entries declared the same `minLlamaCppTag`, so eight gemma4/qwen3.5 entries the live run proved unloadable were
+  offered anyway; those eight now floor at b10201. And "Refresh catalog" returned 200 with a green success toast while
+  being a guaranteed no-op, since no configuration defines a refresh source; the response now says so.
+- Development Mode attempts are survivable and their failures legible: a failed validation renders as failed with the
+  fault still identifiable, rather than collapsing into an opaque terminal state.
+- Development Mode mounts a bounded `noexec` tmpfs at `/tmp` inside the container, without which `dotnet` cannot run at
+  all.
+- Development Mode path redaction is anchored on the identity container rather than its position, and
+  container-internal roots are redacted without the generic pattern swallowing the file name and line number.
+- Repository-local Git configuration can no longer execute host commands: exec-bearing git config is pinned, closing
+  the `.git/config` execution vector for both AgentHome and Development Mode.
+- Image-model downloads that failed were silent forever — the start endpoint fired the transfer on a detached task that
+  swallowed every failure into a log line and returned 202. A download coordinator now owns the transfer, every
+  download ends in an observable terminal phase, and a failure surfaces inline plus as a toast. A job card also
+  reported the *requested* image dimensions, not the produced ones; sd-server rounds the latent grid up to a multiple
+  of 64, so a requested 100×512 came back 128×512 and the app stated a false fact about its own output. Dimensions are
+  now read from the produced PNG's IHDR header.
+- A model whose weights **alone** overflow the combined GPU + RAM budget — roughly a 70B-class Q4 on a 32 GB box, not
+  the 20–30B models the advisor recommends, which fit by splitting layers across GPU and RAM — was launched at the
+  *smallest* context tier, 2048 tokens. That is the one window where the conversation budgeter's reserved output floor
+  claims half the window and the agent scaffold alone overflows the always-keep set, so every send failed with a
+  context-budget error that read as an application bug rather than an oversized model. Collapsing to the smallest tier
+  also bought nothing, because the weights term that overflowed does not shrink with the context window. The degraded
+  launch now floors at 8192 and only ever walks *down* from there, keeping the largest tier whose window-scaled cost —
+  the KV cache plus its share of the safety margin — fits the combined budget; a smaller tier now requires a host that
+  cannot hold even the KV cache. Embedding and reranker roles carry a single configured window and are untouched.
+- An inference backend that could not be determined — a probe timeout or a spawn failure — rendered as silence, which
+  was indistinguishable from a healthy GPU. It now surfaces as its own alert carrying the measured reason, beside but
+  distinct from the CPU-fallback and partial-offload warnings.
+- **A `llama-server` startup failure could leave its automatic recovery unrun** — one symptom, three independent
+  faults. Two of them affected every launch, chat included. First, the classifier substring-tested the *joined* startup
+  capture and matched the KV-cache wording before out-of-memory, so a genuine KV-cache allocation failure —
+  `failed to allocate buffer for kv cache` on one line, `cudaMalloc failed: out of memory` on another — was read as a
+  flash-attention incompatibility and the automatic context down-tier was skipped. That is likely the most common
+  out-of-memory shape on a 16 GB box. Second, the incompatibility markers it tested for never matched what llama.cpp
+  actually emits: `V cache quantization requires flash_attn` contains no "flash attention", no "kv cache" and no
+  `-ctk`/`-ctv`, so real incompatibilities classified as `Other` as well and that branch was largely unreachable.
+  Classification is now per line and then reduced — within a line an unambiguous out-of-memory wins, then a cache-type
+  or flash-attention marker, then generic allocation wording; across lines out-of-memory outranks compatibility — and
+  `kv cache` is gone from the marker set, because it names a component, not a compatibility problem. The third fault
+  was narrower and reached only **operator-triggered model profiling runs**, which already raise llama.cpp's log
+  verbosity: that pushed the failure text out to roughly line 484 while the captured diagnostic window kept only the
+  first 64 lines, leaving the classifier nothing but model-loader metadata. The window now retains the END of the
+  output, where failure text always is, and classifies identically at any verbosity. Chat launches were never affected
+  by this third fault — at the default verbosity the failure text sits at line 11 of 18, well inside the window.
+- MTP draft models are no longer flattened into the base model's quant ladder.
+- A browser reload no longer leaks an Open Canvas run slot.
+- The UI stops advertising capabilities the enforcing layer denies.
+- OTLP log export actually receives log events.
+- The legacy CUDA build is given an `$ORIGIN` build RUNPATH, so a relocated build finds its own shared objects.
+- Knowledge base: native query cache hits restored.
 - **llama.cpp official source builds answered 409 on every attempt.** `LlamaCppSourceBuildRequestValidation.Normalize`
   ran at three layers and was not idempotent: for `source=official` the first pass wrote the server-selected
   repository, which the strict "the official repository is selected by the server" rule then rejected on the second
@@ -117,6 +209,13 @@ creating it on HEAD is the operator's release-time step, and the packager refuse
 
 ### Performance
 
+- Chat: markdown renderer identities stay stable across streaming frames, so a streamed answer no longer re-mounts its
+  whole rendered tree on every token batch.
+- Client: queries default to a 30-second `staleTime`, and non-fallback locales load as separate chunks instead of
+  riding in the main bundle.
+- Build: analyzer execution is gated to Release and CI, taking a local Debug build from ~84 s to ~10 s. **A Debug build
+  therefore no longer runs the static-analysis wall** — a backend change is only verified by
+  `dotnet build XE-Local-AI-Engine.slnx --configuration Release`.
 - Chat: long threads are windowed in `ChatMessageList` (`@tanstack/react-virtual`), per-turn invalidations are scoped
   to what a turn actually changes, streamed content is backed by an immutable accumulator (removing an O(n²) clone
   cost), and redundant per-turn work was removed (one agent-definition read, cached provider resolution, memoized
@@ -144,22 +243,38 @@ creating it on HEAD is the operator's release-time step, and the packager refuse
   if invoked directly; the UI surface is capability-gated off. Proper fail-fast messaging is still outstanding.
 - Windows AMD/Intel GPU: GPU hardware is not detected on Windows for AMD or Intel GPUs; these configurations fall back
   to CPU mode. NVIDIA on Windows is unaffected. A DXGI VRAM/vendor probe is a deferred follow-up.
-- Upstream ships no Linux CUDA prebuilt llama.cpp binary. On Linux an NVIDIA box resolves to Vulkan; CUDA requires
-  either the bring-your-own-binary override or the in-app build-from-source runtime.
+- Upstream ships no Linux CUDA prebuilt llama.cpp binary **at any tag**, b10201 included. On Linux an NVIDIA box
+  resolves to Vulkan; CUDA requires either the bring-your-own-binary override or the in-app build-from-source runtime.
+  That source build now pins b10201 and compiles for `sm_120`, so Blackwell cards are covered — but it is still a
+  build the user has to run, not a download.
 - The `main` update channel is intentionally inert (`appsettings.AppUpdate.main.json` keeps its `REPLACE_*`
   placeholders). Distribution is tester-only by decision, not by oversight.
-- The agent process sandbox (`ProcessSandboxRuntimeProvider`) enforces the working-directory jail, a scrubbed child
-  environment, per-command timeouts, and captured-output byte caps, but provides no network isolation and no
-  CPU/memory/PID limits; a sandbox request for either is rejected fail-closed rather than silently ignored, and
-  OS-level isolation is deferred to a future provider.
+- **The agent process sandbox contains far more on Linux than on Windows, and says so only in a log line.**
+  `ProcessSandboxRuntimeProvider` always enforces the working-directory jail, a scrubbed child environment, per-command
+  timeouts and captured-output byte caps. Everything beyond that is *measured* per host at startup, never assumed: where
+  `setsid`, `systemd-run --user` and `unshare` are all present and prove themselves by really performing the operation,
+  AgentHome and Coder additionally get memory/PID/CPU ceilings and a fresh network namespace with no route to loopback,
+  the LAN or the cloud-metadata endpoint. Off Linux — which is every Windows tester — none of those mechanisms exist,
+  `SandboxContainment.None` applies, and the sandbox is a plain child process with no network isolation and no resource
+  limits. The provider never advertises what it cannot deliver and fails closed on a guarantee it cannot honour, so
+  nothing lies; but a Windows tester gets the jail and the approval gate as their only controls, and the UI does not
+  distinguish the two cases. A Windows Job Object mechanism is a deferred follow-up.
+- **Development Mode on Windows executes repository code as the signed-in user**, with full network access and no
+  resource limits — the container provider is opt-in and unset by default, so Development Mode falls back to the process
+  provider, which has no containment mechanism off Linux. Separately, Development Mode keeps network access
+  **Unrestricted by deliberate decision on every platform**, including the contained Linux path: its `dotnet restore`
+  needs the network until the dependency-manifest work ships, and denying egress there would be an outage, not a
+  hardening win. Treat a Development Mode run as running the repository's own build and test commands on your machine,
+  because on Windows that is exactly what it is.
 - All local chat catalog tools ship auto-execute this RC (`LocalAgentToolRegistry.CatalogRequiresApproval` is
   `false`); the node-wide per-agent tool-approval policy (OPP-03) still applies on top where configured.
 - ModelFit's Benchmark mode is inert scaffolding: a refresh request for it is rejected with "Benchmark refresh is not
   yet enabled"; only the Recommend path is live.
 - Voice output ships opt-in and off by default, and the remote-TTS fallback in the voice manifest contract is
   deferred (unbuilt; always `null` on the manifest).
-- Image-model downloads report no progress and cannot be cancelled once started — the endpoint returns 202 and the
-  transfer runs to completion in the background regardless.
+- Image-model downloads **cannot be cancelled** once started — the endpoint returns 202 and the transfer runs to its
+  terminal phase in the background regardless. Progress and failure reporting were fixed this release: a download now
+  reports byte progress whenever the source sends a content length, and always ends in an observable terminal phase.
 - Image generation has no Linux CUDA path: stable-diffusion.cpp ships no Linux CUDA prebuilt, so a Linux NVIDIA box
   generates images via Vulkan (or the CPU floor), unlike chat's CUDA source-build option.
 - Chat retention policy is configured only via `appsettings` (the `ChatRetention` section); there is no UI to view or
