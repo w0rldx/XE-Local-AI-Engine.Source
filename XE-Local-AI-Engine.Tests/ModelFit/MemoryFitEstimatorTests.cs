@@ -482,8 +482,10 @@ public sealed class MemoryFitEstimatorTests
     [Test]
     public void FilterOutNativeFormatRequants_DropsHigherQuantRequants_KeepsNative()
     {
-        // A gpt-oss repo shipping native MXFP4 plus bartowski Q8_0/Q4_K_M requants: the higher-nominal-quality requants
-        // must be dropped so the advisor recommends the native file, never a bloated lossy "upgrade".
+        // A gpt-oss repo shipping native MXFP4 plus bartowski Q8_0/Q4_K_M requants: both must be dropped so the advisor
+        // recommends the native file, never a bloated lossy "upgrade". Q8_0 goes on quality rank; Q4_K_M goes on width —
+        // it ranks BELOW native FP4 on the ladder yet is wider (4.5 vs 4.25 bits/weight), so re-encoding the native
+        // weights into it costs space and quality at once.
         var candidates = new[]
         {
             ("MXFP4", QuantLadder.QualityRank("MXFP4")),
@@ -495,6 +497,78 @@ public sealed class MemoryFitEstimatorTests
 
         AssertEx.Equal(expected: 1, kept.Count);
         AssertEx.Equal("MXFP4", kept[0].Item1);
+    }
+
+    [Test]
+    public void FilterOutNativeFormatRequants_KeepsGenuinelySmallerQuants_ForTightBoxes()
+    {
+        // The native cap is about pointless requants, not about hiding the repo from a small box: a quant that is
+        // genuinely narrower than the native format is a real lower-quality option and must survive the guard.
+        var candidates = new[]
+        {
+            ("NVFP4", QuantLadder.QualityRank("NVFP4")),
+            ("Q6_K", QuantLadder.QualityRank("Q6_K")),
+            ("Q3_K_M", QuantLadder.QualityRank("Q3_K_M")),
+            ("Q2_K", QuantLadder.QualityRank("Q2_K"))
+        };
+
+        var kept = MemoryFitEstimator.FilterOutNativeFormatRequants(candidates, candidate => candidate.Item1, candidate => candidate.Item2)
+                                     .Select(candidate => candidate.Item1)
+                                     .ToList();
+
+        AssertEx.Equal(expected: 3, kept.Count);
+        AssertEx.Contains(kept, "NVFP4", message: "the native file itself is always kept.");
+        AssertEx.Contains(kept, "Q3_K_M", message: "Q3_K_M is narrower than native FP4 — a real option, not a requant upgrade.");
+        AssertEx.Contains(kept, "Q2_K", message: "Q2_K is narrower than native FP4 — a real option, not a requant upgrade.");
+    }
+
+    [Test]
+    public void MemoryFit_GpuBudget_PrefersFreeVram_OverTotalVram()
+    {
+        // A 16 GiB card on a Windows desktop holds ~2.25 GiB for the compositor, browser and any warm sub-agent server
+        // before the first model loads, leaving 13.75 GiB free. A dense 27B at Q3_K_M with an 8192-token window
+        // estimates ~15.02 GiB: it clears TOTAL VRAM by ~0.98 GiB and misses FREE VRAM by ~1.27 GiB. Budgeting against
+        // total scored it "recommended"; on WDDM the launch then demand-pages to host RAM with no OOM and no error, just
+        // a several-fold slowdown that reads as an application fault.
+        const long totalVram = 16 * Gb;
+        const long freeVram = totalVram - (9 * Gb / 4); // 2.25 GiB already resident.
+        const long paramCount = 27_000_000_000L;
+        var attention = new GgufAttentionShape(KeyLength: 128, ValueLength: 128);
+        var estimator = new MemoryFitEstimator();
+
+        var againstTotal = estimator.Estimate("Q3_K_M", paramCount, fileSizeBytes: 0, blockCount: 62, attentionHeadCountKV: 8,
+            embeddingLength: 5376, attentionHeadCount: 42, ctxTarget: 8192, GpuProfile(totalVram), kvCacheQuantized: false,
+            attention: attention);
+        var againstFree = estimator.Estimate("Q3_K_M", paramCount, fileSizeBytes: 0, blockCount: 62, attentionHeadCountKV: 8,
+            embeddingLength: 5376, attentionHeadCount: 42, ctxTarget: 8192, GpuProfile(totalVram, freeVram), kvCacheQuantized: false,
+            attention: attention);
+
+        AssertEx.Equal(againstTotal.EstimatedBytes, againstFree.EstimatedBytes, "only the budget differs, not the footprint.");
+        AssertEx.True(againstTotal.Fits, "the model does clear the card's TOTAL VRAM — the figure that produced the false recommendation.");
+        AssertEx.False(againstFree.Fits, "it does not clear the VRAM actually free, so the advisor must not recommend it.");
+        AssertEx.Equal(FitMode.Gpu, againstFree.Mode);
+        AssertEx.Equal(freeVram - againstFree.EstimatedBytes, againstFree.HeadroomBytes,
+            "headroom must be reported against the free-VRAM budget too.");
+    }
+
+    [Test]
+    public void MemoryFit_GpuBudget_FallsBackToTotalVram_WhenFreeVramUnmeasured()
+    {
+        // Only NVIDIA reports free VRAM; every other vendor leaves it null, and a non-positive reading is not credible.
+        // Neither may collapse the budget to zero and drop every model from the advisor.
+        const long totalVram = 16 * Gb;
+        const long paramCount = 8_000_000_000L;
+        var estimator = new MemoryFitEstimator();
+
+        var unmeasured = estimator.Estimate("Q4_K_M", paramCount, fileSizeBytes: 0, BlockCount, KvHeads, EmbeddingLength, HeadCount,
+            CtxTarget, GpuProfile(totalVram), kvCacheQuantized: false);
+        var zeroReading = estimator.Estimate("Q4_K_M", paramCount, fileSizeBytes: 0, BlockCount, KvHeads, EmbeddingLength, HeadCount,
+            CtxTarget, GpuProfile(totalVram, availableVramBytes: 0), kvCacheQuantized: false);
+
+        AssertEx.Equal(FitMode.Gpu, unmeasured.Mode);
+        AssertEx.Equal(totalVram - unmeasured.EstimatedBytes, unmeasured.HeadroomBytes);
+        AssertEx.Equal(unmeasured.HeadroomBytes, zeroReading.HeadroomBytes, "a zero free-VRAM reading falls back to total VRAM.");
+        AssertEx.True(unmeasured.Fits, "an 8B Q4_K_M must still fit a 16 GiB card when free VRAM was not measured.");
     }
 
     [Test]
@@ -524,13 +598,14 @@ public sealed class MemoryFitEstimatorTests
         AssertEx.Equal(FitConfidence.Approximate, estimate.Confidence);
     }
 
-    private static HardwareProfile GpuProfile(long vramBytes)
+    private static HardwareProfile GpuProfile(long vramBytes, long? availableVramBytes = null)
     {
         return new HardwareProfile
         {
             TotalRamBytes = 64 * Gb,
             AvailableRamBytes = 48 * Gb,
             VramBytes = vramBytes,
+            AvailableVramBytes = availableVramBytes,
             VramKnown = true,
             GpuVendor = GpuVendor.Nvidia,
             GpuAccelAvailable = true,

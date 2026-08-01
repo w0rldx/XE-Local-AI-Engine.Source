@@ -677,9 +677,10 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
     /// </summary>
     private static string SerializeAdvisorJson(IReadOnlyList<AdvisorRecommendation> recommendations, HardwareProfile profile)
     {
-        // The fit budget the score is normalized against — VRAM in GPU mode, else available RAM (mirrors MemoryFitEstimator).
-        var useGpu = profile is { GpuAccelAvailable: true, VramKnown: true } && profile.VramBytes is > 0;
-        var budgetBytes = useGpu ? profile.VramBytes!.Value : profile.AvailableRamBytes;
+        // The fit budget the score is normalized against. Read from the estimator rather than re-derived here: this
+        // expression used to be duplicated, and when the GPU budget moved from total VRAM to free VRAM this copy was
+        // missed, so the score below was normalized against a budget the fit verdicts no longer used.
+        var budgetBytes = MemoryFitEstimator.ResolveFitBudgetBytes(profile);
 
         using var buffer = new MemoryStream();
         using (var writer = new Utf8JsonWriter(buffer))
@@ -723,9 +724,9 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
                 writer.WriteString("file_name", recommendation.FileName);
                 writer.WriteBoolean("installed", recommendation.IsInstalled);
 
-                // Catalog-lane fields (locked decision D1/D2): section splits the response into the primary
+                // Catalog-lane fields: section splits the response into the primary
                 // recommended/canRun catalog rows vs. the secondary explore (live-HF) rows; tier/catalog metadata are
-                // null for an explore row. expert_offload/gpu_gb/cpu_gb surface the MoE expert-offload split (D3) so
+                // null for an explore row. expert_offload/gpu_gb/cpu_gb surface the MoE expert-offload split so
                 // the UI can label a model honestly ("experts on CPU — slower, higher quality") instead of showing a
                 // bare fit verdict.
                 writer.WriteString("section", recommendation.Section);

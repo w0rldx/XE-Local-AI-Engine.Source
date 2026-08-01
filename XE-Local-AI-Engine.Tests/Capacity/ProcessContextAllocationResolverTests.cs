@@ -54,6 +54,67 @@ public sealed class ProcessContextAllocationResolverTests
     }
 
     [Test]
+    public async Task Resolve_NoTierFits_FloorsChatAtTheDefaultConversationWindow()
+    {
+        // 16 GiB VRAM / 32 GiB RAM (the target desktop) with a dense 70B at Q4_K_M. Usable budgets are 15.20 GiB GPU and
+        // 27.20 GiB RAM, but the weights alone are 36.67 GiB — so the RAM side overflows at EVERY tier and the walk
+        // exhausts. Dropping to 2048 there is the worst possible answer: the weights term that overflowed does not
+        // shrink with the window (2048 saves 2.1 GiB of KV against a 9.5 GiB shortfall), while the reserved output floor
+        // then claims half the window and the agent scaffold alone overflows the always-keep set, so every send fails
+        // with a context-budget error. llama.cpp splits the layers and launches regardless, so the window must not
+        // collapse with the weights.
+        var resolver = BuildResolver(Profile(32 * Gb, 16 * Gb, vramKnown: true),
+            processBudget: 16 * Gb,
+            facts: SeventyBillionParameterFacts());
+
+        var allocation = AssertEx.NotNull(await resolver.ResolveAsync(Model,
+            ModelRole.Chat,
+            GpuVariant.Cuda,
+            ResolvedLaunchArguments.Explore(),
+            CancellationToken.None));
+
+        AssertEx.Equal(expected: 8192, allocation.ProcessContextTokens);
+        AssertEx.Equal(ProcessContextAllocationSource.HardwareTier, allocation.Source);
+        AssertEx.Equal(ProcessPlacementMode.Hybrid, allocation.Placement);
+    }
+
+    [Test]
+    public async Task Resolve_NoTierFits_StillDegradesBelowTheFloor_WhenEvenTheKvCacheDoesNotFit()
+    {
+        // The floor is a floor, not a guarantee. A 3 GiB CPU-only host leaves 1.0 GiB usable; an 8B Q4_K_M needs 4.19 GiB
+        // of weights, so nothing fits. The 8192-token KV cache alone costs 1.12 GiB — over budget — so the fallback keeps
+        // walking down and lands on 4096 (0.56 GiB) rather than blindly allocating a window the host cannot hold.
+        var resolver = BuildResolver(Profile(3 * Gb, vram: 0, vramKnown: false));
+
+        var allocation = AssertEx.NotNull(await resolver.ResolveAsync(Model,
+            ModelRole.Chat,
+            GpuVariant.Cpu,
+            ResolvedLaunchArguments.Explore(),
+            CancellationToken.None));
+
+        AssertEx.Equal(expected: 4096, allocation.ProcessContextTokens);
+        AssertEx.Equal(ProcessPlacementMode.Cpu, allocation.Placement);
+    }
+
+    [Test]
+    public async Task Resolve_NoTierFits_LeavesAuxiliaryRolesAtTheirConfiguredWindow()
+    {
+        // Embedding/reranker carry a single configured window rather than a tier ladder, and their requests are single
+        // short forward passes — the chat floor must not inflate them.
+        var resolver = BuildResolver(Profile(32 * Gb, 16 * Gb, vramKnown: true),
+            processBudget: 16 * Gb,
+            facts: SeventyBillionParameterFacts());
+
+        var allocation = AssertEx.NotNull(await resolver.ResolveAsync(Model,
+            ModelRole.Embedding,
+            GpuVariant.Cuda,
+            ResolvedLaunchArguments.Explore(),
+            CancellationToken.None));
+
+        AssertEx.Equal(expected: 2048, allocation.ProcessContextTokens);
+    }
+
+    [Test]
     public async Task Resolve_TrainCeilingSubtractsMarginAndAligns()
     {
         var resolver = BuildResolver(Profile(64 * Gb, 32 * Gb, vramKnown: true),
@@ -444,6 +505,16 @@ public sealed class ProcessContextAllocationResolverTests
             Architecture: expertCount is > 0 ? "qwen3moe" : "llama",
             ExpertCount: expertCount,
             ExpertUsedCount: expertUsedCount);
+
+    // A dense 70B at Q4_K_M: 39.4 GB of weights (36.67 GiB) over 80 layers with GQA (8 kv-heads, head_dim 128). Nothing
+    // this size fits a 16 GiB / 32 GiB desktop, which is exactly the point — it exercises the exhausted-tier-walk path.
+    private static GgufModelFootprintFacts SeventyBillionParameterFacts() =>
+        Facts(paramCount: 70_000_000_000,
+            fileSizeBytes: (long)(70_000_000_000 * MemoryFitEstimator.BytesPerWeight("Q4_K_M")),
+            blockCount: 80,
+            attentionHeadCount: 64,
+            attentionHeadCountKv: 8,
+            embeddingLength: 8192);
 
     private static long UsableRamBudget(long total) =>
         Math.Max(0, total - Math.Max(LlamaServerLaunchPolicyOptions.MinimumRamReserveBytes,

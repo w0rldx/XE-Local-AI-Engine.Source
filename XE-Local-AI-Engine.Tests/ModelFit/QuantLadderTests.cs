@@ -81,6 +81,45 @@ public sealed class QuantLadderTests
     }
 
     [Test]
+    public void QualityRank_NativeFp4_PassesTheRecommendedQualityGate()
+    {
+        // The advisor's "Recommended" gate is QualityRank(quant) <= QualityRank(Q4_K_M). An off-ladder label takes the
+        // unknown rank, which sits exactly ONE step past that gate — so while NVFP4/MXFP4 were absent from the ladder a
+        // native-FP4 repo was demoted to "Can run" however much headroom it had. Observed live 2026-07-31 against
+        // tngtech/Qwen3.6-27B-NVFP4-GGUF and s-batman/Ornith-1.0-9B-NVFP4-MTP-GGUF.
+        var gate = QuantLadder.QualityRank(MemoryFitEstimator.DefaultQuant);
+
+        AssertEx.True(QuantLadder.QualityRank("NVFP4") <= gate, "NVFP4 must clear the recommended-quality gate.");
+        AssertEx.True(QuantLadder.QualityRank("MXFP4") <= gate, "MXFP4 must clear the recommended-quality gate.");
+        AssertEx.True(QuantLadder.QualityRank("NVFP4") < QuantLadder.QualityRank("totally-made-up"),
+            "a native format must not share the off-ladder unknown rank.");
+        AssertEx.True(QuantLadder.MeetsFloor("NVFP4"), "NVFP4 is well above the auto-recommend quality floor.");
+        AssertEx.True(QuantLadder.MeetsFloor("MXFP4"), "MXFP4 is well above the auto-recommend quality floor.");
+    }
+
+    [Test]
+    public void QualityRank_NativeFp4_SitsBetweenQ5KSAndQ4KM()
+    {
+        // Native FP4 is trained precision, not a lossy requant, so it outranks Q4_K_M despite sizing narrower than it —
+        // the same rank-vs-bytes divergence the IQ4 family shows. NVFP4 leads MXFP4 on scale granularity.
+        AssertEx.True(QuantLadder.QualityRank("Q5_K_S") < QuantLadder.QualityRank("NVFP4"),
+            "the 5-bit K-quants still outrank native FP4.");
+        AssertEx.True(QuantLadder.QualityRank("NVFP4") < QuantLadder.QualityRank("MXFP4"),
+            "NVFP4's finer scale granularity ranks it above MXFP4 at the same density.");
+        AssertEx.True(QuantLadder.QualityRank("MXFP4") < QuantLadder.QualityRank("Q4_K_M"),
+            "a native 4-bit format outranks a lossy 4-bit requant.");
+    }
+
+    [Test]
+    public void TierOf_NativeFp4_IsOnLadderAndBadgesBalanced()
+    {
+        // Off-ladder returned null here, which sent the download picker to its family fallback instead of a real tier.
+        AssertEx.True(QuantLadder.TierOf("NVFP4") == GgufQuantTier.Balanced, "NVFP4 badges Balanced.");
+        AssertEx.True(QuantLadder.TierOf("MXFP4") == GgufQuantTier.Balanced, "MXFP4 badges Balanced.");
+        AssertEx.True(QuantLadder.TierOf("nvfp4") == GgufQuantTier.Balanced, "TierOf is case-insensitive for NVFP4.");
+    }
+
+    [Test]
     public void BytesPerWeight_NvFp4_MatchesMxFp4NativeDensity()
     {
         // Measured, not theoretical: s-batman/Ornith-1.0-9B-NVFP4-MTP-GGUF ships MXFP4 and NVFP4 conversions of the
