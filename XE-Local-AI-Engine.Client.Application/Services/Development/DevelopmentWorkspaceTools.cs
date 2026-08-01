@@ -4,6 +4,8 @@ using System.Text;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
+using XE_Local_AI_Engine.Client.Services.Workspace;
+using XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
 
 public static class DevelopmentCommandIds
 {
@@ -54,6 +56,22 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
     /// </summary>
     private const string CommandProfileVersion = "development-workspace-v1";
 
+    /// <summary>
+    ///     The product's single definition of "this file may hold a credential". Read paths here call its
+    ///     <see cref="ISensitiveFileExclusionService.IsSecret" /> predicate, deliberately NOT the broader
+    ///     <see cref="ISensitiveFileExclusionService.IsExcluded" /> copy filter — that one also names build output,
+    ///     which an agent legitimately reads after a failed build and which is not a credential.
+    ///     <para>
+    ///         This is a MITIGATION, not a boundary. It removes the one-step path — the coder or reviewer model naming
+    ///         a secret directly to <c>read_file</c>/<c>search_text</c>, on its own initiative or steered by
+    ///         prompt-injected content in the repository it was asked to read — and nothing more. Development Mode also
+    ///         EXECUTES the repository's own build and test commands, and a test that prints <c>.env</c> puts those
+    ///         bytes into captured stdout, which reaches the same attempt context and the same cloud role route. A
+    ///         hostile repository's secrets are not made safe by this check; only the trivial path to them is closed.
+    ///     </para>
+    /// </summary>
+    private static readonly ISensitiveFileExclusionService DefaultExclusions = new SensitiveFileExclusionService();
+
     private readonly List<DevelopmentCommandEvidence> _commandEvidence = [];
 
     /// <summary>
@@ -73,6 +91,7 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
     /// </summary>
     private readonly string? _importBaselineDigest;
 
+    private readonly ISensitiveFileExclusionService _exclusions;
     private readonly DevelopmentAttemptLiveProgress? _liveProgress;
     private readonly DevelopmentOptions _options;
     private readonly DevelopmentCommandProfile _profile;
@@ -83,7 +102,8 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
         DevelopmentWorkspaceSession session,
         IOptions<DevelopmentOptions> options,
         DevelopmentCommandProfile profile,
-        DevelopmentAttemptLiveProgress? liveProgress = null)
+        DevelopmentAttemptLiveProgress? liveProgress = null,
+        ISensitiveFileExclusionService? exclusions = null)
     {
         _sandbox = sandbox ?? throw new ArgumentNullException(nameof(sandbox));
         _session = session ?? throw new ArgumentNullException(nameof(session));
@@ -91,6 +111,7 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
         _options = options.Value;
         _profile = profile ?? throw new ArgumentNullException(nameof(profile));
         _liveProgress = liveProgress;
+        _exclusions = exclusions ?? DefaultExclusions;
         _importBaselineDigest = DevelopmentCommandProfileImport.TryComputeDigest(session.HostWorktreePath);
         EnsureRuntimeDirectories();
     }
@@ -104,18 +125,82 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
         var confined = RequirePath(path, allowRoot: true);
         var result = await ExecuteAsync("tool_list_files",
             "find",
-            ["-P", ".", "-maxdepth", "64", "-type", "f", "-print"],
+            BuildListArguments(),
             confined.SandboxPath,
             standardInput: null,
             cancellationToken).ConfigureAwait(false);
         EnsureCompleted(result, "list_files");
         return string.Join('\n', result.StandardOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                                       .Where(entry => !IsSuppressedFromOutput(entry))
                                        .Take(_options.MaxChangedFiles));
+    }
+
+    /// <summary>
+    ///     The listing tool's argument vector, with every suppressed tree PRUNED rather than merely filtered out of the
+    ///     result afterwards.
+    ///     <para>
+    ///         Pruning is what makes the listing usable at all. The raw output is capped at
+    ///         <see cref="DevelopmentOptions.MaxCommandOutputBytes" /> BEFORE the post-filter runs, so on a workspace
+    ///         whose Git metadata alone outruns that cap every surviving line named a suppressed path, the filter
+    ///         discarded all of them, and <c>list_files</c> answered with nothing while the workspace was full of files
+    ///         the agent could act on. Which files survive depended on the order the filesystem happened to hand back,
+    ///         so the same repository could list correctly on one machine and empty on another.
+    ///     </para>
+    ///     <para>
+    ///         The patterns are read from the same two definitions the post-filter gates on — the credential globs and
+    ///         the protected prefixes — so the generator and the filter cannot drift. Secrets match by NAME at any
+    ///         depth, exactly as the grep exclusions do; protected trees match by their ROOTED path, exactly as
+    ///         <see cref="DevelopmentWorkspaceSecurity.IsProtected" /> does.
+    ///     </para>
+    ///     <para>
+    ///         The post-filter stays behind this as defence in depth, and it still carries real weight: it also covers a
+    ///         listing taken from a subdirectory, where the rooted prefix patterns match nothing.
+    ///     </para>
+    /// </summary>
+    private List<string> BuildListArguments()
+    {
+        var predicates = new List<string>();
+        foreach (var secret in _exclusions.SecretEntryNames)
+        {
+            AppendPrunePredicate(predicates, "-iname", secret);
+        }
+
+        foreach (var prefix in DevelopmentWorkspaceSecurity.ProtectedPathPrefixes)
+        {
+            AppendPrunePredicate(predicates, "-ipath", "./" + prefix);
+        }
+
+        var arguments = new List<string> { "-P", ".", "-maxdepth", "64" };
+        if (predicates.Count > 0)
+        {
+            arguments.Add("(");
+            arguments.AddRange(predicates);
+            arguments.Add(")");
+            arguments.Add("-prune");
+            arguments.Add("-o");
+        }
+
+        arguments.Add("-type");
+        arguments.Add("f");
+        arguments.Add("-print");
+        return arguments;
+    }
+
+    private static void AppendPrunePredicate(List<string> predicates, string test, string pattern)
+    {
+        if (predicates.Count > 0)
+        {
+            predicates.Add("-o");
+        }
+
+        predicates.Add(test);
+        predicates.Add(pattern);
     }
 
     public async Task<string> ReadFileAsync(string path, CancellationToken cancellationToken = default)
     {
         var confined = RequirePath(path, allowRoot: false);
+        EnsureNotSecret(confined.RelativePath);
         return await _sandbox.ReadFileAsync(_session.SandboxHandle,
             confined.SandboxPath,
             _options.MaxCommandOutputBytes,
@@ -126,9 +211,27 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
     {
         ArgumentNullException.ThrowIfNull(pattern);
         var confined = RequirePath(path, allowRoot: true);
+
+        // Exclude every SECRET name/glob at the grep invocation, so a credential's CONTENT never enters the output in
+        // the first place. The post-filter below is defence in depth behind it, not the guard. Build output is
+        // deliberately NOT excluded here — searching bin/obj/node_modules is legitimate and leaks nothing.
+        var arguments = new List<string> { "-rnI", "-F" };
+        foreach (var secret in _exclusions.SecretEntryNames)
+        {
+            arguments.Add("--exclude-dir=" + secret);
+            arguments.Add("--exclude=" + secret);
+        }
+
+        // The pattern is bound via `-e` so a value beginning with '-' is data, not a flag; `--` then ends option
+        // parsing before the lone path operand.
+        arguments.Add("-e");
+        arguments.Add(pattern);
+        arguments.Add("--");
+        arguments.Add(".");
+
         var result = await ExecuteAsync("tool_search_text",
             "grep",
-            ["-rnI", "-F", "-e", pattern, "--", "."],
+            arguments,
             confined.SandboxPath,
             standardInput: null,
             cancellationToken).ConfigureAwait(false);
@@ -138,7 +241,8 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
         }
 
         EnsureCompleted(result, "search_text");
-        return result.StandardOutput;
+        return string.Join('\n', result.StandardOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                                       .Where(line => !IsSuppressedMatchLine(line)));
     }
 
     public async Task<string> WriteFileAsync(string path, string content, CancellationToken cancellationToken = default)
@@ -488,6 +592,55 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
         }
     }
 
+    /// <summary>
+    ///     Refuses a read whose path names a credential-bearing entry. See <see cref="DefaultExclusions" /> for what
+    ///     this does and does not close: it removes the direct read, and it does nothing about a build or test command
+    ///     that prints the same bytes to captured stdout.
+    ///     <para>
+    ///         Gates on <see cref="ISensitiveFileExclusionService.IsSecret" />, NOT on the broader copy filter. Build
+    ///         output — <c>bin</c>, <c>obj</c>, <c>node_modules</c>, <c>dist</c> — stays readable, because reading it
+    ///         after a failed build is a primary reason this feature exists and none of it is a credential.
+    ///     </para>
+    /// </summary>
+    private void EnsureNotSecret(string relativePath)
+    {
+        if (IsSecretPath(relativePath))
+        {
+            // Names only the path the caller already supplied — no host path, no matched rule, no file content.
+            throw new DevelopmentWorkspaceSecurityException(
+                $"'{relativePath}' is excluded because files with that name commonly hold credentials.");
+        }
+    }
+
+    private bool IsSecretPath(string relativePath)
+    {
+        // find and grep emit "./a/b", so the leading "." and the empty segment before it are both skipped.
+        return relativePath.Split('/')
+                           .Where(static segment => !string.IsNullOrWhiteSpace(segment) && segment is not ("." or ".."))
+                           .Any(segment => _exclusions.IsSecret(segment));
+    }
+
+    /// <summary>
+    ///     What list_files and search_text drop from their output: credentials, plus the paths
+    ///     <see cref="DevelopmentWorkspaceSecurity.Confine" /> already refuses as tool arguments. Build output is
+    ///     deliberately absent from both — it is neither secret nor protected, and an agent reads it after a failed
+    ///     build.
+    /// </summary>
+    private bool IsSuppressedFromOutput(string emittedPath)
+    {
+        // find and grep emit "./a/b"; the protected-prefix check needs the same workspace-relative shape Confine sees.
+        var relative = emittedPath.StartsWith("./", StringComparison.Ordinal) ? emittedPath[2..] : emittedPath;
+        return IsSecretPath(relative) || DevelopmentWorkspaceSecurity.IsProtected(relative);
+    }
+
+    private bool IsSuppressedMatchLine(string matchLine)
+    {
+        // A grep -rn match is "<path>:<line>:<text>"; only the path portion is checked, so a ':' inside the matched
+        // text can never be mistaken for the separator.
+        var separatorIndex = matchLine.IndexOf(':', StringComparison.Ordinal);
+        return IsSuppressedFromOutput(separatorIndex > 0 ? matchLine[..separatorIndex] : matchLine);
+    }
+
     private static DevelopmentConfinedPath RequirePath(string? path, bool allowRoot)
     {
         var confined = DevelopmentWorkspaceSecurity.Confine(path, allowRoot);
@@ -496,7 +649,7 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
             : throw new DevelopmentWorkspaceSecurityException(confined.RejectionReason ?? "The workspace path was rejected.");
     }
 
-    private static HashSet<string> ParsePatchPaths(string patch)
+    private HashSet<string> ParsePatchPaths(string patch)
     {
         if (patch.Contains("120000", StringComparison.Ordinal))
         {
@@ -535,7 +688,7 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
 
             if (line.StartsWith("rename from ", StringComparison.Ordinal))
             {
-                AddPatchPath(paths, line["rename from ".Length..]);
+                AddSourcePatchPath(paths, line["rename from ".Length..]);
             }
             else if (line.StartsWith("rename to ", StringComparison.Ordinal))
             {
@@ -543,7 +696,7 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
             }
             else if (line.StartsWith("copy from ", StringComparison.Ordinal))
             {
-                AddPatchPath(paths, line["copy from ".Length..]);
+                AddSourcePatchPath(paths, line["copy from ".Length..]);
             }
             else if (line.StartsWith("copy to ", StringComparison.Ordinal))
             {
@@ -575,6 +728,31 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
         }
 
         AddPatchPath(paths, value[prefix.Length..]);
+    }
+
+    /// <summary>
+    ///     Adds the SOURCE side of a rename or copy, refusing it when it names a secret.
+    ///     <para>
+    ///         Rename and copy are the only patch operations that move bytes the model has never seen. Everything else
+    ///         in a unified diff carries its content as literal <c>+</c> lines, so a patch can only write a secret the
+    ///         model already knew — whereas <c>rename from .env to notes.txt</c> relocates an unread credential to a
+    ///         readable name, and <c>read_file("notes.txt")</c> then completes the leak the read gate just closed.
+    ///     </para>
+    ///     <para>
+    ///         Only the source side is checked, on purpose. Gating the destination too would refuse CREATING
+    ///         <c>.env.example</c> (it matches the <c>.env.*</c> rule), which is ordinary, legitimate work — and a
+    ///         creation has no secret source to leak.
+    ///     </para>
+    /// </summary>
+    private void AddSourcePatchPath(HashSet<string> paths, string path)
+    {
+        AddPatchPath(paths, path);
+        if (IsSecretPath(path))
+        {
+            // Names only the path the patch itself supplied — no file content, and the patch is refused whole.
+            throw new DevelopmentWorkspaceSecurityException(
+                $"a patch cannot rename or copy from '{path}' because files with that name commonly hold credentials.");
+        }
     }
 
     private static void AddPatchPath(HashSet<string> paths, string path)

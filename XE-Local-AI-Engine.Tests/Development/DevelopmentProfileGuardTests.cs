@@ -14,7 +14,7 @@ using PersistenceDevelopmentTaskStatus = XE_Local_AI_Engine.Client.Persistence.E
 
 /// <summary>
 ///     The two guards that stop an attempt from rewriting the terms it is judged by: the <c>.xe-dev/profile.json</c>
-///     tamper check, and the D3 test-write policy.
+///     tamper check, and the test-write policy.
 /// </summary>
 public sealed class DevelopmentProfileGuardTests : IDisposable
 {
@@ -95,7 +95,8 @@ public sealed class DevelopmentProfileGuardTests : IDisposable
     }
 
     /// <summary>
-    ///     D3, stated as the behaviour that matters: adding tests is allowed, removing or weakening an existing one is
+    ///     The test-write policy, stated as the behaviour that matters: adding tests is allowed, removing or weakening
+    ///     an existing one is
     ///     not. The "added" case is not a formality — the change types are mapped words rather than git's status
     ///     letters, and comparing against the letters silently rejects every new test instead.
     /// </summary>

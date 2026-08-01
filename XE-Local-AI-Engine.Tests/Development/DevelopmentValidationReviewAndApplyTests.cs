@@ -631,7 +631,8 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     ///         than collapsed into "validation failed".
     ///     </para>
     ///     <para>
-    ///         D3 is what makes the failure recoverable rather than a dead end: the agent may ADD tests, it just may
+    ///         The test-write policy is what makes the failure recoverable rather than a dead end: the agent may ADD
+    ///         tests, it just may
     ///         not weaken or delete the ones that existed at <c>BaseCommit</c>. So the remedy for this failure is
     ///         available to the same loop that hit it.
     ///     </para>

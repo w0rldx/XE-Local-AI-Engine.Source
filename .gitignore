@@ -351,6 +351,16 @@ ASALocalRun/
 *.db-shm
 *.db-wal
 *.db
+# The node database is named *.sqlite, which the *.db rules above do not cover. A headless/Aspire run resolves
+# INodeDataDirectory to the content root, so these land in the repo tree and `git add -A` would commit the chat
+# database and every encrypted column in it.
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
+# The node operator secret. 32 bytes from which the SQLite column key, the node JWT signing key and the Data
+# Protection key-ring KEK are all derived — committing it forges node JWTs and decrypts every .enc blob.
+node.key
 
 # Runtime per-conversation uploaded-file blobs (INodeDataDirectory data root; created
 # under the content root in headless/dev mode)

@@ -64,6 +64,56 @@ public sealed class CloudCredentialStoreTests : IDisposable
         AssertEx.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(GetCredentialsPath()));
     }
 
+    /// <summary>
+    ///     The save now creates the file 0600 in the same syscall that creates it, instead of writing at the process
+    ///     umask (0644 on a default box) and narrowing afterwards. <c>UnixCreateMode</c> applies only on create, so the
+    ///     narrowing pass still has to run for a file an older build already left behind at 0644 — this pins that the
+    ///     rewrite did not drop it.
+    ///     <para>
+    ///         The window this fix closes is a race and is therefore not directly observable from a test; what is
+    ///         asserted here is the end state on both the create and the overwrite path.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task SaveAsync_WhenCredentialFileWasLeftWorldReadable_NarrowsItBackToUserReadWrite()
+    {
+        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS())
+        {
+            return;
+        }
+
+        using var store = CreateStore();
+        await store.SaveAsync(CreateCredentials());
+
+        // Exactly the mode a pre-fix build's umask-created file carried.
+        File.SetUnixFileMode(GetCredentialsPath(),
+            UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead | UnixFileMode.OtherRead);
+
+        await store.SaveAsync(CreateCredentials(endpoint: "https://second.openai.azure.com/"));
+
+        AssertEx.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(GetCredentialsPath()));
+    }
+
+    /// <summary>
+    ///     The save switched from <c>File.WriteAllBytesAsync</c> to an explicit <see cref="FileStream" />. A stream
+    ///     opened without <see cref="FileMode.Create" /> would leave the tail of a longer previous payload behind, and
+    ///     the residue would be a decryptable fragment of the credentials it was meant to replace.
+    /// </summary>
+    [Test]
+    public async Task SaveAsync_WhenReplacingALongerPayload_LeavesNoResidueFromIt()
+    {
+        using var store = CreateStore();
+        await store.SaveAsync(CreateCredentials(endpoint: "https://a-very-much-longer-endpoint-host-name.openai.azure.com/"));
+        var longLength = new FileInfo(GetCredentialsPath()).Length;
+
+        await store.SaveAsync(CreateCredentials(endpoint: "https://s.openai.azure.com/"));
+
+        AssertEx.True(new FileInfo(GetCredentialsPath()).Length < longLength,
+            "the shorter payload must truncate the file rather than overwrite its head");
+        var reloaded = AssertEx.NotNull(await store.LoadAsync());
+        AssertEx.Equal("https://s.openai.azure.com/", reloaded.Endpoint);
+    }
+
     [Test]
     public async Task ClearAsync_WhenCredentialsExist_RemovesCredentialFile()
     {
