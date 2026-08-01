@@ -154,6 +154,14 @@
 			"source": "frontend"
 		},
 		{
+			"id": "backend:Docker.DotNet.Enhanced@4.3.3",
+			"name": "Docker.DotNet.Enhanced",
+			"version": "4.3.3",
+			"license": "MIT",
+			"homepageUrl": "https://licenses.nuget.org/MIT",
+			"source": "backend"
+		},
+		{
 			"id": "backend:DocumentFormat.OpenXml@3.5.1",
 			"name": "DocumentFormat.OpenXml",
 			"version": "3.5.1",
@@ -226,25 +234,25 @@
 			"source": "frontend"
 		},
 		{
-			"id": "backend:Microsoft.Agents.AI@1.13.0",
+			"id": "backend:Microsoft.Agents.AI@1.15.0",
 			"name": "Microsoft.Agents.AI",
-			"version": "1.13.0",
+			"version": "1.15.0",
 			"license": "MIT",
 			"homepageUrl": "https://learn.microsoft.com/agent-framework/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Agents.AI.Abstractions@1.13.0",
+			"id": "backend:Microsoft.Agents.AI.Abstractions@1.15.0",
 			"name": "Microsoft.Agents.AI.Abstractions",
-			"version": "1.13.0",
+			"version": "1.15.0",
 			"license": "MIT",
 			"homepageUrl": "https://learn.microsoft.com/agent-framework/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Agents.AI.Workflows@1.13.0",
+			"id": "backend:Microsoft.Agents.AI.Workflows@1.15.0",
 			"name": "Microsoft.Agents.AI.Workflows",
-			"version": "1.13.0",
+			"version": "1.15.0",
 			"license": "MIT",
 			"homepageUrl": "https://learn.microsoft.com/agent-framework/",
 			"source": "backend"
@@ -298,25 +306,25 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.AI@10.7.0",
+			"id": "backend:Microsoft.Extensions.AI@10.8.3",
 			"name": "Microsoft.Extensions.AI",
-			"version": "10.7.0",
+			"version": "10.8.3",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.AI.Abstractions@10.7.0",
+			"id": "backend:Microsoft.Extensions.AI.Abstractions@10.8.3",
 			"name": "Microsoft.Extensions.AI.Abstractions",
-			"version": "10.7.0",
+			"version": "10.8.3",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.AI.OpenAI@10.7.0",
+			"id": "backend:Microsoft.Extensions.AI.OpenAI@10.8.3",
 			"name": "Microsoft.Extensions.AI.OpenAI",
-			"version": "10.7.0",
+			"version": "10.8.3",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
@@ -338,9 +346,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.DependencyInjection.Abstractions@10.0.9",
+			"id": "backend:Microsoft.Extensions.DependencyInjection.Abstractions@10.0.10",
 			"name": "Microsoft.Extensions.DependencyInjection.Abstractions",
-			"version": "10.0.9",
+			"version": "10.0.10",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
@@ -354,9 +362,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Logging.Abstractions@10.0.9",
+			"id": "backend:Microsoft.Extensions.Logging.Abstractions@10.0.10",
 			"name": "Microsoft.Extensions.Logging.Abstractions",
-			"version": "10.0.9",
+			"version": "10.0.10",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
@@ -410,9 +418,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:ModelContextProtocol@1.4.0",
+			"id": "backend:ModelContextProtocol@1.4.1",
 			"name": "ModelContextProtocol",
-			"version": "1.4.0",
+			"version": "1.4.1",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://csharp.sdk.modelcontextprotocol.io/",
 			"source": "backend"
@@ -426,9 +434,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:OllamaSharp@5.4.25",
+			"id": "backend:OllamaSharp@5.4.30",
 			"name": "OllamaSharp",
-			"version": "5.4.25",
+			"version": "5.4.30",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/awaescher/OllamaSharp",
 			"source": "backend"
@@ -706,9 +714,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "backend:System.Numerics.Tensors@10.0.9",
+			"id": "backend:System.Numerics.Tensors@10.0.10",
 			"name": "System.Numerics.Tensors",
-			"version": "10.0.9",
+			"version": "10.0.10",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
@@ -736,14 +744,6 @@
 			"license": "MIT",
 			"homepageUrl": "https://github.com/velopack/velopack",
 			"source": "backend"
-		},
-		{
-			"id": "frontend:vite-plugin-static-copy@4.1.1",
-			"name": "vite-plugin-static-copy",
-			"version": "4.1.1",
-			"license": "MIT",
-			"homepageUrl": "https://github.com/sapphi-red/vite-plugin-static-copy#readme",
-			"source": "frontend"
 		},
 		{
 			"id": "frontend:zod@4.4.3",
