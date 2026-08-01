@@ -24,6 +24,7 @@ esac
 
 dev_require_tools
 command -v setsid >/dev/null 2>&1 || { echo "[dev-start] setsid is required for transactional startup cleanup." >&2; exit 2; }
+dev_ensure_node_operator_secret || exit 2
 if dev_matching_app_json >/dev/null 2>&1; then
   echo "[dev-start] This worktree's AppHost is already running." >&2
   "${DEV_SCRIPT_DIR}/dev-status.sh"
@@ -38,6 +39,22 @@ fi
 
 args=(start --apphost "${DEV_APPHOST}" --isolated --format Json --non-interactive --nologo)
 [[ "${NO_BUILD}" == "true" ]] && args+=(--no-build)
+
+# `--non-interactive` means Aspire can never prompt for the required `node-sqlite-key` parameter, and
+# `--isolated` means it does not read the normal user-secrets store, so the value has to arrive as
+# configuration. Aspire resolves the parameter from the key `Parameters:node-sqlite-key`, whose
+# environment-variable form is `Parameters__node-sqlite-key`. bash cannot `export` a name containing
+# dashes, and routing it through `env` would publish the secret in world-readable /proc/<pid>/cmdline,
+# so python3 (already a hard requirement of these scripts) reads the owner-only key file, sets the
+# variable in its own environment, and execs the CLI in place — the secret only ever exists in a
+# process environment, which is readable by its own user alone.
+seed_operator_secret_py='
+import os, sys
+
+with open(sys.argv[1], "r", encoding="ascii") as handle:
+    os.environ[sys.argv[2]] = handle.read().strip()
+os.execvp(sys.argv[3], sys.argv[3:])
+'
 
 # Aspire's JSON includes a dashboard login token. Keep all startup coordination files in one
 # owner-only directory, never echo the raw output, and emit only the filtered status helper output.
@@ -154,7 +171,9 @@ setsid bash -c '
   mv -f -- "${status_file}.tmp" "${status_file}"
   while [[ ! -e "${release_file}" ]]; do sleep 0.05; done
   exit "${command_status}"
-' _ "${start_status_file}" "${start_release_file}" aspire "${args[@]}" \
+' _ "${start_status_file}" "${start_release_file}" \
+  python3 -c "${seed_operator_secret_py}" \
+  "${DEV_NODE_OPERATOR_SECRET_FILE}" "Parameters__node-sqlite-key" aspire "${args[@]}" \
   >"${private_output}" 2>&1 &
 START_CLI_PID=$!
 START_SESSION_ID="${START_CLI_PID}"
