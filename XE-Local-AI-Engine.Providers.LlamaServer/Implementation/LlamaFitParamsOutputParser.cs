@@ -95,17 +95,7 @@ internal static partial class LlamaFitParamsOutputParser
                 continue;
             }
 
-            var match = FullGpuOffloadRegex().Match(line);
-            if (match.Success
-                && int.TryParse(match.Groups["offloaded"].Value,
-                    NumberStyles.None,
-                    CultureInfo.InvariantCulture,
-                    out var offloaded)
-                && int.TryParse(match.Groups["total"].Value,
-                    NumberStyles.None,
-                    CultureInfo.InvariantCulture,
-                    out var total)
-                && total > 0)
+            if (LlamaLayerOffloadBanner.TryParse(line, out var offloaded, out var total))
             {
                 foundPlacement = true;
                 if (offloaded != total)
@@ -202,10 +192,4 @@ internal static partial class LlamaFitParamsOutputParser
         RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture,
         matchTimeoutMilliseconds: 1000)]
     private static partial Regex OutputLineRegex();
-
-    [GeneratedRegex(
-        """\boffloaded\s+(?<offloaded>\d+)\s*/\s*(?<total>\d+)\s+layers?\s+to\s+GPU\b""",
-        RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture | RegexOptions.IgnoreCase,
-        matchTimeoutMilliseconds: 1000)]
-    private static partial Regex FullGpuOffloadRegex();
 }

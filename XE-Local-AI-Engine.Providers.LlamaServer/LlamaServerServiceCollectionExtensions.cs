@@ -141,6 +141,11 @@ public static class LlamaServerServiceCollectionExtensions
         // Providers (the interface is DEFINED here, implemented in Application).
         services.TryAddSingleton<IInferenceProfileResolver, DefaultInferenceProfileResolver>();
 
+        // Measured GPU layer placement for the node: the supervisor writes it as models load, the runtime device audit
+        // reads it for the operator UI. Both must see the SAME instance, so it is registered before the supervisor and
+        // passed in explicitly rather than left to the supervisor's private default.
+        services.TryAddSingleton<ILlamaLayerPlacementReport, LlamaLayerPlacementReport>();
+
         // The supervisor owns all llama-server child processes for the node — strictly one singleton. Built via an
         // explicit factory because its ctor is internal (it takes the internal launcher/health-probe seams).
         services.TryAddSingleton(static sp => new LlamaServerProcessSupervisor(sp.GetRequiredService<ILlamaCppBinaryManager>(),
@@ -156,7 +161,8 @@ public static class LlamaServerServiceCollectionExtensions
             sp.GetRequiredService<ILogger<LlamaServerProcessSupervisor>>(),
             sp.GetRequiredService<IGpuModelLoadAdmission>(),
             sp.GetRequiredService<ILlamaCppSourceBuildActivity>(),
-            allocationResolver: sp.GetRequiredService<IProcessContextAllocationResolver>()));
+            allocationResolver: sp.GetRequiredService<IProcessContextAllocationResolver>(),
+            layerPlacementReport: sp.GetRequiredService<ILlamaLayerPlacementReport>()));
         services.TryAddSingleton<ILlamaServerProcessSupervisor>(static sp =>
             sp.GetRequiredService<LlamaServerProcessSupervisor>());
 

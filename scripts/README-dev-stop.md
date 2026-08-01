@@ -15,6 +15,11 @@ All commands resolve the canonical AppHost path for the checkout that contains t
 Aspire user secrets do not collide with another worktree. It launches the CLI in a captured session
 and, on any CLI/registration/status failure or signal, identity-checks and removes survivors from
 that session independently of Aspire's registry before attempting the normal scoped stop path.
+Because `--non-interactive` rules out a prompt and `--isolated` rules out the shared user-secrets
+store, `dev-start.sh` also seeds the AppHost's required `node-sqlite-key` parameter itself: it mints a
+per-checkout, owner-only `XE-Local-AI-Engine.AppHost/.data/node.key` (base64 32 bytes, `.gitignore`d)
+on first use, reuses it afterwards so encrypted dev data stays readable, and passes it as the
+environment variable `Parameters__node-sqlite-key` — never on a command line.
 `dev-status.sh` selects the same exact
 AppHost from `aspire ps --format Json`, then emits only resource name/type/state/health and endpoint
 URLs with query strings removed. It never prints resource environment, properties, connection
