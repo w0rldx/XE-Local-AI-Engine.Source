@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 using System.Collections.Concurrent;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
@@ -141,6 +142,31 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
     // SINGLETON and IModelProviderMapStore is SCOPED, so the write goes through a fresh DI scope (same pattern the
     // provider resolver uses). Caller-cancellation propagates; any other failure is swallowed with a warning so a
     // successful download is never reported as failed because the routing row could not be persisted.
+    /// <summary>
+    ///     Adds the just-installed model to the tool-capable allow-list when its GGUF chat template advertises tool
+    ///     calling. Best-effort: a failure here leaves the operator with the existing (possibly stale) list, which is the
+    ///     pre-change behaviour — never a failed download.
+    /// </summary>
+    private async Task RegisterToolCapabilityAsync(string modelName, CancellationToken token)
+    {
+        try
+        {
+            await using var scope = _scopeFactory.CreateAsyncScope();
+            var registrar = scope.ServiceProvider.GetRequiredService<IToolCapableModelRegistrar>();
+            _ = await registrar.RegisterIfToolCapableAsync(modelName, token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception,
+                "Could not record tool capability for {ModelName}; the configured tool-capable model list still applies.",
+                modelName);
+        }
+    }
+
     private async Task MapModelToLlamaCppAsync(string modelName, CancellationToken token)
     {
         try
@@ -244,6 +270,13 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
             // writer that makes a downloaded GGUF reachable. Best-effort: a map-write failure must not mark the
             // (successful) download as Failed — the default-provider flip still routes it.
             await MapModelToLlamaCppAsync(modelName, token).ConfigureAwait(false);
+
+            // Admit the model to the tool-capable allow-list when its chat template says it supports tool calls. Without
+            // this, a user who followed the app's own recommendation downloaded a tool-capable model and silently got no
+            // tool calling, because the gate is exact membership of a list whose shipped default named only two
+            // previous-generation models. Same best-effort contract as the provider mapping above: this must never turn
+            // a successful download into a Failed one.
+            await RegisterToolCapabilityAsync(modelName, token).ConfigureAwait(false);
 
             var last = _status.TryGetValue(modelName, out var snapshot) ? snapshot : null;
             SetStatus(new GgufDownloadStatus(modelName,
