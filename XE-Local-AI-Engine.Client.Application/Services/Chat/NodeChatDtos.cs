@@ -162,7 +162,7 @@ public sealed record NodeChatTerminalizeMessageRequest(
     // Whole-turn wall-clock generation duration in milliseconds (drives the optional tokens-per-second attribution).
     // Trailing optional so legacy callers and the platform path leave it null. Null preserves any existing value.
     long? GenerationDurationMs = null,
-    // Durable run-envelope payload (R4). When supplied, the terminalize persistence command writes the
+    // Durable run-envelope payload. When supplied, the terminalize persistence command writes the
     // content-free envelope row in the SAME transaction as the terminal message row, so the two commit or roll back
     // together (no swallowed best-effort write). Null on paths that write no envelope. The terminal status/success and
     // the bound agent id are derived from the winning persisted message row inside the transaction, so they are NOT

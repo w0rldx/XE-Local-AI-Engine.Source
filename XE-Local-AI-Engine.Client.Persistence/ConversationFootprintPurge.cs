@@ -47,7 +47,7 @@ public static class ConversationFootprintPurge
         await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM conversation_uploaded_files WHERE conversation_id = {0};", [conversationId], cancellationToken).ConfigureAwait(false);
         // Execution-log telemetry carries plaintext conversation/message correlation ids (both the adaptive-memory
         // diagnostics rows and the durable run envelopes). Without this delete those correlations would survive an
-        // immediate conversation purge for the separate execution-log retention period — a privacy gap (R4). Covers both
+        // immediate conversation purge for the separate execution-log retention period — a privacy gap. Covers both
         // record kinds by deleting on conversation_id.
         await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM agent_execution_logs WHERE conversation_id = {0};", [conversationId], cancellationToken).ConfigureAwait(false);
         await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM purged_tombstones WHERE conversation_id = {0};", [conversationId], cancellationToken).ConfigureAwait(false);

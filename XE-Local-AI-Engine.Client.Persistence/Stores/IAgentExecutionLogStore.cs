@@ -127,8 +127,8 @@ public static class AgentRunEnvelope
 {
     /// <summary>
     ///     Current run-envelope shape version. Bump when the envelope's field set changes so a reader can tell old rows
-    ///     apart. v2 (R4): added reasoning/total tokens + started_at_utc lifecycle fields and the deterministic
-    ///     message-id upsert key. v3 (R4 round 3): written atomically inside the terminalize transaction with the bound
+    ///     apart. v2: added reasoning/total tokens + started_at_utc lifecycle fields and the deterministic
+    ///     message-id upsert key. v3: written atomically inside the terminalize transaction with the bound
     ///     agent id populated from the winning message row.
     /// </summary>
     public const int CurrentSchemaVersion = 3;

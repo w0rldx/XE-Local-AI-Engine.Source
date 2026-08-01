@@ -64,7 +64,8 @@ public sealed class ServiceDefaultsTelemetryTests
         meterProvider.ForceFlush();
 
         AssertEx.True(exportedMeterNames.Contains(AgentBudgetMeterName),
-            $"The '{AgentBudgetMeterName}' meter must be exported; ConfigureOpenTelemetry must AddMeter it (MED-007).");
+            $"The '{AgentBudgetMeterName}' meter must be exported; ConfigureOpenTelemetry must AddMeter it — an "
+            + "unregistered meter drops every agent-budget measurement silently.");
     }
 
     [Test]

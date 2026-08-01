@@ -169,8 +169,8 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         {
             AttachKey = attachKey,
             RuntimeProfile = effectiveProfile,
-            // Default-deny egress wherever the provider can actually enforce it (PLAN-sandbox-hardening S2, locked
-            // decision #3). Everything AgentHome and Coder run inside the sandbox is local — `dotnet --version`, git
+            // Default-deny egress wherever the provider can actually enforce it. The rule this rests on: everything
+            // AgentHome and Coder run inside the sandbox is local — `dotnet --version`, git
             // init/config/add/commit/diff under /dev/null hooks, and Coder's find/grep — so denying egress costs no
             // supported capability and removes the sandbox child's reach to the node's own loopback API, the LAN, and
             // the cloud-metadata endpoint.

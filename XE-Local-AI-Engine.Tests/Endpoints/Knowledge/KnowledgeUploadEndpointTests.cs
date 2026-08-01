@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Endpoint tests for the knowledge upload admission decision (R2): a deduplicated upload whose existing document is
+///     Endpoint tests for the knowledge upload admission decision: a deduplicated upload whose existing document is
 ///     still Pending (never ingested — e.g. a prior upload the full queue rejected with 503) RETRIES admission instead of
 ///     reporting success while the document stays stranded; a dedupe hit that is already Indexed is left alone; and a
 ///     fresh upload the bounded queue cannot admit returns the retryable 503 + Retry-After busy response.

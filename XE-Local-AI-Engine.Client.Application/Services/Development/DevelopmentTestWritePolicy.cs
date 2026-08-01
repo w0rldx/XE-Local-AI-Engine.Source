@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Development;
 
 /// <summary>
-///     The D3 test-write policy: the agent may ADD test files, but may not modify or delete one that already existed at
+///     The test-write policy: the agent may ADD test files, but may not modify or delete one that already existed at
 ///     the attempt's base commit.
 ///     <para>
 ///         This is the primary reward-hacking control, and it is more load-bearing than the profile-file guard.
@@ -17,7 +17,7 @@ internal static class DevelopmentTestWritePolicy
     ///     <para>
     ///         These are <see cref="DevelopmentPatchEvidenceService" />'s mapped words, NOT git's raw status letters.
     ///         Comparing against <c>"A"</c>/<c>"M"</c>/<c>"D"</c> here matches nothing, which silently inverts the
-    ///         policy into rejecting every newly added test — the precise opposite of what D3 requires.
+    ///         policy into rejecting every newly added test — the precise opposite of what the test-write policy requires.
     ///     </para>
     ///     <para>
     ///         <c>copied</c> belongs here with <c>added</c>: git reports a copy only when the source survives, so the
@@ -32,7 +32,7 @@ internal static class DevelopmentTestWritePolicy
     ///     <para>
     ///         The evidence comes from <c>git diff --cached --name-status -z HEAD</c>, and the managed worktree is
     ///         detached at the base commit with that invariant re-checked after every catalog command — so HEAD here IS
-    ///         the base commit, which is the comparison D3 specifies.
+    ///         the base commit, which is the comparison the test-write policy specifies.
     ///     </para>
     ///     <para>
     ///         A rename is checked against its previous path as well as its new one, because renaming a test out of the

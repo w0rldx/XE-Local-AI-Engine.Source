@@ -155,7 +155,7 @@ internal sealed record DevelopmentCommandProfile(
     }
 
     /// <summary>
-    ///     True when the repository-relative path matches any protected test pattern (D3). Paths arrive from
+    ///     True when the repository-relative path matches any protected test pattern. Paths arrive from
     ///     <c>git diff --name-status</c>, so they are always repository-relative with forward slashes.
     /// </summary>
     public bool IsProtectedTestPath(string repositoryRelativePath)

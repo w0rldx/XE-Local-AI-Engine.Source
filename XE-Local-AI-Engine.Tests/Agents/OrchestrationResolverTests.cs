@@ -182,8 +182,9 @@ public sealed class OrchestrationResolverTests
     [Test]
     public async Task ResolveAsync_WhenParticipantPinnedToCloudModel_OnLocalActiveTurn_WithholdsKnowledgeTools()
     {
-        // R1 (HIGH): the turn's active model is LOCAL, but a participant pins a CLOUD model. That participant's
-        // knowledge tools must be gated on ITS OWN effective model's locality, resolved per participant.
+        // Effective-model knowledge-tool locality gate: the turn's active model is LOCAL, but a participant pins a
+        // CLOUD model. That participant's knowledge tools must be gated on ITS OWN effective model's locality, resolved
+        // per participant.
         var resolved = await ResolveWithCloudPinnedParticipantAsync(allowCloudKnowledgeAccess: false).ConfigureAwait(false);
 
         AssertEx.NotNull(resolved);

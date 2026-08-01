@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Tests.Testing;
 
-// The durable run ledger (R4): NodeChatInvocationPump no longer writes the envelope itself — it hands the
+// The durable run ledger: NodeChatInvocationPump no longer writes the envelope itself — it hands the
 // content-free envelope metadata INTO the terminalize persistence request so the row is written atomically with the
 // terminal message row. These tests pin the pump's field mapping onto that request and that the result reflects the
 // persisted winning status; the atomic write itself (agent id, winning status, idempotency) is covered by the

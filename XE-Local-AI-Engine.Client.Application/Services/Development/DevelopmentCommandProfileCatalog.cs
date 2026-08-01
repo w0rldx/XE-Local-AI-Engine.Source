@@ -30,7 +30,8 @@ internal static class DevelopmentCommandProfileCatalog
     public const string CurrentVersion = "v1";
 
     /// <summary>
-    ///     Paths the agent may create but may not modify or delete once they existed at <c>BaseCommit</c> (D3).
+    ///     Paths the agent may create but may not modify or delete once they existed at <c>BaseCommit</c> — the
+    ///     test-write policy.
     ///     <para>
     ///         Grounded in the measured layout of this repository, <c>XE-Framework</c> and the synthetic fixture rather
     ///         than assumed. Three things this set deliberately encodes:
@@ -39,12 +40,13 @@ internal static class DevelopmentCommandProfileCatalog
     ///         The filename rules carry most of the weight: <c>*Tests.cs</c> matched 543 files across both real
     ///         repositories with zero false positives. The directory rules exist only to close the shared-helper hole —
     ///         without them the agent could gut <c>AssertEx.cs</c> so every assertion silently passes, which is a
-    ///         shorter path to green than deleting a test and is exactly the move D3 exists to stop.
+    ///         shorter path to green than deleting a test and is exactly the move the test-write policy exists to stop.
     ///     </para>
     ///     <para>
     ///         The directory rules are scoped to <c>*.cs</c> on purpose. Freezing whole test directories would also
     ///         freeze the nine test <c>.csproj</c> files, so the agent could never add a package reference to an
-    ///         existing test project — which blocks the "implement a feature and its tests" case D3 explicitly permits.
+    ///         existing test project — which blocks the "implement a feature and its tests" case the test-write policy
+    ///         explicitly permits.
     ///     </para>
     ///     <para>
     ///         <c>**&#47;*.Tests&#47;**</c> alone would be a trap and is not used alone: no directory in
@@ -140,7 +142,7 @@ internal static class DevelopmentCommandProfileCatalog
     ///         This does <em>not</em> touch the three artifact protocol versions
     ///         (<c>development-workspace-v1</c>, <c>development-validation-v2</c>, <c>development-review-v1</c>) or the
     ///         gates that compare them. Those describe artifact shape compatibility; this describes command content.
-    ///         They are separate dimensions and an earlier revision of the plan was wrong to propose merging them.
+    ///         They are separate dimensions.
     ///     </para>
     /// </summary>
     public static DevelopmentCommandProfile ResolveStored(string? storedProfileJson)

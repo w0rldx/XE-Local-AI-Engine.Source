@@ -186,7 +186,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
         }
 
         // The seeded "Default Assistant" (mode-off persona) reproduces today's chat exactly: it receives the FULL
-        // capability-gated offer for the effective model, NOT the intersected allowed set (D3). It is the ONLY
+        // capability-gated offer for the effective model, NOT the intersected allowed set. It is the ONLY
         // definition granted the full offer — every other definition stays intersected (security invariant: a selected
         // agent's tool offer is never widened beyond its allowed set). The provenance is forge-proof (only the seeder
         // mints Source=Seeded with this slug), so an operator-authored row can never claim the full offer.

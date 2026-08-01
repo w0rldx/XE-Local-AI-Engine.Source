@@ -78,7 +78,7 @@ public sealed class SubAgentSpawnServiceTests
     [Test]
     public async Task Spawn_WhenChildDefinitionPinnedToCloudModel_ResolvesToolOfferOnThatCloudModel()
     {
-        // R1 (HIGH): a spawned sub-agent bound to a definition pinned to a CLOUD model must resolve its tool offer
+        // A spawned sub-agent bound to a definition pinned to a CLOUD model must resolve its tool offer
         // through the shared AgentDefinitionResolver keyed on the CHILD's effective (pinned) cloud model — the model the
         // effective-model knowledge-tool locality gate keys on (the gate's withholding is proven end-to-end in
         // AgentDefinitionResolverTests). This proves the spawn path threads the child's pinned model into that gate,
@@ -557,7 +557,7 @@ public sealed class SubAgentSpawnServiceTests
         // All log text captured from the SUT, so a test can assert the dropped-approval-tool Warning.
         public string LogText => _logger.AllText;
 
-        // Registers a bound sub-agent profile pinned to a SPECIFIC model (e.g. a cloud deployment) so an R1 test can
+        // Registers a bound sub-agent profile pinned to a SPECIFIC model (e.g. a cloud deployment) so a locality-gate test can
         // prove the spawn resolves the child's tool offer through the shared resolver keyed on that pinned model — the
         // effective model the knowledge-tool locality gate keys on (the gate itself is proven in AgentDefinitionResolverTests).
         public Guid RegisterProfilePinnedTo(string name, string modelProfile, params string[] allowedToolNames)

@@ -745,8 +745,8 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
     [Test]
     public async Task ProcessSandboxProvider_Execute_WhenChildExceedsJailDiskCap_TreeKillsAndReturnsIncomplete()
     {
-        // Lane D: MaxCopyFileBytes bounds only the host→jail copy-in re-read. Without this watchdog a command could
-        // fill the host disk from INSIDE the jail and nothing would stop it.
+        // Jail-dir disk watchdog: MaxCopyFileBytes bounds only the host→jail copy-in re-read. Without this watchdog a
+        // command could fill the host disk from INSIDE the jail and nothing would stop it.
         if (!OperatingSystem.IsLinux())
         {
             Skip("the jail disk watchdog test uses /bin/sh and dd");
@@ -775,7 +775,7 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
     [Test]
     public async Task ProcessSandboxProvider_Execute_WhenEgressDenied_ChildCannotReachLoopbackLanOrMetadata()
     {
-        // LIVE, Lane E. Asserts the mechanism's real effect, not the argument mapping — SandboxLaunchPlanTests covers
+        // LIVE default-deny egress. Asserts the mechanism's real effect, not the argument mapping — SandboxLaunchPlanTests covers
         // the mapping, and a wrapper chain that maps correctly but does not actually isolate would pass that and fail
         // the product.
         var containment = HostContainment();
@@ -953,7 +953,7 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
     [Test]
     public async Task ProcessSandboxProvider_Execute_WhenMemoryCeilingSet_KernelOomKillsARunawayChild()
     {
-        // LIVE, Lane C. The ceiling must be enforced by the KERNEL, not by the app noticing afterwards.
+        // LIVE cgroup resource ceiling. The ceiling must be enforced by the KERNEL, not by the app noticing afterwards.
         var containment = HostContainment();
         if (!containment.SupportsResourceLimits)
         {
@@ -1012,7 +1012,8 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
     [Test]
     public async Task ProcessSandboxProvider_Execute_WhenLimitsApplied_ChildCannotReachTheUserSystemdBus()
     {
-        // LIVE regression guard for a real escape found while building Lane C. systemd-run --user needs the session bus
+        // LIVE regression guard for a real sandbox escape found while building the cgroup resource ceilings.
+        // systemd-run --user needs the session bus
         // address in its environment, and a network namespace does NOT confine UNIX sockets — so before the env(1)
         // strip layer existed, a child inside the namespace successfully started a unit OUTSIDE its own scope,
         // escaping both the ceiling and the egress denial.
@@ -1053,7 +1054,7 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
     [Test]
     public async Task ProcessSandboxProvider_Execute_WhenLaunchedAsGroupLeader_WritesAndThenRemovesItsOrphanMarker()
     {
-        // Lane F's write side: the marker must exist while a command runs (so a crash right now would be recoverable)
+        // The orphan reaper's marker-store write side: the marker must exist while a command runs (so a crash right now would be recoverable)
         // and be gone once it finishes (so the startup sweep stays proportional to real orphans).
         var containment = HostContainment();
         if (!containment.SupportsProcessGroup)

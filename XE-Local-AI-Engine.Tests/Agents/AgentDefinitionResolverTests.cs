@@ -309,7 +309,7 @@ public sealed class AgentDefinitionResolverTests
         AssertEx.Equal("Calculate", resolved.AllowedTools[0].Name);
     }
 
-    // ---- R1: knowledge-tool locality gates on the EFFECTIVE (post-pin) model, not the turn's active model ----
+    // ---- Knowledge-tool locality gates on the EFFECTIVE (post-pin) model, not the turn's active model ----
 
     private const string KnowledgeSearchToolName = "search_knowledge_base";
     private const string CloudPinnedModel = "azure-foundry-deploy";
@@ -317,8 +317,9 @@ public sealed class AgentDefinitionResolverTests
     [Test]
     public async Task ResolveAsync_WhenAgentPinnedToCloudModel_OnLocalActiveTurn_WithholdsKnowledgeToolsByDefault()
     {
-        // R1 (HIGH): the turn's active model is LOCAL, but the agent pins a CLOUD model. The knowledge tools must be
-        // gated on the pinned effective model's locality — otherwise a cloud-pinned agent leaks node-local documents.
+        // Effective-model knowledge-tool locality gate: the turn's active model is LOCAL, but the agent pins a CLOUD
+        // model. The knowledge tools must be gated on the pinned effective model's locality — otherwise a cloud-pinned
+        // agent leaks node-local documents.
         var capabilityResolver = Substitute.For<IModelCapabilityResolver>();
         capabilityResolver.ResolveAsync(CloudPinnedModel, Arg.Any<CancellationToken>())
                           .Returns(Task.FromResult((SupportsThinking: false, SupportsTools: true, IsCloud: true)));
@@ -1085,7 +1086,7 @@ public sealed class AgentDefinitionResolverTests
         return new AgentSkillRecord(id, name, description, body, Enabled: true, version, CreatedAtUtc: 10, UpdatedAtUtc: 10);
     }
 
-    // Builds a resolver over the REAL LocalToolOfferProvider so the R1 tests observe the actual knowledge-tool
+    // Builds a resolver over the REAL LocalToolOfferProvider so the locality-gate tests observe the actual knowledge-tool
     // withholding (not a mock). CloudPinnedModel is in the tool-capable allow-list, so the knowledge tools WOULD be
     // offered to it but for the provider-locality gate the resolver now applies to the effective (pinned) model.
     private static AgentDefinitionResolver BuildRealOfferResolver(out IAgentDefinitionStore store,

@@ -45,7 +45,7 @@ public sealed class NodeChatRestartRecoveryService(NodeChatPersistenceWriter wri
                     ],
                     token).ConfigureAwait(false);
 
-                // Durable run-envelope reconcile (R4 round 3): a crash or an envelope-write failure after ANY terminal
+                // Durable run-envelope reconcile: a crash or an envelope-write failure after ANY terminal
                 // message commit — completed, failed, cancelled, or interrupted — can leave that assistant row without an
                 // envelope. Backfill one envelope per terminal assistant message that lacks one, in the SAME transaction,
                 // deriving the terminal status and success FROM the persisted message row (so the envelope matches the row's
