@@ -187,14 +187,14 @@ describe("LoadedModelsPage", () => {
 
 		// Both runtimes show: the Ollama in-memory table and the llama.cpp running-models table.
 		expect(screen.getByTestId("loaded-models-table")).toBeTruthy();
-		expect(screen.getByTestId("model-fit-running-table")).toBeTruthy();
-		expect(screen.getByTestId("model-fit-running-row-running-a")).toBeTruthy();
+		expect(screen.getByTestId("loaded-models-llamacpp-table")).toBeTruthy();
+		expect(screen.getByTestId("loaded-models-llamacpp-row-running-a")).toBeTruthy();
 	});
 
 	it("shows the empty state for the llama.cpp section when no processes are running", () => {
 		renderPage();
 
-		expect(screen.getByTestId("model-fit-running-empty")).toBeTruthy();
+		expect(screen.getByTestId("loaded-models-llamacpp-empty")).toBeTruthy();
 	});
 
 	it("confirms then ejects a llama.cpp running model gracefully (force=false) through its own eject mutation", async () => {
@@ -204,7 +204,7 @@ describe("LoadedModelsPage", () => {
 
 		renderPage();
 
-		fireEvent.click(screen.getByTestId("model-fit-eject-button-running-a"));
+		fireEvent.click(screen.getByTestId("loaded-models-llamacpp-eject-running-a"));
 
 		// The eject now confirms first (async), then dispatches a graceful (force=false) eject.
 		await waitFor(() => expect(ejectRunning.mutate).toHaveBeenCalled());
@@ -221,7 +221,7 @@ describe("LoadedModelsPage", () => {
 		runningMock.useEjectRunningModel.mockReturnValue(ejectRunning);
 
 		renderPage();
-		fireEvent.click(screen.getByTestId("model-fit-eject-button-running-a"));
+		fireEvent.click(screen.getByTestId("loaded-models-llamacpp-eject-running-a"));
 		await waitFor(() => expect(ejectRunning.mutate).toHaveBeenCalled());
 
 		// Drive the mutation's onSuccess callback with the backend outcome the page maps to a toast.
@@ -237,7 +237,7 @@ describe("LoadedModelsPage", () => {
 		runningMock.useEjectRunningModel.mockReturnValue(ejectRunning);
 
 		renderPage();
-		fireEvent.click(screen.getByTestId("model-fit-eject-button-running-a"));
+		fireEvent.click(screen.getByTestId("loaded-models-llamacpp-eject-running-a"));
 		await waitFor(() => expect(ejectRunning.mutate).toHaveBeenCalled());
 		confirmMock.mockClear();
 
