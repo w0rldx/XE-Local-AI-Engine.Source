@@ -158,11 +158,184 @@
 				"securityWarning": "Entwicklungsbefehle laufen unter Ihrem Host-Benutzer. Das verwaltete Arbeitsverzeichnis begrenzt anwendungsvermittelte Änderungen, ist aber keine Betriebssystem-Isolation — Repository-Code kann auf andere Host-Ressourcen zugreifen.",
 				"securityWarningContainer": "Entwicklungsbefehle laufen in einem gehärteten Container — schreibgeschütztes Root-Dateisystem, alle Capabilities entzogen, keine Host-Namespaces — in den nur das verwaltete Arbeitsverzeichnis und die Laufzeitverzeichnisse eingebunden sind. Repository-Code wird weiterhin ausgeführt; registrieren Sie daher nur Repositories, denen Sie vertrauen.",
 				"trustAcknowledgement": "Ich vertraue dem ausgewählten Repository, Entwicklungsbefehle mit meinen Host-Benutzerrechten auszuführen.",
-				"trustAcknowledgementContainer": "Ich vertraue dem ausgewählten Repository, Entwicklungsbefehle in der Container-Sandbox dieses Knotens auszuführen."
+				"trustAcknowledgementContainer": "Ich vertraue dem ausgewählten Repository, Entwicklungsbefehle in der Container-Sandbox dieses Knotens auszuführen.",
+				"repository": "Registriertes Repository",
+				"repositoryDescription": "Der Agent arbeitet in einem verwalteten Arbeitsverzeichnis, das an dieses registrierte Git-Repository gebunden ist.",
+				"repositoryPlaceholder": "Repository auswählen",
+				"registerRepository": "Repository registrieren",
+				"createFromTemplate": "Aus Vorlage erstellen",
+				"objective": "Projektziel",
+				"baseBranch": "Basis-Branch",
+				"taskTitle": "Titel der ersten Aufgabe",
+				"requirements": "Anforderungen",
+				"acceptanceCriteria": "Abnahmekriterien (JSON)",
+				"egressPolicy": "Cloud-Richtlinie",
+				"coderModel": "Modell-ID des Coders",
+				"reviewerModel": "Modell-ID des Reviewers",
+				"maxTokens": "Maximale Tokenzahl (optional)",
+				"maxDuration": "Maximale Dauer in Sekunden (optional)",
+				"create": "Entwicklungsprojekt erstellen"
 			},
 			"containerRuntime": {
 				"notYetInUse": "Container-gestützte Ausführung ist noch nicht aktiviert. Heutige Läufe nutzen weiterhin die überwachte Prozess-Sandbox; diese Vorprüfung meldet, ob die Container-Laufzeit verfügbar sein wird, wenn sie umgestellt werden.",
-				"inUse": "Entwicklungsbefehle auf diesem Knoten werden in dieser Container-Laufzeit ausgeführt. Ein hier gemeldeter Fehler stoppt Läufe; es gibt keinen Rückfall auf den Host."
+				"inUse": "Entwicklungsbefehle auf diesem Knoten werden in dieser Container-Laufzeit ausgeführt. Ein hier gemeldeter Fehler stoppt Läufe; es gibt keinen Rückfall auf den Host.",
+				"title": "Container-Laufzeit",
+				"confirm": "Diese Container-Laufzeit bestätigen"
+			},
+			"title": "Entwicklungsmodus",
+			"subtitle": "Führen Sie außerhalb des Chats einen dauerhaften Ablauf aus Coder → Validierung → unabhängigem Review → ausdrücklichem Anwenden aus.",
+			"disabled": "Der Entwicklungsmodus ist durch die Laufzeitkonfiguration dieses Knotens deaktiviert.",
+			"newProject": "Neues Entwicklungsprojekt",
+			"projects": "Projekte",
+			"untitledProject": "Unbenanntes Projekt",
+			"cancelAttempt": "Versuch abbrechen",
+			"repositoryNotConnected": "Repository nicht verbunden",
+			"repositoryUnavailable": "nicht verfügbar",
+			"templateUnavailable": "nicht verfügbar",
+			"repositoryUnavailableDescription": "Das registrierte Repository ist nicht verfügbar oder passt nicht mehr zu diesem Projekt. Entwicklungsaktionen sind blockiert.",
+			"timeline": {
+				"title": "Dauerhafte Ereignis-Chronik"
+			},
+			"empty": {
+				"title": "Noch keine Entwicklungsprojekte",
+				"body": "Legen Sie oben das erste Projekt und die erste Aufgabe an. Dieser Ablauf führt nie in den Chat."
+			},
+			"loading": {
+				"capability": "Verfügbarkeit des Entwicklungsmodus wird geprüft",
+				"projects": "Entwicklungsprojekte werden geladen",
+				"project": "Entwicklungsprojekt wird geladen",
+				"repositories": "Registrierte Entwicklungs-Repositories werden geladen"
+			},
+			"errors": {
+				"create": "Das Entwicklungsprojekt konnte nicht erstellt werden.",
+				"profileDetection": "Das Repository konnte nicht auf ein Build-System untersucht werden."
+			},
+			"nextAction": {
+				"default": "Nächste Aktion starten",
+				"replacement": "Ersatzversuch starten",
+				"review": "Unabhängiges Review starten",
+				"revision": "Überarbeitung durch den Coder starten",
+				"validation": "Deterministische Validierung ausführen"
+			},
+			"attempts": {
+				"title": "Versuche",
+				"role": "Rolle",
+				"model": "Modell",
+				"provider": "Anbieter",
+				"status": "Status",
+				"tokens": "Tokens",
+				"predecessor": "Vorgänger"
+			},
+			"apply": {
+				"title": "Vom Menschen gesteuertes Anwenden des Patches",
+				"awaiting": "Wartet auf ausdrückliche Freigabe",
+				"preview": "Aktuellen Patch ansehen",
+				"apply": "Geprüften Patch anwenden",
+				"previewLabel": "Vorschau des geprüften Patches",
+				"applied": "Patch angewendet.",
+				"subject": "Subjekt",
+				"patch": "Patch",
+				"manifest": "Manifest"
+			},
+			"consent": {
+				"title": "Bevor Sie den Entwicklungsmodus nutzen",
+				"intro": "Im Entwicklungsmodus darf ein Modell Dateien in einem verwalteten Arbeitsverzeichnis ändern, und die Build-, Test- und Lint-Befehle Ihres Repositorys werden auf diesem Rechner ausgeführt. Lesen Sie dies einmal, bevor Sie beginnen.",
+				"container": "Auf diesem Knoten laufen diese Befehle in einem Container: schreibgeschütztes Root-Dateisystem, alle Capabilities entzogen, keine Host-Namespaces, und eingebunden sind nur das verwaltete Arbeitsverzeichnis und die Laufzeitverzeichnisse.",
+				"containerNetwork": "Das Netzwerk gehört nicht zu dieser Abschottung. Der Container hat ausgehenden Netzwerkzugriff, und nichts schränkt ein, was er erreichen kann — das Auflösen von Abhängigkeiten benötigt ihn.",
+				"processUser": "Auf diesem Knoten laufen diese Befehle unter dem angemeldeten Benutzerkonto, das die Engine ausführt — mit dessen Zugriff auf Ihre Dateien, nicht nur auf das Repository.",
+				"processNetwork": "Sie haben Netzwerkzugriff, und nichts schränkt ein, was sie erreichen können.",
+				"processLimits": "Grenzen für CPU, Arbeitsspeicher und Prozessanzahl werden nur unter Linux durchgesetzt. Unter Windows gibt es keine — ein außer Kontrolle geratener Befehl wird dort nur durch den Rechner selbst begrenzt.",
+				"trust": "Registrieren Sie nur Repositories, denen Sie vertrauen. Repository-Code wird in jedem Fall ausgeführt.",
+				"disclosureNote": "Dieser Hinweis ist eine Offenlegung, kein Schutz. Ihre Bestätigung wird nur in diesem Browser gespeichert und ändert nichts daran, was ein Entwicklungslauf tun darf.",
+				"checkbox": "Ich habe verstanden, was der Entwicklungsmodus auf diesem Rechner ausführt.",
+				"accept": "Weiter zum Entwicklungsmodus",
+				"decline": "Jetzt nicht"
+			},
+			"policy": {
+				"localOnly": "Nur lokal",
+				"cloudScoped": "Cloud-begrenzt"
+			},
+			"profile": {
+				"title": "Befehlsprofil bestätigen",
+				"detected": "Erkanntes Profil",
+				"detecting": "Das Repository wird auf ein Build-System untersucht …",
+				"detectingLabel": "Build-System wird erkannt",
+				"buildTarget": "Build-Ziel",
+				"buildTargetDescription": "Die Solution oder das Projekt, das das Validierungs-Gate wiederherstellt, baut und testet.",
+				"whitespaceOnly": "Kein Build-System erkannt — die Validierung prüft nur Leerraum. Es wird nichts wiederhergestellt, gebaut oder getestet; eine bestandene Validierung bedeutet also nicht, dass die Änderung kompiliert.",
+				"confirm": "Ich bestätige dieses Befehlsprofil für die gesamte Laufzeit dieses Projekts."
+			},
+			"reconnect": {
+				"description": "Dieses bestehende Projekt muss wieder mit seinem ursprünglich registrierten Repository verbunden werden, bevor Aktionen laufen können.",
+				"repository": "Ursprüngliches Repository",
+				"submit": "Repository neu verbinden"
+			},
+			"register": {
+				"title": "Lokales Git-Repository registrieren",
+				"description": "Geben Sie den absoluten Pfad einmalig ein. Der Server speichert ihn verschlüsselt und gibt nur diesen Alias und eine undurchsichtige Kennung zurück.",
+				"alias": "Alias",
+				"path": "Absoluter Repository-Pfad",
+				"submit": "Repository registrieren",
+				"error": "Das lokale Git-Repository konnte nicht registriert werden."
+			},
+			"template": {
+				"title": "Projekt-Repository aus Vorlage erstellen",
+				"description": "Das Vorlagen-Repository wird an einen neuen Ort auf diesem Host geklont und als Repository des Projekts registriert.",
+				"template": "Vorlagen-Repository",
+				"placeholder": "Vorlage auswählen",
+				"destination": "Absoluter Zielpfad",
+				"destinationDescription": "Wo der Klon angelegt wird. Es muss ein absoluter Pfad außerhalb des Knoten-Datenverzeichnisses sein.",
+				"alias": "Alias des neuen Projekts",
+				"submit": "Aus Vorlage erstellen",
+				"registry": "Registrierte Vorlagen",
+				"registryEmpty": "Es sind noch keine Vorlagen-Repositories registriert.",
+				"registryAlias": "Vorlagen-Alias",
+				"registryPath": "Absoluter Vorlagenpfad",
+				"add": "Vorlage hinzufügen",
+				"remove": "Entfernen",
+				"error": "Das Projekt-Repository konnte nicht aus der Vorlage erstellt werden.",
+				"registryError": "Das Vorlagen-Repository konnte nicht registriert werden.",
+				"removeError": "Das Vorlagen-Repository konnte nicht entfernt werden.",
+				"loadingLabel": "Registrierte Vorlagen werden geladen"
+			},
+			"live": {
+				"noAttempt": "Kein aktiver Versuch",
+				"idle": "Untätig",
+				"watermark": "Wasserzeichen",
+				"dropped": "zusammengefasst",
+				"model": "Modell",
+				"provider": "Anbieter",
+				"speed": "Ausgabe-Tokens/s",
+				"rounds": "Anbieter-Runden",
+				"tools": "Tool-Aufrufe",
+				"commands": "Befehle",
+				"files": "Geänderte Dateien",
+				"context": "Kontext-Reserve",
+				"noProgress": "Zeit ohne Fortschritt",
+				"inputTokens": "Eingabe-Tokens",
+				"outputTokens": "Ausgabe-Tokens",
+				"reasoningTokens": "Reasoning-Tokens",
+				"warning": "Warnung",
+				"noOutput": "Noch keine Live-Ausgabe.",
+				"activityUpdated": "Aktivität aktualisiert",
+				"noTools": "Noch keine Tool-Aktivität.",
+				"noCommands": "Noch keine Befehlsaktivität.",
+				"filesSummary": "{{files}} Datei(en) geändert; Patch-Größe {{bytes}} Bytes.",
+				"tabs": {
+					"live": "Live",
+					"tools": "Tools",
+					"commands": "Befehle",
+					"files": "Dateien",
+					"validation": "Validierung",
+					"details": "Details"
+				},
+				"details": {
+					"attempt": "Versuch",
+					"predecessor": "Vorgänger",
+					"activity": "Aktuelle Aktivität",
+					"subject": "Subjekt",
+					"events": "Dauerhafte Ereignisse"
+				}
 			}
 		},
 		"knowledgeBase": {
@@ -781,6 +954,9 @@
 				"tooltip": "{{usedOrigin}}. {{maxOrigin}}. Modell: {{model}}. Node: {{node}}.",
 				"srUnknown": "Kontextfenster-Nutzung unbekannt, {{used}} von {{max}} Tokens.",
 				"srUsed": "Kontextfenster zu {{percent}} Prozent genutzt, {{used}} von {{max}} Tokens."
+			},
+			"remoteImage": {
+				"load": "Externes Bild laden"
 			}
 		},
 		"clientNodes": {
@@ -1060,7 +1236,14 @@
 		"home": {
 			"title": {
 				"welcome": "Willkommen!"
-			}
+			},
+			"loading": "Installierte Modelle werden geprüft",
+			"status": {
+				"ready": "{{installed}} lokale(s) Modell(e) auf diesem Knoten installiert.",
+				"empty": "Es ist noch kein lokales Modell installiert, daher kann dieser Knoten nichts beantworten. Installieren Sie eines, um zu starten."
+			},
+			"goToModels": "Modell installieren",
+			"goToChat": "Chat starten"
 		},
 		"dashboard": {
 			"placeholder": {
@@ -1677,7 +1860,12 @@
 			},
 			"local": {
 				"setDefaultSuccess": "Standard-Lokalmodell auf {{name}} gesetzt.",
-				"deleteSuccess": "Modell {{name}} gelöscht."
+				"deleteSuccess": "Modell {{name}} gelöscht.",
+				"title": "Modellverwaltung",
+				"subtitle": "Installierte lokale Modelle auflisten, auswählen und löschen.",
+				"loading": "Lokale Modelle werden geladen …",
+				"installedTitle": "Installierte Modelle",
+				"empty": "Keine lokalen Modelle gefunden."
 			},
 			"gguf": {
 				"browse": {
@@ -2611,6 +2799,17 @@
 					"title": "Ausführung auf der CPU trotz erkannter GPU",
 					"reason": "Die gewählte Inferenz-Laufzeit konnte die GPU dieses Rechners nicht nutzen, daher läuft die Inferenz auf der CPU."
 				},
+				"backendUndeterminedAlert": {
+					"title": "GPU-Backend konnte nicht ermittelt werden"
+				},
+				"partialOffloadAlert": {
+					"title": "Ein Teil dieses Modells läuft auf der CPU",
+					"reason": "Nur {{offloaded}} von {{total}} Schichten von {{model}} passen auf die GPU. Die restlichen {{remaining}} laufen aus dem Arbeitsspeicher, was deutlich langsamer ist — das Modell antwortet weiterhin korrekt, aber mit einem Bruchteil der Geschwindigkeit.",
+					"remediation": "Eine kleinere Quantisierung, ein kürzerer Kontext oder das Freigeben von VRAM anderer Prozesse lässt das Modell meist vollständig passen."
+				},
+				"thisModel": "dieses Modell",
+				"gpuLayers": "Schichten auf der GPU",
+				"gpuLayersUnknown": "Noch nicht gemessen",
 				"refresh": "Hardware aktualisieren",
 				"loading": "Hardware wird erkannt…",
 				"error": "Hardware konnte nicht erkannt werden.",
@@ -2639,17 +2838,17 @@
 					"label": "Benchmarks trotz bestehendem VRAM-Druck zulassen",
 					"description": "Operator-Override: Umgeht nur die Prüfung auf bestehenden VRAM-Druck vor dem Start. Neuer Druck während des Benchmarks macht den Lauf weiterhin ungültig."
 				},
-    "moe": "MoE",
-    "moeExperts": "MoE · {{count}} Experten",
-    "policyFingerprint": "Richtlinie v{{version}} · {{fingerprint}}",
-    "freezeVramSummary": "Global frei {{globalFree}} · Prozessbudget {{processBudget}}",
-    "explore": {
+				"moe": "MoE",
+				"moeExperts": "MoE · {{count}} Experten",
+				"policyFingerprint": "Richtlinie v{{version}} · {{fingerprint}}",
+				"freezeVramSummary": "Global frei {{globalFree}} · Prozessbudget {{processBudget}}",
+				"explore": {
 					"modelLabel": "Modellname",
 					"modelPlaceholder": "z. B. unsloth/Qwen3-4B-GGUF",
-      "roleLabel": "Rolle",
-      "roleChat": "Chat",
-      "roleEmbedding": "Embedding",
-      "roleReranker": "Reranker",
+					"roleLabel": "Rolle",
+					"roleChat": "Chat",
+					"roleEmbedding": "Embedding",
+					"roleReranker": "Reranker",
 					"button": "Erkunden",
 					"success": "Optimiertes Profil für {{model}} wird erkundet.",
 					"error": "Erkundung konnte nicht gestartet werden."
@@ -2685,29 +2884,29 @@
 					"genTps": "Generierung Tok/s",
 					"cacheHit": "Cache-Treffer",
 					"toolLoop": "Tool-Schleife",
-      "vramLoad": "VRAM beim Laden",
-      "vramAfter": "VRAM danach",
-      "role": "Rolle",
-      "itemsPerSecond": "Elemente/s",
-      "inputTokensPerSecond": "Eingabe-Tok/s",
-      "p50Latency": "P50-Latenz",
-      "p95Latency": "P95-Latenz",
-      "batchSize": "Batch-Größe",
-      "outputDimension": "Ausgabedimension",
-      "valuesFinite": "Endliche Werte",
-      "deterministicOutput": "Stabile Ausgabe",
-      "yes": "Ja",
-      "no": "Nein",
-      "unknown": "Unbekannt",
-      "globalFreeVramLoad": "Global frei beim Laden",
-      "globalFreeVramAfter": "Global frei danach",
-      "processBudgetVramLoad": "Prozessbudget beim Laden",
-      "processBudgetVramAfter": "Prozessbudget danach",
-      "minimumGlobalFreeVram": "Globales Minimum frei",
-      "minimumProcessBudgetVram": "Minimales Prozessbudget",
-      "peakProcessRam": "Maximaler Prozess-RAM",
-      "externalPressure": "Externer VRAM-Druck erkannt; dieser Benchmark ist ungültig."
-    }
+					"vramLoad": "VRAM beim Laden",
+					"vramAfter": "VRAM danach",
+					"role": "Rolle",
+					"itemsPerSecond": "Elemente/s",
+					"inputTokensPerSecond": "Eingabe-Tok/s",
+					"p50Latency": "P50-Latenz",
+					"p95Latency": "P95-Latenz",
+					"batchSize": "Batch-Größe",
+					"outputDimension": "Ausgabedimension",
+					"valuesFinite": "Endliche Werte",
+					"deterministicOutput": "Stabile Ausgabe",
+					"yes": "Ja",
+					"no": "Nein",
+					"unknown": "Unbekannt",
+					"globalFreeVramLoad": "Global frei beim Laden",
+					"globalFreeVramAfter": "Global frei danach",
+					"processBudgetVramLoad": "Prozessbudget beim Laden",
+					"processBudgetVramAfter": "Prozessbudget danach",
+					"minimumGlobalFreeVram": "Globales Minimum frei",
+					"minimumProcessBudgetVram": "Minimales Prozessbudget",
+					"peakProcessRam": "Maximaler Prozess-RAM",
+					"externalPressure": "Externer VRAM-Druck erkannt; dieser Benchmark ist ungültig."
+				}
 			}
 		},
 		"loadedModels": {
@@ -3580,7 +3779,8 @@
 		"onlyAlphanumeric": "Nur alphanumerische Zeichen erlaubt",
 		"userNameNotMatchCriteria": "Der Benutzername darf nur Buchstaben, Zahlen, Punkte, Unterstriche und Bindestriche enthalten und darf nicht leer sein",
 		"defaultErrorMessage": "Ein Fehler ist aufgetreten",
-		"tooManyRequests": "Zu viele Anfragen. Bitte versuchen Sie es später erneut."
+		"tooManyRequests": "Zu viele Anfragen. Bitte versuchen Sie es später erneut.",
+		"nodeUnreachable": "Der Knoten ist nicht erreichbar. Prüfen Sie, ob er läuft, und versuchen Sie es erneut."
 	},
 	"diagnostics": {
 		"title": "Diagnose",
@@ -3699,5 +3899,8 @@
 			"builtInVoicesGroupLabel": "Integrierte Stimmen",
 			"systemVoiceGroupLabel": "Systemstimmen ({{language}})"
 		}
+	},
+	"notifications": {
+		"emptyMessage": "Fertig."
 	}
 }

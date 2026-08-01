@@ -134,8 +134,9 @@ describe("DevelopmentContainerRuntimePanel", () => {
 	});
 
 	it("states that container-backed execution is not yet in use under the process provider", () => {
-		// Phase 1 honesty check. Without this line an operator reading a green container-runtime banner would
-		// reasonably conclude their Development Mode runs are already containerised. They are not.
+		// Honesty check on the container-runtime banner. Without this line an operator reading a green banner would
+		// reasonably conclude their Development Mode runs are already containerised. Under the process provider —
+		// the default, since the container provider is opt-in — they are not.
 		renderPanel({ ready: true, status: "ready", message: "ok", requiresOperatorConfirmation: false }, vi.fn(), undefined, "process");
 
 		expect(screen.getByTestId("development-container-runtime-not-yet-in-use").textContent).toContain(

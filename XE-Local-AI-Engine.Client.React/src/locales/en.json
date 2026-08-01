@@ -158,11 +158,184 @@
 				"securityWarning": "Development commands run as your host user. The managed worktree confines application-mediated changes, but it is not OS isolation and repository code may access other host resources.",
 				"securityWarningContainer": "Development commands run inside a hardened container — read-only root filesystem, all capabilities dropped, no host namespaces — with only the managed worktree and runtime directories mounted. Repository code still executes, so register only repositories you trust.",
 				"trustAcknowledgement": "I trust the selected repository to execute Development commands with my host-user permissions.",
-				"trustAcknowledgementContainer": "I trust the selected repository to execute Development commands inside this node's container sandbox."
+				"trustAcknowledgementContainer": "I trust the selected repository to execute Development commands inside this node's container sandbox.",
+				"repository": "Registered repository",
+				"repositoryDescription": "The agent works in a managed worktree bound to this registered Git repository.",
+				"repositoryPlaceholder": "Select a repository",
+				"registerRepository": "Register repository",
+				"createFromTemplate": "Create from template",
+				"objective": "Project objective",
+				"baseBranch": "Base branch",
+				"taskTitle": "Initial task title",
+				"requirements": "Requirements",
+				"acceptanceCriteria": "Acceptance criteria (JSON)",
+				"egressPolicy": "Cloud policy",
+				"coderModel": "Coder model ID",
+				"reviewerModel": "Reviewer model ID",
+				"maxTokens": "Maximum tokens (optional)",
+				"maxDuration": "Maximum duration in seconds (optional)",
+				"create": "Create Development project"
 			},
 			"containerRuntime": {
 				"notYetInUse": "Container-backed execution is not switched on yet. Today's runs still use the supervised process sandbox; this preflight reports whether the container runtime will be available when they move.",
-				"inUse": "Development commands on this node execute inside this container runtime. A failure reported here stops runs; it does not fall back to the host."
+				"inUse": "Development commands on this node execute inside this container runtime. A failure reported here stops runs; it does not fall back to the host.",
+				"title": "Container runtime",
+				"confirm": "Confirm this container runtime"
+			},
+			"title": "Development Mode",
+			"subtitle": "Run one durable coder → validation → independent review → explicit apply workflow outside Chat.",
+			"disabled": "Development Mode is disabled by this node's runtime configuration.",
+			"newProject": "New Development project",
+			"projects": "Projects",
+			"untitledProject": "Untitled project",
+			"cancelAttempt": "Cancel attempt",
+			"repositoryNotConnected": "Repository not connected",
+			"repositoryUnavailable": "unavailable",
+			"templateUnavailable": "unavailable",
+			"repositoryUnavailableDescription": "The registered repository is unavailable or no longer matches this project. Development actions are blocked.",
+			"timeline": {
+				"title": "Durable event timeline"
+			},
+			"empty": {
+				"title": "No Development projects yet",
+				"body": "Create the initial project and task above. This workflow never enters Chat."
+			},
+			"loading": {
+				"capability": "Loading Development capability",
+				"projects": "Loading Development projects",
+				"project": "Loading Development project",
+				"repositories": "Loading registered Development repositories"
+			},
+			"errors": {
+				"create": "Could not create the Development project.",
+				"profileDetection": "Could not inspect the repository for a build system."
+			},
+			"nextAction": {
+				"default": "Start next action",
+				"replacement": "Start replacement attempt",
+				"review": "Start independent review",
+				"revision": "Start coder revision",
+				"validation": "Run deterministic validation"
+			},
+			"attempts": {
+				"title": "Attempts",
+				"role": "Role",
+				"model": "Model",
+				"provider": "Provider",
+				"status": "Status",
+				"tokens": "Tokens",
+				"predecessor": "Predecessor"
+			},
+			"apply": {
+				"title": "Human-controlled patch apply",
+				"awaiting": "Awaiting explicit approval",
+				"preview": "Preview current patch",
+				"apply": "Apply verified patch",
+				"previewLabel": "Verified patch preview",
+				"applied": "Patch applied.",
+				"subject": "Subject",
+				"patch": "patch",
+				"manifest": "manifest"
+			},
+			"consent": {
+				"title": "Before you use Development Mode",
+				"intro": "Development Mode lets a model change files in a managed worktree and runs your repository's own build, test and lint commands on this machine. Read this once before you start.",
+				"container": "On this node those commands run inside a container: read-only root filesystem, all capabilities dropped, no host namespaces, and only the managed worktree and runtime directories mounted.",
+				"containerNetwork": "The network is not part of that containment. The container has outbound network access, and nothing restricts what it can reach — dependency restore needs it.",
+				"processUser": "On this node those commands run as the signed-in user account that runs the engine — with that account's access to your files, not just the repository.",
+				"processNetwork": "They have network access, and nothing restricts what they can reach.",
+				"processLimits": "CPU, memory and process-count limits are enforced on Linux only. On Windows there are none, so a runaway command is bounded only by the machine.",
+				"trust": "Register only repositories you trust. Repository code executes either way.",
+				"disclosureNote": "This notice is a disclosure, not a protection. Acknowledging it is recorded in this browser only and changes nothing about what a Development run is allowed to do.",
+				"checkbox": "I understand what Development Mode executes on this machine.",
+				"accept": "Continue to Development Mode",
+				"decline": "Not now"
+			},
+			"policy": {
+				"localOnly": "Local only",
+				"cloudScoped": "Cloud scoped"
+			},
+			"profile": {
+				"title": "Confirm the command profile",
+				"detected": "Detected profile",
+				"detecting": "Inspecting the repository for a build system…",
+				"detectingLabel": "Detecting build system",
+				"buildTarget": "Build target",
+				"buildTargetDescription": "The solution or project the validation gate restores, builds and tests.",
+				"whitespaceOnly": "No build system detected — validation will only check whitespace. Nothing will be restored, built or tested, so a passing validation does not mean the change compiles.",
+				"confirm": "I confirm this command profile for the life of this project."
+			},
+			"reconnect": {
+				"description": "This existing project must be reconnected to its original registered repository before actions can run.",
+				"repository": "Original repository",
+				"submit": "Reconnect repository"
+			},
+			"register": {
+				"title": "Register local Git repository",
+				"description": "Enter the absolute path once. The server stores it encrypted and returns only this alias and an opaque identifier.",
+				"alias": "Alias",
+				"path": "Absolute repository path",
+				"submit": "Register repository",
+				"error": "Could not register the local Git repository."
+			},
+			"template": {
+				"title": "Create project repository from template",
+				"description": "The template repository is cloned to a new location on this host and registered as the project's repository.",
+				"template": "Template repository",
+				"placeholder": "Select a template",
+				"destination": "Absolute destination path",
+				"destinationDescription": "Where the clone is created. It must be an absolute path outside the node data directory.",
+				"alias": "New project alias",
+				"submit": "Create from template",
+				"registry": "Registered templates",
+				"registryEmpty": "No template repositories are registered yet.",
+				"registryAlias": "Template alias",
+				"registryPath": "Absolute template path",
+				"add": "Add template",
+				"remove": "Remove",
+				"error": "Could not create the project repository from the template.",
+				"registryError": "Could not register the template repository.",
+				"removeError": "Could not remove the template repository.",
+				"loadingLabel": "Loading registered templates"
+			},
+			"live": {
+				"noAttempt": "No active attempt",
+				"idle": "Idle",
+				"watermark": "Watermark",
+				"dropped": "coalesced",
+				"model": "Model",
+				"provider": "Provider",
+				"speed": "Output tokens/s",
+				"rounds": "Provider rounds",
+				"tools": "Tool calls",
+				"commands": "Commands",
+				"files": "Files changed",
+				"context": "Context headroom",
+				"noProgress": "No-progress age",
+				"inputTokens": "Input tokens",
+				"outputTokens": "Output tokens",
+				"reasoningTokens": "Reasoning tokens",
+				"warning": "Warning",
+				"noOutput": "No live output yet.",
+				"activityUpdated": "Activity updated",
+				"noTools": "No tool activity yet.",
+				"noCommands": "No command activity yet.",
+				"filesSummary": "{{files}} file(s) changed; patch size {{bytes}} bytes.",
+				"tabs": {
+					"live": "Live",
+					"tools": "Tools",
+					"commands": "Commands",
+					"files": "Files",
+					"validation": "Validation",
+					"details": "Details"
+				},
+				"details": {
+					"attempt": "Attempt",
+					"predecessor": "Predecessor",
+					"activity": "Current activity",
+					"subject": "Subject",
+					"events": "Durable events"
+				}
 			}
 		},
 		"knowledgeBase": {
@@ -781,6 +954,9 @@
 				"tooltip": "{{usedOrigin}}. {{maxOrigin}}. Model: {{model}}. Node: {{node}}.",
 				"srUnknown": "Context window usage unknown, {{used}} of {{max}} tokens.",
 				"srUsed": "Context window {{percent}} percent used, {{used}} of {{max}} tokens."
+			},
+			"remoteImage": {
+				"load": "Load remote image"
 			}
 		},
 		"clientNodes": {
@@ -1060,7 +1236,14 @@
 		"home": {
 			"title": {
 				"welcome": "Welcome!"
-			}
+			},
+			"loading": "Checking installed models",
+			"status": {
+				"ready": "{{installed}} local model(s) installed on this node.",
+				"empty": "No local models are installed yet, so this node cannot answer anything. Install one to get started."
+			},
+			"goToModels": "Install a model",
+			"goToChat": "Start chatting"
 		},
 		"dashboard": {
 			"placeholder": {
@@ -1677,7 +1860,12 @@
 			},
 			"local": {
 				"setDefaultSuccess": "Default local model set to {{name}}.",
-				"deleteSuccess": "Model {{name}} deleted."
+				"deleteSuccess": "Model {{name}} deleted.",
+				"title": "Model management",
+				"subtitle": "List, select, and delete installed local models.",
+				"loading": "Loading local models…",
+				"installedTitle": "Installed models",
+				"empty": "No local models found."
 			},
 			"gguf": {
 				"browse": {
@@ -2611,6 +2799,17 @@
 					"title": "Running on CPU despite a detected GPU",
 					"reason": "The selected inference runtime could not use this machine's GPU, so inference is running on the CPU."
 				},
+				"backendUndeterminedAlert": {
+					"title": "Could not determine your GPU backend"
+				},
+				"partialOffloadAlert": {
+					"title": "Part of this model is running on the CPU",
+					"reason": "Only {{offloaded}} of {{model}}'s {{total}} layers fit on the GPU. The remaining {{remaining}} run from system RAM, which is substantially slower — the model still answers correctly, just at a fraction of the speed.",
+					"remediation": "A smaller quantization, a shorter context, or freeing VRAM used by other processes will usually fit the whole model."
+				},
+				"thisModel": "this model",
+				"gpuLayers": "Layers on GPU",
+				"gpuLayersUnknown": "Not measured yet",
 				"refresh": "Refresh hardware",
 				"loading": "Detecting hardware…",
 				"error": "Could not detect hardware.",
@@ -2639,17 +2838,17 @@
 					"label": "Allow benchmarks despite existing VRAM pressure",
 					"description": "Operator override: bypasses only the pre-spawn ambient-pressure gate. New pressure caused during the benchmark still invalidates the run."
 				},
-    "moe": "MoE",
-    "moeExperts": "MoE · {{count}} experts",
-    "policyFingerprint": "Policy v{{version}} · {{fingerprint}}",
-    "freezeVramSummary": "Global free {{globalFree}} · process budget {{processBudget}}",
-    "explore": {
+				"moe": "MoE",
+				"moeExperts": "MoE · {{count}} experts",
+				"policyFingerprint": "Policy v{{version}} · {{fingerprint}}",
+				"freezeVramSummary": "Global free {{globalFree}} · process budget {{processBudget}}",
+				"explore": {
 					"modelLabel": "Model name",
 					"modelPlaceholder": "e.g. unsloth/Qwen3-4B-GGUF",
-      "roleLabel": "Role",
-      "roleChat": "Chat",
-      "roleEmbedding": "Embedding",
-      "roleReranker": "Reranker",
+					"roleLabel": "Role",
+					"roleChat": "Chat",
+					"roleEmbedding": "Embedding",
+					"roleReranker": "Reranker",
 					"button": "Explore",
 					"success": "Exploring a tuned profile for {{model}}.",
 					"error": "Could not start exploration."
@@ -2685,29 +2884,29 @@
 					"genTps": "Generation tok/s",
 					"cacheHit": "Cache hit",
 					"toolLoop": "Tool loop",
-      "vramLoad": "VRAM at load",
-      "vramAfter": "VRAM after",
-      "role": "Role",
-      "itemsPerSecond": "Items/s",
-      "inputTokensPerSecond": "Input tok/s",
-      "p50Latency": "P50 latency",
-      "p95Latency": "P95 latency",
-      "batchSize": "Batch size",
-      "outputDimension": "Output dimension",
-      "valuesFinite": "Finite values",
-      "deterministicOutput": "Stable output",
-      "yes": "Yes",
-      "no": "No",
-      "unknown": "Unknown",
-      "globalFreeVramLoad": "Global free at load",
-      "globalFreeVramAfter": "Global free after",
-      "processBudgetVramLoad": "Process budget at load",
-      "processBudgetVramAfter": "Process budget after",
-      "minimumGlobalFreeVram": "Minimum global free",
-      "minimumProcessBudgetVram": "Minimum process budget",
-      "peakProcessRam": "Peak process RAM",
-      "externalPressure": "External VRAM pressure detected; this benchmark is invalid."
-    }
+					"vramLoad": "VRAM at load",
+					"vramAfter": "VRAM after",
+					"role": "Role",
+					"itemsPerSecond": "Items/s",
+					"inputTokensPerSecond": "Input tok/s",
+					"p50Latency": "P50 latency",
+					"p95Latency": "P95 latency",
+					"batchSize": "Batch size",
+					"outputDimension": "Output dimension",
+					"valuesFinite": "Finite values",
+					"deterministicOutput": "Stable output",
+					"yes": "Yes",
+					"no": "No",
+					"unknown": "Unknown",
+					"globalFreeVramLoad": "Global free at load",
+					"globalFreeVramAfter": "Global free after",
+					"processBudgetVramLoad": "Process budget at load",
+					"processBudgetVramAfter": "Process budget after",
+					"minimumGlobalFreeVram": "Minimum global free",
+					"minimumProcessBudgetVram": "Minimum process budget",
+					"peakProcessRam": "Peak process RAM",
+					"externalPressure": "External VRAM pressure detected; this benchmark is invalid."
+				}
 			}
 		},
 		"loadedModels": {
@@ -3580,7 +3779,8 @@
 		"onlyAlphanumeric": "Only alphanumeric characters are allowed",
 		"userNameNotMatchCriteria": "Username can only contain letters, numbers, dots, underscores, and hyphens and cannot be empty",
 		"defaultErrorMessage": "An error occurred",
-		"tooManyRequests": "Too many requests. Please try again later."
+		"tooManyRequests": "Too many requests. Please try again later.",
+		"nodeUnreachable": "Can't reach the node. Check that it's running and try again."
 	},
 	"diagnostics": {
 		"title": "Diagnostics",
@@ -3699,5 +3899,8 @@
 			"builtInVoicesGroupLabel": "Built-in voices",
 			"systemVoiceGroupLabel": "System voices ({{language}})"
 		}
+	},
+	"notifications": {
+		"emptyMessage": "Done."
 	}
 }

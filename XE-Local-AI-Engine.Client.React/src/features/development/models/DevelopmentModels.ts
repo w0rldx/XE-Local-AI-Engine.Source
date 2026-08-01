@@ -60,7 +60,7 @@ export function isDevelopmentWhitespaceOnlyProfile(profileId?: string | null): b
  * The sandbox providers Development Mode can execute on, as `DevelopmentCapabilityResponse.SandboxProvider` reports
  * them. These are a backend contract, not a display value.
  */
-export const developmentSandboxProviders = {
+const developmentSandboxProviders = {
 	fake: "fake",
 	process: "process",
 	container: "docker",

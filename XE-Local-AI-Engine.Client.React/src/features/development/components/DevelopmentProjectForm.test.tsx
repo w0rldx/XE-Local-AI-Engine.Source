@@ -4,6 +4,7 @@ import { MantineProvider } from "@mantine/core";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { NetworkError } from "@/core/api/errors/NetworkError";
 import {
 	DevelopmentProjectForm,
 	type DevelopmentProjectFormValues,
@@ -12,6 +13,9 @@ import {
 vi.mock("react-i18next", () => ({
 	useTranslation: () => ({ t: (_key: string, fallback?: string) => fallback ?? _key }),
 }));
+
+// apiErrorMessage resolves its copy through i18next's standalone `t`, which is not initialized in unit tests.
+vi.mock("i18next", () => ({ t: (key: string, fallback?: string) => fallback ?? key }));
 
 function installDomMocks(): void {
 	Object.defineProperty(window, "matchMedia", {
@@ -480,6 +484,35 @@ describe("DevelopmentProjectForm", () => {
 
 		expect(await screen.findByText("The repository registration response was incomplete.")).toBeTruthy();
 		expect(screen.getByRole("dialog")).toBeTruthy();
+	});
+
+	// A request that never reached the node arrives as a NetworkError, whose message is deliberately EMPTY so callers
+	// localize the copy themselves. Reading `failure.message` directly rendered an empty Alert — the operator saw a
+	// register button that did nothing and no reason at all. Routed through apiErrorMessage, every one of this form's
+	// failure paths answers with the node-unreachable sentence instead.
+	it("names the unreachable node instead of rendering an empty alert when the request never lands", async () => {
+		const register = vi.fn().mockRejectedValue(new NetworkError());
+		render(
+			<MantineProvider>
+				<DevelopmentProjectForm
+					repositories={[]}
+					repositoriesLoading={false}
+					isRegistering={false}
+					isSubmitting={false}
+					onRegister={register}
+					onSubmit={vi.fn()}
+				/>
+			</MantineProvider>,
+		);
+
+		fireEvent.click(screen.getByTestId("development-open-register-repository"));
+		fireEvent.change(await screen.findByTestId("development-register-alias"), { target: { value: "Engine" } });
+		fireEvent.change(screen.getByTestId("development-register-path"), {
+			target: { value: "/home/operator/projects/engine" },
+		});
+		fireEvent.click(screen.getByTestId("development-register-repository"));
+
+		expect(await screen.findByText("Can't reach the node. Check that it's running and try again.")).toBeTruthy();
 	});
 
 	it("describes the isolation posture of the provider actually in force, on the control being consented to", () => {
