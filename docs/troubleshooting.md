@@ -53,7 +53,7 @@ If the app's chat/settings state is corrupted or you want a clean slate:
 
 This wipes chats, agents, scheduler jobs, and settings, but **keeps** your downloaded models and runtimes.
 
-> **Do not delete `node.key`** unless you are also deleting `node.sqlite`. The database is encrypted with that key — removing the key without the database (or vice versa) leaves an unreadable database. If you delete `node.sqlite`, deleting `node.key` too is fine (a fresh key is generated).
+> **Do not delete `node.key`** unless you are also deleting `node.sqlite`. The database file itself is ordinary SQLite, but the sensitive **columns** inside it are encrypted with that key (per-column AES-256-GCM) — removing the key without the database leaves those columns permanently unreadable. If you delete `node.sqlite`, deleting `node.key` too is fine (a fresh key is generated).
 
 ## Fully remove the app
 

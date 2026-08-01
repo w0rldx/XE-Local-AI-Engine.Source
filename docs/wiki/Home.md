@@ -42,8 +42,11 @@ HostAgent as live anywhere, it is stale — trust the code and these pages. The 
 just as easy: a doc or comment asserting "no Docker **anywhere**" predates
 [ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md) and is stale in the other
 direction. The container provider it approves is Development-Mode-only, is chosen **per feature**
-(AgentHome and Coder stay on the process sandbox provider), and is Slice 3 work that is **in progress** —
-so read the ADR for what is decided rather than inferring it from the tree.
+(AgentHome and Coder stay on the process sandbox provider), and has **shipped as an opt-in provider that
+is not the default** — `Development:Sandbox:Provider=docker` selects it, and the shipped config leaves that
+key unset. Read the ADR for what is *decided*, and
+[Development Mode container implementation status](../roadmaps/development-mode-container-status.md) for what
+is *built* — that page is the canonical status record, so no wiki page restates it.
 
 **Shipped since the last review (2026-06-24…27):** a profile-driven **inference optimizer** (per-machine
 explore → freeze → replay tuning; the supervisor no longer forces `--n-gpu-layers 999` — see
@@ -56,8 +59,9 @@ explore → freeze → replay tuning; the supervisor no longer forces `--n-gpu-l
 [Image Generation](14-image-generation.md)) and an offline **Knowledge Base / RAG** with hybrid FTS+vector
 search and a local reranker (see [Knowledge Base / RAG](15-knowledge-base.md)). **Development Mode** is a
 default-on local coding workflow that binds a registered Git source repository to an engine-owned detached
-worktree — 16 `development/*` endpoints, a live-attempt hub, its own React feature, and two accepted Development Mode ADRs
-([0001](../adr/0001-development-mode-restart-recovery.md), [0002](../adr/0002-development-cloud-egress-carrier.md));
+worktree — 21 `development/*` endpoints, a live-attempt hub, its own React feature, and three accepted Development Mode ADRs
+([0001](../adr/0001-development-mode-restart-recovery.md), [0002](../adr/0002-development-cloud-egress-carrier.md),
+[0004](../adr/0004-development-mode-container-execution-docker-stopgap.md));
 see [Architecture Overview](01-architecture-overview.md#development-mode-registered-source-managed-worktree)
 for the source/worktree flow and [Security & Privacy](12-security-and-privacy.md) for the host-user execution boundary.
 

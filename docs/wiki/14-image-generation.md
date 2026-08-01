@@ -13,7 +13,7 @@ The node generates images **locally** with [stable-diffusion.cpp](https://github
 | Process supervisor (spawn / reuse / evict / tree-kill) | `…/StableDiffusionCpp/Implementation/ImageServerProcessSupervisor.cs` (`IImageServerSupervisor`) |
 | Binary manager (managed selection or download / verify / cache) | `…/StableDiffusionCpp/Implementation/StableDiffusionCppBinaryManager.cs` |
 | Managed source build (probe / fetch / build / adopt / recover) | `…/StableDiffusionCpp/Implementation/StableDiffusionCppSourceBuildService.cs` |
-| Installed-runtime state + mutation gate | `…/StableDiffusionCpp/Implementation/StableDiffusionInstalledRuntimeStore.cs`, `…/StableDiffusionCpp/Implementation/ImageRuntimeActivityCoordinator.cs` |
+| Installed-runtime state + mutation gate | `…/StableDiffusionCpp/Implementation/StableDiffusionInstalledRuntimeStore.cs`, `…/StableDiffusionCpp/Implementation/ImageRuntimeActivityGate.cs` (`Contracts/IImageRuntimeActivityGate.cs`) |
 | Stale-daemon reaper | `…/StableDiffusionCpp/Implementation/StaleImageServerReaper.cs` |
 | Runtime options | `…/StableDiffusionCpp/Options/StableDiffusionRuntimeOptions.cs` |
 | SignalR hubs + publishers | `XE-Local-AI-Engine.Client/Hubs/ImageJobHub.cs`, `…/ImageJobEventPublisher.cs`, `…/StableDiffusionCppSourceBuildHub.cs`, `…/StableDiffusionCppSourceBuildEventPublisher.cs` |
@@ -58,7 +58,7 @@ Progress is **coarse status only** — never the prompt, a path, or a step/perce
 
 **Cancellation is two-mode.** When the token is signalled the runtime asks sd-server to cancel the job: a still-*queued* job cancels cleanly (HTTP 200); a job already *generating* cannot be interrupted (HTTP 409), so the runtime asks the supervisor to **tree-kill + restart** the daemon, dropping the one active job. Because the coordinator serializes to one job, a kill+restart can only ever affect that single job.
 
-The process-wide `ImageRuntimeActivityCoordinator` also serializes runtime mutation against generation, spawn/readiness, and resident-daemon eviction. A source build or removal returns `409 runtime-busy` while one of those leases is active. Eject the resident image runtime first, then build/remove.
+The process-wide activity gate (`IImageRuntimeActivityGate` → `ImageRuntimeActivityGate`) also serializes runtime mutation against generation, spawn/readiness, and resident-daemon eviction. A source build or removal returns `409 runtime-busy` while one of those leases is active. Eject the resident image runtime first, then build/remove.
 
 ## The process supervisor
 

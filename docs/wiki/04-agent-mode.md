@@ -165,11 +165,11 @@ AI.Agent interfaces, provider seams (`ILocalModelProvider`, `IChatClient`, `IEmb
 |---|---|---|
 | **Agents** | `AgentDefinitionService`, `AgentDefinitionResolver`, `AgentSkillService`, `AgentTemplateCatalog`/`Import`, `DefaultAgentSeeder`, `CoderAgentSeeder`, `OrchestrationResolver` | CRUD of agent definitions; per-turn resolution into a `ResolvedAgentRuntime` (prompt + gated tool offer + pinned model + skills + flags). |
 | **AgentHome** | `AgentHomeService`, `AgentHomeManifestService`, `AgentHomeWorkspaceService`, `AgentHomePatchService`, `NodePatchApplyService`, `MemoryProposalSecretScanner`, `IConversationSandboxStager`, `Tools/RunInAgentHomeToolHandler` | The write-back loop: sandboxed git workspace, patch apply, memory proposals, conversation-attachment staging. |
-| **Analysis** | `PlaybookAnalysisService`, `OllamaPlaybookAnalysisAgent`, `IPlaybookAnalysisAgent` | Playbook analysis → **Suggested** staging (node-local model only). |
+| **Analysis** | `PlaybookAnalysisService`, `DefaultPlaybookAnalysisAgent`, `IPlaybookAnalysisAgent` | Playbook analysis → **Suggested** staging (node-local model only). |
 | **Eval** | (uses AI.Agent `IPlaybookEvalAgentRunner`) + `PlaybookActionService` gate logic | Golden-conversation eval gate (Suggested → Enabled). |
 | **Insights** | `FeedbackInsightsService` / `IFeedbackInsightsService` | Read-only per-agent feedback aggregation (n≥3 threshold). |
 | **Monitoring** | `PlaybookMonitorService` / `IPlaybookMonitorService` | Cohort monitoring of enabled playbook actions. |
-| **Memory** | `MemoryExtractionService`, `MemoryExtractionDispatcher`, `OllamaMemoryExtractionAgent` | Adaptive agent memory: post-run node-local extraction → Suggested/Extracted, token-budgeted. |
+| **Memory** | `MemoryExtractionService`, `MemoryExtractionDispatcher`, `DefaultMemoryExtractionAgent` | Adaptive agent memory: post-run node-local extraction → Suggested/Extracted, token-budgeted. |
 | **Approval/audit** | `NodeToolApprovalPolicy`, `IToolApprovalAuditRecorder`, `ToolApprovalAuditRecorder` | Tighten-only category/name approval policy plus content-free approval-decision telemetry. |
 | **Usage** | `IAgentExecutionLogStore`, `IUsageRateResolver`, `GetAgentUsageSummaryEndpoint` | Retained token-usage aggregation and operator-configured USD cost estimates; no message content. |
 | **Capacity** | `CapacityService`, `ModelFootprintProvider`, `PendingFootprintLedger`, `SpawnSerializer`, `SpawnContext` | Capacity gate for spawning a model process (Allow / QueueSameModel / reject). |
@@ -267,7 +267,7 @@ prompt. Their promotion is governed so that nothing reaches the live prompt with
 ```
  P1 manual        operator authors an action  ─────────────┐
  P2 feedback      👍/👎 aggregated per agent (n≥3)          │  Insights / FeedbackInsightsService
- P3 analysis      node-local model proposes  ──► Suggested  │  Analysis / OllamaPlaybookAnalysisAgent
+ P3 analysis      node-local model proposes  ──► Suggested  │  Analysis / DefaultPlaybookAnalysisAgent
  P4 eval gate     golden conversations re-run ──► Enabled   │  Eval / MafPlaybookEvalAgentRunner
  P5 monitoring +  cohort monitoring + relevance retrieval   │  Monitoring + PlaybookRetrievalSelector
     retrieval     (top-k injected, cap MaxEnabledActions=20)─┘
@@ -275,7 +275,7 @@ prompt. Their promotion is governed so that nothing reaches the live prompt with
 
 - **P1 Manual** — operator authors actions; `PlaybookActionService` owns the state machine.
 - **P2 Feedback** — `FeedbackInsightsService` aggregates 👍/👎 per agent (read-only, n≥3 threshold).
-- **P3 Analysis** — `PlaybookAnalysisService` + `OllamaPlaybookAnalysisAgent` stage **Suggested**
+- **P3 Analysis** — `PlaybookAnalysisService` + `DefaultPlaybookAnalysisAgent` stage **Suggested**
   actions. **Privacy invariant: this runs on a node-local model only** (no cloud), so user
   conversation content never leaves the box for analysis.
 - **P4 Eval gate** — golden conversations are **re-run through the real MAF loop** node-local
