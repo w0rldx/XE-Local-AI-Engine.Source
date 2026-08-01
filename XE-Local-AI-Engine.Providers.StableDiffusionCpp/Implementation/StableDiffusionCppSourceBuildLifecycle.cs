@@ -29,8 +29,20 @@ internal sealed class StableDiffusionCppSourceBuildLifecycle(
         }
     }
 
-    public Task StopAsync(CancellationToken cancellationToken)
+    public async Task StopAsync(CancellationToken cancellationToken)
     {
-        return service.ShutdownAsync(cancellationToken);
+        try
+        {
+            await service.ShutdownAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Same contract as CudaBuildStartupService.StopAsync: the host's shutdown token means "stop being
+            // graceful", not "throw". ShutdownAsync awaits the start gate on this token, so an over-budget
+            // shutdown throws here and Host.StopAsync rethrows the aggregate, killing the process with an
+            // unhandled exception instead of exiting cleanly.
+            logger.LogWarning("The managed stable-diffusion.cpp shutdown drain was cut short by the host shutdown "
+                              + "budget; any in-flight build is abandoned and will be reconciled on the next start.");
+        }
     }
 }

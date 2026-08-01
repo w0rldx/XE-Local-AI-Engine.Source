@@ -729,6 +729,28 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
         AssertEx.Equal(expected: 0, logger.ErrorCount);
     }
 
+    /// <summary>
+    ///     The mirror of the startup contract above: on the way DOWN, a cancelled token is the host saying the
+    ///     shutdown budget is spent, not an error to propagate. Host.StopAsync aggregates and rethrows anything a
+    ///     hosted service throws, so an escaping cancellation here ends the process with an unhandled exception
+    ///     instead of a clean exit — which is what a desktop user gets when closing the app after a slow drain.
+    /// </summary>
+    [Test]
+    public async Task Lifecycle_ShutdownCancellationIsAbsorbedSoTheHostExitsCleanly()
+    {
+        using var cancellation = new CancellationTokenSource();
+        await cancellation.CancelAsync();
+        var service = Substitute.For<IStableDiffusionCppSourceBuildService>();
+        var logger = new RecordingLogger<StableDiffusionCppSourceBuildLifecycle>();
+        service.ShutdownAsync(cancellation.Token)
+               .Returns<Task>(_ => throw new OperationCanceledException(cancellation.Token));
+        var lifecycle = new StableDiffusionCppSourceBuildLifecycle(service, logger);
+
+        await lifecycle.StopAsync(cancellation.Token);
+
+        AssertEx.Equal(expected: 0, logger.ErrorCount);
+    }
+
     [Test]
     public async Task PrerequisiteProbe_CallerCancellationTerminatesSpawnedProcess()
     {

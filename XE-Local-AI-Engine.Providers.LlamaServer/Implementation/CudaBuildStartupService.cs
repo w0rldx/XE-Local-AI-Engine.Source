@@ -50,8 +50,24 @@ internal sealed class CudaBuildStartupService : IHostedService
         }
     }
 
-    public Task StopAsync(CancellationToken cancellationToken)
+    public async Task StopAsync(CancellationToken cancellationToken)
     {
-        return _buildService.ShutdownAsync(cancellationToken);
+        try
+        {
+            await _buildService.ShutdownAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // The host's shutdown token means "stop being graceful", NOT "throw". ShutdownAsync awaits the start
+            // gate and the in-flight build on this token, so once the shutdown budget (HostOptions.ShutdownTimeout,
+            // 30s by default) expires every one of those awaits throws. Host.StopAsync aggregates whatever a
+            // StopAsync throws and rethrows it, so letting it escape turned an over-budget-but-otherwise-normal
+            // shutdown into an UNHANDLED exception and a non-zero exit code — observed live on 2026-08-01 as
+            // "One or more hosted services failed to stop" after a model had been loaded in desktop mode.
+            // Abandoning the drain is the correct response here; the build's own cancellation has already been
+            // signalled and its work tree is reconciled by RecoverAsync on the next start.
+            _logger.LogWarning("The managed source-build shutdown drain was cut short by the host shutdown budget; "
+                               + "any in-flight build is abandoned and will be reconciled on the next start.");
+        }
     }
 }

@@ -255,6 +255,34 @@ public sealed class SourceBuildRecoveryTests
         await AssertEx.ThrowsAsync<IOException>(() => service.StartAsync(CancellationToken.None));
     }
 
+    /// <summary>
+    ///     A shutdown that overruns the host's budget must still exit cleanly.
+    ///     <para>
+    ///         <see cref="LlamaCppSourceBuildService.ShutdownAsync" /> awaits the start gate, the in-flight build and
+    ///         the publisher flush on the token it is handed. The host hands it the shutdown token, which is cancelled
+    ///         once <c>HostOptions.ShutdownTimeout</c> expires — so every one of those awaits throws. Because
+    ///         <c>Host.StopAsync</c> aggregates and rethrows whatever a hosted service's <c>StopAsync</c> throws, an
+    ///         escaping cancellation turned an over-budget shutdown into an unhandled exception and a non-zero exit,
+    ///         which is what a desktop user sees when they close the app after using a model. The token means "stop
+    ///         being graceful", not "throw", so the hosted-service boundary absorbs it.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task Stop_WithExpiredShutdownBudget_DoesNotThrow()
+    {
+        using var temp = new TempDirectory();
+        using var store = new InstalledRuntimeStore(temp.Path);
+        using var buildService = CreateService(temp.Path, store, new CudaManagedBuildSignal());
+        var startup = new CudaBuildStartupService(buildService,
+            store,
+            new CudaManagedBuildSignal(),
+            NullLogger<CudaBuildStartupService>.Instance);
+        using var expired = new CancellationTokenSource();
+        await expired.CancelAsync();
+
+        await startup.StopAsync(expired.Token);
+    }
+
     [Test]
     public async Task Start_WhenRecoveryStoreFails_BlocksAndPreservesBackup()
     {
