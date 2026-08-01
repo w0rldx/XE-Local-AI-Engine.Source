@@ -40,20 +40,23 @@ internal sealed class LlamaServerProcessLauncher : ILlamaServerProcessLauncher
         // Optional per-line capture sink — set only for operator profiling spawns; null for every normal spawn.
         var capture = spec.StartupCapture;
 
+        // Null for every operator-driven spawn, so those keep logging at Information exactly as before.
+        var demote = spec.ShouldDemoteForwardedLines;
+
         if (OperatingSystem.IsWindows())
         {
-            return LaunchWindows(BuildStartInfo(spec), label, capture);
+            return LaunchWindows(BuildStartInfo(spec), label, capture, demote);
         }
 
         if (OperatingSystem.IsLinux())
         {
-            return LaunchLinux(BuildStartInfo(spec), label, capture);
+            return LaunchLinux(BuildStartInfo(spec), label, capture, demote);
         }
 
         // macOS / other Unix: no Job Object and no setsid wrapper. Supervised GPU inference targets Windows + Linux,
         // which are the only platforms with a dedicated containment primitive; on the CPU floor elsewhere a plain
         // process whose own tree-kill tears down the server keeps the launcher functional.
-        return LaunchPlain(BuildStartInfo(spec), label, capture);
+        return LaunchPlain(BuildStartInfo(spec), label, capture, demote);
     }
 
     private static ProcessStartInfo BuildStartInfo(LlamaServerLaunchSpec spec)
@@ -77,15 +80,15 @@ internal sealed class LlamaServerProcessLauncher : ILlamaServerProcessLauncher
     }
 
     [SupportedOSPlatform("windows")]
-    private ILlamaServerProcessHandle LaunchWindows(ProcessStartInfo startInfo, string label, Action<string>? capture)
+    private ILlamaServerProcessHandle LaunchWindows(ProcessStartInfo startInfo, string label, Action<string>? capture, Func<bool>? demote)
     {
         // Wrap takes ownership of the process and disposes it on any containment failure.
-        var process = StartProcess(startInfo, label, capture);
+        var process = StartProcess(startInfo, label, capture, demote);
         return WindowsJobObjectProcessHandle.Wrap(process);
     }
 
     [SupportedOSPlatform("linux")]
-    private ILlamaServerProcessHandle LaunchLinux(ProcessStartInfo startInfo, string label, Action<string>? capture)
+    private ILlamaServerProcessHandle LaunchLinux(ProcessStartInfo startInfo, string label, Action<string>? capture, Func<bool>? demote)
     {
         // Run llama-server under `setsid` so it leads a new process group; tree-kill = kill(-pgid). The server inherits
         // setsid's redirected stdout/stderr, so the forwarding wired in StartProcess still captures the server's output.
@@ -94,18 +97,18 @@ internal sealed class LlamaServerProcessLauncher : ILlamaServerProcessLauncher
         startInfo.ArgumentList.Insert(index: 0, serverPath);
 
 #pragma warning disable CA2000 // The returned handle takes ownership of the process and disposes it on tree-kill; Wrap disposes on a construction failure.
-        return LinuxProcessGroupHandle.Wrap(StartProcess(startInfo, label, capture));
+        return LinuxProcessGroupHandle.Wrap(StartProcess(startInfo, label, capture, demote));
 #pragma warning restore CA2000
     }
 
-    private ILlamaServerProcessHandle LaunchPlain(ProcessStartInfo startInfo, string label, Action<string>? capture)
+    private ILlamaServerProcessHandle LaunchPlain(ProcessStartInfo startInfo, string label, Action<string>? capture, Func<bool>? demote)
     {
 #pragma warning disable CA2000 // The returned handle takes ownership of the process and disposes it on tree-kill; Wrap disposes on a construction failure.
-        return PlainProcessHandle.Wrap(StartProcess(startInfo, label, capture));
+        return PlainProcessHandle.Wrap(StartProcess(startInfo, label, capture, demote));
 #pragma warning restore CA2000
     }
 
-    private Process StartProcess(ProcessStartInfo startInfo, string label, Action<string>? capture)
+    private Process StartProcess(ProcessStartInfo startInfo, string label, Action<string>? capture, Func<bool>? demote)
     {
         var process = new Process
         {
@@ -115,8 +118,8 @@ internal sealed class LlamaServerProcessLauncher : ILlamaServerProcessLauncher
         // Forward both streams to the app log (and, for profiling spawns, the optional capture sink). Attached before
         // Start (per Process API) and pumped via the async begin-read APIs so the pipes are drained continuously and
         // never stall the child.
-        process.OutputDataReceived += (_, e) => ForwardLine(label, e.Data, capture);
-        process.ErrorDataReceived += (_, e) => ForwardLine(label, e.Data, capture);
+        process.OutputDataReceived += (_, e) => ForwardLine(label, e.Data, capture, demote);
+        process.ErrorDataReceived += (_, e) => ForwardLine(label, e.Data, capture, demote);
 
         try
         {
@@ -146,14 +149,20 @@ internal sealed class LlamaServerProcessLauncher : ILlamaServerProcessLauncher
     // default app log (the level the desktop console surfaces). The final end-of-stream callback carries null Data.
     // When set, the capture sink is invoked AFTER logging, in addition to it — both pipes call this concurrently, so
     // the sink the supervisor supplies is responsible for being thread-safe.
-    private void ForwardLine(string label, string? line, Action<string>? capture)
+    //
+    // The one exception is a child whose verbosity the supervisor raised for its own layer-placement measurement: once
+    // that child is serving, its extra per-request chatter is demoted to Debug. The sniffer already read those lines in
+    // process, so persisting them would inflate the serving log for a diagnostic the operator never asked for. The load
+    // window is deliberately NOT demoted, so the placement banner and every failure message still reach Information.
+    private void ForwardLine(string label, string? line, Action<string>? capture, Func<bool>? demote)
     {
         if (string.IsNullOrWhiteSpace(line))
         {
             return;
         }
 
-        _logger.LogInformation("llama-server[{Label}] {Line}", label, line);
+        var level = demote is not null && demote() ? LogLevel.Debug : LogLevel.Information;
+        _logger.Log(level, "llama-server[{Label}] {Line}", label, line);
         capture?.Invoke(line);
     }
 }

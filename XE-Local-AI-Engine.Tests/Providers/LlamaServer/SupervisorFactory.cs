@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
+using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
@@ -21,7 +22,9 @@ internal static class SupervisorFactory
         ILlamaServerLaunchFallbackStore? launchFallbackStore = null,
         IGpuModelLoadAdmission? loadAdmission = null,
         ILlamaCppSourceBuildActivity? sourceBuildActivity = null,
-        ILlamaFitParamsRunner? fitParamsRunner = null)
+        ILlamaFitParamsRunner? fitParamsRunner = null,
+        ILlamaLayerPlacementReport? layerPlacementReport = null,
+        IProcessContextAllocationResolver? allocationResolver = null)
     {
         return new LlamaServerProcessSupervisor(new FakeBinaryManager(),
             variantSelector ?? new FakeVariantSelector(),
@@ -42,6 +45,8 @@ internal static class SupervisorFactory
             timeProvider ?? new AdvanceableTimeProvider(),
             loadAdmission: loadAdmission,
             sourceBuildActivity: sourceBuildActivity,
-            fitParamsRunner: fitParamsRunner);
+            fitParamsRunner: fitParamsRunner,
+            allocationResolver: allocationResolver,
+            layerPlacementReport: layerPlacementReport);
     }
 }
