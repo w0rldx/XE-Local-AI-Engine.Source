@@ -33,11 +33,14 @@ public sealed class OnboardingTourE2ETests : XEE2ETestBase
     // TypeScript source by XE-Local-AI-Engine.Tests/Onboarding/OnboardingTourKeyDriftTests.
     private const string TourProgressStorageKey = XENodeE2EWebApplicationFactory.TourProgressStorageKey;
 
-    // The `data-testid` lands on Mantine's Modal ROOT, a zero-box wrapper Playwright always reports as
-    // hidden even while the dialog is on screen. Scope to the role="dialog" element Mantine renders
-    // inside it: that one has a real box when open and is unmounted when closed, so the same locator
-    // answers both "is it up" and "did it stay away".
-    private ILocator WelcomeDialog => Page.GetByTestId("onboarding-welcome-dialog").GetByRole(AriaRole.Dialog);
+    // The `data-testid` now lands on the Modal's CONTENT section, which is the `role="dialog"` element itself — it has a
+    // real box when open and is unmounted when closed, so this single locator answers both "is it up" and "did it stay
+    // away". It used to land on Mantine's Modal ROOT, a zero-box portal wrapper Playwright always reports as hidden even
+    // while the dialog is on screen, and this locator had to chain `.GetByRole(AriaRole.Dialog)` to descend into the real
+    // element. DialogShell routes the id for every dialog now (via Mantine's `attributes` Styles API), so that descent
+    // would find nothing and had to go. Pinned by DialogShell.test.tsx, which asserts the tagged element is both
+    // `mantine-Modal-content` and `role="dialog"`.
+    private ILocator WelcomeDialog => Page.GetByTestId("onboarding-welcome-dialog");
 
     [Before(Test)]
     public async Task ClearSeededTutorialStateAsync()

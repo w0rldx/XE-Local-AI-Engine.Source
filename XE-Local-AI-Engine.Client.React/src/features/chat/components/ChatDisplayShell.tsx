@@ -310,7 +310,10 @@ export function ChatDisplayShell({
 					padding={0}
 					withCloseButton={true}
 					title={t("pages.chat.conversations", "Conversations")}
-					data-testid="chat-conversations-drawer"
+					// On the `content` section, not the root: Mantine spreads an unknown prop onto the Drawer ROOT, which is a
+					// zero-size portal wrapper that Playwright reports as `hidden`, so a visibility wait times out against a
+					// drawer that is on screen. Same rule DialogShell applies for every dialog.
+					attributes={{ content: { "data-testid": "chat-conversations-drawer" } }}
 					// Body padding is 0 so the embedded list controls their own md inset; pad the header inline to match
 					// so the drawer title lines up with the search field + conversation rows below it instead of flush-left.
 					styles={{ header: { paddingInline: "var(--mantine-spacing-md)" } }}
