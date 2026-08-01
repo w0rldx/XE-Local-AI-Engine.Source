@@ -406,7 +406,9 @@ export function DevelopmentLivePanel({ attempt, live, artifacts, events }: Devel
 			<Group justify="space-between">
 				<Group gap="xs">
 					<Badge variant="light">{attempt?.role ?? t("pages.development.live.noAttempt", "No active attempt")}</Badge>
-					<Badge color={attempt?.status === "Running" ? "green" : "gray"}>{attempt?.status ?? "Idle"}</Badge>
+					<Badge color={attempt?.status === "Running" ? "green" : "gray"}>
+						{attempt?.status ?? t("pages.development.live.idle", "Idle")}
+					</Badge>
 					<Badge variant="outline">{live.connectionState}</Badge>
 				</Group>
 				<Text size="xs" c="dimmed">
@@ -450,7 +452,7 @@ export function DevelopmentLivePanel({ attempt, live, artifacts, events }: Devel
 					key={warning.sequence}
 					icon={<IconAlertTriangle size={16} />}
 					color="yellow"
-					title={warning.warningCategory ?? "Warning"}
+					title={warning.warningCategory ?? t("pages.development.live.warning", "Warning")}
 				>
 					{warning.warningMessage}
 				</Alert>
@@ -459,35 +461,35 @@ export function DevelopmentLivePanel({ attempt, live, artifacts, events }: Devel
 			<Tabs defaultValue="live">
 				<Tabs.List>
 					<Tabs.Tab value="live" leftSection={<IconCode size={14} />}>
-						Live
+						{t("pages.development.live.tabs.live", "Live")}
 					</Tabs.Tab>
 					<Tabs.Tab value="tools" leftSection={<IconTool size={14} />}>
-						Tools
+						{t("pages.development.live.tabs.tools", "Tools")}
 					</Tabs.Tab>
 					<Tabs.Tab value="commands" leftSection={<IconTerminal2 size={14} />}>
-						Commands
+						{t("pages.development.live.tabs.commands", "Commands")}
 					</Tabs.Tab>
 					<Tabs.Tab value="files" leftSection={<IconFile size={14} />}>
-						Files
+						{t("pages.development.live.tabs.files", "Files")}
 					</Tabs.Tab>
 					<Tabs.Tab value="validation" leftSection={<IconListCheck size={14} />}>
-						Validation
+						{t("pages.development.live.tabs.validation", "Validation")}
 					</Tabs.Tab>
 					<Tabs.Tab value="details" leftSection={<IconInfoCircle size={14} />}>
-						Details
+						{t("pages.development.live.tabs.details", "Details")}
 					</Tabs.Tab>
 				</Tabs.List>
 
 				<Tabs.Panel value="live" pt="md">
 					<ScrollArea h={260}>
 						<Stack gap="xs">
-							{output.length === 0 ? <Text c="dimmed">No live output yet.</Text> : null}
+							{output.length === 0 ? <Text c="dimmed">{t("pages.development.live.noOutput", "No live output yet.")}</Text> : null}
 							{output.map((update) => (
 								<Paper key={update.sequence} withBorder={true} p="xs">
 									<Text size="xs" c="dimmed">
 										#{update.sequence} · {update.kind}
 									</Text>
-									<Text>{update.outputDelta ?? update.currentActivity ?? "Activity updated"}</Text>
+									<Text>{update.outputDelta ?? update.currentActivity ?? t("pages.development.live.activityUpdated", "Activity updated")}</Text>
 								</Paper>
 							))}
 						</Stack>
@@ -495,7 +497,7 @@ export function DevelopmentLivePanel({ attempt, live, artifacts, events }: Devel
 				</Tabs.Panel>
 				<Tabs.Panel value="tools" pt="md">
 					<Stack gap="xs">
-						{tools.length === 0 ? <Text c="dimmed">No tool activity yet.</Text> : null}
+						{tools.length === 0 ? <Text c="dimmed">{t("pages.development.live.noTools", "No tool activity yet.")}</Text> : null}
 						{tools.map((update) => (
 							<Code key={update.sequence}>
 								{update.currentToolId ?? "tool"} · {update.currentActivity ?? update.status}
@@ -505,7 +507,9 @@ export function DevelopmentLivePanel({ attempt, live, artifacts, events }: Devel
 				</Tabs.Panel>
 				<Tabs.Panel value="commands" pt="md">
 					<Stack gap="xs">
-						{commands.length === 0 ? <Text c="dimmed">No command activity yet.</Text> : null}
+						{commands.length === 0 ? (
+							<Text c="dimmed">{t("pages.development.live.noCommands", "No command activity yet.")}</Text>
+						) : null}
 						{commands.map((update) => (
 							<Code key={update.sequence}>
 								{update.currentCommandId ?? "command"} · {update.currentActivity ?? update.status}
@@ -516,7 +520,10 @@ export function DevelopmentLivePanel({ attempt, live, artifacts, events }: Devel
 				<Tabs.Panel value="files" pt="md">
 					<Stack gap="xs">
 						<Text>
-							{latest?.changedFileCount ?? 0} file(s) changed; patch size {latest?.patchByteCount ?? 0} bytes.
+							{t("pages.development.live.filesSummary", "{{files}} file(s) changed; patch size {{bytes}} bytes.", {
+								files: latest?.changedFileCount ?? 0,
+								bytes: latest?.patchByteCount ?? 0,
+							})}
 						</Text>
 						{artifacts
 							.filter((artifact) => artifact.kind === "ChangedFilesManifest" || artifact.kind === "Patch")
@@ -555,11 +562,21 @@ export function DevelopmentLivePanel({ attempt, live, artifacts, events }: Devel
 				</Tabs.Panel>
 				<Tabs.Panel value="details" pt="md">
 					<Stack gap="xs">
-						<Text size="sm">Attempt: {attempt?.id ?? "—"}</Text>
-						<Text size="sm">Predecessor: {attempt?.predecessorAttemptId ?? "—"}</Text>
-						<Text size="sm">Current activity: {latest?.currentActivity ?? "—"}</Text>
-						<Text size="sm">Subject: {latest?.subjectHash?.slice(0, 16) ?? "—"}</Text>
-						<Text size="sm">Durable events: {events.length}</Text>
+						<Text size="sm">
+							{t("pages.development.live.details.attempt", "Attempt")}: {attempt?.id ?? "—"}
+						</Text>
+						<Text size="sm">
+							{t("pages.development.live.details.predecessor", "Predecessor")}: {attempt?.predecessorAttemptId ?? "—"}
+						</Text>
+						<Text size="sm">
+							{t("pages.development.live.details.activity", "Current activity")}: {latest?.currentActivity ?? "—"}
+						</Text>
+						<Text size="sm">
+							{t("pages.development.live.details.subject", "Subject")}: {latest?.subjectHash?.slice(0, 16) ?? "—"}
+						</Text>
+						<Text size="sm">
+							{t("pages.development.live.details.events", "Durable events")}: {events.length}
+						</Text>
 					</Stack>
 				</Tabs.Panel>
 			</Tabs>

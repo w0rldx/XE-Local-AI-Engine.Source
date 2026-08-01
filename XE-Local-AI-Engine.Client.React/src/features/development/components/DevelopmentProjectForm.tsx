@@ -17,6 +17,7 @@ import { IconAlertTriangle, IconFolderPlus, IconPlus, IconTemplate, IconTrash, I
 import { type FormEvent, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import {
 	type DevelopmentProfileDetection,
@@ -236,9 +237,10 @@ export function DevelopmentProjectForm({
 			setRegistrationOpened(false);
 		} catch (registrationFailure) {
 			setRegistrationAttemptError(
-				registrationFailure instanceof Error
-					? registrationFailure.message
-					: t("pages.development.register.error", "Could not register the local Git repository."),
+				apiErrorMessage(
+					registrationFailure,
+					t("pages.development.register.error", "Could not register the local Git repository."),
+				),
 			);
 		}
 	};
@@ -268,9 +270,10 @@ export function DevelopmentProjectForm({
 			setTemplateOpened(false);
 		} catch (creationFailure) {
 			setTemplateCreationError(
-				creationFailure instanceof Error
-					? creationFailure.message
-					: t("pages.development.template.error", "Could not create the project repository from the template."),
+				apiErrorMessage(
+					creationFailure,
+					t("pages.development.template.error", "Could not create the project repository from the template."),
+				),
 			);
 		} finally {
 			setTemplateCreating(false);
@@ -289,9 +292,10 @@ export function DevelopmentProjectForm({
 			setTemplateRegistration({ alias: "", hostPath: "" });
 		} catch (registryFailure) {
 			setTemplateRegistryError(
-				registryFailure instanceof Error
-					? registryFailure.message
-					: t("pages.development.template.registryError", "Could not register the template repository."),
+				apiErrorMessage(
+					registryFailure,
+					t("pages.development.template.registryError", "Could not register the template repository."),
+				),
 			);
 		} finally {
 			setTemplateRegistryBusy(false);
@@ -310,9 +314,10 @@ export function DevelopmentProjectForm({
 			setTemplateCreation((current) => (current.templateId === templateId ? emptyTemplateCreation : current));
 		} catch (registryFailure) {
 			setTemplateRegistryError(
-				registryFailure instanceof Error
-					? registryFailure.message
-					: t("pages.development.template.removeError", "Could not remove the template repository."),
+				apiErrorMessage(
+					registryFailure,
+					t("pages.development.template.removeError", "Could not remove the template repository."),
+				),
 			);
 		} finally {
 			setTemplateRegistryBusy(false);
@@ -385,7 +390,7 @@ export function DevelopmentProjectForm({
 					) : null}
 					{detectionLoading ? (
 						<Stack gap="xs" data-testid="development-profile-detecting">
-							<Loader size="sm" aria-label="Detecting build system" />
+							<Loader size="sm" aria-label={t("pages.development.profile.detectingLabel", "Detecting build system")} />
 							<Text size="sm" c="dimmed">
 								{t("pages.development.profile.detecting", "Inspecting the repository for a build system…")}
 							</Text>
@@ -741,7 +746,9 @@ export function DevelopmentProjectForm({
 						label={t("pages.development.template.registry", "Registered templates")}
 						labelPosition="left"
 					/>
-					{templatesLoading ? <Loader size="sm" aria-label="Loading registered templates" /> : null}
+					{templatesLoading ? (
+						<Loader size="sm" aria-label={t("pages.development.template.loadingLabel", "Loading registered templates")} />
+					) : null}
 					{!templatesLoading && templates.length === 0 ? (
 						<Text size="sm" c="dimmed" data-testid="development-template-registry-empty">
 							{t("pages.development.template.registryEmpty", "No template repositories are registered yet.")}

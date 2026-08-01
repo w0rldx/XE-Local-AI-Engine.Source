@@ -30,6 +30,7 @@ import {
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { DevelopmentContainerRuntimePanel } from "@/features/development/components/DevelopmentContainerRuntimePanel";
 import { DevelopmentLivePanel } from "@/features/development/components/DevelopmentLivePanel";
 import {
@@ -70,10 +71,6 @@ const nextActionStatuses = new Set(["Planned", "Ready", "InProgress", "ChangesRe
 
 function operationId(): string {
 	return globalThis.crypto.randomUUID();
-}
-
-function errorMessage(error: unknown, fallback: string): string {
-	return error instanceof Error ? error.message : fallback;
 }
 
 /**
@@ -122,20 +119,27 @@ function statusColor(status?: string): string {
 	return "blue";
 }
 
-function nextActionLabel(status: string | undefined, latestAttemptStatus: string | undefined): string {
+/**
+ * The next-action button's label as a translation key paired with its English default.
+ *
+ * The label names the SPECIFIC action the engine will take next, which is the only thing on the page that tells the
+ * operator what the button is about to do. Returning the key rather than the sentence keeps that selection here, in
+ * plain control flow, while leaving the wording to the locale files.
+ */
+function nextActionLabel(status: string | undefined, latestAttemptStatus: string | undefined): readonly [string, string] {
 	if (latestAttemptStatus === "Interrupted") {
-		return "Start replacement attempt";
+		return ["pages.development.nextAction.replacement", "Start replacement attempt"];
 	}
 	if (status === "InReview") {
-		return "Start independent review";
+		return ["pages.development.nextAction.review", "Start independent review"];
 	}
 	if (status === "InProgress" && latestAttemptStatus === "Succeeded") {
-		return "Run deterministic validation";
+		return ["pages.development.nextAction.validation", "Run deterministic validation"];
 	}
 	if (status === "ChangesRequested") {
-		return "Start coder revision";
+		return ["pages.development.nextAction.revision", "Start coder revision"];
 	}
-	return "Start next action";
+	return ["pages.development.nextAction.default", "Start next action"];
 }
 
 export function DevelopmentPage() {
@@ -184,6 +188,7 @@ export function DevelopmentPage() {
 	const events = detail?.events ?? [];
 	const latestAttempt = attempts.at(-1) ?? null;
 	const activeAttempt = attempts.find(isActiveAttempt) ?? null;
+	const [nextActionKey, nextActionDefault] = nextActionLabel(task?.status, latestAttempt?.status);
 	const live = useDevelopmentAttemptHub(detail?.project?.id ?? null, task?.id ?? null, activeAttempt?.id ?? null);
 	const projectRepository = repositories.find((repository) => repository.id === detail?.project?.selectedFolderId);
 	const repositoryConnectionRequired = detail?.project?.repositoryConnectionRequired === true;
@@ -320,7 +325,7 @@ export function DevelopmentPage() {
 	if (capabilityQuery.isLoading) {
 		return (
 			<Container fluid={true} py="lg">
-				<Loader aria-label="Loading Development capability" />
+				<Loader aria-label={t("pages.development.loading.capability", "Loading Development capability")} />
 			</Container>
 		);
 	}
@@ -330,7 +335,7 @@ export function DevelopmentPage() {
 			<Container fluid={true} py="lg">
 				<Alert color={capabilityQuery.error ? "red" : "yellow"} icon={<IconAlertCircle size={16} />}>
 					{capabilityQuery.error
-						? errorMessage(capabilityQuery.error, "Could not verify whether Development Mode is available.")
+						? apiErrorMessage(capabilityQuery.error, "Could not verify whether Development Mode is available.")
 						: t("pages.development.disabled", "Development Mode is disabled by this node's runtime configuration.")}
 				</Alert>
 			</Container>
@@ -353,7 +358,7 @@ export function DevelopmentPage() {
 					confirming={confirmContainerRuntimeMutation.isPending}
 					confirmError={
 						confirmContainerRuntimeMutation.error
-							? errorMessage(confirmContainerRuntimeMutation.error, "Could not confirm the container runtime.")
+							? apiErrorMessage(confirmContainerRuntimeMutation.error, "Could not confirm the container runtime.")
 							: undefined
 					}
 				/>
@@ -378,14 +383,14 @@ export function DevelopmentPage() {
 								repositoriesLoading={repositoriesQuery.isLoading}
 								repositoriesError={
 									repositoriesQuery.error
-										? errorMessage(repositoriesQuery.error, "Could not load registered Development repositories.")
+										? apiErrorMessage(repositoriesQuery.error, "Could not load registered Development repositories.")
 										: undefined
 								}
 								isRegistering={registerMutation.isPending}
 								isSubmitting={createMutation.isPending}
 								error={
 									createMutation.error
-										? errorMessage(
+										? apiErrorMessage(
 												createMutation.error,
 												t("pages.development.errors.create", "Could not create the Development project."),
 											)
@@ -395,7 +400,7 @@ export function DevelopmentPage() {
 								detectionLoading={detectionQuery.isFetching}
 								detectionError={
 									detectionQuery.error
-										? errorMessage(
+										? apiErrorMessage(
 												detectionQuery.error,
 												t(
 													"pages.development.errors.profileDetection",
@@ -417,16 +422,21 @@ export function DevelopmentPage() {
 					</Accordion.Item>
 				</Accordion>
 
-				{projectsQuery.isLoading ? <Loader aria-label="Loading Development projects" /> : null}
+				{projectsQuery.isLoading ? <Loader aria-label={t("pages.development.loading.projects", "Loading Development projects")} /> : null}
 				{projectsQuery.error ? (
 					<Alert color="red" icon={<IconAlertCircle size={16} />}>
-						{errorMessage(projectsQuery.error, "Could not load Development projects.")}
+						{apiErrorMessage(projectsQuery.error, "Could not load Development projects.")}
 					</Alert>
 				) : null}
 				{projects.length === 0 && !projectsQuery.isLoading ? (
 					<Paper withBorder={true} p="xl" data-testid="development-empty-state">
 						<Text fw={600}>{t("pages.development.empty.title", "No Development projects yet")}</Text>
-						<Text c="dimmed">Create the initial project and task above. This workflow never enters Chat.</Text>
+						<Text c="dimmed">
+							{t(
+								"pages.development.empty.body",
+								"Create the initial project and task above. This workflow never enters Chat.",
+							)}
+						</Text>
 					</Paper>
 				) : null}
 
@@ -448,7 +458,7 @@ export function DevelopmentPage() {
 											}}
 											data-testid={`development-project-${project.id}`}
 										>
-											{project.objective ?? "Untitled project"}
+											{project.objective ?? t("pages.development.untitledProject", "Untitled project")}
 										</Button>
 									))}
 								</Stack>
@@ -456,10 +466,10 @@ export function DevelopmentPage() {
 						</Grid.Col>
 
 						<Grid.Col span={{ base: 12, lg: 9 }}>
-							{projectQuery.isLoading ? <Loader aria-label="Loading Development project" /> : null}
+							{projectQuery.isLoading ? <Loader aria-label={t("pages.development.loading.project", "Loading Development project")} /> : null}
 							{projectQuery.error ? (
 								<Alert color="red" icon={<IconAlertCircle size={16} />}>
-									{errorMessage(projectQuery.error, "Could not load the Development project.")}
+									{apiErrorMessage(projectQuery.error, "Could not load the Development project.")}
 								</Alert>
 							) : null}
 							{detail?.project && task ? (
@@ -508,13 +518,17 @@ export function DevelopmentPage() {
 													</Group>
 													{reconnectMutation.error ? (
 														<Text c="red" size="sm">
-															{errorMessage(reconnectMutation.error, "Could not reconnect the repository.")}
+															{apiErrorMessage(reconnectMutation.error, "Could not reconnect the repository.")}
 														</Text>
 													) : null}
 												</Stack>
 											</Alert>
 										) : repositoriesQuery.isLoading ? (
-											<Loader mt="md" size="sm" aria-label="Loading registered Development repositories" />
+											<Loader
+										mt="md"
+										size="sm"
+										aria-label={t("pages.development.loading.repositories", "Loading registered Development repositories")}
+									/>
 										) : projectRepository?.availability !== "Available" ? (
 											<Alert color="red" mt="md" icon={<IconAlertCircle size={16} />}>
 												{t(
@@ -532,7 +546,7 @@ export function DevelopmentPage() {
 													disabled={!repositoryReady || activeAttempt !== null}
 													data-testid="development-start-next"
 												>
-													{nextActionLabel(task.status, latestAttempt?.status)}
+													{t(nextActionKey, nextActionDefault)}
 												</Button>
 											) : null}
 											{activeAttempt ? (
@@ -544,13 +558,13 @@ export function DevelopmentPage() {
 													loading={cancelMutation.isPending}
 													data-testid="development-cancel-attempt"
 												>
-													Cancel attempt
+													{t("pages.development.cancelAttempt", "Cancel attempt")}
 												</Button>
 											) : null}
 										</Group>
 										{startMutation.error ? (
 											<Alert color="red" mt="md">
-												{errorMessage(startMutation.error, "Could not start the next action.")}
+												{apiErrorMessage(startMutation.error, "Could not start the next action.")}
 											</Alert>
 										) : null}
 										{task.blockedReason ? (
@@ -571,18 +585,18 @@ export function DevelopmentPage() {
 
 									<Paper withBorder={true} p="md">
 										<Title order={3} mb="md">
-											Attempts
+											{t("pages.development.attempts.title", "Attempts")}
 										</Title>
 										<Table.ScrollContainer minWidth={700}>
 											<Table striped={true} highlightOnHover={true}>
 												<Table.Thead>
 													<Table.Tr>
-														<Table.Th>Role</Table.Th>
-														<Table.Th>Model</Table.Th>
-														<Table.Th>Provider</Table.Th>
-														<Table.Th>Status</Table.Th>
-														<Table.Th>Tokens</Table.Th>
-														<Table.Th>Predecessor</Table.Th>
+														<Table.Th>{t("pages.development.attempts.role", "Role")}</Table.Th>
+														<Table.Th>{t("pages.development.attempts.model", "Model")}</Table.Th>
+														<Table.Th>{t("pages.development.attempts.provider", "Provider")}</Table.Th>
+														<Table.Th>{t("pages.development.attempts.status", "Status")}</Table.Th>
+														<Table.Th>{t("pages.development.attempts.tokens", "Tokens")}</Table.Th>
+														<Table.Th>{t("pages.development.attempts.predecessor", "Predecessor")}</Table.Th>
 													</Table.Tr>
 												</Table.Thead>
 												<Table.Tbody>
@@ -625,8 +639,8 @@ export function DevelopmentPage() {
 									{task.status === "AwaitingApply" ? (
 										<Paper withBorder={true} p="md" data-testid="development-apply-panel">
 											<Group justify="space-between" mb="md">
-												<Title order={3}>Human-controlled patch apply</Title>
-												<Badge color="green">Awaiting explicit approval</Badge>
+												<Title order={3}>{t("pages.development.apply.title", "Human-controlled patch apply")}</Title>
+												<Badge color="green">{t("pages.development.apply.awaiting", "Awaiting explicit approval")}</Badge>
 											</Group>
 											<Group>
 												<Button
@@ -636,7 +650,7 @@ export function DevelopmentPage() {
 													disabled={!repositoryReady}
 													data-testid="development-preview-patch"
 												>
-													Preview current patch
+													{t("pages.development.apply.preview", "Preview current patch")}
 												</Button>
 												<Button
 													color="green"
@@ -646,14 +660,16 @@ export function DevelopmentPage() {
 													disabled={!repositoryReady || !previewMutation.data || previewTaskId !== task.id}
 													data-testid="development-apply-patch"
 												>
-													Apply verified patch
+													{t("pages.development.apply.apply", "Apply verified patch")}
 												</Button>
 											</Group>
 											{previewMutation.data && previewTaskId === task.id ? (
 												<Stack mt="md">
 													<Text size="sm">
-														Subject <Code>{previewMutation.data.subjectHash}</Code> · patch{" "}
-														<Code>{previewMutation.data.patchHash}</Code> · manifest{" "}
+														{t("pages.development.apply.subject", "Subject")} <Code>{previewMutation.data.subjectHash}</Code>{" "}
+														· {t("pages.development.apply.patch", "patch")}{" "}
+														<Code>{previewMutation.data.patchHash}</Code> ·{" "}
+														{t("pages.development.apply.manifest", "manifest")}{" "}
 														<Code>{previewMutation.data.manifestHash}</Code>
 													</Text>
 													<Textarea
@@ -662,13 +678,13 @@ export function DevelopmentPage() {
 														autosize={true}
 														minRows={8}
 														maxRows={24}
-														aria-label="Verified patch preview"
+														aria-label={t("pages.development.apply.previewLabel", "Verified patch preview")}
 													/>
 												</Stack>
 											) : null}
 											{applyMutation.data ? (
 												<Alert color="green" mt="md">
-													{applyMutation.data.outcome ?? "Patch applied."}
+													{applyMutation.data.outcome ?? t("pages.development.apply.applied", "Patch applied.")}
 												</Alert>
 											) : null}
 										</Paper>
@@ -676,14 +692,14 @@ export function DevelopmentPage() {
 
 									<Paper withBorder={true} p="md">
 										<Group justify="space-between" mb="md">
-											<Title order={3}>Durable event timeline</Title>
+											<Title order={3}>{t("pages.development.timeline.title", "Durable event timeline")}</Title>
 											<Button
 												variant="subtle"
 												size="xs"
 												leftSection={<IconRefresh size={14} />}
 												onClick={() => projectQuery.refetch()}
 											>
-												Refresh
+												{t("common.refresh", "Refresh")}
 											</Button>
 										</Group>
 										<ScrollArea h={260}>
