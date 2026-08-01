@@ -1540,6 +1540,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             args.Add("--embeddings");
             args.Add("--pooling");
             args.Add("mean");
+            AppendPooledForwardPassBatchArgs(args, resolved, plan);
         }
         else if (key.Role == ModelRole.Reranker)
         {
@@ -1551,6 +1552,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             args.Add("--rerank");
             args.Add("--pooling");
             args.Add("rank");
+            AppendPooledForwardPassBatchArgs(args, resolved, plan);
         }
         else
         {
@@ -1601,6 +1603,57 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         // "CPU emits no gpu/fit args" behavior byte-for-byte.
         AppendPolicyContextArgs(args, plan);
         AppendCpuThreadArgs(args, plan);
+    }
+
+    /// <summary>
+    ///     Appends the physical/logical batch sizes (<c>-b</c>/<c>-ub</c>) for the POOLED roles (Embedding, Reranker),
+    ///     raising them from llama.cpp's 512-token default to this spawn's context size.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         <strong>This is a correctness flag, not a tuning flag.</strong> A pooled embedding/rerank forward pass is
+    ///         non-causal: the whole input must sit inside ONE physical micro-batch, because pooling has no way to carry
+    ///         attention state across <c>n_ubatch</c> boundaries. llama-server therefore rejects — it does not split —
+    ///         any single input longer than <c>n_ubatch</c>, with
+    ///         <c>500 {"error":{"code":500,"message":"input (N tokens) is too large to process. increase the physical
+    ///         batch size (current batch size: 512)"}}</c>.
+    ///     </para>
+    ///     <para>
+    ///         Without this, the usable embedding input was llama.cpp's DEFAULT <c>n_ubatch</c> of <strong>512</strong>
+    ///         tokens — NOT the <c>-c</c> we ask for (2048 by default, see
+    ///         <c>LlamaServerLaunchPolicyOptions.EmbeddingContextTokens</c>) and NOT the window the model advertises.
+    ///         Nothing upstream knew that: the knowledge-base chunker sizes chunks against the model's CONTEXT window,
+    ///         so ordinary 2000-character markdown chunks (~520-680 real tokens) exceeded the silent 512 ceiling and
+    ///         every knowledge-base document failed to index on a default node. Measured against
+    ///         <c>nomic-embed-text-v1.5.Q4_K_M</c>: 11 of 12 consecutive real markdown chunks were rejected at the
+    ///         default, 0 of 12 with these flags.
+    ///     </para>
+    ///     <para>
+    ///         Safe by construction: llama.cpp CLAMPS both values down to the effective context, so requesting more than
+    ///         the model supports is a no-op rather than an error (verified: <c>-ub 8192</c> against a 2048-window model
+    ///         starts and reports <c>n_ctx_slot = 2048</c>). The flags also compose with <c>--fit on</c> — auto-fit sizes
+    ///         placement around them rather than overriding them (verified against the in-app source build, pin b10201).
+    ///         Chat is deliberately excluded: a causal decode splits across micro-batches correctly, so raising its batch
+    ///         is a memory/throughput trade-off rather than a correctness fix, and <c>--fit</c> owns that decision.
+    ///     </para>
+    /// </remarks>
+    private static void AppendPooledForwardPassBatchArgs(List<string> args, ResolvedLaunchArguments resolved, LlamaServerLaunchPlan? plan)
+    {
+        // Mirror whichever -c this spawn actually emitted: the policy context (explore/CPU) or the frozen replay's own
+        // context. A pooled role must be able to embed anything that fits the context it advertises.
+        var contextTokens = plan?.RequestedContextTokens ?? resolved.CtxSize;
+        if (contextTokens <= 0)
+        {
+            return;
+        }
+
+        var value = contextTokens.ToString(CultureInfo.InvariantCulture);
+
+        // -b (logical) must be >= -ub (physical); pinning both to the context satisfies that for any context size.
+        args.Add("-b");
+        args.Add(value);
+        args.Add("-ub");
+        args.Add(value);
     }
 
     /// <summary>Appends the policy's requested context (<c>-c</c>) when set (a frozen replay owns its own -c instead).</summary>
