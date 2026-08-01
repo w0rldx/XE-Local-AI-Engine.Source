@@ -408,7 +408,7 @@ describe("ModelRecommendationsPage", () => {
 		// These panels moved to Model Management / Node Settings / Loaded Models — the advisor is now slim.
 		expect(screen.queryByTestId("model-fit-browse-card")).toBeNull();
 		expect(screen.queryByTestId("model-fit-download-card")).toBeNull();
-		expect(screen.queryByTestId("model-fit-running-card")).toBeNull();
+		expect(screen.queryByTestId("loaded-models-llamacpp-card")).toBeNull();
 		expect(screen.queryByTestId("model-fit-llamacpp-card")).toBeNull();
 		expect(screen.queryByTestId("model-fit-hf-token-card")).toBeNull();
 	});
