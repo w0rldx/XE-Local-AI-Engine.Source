@@ -3,6 +3,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import {
 	codexLoginMutation,
 	codexLogoutMutation,
@@ -61,7 +62,7 @@ export function useCodexLogout(onSuccess?: () => void) {
 			onSuccess?.();
 		},
 		onError: (error) => {
-			const message = error instanceof Error ? error.message : "Logout failed";
+			const message = apiErrorMessage(error, "Logout failed");
 			toast.error(message);
 		},
 	});

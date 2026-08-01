@@ -6,6 +6,7 @@ import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
+import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import {
 	deleteLocalModelMutation,
 	deleteModelKindMutation,
@@ -37,11 +38,7 @@ import { useGgufBrowseStore } from "@/features/models/stores/GgufBrowseStore";
 /* eslint-disable react-doctor/no-event-handler, react-doctor/no-chain-state-updates -- Model mutations intentionally coordinate selection, dialogs, and result notifications in their user-event callbacks. */
 
 function errorMessage(error: unknown): string {
-	return error instanceof Error ? error.message : "Unexpected local model error";
-}
-
-function ggufErrorMessage(error: unknown, fallback: string): string {
-	return error instanceof Error ? error.message : fallback;
+	return apiErrorMessage(error, "Unexpected local model error");
 }
 
 export function ModelManagement() {
@@ -185,7 +182,7 @@ export function ModelManagement() {
 						}
 					},
 					onError: (error) =>
-						toast.error(ggufErrorMessage(error, t("pages.models.gguf.download.error", "Could not start the download."))),
+						toast.error(apiErrorMessage(error, t("pages.models.gguf.download.error", "Could not start the download."))),
 				},
 			);
 		},
@@ -218,7 +215,7 @@ export function ModelManagement() {
 				toast.success(t("pages.models.gguf.download.cancelled", "Download cancelled."));
 			},
 			onError: (error) =>
-				toast.error(ggufErrorMessage(error, t("pages.models.gguf.download.cancelError", "Could not cancel the download."))),
+				toast.error(apiErrorMessage(error, t("pages.models.gguf.download.cancelError", "Could not cancel the download."))),
 		});
 	};
 
@@ -232,8 +229,8 @@ export function ModelManagement() {
 						<Text size="sm" tt="uppercase" fw={700} c="dimmed">
 							{t("common.workerNode", "Worker Node")}
 						</Text>
-						<Title order={2}>Model management</Title>
-						<Text c="dimmed">List, select, and delete installed local models.</Text>
+						<Title order={2}>{t("pages.models.local.title", "Model management")}</Title>
+						<Text c="dimmed">{t("pages.models.local.subtitle", "List, select, and delete installed local models.")}</Text>
 					</Stack>
 					<Group gap="sm">
 						<Button
@@ -242,7 +239,7 @@ export function ModelManagement() {
 							onClick={() => modelsRefetch()}
 							disabled={modelsIsFetching}
 						>
-							Refresh
+							{t("common.refresh", "Refresh")}
 						</Button>
 					</Group>
 				</Group>
@@ -250,7 +247,7 @@ export function ModelManagement() {
 				{modelsIsLoading ? (
 					<Group gap="sm">
 						<Loader size="sm" />
-						<Text c="dimmed">Loading local models…</Text>
+						<Text c="dimmed">{t("pages.models.local.loading", "Loading local models…")}</Text>
 					</Group>
 				) : null}
 
@@ -263,7 +260,7 @@ export function ModelManagement() {
 				<Card withBorder={true} radius="md" p="lg">
 					<Stack gap="md">
 						<Group justify="space-between">
-							<Title order={3}>Installed models</Title>
+							<Title order={3}>{t("pages.models.local.installedTitle", "Installed models")}</Title>
 							<IconRobot size={22} />
 						</Group>
 						<InstalledModelsTable
@@ -274,7 +271,9 @@ export function ModelManagement() {
 							onDelete={confirmDelete}
 							onResetKind={(modelName) => resetKindMutation.mutate({ path: { modelName } })}
 						/>
-						{modelViewModels.length === 0 ? <Text c="dimmed">No local models found.</Text> : null}
+						{modelViewModels.length === 0 ? (
+								<Text c="dimmed">{t("pages.models.local.empty", "No local models found.")}</Text>
+							) : null}
 					</Stack>
 				</Card>
 

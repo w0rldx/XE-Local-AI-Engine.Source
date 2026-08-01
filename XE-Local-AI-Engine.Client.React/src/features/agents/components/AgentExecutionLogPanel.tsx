@@ -2,6 +2,7 @@ import { Alert, Badge, Group, Loader, Paper, Stack, Table, Text } from "@mantine
 import { IconAlertTriangle } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
+import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { TablePaginationFooter } from "@/core/ui/components/TablePagination/TablePaginationFooter";
 import { useTablePagination } from "@/core/ui/components/TablePagination/useTablePagination";
 import type { AgentExecutionLog } from "@/features/agents/models/AgentExecutionLogModels";
@@ -12,10 +13,6 @@ interface AgentExecutionLogPanelProps {
 	agentName: string;
 	// FE-static capability gate (folded under agentManagement). When false the panel renders nothing.
 	enabled: boolean;
-}
-
-function errorMessage(error: unknown, fallback: string): string {
-	return error instanceof Error ? error.message : fallback;
 }
 
 // Render an epoch-millisecond timestamp as a locale string, or an em-dash for a missing/invalid value.
@@ -72,7 +69,7 @@ export function AgentExecutionLogPanel({ agentDefinitionId, agentName, enabled }
 
 				{logsQuery.error ? (
 					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="agent-execution-log-error">
-						{errorMessage(logsQuery.error, t("pages.agents.executionLog.errors.load", "Could not load run diagnostics."))}
+						{apiErrorMessage(logsQuery.error, t("pages.agents.executionLog.errors.load", "Could not load run diagnostics."))}
 					</Alert>
 				) : null}
 

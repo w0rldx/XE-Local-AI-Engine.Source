@@ -16,6 +16,7 @@ import {
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import {
 	MEMORY_SCOPES,
 	memoryScopeFallbacks,
@@ -51,10 +52,6 @@ interface PlaybookPanelProps {
 	agentName: string;
 	// FE-static capability gate (folded under agentManagement). When false the panel renders nothing.
 	enabled: boolean;
-}
-
-function errorMessage(error: unknown, fallback: string): string {
-	return error instanceof Error ? error.message : fallback;
 }
 
 // Editor target: "create" a new action or "edit" an existing one by id. null = editor closed.
@@ -182,7 +179,7 @@ export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: Playboo
 	const isEditingSuggested = editingAction?.state === "Suggested";
 	const saveError = createMutation.error ?? updateMutation.error ?? updateSuggestedMutation.error;
 	const submitError = saveError
-		? errorMessage(saveError, t("pages.agents.playbook.errors.save", "Could not save the playbook action."))
+		? apiErrorMessage(saveError, t("pages.agents.playbook.errors.save", "Could not save the playbook action."))
 		: undefined;
 
 	// "No new suggestions" notice: shown only after a completed analyze run that returned zero proposals and when
@@ -324,7 +321,7 @@ export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: Playboo
 
 				{actionsQuery.error ? (
 					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="playbook-list-error">
-						{errorMessage(actionsQuery.error, t("pages.agents.playbook.errors.load", "Could not load the playbook."))}
+						{apiErrorMessage(actionsQuery.error, t("pages.agents.playbook.errors.load", "Could not load the playbook."))}
 					</Alert>
 				) : null}
 

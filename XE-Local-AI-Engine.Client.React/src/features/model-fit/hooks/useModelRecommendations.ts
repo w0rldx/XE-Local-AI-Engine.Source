@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { toast } from "@/core/ui/notifications/Toast";
 import { useModelFitSchedulerEvents } from "@/features/model-fit/hooks/useModelFitSchedulerEvents";
 import {
@@ -26,10 +27,6 @@ import { useModelFitManagementStore } from "@/features/model-fit/stores/ModelFit
 import { useStartGgufDownload } from "@/features/models/queries/useGgufDownload";
 import { useGgufBrowseStore } from "@/features/models/stores/GgufBrowseStore";
 import { useScheduledJobs } from "@/features/scheduler/queries/useScheduler";
-
-function errorMessage(error: unknown, fallback: string): string {
-	return error instanceof Error ? error.message : fallback;
-}
 
 // The hardware-profile card's data + re-probe action, grouped so the card can be wired from one prop.
 interface HardwareState {
@@ -125,7 +122,7 @@ export function useModelRecommendations(): UseModelRecommendationsResult {
 						{ title: t("pages.modelFit.recommendations.toasts.startedTitle", "Refresh started"), id: "model-fit-refresh-start" },
 					),
 				onError: (error) =>
-					toast.error(errorMessage(error, t("pages.modelFit.recommendations.errors.refresh", "Could not start a refresh."))),
+					toast.error(apiErrorMessage(error, t("pages.modelFit.recommendations.errors.refresh", "Could not start a refresh."))),
 			},
 		);
 	};
@@ -169,7 +166,7 @@ export function useModelRecommendations(): UseModelRecommendationsResult {
 					}
 				},
 				onError: (error) =>
-					toast.error(errorMessage(error, t("pages.models.gguf.download.error", "Could not start the download."))),
+					toast.error(apiErrorMessage(error, t("pages.models.gguf.download.error", "Could not start the download."))),
 			},
 		);
 	};
@@ -193,7 +190,7 @@ export function useModelRecommendations(): UseModelRecommendationsResult {
 			},
 			onError: (error) =>
 				toast.error(
-					errorMessage(error, t("pages.modelFit.recommendations.catalog.toasts.refreshError", "Could not refresh the model catalog.")),
+					apiErrorMessage(error, t("pages.modelFit.recommendations.catalog.toasts.refreshError", "Could not refresh the model catalog.")),
 				),
 		});
 	};

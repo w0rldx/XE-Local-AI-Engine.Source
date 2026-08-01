@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
+import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { listLocalModelsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
@@ -36,10 +37,6 @@ import {
 	useUpdateAgentDefinition,
 } from "@/features/agents/queries/useAgentDefinitions";
 import { useAgentManagementStore } from "@/features/agents/stores/AgentManagementStore";
-
-function errorMessage(error: unknown, fallback: string): string {
-	return error instanceof Error ? error.message : fallback;
-}
 
 const emptyFormValues: AgentDefinitionFormValues = {
 	name: "",
@@ -127,7 +124,7 @@ export function AgentsPage() {
 	const isMutating = createMutation.isPending || updateMutation.isPending || deleteMutation.isPending;
 	const submitError =
 		createMutation.error || updateMutation.error
-			? errorMessage(
+			? apiErrorMessage(
 					createMutation.error ?? updateMutation.error,
 					t("pages.agents.errors.save", "Could not save the agent definition."),
 				)
@@ -191,7 +188,7 @@ export function AgentsPage() {
 
 			if (confirmed) {
 				deleteMutation.mutate(definition.id, {
-					onError: (error) => toast.error(errorMessage(error, t("pages.agents.errors.delete", "Could not delete the agent."))),
+					onError: (error) => toast.error(apiErrorMessage(error, t("pages.agents.errors.delete", "Could not delete the agent."))),
 				});
 			}
 		},
@@ -246,7 +243,7 @@ export function AgentsPage() {
 						) : null}
 						{definitionsQuery.error ? (
 							<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="agent-list-error">
-								{errorMessage(definitionsQuery.error, t("pages.agents.errors.load", "Could not load agent definitions."))}
+								{apiErrorMessage(definitionsQuery.error, t("pages.agents.errors.load", "Could not load agent definitions."))}
 							</Alert>
 						) : null}
 						{!definitionsQuery.isLoading && !definitionsQuery.error ? (

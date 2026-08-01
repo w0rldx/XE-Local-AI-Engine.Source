@@ -31,7 +31,7 @@ export function toImageJobStatus(raw: string | null | undefined): ImageJobStatus
 export const imageSamplers = ["euler", "euler_a", "heun", "dpm2", "dpmpp2m", "dpmpp2s_a", "lcm"] as const;
 export type ImageSampler = (typeof imageSamplers)[number];
 
-// Form defaults tuned for the step-1 target model (SD1.5 @ 512, plan decision 7). seed -1 = runtime-random.
+// Form defaults tuned for the first supported image model, SD1.5 at 512x512. seed -1 = runtime-random.
 export const imageFormDefaults = {
 	prompt: "",
 	negativePrompt: "",
@@ -126,18 +126,12 @@ export function toImageModelView(dto: ImageModelResponse): ImageModelView {
 // Coarse lifecycle of an image-model weight download, mirroring the backend ImageModelDownloadPhase enum. A download
 // ALWAYS ends in one of the three terminal phases — that is the whole point of the coordinator: a failure that is never
 // reported is indistinguishable from a slow download.
-export const imageModelDownloadPhases = ["Running", "Completed", "Cancelled", "Failed"] as const;
+const imageModelDownloadPhases = ["Running", "Completed", "Cancelled", "Failed"] as const;
 export type ImageModelDownloadPhase = (typeof imageModelDownloadPhases)[number];
-
-const terminalDownloadPhases = new Set<ImageModelDownloadPhase>(["Completed", "Cancelled", "Failed"]);
-
-export function isTerminalDownloadPhase(phase: ImageModelDownloadPhase): boolean {
-	return terminalDownloadPhases.has(phase);
-}
 
 // Normalizes an arbitrary wire phase into the known union. An unrecognized value is treated as "Running" so a future
 // backend phase never makes the UI declare a live download finished.
-export function toImageModelDownloadPhase(raw: string | null | undefined): ImageModelDownloadPhase {
+function toImageModelDownloadPhase(raw: string | null | undefined): ImageModelDownloadPhase {
 	return (imageModelDownloadPhases as readonly string[]).includes(raw ?? "") ? (raw as ImageModelDownloadPhase) : "Running";
 }
 

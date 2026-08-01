@@ -89,7 +89,7 @@ export type PreviewRunStartedResponse = z.infer<typeof previewRunStartedResponse
 // a reattaching client can replay the result. `lastSeq` is the highest buffered sequence number; a client
 // passes it back as the hub's `afterSeq` to receive only what it has not already applied. `state` is the
 // backend PreviewRunState enum NAME.
-export const previewRunStates = ["Running", "Paused", "Completing", "Completed", "Cancelled", "Faulted"] as const;
+const previewRunStates = ["Running", "Paused", "Completing", "Completed", "Cancelled", "Faulted"] as const;
 
 export const previewRunSummarySchema = z.object({
 	runId: z.string(),

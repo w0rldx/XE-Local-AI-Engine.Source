@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
+import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { getLocalModelDetailsOptions, listLocalModelsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
@@ -113,7 +114,7 @@ function mergeSelectedConversation(
 }
 
 function errorMessage(error: unknown): string {
-	return error instanceof Error ? error.message : "Unknown error";
+	return apiErrorMessage(error, "Unknown error");
 }
 
 function createId(): string {

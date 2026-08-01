@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 
+import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { toast } from "@/core/ui/notifications/Toast";
 import {
@@ -49,10 +50,6 @@ interface UsePlaybookPanelHandlersArgs {
 	runEvalMutation: { mutate: (id: string, opts?: { onError?: (error: unknown) => void }) => void };
 }
 
-function errorMessage(error: unknown, fallback: string): string {
-	return error instanceof Error ? error.message : fallback;
-}
-
 // All event-handler callbacks for PlaybookPanel. Extracted here so the component body stays
 // focused on state wiring and render; the mutation orchestration logic lives here.
 export function usePlaybookPanelHandlers({
@@ -79,7 +76,7 @@ export function usePlaybookPanelHandlers({
 		(error: unknown): string =>
 			error instanceof PromoteConflictError
 				? t(`pages.agents.playbook.eval.conflict.${error.status}`, error.message)
-				: errorMessage(error, t("pages.agents.playbook.errors.review", "Could not update the suggestion.")),
+				: apiErrorMessage(error, t("pages.agents.playbook.errors.review", "Could not update the suggestion.")),
 		[t],
 	);
 
@@ -152,7 +149,7 @@ export function usePlaybookPanelHandlers({
 			if (confirmed) {
 				deleteMutation.mutate(action.id, {
 					onError: (error) =>
-						toast.error(errorMessage(error, t("pages.agents.playbook.errors.delete", "Could not delete the playbook action."))),
+						toast.error(apiErrorMessage(error, t("pages.agents.playbook.errors.delete", "Could not delete the playbook action."))),
 				});
 			}
 		},
@@ -163,7 +160,7 @@ export function usePlaybookPanelHandlers({
 	// notice is derived from analyzeMutation below.
 	const handleAnalyze = useCallback(() => {
 		analyzeMutation.mutate(undefined, {
-			onError: (error) => toast.error(errorMessage(error, t("pages.agents.playbook.errors.analyze", "Could not analyze feedback."))),
+			onError: (error) => toast.error(apiErrorMessage(error, t("pages.agents.playbook.errors.analyze", "Could not analyze feedback."))),
 		});
 	}, [analyzeMutation, t]);
 

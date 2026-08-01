@@ -2,9 +2,10 @@ import { Alert, Button, Center, Paper, Stack, Text, Title } from "@mantine/core"
 import { IconAlertCircle } from "@tabler/icons-react";
 
 import type { AppErrorFallbackProps } from "@/AppErrorFallback.types";
+import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 
 export function AppErrorFallback({ error, onRetry }: AppErrorFallbackProps) {
-	const errorMessage = error instanceof Error ? error.message : "Unknown error";
+	const errorMessage = apiErrorMessage(error, "Unknown error");
 
 	return (
 		<Center mih="100vh" p="md">

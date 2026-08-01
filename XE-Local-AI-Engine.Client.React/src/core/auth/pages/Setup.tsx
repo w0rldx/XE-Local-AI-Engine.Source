@@ -85,10 +85,20 @@ export function Setup() {
 	const navigate = useNavigate();
 	const setToken = useNodeAuthStore((state) => state.actions.setToken);
 	const [values, setValues] = useState<SetupFormValues>({ email: "", password: "", confirmPassword: "" });
+	// Which fields the operator has actually interacted with. `errors` is computed on every render, including the very
+	// first — so without this gate the literal first screen of a fresh install greeted the operator with two red
+	// validation errors for fields they had not typed in yet. The errors are correct; showing them before there is any
+	// input to be wrong about is not. `hasErrors` still reads the ungated result, so the submit button stays disabled.
+	const [touched, setTouched] = useState<Partial<Record<keyof SetupFormValues, boolean>>>({});
 	const [error, setError] = useState<string | undefined>();
 	const [submitting, setSubmitting] = useState(false);
 	const errors = useMemo(() => validate(values, t), [values, t]);
 	const hasErrors = Object.keys(errors).length > 0;
+	const visibleError = (field: keyof SetupFormValues): string | undefined =>
+		touched[field] === true ? errors[field] : undefined;
+	const markTouched = (field: keyof SetupFormValues): void => {
+		setTouched((current) => (current[field] === true ? current : { ...current, [field]: true }));
+	};
 
 	// Mirrors the backend ASP.NET Identity password policy (ConfigureServices.cs) so the operator sees the rules up
 	// front and gets immediate client-side feedback instead of a server round-trip.
@@ -154,8 +164,10 @@ export function Setup() {
 									onChange={(event) => {
 										const value = event.currentTarget.value;
 										setValues((current) => ({ ...current, email: value }));
+										markTouched("email");
 									}}
-									error={errors.email}
+									onBlur={() => markTouched("email")}
+									error={visibleError("email")}
 								/>
 								<Stack gap={4}>
 									<PasswordInput
@@ -166,8 +178,10 @@ export function Setup() {
 										onChange={(event) => {
 											const value = event.currentTarget.value;
 											setValues((current) => ({ ...current, password: value }));
+											markTouched("password");
 										}}
-										error={errors.password}
+										onBlur={() => markTouched("password")}
+										error={visibleError("password")}
 									/>
 									<List size="xs" c="dimmed" spacing={0} withPadding={true}>
 										{passwordRules.map((rule) => (
@@ -183,8 +197,10 @@ export function Setup() {
 									onChange={(event) => {
 										const value = event.currentTarget.value;
 										setValues((current) => ({ ...current, confirmPassword: value }));
+										markTouched("confirmPassword");
 									}}
-									error={errors.confirmPassword}
+									onBlur={() => markTouched("confirmPassword")}
+									error={visibleError("confirmPassword")}
 								/>
 								<Button type="submit" loading={submitting} disabled={hasErrors} fullWidth={true}>
 									{t("auth.setup.createButton")}

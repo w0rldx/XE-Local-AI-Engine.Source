@@ -58,7 +58,7 @@ public sealed class ModelFitRecommendationResponse
 
     /// <summary>
     ///     Which recommendation section this row belongs to: <c>recommended</c> / <c>canRun</c> (the curated catalog
-    ///     lane, primary — locked decision D1/D2) or <c>explore</c> (the live Hugging Face discovery lane, secondary).
+    ///     lane, primary) or <c>explore</c> (the live Hugging Face discovery lane, secondary).
     ///     A pre-existing snapshot row predating the catalog lane defaults to <c>explore</c>.
     /// </summary>
     public required string Section { get; init; }
@@ -77,7 +77,7 @@ public sealed class ModelFitRecommendationResponse
 
     /// <summary>
     ///     <c>true</c> when this Mixture-of-Experts model was fitted with experts offloaded to system RAM
-    ///     (llama.cpp <c>--n-cpu-moe</c>, locked decision D3) — the UI must label this honestly ("experts on CPU —
+    ///     (llama.cpp <c>--n-cpu-moe</c>) — the UI must label this honestly ("experts on CPU —
     ///     slower, higher quality"), never as a plain resident fit.
     /// </summary>
     public bool ExpertsOffloaded { get; init; }
@@ -228,4 +228,26 @@ public sealed class HardwareProfileResponse
 
     /// <summary>Operator-facing remediation (in-app paths) for the CPU fallback, or null when the GPU is being used.</summary>
     public string? CpuFallbackRemediation { get; init; }
+
+    /// <summary>
+    ///     Operator-facing explanation when <see cref="InferenceBackend" /> is <c>unknown</c> because the device probe
+    ///     could not complete, or null when the backend is known. NOT a CPU fallback — it is an unanswered question.
+    /// </summary>
+    public string? BackendUndeterminedReason { get; init; }
+
+    // Measured GPU layer placement from the most recent observed model load. Distinct from the CPU-fallback fields: a
+    // partial offload means the GPU IS in use, just not for every layer. Null until a model has been loaded and
+    // observed. The model name is carried so the figures are never attributed to the wrong model.
+
+    /// <summary>Layers the runtime actually placed on the GPU for <see cref="GpuOffloadModelName" />, or null.</summary>
+    public int? GpuOffloadedLayers { get; init; }
+
+    /// <summary>Total layers in <see cref="GpuOffloadModelName" />, or null when no load has been observed.</summary>
+    public int? GpuTotalLayers { get; init; }
+
+    /// <summary>The model the offload figures describe, or null when no load has been observed.</summary>
+    public string? GpuOffloadModelName { get; init; }
+
+    /// <summary>The role (<c>chat|embedding|reranker</c>) the observed process serves, or null.</summary>
+    public string? GpuOffloadRole { get; init; }
 }

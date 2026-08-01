@@ -1,7 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+// i18next is not initialized in unit tests; resolve to the inline default the way the app's react-i18next mocks do.
+vi.mock("i18next", () => ({ t: (key: string, fallback?: string) => fallback ?? key }));
 
 import { ApiError } from "@/core/api/errors/ApiError";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { NetworkError } from "@/core/api/errors/NetworkError";
 
 describe("apiErrorMessage", () => {
 	it("surfaces a blocked-build 409 reason carried on an ApiError", () => {
@@ -29,6 +33,15 @@ describe("apiErrorMessage", () => {
 
 	it("uses a plain Error's message", () => {
 		expect(apiErrorMessage(new Error("Network error"), "fallback")).toBe("Network error");
+	});
+
+	// A request that never reached the node used to arrive as `new Error("Network error")`, so every page rendered that
+	// untranslated two-word literal and no next action. The interceptor now throws a typed, message-less NetworkError
+	// and the sentence is resolved — localized — here.
+	it("answers a NetworkError with the node-unreachable sentence, not the caller's fallback", () => {
+		expect(apiErrorMessage(new NetworkError(), "Could not load Development projects.")).toBe(
+			"Can't reach the node. Check that it's running and try again.",
+		);
 	});
 
 	it("falls back when the failure carries no message at all", () => {

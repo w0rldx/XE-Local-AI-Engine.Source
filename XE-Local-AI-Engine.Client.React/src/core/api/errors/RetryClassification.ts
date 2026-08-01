@@ -1,6 +1,7 @@
 import { isAxiosError } from "axios";
 
 import { ApiError } from "@/core/api/errors/ApiError";
+import { NetworkError } from "@/core/api/errors/NetworkError";
 
 // How many times a transient failure is retried before the query is allowed to settle as an error.
 // Total attempts = MAX_QUERY_RETRIES + 1 (the initial try plus the retries).
@@ -33,14 +34,21 @@ export function getErrorStatus(error: unknown): number | undefined {
 }
 
 // True for a network/transport interruption (no HTTP response was ever received). The ProblemDetails
-// interceptor rethrows an Axios `ERR_NETWORK` as a bare `new Error("Network error")`, so that message is
-// also treated as transport-level. Axios timeout/abort codes never carry a status either.
+// interceptor rethrows an Axios `ERR_NETWORK` as a typed NetworkError, so the TYPE is what identifies that case
+// here. It used to be matched on the literal message "Network error"; that string no longer exists anywhere in
+// the app (NetworkError's message is deliberately empty so renderers fall through to a localized fallback), so
+// matching on it would silently classify every transport interruption as terminal. Axios timeout/abort codes
+// never carry a status either, so they are read straight off the AxiosError.
 function isTransportError(error: unknown): boolean {
+	if (error instanceof NetworkError) {
+		return true;
+	}
+
 	if (isAxiosError(error)) {
 		return error.code === "ERR_NETWORK" || error.code === "ECONNABORTED" || error.code === "ETIMEDOUT";
 	}
 
-	return error instanceof Error && error.message === "Network error";
+	return false;
 }
 
 // Classifies whether an error is worth retrying. Only transient classes are retried — transport

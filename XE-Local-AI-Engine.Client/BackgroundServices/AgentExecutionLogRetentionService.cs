@@ -40,7 +40,7 @@ public sealed class AgentExecutionLogRetentionService : BackgroundService
             return;
         }
 
-        // Sweep once at startup rather than waiting a full interval (R4): a node that ran, wrote plaintext-correlation
+        // Sweep once at startup rather than waiting a full interval: a node that ran, wrote plaintext-correlation
         // execution logs, then stayed down past a row's retention window would otherwise keep those rows until the first
         // post-restart tick. Best-effort — a startup-sweep failure is logged and the periodic loop still runs.
         try

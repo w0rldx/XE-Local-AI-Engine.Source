@@ -2,6 +2,7 @@ import { AxiosError } from "axios";
 import { describe, expect, it } from "vitest";
 
 import { ApiError } from "@/core/api/errors/ApiError";
+import { NetworkError } from "@/core/api/errors/NetworkError";
 import type { ProblemDetails } from "@/core/api/models/ProblemDetails";
 import { getErrorStatus, isTransientError, shouldRetryQuery } from "@/core/api/errors/RetryClassification";
 
@@ -21,8 +22,10 @@ function axiosStatusError(status: number): AxiosError {
 	});
 }
 
-// The ProblemDetails interceptor rethrows an Axios ERR_NETWORK as a bare Error("Network error").
-const networkError = new Error("Network error");
+// The ProblemDetails interceptor rethrows an Axios ERR_NETWORK as a typed NetworkError whose message is
+// deliberately EMPTY, so the classifier has to recognize the type. Matching on a message string instead made a
+// briefly-unreachable node (restarting, port moved, machine waking) fail on the first attempt with no retry.
+const networkError = new NetworkError();
 const axiosTransportError = new AxiosError("Network Error", "ERR_NETWORK");
 
 // Mirrors TanStack Query's retryer: it calls retry(failureCount, error) with a 0-based failureCount and retries while
@@ -64,6 +67,14 @@ describe("isTransientError", () => {
 	it("treats network / transport interruptions as transient", () => {
 		expect(isTransientError(networkError)).toBe(true);
 		expect(isTransientError(axiosTransportError)).toBe(true);
+	});
+
+	// Pins the property the classifier must not depend on: NetworkError carries NO message, because the copy an
+	// operator sees is localized at render time. Any classifier that matches a message string instead of the type
+	// silently reports every transport interruption terminal, and shouldRetryQuery then gives up after one attempt.
+	it("classifies a NetworkError by type, not by its (empty) message", () => {
+		expect(networkError.message).toBe("");
+		expect(isTransientError(networkError)).toBe(true);
 	});
 
 	it("treats an unclassifiable error as terminal", () => {

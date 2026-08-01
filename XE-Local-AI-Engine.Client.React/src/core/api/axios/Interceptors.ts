@@ -3,6 +3,7 @@ import { t } from "i18next";
 import { toast } from "@/core/ui/notifications/Toast";
 
 import { ApiError } from "@/core/api/errors/ApiError";
+import { NetworkError } from "@/core/api/errors/NetworkError";
 import type { ProblemDetails } from "@/core/api/models/ProblemDetails";
 import { refreshNodeAuthToken } from "@/core/auth/api/NodeAuthApi";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
@@ -93,8 +94,12 @@ export const addApiProblemDetailsInterceptor = (axiosInstance: AxiosInstance) =>
 	axiosInstance.interceptors.response.use(
 		(response) => response,
 		(error: AxiosError) => {
+			// A typed, message-less error rather than `new Error("Network error")`. That literal was untranslated and
+			// unactionable, and because every helper renders `error.message` verbatim it became the ONLY thing every
+			// page said when the node went away. NetworkError carries the case, not the copy; apiErrorMessage turns it
+			// into a localized sentence at render time.
 			if (error.code === "ERR_NETWORK") {
-				throw new Error("Network error");
+				throw new NetworkError();
 			}
 
 			if (

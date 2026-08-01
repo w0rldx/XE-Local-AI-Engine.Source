@@ -3,6 +3,7 @@ import { IconAlertTriangle, IconCloudDownload, IconExternalLink, IconSearch } fr
 import { type FormEvent, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { formatGgufTimestamp } from "@/features/models/models/GgufFormatters";
 import type { GgufRepository } from "@/features/models/models/GgufModels";
 
@@ -14,10 +15,6 @@ interface GgufBrowsePanelProps {
 	onSearch: (query: string) => void;
 	onDownload: (repository: GgufRepository) => void;
 	downloadingRepoId: string | null;
-}
-
-function errorMessage(error: unknown, fallback: string): string {
-	return error instanceof Error ? error.message : fallback;
 }
 
 // HF GGUF browse/select panel: a search box runs browseGgufRepositories, results list each candidate repo with its
@@ -72,7 +69,7 @@ export function GgufBrowsePanel({
 
 				{error ? (
 					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="model-fit-browse-error">
-						{errorMessage(error, t("pages.models.gguf.browse.error", "Could not search repositories."))}
+						{apiErrorMessage(error, t("pages.models.gguf.browse.error", "Could not search repositories."))}
 					</Alert>
 				) : null}
 

@@ -13,6 +13,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { nodeRoutePaths } from "@/capabilities/NodeCapabilities";
+import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
 import { toast } from "@/core/ui/notifications/Toast";
 import {
@@ -30,10 +31,6 @@ import {
 
 // Keyed progress-toast id so the update surfaces as ONE in-place animating notification.
 const UPDATE_TOAST_ID = "llamacpp-runtime-update";
-
-function errorMessage(error: unknown, fallback: string): string {
-	return error instanceof Error ? error.message : fallback;
-}
 
 // Reads the resolved installed/recommended tags off the runtime status. The installed tag is null on a first run that
 // has not installed anything yet (the binary resolves from the pin floor); render an em-dash placeholder then.
@@ -122,7 +119,7 @@ export function LlamaCppUpdaterPanel() {
 		refreshRuntime()
 			.catch((error: unknown) =>
 				toast.error(
-					errorMessage(
+					apiErrorMessage(
 						error,
 						t("pages.nodeSettings.llamaCpp.updater.statusError", "Could not resolve the llama.cpp runtime status."),
 					),
@@ -135,7 +132,7 @@ export function LlamaCppUpdaterPanel() {
 		ensureMutation.mutate(selectedVariant, {
 			onSuccess: () => toast.success(t("pages.nodeSettings.llamaCpp.ensured", "llama.cpp binary ready.")),
 			onError: (error) =>
-				toast.error(errorMessage(error, t("pages.nodeSettings.llamaCpp.ensureError", "Could not ensure the llama.cpp binary."))),
+				toast.error(apiErrorMessage(error, t("pages.nodeSettings.llamaCpp.ensureError", "Could not ensure the llama.cpp binary."))),
 		});
 	};
 
@@ -158,7 +155,7 @@ export function LlamaCppUpdaterPanel() {
 					}),
 				onError: (error) =>
 					toast.error(
-						errorMessage(error, t("pages.nodeSettings.llamaCpp.updater.toastError", "Could not update the llama.cpp runtime.")),
+						apiErrorMessage(error, t("pages.nodeSettings.llamaCpp.updater.toastError", "Could not update the llama.cpp runtime.")),
 						{ id: UPDATE_TOAST_ID, title: t("pages.nodeSettings.llamaCpp.updater.toastErrorTitle", "Update failed") },
 					),
 			},
@@ -193,7 +190,7 @@ export function LlamaCppUpdaterPanel() {
 
 				{statusQuery.error ? (
 					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="llamacpp-updater-error">
-						{errorMessage(
+						{apiErrorMessage(
 							statusQuery.error,
 							t("pages.nodeSettings.llamaCpp.updater.statusError", "Could not resolve the llama.cpp runtime status."),
 						)}

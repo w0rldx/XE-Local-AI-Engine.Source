@@ -10,12 +10,21 @@ export interface NodeChatConnectionReadinessState {
 	readonly retry: () => void;
 }
 
+// Guarded rather than a raw `error.message` read. An Error can carry an EMPTY message — `new Error()` does, and the
+// shared axios interceptor's NetworkError deliberately does so renderers fall through to their own localized copy —
+// and the chat gate renders this value as `connectionError ?? fallback`, which an empty string SATISFIES. The result
+// was a blank "Local chat unavailable" panel on the app's main screen. Anything without usable text now falls through
+// to the generic sentence below, so the panel always says something.
 function describeConnectionError(error: unknown): string {
-	if (error instanceof Error) {
+	if (error instanceof Error && error.message.trim().length > 0) {
 		return error.message;
 	}
 
-	return typeof error === "string" ? error : "Unable to connect to the local chat hub.";
+	if (typeof error === "string" && error.trim().length > 0) {
+		return error;
+	}
+
+	return "Unable to connect to the local chat hub.";
 }
 
 /**

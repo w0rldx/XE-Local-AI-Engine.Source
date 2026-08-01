@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import type { SaveNodeSettingsResponse } from "@/core/api/generated";
 import {
 	downloadRecommendedEmbeddingMutation,
@@ -41,11 +42,7 @@ import { useHfTokenStore } from "@/features/node-settings/stores/HfTokenStore";
 import { VoiceSettingsCard } from "@/features/voice/components/VoiceSettingsCard";
 
 function errorMessage(error: unknown): string {
-	return error instanceof Error ? error.message : "Unexpected node settings error";
-}
-
-function runtimeErrorMessage(error: unknown, fallback: string): string {
-	return error instanceof Error ? error.message : fallback;
+	return apiErrorMessage(error, "Unexpected node settings error");
 }
 
 export function NodeSettings() {
@@ -189,7 +186,7 @@ export function NodeSettings() {
 		},
 		onError: (error) =>
 			toast.error(
-				runtimeErrorMessage(
+				apiErrorMessage(
 					error,
 					t("pages.nodeSettings.fields.rerankerModel.downloadError", "Could not start the recommended reranker download."),
 				),
@@ -207,7 +204,7 @@ export function NodeSettings() {
 				toast.success(t("pages.models.gguf.download.cancelled", "Download cancelled."));
 			},
 			onError: (error) =>
-				toast.error(runtimeErrorMessage(error, t("pages.models.gguf.download.cancelError", "Could not cancel the download."))),
+				toast.error(apiErrorMessage(error, t("pages.models.gguf.download.cancelError", "Could not cancel the download."))),
 		});
 	};
 
@@ -262,7 +259,7 @@ export function NodeSettings() {
 		},
 		onError: (error) =>
 			toast.error(
-				runtimeErrorMessage(
+				apiErrorMessage(
 					error,
 					t(
 						"pages.nodeSettings.fields.embeddingModel.downloadError",
@@ -366,7 +363,7 @@ export function NodeSettings() {
 				toast.success(t("pages.nodeSettings.hfToken.saved", "Token saved."));
 			},
 			onError: (error) =>
-				toast.error(runtimeErrorMessage(error, t("pages.nodeSettings.hfToken.saveError", "Could not save the token."))),
+				toast.error(apiErrorMessage(error, t("pages.nodeSettings.hfToken.saveError", "Could not save the token."))),
 		});
 	};
 
@@ -377,7 +374,7 @@ export function NodeSettings() {
 				toast.success(t("pages.nodeSettings.hfToken.cleared", "Token cleared."));
 			},
 			onError: (error) =>
-				toast.error(runtimeErrorMessage(error, t("pages.nodeSettings.hfToken.clearError", "Could not clear the token."))),
+				toast.error(apiErrorMessage(error, t("pages.nodeSettings.hfToken.clearError", "Could not clear the token."))),
 		});
 	};
 
@@ -509,11 +506,17 @@ export function NodeSettings() {
 							<Title order={3}>{t("pages.nodeSettings.developerMode.title", "Developer settings")}</Title>
 							<IconCode size={22} />
 						</Group>
+						{/*
+						 * The recording half of this disclosure is not optional. Enabling developer mode also starts an rrweb
+						 * DOM recording of this browser session (InstallCollectors), which is captured into diagnostic
+						 * snapshots. A description that names only the visible half — "experimental controls" — understates
+						 * what the operator is switching on.
+						 */}
 						<Switch
 							label={t("pages.nodeSettings.developerMode.label", "Developer mode")}
 							description={t(
 								"pages.nodeSettings.developerMode.description",
-								"Enables advanced, experimental controls in the app (e.g. chat sampling options). Stored in this browser only.",
+								"Enables advanced, experimental controls in the app (e.g. chat sampling options), and starts recording this browser session — DOM changes, clicks and navigation — so it can be attached to a diagnostic snapshot. Stored in this browser only.",
 							)}
 							checked={developerMode}
 							onChange={() => toggleDeveloperMode()}

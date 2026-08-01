@@ -3,6 +3,7 @@ import { IconAlertTriangle, IconDeviceFloppy, IconPlus, IconSchool, IconX } from
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { useUnsavedChangesGuard } from "@/core/ui/hooks/useUnsavedChangesGuard";
@@ -13,10 +14,6 @@ import { toCreateSkillRequest, toUpdateSkillRequest } from "@/features/skills/mo
 import type { Skill, SkillFormValues, SkillSummary } from "@/features/skills/models/SkillModels";
 import { useCreateSkill, useDeleteSkill, useSkill, useSkills, useUpdateSkill } from "@/features/skills/queries/useSkills";
 import { useSkillManagementStore } from "@/features/skills/stores/SkillManagementStore";
-
-function errorMessage(error: unknown, fallback: string): string {
-	return error instanceof Error ? error.message : fallback;
-}
 
 // A new skill always persists enabled by the store default; the create form has no enabled toggle, so the default
 // here is true to match what the backend stores.
@@ -74,7 +71,7 @@ export function SkillsPage() {
 
 	const submitError =
 		createMutation.error || updateMutation.error
-			? errorMessage(createMutation.error ?? updateMutation.error, t("pages.skills.errors.save", "Could not save the skill."))
+			? apiErrorMessage(createMutation.error ?? updateMutation.error, t("pages.skills.errors.save", "Could not save the skill."))
 			: undefined;
 
 	// Closes the editor and clears the dirty flag. A successful save closes through here so the next open starts
@@ -133,7 +130,7 @@ export function SkillsPage() {
 				deleteMutation.mutate(
 					{ path: { skillId: skill.id } },
 					{
-						onError: (error) => toast.error(errorMessage(error, t("pages.skills.errors.delete", "Could not delete the skill."))),
+						onError: (error) => toast.error(apiErrorMessage(error, t("pages.skills.errors.delete", "Could not delete the skill."))),
 					},
 				);
 			}
@@ -182,7 +179,7 @@ export function SkillsPage() {
 						) : null}
 						{skillsQuery.error ? (
 							<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="skills-list-error">
-								{errorMessage(skillsQuery.error, t("pages.skills.errors.load", "Could not load skills."))}
+								{apiErrorMessage(skillsQuery.error, t("pages.skills.errors.load", "Could not load skills."))}
 							</Alert>
 						) : null}
 						{!skillsQuery.isLoading && !skillsQuery.error ? (
@@ -234,7 +231,7 @@ export function SkillsPage() {
 						</Group>
 					) : editorBodyError ? (
 						<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="skill-editor-error">
-							{errorMessage(editorBodyError, t("pages.skills.errors.load", "Could not load skills."))}
+							{apiErrorMessage(editorBodyError, t("pages.skills.errors.load", "Could not load skills."))}
 						</Alert>
 					) : (
 						<SkillForm

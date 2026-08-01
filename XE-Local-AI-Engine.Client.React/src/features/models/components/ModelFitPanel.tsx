@@ -3,6 +3,7 @@ import { IconAlertTriangle } from "@tabler/icons-react";
 import { type ReactNode, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import {
 	fitLevelColor,
 	formatContextTokens,
@@ -23,7 +24,7 @@ interface ModelFitPanelProps {
 }
 
 function errorMessage(error: unknown): string {
-	return error instanceof Error ? error.message : "Unexpected model-fit error";
+	return apiErrorMessage(error, "Unexpected model-fit error");
 }
 
 type Translate = (key: string, fallback: string) => string;

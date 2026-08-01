@@ -9,6 +9,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
+import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import type { XeLocalAiEngineClientEndpointsConnectionV1ConnectionStatusResponse } from "@/core/api/generated";
 import {
 	connectConnectionMutation,
@@ -58,7 +59,7 @@ export function Dashboard() {
 	// Connection action failures surface as a transient toast (the kept inline Alerts are the persistent
 	// status-load error and the connection's lastError).
 	const onActionError = (error: unknown): void => {
-		toast.error(error instanceof Error ? error.message : t("pages.dashboard.unexpectedError"));
+		toast.error(apiErrorMessage(error, t("pages.dashboard.unexpectedError")));
 	};
 
 	const connectMutation = useMutation({
@@ -88,8 +89,7 @@ export function Dashboard() {
 		enableAutoConnectMutationResult.isPending ||
 		disableAutoConnectMutationResult.isPending;
 
-	const getErrorMessage = (error: unknown): string =>
-		error instanceof Error ? error.message : t("pages.dashboard.unexpectedError");
+	const getErrorMessage = (error: unknown): string => apiErrorMessage(error, t("pages.dashboard.unexpectedError"));
 
 	const getConnectionStatusLabel = (state: string): string => {
 		const key = `pages.dashboard.connectionStatus.${state}`;

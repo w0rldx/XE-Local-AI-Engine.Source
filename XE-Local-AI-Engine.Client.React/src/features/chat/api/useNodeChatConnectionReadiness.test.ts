@@ -3,6 +3,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { NetworkError } from "@/core/api/errors/NetworkError";
 import type { NodeChatConnectionEvents, NodeChatConnectionStatus } from "@/features/chat/api/NodeChatConnection";
 import { nodeChatConnection } from "@/features/chat/api/NodeChatConnection";
 import { useNodeChatConnectionReadiness } from "@/features/chat/api/useNodeChatConnectionReadiness";
@@ -147,6 +148,28 @@ describe("useNodeChatConnectionReadiness", () => {
 
 	it("falls back to a generic message for unknown error shapes", async () => {
 		manager.ensureConnection.mockReturnValue(Promise.reject({ code: 42 }));
+
+		const { result } = renderHook(() => useNodeChatConnectionReadiness());
+
+		await waitFor(() => expect(result.current.readiness).toBe("error"));
+		expect(result.current.error).toBe("Unable to connect to the local chat hub.");
+	});
+
+	// The chat gate renders this as `connectionError ?? localizedFallback`, and an empty string satisfies `??` — so an
+	// Error with no message produced a BLANK "Local chat unavailable" panel on the app's main screen. NetworkError is
+	// the app's canonical instance of that shape (its message is deliberately empty); the hub's own start failures do
+	// not travel through axios, so what this pins is the shape, not that specific type's route to here.
+	it("falls back to the generic message for an Error carrying no message", async () => {
+		manager.ensureConnection.mockReturnValue(Promise.reject(new NetworkError()));
+
+		const { result } = renderHook(() => useNodeChatConnectionReadiness());
+
+		await waitFor(() => expect(result.current.readiness).toBe("error"));
+		expect(result.current.error).toBe("Unable to connect to the local chat hub.");
+	});
+
+	it("falls back to the generic message for a blank string rejection", async () => {
+		manager.ensureConnection.mockReturnValue(Promise.reject("   "));
 
 		const { result } = renderHook(() => useNodeChatConnectionReadiness());
 
