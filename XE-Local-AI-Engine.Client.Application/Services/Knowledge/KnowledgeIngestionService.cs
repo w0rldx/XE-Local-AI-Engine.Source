@@ -65,14 +65,48 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
         }
         catch (KnowledgeIngestionException exception)
         {
-            _logger.LogWarning("Knowledge ingestion failed for document {DocumentId} ({ErrorClass}).", documentId, exception.GetType().Name);
+            LogIngestionFailure(documentId, exception);
             await SafeFailAsync(documentId, exception.Reason).ConfigureAwait(false);
         }
         catch (Exception exception)
         {
-            _logger.LogWarning("Knowledge ingestion failed for document {DocumentId} ({ErrorClass}).", documentId, exception.GetType().Name);
+            LogIngestionFailure(documentId, exception);
             await SafeFailAsync(documentId, UnexpectedReason).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>
+    ///     Logs an ingestion failure with the exception TYPE plus the causal chain's messages.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         This deliberately logs more than the type name. It previously recorded only
+    ///         <c>exception.GetType().Name</c>, on the reasoning that a document may contain sensitive text — but a
+    ///         TRANSPORT failure's message is not document content, and dropping it left the operator with a bare
+    ///         <c>(ClientResultException)</c>: no status, no server response, no failing step. A completely deterministic,
+    ///         100%-reproducible embedding-server rejection was undiagnosable from logs because of it.
+    ///     </para>
+    ///     <para>
+    ///         The no-content-in-logs rule is preserved by the SOURCES, not by suppressing the message: every reason this
+    ///         pipeline raises is a fixed const string (see this type's <c>*Reason</c> fields and
+    ///         <see cref="KnowledgeChunkEmbedder" />'s), the provider layer sanitizes llama-server's response before it
+    ///         becomes an exception message, and no chunk or document text is ever interpolated into either. The inner
+    ///         chain is walked because the actionable detail is always in the innermost transport exception, never in the
+    ///         <see cref="KnowledgeIngestionException" /> wrapper.
+    ///     </para>
+    /// </remarks>
+    private void LogIngestionFailure(Guid documentId, Exception exception)
+    {
+        var chain = new List<string>();
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            chain.Add($"{current.GetType().Name}: {current.Message}");
+        }
+
+        _logger.LogWarning("Knowledge ingestion failed for document {DocumentId} ({ErrorClass}): {FailureChain}",
+            documentId,
+            exception.GetType().Name,
+            string.Join(" -> ", chain));
     }
 
     private async Task IngestAsync(Guid documentId, CancellationToken cancellationToken)
