@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
 
 internal static class AddNodeModelCapabilitiesAndMcpExtensions
@@ -19,6 +20,12 @@ internal static class AddNodeModelCapabilitiesAndMcpExtensions
         ArgumentNullException.ThrowIfNull(configuration);
 
         builder.Services.AddSingleton<ILocalChatRuntimePackageBuilder, LocalChatRuntimePackageBuilder>();
+        // Feeds template-detected tool capability INTO the allow-list the gate below reads, so a model the app itself
+        // recommended and downloaded is admitted without the operator hand-typing its name. See
+        // IToolCapableModelRegistrar for why the list is fed rather than the gate replaced. The backfill runs at startup
+        // so models installed before this existed are corrected too.
+        builder.Services.AddSingleton<IToolCapableModelRegistrar, ToolCapableModelRegistrar>();
+        builder.Services.AddHostedService<ToolCapableModelBackfillService>();
         // LocalToolOfferProvider takes INodeRuntimeSettings itself and reads the migrated AgentHome:ToolCapableModels
         // allow-list LIVE on each offer (see LocalToolOfferProvider.IsToolCapable). It used to be seeded here once, which
         // meant an operator could add their model in Node Settings, save successfully, and still get no tools until the
