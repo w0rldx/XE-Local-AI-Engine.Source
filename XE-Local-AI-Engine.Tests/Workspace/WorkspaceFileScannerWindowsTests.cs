@@ -10,9 +10,20 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         everywhere, so a green Linux run IS the Windows evidence for its behaviour. The exception is its two
 ///         security guards, which have to plant a link to prove anything, and on a stock Windows 11 box those tests
 ///         cannot run at all: creating a symbolic link needs Developer Mode or elevation. Measured on the Windows 11
-///         machine this file was written on, the full suite reported <b>7 skips</b> reading <i>"This host does not
-///         permit creating symbolic links"</i> — so the no-follow guard, which is what stops a listing confined to the
-///         workspace from becoming an unconfined one, had no Windows coverage of any kind.
+///         machine this file was written on (Developer Mode off, unelevated), the full backend suite reported
+///         <b>seven</b> symbolic-link-privilege skips — six reading <i>"This host does not permit creating symbolic
+///         links (on Windows this needs Developer Mode or an elevated process)"</i> and one worded <i>"Creating
+///         symbolic links is privilege-dependent on Windows"</i>. So the no-follow guard, which is what stops a
+///         listing confined to the workspace from becoming an unconfined one, had no Windows coverage of any kind.
+///     </para>
+///     <para>
+///         <b>What these tests do NOT close.</b> Only two of those seven skips are this scanner's
+///         (<c>ListFiles_NeitherFollowsNorEmitsASymbolicLink</c> and
+///         <c>ListFiles_WhenTheScanRootIsItselfALink_Refuses</c>). The other five cover different link guards
+///         entirely — AgentHome's selected-folder preparation, the sandbox <c>CopyInto</c> destination check,
+///         <c>DevelopmentWorkspaceGitConfig.RestoreMinimal</c>, and registered-path resolution — and they remain
+///         unproven on an unprivileged Windows box. Junctions would close those too, the same way, and that is
+///         worth doing; it is simply not what this file does.
 ///     </para>
 ///     <para>
 ///         NTFS <b>junctions</b> close that gap. They are reparse points, exactly like symbolic links, so the same

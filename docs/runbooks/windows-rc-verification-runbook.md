@@ -20,9 +20,25 @@ Note `llama-server` — the OS process table carries no extension on Windows, ev
 
 ### What changed since the last revision of this runbook
 
-Checks **4, 5 and 9** now describe fixed behaviour rather than known-broken behaviour; each carries a "Changed for
-this RC" note saying what was proven on the Linux dev box and what only you can prove. Checks 1, 2, 3, 7 and 8 are
-unchanged and remain open questions.
+Checks **4, 5 and 9** describe fixed behaviour rather than known-broken behaviour; each carries a "Changed for
+this RC" note saying what was proven on the dev box and what only you can prove.
+
+**A 2026-08-02 session ran on a real Windows 11 box (build 26220, RTX 5090, git 2.55.0, .NET 10.0.302) and closed
+several of the questions this runbook was written to ask.** Where that happened the check now says so, and says
+what is left for you:
+
+- **Checks 1 and 2** — the Job Object interop is no longer unverified. `WindowsJobObjectTreeKillTests` proves
+  tree-kill *and* the `TerminateProcess` hard-kill path in the ordinary backend suite, with a negative control
+  showing Windows does not reap orphans on its own. What you still add is a real `llama-server.exe` holding real
+  VRAM through a real driver.
+- **Check 5** — the `core.autocrlf` question is answered (the `i/` column is unaffected; the design is right), and
+  the CRLF gate failure plus its fix are reproduced end-to-end on real Windows git. NTFS junctions now have tests.
+  `MAX_PATH` on a box with long paths *disabled* is still open.
+- **Check 9** — `wmic` is confirmed absent and the `Get-CimInstance` replacement confirmed to answer in ~1.3 s.
+  An AMD/Intel-**only** box is still needed for the vendor result itself.
+
+Still fully open, and still the reason this runbook exists: **checks 3, 7 and 8**, and the deliberately-broken
+half of check 4.
 
 One change can make a previously-starting install fail to start: check 4's fail-closed key ring. A hard startup
 failure there may be the fix working correctly — read that check before concluding the RC is broken.
@@ -33,9 +49,22 @@ failure there may be the fix working correctly — read that check before conclu
 
 **What it proves.** That the Win32 Job Object (`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`) actually reaps
 `llama-server.exe` when the host dies without running managed shutdown — catching the worst failure on a 16 GB
-box: an orphan holding 8–14 GB of VRAM and a loopback port forever. The code carries an explicit
-operator-verification flag (`WindowsJobObjectProcessHandle.cs:17-23`: *"real tree-kill behavior MUST be verified
-on Windows 11"*) and has never been executed on Windows.
+box: an orphan holding 8–14 GB of VRAM and a loopback port forever.
+
+> ### Changed for this RC — the mechanism is now proven automatically; what you add is the real `llama-server`
+>
+> `WindowsJobObjectProcessHandle` used to have no covering test of any kind, and carried an
+> operator-verification flag reading *"real tree-kill behavior MUST be verified on Windows 11"*. That flag has
+> been discharged: `WindowsJobObjectTreeKillTests` now runs on Windows in the ordinary backend suite and proves
+> both halves against real processes — `TreeKill` reaps a descendant the handle never knew about, and a
+> `TerminateProcess` hard kill of the process that OWNS the job (no console-ctrl event, no managed code) reaps it
+> too. The negative control is what makes that evidence: the same parent/grandchild shape with no Job Object,
+> hard-killed the same way, leaves the grandchild running indefinitely — measured on Windows 11 (26220), still
+> alive 5 s later and killed by hand. Windows does not reap orphans, so the Job Object is what did it.
+>
+> So a red check 1 is now much more likely to mean *something about the real spawn path* — the supervisor, the
+> launch spec, `llama-server.exe` itself — than the interop. Run it anyway: the tests contain a PowerShell child,
+> not a GPU process holding 8–14 GB of VRAM through a driver, and only you can supply that.
 
 > ### Closing the console window is NOT a hard kill — do not test that path
 >
@@ -270,12 +299,31 @@ column, not `w/`.
   not apply. Check that the attributes file above exists and that the paths it names match the failing file.
 
 **Not verifiable without you.** These paths are exercised on Linux by `WorkspaceFileScannerTests` and
-`DevelopmentWorkspaceWhitespacePolicyTests`, but three things are genuinely Windows-only and are what this check
-is for: NTFS junctions and reparse points (the scanner refuses to follow one — a Linux symlink test is close but
-not identical), `MAX_PATH` behaviour on a deep tree, and whether Git for Windows' **system** config
-(`core.autocrlf=true` is a common default there) changes what `git ls-files --eol` reports for the `i/` column. If
-it does, the policy would be derived from a different classification than the Linux tests assume — record the
-`i/` column verbatim for one file you know is CRLF.
+`DevelopmentWorkspaceWhitespacePolicyTests`. Three things used to be listed here as genuinely Windows-only; two of
+them have since been closed on a real Windows 11 box, and the remaining one is what this check is now for.
+
+- **`core.autocrlf` — answered, and the design is correct.** Git for Windows' system config
+  (`C:\Program Files\Git\etc\gitconfig`) really does set `core.autocrlf=true`, and it applies inside the managed
+  workspace: the engine redirects `HOME`, which suppresses the user's `~/.gitconfig` but not the *system* file,
+  and nothing pins `GIT_CONFIG_NOSYSTEM`. Measured with it genuinely in effect (git 2.55.0): a CRLF-authored file
+  is normalised to **`i/lf w/crlf`**, and after a fresh checkout *every* file reports `w/crlf` while the index
+  stays `lf`. So the `i/` column is unaffected by `autocrlf` — the policy correctly derives *no* attributes file
+  on such a repository, and sampling `w/` would have blanket-granted `cr-at-eol` to an ordinary LF repository on
+  every Windows box. No action needed; do not "fix" the policy to read the worktree.
+- **The gate failure and its fix are reproduced end-to-end on real Windows git.** On a genuinely CRLF-stored
+  repository (`.gitattributes` `* -text`, so `i/crlf`), appending one CRLF line makes `git diff --check HEAD -- .`
+  report `trailing whitespace` and exit **2**; with the engine's `.git/info/attributes` in place it exits **0**;
+  and a real trailing-space defect on the same file still exits **2**. The `cr-at-eol` grant does not blind the
+  check.
+- **NTFS junctions — now covered by a test.** `WorkspaceFileScannerWindowsTests` plants real junctions and proves
+  the scanner neither follows nor emits one, in list and in search, and refuses a scan root that is itself a
+  junction. Junctions need no privilege, unlike symbolic links (which need Developer Mode or elevation, and whose
+  tests skip on a stock box).
+- **Still yours: `MAX_PATH` on a host with long paths DISABLED.** The scanner adds no length ceiling of its own —
+  proven on a 399-character path — but that box had
+  `HKLM\SYSTEM\CurrentControlSet\Control\FileSystem\LongPathsEnabled = 1`. Check yours
+  (`Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem' -Name LongPathsEnabled`) and **record the
+  value with your result** — a pass on a box with it enabled says nothing about one where it is not.
 
 ---
 
@@ -424,9 +472,22 @@ Skip unless an AMD/Intel-only Windows box is available. Characterization, not pa
 > descriptions from `Win32_VideoController` via `Get-CimInstance`, preferring
 > `%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe` by absolute path, then bare `powershell`, then
 > `wmic` last. `HardwareProfiler.ProbeWindowsAdapterVendor` is no longer a hardcoded `Unknown` stub.
-> **This is the single least-verifiable change in the pass**: no Windows machine was available, so what was
-> proven here is the branch logic (with the platform injected) and the vendor mapping — not that
-> `Get-CimInstance Win32_VideoController` actually answers on your box.
+>
+> **The query itself is now confirmed to answer on real Windows 11** (build 26220), which was the open half:
+> `where.exe wmic` finds **nothing** — the premise holds, `wmic` really is absent by default — and the exact
+> probe invocation
+> (`…\v1.0\powershell.exe -NoProfile -NonInteractive -Command "Get-CimInstance -ClassName Win32_VideoController |
+> Select-Object -ExpandProperty Name"`) returns the adapter list in **~1.3 s**, repeatably, against an 8 s
+> per-tool deadline. The absolute System32 path exists.
+>
+> Two things that box could **not** settle, because it is an NVIDIA box:
+> - Its `ProcessGpuVendorProbe` never reaches this code at all. `System32\nvml.dll` is present, so the NVML fast
+>   path returns `Nvidia` with **zero** processes spawned. The CIM query was verified by running it directly, not
+>   by observing the engine run it.
+> - It has **two** adapters — `AMD Radeon(TM) Graphics` (integrated) listed **first**, then
+>   `NVIDIA GeForce RTX 5090`. That is worth knowing because `MapAdapterVendor` tests `nvidia` **before** `amd`
+>   against the whole listing, so a dual-adapter box maps to `nvidia` regardless of enumeration order. A
+>   genuinely AMD/Intel-**only** box is still the only way to exercise the AMD/Intel result.
 
 **What it still does not fix.** The CPU-fallback alert remains **structurally unreachable** on an AMD/Intel
 Windows box, because `cpuFallback` requires `gpuExpected`, which is `vendor ∈ {nvidia, amd, intel} && vramBytes > 0`
