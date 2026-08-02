@@ -28,18 +28,20 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///     </para>
 ///     <para>
 ///         Probe order: NVML driver-presence (NVIDIA, no shelling) → <c>nvidia-smi</c> (NVIDIA confirmation/fallback) →
-///         a platform adapter list (<c>wmic</c>/<c>lspci</c>) for AMD/Intel.
+///         a platform adapter list for AMD/Intel — <c>lspci</c> on Linux, and on Windows a <c>Win32_VideoController</c>
+///         CIM query with <c>wmic</c> only as a last resort (see <see cref="ReadWindowsAdapterListAsync" />).
 ///     </para>
 /// </remarks>
 public sealed class ProcessGpuVendorProbe : IGpuVendorProbe
 {
     // Hard cap per probe tool. Without it a hung tool blocks until the caller's token fires: nvidia-smi can stall
-    // indefinitely under some Windows driver/WMI states, and the deprecated wmic can be very slow or absent. A hung GPU
-    // probe would otherwise freeze first-run model provisioning. On timeout we kill the tool (entire tree) and treat the
-    // vendor as undetected — degrading to the CPU runtime, which always works.
+    // indefinitely under some Windows driver/WMI states, and a CIM/WMI query against a wedged WMI repository can too.
+    // A hung GPU probe would otherwise freeze first-run model provisioning. On timeout we kill the tool (entire tree)
+    // and treat the vendor as undetected — degrading to the CPU runtime, which always works.
     private static readonly TimeSpan DefaultProbeTimeout = TimeSpan.FromSeconds(8);
 
     private readonly Func<bool> _nvidiaDriverPresent;
+    private readonly ProbePlatform _platform;
     private readonly TimeSpan _probeTimeout;
     private readonly Func<string, string, IProbeProcess> _processFactory;
 
@@ -50,15 +52,40 @@ public sealed class ProcessGpuVendorProbe : IGpuVendorProbe
     }
 
     /// <summary>
-    ///     Test seam: lets a unit test simulate the NVML driver-presence signal, shorten the per-tool timeout, and swap
-    ///     the process factory for a fake that overruns/records-kill — so the no-shelling fast path AND the overrun
-    ///     reaping path are exercisable on any host without a real GPU.
+    ///     Test seam: lets a unit test simulate the NVML driver-presence signal, shorten the per-tool timeout, swap the
+    ///     process factory for a fake that overruns/records-kill, and choose which platform's adapter-list branch runs —
+    ///     so the no-shelling fast path, the overrun reaping path AND the Windows adapter enumeration are all
+    ///     exercisable on any host without a real GPU. The platform is a parameter rather than an
+    ///     <c>OperatingSystem.IsWindows()</c> call buried in the branch precisely because the Windows branch is the one
+    ///     that was wrong and there is no Windows machine to verify it on.
     /// </summary>
-    internal ProcessGpuVendorProbe(Func<bool> nvidiaDriverPresent, TimeSpan probeTimeout, Func<string, string, IProbeProcess> processFactory)
+    internal ProcessGpuVendorProbe(Func<bool> nvidiaDriverPresent,
+        TimeSpan probeTimeout,
+        Func<string, string, IProbeProcess> processFactory,
+        ProbePlatform? platform = null)
     {
         _nvidiaDriverPresent = nvidiaDriverPresent ?? throw new ArgumentNullException(nameof(nvidiaDriverPresent));
         _probeTimeout = probeTimeout;
         _processFactory = processFactory ?? throw new ArgumentNullException(nameof(processFactory));
+        _platform = platform ?? CurrentPlatform();
+    }
+
+    /// <summary>Which host the adapter-list branch should enumerate for.</summary>
+    internal enum ProbePlatform
+    {
+        Other,
+        Windows,
+        Linux
+    }
+
+    private static ProbePlatform CurrentPlatform()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return ProbePlatform.Windows;
+        }
+
+        return OperatingSystem.IsLinux() ? ProbePlatform.Linux : ProbePlatform.Other;
     }
 
     /// <inheritdoc />
@@ -160,17 +187,76 @@ public sealed class ProcessGpuVendorProbe : IGpuVendorProbe
 
     private async Task<string> ReadAdapterListAsync(CancellationToken ct)
     {
-        if (OperatingSystem.IsWindows())
+        return _platform switch
         {
-            return await TryRunAsync("wmic", "path win32_VideoController get name", ct).ConfigureAwait(false) ?? string.Empty;
-        }
+            ProbePlatform.Windows => await ReadWindowsAdapterListAsync(ct).ConfigureAwait(false),
+            ProbePlatform.Linux => await TryRunAsync("lspci", string.Empty, ct).ConfigureAwait(false) ?? string.Empty,
+            _ => string.Empty
+        };
+    }
 
-        if (OperatingSystem.IsLinux())
+    /// <summary>
+    ///     Enumerates Windows display adapters, trying each source in turn until one answers.
+    ///     <para>
+    ///         <b>Why this is not just <c>wmic</c> any more.</b> <c>wmic</c> is a deprecated Feature-on-Demand that is
+    ///         NOT installed by default on current Windows 11. Its absence was swallowed here into "no adapter list",
+    ///         which collapsed the vendor to <see cref="DetectedGpuVendor.None" /> and therefore selected
+    ///         <c>GpuVariant.Cpu</c> — so a perfectly Vulkan-capable AMD or Intel box ran inference on the CPU, at a
+    ///         fraction of the speed, and said nothing about it. The failure was silent in both places it could have
+    ///         been noticed: the probe treats a missing tool as a legitimate "not detected", and the CPU-fallback alert
+    ///         needs a positive VRAM figure that this class does not produce.
+    ///     </para>
+    ///     <para>
+    ///         The CIM query is what Microsoft's own <c>wmic</c> deprecation notice points at, and Windows PowerShell
+    ///         5.1 is in-box on every Windows 11 install. It is preferred by absolute path so a <c>powershell.exe</c>
+    ///         planted earlier on <c>PATH</c> cannot answer for it, with the bare name behind that for a host whose
+    ///         layout differs. <c>wmic</c> stays LAST rather than being deleted: it still exists on boxes where the
+    ///         Feature-on-Demand is installed, and it costs nothing on the ones where it is not — a missing executable
+    ///         fails to start immediately rather than burning the per-tool timeout.
+    ///     </para>
+    ///     <para>
+    ///         Worst case is one timeout, not one per candidate: only a tool that STARTS can overrun, and a host that
+    ///         has both PowerShell and <c>wmic</c> gets its answer from the first. That keeps this inside the caller's
+    ///         own ceiling (<c>FirstRunModelProvisioningService</c>, 25 s).
+    ///     </para>
+    ///     <para>
+    ///         NVIDIA never reaches here — NVML and <c>nvidia-smi</c> answer first — so nothing on this path can change
+    ///         what an NVIDIA box selects.
+    ///     </para>
+    /// </summary>
+    private async Task<string> ReadWindowsAdapterListAsync(CancellationToken ct)
+    {
+        foreach (var (fileName, arguments) in WindowsAdapterListCommands(Environment.SystemDirectory))
         {
-            return await TryRunAsync("lspci", string.Empty, ct).ConfigureAwait(false) ?? string.Empty;
+            var output = await TryRunAsync(fileName, arguments, ct).ConfigureAwait(false);
+            if (!string.IsNullOrWhiteSpace(output))
+            {
+                return output;
+            }
         }
 
         return string.Empty;
+    }
+
+    /// <summary>
+    ///     The Windows adapter-list candidates in the order they are tried. Takes the system directory rather than
+    ///     reading it, so the preferred absolute path — the part that only exists on Windows — is still assertable from
+    ///     a test on any host.
+    /// </summary>
+    internal static IEnumerable<(string FileName, string Arguments)> WindowsAdapterListCommands(string? systemDirectory)
+    {
+        // -NoProfile so a user profile script cannot slow the probe or change its output; -NonInteractive so nothing
+        // can prompt on a headless start. A cmdlet failure (a broken WMI repository) leaves stdout empty, which reads
+        // as "this source has no answer" and falls through to the next candidate.
+        const string CimArguments = "-NoProfile -NonInteractive -Command \"Get-CimInstance -ClassName Win32_VideoController | Select-Object -ExpandProperty Name\"";
+
+        if (!string.IsNullOrEmpty(systemDirectory))
+        {
+            yield return (Path.Combine(systemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe"), CimArguments);
+        }
+
+        yield return ("powershell", CimArguments);
+        yield return ("wmic", "path win32_VideoController get name");
     }
 
     private async Task<string?> TryRunAsync(string fileName, string arguments, CancellationToken ct)

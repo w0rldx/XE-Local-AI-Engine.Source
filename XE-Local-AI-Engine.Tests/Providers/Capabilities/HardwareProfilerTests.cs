@@ -204,11 +204,11 @@ public sealed class HardwareProfilerTests
     }
 
     [Test]
-    public async Task HardwareProfiler_Windows_NonNvidia_DegradesToCpu_UntilDxgiSeamFilled()
+    public async Task HardwareProfiler_Windows_WhenNoAdapterSourceAnswers_DegradesToCpu()
     {
-        // No NVIDIA; the DXGI/WMI Windows seam is not yet implemented (returns Unknown vendor + null VRAM on this box)
-        // ⇒ the vendor-name fallback path yields VramKnown=false and CPU mode.
-        var probe = new FakeProcessProbe(); // nvidia-smi absent.
+        // Neither nvidia-smi nor any adapter-description source answers, so there is nothing to name the vendor with.
+        // Unknown + VramKnown:false + CPU mode is the always-correct floor.
+        var probe = new FakeProcessProbe(); // every tool absent.
         var environment = new FakeEnvironment
         {
             IsWindows = true,
@@ -224,6 +224,138 @@ public sealed class HardwareProfilerTests
         AssertEx.False(profile.VramKnown);
         AssertEx.False(profile.GpuAccelAvailable);
     }
+
+    /// <summary>
+    ///     The Windows vendor probe used to be a hardcoded <c>Unknown</c> stub, so an AMD or Intel box reported
+    ///     <c>gpuVendor: "unknown"</c> on the hardware-profile card the operator actually reads — while the runtime
+    ///     selector, using a different probe entirely, could be choosing the Vulkan binary for that same machine. The
+    ///     two detectors disagreeing is what this closes.
+    /// </summary>
+    [Test]
+    public async Task HardwareProfiler_Windows_NonNvidia_NamesTheVendorFromTheAdapterDescription()
+    {
+        foreach (var (adapterName, expected) in new[]
+                 {
+                     ("AMD Radeon RX 7800 XT\n", GpuVendor.Amd),
+                     ("Advanced Micro Devices, Inc. [AMD/ATI]\n", GpuVendor.Amd),
+                     ("Intel(R) UHD Graphics 770\n", GpuVendor.Intel)
+                 })
+        {
+            var probe = new ScriptedProcessProbe().WithOutput("powershell", adapterName);
+            var profiler = new HardwareProfiler(probe, WindowsEnvironment(), new HardwareProfilerOptions());
+
+            var profile = await profiler.GetProfileAsync(forceRefresh: false, CancellationToken.None);
+
+            AssertEx.Equal(expected, profile.GpuVendor);
+
+            // Naming the vendor does NOT invent VRAM bytes, so the CPU-mode floor is unchanged — the profile is simply
+            // truthful about what the adapter is now. Do not read this test as making the CPU-fallback alert reachable.
+            AssertEx.False(profile.VramKnown);
+            AssertEx.False(profile.GpuAccelAvailable);
+        }
+    }
+
+    /// <summary>
+    ///     <c>wmic</c> is a deprecated Feature-on-Demand that is not installed by default on current Windows 11, and
+    ///     depending on it is exactly what left this detector blind. The CIM query — in-box on every Windows 11 — is
+    ///     tried first, by its absolute System32 path so a planted <c>powershell.exe</c> cannot answer for it.
+    /// </summary>
+    [Test]
+    public async Task HardwareProfiler_Windows_PrefersTheCimQueryOverTheDeprecatedWmic()
+    {
+        var probe = new ScriptedProcessProbe().WithOutput("powershell", "AMD Radeon RX 7800 XT\n");
+        var profiler = new HardwareProfiler(probe, WindowsEnvironment(), new HardwareProfilerOptions());
+
+        _ = await profiler.GetProfileAsync(forceRefresh: false, CancellationToken.None);
+
+        var adapterCalls = probe.Calls.Where(call => !string.Equals(call.FileName, "nvidia-smi", StringComparison.Ordinal)).ToList();
+        AssertEx.NotEmpty(adapterCalls);
+        AssertEx.Contains(adapterCalls[0].FileName, "powershell", StringComparison.OrdinalIgnoreCase);
+        AssertEx.Contains(string.Join(' ', adapterCalls[0].Arguments), "Win32_VideoController");
+        AssertEx.False(adapterCalls.Any(call => call.FileName.Contains("wmic", StringComparison.OrdinalIgnoreCase)),
+            "wmic must not be reached once the CIM query has answered");
+    }
+
+    [Test]
+    public async Task HardwareProfiler_Windows_WhenPowerShellIsUnavailable_StillReadsTheVendorFromWmic()
+    {
+        // A locked-down box can have PowerShell constrained or removed while the wmic Feature-on-Demand is still
+        // installed. Keeping wmic as the last candidate costs nothing on a box that has neither.
+        var probe = new ScriptedProcessProbe().WithOutput("wmic", "Name\nAMD Radeon RX 7800 XT\n");
+        var profiler = new HardwareProfiler(probe, WindowsEnvironment(), new HardwareProfilerOptions());
+
+        var profile = await profiler.GetProfileAsync(forceRefresh: false, CancellationToken.None);
+
+        AssertEx.Equal(GpuVendor.Amd, profile.GpuVendor);
+    }
+
+    /// <summary>
+    ///     A wedged WMI repository is one of the states the per-probe deadline exists for. The adapter query must
+    ///     degrade to Unknown like every other probe here, never stall the profile.
+    /// </summary>
+    [Test]
+    public async Task HardwareProfiler_Windows_WhenTheAdapterQueryTimesOut_DegradesToUnknown()
+    {
+        var probe = new ScriptedProcessProbe().WithTimeout("powershell").WithTimeout("wmic");
+        var options = new HardwareProfilerOptions
+        {
+            HardwareProbeTimeoutSeconds = 7
+        };
+        var profiler = new HardwareProfiler(probe, WindowsEnvironment(), options);
+
+        var profile = await profiler.GetProfileAsync(forceRefresh: false, CancellationToken.None);
+
+        AssertEx.Equal(GpuVendor.Unknown, profile.GpuVendor);
+        AssertEx.False(profile.GpuAccelAvailable);
+        foreach (var call in probe.Calls)
+        {
+            AssertEx.Equal(TimeSpan.FromSeconds(7), call.Timeout, "every probe must run under the configured deadline");
+        }
+    }
+
+    [Test]
+    public async Task HardwareProfiler_Linux_NeverAttemptsTheWindowsAdapterQuery()
+    {
+        var probe = new ScriptedProcessProbe();
+        var environment = new FakeEnvironment
+        {
+            IsLinux = true,
+            ProcMemInfo = "MemTotal: 8 kB\nMemAvailable: 4 kB\n",
+            DrmVendorIds = ["1002"],
+            ProcessorCount = 8
+        };
+
+        var profile = await new HardwareProfiler(probe, environment, new HardwareProfilerOptions())
+                            .GetProfileAsync(forceRefresh: false, CancellationToken.None);
+
+        AssertEx.Equal(GpuVendor.Amd, profile.GpuVendor);
+        AssertEx.False(probe.Calls.Any(call => call.FileName.Contains("powershell", StringComparison.OrdinalIgnoreCase)
+                                               || call.FileName.Contains("wmic", StringComparison.OrdinalIgnoreCase)),
+            "the Linux DRM path must not shell a Windows adapter query");
+    }
+
+    [Test]
+    public void MapAdapterVendor_DistinguishesNoVendorFromAFailedRead()
+    {
+        AssertEx.Equal(GpuVendor.Amd, HardwareProfiler.MapAdapterVendor("AMD Radeon RX 7800 XT"));
+        AssertEx.Equal(GpuVendor.Amd, HardwareProfiler.MapAdapterVendor("Advanced Micro Devices, Inc."));
+        AssertEx.Equal(GpuVendor.Intel, HardwareProfiler.MapAdapterVendor("Intel(R) Arc(TM) A770"));
+        AssertEx.Equal(GpuVendor.Nvidia, HardwareProfiler.MapAdapterVendor("NVIDIA GeForce RTX 4080"));
+
+        // Null, not Unknown: a listing that names no modelled vendor is a source with no answer, so the caller goes on
+        // to the next one instead of accepting it as the verdict.
+        AssertEx.Null(HardwareProfiler.MapAdapterVendor("Microsoft Basic Display Adapter"));
+        AssertEx.Null(HardwareProfiler.MapAdapterVendor(string.Empty));
+    }
+
+    private static FakeEnvironment WindowsEnvironment() =>
+        new()
+        {
+            IsWindows = true,
+            TotalRamBytes = 16_000_000_000L,
+            AvailableRamBytes = 10_000_000_000L,
+            ProcessorCount = 8
+        };
 
     [Test]
     public async Task HardwareProfiler_WhenVramUnprobed_DegradesToCpu()
@@ -403,6 +535,44 @@ public sealed class HardwareProfilerTests
         public FakeProcessProbe TimeoutAfterFirstCall()
         {
             _timeoutAfterFirstCall = true;
+            return this;
+        }
+    }
+
+    /// <summary>
+    ///     A probe that answers per executable, so the Windows adapter-source ORDER and each source's outcome are
+    ///     assertable on a Linux host — the platform decision under test is the injected
+    ///     <see cref="IHardwareProbeEnvironment.IsWindows" />, never a live OS call.
+    /// </summary>
+    private sealed class ScriptedProcessProbe : IProcessProbe
+    {
+        private readonly Dictionary<string, string> _outputs = new(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _timeouts = new(StringComparer.OrdinalIgnoreCase);
+
+        public List<(string FileName, IReadOnlyList<string> Arguments, TimeSpan Timeout)> Calls { get; } = [];
+
+        public Task<ProcessProbeResult?> RunAsync(string fileName, IReadOnlyList<string> arguments, TimeSpan timeout, CancellationToken ct)
+        {
+            Calls.Add((fileName, arguments, timeout));
+
+            if (_timeouts.Any(key => fileName.Contains(key, StringComparison.OrdinalIgnoreCase)))
+            {
+                return Task.FromResult<ProcessProbeResult?>(new ProcessProbeResult(ExitCode: -1, StandardOutput: string.Empty, TimedOut: true));
+            }
+
+            var match = _outputs.FirstOrDefault(entry => fileName.Contains(entry.Key, StringComparison.OrdinalIgnoreCase));
+            return Task.FromResult(match.Value is null ? null : new ProcessProbeResult(ExitCode: 0, match.Value));
+        }
+
+        public ScriptedProcessProbe WithOutput(string fileNameFragment, string standardOutput)
+        {
+            _outputs[fileNameFragment] = standardOutput;
+            return this;
+        }
+
+        public ScriptedProcessProbe WithTimeout(string fileNameFragment)
+        {
+            _ = _timeouts.Add(fileNameFragment);
             return this;
         }
     }

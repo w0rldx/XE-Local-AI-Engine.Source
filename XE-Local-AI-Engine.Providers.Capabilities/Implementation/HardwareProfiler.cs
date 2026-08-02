@@ -119,7 +119,7 @@ internal sealed class HardwareProfiler : IHardwareProfiler
         {
             // No NVIDIA GPU (or the probe timed out with no cache): fall back to the OS vendor seam. VRAM stays unknown
             // on Linux non-NVIDIA and on the not-yet-implemented Windows DXGI seam ⇒ CPU mode.
-            vendor = DetectNonNvidiaVendor();
+            vendor = await DetectNonNvidiaVendorAsync(ct).ConfigureAwait(false);
             vramBytes = await DetectNonNvidiaVramAsync(vendor, ct).ConfigureAwait(false);
             availableVramBytes = null;
         }
@@ -159,22 +159,18 @@ internal sealed class HardwareProfiler : IHardwareProfiler
         return (_environment.GetTotalPhysicalMemoryBytes(), _environment.GetAvailableMemoryBytes());
     }
 
-    // Non-NVIDIA vendor detection: Linux /sys/class/drm vendor ids, else the Windows adapter-name seam. NVIDIA is handled
-    // up front by the single nvidia-smi probe, so this branch never runs for an NVIDIA box.
-    private GpuVendor DetectNonNvidiaVendor()
+    // Non-NVIDIA vendor detection: Linux /sys/class/drm vendor ids, else the Windows adapter-name query. NVIDIA is
+    // handled up front by the single nvidia-smi probe, so this branch normally never runs for an NVIDIA box.
+    private async Task<GpuVendor> DetectNonNvidiaVendorAsync(CancellationToken ct)
     {
         if (_environment.IsLinux)
         {
             return DetectLinuxDrmVendor();
         }
 
-        if (_environment.IsWindows)
-        {
-            // DXGI/WMI vendor-name seam (operator-filled on Win11). Returns Unknown on this Linux box.
-            return ProbeWindowsAdapterVendor();
-        }
-
-        return GpuVendor.Unknown;
+        return _environment.IsWindows
+            ? await ProbeWindowsAdapterVendorAsync(ct).ConfigureAwait(false)
+            : GpuVendor.Unknown;
     }
 
     private GpuVendor DetectLinuxDrmVendor()
@@ -326,18 +322,104 @@ internal sealed class HardwareProfiler : IHardwareProfiler
     }
 
     /// <summary>
-    ///     Windows GPU-vendor-name seam from the adapter description (DXGI/WMI). Not yet implemented: returns
-    ///     <see cref="GpuVendor.Unknown" /> so the NVIDIA-via-nvidia-smi path still works and non-NVIDIA Windows boxes
-    ///     degrade to CPU mode until this is implemented and validated on Win11.
+    ///     Windows GPU-vendor name, read from the adapter descriptions <c>Win32_VideoController</c> reports.
+    ///     <para>
+    ///         This used to be a hardcoded <see cref="GpuVendor.Unknown" /> stub, so an AMD or Intel Windows box
+    ///         reported <c>gpuVendor: "unknown"</c> on the hardware-profile card while the runtime selector — reading a
+    ///         different probe entirely — could be selecting the Vulkan binary for the same machine. The two detectors
+    ///         disagreeing is the reason this is implemented rather than left deferred: the profile is what the operator
+    ///         is shown.
+    ///     </para>
+    ///     <para>
+    ///         The query goes through <see cref="IProcessProbe" /> under the same wall-clock deadline as
+    ///         <c>nvidia-smi</c>, so a wedged WMI repository degrades to <see cref="GpuVendor.Unknown" /> instead of
+    ///         stalling the profile — and the OS decision is the injected
+    ///         <see cref="IHardwareProbeEnvironment.IsWindows" />, not an inline platform call, so both branches are
+    ///         exercisable without a Windows host.
+    ///     </para>
+    ///     <para>
+    ///         <b>This does NOT make the CPU-fallback alert reachable on such a box, and must not be read as if it
+    ///         did.</b> That alert needs <c>gpuExpected</c>, which is
+    ///         <c>vendor ∈ {nvidia, amd, intel} &amp;&amp; vramBytes &gt; 0</c>, and the VRAM half is still the
+    ///         deferred seam below. A vendor without bytes still degrades to CPU mode by the profile's own rule
+    ///         (<see cref="HardwareProfile.VramKnown" /> false ⇒ <see cref="HardwareProfile.GpuAccelAvailable" />
+    ///         false); what changes is that the profile now names the adapter truthfully instead of saying it does not
+    ///         know what it is.
+    ///     </para>
     /// </summary>
-    private static GpuVendor ProbeWindowsAdapterVendor()
+    private async Task<GpuVendor> ProbeWindowsAdapterVendorAsync(CancellationToken ct)
     {
-        // Known, intentionally-deferred limitation (release cleanup, doc-and-defer): the Windows non-NVIDIA vendor
-        // probe is not built this release because it can't be live-verified on this Linux/WSL box; AMD/Intel on Windows
-        // therefore report Unknown and run in CPU mode, while NVIDIA on Windows is unaffected (nvidia-smi).
-        // Win11 follow-up: enumerate DXGI adapter descriptions / WMI Win32_VideoController.Name and map
-        // "AMD"/"Radeon"/"Advanced Micro Devices"→Amd, "Intel"→Intel.
+        foreach (var (fileName, arguments) in WindowsAdapterListCommands())
+        {
+            var result = await _processProbe.RunAsync(fileName, arguments, ResolveProbeTimeout(), ct).ConfigureAwait(false);
+            if (result is null || result.TimedOut || result.ExitCode != 0)
+            {
+                continue;
+            }
+
+            if (MapAdapterVendor(result.StandardOutput) is { } vendor)
+            {
+                return vendor;
+            }
+        }
+
         return GpuVendor.Unknown;
+    }
+
+    /// <summary>
+    ///     Maps an adapter-description listing to a vendor, or <see langword="null" /> when the listing names no vendor
+    ///     this profiler models — which is a different answer from "the tool failed", so the caller can go on to the
+    ///     next source rather than accepting an empty read.
+    /// </summary>
+    internal static GpuVendor? MapAdapterVendor(string adapterNames)
+    {
+        ArgumentNullException.ThrowIfNull(adapterNames);
+
+        if (adapterNames.Contains("nvidia", StringComparison.OrdinalIgnoreCase))
+        {
+            // Reachable only when nvidia-smi is absent or unusable while the adapter is genuinely NVIDIA — a
+            // driver-present/tool-missing box. Naming it is still better than Unknown.
+            return GpuVendor.Nvidia;
+        }
+
+        if (adapterNames.Contains("amd", StringComparison.OrdinalIgnoreCase)
+            || adapterNames.Contains("radeon", StringComparison.OrdinalIgnoreCase)
+            || adapterNames.Contains("advanced micro devices", StringComparison.OrdinalIgnoreCase))
+        {
+            return GpuVendor.Amd;
+        }
+
+        return adapterNames.Contains("intel", StringComparison.OrdinalIgnoreCase) ? GpuVendor.Intel : null;
+    }
+
+    /// <summary>
+    ///     The Windows adapter-description sources, in the order they are tried.
+    ///     <para>
+    ///         <c>wmic</c> is LAST and is no longer the only source: it is a deprecated Feature-on-Demand that is not
+    ///         installed by default on current Windows 11, and depending on it is what left this detector blind. Windows
+    ///         PowerShell 5.1 is in-box on every Windows 11 install and <c>Get-CimInstance</c> is what Microsoft's own
+    ///         deprecation notice points at. The absolute System32 path is preferred so a <c>powershell.exe</c> planted
+    ///         earlier on <c>PATH</c> cannot answer for it.
+    ///     </para>
+    /// </summary>
+    private static IEnumerable<(string FileName, IReadOnlyList<string> Arguments)> WindowsAdapterListCommands()
+    {
+        string[] cimArguments =
+        [
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "Get-CimInstance -ClassName Win32_VideoController | Select-Object -ExpandProperty Name"
+        ];
+
+        var systemDirectory = Environment.SystemDirectory;
+        if (!string.IsNullOrEmpty(systemDirectory))
+        {
+            yield return (Path.Combine(systemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe"), cimArguments);
+        }
+
+        yield return ("powershell", cimArguments);
+        yield return ("wmic", ["path", "win32_VideoController", "get", "name"]);
     }
 
     private static bool TryParseMemInfoKilobytes(string memInfo, string key, out long kilobytes)
