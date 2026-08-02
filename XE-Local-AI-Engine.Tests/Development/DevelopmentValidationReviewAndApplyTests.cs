@@ -39,7 +39,15 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     /// <summary>Reused because CA1869 forbids minting serializer options per operation.</summary>
     private static readonly JsonSerializerOptions ReportJsonOptions = new(JsonSerializerDefaults.Web);
 
-    private readonly string _root = Path.Combine(Path.GetTempPath(), "xe-development-validation-review-" + Guid.NewGuid().ToString("N"));
+    // Short prefix and truncated suffix on purpose: this fixture's root is the outermost of FOUR nested unique
+    // segments, because DevelopmentWorkspaceProvider then appends development\workspaces\<projectId>\<taskId> as two
+    // more full GUIDs. With the original 33-char prefix and full GUIDs the clone destination reached ~226 characters
+    // under %TEMP%, and `git clone` died with "fatal: '$GIT_DIR' too big / fetch-pack: invalid index-pack output" once
+    // index-pack appended its own \.git\objects\pack\tmp_idx_XXXXXX. core.longpaths does NOT lift that limit —
+    // index-pack builds the temp-pack path into a fixed PATH_MAX buffer — so the only fix is a shorter path.
+    // Production is unaffected: its data root is %LOCALAPPDATA%\XE-Local-AI-Engine, leaving ~90 characters of headroom.
+    // 48 bits of randomness is ample for a per-run temporary directory.
+    private readonly string _root = Path.Combine(Path.GetTempPath(), "xe-dev-rev-" + Guid.NewGuid().ToString("N")[..12]);
 
     public void Dispose()
     {
@@ -865,7 +873,8 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         int maxAttemptDurationSeconds = 60)
     {
         Directory.CreateDirectory(_root);
-        var dataRoot = Path.Combine(_root, "data-" + Guid.NewGuid().ToString("N"));
+        // Truncated for the same Windows path-budget reason as _root above.
+        var dataRoot = Path.Combine(_root, "d-" + Guid.NewGuid().ToString("N")[..12]);
         Directory.CreateDirectory(dataRoot);
         var databasePath = Path.Combine(dataRoot, "node.sqlite");
         var options = Options.Create(new DevelopmentOptions
