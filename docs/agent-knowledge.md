@@ -459,6 +459,37 @@ The trap is the relationship between 3 and 4. **Gate 3 is a statement about the 
 
 Note the failure is *partial*, which makes it harder to spot than a clean "no tools": a non-allow-listed model still receives `get_current_time` and `calculate` (the whole production `LocalAgentToolRegistry`), while the coder tools, the knowledge-base tools, `spawn_subagent` and **every MCP tool** are dropped. So "tools work" and "tools are broken" can both look true in the same conversation.
 
+### Passing all five gates is still not enough — llama.cpp must be able to COMPILE the tool schemas
+
+A sixth thing can fail *after* every gate above says yes, and it looks nothing like a capability problem. llama-server turns each offered tool's JSON schema into a GBNF grammar for constrained decoding, and its converter has a hard repetition ceiling. Exceed it and the turn dies in ~80 ms with a raw sampler message:
+
+```
+parse: error parsing grammar: number of repetitions exceeds sane defaults, please reduce the number of repetitions
+-> HTTP 400 {"message":"Failed to initialize samplers: failed to parse grammar"}
+```
+
+**Do not read that as "the model can't do tool calling".** A capture run in 2026-08 filed it that way against the first-run 0.5B, and the diagnosis was wrong in every particular: the model tool-calls correctly, it *was* in the allow-list, and the UI toggle was right to be enabled. The defect was ours — our own tool schemas.
+
+Measured against `llama-server` b10201 (source-build CUDA) with `bartowski/Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M`, one keyword per request:
+
+| keyword | breaks at | safe at |
+|---|---|---|
+| `maxLength` | 2000 | 1990 |
+| `minLength`, `minItems`, `maxItems` | 8000 | — |
+| `pattern` with a `{0,8000}` quantifier | yes | `{0,63}` fine |
+| integer `minimum` / `maximum` | **never** — ok at 100000 | — |
+
+The ceiling is also **combined across the whole `tools` array** (a second error variant names "rules ... multiplied by the new repetition"), so a per-keyword threshold is not sufficient on its own: the full production offer still failed with every `maxLength` clamped to 2048 and only compiled at 1024. That is where `LlamaGrammarToolSchemaCompatibility`'s bound comes from — it is an empirical figure for *our whole catalog*, not a number from llama.cpp's source. Re-measure it if the offer grows.
+
+Two traps worth keeping:
+
+- **The bug hides behind reasoning models.** The same request that 400s on Qwen2.5 succeeds on Qwen3.6-27B — not because the 27B is more capable, but because it emits `reasoning_content` first, so llama.cpp never enters the constrained branch and never compiles the grammar (its server log contains zero grammar lines). Both report `chat format: peg-native`. A reasoning model is therefore **useless as a positive control** for this failure; reproduce on a non-reasoning tool-capable model.
+
+  This is not hypothetical: `ChatLocalToolsE2ETests` pins `ToolCapableModelName = "qwen3.5:0.8b"` — a reasoning model — so the one E2E that drives the local-tools toggle end to end **structurally could not catch this**, and did not. If you extend that suite, add a non-reasoning tool-capable model rather than assuming the existing green run covers the constrained-decoding path.
+- **Fixing it by shrinking the constants is the wrong reflex.** The bound in a tool's `ParameterSchema` is advisory to the model; the handler's own validation is authoritative, and the same schema drives `ToolArgumentRepairAIFunction`'s argument checking. Clamping `spawn_subagent`'s `task` from 8000 to 1024 would tell the model a lie and weaken validation to match it. The compatibility pass strips the offending keyword **on the llama.cpp wire only**, so Codex and Azure Foundry keep the full schema. `KnowledgeQueryLimits` already carries a scar from the other half of this — its comment records the tool schema's "former advisory 2000".
+
+MCP servers supply third-party tool schemas the node does not control, so this is not a closed problem: the compatibility pass is the guard, and `FailureCategory.ModelCapabilityUnsupported` carries the translated message when something still slips through.
+
 ### Capability detection is a substring scan of the chat template — know what it can and cannot see
 
 `GgufCapabilityDetector` decides a GGUF's advertised capabilities by scanning `tokenizer.chat_template` for literal substrings: tools from `tool_calls`/`tool_call`/`function_call`/`tools`, reasoning from `<think`/`enable_thinking`/`reasoning_content`. Two consequences that have already bitten:

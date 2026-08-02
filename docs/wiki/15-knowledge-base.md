@@ -66,6 +66,8 @@ Upload ──▶ Uploaded ──▶ Extracting ──▶ Chunking ──▶ Embe
 
 **Graceful degradation is a contract:** if the embedding model or the reranker is unavailable, search degrades (lexical-only / fusion-order) rather than failing. A hit's `Title`/`Section` are derived from the **non-sensitive** `heading_path`/`storage_path`, so a result never exposes the encrypted original file name.
 
+That invariant is a statement about the **search response**, not about what the user sees. Because `storage_path` is a GUID filename, a chunk with no heading trail would otherwise be labelled with a raw GUID — unreadable, and indistinguishable between two documents. The **UI resolves the display name client-side**: each hit carries its `document_id`, and `KnowledgeSearchPanel` joins that against the already-loaded documents list (which decrypts names for the same operator-authenticated viewer) to render `12-security-and-privacy.md › Encryption at rest`, falling back to the API's title when the document is not in the loaded list. So do not "fix" a GUID-titled result by decrypting `original_file_name` in `KnowledgeSearchService` — the readable label already exists one layer up, and moving it into the response would also hand file names to a cloud model through the gated `search_knowledge_base` tool.
+
 ## Agent tool surface
 
 The knowledge base is exposed to the agent loop as tools:
