@@ -37,8 +37,26 @@ what is left for you:
 - **Check 9** — `wmic` is confirmed absent and the `Get-CimInstance` replacement confirmed to answer in ~1.3 s.
   An AMD/Intel-**only** box is still needed for the vendor result itself.
 
-Still fully open, and still the reason this runbook exists: **checks 3, 7 and 8**, and the deliberately-broken
-half of check 4.
+**A second session, 2026-08-03, ran the half that needs a real model on the real GPU.** Status after it:
+
+| Check | State |
+|---|---|
+| 1 — Job Object tree-kill | **Verified** with a real `llama-server` holding 31741 MiB through driver 610.88 |
+| 2 — stale-orphan reaper | **Verified** — 0 reaper lines, so the Job Object is what reaped it |
+| 3 — `node.key` DPAPI wrap | Verified in the earlier session |
+| 4 — `dp-keys` fail-closed ring | Verified in the earlier session, both directions |
+| 5 — Development Mode surveys | **Blocked** by a redirected `%LOCALAPPDATA%` in that harness — see the note in check 5; not a product failure, but read it before re-running |
+| 5b — Coder surveys | **Unproven** — attempted with a *reasoning* model, which cannot produce a tool call; see the note in 5b |
+| 6 — consent disclosure | **Dialog verified live**; the containment probe **line** is still unobserved (needs a real sandbox run, which 5 blocked) |
+| 7 — partial GPU offload | **Verified**, all five criteria, by deliberately oversizing the quant on a 32 GB card |
+| 8 — zero-device runtime | **Answered, and it FAILS** — a successful zero-device probe is reported as a timed-out one |
+| 9 — non-NVIDIA adapter | **Not applicable** on a dual-adapter box; unexercised, not passed |
+
+Still fully open: **checks 5, 5b and the probe-line half of 6**, plus check 9's AMD/Intel result. Check 8 is
+open as a **defect to fix**, not as a question to answer.
+
+Everything measured in that session came from a **32 GB / 61 GB RAM / 32 CPU** box against a ≈16 GB consumer
+target, so every timing, VRAM and fit figure in it **over-reports**. See "16 GB target notes" at the end.
 
 One change can make a previously-starting install fail to start: check 4's fail-closed key ring. A hard startup
 failure there may be the fix working correctly — read that check before concluding the RC is broken.
@@ -98,7 +116,33 @@ box: an orphan holding 8–14 GB of VRAM and a loopback port forever.
    ```
 
 **Pass looks like.** `llama` returns nothing (empty, no rows). `memory.used` back to the idle baseline from
-step 3 (single-digit MiB on a headless GPU). No `llama-server` in Task Manager.
+step 3 (single-digit MiB on a headless GPU; a few GiB on a box whose desktop runs on the same card). No
+`llama-server` in Task Manager.
+
+> ### Closed 2026-08-03 on real Windows 11 with a real GPU model — the Job Object holds
+>
+> Measured on Windows 11 26220, RTX 5090 32 GB, packaged `0.1.0-rc.4.2` portable build, with
+> `unsloth/Qwen3.6-27B-GGUF:Q8_0` (26.6 GiB) fully resident and holding **31741 MiB** of real VRAM through
+> driver 610.88. `Stop-Process -Id <host> -Force` on the parent only — `TerminateProcess`, no console-ctrl
+> event, no managed code:
+>
+> ```
+> t=+1.0s  host=0  llama-server=1  vram=2857 MiB
+> t=+2.1s  host=0  llama-server=1  vram=2873 MiB
+> t=+3.2s  host=0  llama-server=0  vram=2907 MiB
+> t=+5.3s  host=0  llama-server=0  vram=2988 MiB
+> ```
+>
+> The child was gone by **+3.2 s** and ~29 GB of VRAM came back. Check 2 then found **zero** reaper lines, so
+> the Job Object did it, not the next start. Two things a tester should not misread:
+>
+> - **VRAM falls before the process disappears.** At +1 s the process was still listed while its VRAM had
+>   already dropped from 31741 to 2857 MiB. Sampling only `nvidia-smi` would say "done" a second early;
+>   sampling only the process table would say "still there". Check both, and give it the full 5 s.
+> - **The "parent" is `XE-Local-AI-Engine.Client.exe`, not the exe you launched.** The root
+>   `XE-Local-AI-Engine.exe` is the Velopack stub: it starts `current\XE-Local-AI-Engine.Client.exe` and
+>   **exits**, so by the time you look there is exactly one `XE-Local-AI-Engine*` process and it is the Client.
+>   That is the one that owns the Job Object and the one to end. `xe-proc` finds it correctly.
 
 **Fail looks like / next step.** A surviving `llama-server` process and VRAM still pinned. Record its PID and
 `Path` (must be under `%LOCALAPPDATA%\XE-Local-AI-Engine\llama.cpp\`), kill it manually, and go straight to
@@ -121,6 +165,12 @@ Select-String -Path $LOGS -Pattern 'Reaping stale llama-server orphan|Reaped \d+
 ```
 
 **Pass looks like.** Zero matches.
+
+> **Closed 2026-08-03 together with check 1.** After the hard kill above, the app was relaunched and the grep
+> returned **0 matches** across every file in `logs\` *and* across the new run's own console output. Nothing
+> was left to reap, which is the independent confirmation that the Job Object — not the next start — is what
+> removed `llama-server`. Grep both places: the reaper logs through Serilog, so a console-only or file-only
+> grep can miss it depending on sink configuration.
 
 **Fail looks like / next step.** One or both of:
 
@@ -348,6 +398,40 @@ them have since been closed on a real Windows 11 box, and the remaining one is w
   the scanner neither follows nor emits one, in list and in search, and refuses a scan root that is itself a
   junction. Junctions need no privilege, unlike symbolic links (which need Developer Mode or elevation, and whose
   tests skip on a stock box).
+- **NEW 2026-08-03 — a redirected `%LOCALAPPDATA%` makes Development Mode fail before the model is ever called.**
+  Found while running this check. Every Development attempt died instantly, 0 tokens, with the UI message
+  *"The Development coder attempt violated a workspace security policy."* and this in the console:
+
+  ```
+  DevelopmentWorkspaceSecurityException: The preserved Development worktree no longer matches its exact trusted base.
+     at DevelopmentWorkspaceProvider.ValidatePreservedWorktreeAsync(...)
+     at DevelopmentWorkspaceProvider.PrepareAsync(...)
+  ```
+
+  The worktree had been created and fully populated first — the clone works. What fails is the identity check.
+  `ValidatePreservedWorktreeAsync` compares `git rev-parse --show-toplevel` against `Path.GetFullPath` of the
+  path the engine built from its own data directory, and **those two disagree whenever `%LOCALAPPDATA%` is
+  redirected**, because .NET reports the virtual path while `git.exe` resolves the backing one:
+
+  ```
+  git : C:/Users/<u>/AppData/Local/Packages/<pkg>/LocalCache/Local/XE-Local-AI-Engine/development/workspaces/...
+  .NET: C:\Users\<u>\AppData\Local\XE-Local-AI-Engine\development\workspaces\...
+  ```
+
+  Proof the two paths are one file: `node.key` at both hashed identically (SHA-256
+  `96D5D49C…249B`), and a host launched outside the redirection picked a *different* loopback port because it
+  resolved a genuinely different data root.
+
+  In that session the redirection came from running the host inside an MSIX-packaged parent, which is a harness
+  artifact and **not** how a tester launches the RC — launched normally, this check is unaffected. It is
+  recorded here because the same mismatch is reachable on a real operator box wherever `AppData\Local` is
+  redirected, junctioned, or `subst`ed (roaming/folder-redirection profiles, Store-packaged launchers). The
+  symptom is total: Development Mode cannot run at all, and the message names a *security policy*, which reads
+  like a deliberate refusal rather than a path-normalisation mismatch. If a tester reports it, get
+  `git -C <worktree> rev-parse --show-toplevel` and compare it to the path in the log before treating it as
+  tampering. A fix would resolve both sides through the same view (e.g. `GetFinalPathNameByHandle`) rather than
+  comparing a .NET-normalised string to git's.
+
 - **Still yours: `MAX_PATH` on a host with long paths DISABLED.** The scanner adds no length ceiling of its own —
   proven on a 399-character path — but that box had
   `HKLM\SYSTEM\CurrentControlSet\Control\FileSystem\LongPathsEnabled = 1`. Check yours
@@ -378,6 +462,26 @@ search (the tool's opt-in mode) works, and a deliberately invalid one — e.g. `
 **Fail looks like / next step.** `list_files failed:` or `search_text failed:` in the tool output. Record the
 sentence after the colon verbatim — each one names a distinct cause (no workspace, path rejected, path missing,
 timed out, provider cannot survey), and which one appears is the whole diagnostic.
+
+> **Pick a NON-REASONING model for this check, or you will prove nothing — measured 2026-08-03.** Gate 5 was
+> confirmed correct on the Agents page: **Coder (read-only) grants 3 tools, Default Assistant grants 0**, exactly
+> as documented. Gate 4 had also auto-admitted the model (see the note in `docs/agent-knowledge.md` §"Tool calling
+> has FIVE independent gates"). Every gate said yes — and the run still produced **no tool call**. The model
+> emitted the call as ordinary message text:
+>
+> ```
+> {"name": "list_files", "parameters": {"path": "."}}
+> ```
+>
+> That is the reasoning-model trap from `docs/agent-knowledge.md`, in a new place. `unsloth/Qwen3.6-27B-GGUF:Q8_0`
+> carries a **THINKING** badge; it emits `reasoning_content` first, so llama.cpp never enters the constrained
+> decoding branch, never compiles the tool grammar, and the JSON arrives as prose that nothing parses as a call.
+> It is already documented as making `run-tool-grammar-smoke-local.sh` inert rather than red — the same applies to
+> this check, and to **any** live tool-calling verification.
+>
+> So: run 5b with a non-reasoning tool-capable GGUF (e.g. `bartowski/Qwen2.5-3B-Instruct-GGUF:Q4_K_M`, which is
+> also one of the shipped allow-list names). A run on a reasoning model is **not** a check-5b result in either
+> direction — do not record it as a pass or a fail. **This half is still unproven on Windows.**
 
 ---
 
@@ -411,11 +515,35 @@ CPU, memory and process-count limits are enforced on Linux only. On Windows ther
 plus *"…run as the signed-in user account that runs the engine"* and *"They have network access, and nothing
 restricts what they can reach."* No container-runtime panel is rendered anywhere on the page.
 
-> **The probe line is emitted lazily — do the `/development` visit BEFORE you grep.** Measured on Windows 11
+> **The dialog half is CLOSED — live-rendered and read on real Windows 11, 2026-08-03.** The packaged
+> `0.1.0-rc.4.2` build served the **process** branch verbatim, all four bullets:
+>
+> ```
+> On this node those commands run as the signed-in user account that runs the engine — with that account's
+> access to your files, not just the repository.
+> They have network access, and nothing restricts what they can reach.
+> CPU, memory and process-count limits are enforced on Linux only. On Windows there are none, so a runaway
+> command is bounded only by the machine.
+> Register only repositories you trust. Repository code executes either way.
+> ```
+>
+> plus the closing *"This notice is a disclosure, not a protection."* A scan of the rendered DOM for
+> `read-only root filesystem`, `capabilities dropped`, `container`, `Docker`, `image` and `seccomp` returned
+> **false for every one**, and the only `data-testid`s present were the consent dialog's own
+> (`development-consent-dialog|-terms|-checkbox|-decline|-accept`). No container panel, no Docker preflight.
+> What remains open in this check is only the probe LINE — see the correction below.
+
+> **The probe line is emitted lazily — and the `/development` VISIT IS NOT ENOUGH.** Measured on Windows 11
 > across four launches of the packaged build: `Sandbox containment probe` appears **nowhere** in the log after an
 > ordinary start. Containment is measured on first use of the sandbox, not during host startup, so an empty grep
-> on a node where nobody opened Development Mode means "not probed yet", not "the probe is missing". Grepping
-> first and finding nothing is the easiest way to file a false failure here.
+> on a node where nobody opened Development Mode means "not probed yet", not "the probe is missing".
+>
+> **Corrected 2026-08-03 — the previous wording here under-specified the trigger.** A session measured 0 matches
+> before opening `/development`, and **still 0 matches** after opening it *and* accepting the consent gate. The
+> page render, the consent acknowledgement and the capability fetch all happen without ever constructing a
+> sandbox. Only a Development attempt that actually reaches `ISandboxRuntimeProvider.CreateOrAttachAsync` emits
+> the line. So the sequence is **grep → run a Development task → grep again**, and "I opened the page and the
+> line is missing" is not a finding.
 >
 > **What was confirmed statically for this RC, and what still needs your session.** The container branch cannot
 > render on a stock node: the shipped `appsettings.json` leaves `Development:Sandbox:Provider` unset (the
@@ -465,6 +593,50 @@ the card.
   `inferenceBackend` is `cuda`.
 - After ejecting the model, the `N / M` reading and the partial alert **disappear**.
 
+> ### CLOSED 2026-08-03 — all five criteria, on a 32 GB card, by deliberately oversizing the quant
+>
+> **Read the 32 GB caveat below before quoting any number here.** On this card the path had to be provoked: the
+> 18.5 GB NVFP4 build fully offloads, and so does `Q8_0` at 26.6 GiB (`offloaded 65/65`, 31741 MiB, 467 MiB
+> free) *despite the picker grading it `TIGHT`*. What forces the spill is a quant that cannot physically fit:
+> **`unsloth/Qwen3.6-27B-GGUF:UD-Q8_K_XL`, 35,325,163,744 bytes (32.9 GiB) on a 31.8 GiB card.**
+>
+> All five criteria, measured:
+>
+> 1. **Console at `-lv 4`** — llama.cpp's own fit walk-down, which is worth reading in full because it shows the
+>    decision rather than just the outcome:
+>    ```
+>    common_params_fit_impl: projected to use 33979 MiB of device memory vs. 30841 MiB of free device memory
+>    common_params_fit_impl: cannot meet free memory target of 1024 MiB, need to reduce device memory by 4162 MiB
+>    common_params_fit_impl: context size set by user to 65536 -> no change
+>    common_params_fit_impl: filling dense layers back-to-front:
+>    common_params_fit_impl: id=0, n_layer=65, ... mem= 33979 MiB
+>    common_params_fit_impl: id=0, n_layer=56, ... mem= 30019 MiB
+>    common_params_fit_impl: id=0, n_layer=55, ... mem= 29570 MiB
+>    common_params_fit_impl:   - CUDA0 (NVIDIA GeForce RTX 5090): 55 layers,  29570 MiB used,   1270 MiB free
+>    load_tensors: offloading 54 repeating layers to GPU
+>    load_tensors: offloaded 55/65 layers to GPU
+>    ```
+>    Note it honoured the explicit `-c 65536` and spilled *layers* instead of shrinking context — the `-c` the
+>    launch policy emits is respected, exactly as the spawn invariants say.
+> 2. **Supervisor warning, same N/M:**
+>    ```
+>    [WRN] llama-server placed 55/65 of model unsloth/Qwen3.6-27B-GGUF:UD-Q8_K_XL role Chat layers on the GPU;
+>    the remainder runs from system RAM, which is substantially slower.
+>    ```
+> 3. **Card:** `Layers on GPU  55 / 65`, and `model-fit-hardware-partial-offload-alert` visible — *"Only 55 of
+>    …'s 65 layers fit on the GPU. The remaining 10 run from system RAM…"* plus its remediation testid.
+> 4. **The two states stayed distinct.** `model-fit-hardware-cpu-fallback-alert` was **not in the DOM**, and the
+>    profile response read `"inferenceBackend":"cuda"`, `"gpuExpected":true`, `"cpuFallback":false`,
+>    `"cpuFallbackReason":null`, `"backendUndeterminedReason":null`, `"gpuOffloadedLayers":55`,
+>    `"gpuTotalLayers":65`, `"gpuOffloadModelName":"unsloth/Qwen3.6-27B-GGUF:UD-Q8_K_XL"`,
+>    `"gpuOffloadRole":"chat"`.
+> 5. **Eject retired it.** After a graceful eject the card read `Layers on GPU  Not measured yet` and **both**
+>    alerts were absent. The stale-partial-reading failure mode did not occur.
+>
+> **Choosing the model matters more than the fit verdict.** `TIGHT` did not spill and `WON'T FIT` did. If you
+> need this check on a 16 GB box the routine quants get you there for free; on anything larger, pick a file whose
+> **raw byte size exceeds free VRAM** and ignore the grading.
+
 **Fail looks like / next step.**
 - No `N / M` at all → the sniffer missed the banner. Confirm `-lv 4` is on the spawn's argument vector (grep the
   spawn line in the log); the banner only exists above the default verbosity.
@@ -500,6 +672,62 @@ of the two alerts renders.
 **Pass looks like.** Self-consistent: zero devices with a GPU present ⇒ `inferenceBackend: "cpu"`,
 `cpuFallback: true`, the **CPU-fallback** alert, and `backendUndeterminedReason: null`.
 
+> ### ANSWERED 2026-08-03 on Windows 11 — and the answer is FAIL. This is a real defect, not a Vulkan quirk.
+>
+> The open question was whether the Linux observation came from a genuinely timed-out probe or from the
+> zero-device branch. It is the **zero-device branch**, and the two are being collapsed exactly as this check
+> feared. Reproduced on Windows with the **CUDA** runtime, so the earlier "maybe it's a missing Vulkan ICD"
+> theory is dead.
+>
+> **The control that makes this evidence.** The probe does not time out and the binary starts fine — measured
+> directly, before touching the app:
+>
+> ```
+> > $env:CUDA_VISIBLE_DEVICES = "-1"; & llama-server.exe --list-devices
+> 0.00.086.165 E ggml_cuda_init: failed to initialize CUDA: no CUDA-capable device is detected
+> Available devices:
+>   (none)
+> exit=0
+> ```
+>
+> Exit **0**, in ~0.1 s, with an empty device list. That is `ProbeSucceeded = true` + zero devices, which
+> `RuntimeDeviceAuditService.ResolveInferenceBackend` is documented to read as `"cpu"`.
+>
+> **What the product actually reported**, verbatim from the hardware-profile response with the host restarted
+> under `XE_LLAMACPP_SERVER_PATH` = the CUDA `llama-server.exe` and `CUDA_VISIBLE_DEVICES=-1`:
+>
+> ```json
+> "inferenceBackend": "unknown",
+> "gpuExpected": true,
+> "cpuFallback": false,
+> "cpuFallbackReason": null,
+> "cpuFallbackRemediation": null,
+> "backendUndeterminedReason": "The CUDA llama.cpp runtime is selected, but listing its GPU devices did not
+>   complete (the probe timed out or the binary could not be started), so whether inference will use the GPU is
+>   unknown. Model sizing on this page still assumes the GPU's VRAM is usable. A wedged or busy GPU driver is
+>   the usual cause; refreshing the hardware profile re-runs the probe.",
+> "gpuOffloadedLayers": null, "gpuTotalLayers": null
+> ```
+>
+> The alert that renders is **`model-fit-hardware-backend-undetermined-alert`** ("Could not determine your GPU
+> backend"). `model-fit-hardware-cpu-fallback-alert` is **not present in the DOM at all**.
+>
+> Three separate problems, worth filing as three:
+>
+> 1. **A successful probe returning zero devices is reported as a failed probe.** "the probe timed out or the
+>    binary could not be started" is false in both clauses. Whatever feeds `ProbeSucceeded` is not distinguishing
+>    exit-0-with-no-devices from a start/timeout failure.
+> 2. **The remediation names the wrong cause.** "A wedged or busy GPU driver is the usual cause" sends the
+>    operator to reboot a driver that is working perfectly — `nvidia-smi` and a normal-launch `--list-devices`
+>    both answer instantly on the same box, seconds apart.
+> 3. **Sizing keeps trusting the VRAM.** `vramKnown: true`, `gpuAccelAvailable: true`, `gpuExpected: true` and
+>    the card still shows `VRAM 31.8 GB`, while the response itself says it does not know whether the GPU will be
+>    used. The card says so out loud — *"Model sizing on this page still assumes the GPU's VRAM is usable."* —
+>    which is honest, and is also the bug: a node that will actually run on the CPU is being sized as if it had
+>    31.8 GB of VRAM.
+>
+> Reproduce it with the CUDA binary and `CUDA_VISIBLE_DEVICES=-1`; no exotic runtime or broken ICD is needed.
+
 **Fail looks like / next step.** The undetermined-backend alert instead, with a reason blaming a wedged/busy
 driver or a timed-out probe. Capture the full string and whether the probe genuinely timed out (15 s cap) or ran
 and returned nothing — those must not collapse to the same verdict. Also note the remediation text is
@@ -510,6 +738,13 @@ Linux/WSL-flavoured (*"commonly a missing Vulkan ICD under WSL2"*) and is shown 
 ## 9. GPU detection on a non-NVIDIA adapter
 
 Skip unless an AMD/Intel-only Windows box is available. Characterization, not pass/fail on the primary target.
+
+> **NOT APPLICABLE on the 2026-08-02/03 verification box, and deliberately reported as such rather than as a
+> pass.** That machine enumerates two adapters — `AMD Radeon(TM) Graphics` (integrated) listed **first**, then
+> `NVIDIA GeForce RTX 5090`. `MapAdapterVendor` tests `nvidia` **before** `amd` against the whole listing, so it
+> maps to `nvidia` regardless of enumeration order, and the run confirmed `"gpuVendor":"nvidia"` throughout. The
+> AMD/Intel result is therefore **unreachable** here — not passing, not failing, unexercised. A genuinely
+> AMD/Intel-**only** Windows box is still the only way to exercise it, and nothing in this pass changed that.
 
 > **Changed for this RC.** Both detectors have stopped depending on `wmic`. `ProcessGpuVendorProbe` (which
 > chooses the llama.cpp variant) and `HardwareProfiler` (which fills the hardware-profile card) now read adapter
@@ -593,6 +828,49 @@ measured on Windows.
 - **Partial offload is the routine 16 GB path.** The partial-offload alert will fire on 16 GB for models where a
   32 GB box shows nothing at all — same model, same build. Do not treat its appearance as a defect; treat its
   *absence* on a model that visibly spills (slow tokens/s, high system-RAM use) as the defect.
+
+### What a 32 GB box measures, and why none of it is a consumer figure
+
+Everything in this block was measured on **RTX 5090 32 GB / 61.4 GB RAM / 32 CPUs**, which is roughly **2× the
+≈16 GB VRAM consumer target**. Every number here **over-reports** and must never be quoted as a consumer figure.
+It is recorded so a future session does not re-derive the *shape* of the difference.
+
+- **The spill threshold on this card sits above 26.6 GiB of weights**, so the models that exercise partial
+  offload on 16 GB all fully offload here. Two data points, same repo, same build (`b10201` CUDA), same
+  `-c 65536` tier:
+
+  | Model | File size | Result | VRAM peak |
+  |---|---|---|---|
+  | `tngtech/Qwen3.6-27B-NVFP4-GGUF` | 18.5 GB | full offload | 22.7 GB |
+  | `unsloth/Qwen3.6-27B-GGUF:Q8_0` | 26.6 GiB | **`offloaded 65/65 layers to GPU`** | **31741 MiB** |
+
+  The second one is the useful one: the download picker graded it **`TIGHT`**, and it still fitted *entirely*,
+  leaving **467 MiB** free. `--fit on` shrank batch/context around the weights rather than spilling. So a `TIGHT`
+  fit verdict is **not** a prediction of partial offload, on this hardware or any other.
+
+- **The picker's own fit ladder is a cheap way to see where the line is on your box.** On this one, for
+  `unsloth/Qwen3.6-27B-GGUF`: `Q6_K` 21.0 GB `FITS` (and `RECOMMENDED`) · `UD-Q6_K_XL` 23.9 GB `FITS` ·
+  `Q8_0` 26.6 GB `TIGHT` · `UD-Q8_K_XL` 32.9 GB `WON'T FIT` · `BF16` 50.1 GB `WON'T FIT`. On a 16 GB box the
+  same ladder shifts down by roughly half, which is exactly why the routine quant there is a Q4/Q5 and the
+  routine placement is partial.
+
+- **The two VRAM readers already disagree at idle here, with nothing loaded.** `nvidia-smi memory.free` reported
+  **28006 MiB** while `llama-server --list-devices` reported **30991 MiB free** on the same card seconds apart.
+  §2's divergence note describes this under memory pressure; on Windows it is visible with the machine idle,
+  because the desktop compositor's ~4 GB is global but is not charged to the probing process's budget. Do not
+  treat a disagreement between those two numbers as evidence of anything by itself.
+
+- **The desktop runs on the same card, so "idle baseline" is not near zero.** Measured idle: **3906–4194 MiB**
+  used of 32607 MiB. Check 1's "back to baseline" therefore means back to ~3 GB, not to single-digit MiB. A
+  headless GPU is the only place the runbook's original wording is literally right.
+
+- **Unreachable here, and honestly unreachable — do not fake them.** The context-tier walk-down
+  (`[65536, 32768, 16384, …]`), the classified startup OOM, and its one-shot safe-config retry never fired in
+  this session: the chat spawn took the **top** tier (65536) first time and stayed there. On a 32 GB card there
+  is no pressure to walk down. Trying to manufacture it by occupying VRAM from another process is worse than
+  not testing it — see §2 of `docs/agent-knowledge.md`: on WDDM, VRAM exhaustion **silently demand-pages to host
+  RAM instead of OOMing** (measured 161.7 vs 698.4 tok/s, a 4.3× slowdown with zero errors), so the OOM branch
+  cannot be reached that way and every number taken under that pressure is a paged number.
 - **Every GPU spawn pays `-lv 4`** (~213 extra startup lines at Information; ~22 lines/request demoted to Debug
   once serving). A chatty console during model load is by design — that output *is* the placement evidence.
 - **Startup-failure capture is last-64-lines / 16 KB, deliberately.** At `-lv 4` the "out of memory" text lands
