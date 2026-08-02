@@ -40,6 +40,20 @@ using System.Text;
 ///         removed alongside rather than sanitised, since a standalone clone has no linked worktrees to need it.
 ///     </para>
 ///     <para>
+///         <b>This allow-list is NOT what drops the repository's <c>core.whitespace</c> / <c>core.autocrlf</c>.</b> The
+///         question comes up because the managed workspace behaves differently from the operator's own checkout, and
+///         this file looks like the cause. It is not: the workspace is a standalone CLONE, and <c>git clone</c> copies
+///         no <c>core.*</c> from the source repository — verified, a source repository carrying both keys produces a
+///         clone whose config carries neither — so those keys were never here to preserve. The workspace is
+///         additionally more deterministic than the host checkout on purpose, because commands run with <c>HOME</c>
+///         pointed at a per-task runtime directory and therefore see no user <c>~/.gitconfig</c>. Both are intended.
+///         The consequence that mattered — the validation gate's first command failing on a repository that
+///         legitimately stores CRLF — is answered by DERIVING the policy from the repository's own index rather than by
+///         inheriting a setting; see <see cref="DevelopmentWorkspaceWhitespacePolicy" />. Do not "fix" it by adding
+///         <c>whitespace</c> or <c>autocrlf</c> to <see cref="PreservedCoreKeys" />: there is nothing to preserve, and
+///         a key an agent-writable file supplies is exactly what this allow-list exists to refuse.
+///     </para>
+///     <para>
 ///         <b>TOCTOU.</b> There is no meaningful window: evidence export runs after the attempt has finished, with no
 ///         agent command in flight, and workspace preparation runs before any command has started.
 ///     </para>

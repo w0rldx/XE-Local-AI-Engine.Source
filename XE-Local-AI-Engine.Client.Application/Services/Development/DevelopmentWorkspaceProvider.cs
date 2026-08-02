@@ -197,6 +197,12 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
             baseCommit,
             cancellationToken).ConfigureAwait(false);
 
+        // Derived from the index and rewritten every preparation, immediately after the config rewrite above and before
+        // any command of the validation gate runs. Without it, `git diff --check` — the FIRST command of every .NET
+        // profile — reports trailing whitespace on every changed line of a repository that legitimately stores CRLF,
+        // and the gate fails at command one on a correct change.
+        await DevelopmentWorkspaceWhitespacePolicy.ApplyAsync(git, worktreePath, cancellationToken).ConfigureAwait(false);
+
         var persistedManifest = await ReadWorkspaceManifestAsync(workspaceManifestPath, cancellationToken).ConfigureAwait(false);
         if (persistedManifest.Version != WorkspaceManifestVersion || persistedManifest.SelectedFolderId is null)
         {
