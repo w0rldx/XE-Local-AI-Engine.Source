@@ -200,7 +200,21 @@ function Get-ViteReleaseEnvironmentConflict {
 function Get-ExpectedVelopackAsset {
     param([Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Assets)
 
-    $assetList = @($Assets | Where-Object { $_ })
+    # vpk 1.2.0 writes a build-local upload manifest into --outputDir that it never uploads. Verified on
+    # Windows 11 2026-08-02: the rc.4.1 pack output still carries Releases\assets.win.json alongside its five
+    # artifacts (same mtime, same vpk pin — 1.2.0 has been pinned since 5da4b16a, 2026-07-06), while the
+    # published 0.1.0-rc.4.1 release carries exactly those five and no assets.win.json. Its contents are a
+    # vpk-internal index of what to upload ([{RelativeFileName,Type}] for Delta/Full/Portable), not a channel
+    # asset. So it must be filtered from the INVENTORY, not promoted to a sixth definition: the other three
+    # call sites (the SHA-256 manifest, the remote draft's assets, the downloaded assets) legitimately hold
+    # five, and requiring a sixth would fail every one of them in the opposite direction. Anything else
+    # unrecognised still throws below.
+    $localOnlyVpkArtifacts = @('assets.win.json')
+    $assetList = @(
+        $Assets |
+            Where-Object { $_ } |
+            Where-Object { $localOnlyVpkArtifacts -cnotcontains ([string]$_.Name) }
+    )
     $definitions = @(
         [pscustomobject]@{ Label = 'Portable.zip'; Matches = { param($name) $name -like '*Portable*.zip' } },
         [pscustomobject]@{ Label = 'full.nupkg'; Matches = { param($name) $name -like '*-full.nupkg' } },
