@@ -566,6 +566,23 @@ llama.cpp splits (`<base>-00001-of-00003.gguf`) carry a full header only on the 
 
 Without this, the advisor treated a lone 0.99 GB tail shard as its own candidate and estimated a 14B model's footprint at ~1.8 GB.
 
+### NVFP4 **GGUF** runs here, natively — NVFP4 **safetensors** never will
+
+Answered by research at least three separate times; the answer lives here now so it does not need re-deriving.
+
+**It works, live-verified 2026-07-31 on this box** (`Plans/2026-07-31-live-ai-evaluation.md`, model matrix): `tngtech/Qwen3.6-27B-NVFP4-GGUF` — 18.5 GB file, 22.7 GB VRAM peak — downloaded, installed, appeared in the picker with a Reasoning badge, loaded onto the GPU and generated at **95% GPU utilisation**. Every layer of the stack lines up:
+
+- **llama.cpp**: `GGML_TYPE_NVFP4` (type 40) merged over late-March → April 2026; the Blackwell-native tensor-core kernels landed around **b8967** (2026-04-29). `LlamaCppReleasePins.PinnedTag` is `b10201`, comfortably past it. Kernels exist for CUDA, SYCL and Vulkan.
+- **Hardware**: the box is sm_120 Blackwell and the in-app source build detects `CMAKE_CUDA_ARCHITECTURES=120a` live, so this is the real tensor-core path, not just the memory saving. On sm_89 and older the GGUF still loads but collects **only** the size reduction — reported upstream gain is prefill +43–68%, token generation unchanged.
+- **Our quant plumbing** (`75cc519a`): `GgufQuantParser` recognizes the `NVFP4` token; `QuantLadder` ranks it **above** MXFP4 (16-element blocks with an FP8 E4M3 scale beat MXFP4's 32-element E8M0) at `Balanced` tier and reports it via `IsNativeFormat`; `MemoryFitEstimator` prices it at 4.25 bpw.
+
+**The failure everyone hits is the container, not the format.** An NVFP4 **safetensors** checkpoint (ModelOpt / compressed-tensors — e.g. `unsloth/Qwen3.6-27B-NVFP4`) does **not** work and no llama.cpp bump fixes it: the convert script for compressed-tensors NVFP4 is still an open upstream PR. If someone reports "NVFP4 is unreachable", check which container they tried before believing the format is at fault. Requires the CUDA binary, too — this box's *default* variant resolves to Vulkan with no ICD and silently runs on CPU (see §2 llama.cpp binaries).
+
+Two live caveats worth keeping:
+
+- **The 4.25 bpw price is one measurement, not theory.** It came from `s-batman/Ornith-1.0-9B-NVFP4-MTP-GGUF` shipping byte-identical MXFP4 and NVFP4 conversions of the same model from the same converter (5.45 GB each). Cross-repo NVFP4 sizes for one base model vary widely, so a fit estimate for an unfamiliar NVFP4 repo is soft — prefer the real blob size when you have it.
+- **An unrecognized quant token is not merely mis-priced — it makes the file disappear.** The file fails `IsUsableGgufFile`, so a repo whose files all use that token vanishes behind "No GGUF repositories matched that search". That is exactly how NVFP4 looked unsupported before `75cc519a`: `tngtech/Qwen3.6-27B-NVFP4-GGUF` was invisible and `s-batman/Ornith-1.0-9B-NVFP4-MTP-GGUF` was visible with its NVFP4 file silently absent from the picker. Any future native format (the next MX/FP variant) will fail the same silent way until the regex learns it.
+
 ### GGUF filenames from a repo are untrusted input
 
 `GgufFilePath.IsSafeRelativePath` rejects rooted paths and any `.`/`..` segment; `ResolveContainedPath` re-checks containment immediately before any file handle opens. Defense in depth against a compromised repo returning `../../etc/evil.gguf`.
@@ -810,6 +827,7 @@ Old notes (and agents who half-remember them) assert these. They are **false tod
 | "The dev box is an RTX 4080 with 16 GB (sm_89 / Ada); build CUDA with `-DCMAKE_CUDA_ARCHITECTURES=89`." | **Wrong since 2026-07-26** — it is an **RTX 5090, 32 GB, sm_120 (Blackwell)**. Read `nvidia-smi`; never hardcode the arch. The source-build fallback includes `120`, but live detection remains authoritative. |
 | "llama.cpp has native MCP support now, so the app could use it." | The MCP client lives in llama-server's **web UI**, which this app never serves; the backend addition is only the experimental `--ui-mcp-proxy` CORS proxy. The .NET `ModelContextProtocol` client remains the correct integration point, and a browser-side host would move tool execution below the approval/sandbox boundary. See `Plans/2026-07-26-llamacpp-native-mcp-decision.md`. |
 | "Ollama was removed from the app." | Removed only from *Aspire dev orchestration*. It remains a supported, gated, opt-in secondary provider with 50+ live call sites. llama.cpp is the *default*, not the *only*, runtime. |
+| "NVFP4 isn't supported — llama.cpp can't load it, or it can't be used on this box." | **False since `75cc519a`, and live-proven 2026-07-31.** llama.cpp carries `GGML_TYPE_NVFP4` with sm_120 tensor-core kernels, our pin `b10201` includes them, and a 27B NVFP4 GGUF loaded and generated at 95% GPU utilisation here. The *true* limitation is narrower and is about the **container**: NVFP4 **safetensors** (compressed-tensors/ModelOpt) remain unloadable, since the upstream convert script is still an unmerged PR. Don't restate the narrow fact as the broad one — see §3. |
 | "`dotnet test` reports zero tests — run the native test-host exe instead." | Fixed by the `global.json` MTP runner pin. `dotnet test` works against the whole solution. Native exe still works, but is no longer required. |
 | "Any build catches a bare `TODO`, a banned API, or a style violation — so a green `dotnet build` means the analyzer wall passed." | **False since 2026-07-31.** `Directory.Build.targets` disables analyzer *execution* in local Debug builds (84 s → 10 s on the Tests module). The wall is Release-only. **Finish with `dotnet build … --configuration Release`** or you will hand off code the packaging script rejects. `XE_FULL_ANALYSIS=1` forces the full pass in Debug. |
 | "`RunAnalyzers=false` also turns off source generators, so gating analyzers would break TUnit discovery." | **False.** It maps to csc `-skipanalyzers`, which skips diagnostic analyzers only; generators still run. Verified — a Debug build of `XE-Local-AI-Engine.AI.Agent.Tests` still lists 209 tests. |
