@@ -1174,6 +1174,148 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
     ///     would make them measure the runner's box instead. Containment behavior gets its own explicitly-configured
     ///     tests, and the real mechanisms are proven by the live-gated cases below.
     /// </summary>
+    /// <summary>
+    ///     The listing survey, which replaced a <c>find</c> shell-out that did not exist on Windows at all. Seeded
+    ///     through <c>CopyIntoAsync</c> rather than a shell so the assertion itself is OS-independent — this is the
+    ///     code path a Windows tester will run, and it has to be provable here.
+    /// </summary>
+    [Test]
+    public async Task ProcessSandboxProvider_ListFiles_ReturnsJailRelativeEntries()
+    {
+        using var provider = CreateProvider();
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
+        await SeedAsync(provider, handle, "workspace/src/Program.cs", "code");
+        await SeedAsync(provider, handle, "workspace/notes.md", "notes");
+        await SeedAsync(provider, handle, "workspace/deep/nested/Widget.cs", "widget");
+
+        var entries = await provider.ListFilesAsync(handle, new SandboxListFilesRequest
+        {
+            DirectoryPath = "/workspace",
+            MaxEntries = 50
+        });
+
+        AssertEx.Contains(entries, "./notes.md");
+        AssertEx.Contains(entries, "./src/Program.cs");
+        AssertEx.Contains(entries, "./deep/nested/Widget.cs");
+
+        var scoped = await provider.ListFilesAsync(handle, new SandboxListFilesRequest
+        {
+            DirectoryPath = "/workspace/src",
+            MaxEntries = 50,
+            NameGlob = "*.cs"
+        });
+
+        AssertEx.Equal(1, scoped.Count);
+        AssertEx.Equal("./Program.cs", scoped[0]);
+    }
+
+    /// <summary>
+    ///     The survey is a provider operation precisely so the jail controls apply to it. A directory argument that
+    ///     escapes must be refused by the same lexical check a read is refused by — the shell-out put this
+    ///     responsibility in an argument vector the caller had to compose correctly.
+    /// </summary>
+    [Test]
+    public async Task ProcessSandboxProvider_ListFiles_WhenPathEscapesJail_Rejects()
+    {
+        using var provider = CreateProvider();
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
+
+        await AssertEx.ThrowsAsync<UnauthorizedAccessException>(() => provider.ListFilesAsync(handle, new SandboxListFilesRequest
+        {
+            DirectoryPath = "/../../etc",
+            MaxEntries = 50
+        }));
+
+        await AssertEx.ThrowsAsync<UnauthorizedAccessException>(() => provider.SearchTextAsync(handle, new SandboxSearchTextRequest
+        {
+            DirectoryPath = "/../../etc",
+            Pattern = "root",
+            MaxMatches = 10,
+            MaxOutputBytes = 4096
+        }));
+    }
+
+    [Test]
+    public async Task ProcessSandboxProvider_ListFiles_WhenDirectoryIsMissing_ThrowsRatherThanReturningEmpty()
+    {
+        using var provider = CreateProvider();
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
+
+        // An empty listing would read as "the workspace has no files", which is a different and misleading answer.
+        await AssertEx.ThrowsAsync<DirectoryNotFoundException>(() => provider.ListFilesAsync(handle, new SandboxListFilesRequest
+        {
+            DirectoryPath = "/workspace/nope",
+            MaxEntries = 50
+        }));
+    }
+
+    [Test]
+    public async Task ProcessSandboxProvider_SearchText_ReturnsPathLineAndText()
+    {
+        using var provider = CreateProvider();
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
+        await SeedAsync(provider, handle, "workspace/src/a.txt", "alpha\nneedle here\ngamma\n");
+        await SeedAsync(provider, handle, "workspace/src/b.txt", "nothing\n");
+
+        var matches = await provider.SearchTextAsync(handle, new SandboxSearchTextRequest
+        {
+            DirectoryPath = "/workspace",
+            Pattern = "needle",
+            MaxMatches = 10,
+            MaxOutputBytes = 4096
+        });
+
+        AssertEx.Equal(1, matches.Count);
+        AssertEx.Equal("./src/a.txt:2:needle here", matches[0]);
+    }
+
+    /// <summary>
+    ///     A command running in the jail can plant a symlink out of it, and the lexical jail check passes such a path —
+    ///     so the no-symlink walk is what stops the survey from enumerating a directory outside the workspace. Planted
+    ///     the way the sibling read/copy tests plant one, which is why this is Linux-gated: the payload is a shell
+    ///     command, not the assertion.
+    /// </summary>
+    [Test]
+    public async Task ProcessSandboxProvider_ListFiles_WhenPathTraversesJailSymlink_Rejects()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        using var provider = CreateProvider();
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
+        using var outside = new TempDir();
+        await File.WriteAllTextAsync(Path.Combine(outside.Path, "secret.txt"), "OUTSIDE-THE-JAIL");
+
+        await SeedAsync(provider, handle, "workspace/keep.txt", "x");
+        await RunShellInJailAsync(provider, handle, "ln -s " + ShellQuote(outside.Path) + " workspace/escape");
+
+        await AssertEx.ThrowsAsync<UnauthorizedAccessException>(() => provider.ListFilesAsync(handle, new SandboxListFilesRequest
+        {
+            DirectoryPath = "/workspace/escape",
+            MaxEntries = 50
+        }));
+
+        // And a survey of the parent must not follow it either.
+        var entries = await provider.ListFilesAsync(handle, new SandboxListFilesRequest
+        {
+            DirectoryPath = "/workspace",
+            MaxEntries = 50
+        });
+        AssertEx.False(entries.Any(entry => entry.Contains("secret.txt", StringComparison.Ordinal)),
+            "the survey must not enumerate through a planted symlink");
+    }
+
+    private async Task SeedAsync(ProcessSandboxRuntimeProvider provider, SandboxHandle handle, string sandboxPath, string content)
+    {
+        await provider.CopyIntoAsync(handle, new SandboxCopyRequest
+        {
+            SourcePath = WriteHostTempFile(content),
+            DestinationPath = sandboxPath
+        });
+    }
+
     private static ProcessSandboxRuntimeProvider CreateProvider(long? maxCopyFileBytes = null,
         SandboxContainment? containment = null,
         long? maxJailDiskBytes = null,

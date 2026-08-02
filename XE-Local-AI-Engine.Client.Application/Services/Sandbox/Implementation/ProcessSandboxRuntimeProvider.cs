@@ -12,6 +12,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.Win32.SafeHandles;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Reaping;
+using XE_Local_AI_Engine.Client.Services.Workspace;
 
 /// <summary>
 ///     The <c>process</c> sandbox <see cref="ISandboxRuntimeProvider" /> — the <b>process-jail provider</b>: backs
@@ -596,6 +597,77 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
 
         var bytes = await ReadJailFileBytesNoFollowAsync(resolved, maxBytes, cancellationToken).ConfigureAwait(false);
         return Encoding.UTF8.GetString(bytes);
+    }
+
+    /// <summary>
+    ///     Lists the jail's regular files. Resolves the directory through the SAME two controls a read goes through —
+    ///     <c>ResolveJailPath</c> for the lexical escape and <c>EnsureNoSymlinkComponentsUnderJail</c> for a planted
+    ///     link — and then walks it with <see cref="WorkspaceFileScanner" />, which follows no link it meets on the way
+    ///     down either.
+    ///     <para>
+    ///         This used to be the caller's <c>find</c> shell-out. Doing it here is what makes the operation exist on a
+    ///         host with no findutils, and it also moves the confinement from an argument vector the caller had to get
+    ///         right into the provider that owns the jail.
+    ///     </para>
+    /// </summary>
+    public Task<IReadOnlyList<string>> ListFilesAsync(SandboxHandle handle,
+        SandboxListFilesRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var root = ResolveSurveyDirectory(handle, request.DirectoryPath, cancellationToken);
+
+        IReadOnlyList<string> entries = WorkspaceFileScanner.ListFiles(root,
+            request.MaxEntries,
+            static _ => false,
+            request.NameGlob,
+            cancellationToken);
+        return Task.FromResult(entries);
+    }
+
+    /// <inheritdoc cref="ISandboxRuntimeProvider.SearchTextAsync" />
+    public Task<IReadOnlyList<string>> SearchTextAsync(SandboxHandle handle,
+        SandboxSearchTextRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var root = ResolveSurveyDirectory(handle, request.DirectoryPath, cancellationToken);
+
+        IReadOnlyList<string> matches = WorkspaceFileScanner.SearchText(root,
+            request.Pattern,
+            request.IsRegex,
+            request.MaxMatches,
+            request.MaxOutputBytes,
+            static _ => false,
+            cancellationToken);
+        return Task.FromResult(matches);
+    }
+
+    /// <summary>
+    ///     The survey's own confinement, identical to the read leg's. Kept in one place so the two surveys cannot drift
+    ///     apart from each other or from <c>ReadFileAsync</c>.
+    ///     <para>
+    ///         Suppression of secrets is deliberately NOT applied here: which entries a feature may see is that
+    ///         feature's policy, not the jail's, and the two callers do not agree — Development gates on
+    ///         <c>IsSecret</c> while Coder additionally drops its whole copy-filter set. The provider's job is
+    ///         containment; the caller's is redaction, and it applies it to what comes back.
+    ///     </para>
+    /// </summary>
+    private string ResolveSurveyDirectory(SandboxHandle handle, string directoryPath, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(handle);
+        ArgumentException.ThrowIfNullOrWhiteSpace(directoryPath);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var state = GetAliveState(handle);
+        var resolved = ResolveJailPath(state, directoryPath);
+        EnsureNoSymlinkComponentsUnderJail(state.JailRoot, resolved, directoryPath);
+        if (!Directory.Exists(resolved))
+        {
+            throw new DirectoryNotFoundException($"Sandbox path '{directoryPath}' was not found.");
+        }
+
+        return resolved;
     }
 
     public async Task CopyOutAsync(SandboxHandle handle, SandboxCopyRequest request, CancellationToken cancellationToken = default)

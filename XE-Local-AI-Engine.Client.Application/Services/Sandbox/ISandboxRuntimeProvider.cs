@@ -55,6 +55,39 @@ public interface ISandboxRuntimeProvider
         return content;
     }
 
+    /// <summary>
+    ///     List the regular files under a sandbox directory, as <c>./relative/path</c> entries.
+    ///     <para>
+    ///         A provider operation rather than a command the caller composes, for the same reason
+    ///         <see cref="ReadFileAsync(SandboxHandle, string, CancellationToken)" /> is one: only the provider knows how
+    ///         a sandbox path maps to bytes, and only the provider can apply its own confinement to that mapping. The
+    ///         callers used to shell out to <c>find</c> instead, which meant the operation did not exist at all on a host
+    ///         without GNU findutils — on stock Windows 11, <c>find</c> resolves to the DOS tool and rejects the
+    ///         argument vector outright.
+    ///     </para>
+    ///     <para>
+    ///         The default throws: a provider that has not implemented the survey must refuse it rather than return an
+    ///         empty listing, which a caller would read as "the workspace is empty". Implemented by the providers that
+    ///         serve the agent role; the container provider does not, because nothing asks it to.
+    ///     </para>
+    /// </summary>
+    Task<IReadOnlyList<string>> ListFilesAsync(SandboxHandle handle, SandboxListFilesRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(handle);
+        throw new SandboxCapabilityNotSupportedException($"The '{ProviderName}' provider cannot list sandbox files.");
+    }
+
+    /// <summary>
+    ///     Search the non-binary regular files under a sandbox directory, as <c>./relative/path:line:text</c> entries.
+    ///     Replaces a <c>grep</c> shell-out for the same reasons as <see cref="ListFilesAsync" /> — and <c>grep</c> does
+    ///     not exist at all on a stock Windows 11 install.
+    /// </summary>
+    Task<IReadOnlyList<string>> SearchTextAsync(SandboxHandle handle, SandboxSearchTextRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(handle);
+        throw new SandboxCapabilityNotSupportedException($"The '{ProviderName}' provider cannot search sandbox files.");
+    }
+
     /// <summary>Copy a file out of the sandbox onto the host.</summary>
     Task CopyOutAsync(SandboxHandle handle, SandboxCopyRequest request, CancellationToken cancellationToken = default);
 

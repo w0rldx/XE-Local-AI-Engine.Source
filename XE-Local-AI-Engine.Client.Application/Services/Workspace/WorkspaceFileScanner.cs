@@ -1,7 +1,9 @@
-namespace XE_Local_AI_Engine.Client.Services.Development;
+namespace XE_Local_AI_Engine.Client.Services.Workspace;
 
 using System.Globalization;
+using System.IO.Enumeration;
 using System.Text;
+using System.Text.RegularExpressions;
 
 /// <summary>
 ///     The engine's own implementation of the two read-only workspace surveys the coder model uses —
@@ -25,13 +27,13 @@ using System.Text;
 ///     </para>
 ///     <para>
 ///         <b>The security properties are preserved, and one of them is strengthened.</b> Path confinement still
-///         happens in <see cref="DevelopmentWorkspaceSecurity.Confine" /> before anything reaches this class, and this
+///         happens in the caller's own path guard before anything reaches this class, and this
 ///         class additionally refuses a scan root reached through a symbolic link. Symbolic links are never followed
 ///         and never emitted, which is exactly what <c>find -P … -type f</c> and <c>grep -r</c> did. The suppression
 ///         rule is now a single predicate supplied by the caller and applied at BOTH the prune step and the emit step,
 ///         so the generator and the filter can no longer drift — previously the prune expression was built from
 ///         <see cref="ISensitiveFileExclusionService.SecretEntryNames" /> and
-///         <see cref="DevelopmentWorkspaceSecurity.ProtectedPathPrefixes" /> while the filter re-derived the same
+///         the caller's protected-prefix list while the filter re-derived the same
 ///         decision from <c>IsSecret</c>/<c>IsProtected</c>. Note the caller's predicate must keep gating reads on
 ///         <see cref="ISensitiveFileExclusionService.IsSecret" /> and not on the broader
 ///         <see cref="ISensitiveFileExclusionService.IsExcluded" /> copy filter: conflating them would refuse
@@ -44,7 +46,7 @@ using System.Text;
 ///         Sorting ordinally by name makes a listing a function of the tree alone.
 ///     </para>
 /// </summary>
-internal static class DevelopmentWorkspaceFileScanner
+internal static class WorkspaceFileScanner
 {
     /// <summary>
     ///     Mirrors <c>find -maxdepth 64</c>: the scan root is depth 0, so an entry 64 directories below it is the last
@@ -68,27 +70,46 @@ internal static class DevelopmentWorkspaceFileScanner
     private const int BinarySniffBytes = 8 * 1024;
 
     /// <summary>
+    ///     How long a single regular-expression match may run before that line is abandoned. A model-supplied pattern
+    ///     can be crafted to backtrack catastrophically, and a survey must not become a way to burn the host's CPU.
+    ///     Exceeding it skips the line, never the file and never the survey — the same direction as an unreadable file.
+    /// </summary>
+    private static readonly TimeSpan RegexLineTimeout = TimeSpan.FromMilliseconds(250);
+
+    /// <summary>
     ///     Lists regular files under <paramref name="scanRoot" />, emitting at most <paramref name="maxEntries" />
     ///     workspace-survey paths in the <c>./a/b</c> shape the tools' filters and the model's prompt already expect.
     /// </summary>
     /// <param name="scanRoot">An already-confined absolute host directory inside the managed workspace.</param>
-    /// <param name="maxEntries">The emitted-entry ceiling (<see cref="DevelopmentOptions.MaxChangedFiles" />).</param>
+    /// <param name="maxEntries">The emitted-entry ceiling (the caller's listing cap).</param>
     /// <param name="isSuppressed">
     ///     Given a path relative to <paramref name="scanRoot" />, whether it must be neither descended into nor emitted.
+    /// </param>
+    /// <param name="nameGlob">
+    ///     When supplied, only files whose NAME matches this glob are emitted — the shell-out's <c>find -name</c>.
+    ///     Matched against the entry name alone, never the path, and never used to prune a directory: a glob is a
+    ///     result filter, so pruning on it would hide matching files in non-matching directories.
     /// </param>
     public static List<string> ListFiles(string scanRoot,
         int maxEntries,
         Func<string, bool> isSuppressed,
+        string? nameGlob,
         CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(scanRoot);
         ArgumentNullException.ThrowIfNull(isSuppressed);
 
+        var glob = string.IsNullOrWhiteSpace(nameGlob) ? null : nameGlob;
         var results = new List<string>();
         Walk(scanRoot,
             isSuppressed,
-            (relative, _) =>
+            (relative, file) =>
             {
+                if (glob is not null && !FileSystemName.MatchesSimpleExpression(glob, file.Name, ignoreCase: true))
+                {
+                    return true;
+                }
+
                 results.Add("./" + relative);
                 return results.Count < maxEntries;
             },
@@ -97,13 +118,20 @@ internal static class DevelopmentWorkspaceFileScanner
     }
 
     /// <summary>
-    ///     Searches every non-binary regular file under <paramref name="scanRoot" /> for the LITERAL
-    ///     <paramref name="pattern" /> (ordinal, never a regular expression — the shell-out passed <c>grep -F</c> for
-    ///     the same reason) and emits <c>./path:line:text</c>, stopping once the emitted output reaches
-    ///     <paramref name="maxOutputBytes" />.
+    ///     Searches every non-binary regular file under <paramref name="scanRoot" /> and emits
+    ///     <c>./path:line:text</c>, stopping at whichever of <paramref name="maxMatches" /> or
+    ///     <paramref name="maxOutputBytes" /> is reached first.
+    ///     <para>
+    ///         <paramref name="isRegex" /> selects between the two modes the shell-out had: fixed-string
+    ///         (<c>grep -F</c>, ordinal, the default) and regular expression. A model-supplied expression is compiled
+    ///         with a per-line timeout rather than trusted, and an unparseable one is reported to the caller as an
+    ///         <see cref="ArgumentException" /> so it can be answered rather than swallowed.
+    ///     </para>
     /// </summary>
     public static List<string> SearchText(string scanRoot,
         string pattern,
+        bool isRegex,
+        int maxMatches,
         int maxOutputBytes,
         Func<string, bool> isSuppressed,
         CancellationToken cancellationToken)
@@ -113,18 +141,19 @@ internal static class DevelopmentWorkspaceFileScanner
         ArgumentNullException.ThrowIfNull(isSuppressed);
 
         var results = new List<string>();
-        if (pattern.Length == 0)
+        if (pattern.Length == 0 || maxMatches <= 0)
         {
             return results;
         }
 
+        var expression = isRegex ? CompilePattern(pattern) : null;
         var emittedBytes = 0;
         Walk(scanRoot,
             isSuppressed,
             (relative, file) => ForEachTextLine(file,
                 (lineNumber, text) =>
                 {
-                    if (!text.Contains(pattern, StringComparison.Ordinal))
+                    if (!Matches(text, pattern, expression))
                     {
                         return true;
                     }
@@ -132,11 +161,46 @@ internal static class DevelopmentWorkspaceFileScanner
                     var line = string.Create(CultureInfo.InvariantCulture, $"./{relative}:{lineNumber}:{text}");
                     results.Add(line);
                     emittedBytes += Encoding.UTF8.GetByteCount(line) + 1;
-                    return emittedBytes < maxOutputBytes;
+                    return results.Count < maxMatches && emittedBytes < maxOutputBytes;
                 },
                 cancellationToken),
             cancellationToken);
         return results;
+    }
+
+    /// <summary>
+    ///     Compiles a model-supplied expression, translating a bad pattern into an <see cref="ArgumentException" /> the
+    ///     caller can turn into a model-facing message. Not <c>RegexOptions.Compiled</c>: a survey runs once, and
+    ///     compiling a hostile pattern is itself work.
+    /// </summary>
+    private static Regex CompilePattern(string pattern)
+    {
+        try
+        {
+            return new Regex(pattern, RegexOptions.None, RegexLineTimeout);
+        }
+        catch (ArgumentException exception)
+        {
+            throw new ArgumentException("The search pattern is not a valid regular expression.", nameof(pattern), exception);
+        }
+    }
+
+    private static bool Matches(string text, string pattern, Regex? expression)
+    {
+        if (expression is null)
+        {
+            return text.Contains(pattern, StringComparison.Ordinal);
+        }
+
+        try
+        {
+            return expression.IsMatch(text);
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            // One pathological line is not a reason to fail the survey, and reporting it would leak the line.
+            return false;
+        }
     }
 
     /// <summary>
@@ -248,7 +312,7 @@ internal static class DevelopmentWorkspaceFileScanner
     {
         if (IsLink(root))
         {
-            throw new DevelopmentWorkspaceSecurityException("The requested Development workspace directory is a symbolic link.");
+            throw new WorkspaceScanRejectedException("The requested workspace directory is a symbolic link.");
         }
     }
 

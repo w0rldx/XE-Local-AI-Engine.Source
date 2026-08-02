@@ -120,7 +120,7 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
     public DevelopmentCommandProfile Profile => _profile;
 
     /// <summary>
-    ///     Lists the workspace's regular files. Served by <see cref="DevelopmentWorkspaceFileScanner" /> rather than by
+    ///     Lists the workspace's regular files. Served by <see cref="WorkspaceFileScanner" /> rather than by
     ///     <c>find</c> — see that class for why the engine owns this operation on every platform rather than branching
     ///     on Windows.
     ///     <para>
@@ -136,9 +136,10 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
         var confined = RequirePath(path, allowRoot: true);
         var entries = RunScan(confined,
             "list_files",
-            (root, token) => DevelopmentWorkspaceFileScanner.ListFiles(root,
+            (root, token) => WorkspaceFileScanner.ListFiles(root,
                 _options.MaxChangedFiles,
                 IsSuppressedFromOutput,
+                nameGlob: null,
                 token),
             cancellationToken);
         return Task.FromResult(string.Join('\n', entries));
@@ -155,7 +156,7 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
     }
 
     /// <summary>
-    ///     Searches the workspace for a LITERAL string. Served by <see cref="DevelopmentWorkspaceFileScanner" /> rather
+    ///     Searches the workspace for a LITERAL string. Served by <see cref="WorkspaceFileScanner" /> rather
     ///     than by <c>grep</c> — see that class for why.
     ///     <para>
     ///         Credential-bearing entries are excluded by PRUNING, so a secret's CONTENT never enters the result in the
@@ -176,8 +177,12 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
         var confined = RequirePath(path, allowRoot: true);
         var matches = RunScan(confined,
             "search_text",
-            (root, token) => DevelopmentWorkspaceFileScanner.SearchText(root,
+            (root, token) => WorkspaceFileScanner.SearchText(root,
                 pattern,
+                isRegex: false,
+                // Bounded by bytes alone, exactly as the shell-out was: the evidence cap is the contract here, and a
+                // separate match count would be a second limit nobody configured.
+                maxMatches: int.MaxValue,
                 _options.MaxCommandOutputBytes,
                 IsSuppressedFromOutput,
                 token),
@@ -215,6 +220,12 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
         try
         {
             return scan(root, timeoutCts.Token);
+        }
+        catch (WorkspaceScanRejectedException exception)
+        {
+            // Keep Development's own security-exception type at its boundary: the attempt lane distinguishes a security
+            // refusal from an operational failure, and the scanner's neutral type would be read as the latter.
+            throw new DevelopmentWorkspaceSecurityException(exception.Message);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -605,7 +616,7 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
     ///     deliberately absent from both — it is neither secret nor protected, and an agent reads it after a failed
     ///     build.
     ///     <para>
-    ///         This one predicate is the whole rule now: <see cref="DevelopmentWorkspaceFileScanner" /> consults it to
+    ///         This one predicate is the whole rule now: <see cref="WorkspaceFileScanner" /> consults it to
     ///         prune a directory and again to admit a file, so there is no separately-built exclusion expression that
     ///         can drift away from it. Secrets match by NAME at any depth; protected trees match by their path rooted
     ///         at the SCANNED directory, which is why a listing taken from a subdirectory still suppresses secrets even

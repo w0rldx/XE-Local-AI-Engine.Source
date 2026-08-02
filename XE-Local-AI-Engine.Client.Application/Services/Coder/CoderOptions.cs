@@ -30,6 +30,13 @@ public sealed class CoderOptions
     /// </summary>
     public int DefaultReadLineCap { get; set; } = 2000;
 
-    /// <summary>Per-command timeout for the allow-listed list/search executables. Defaults to 30 seconds.</summary>
+    /// <summary>
+    ///     Hard byte cap on what a single <c>search_text</c> call returns, on top of
+    ///     <see cref="MaxSearchMatches" />. Both are needed: a match count alone does not bound the output of a file
+    ///     whose lines are enormous, and a generated or minified file routinely is. Defaults to 262144 (256 KiB).
+    /// </summary>
+    public int MaxSearchOutputBytes { get; set; } = 256 * 1024;
+
+    /// <summary>Per-call timeout for the list/search workspace surveys. Defaults to 30 seconds.</summary>
     public int CommandTimeoutSeconds { get; set; } = 30;
 }
