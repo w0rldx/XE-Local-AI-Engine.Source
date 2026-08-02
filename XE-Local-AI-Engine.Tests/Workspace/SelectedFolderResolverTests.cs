@@ -10,7 +10,11 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class SelectedFolderResolverTests
 {
-    private const string TrustedHostPath = "/trusted/host/projects/repo-one";
+    // SelectedFolderResolver.IsSafeHostPath requires Path.IsPathFullyQualified, and "/trusted/..." is rooted but NOT
+    // fully qualified on Windows — it has no drive, so it resolves against the current drive. A Unix literal therefore
+    // fails registration before any of these tests reach their actual assertion. The production check is correct and
+    // portable; only the fixture was Unix-only.
+    private static readonly string TrustedHostPath = HostPath("trusted", "host", "projects", "repo-one");
 
     [Test]
     public async Task RegisterAsync_NormalizesAliasAndPersists()
@@ -37,7 +41,9 @@ public sealed class SelectedFolderResolverTests
     {
         var resolver = CreateResolver();
 
-        _ = await AssertEx.ThrowsAsync<SelectedFolderValidationException>(() => resolver.RegisterAsync(new SelectedFolderRegistration("repo-one", "/trusted/../etc/passwd")),
+        // Still fully qualified on both platforms, so the '..' segment — not the qualification check — is what rejects it.
+        _ = await AssertEx.ThrowsAsync<SelectedFolderValidationException>(
+            () => resolver.RegisterAsync(new SelectedFolderRegistration("repo-one", HostPath("trusted", "..", "etc", "passwd"))),
             "A traversal host path should be rejected.");
     }
 
@@ -56,7 +62,8 @@ public sealed class SelectedFolderResolverTests
         var resolver = CreateResolver();
         _ = await resolver.RegisterAsync(new SelectedFolderRegistration("repo-one", TrustedHostPath));
 
-        _ = await AssertEx.ThrowsAsync<SelectedFolderValidationException>(() => resolver.RegisterAsync(new SelectedFolderRegistration("Repo-One", "/trusted/host/other")),
+        _ = await AssertEx.ThrowsAsync<SelectedFolderValidationException>(
+            () => resolver.RegisterAsync(new SelectedFolderRegistration("Repo-One", HostPath("trusted", "host", "other"))),
             "A colliding alias should be rejected after normalization.");
     }
 
@@ -112,6 +119,15 @@ public sealed class SelectedFolderResolverTests
         AssertEx.Equal("repo-one", references[0].Alias);
         AssertEx.True(Guid.TryParse(references[0].Id, out _), "Listed references should carry a GUID id.");
     }
+
+    /// <summary>
+    ///     Builds a fully qualified host path for the running OS. Windows needs a drive to satisfy
+    ///     <see cref="Path.IsPathFullyQualified" />; a bare leading slash is rooted but not qualified.
+    /// </summary>
+    private static string HostPath(params string[] segments) =>
+        OperatingSystem.IsWindows()
+            ? string.Concat(@"C:\", string.Join('\\', segments))
+            : string.Concat("/", string.Join('/', segments));
 
     private static SelectedFolderResolver CreateResolver()
     {
