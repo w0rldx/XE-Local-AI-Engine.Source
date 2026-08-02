@@ -49,11 +49,10 @@ what is left for you:
 | 5b — Coder surveys | **Unproven** — attempted with a *reasoning* model, which cannot produce a tool call; see the note in 5b |
 | 6 — consent disclosure | **Dialog verified live**; the containment probe **line** is still unobserved (needs a real sandbox run, which 5 blocked) |
 | 7 — partial GPU offload | **Verified**, all five criteria, by deliberately oversizing the quant on a 32 GB card |
-| 8 — zero-device runtime | **Answered, and it FAILS** — a successful zero-device probe is reported as a timed-out one |
+| 8 — zero-device runtime | **Answered: managed path PASSES**; only a bring-your-own override misreported the cause — fixed |
 | 9 — non-NVIDIA adapter | **Not applicable** on a dual-adapter box; unexercised, not passed |
 
-Still fully open: **checks 5, 5b and the probe-line half of 6**, plus check 9's AMD/Intel result. Check 8 is
-open as a **defect to fix**, not as a question to answer.
+Still fully open: **checks 5, 5b and the probe-line half of 6**, plus check 9's AMD/Intel result.
 
 Everything measured in that session came from a **32 GB / 61 GB RAM / 32 CPU** box against a ≈16 GB consumer
 target, so every timing, VRAM and fit figure in it **over-reports**. See "16 GB target notes" at the end.
@@ -672,12 +671,42 @@ of the two alerts renders.
 **Pass looks like.** Self-consistent: zero devices with a GPU present ⇒ `inferenceBackend: "cpu"`,
 `cpuFallback: true`, the **CPU-fallback** alert, and `backendUndeterminedReason: null`.
 
-> ### ANSWERED 2026-08-03 on Windows 11 — and the answer is FAIL. This is a real defect, not a Vulkan quirk.
+> ### ANSWERED 2026-08-03 on Windows 11 — the managed path PASSES; only a bring-your-own override misreported
 >
-> The open question was whether the Linux observation came from a genuinely timed-out probe or from the
-> zero-device branch. It is the **zero-device branch**, and the two are being collapsed exactly as this check
-> feared. Reproduced on Windows with the **CUDA** runtime, so the earlier "maybe it's a missing Vulkan ICD"
-> theory is dead.
+> **Read this before re-testing: the first version of this note was wrong about the blast radius, and the
+> correction is the useful part.** The check was initially recorded as a broad failure. Re-testing with the
+> override removed showed the opposite, so the two configurations must be tested separately.
+>
+> **Managed binary (what a tester actually runs) — PASSES.** Same box, same `CUDA_VISIBLE_DEVICES=-1`, no
+> `XE_LLAMACPP_SERVER_PATH`. Exactly the "Pass looks like" above:
+>
+> ```json
+> "inferenceBackend": "cpu", "gpuExpected": true, "cpuFallback": true,
+> "cpuFallbackReason": "The CUDA llama.cpp runtime is selected but enumerated no GPU devices …",
+> "backendUndeterminedReason": null
+> ```
+>
+> and the **CPU-fallback** alert renders ("Running on CPU despite a detected GPU"). So an AMD/Intel tester whose
+> Vulkan build finds no ICD — the population this check was written for — gets the correct verdict. `BuildState`
+> and `ResolveInferenceBackend` were right all along.
+>
+> **Bring-your-own override — misreported, now fixed.** With `XE_LLAMACPP_SERVER_PATH` at a GPU-variant binary
+> that enumerates no devices, `LlamaCppBinaryManager.ResolveOverrideBinaryAsync` **refuses it on purpose** (the
+> no-silent-CPU invariant, so a mis-tagged binary cannot run wrong-but-green). That deliberate refusal reached
+> `LlamaDeviceInventoryProbe` as an exception indistinguishable from a spawn glitch, so the card said *"the probe
+> timed out or the binary could not be started"* and blamed *"a wedged or busy GPU driver"* — sending the
+> operator to diagnose a driver that was working perfectly. The control: `--list-devices` under
+> `CUDA_VISIBLE_DEVICES=-1` prints `(none)` and **exits 0 in ~0.1 s**, so neither clause was true.
+>
+> Fixed: the text now lists the causes and names the override case first, and the probe logs the refusal at
+> **Warning** instead of Debug so the reason is actually in the log the card points at. Re-verified from the
+> packaged `0.1.0-rc.4.2` artifact at the shipped log level.
+>
+> **What is still open here**: on the override path `cpuFallback` stays false, so `GetEffectiveProfileAsync` does
+> not zero the VRAM and sizing keeps trusting it. That is mitigated — the same refusal blocks inference outright,
+> so the operator gets a hard failure rather than a silent wrong-sized run — but the state is still
+> "undetermined-but-trusting". Distinguishing a refused binary from an unrunnable probe in the audit itself, so
+> it can size against RAM, is the real follow-up.
 >
 > **The control that makes this evidence.** The probe does not time out and the binary starts fine — measured
 > directly, before touching the app:
