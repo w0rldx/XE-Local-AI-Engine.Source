@@ -104,7 +104,10 @@ public sealed class DevelopmentTestResultAdapterTests
     [Test]
     public void Adapter_NeverResolvesForACustomProfile()
     {
-        var custom = SlnxProfile with { IsCustom = true };
+        var custom = SlnxProfile with
+        {
+            IsCustom = true
+        };
 
         AssertEx.Null(DevelopmentTestResultAdapters.Resolve(custom, DevelopmentCommandIds.DotnetTestRelease));
     }

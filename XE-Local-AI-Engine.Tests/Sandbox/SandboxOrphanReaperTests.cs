@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Sandbox;
 
+using System.Globalization;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Reaping;
@@ -223,7 +224,7 @@ public sealed class SandboxOrphanReaperTests : IDisposable
         {
             for (var index = 0; index < markers.Length; index++)
             {
-                _markers["marker-" + index.ToString(System.Globalization.CultureInfo.InvariantCulture)] = markers[index];
+                _markers["marker-" + index.ToString(CultureInfo.InvariantCulture)] = markers[index];
             }
         }
 

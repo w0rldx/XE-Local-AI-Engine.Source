@@ -1,7 +1,9 @@
 namespace XE_Local_AI_Engine.Tests.Development;
 
+using System.Diagnostics;
 using Microsoft.Extensions.Options;
 using NSubstitute;
+using TUnit.Core.Exceptions;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -42,8 +44,7 @@ public sealed class TrustedDevelopmentHostApplyPortHardeningTests : IDisposable
     {
         if (OperatingSystem.IsWindows())
         {
-            throw new TUnit.Core.Exceptions.SkipTestException(
-                "SKIPPED — the payload is a POSIX shell script. This pin runs on Linux and macOS.");
+            throw new SkipTestException("SKIPPED — the payload is a POSIX shell script. This pin runs on Linux and macOS.");
         }
 
         var repository = Path.Combine(_root, "repo");
@@ -64,7 +65,12 @@ public sealed class TrustedDevelopmentHostApplyPortHardeningTests : IDisposable
 
         var blobStore = Substitute.For<IDevelopmentArtifactBlobStore>();
         blobStore.ReadAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<long>(), Arg.Any<CancellationToken>())
-                 .Returns(new DevelopmentArtifactBlobReadResult(DevelopmentArtifactReadStatus.Found, new byte[] { 1, 2, 3 }));
+                 .Returns(new DevelopmentArtifactBlobReadResult(DevelopmentArtifactReadStatus.Found, new byte[]
+                 {
+                     1,
+                     2,
+                     3
+                 }));
 
         var port = new TrustedDevelopmentHostApplyPort(blobStore, Options.Create(OptionsValue()));
         var projectId = Guid.NewGuid();
@@ -75,30 +81,30 @@ public sealed class TrustedDevelopmentHostApplyPortHardeningTests : IDisposable
         // command (`write-tree` / `status`) is what fires fsmonitor, and every path through ResolveAsync runs one once
         // the identity hash matches.
         _ = await port.InspectAsync(new DevelopmentApprovedApplySubject(projectId,
-                    Guid.NewGuid(),
-                    ExpectedTaskVersion: 1,
-                    await ReadHeadAsync(repository).ConfigureAwait(false),
-                    "PATCHHASH",
-                    "MANIFESTHASH",
-                    "RESULTHASH",
-                    $"{projectId:N}/{patchArtifactId:N}",
-                    $"{projectId:N}/{manifestArtifactId:N}",
-                    patchArtifactId,
-                    manifestArtifactId,
-                    "SUBJECTHASH",
-                    DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)),
-                    "main",
-                    PatchByteCount: 3,
-                    ManifestByteCount: 3),
-                repository)
-            .ConfigureAwait(false);
+                              Guid.NewGuid(),
+                              ExpectedTaskVersion: 1,
+                              await ReadHeadAsync(repository).ConfigureAwait(false),
+                              "PATCHHASH",
+                              "MANIFESTHASH",
+                              "RESULTHASH",
+                              $"{projectId:N}/{patchArtifactId:N}",
+                              $"{projectId:N}/{manifestArtifactId:N}",
+                              patchArtifactId,
+                              manifestArtifactId,
+                              "SUBJECTHASH",
+                              DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)),
+                              "main",
+                              PatchByteCount: 3,
+                              ManifestByteCount: 3),
+                          repository)
+                      .ConfigureAwait(false);
 
         AssertEx.False(File.Exists(sentinel), "the repository-local core.fsmonitor command executed on the host.");
     }
 
     private static async Task<string> ReadHeadAsync(string repository)
     {
-        var startInfo = new System.Diagnostics.ProcessStartInfo
+        var startInfo = new ProcessStartInfo
         {
             FileName = "git",
             WorkingDirectory = repository,
@@ -109,7 +115,10 @@ public sealed class TrustedDevelopmentHostApplyPortHardeningTests : IDisposable
         startInfo.ArgumentList.Add("rev-parse");
         startInfo.ArgumentList.Add("HEAD");
 
-        using var process = new System.Diagnostics.Process { StartInfo = startInfo };
+        using var process = new Process
+        {
+            StartInfo = startInfo
+        };
         process.Start();
         var output = await process.StandardOutput.ReadToEndAsync().ConfigureAwait(false);
         await process.WaitForExitAsync().ConfigureAwait(false);

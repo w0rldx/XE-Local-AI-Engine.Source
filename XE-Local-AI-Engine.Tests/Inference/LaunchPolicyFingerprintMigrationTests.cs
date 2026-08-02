@@ -29,8 +29,7 @@ public sealed class LaunchPolicyFingerprintMigrationTests : IDisposable
         await using var scope = provider.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
         var migrations = dbContext.Database.GetMigrations().ToList();
-        var migrationIndex = migrations.FindIndex(
-            id => id.EndsWith("AddLaunchPolicyFingerprintAndBenchmarkResources", StringComparison.Ordinal));
+        var migrationIndex = migrations.FindIndex(id => id.EndsWith("AddLaunchPolicyFingerprintAndBenchmarkResources", StringComparison.Ordinal));
         AssertEx.True(migrationIndex > 0, "The fingerprint migration must exist and have a predecessor.");
         var migration = migrations[migrationIndex];
         var previousMigration = migrations[migrationIndex - 1];
@@ -68,13 +67,11 @@ public sealed class LaunchPolicyFingerprintMigrationTests : IDisposable
         Directory.CreateDirectory(_rootPath);
         var services = new ServiceCollection();
         services.AddScoped<INodeSqliteKeyHolder, NullNodeSqliteKeyHolder>();
-        services.AddDbContext<NodeChatDbContext>(
-            options => options.UseSqlite($"Data Source={Path.Combine(_rootPath, "fingerprint-migration.sqlite")}"));
+        services.AddDbContext<NodeChatDbContext>(options => options.UseSqlite($"Data Source={Path.Combine(_rootPath, "fingerprint-migration.sqlite")}"));
         return services.BuildServiceProvider(true);
     }
 
-    private static async Task InsertLegacyProfileAsync(
-        NodeChatDbContext dbContext,
+    private static async Task InsertLegacyProfileAsync(NodeChatDbContext dbContext,
         Guid profileId,
         Guid benchmarkId)
     {
@@ -101,8 +98,7 @@ public sealed class LaunchPolicyFingerprintMigrationTests : IDisposable
         int Status,
         string? BenchmarkSnapshotId,
         int? FingerprintVersion,
-        string? Fingerprint)> ReadProfileStateAsync(
-        NodeChatDbContext dbContext,
+        string? Fingerprint)> ReadProfileStateAsync(NodeChatDbContext dbContext,
         Guid profileId)
     {
         var connection = await GetOpenConnectionAsync(dbContext).ConfigureAwait(false);
@@ -128,8 +124,7 @@ public sealed class LaunchPolicyFingerprintMigrationTests : IDisposable
                 : await reader.GetFieldValueAsync<string>(3).ConfigureAwait(false));
     }
 
-    private static async Task<IReadOnlySet<string>> ReadInferenceProfileColumnNamesAsync(
-        NodeChatDbContext dbContext)
+    private static async Task<IReadOnlySet<string>> ReadInferenceProfileColumnNamesAsync(NodeChatDbContext dbContext)
     {
         var connection = await GetOpenConnectionAsync(dbContext).ConfigureAwait(false);
         await using var command = connection.CreateCommand();

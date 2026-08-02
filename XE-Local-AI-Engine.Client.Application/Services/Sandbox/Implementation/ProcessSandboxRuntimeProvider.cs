@@ -772,8 +772,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
                     var current = MeasureDirectoryBytes(jailRoot, baseline + ceiling);
                     if (current - baseline > ceiling)
                     {
-                        _logger.LogWarning(
-                            "Sandbox command exceeded the jail disk ceiling of {Ceiling} bytes (grew {Grown} bytes); terminating it.",
+                        _logger.LogWarning("Sandbox command exceeded the jail disk ceiling of {Ceiling} bytes (grew {Grown} bytes); terminating it.",
                             ceiling,
                             current - baseline);
                         await diskCapSource.CancelAsync().ConfigureAwait(false);

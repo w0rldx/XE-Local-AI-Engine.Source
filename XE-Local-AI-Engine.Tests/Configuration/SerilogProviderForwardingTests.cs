@@ -77,7 +77,8 @@ public sealed class SerilogProviderForwardingTests : IDisposable
     {
         private readonly List<string> _recorded = recorded;
 
-        public ILogger CreateLogger(string categoryName) => new RecordingLogger(_recorded);
+        public ILogger CreateLogger(string categoryName) =>
+            new RecordingLogger(_recorded);
 
         public void Dispose()
         {
@@ -89,9 +90,11 @@ public sealed class SerilogProviderForwardingTests : IDisposable
         private readonly List<string> _recorded = recorded;
 
         public IDisposable? BeginScope<TState>(TState state)
-            where TState : notnull => null;
+            where TState : notnull =>
+            null;
 
-        public bool IsEnabled(LogLevel logLevel) => true;
+        public bool IsEnabled(LogLevel logLevel) =>
+            true;
 
         public void Log<TState>(LogLevel logLevel,
             EventId eventId,

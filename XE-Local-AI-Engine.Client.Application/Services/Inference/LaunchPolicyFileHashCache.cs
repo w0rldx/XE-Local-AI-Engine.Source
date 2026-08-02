@@ -216,7 +216,8 @@ internal sealed class LaunchPolicyFileHashCache : IDisposable
 
     private sealed record CacheEntry(FileStamp Stamp, string Sha256);
 
-    private readonly record struct FileStamp(long Length,
+    private readonly record struct FileStamp(
+        long Length,
         long LastWriteUtcTicks,
         long CreationUtcTicks,
         string GuardSha256);

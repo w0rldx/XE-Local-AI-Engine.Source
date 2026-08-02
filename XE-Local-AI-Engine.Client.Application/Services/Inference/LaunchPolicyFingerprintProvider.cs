@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Inference;
 
 using System.Buffers.Binary;
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -63,14 +64,19 @@ public sealed class LaunchPolicyFingerprintProvider(
 
     private readonly IInstalledRuntimeStore _installedRuntimeStore =
         installedRuntimeStore ?? throw new ArgumentNullException(nameof(installedRuntimeStore));
+
     private readonly ILlamaCppBinaryManager _binaryManager =
         binaryManager ?? throw new ArgumentNullException(nameof(binaryManager));
+
     private readonly LlamaServerLaunchPolicyOptions _launchPolicyOptions =
         launchPolicyOptions ?? throw new ArgumentNullException(nameof(launchPolicyOptions));
+
     private readonly LaunchPolicyFileHashCache _fileHashCache = new();
     private readonly IGgufModelStore _modelStore = modelStore ?? throw new ArgumentNullException(nameof(modelStore));
+
     private readonly IGgufModelRegistry _modelRegistry =
         modelRegistry ?? throw new ArgumentNullException(nameof(modelRegistry));
+
     private readonly LlamaServerSupervisorOptions _supervisorOptions =
         supervisorOptions ?? throw new ArgumentNullException(nameof(supervisorOptions));
 
@@ -103,16 +109,16 @@ public sealed class LaunchPolicyFingerprintProvider(
     private static InferenceProfileFingerprintInput ToInput(InferenceProfileRecord profile, string modelFilePath)
     {
         return new InferenceProfileFingerprintInput(profile.ModelName,
-                profile.Role,
-                profile.Backend,
-                modelFilePath,
-                profile.CtxSize,
-                profile.NGpuLayers,
-                profile.TensorSplit,
-                profile.OverrideTensor,
-                profile.KvTypeK,
-                profile.KvTypeV,
-                profile.FlashAttn);
+            profile.Role,
+            profile.Backend,
+            modelFilePath,
+            profile.CtxSize,
+            profile.NGpuLayers,
+            profile.TensorSplit,
+            profile.OverrideTensor,
+            profile.KvTypeK,
+            profile.KvTypeV,
+            profile.FlashAttn);
     }
 
     public async Task<LaunchPolicyFingerprint> CaptureAsync(InferenceProfileFingerprintInput input, CancellationToken ct)
@@ -148,12 +154,10 @@ public sealed class LaunchPolicyFingerprintProvider(
             }
         }
 
-        throw new IOException(
-            "The model or selected llama.cpp runtime changed while its launch-policy fingerprint was being captured. Retry after file updates finish.");
+        throw new IOException("The model or selected llama.cpp runtime changed while its launch-policy fingerprint was being captured. Retry after file updates finish.");
     }
 
-    private async Task<string> CaptureValueAsync(
-        InferenceProfileFingerprintInput input,
+    private async Task<string> CaptureValueAsync(InferenceProfileFingerprintInput input,
         bool includeContentHashes,
         CancellationToken ct)
     {
@@ -271,8 +275,16 @@ public sealed class LaunchPolicyFingerprintProvider(
                 role = roleIdentity,
                 backend = input.Backend.ToUpperInvariant(),
                 parallel = ParallelSlots,
-                batch = new { mode = RuntimeDefaultMode, value = (int?)null },
-                microBatch = new { mode = RuntimeDefaultMode, value = (int?)null },
+                batch = new
+                {
+                    mode = RuntimeDefaultMode,
+                    value = (int?)null
+                },
+                microBatch = new
+                {
+                    mode = RuntimeDefaultMode,
+                    value = (int?)null
+                },
                 requestedTotalContextTokens = input.CtxSize,
                 effectiveTotalContextTokens = effectivePerSequenceContext * ParallelSlots,
                 perSequenceContext = new
@@ -302,8 +314,7 @@ public sealed class LaunchPolicyFingerprintProvider(
         _fileHashCache.Dispose();
     }
 
-    private async Task<object?> ResolveChatLaunchIdentityAsync(
-        ModelRole? role,
+    private async Task<object?> ResolveChatLaunchIdentityAsync(ModelRole? role,
         bool includeContentHashes,
         CancellationToken ct)
     {
@@ -346,16 +357,14 @@ public sealed class LaunchPolicyFingerprintProvider(
         if (string.IsNullOrWhiteSpace(draftModelPath)
             && !string.IsNullOrWhiteSpace(_supervisorOptions.SpeculativeDraftModelName))
         {
-            draftModelPath = await _modelStore.ResolveModelFilePathAsync(
-                    _supervisorOptions.SpeculativeDraftModelName,
-                    ct)
-                .ConfigureAwait(false);
+            draftModelPath = await _modelStore.ResolveModelFilePathAsync(_supervisorOptions.SpeculativeDraftModelName,
+                                                  ct)
+                                              .ConfigureAwait(false);
         }
 
         if (string.IsNullOrWhiteSpace(draftModelPath) || !File.Exists(draftModelPath))
         {
-            throw new FileNotFoundException(
-                "The configured speculative-decoding draft GGUF file no longer exists.",
+            throw new FileNotFoundException("The configured speculative-decoding draft GGUF file no longer exists.",
                 draftModelPath);
         }
 
@@ -435,8 +444,7 @@ public sealed class LaunchPolicyFingerprintProvider(
         return checked(((divided + contextAlignment - 1) / contextAlignment) * contextAlignment);
     }
 
-    private async Task<ModelContentIdentity> ResolveModelIdentityAsync(
-        string? modelName,
+    private async Task<ModelContentIdentity> ResolveModelIdentityAsync(string? modelName,
         string filePath,
         FileInfo file,
         bool includeContentHashes,
@@ -478,8 +486,7 @@ public sealed class LaunchPolicyFingerprintProvider(
             validationGuard);
     }
 
-    private async Task<RuntimeBundleIdentity> ComputeRuntimeBundleIdentityAsync(
-        string serverExecutablePath,
+    private async Task<RuntimeBundleIdentity> ComputeRuntimeBundleIdentityAsync(string serverExecutablePath,
         bool includeContentHashes,
         CancellationToken ct)
     {
@@ -565,13 +572,12 @@ public sealed class LaunchPolicyFingerprintProvider(
 
     private static string BuildValidationIdentity(FileInfo file, string guardSha256, string? authoritySha256)
     {
-        var canonical = string.Create(System.Globalization.CultureInfo.InvariantCulture,
+        var canonical = string.Create(CultureInfo.InvariantCulture,
             $"{file.Length}:{file.LastWriteTimeUtc.Ticks}:{file.CreationTimeUtc.Ticks}:{guardSha256}:{authoritySha256 ?? "unavailable"}");
         return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));
     }
 
-    private static bool TrySplitFingerprint(
-        string? value,
+    private static bool TrySplitFingerprint(string? value,
         out string strongHash,
         out string validationHash)
     {

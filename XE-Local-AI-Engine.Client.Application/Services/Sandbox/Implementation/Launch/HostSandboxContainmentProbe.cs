@@ -105,8 +105,7 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
             NetworkIsolationUnavailableReason = networkReason
         };
 
-        _logger.LogInformation(
-            "Sandbox containment probe: process group {ProcessGroup}, resource limits {Limits}{LimitsReason}, network isolation {Network}{NetworkReason}.",
+        _logger.LogInformation("Sandbox containment probe: process group {ProcessGroup}, resource limits {Limits}{LimitsReason}, network isolation {Network}{NetworkReason}.",
             containment.SupportsProcessGroup,
             containment.SupportsResourceLimits,
             limitsReason is null ? string.Empty : $" ({limitsReason})",
@@ -122,8 +121,7 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
     ///     bus is reachable AND that the cgroup-v2 controllers backing those properties are delegated to the user slice —
     ///     the two conditions a presence check cannot establish.
     /// </summary>
-    private static (bool Active, string? Reason, IReadOnlyDictionary<string, string> UserBusEnvironment) MeasureResourceLimits(
-        string? setsid,
+    private static (bool Active, string? Reason, IReadOnlyDictionary<string, string> UserBusEnvironment) MeasureResourceLimits(string? setsid,
         string? systemdRun,
         string? envBinary,
         string trueBinary)
@@ -210,13 +208,13 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
         }
 
         var probed = RunProbe(unshare,
-        [
-            "--user",
-            "--map-current-user",
-            "--net",
-            "--",
-            trueBinary
-        ],
+            [
+                "--user",
+                "--map-current-user",
+                "--net",
+                "--",
+                trueBinary
+            ],
             environment: null);
 
         return probed

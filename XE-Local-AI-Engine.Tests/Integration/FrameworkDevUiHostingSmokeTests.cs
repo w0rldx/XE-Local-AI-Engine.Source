@@ -2,8 +2,6 @@
 namespace XE_Local_AI_Engine.Tests.Integration;
 
 using Microsoft.Agents.AI.DevUI;
-using Microsoft.Agents.AI.Hosting;
-using Microsoft.Agents.AI.Hosting.OpenAI;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.AI;
@@ -36,10 +34,10 @@ public sealed class FrameworkDevUiHostingSmokeTests
         app.MapDevUI();
 
         var routes = ((IEndpointRouteBuilder)app).DataSources
-                                                .SelectMany(static source => source.Endpoints)
-                                                .OfType<RouteEndpoint>()
-                                                .Select(static endpoint => endpoint.RoutePattern.RawText ?? string.Empty)
-                                                .ToArray();
+                                                 .SelectMany(static source => source.Endpoints)
+                                                 .OfType<RouteEndpoint>()
+                                                 .Select(static endpoint => endpoint.RoutePattern.RawText ?? string.Empty)
+                                                 .ToArray();
 
         AssertEx.True(routes.Any(static route => route.Contains("responses", StringComparison.OrdinalIgnoreCase)),
             "The OpenAI Responses endpoint must be mapped before DevUI.");
@@ -51,11 +49,14 @@ public sealed class FrameworkDevUiHostingSmokeTests
 
     private sealed class FixedInstructionProvider : IAgentInstructionProvider
     {
-        public string GetLocalChatInstructions() => "DevUI smoke instructions.";
+        public string GetLocalChatInstructions() =>
+            "DevUI smoke instructions.";
 
-        public string GetBaseScaffold() => string.Empty;
+        public string GetBaseScaffold() =>
+            string.Empty;
 
-        public string GetDefaultChatSystemPrompt() => "DevUI smoke instructions.";
+        public string GetDefaultChatSystemPrompt() =>
+            "DevUI smoke instructions.";
     }
 }
 #endif

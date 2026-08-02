@@ -25,7 +25,14 @@ public sealed class ImageModelDownloadCoordinatorTests
             ModelName = modelName,
             RepoId = "Comfy-Org/stable-diffusion-v1-5-archive",
             Family = ImageModelFamily.Sd15,
-            Parts = [new ImageModelPartRequest { Role = ImageModelPartRole.Diffusion, FileName = "this-file-does-not-exist.safetensors" }]
+            Parts =
+            [
+                new ImageModelPartRequest
+                {
+                    Role = ImageModelPartRole.Diffusion,
+                    FileName = "this-file-does-not-exist.safetensors"
+                }
+            ]
         };
     }
 
@@ -37,8 +44,8 @@ public sealed class ImageModelDownloadCoordinatorTests
     private static async Task<ImageModelDownloadStatus> WaitForTerminalAsync(IImageModelDownloadCoordinator coordinator, string modelName)
     {
         await AssertEx.EventuallyAsync(() => coordinator.GetStatus(modelName) is { Phase: not ImageModelDownloadPhase.Running },
-                           Timeout,
-                           $"The download for {modelName} never reached a terminal phase.")
+                          Timeout,
+                          $"The download for {modelName} never reached a terminal phase.")
                       .ConfigureAwait(false);
 
         return AssertEx.NotNull(coordinator.GetStatus(modelName));

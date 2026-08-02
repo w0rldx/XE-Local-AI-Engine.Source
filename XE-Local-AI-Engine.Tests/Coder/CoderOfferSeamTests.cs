@@ -4,8 +4,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Coder.Tools;
-using XE_Local_AI_Engine.Tests.Testing.Builders;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     The offer-seam gates. <see cref="LocalToolOfferProvider" /> is built on the REAL

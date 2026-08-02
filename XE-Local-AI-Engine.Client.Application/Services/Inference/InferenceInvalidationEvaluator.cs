@@ -143,8 +143,7 @@ public sealed class InferenceInvalidationEvaluator : IInferenceInvalidationEvalu
             (long)Math.Ceiling(freezeBaseline * MaterialFreeVramRegressionRatio));
         if (regression >= materialThreshold)
         {
-            _logger.LogInformation(
-                "Inference profile {ProfileId} global-free VRAM dropped materially below the frozen baseline; flagging for re-explore.",
+            _logger.LogInformation("Inference profile {ProfileId} global-free VRAM dropped materially below the frozen baseline; flagging for re-explore.",
                 profile.Id);
             return true;
         }

@@ -111,8 +111,7 @@ public sealed class DevelopmentTemplateServiceTests : IDisposable
         // S2.3: node data is where the engine's managed worktrees and runtime state live. A user-created project is a
         // user artifact and must not be inside it.
         var destination = Path.Combine(NodeDataRoot(), "development", "sneaky");
-        var failure = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(
-            () => service.CreateFromTemplateAsync(TemplateId, destination, "sneaky", "main")).ConfigureAwait(false);
+        var failure = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => service.CreateFromTemplateAsync(TemplateId, destination, "sneaky", "main")).ConfigureAwait(false);
         AssertEx.True(failure.Message.Contains("node data", StringComparison.OrdinalIgnoreCase), failure.Message);
         AssertEx.False(Directory.Exists(destination));
     }
@@ -126,8 +125,7 @@ public sealed class DevelopmentTemplateServiceTests : IDisposable
         Directory.CreateDirectory(destination);
         await File.WriteAllTextAsync(Path.Combine(destination, "keep.txt"), "existing").ConfigureAwait(false);
 
-        _ = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(
-            () => service.CreateFromTemplateAsync(TemplateId, destination, "occupied", "main")).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => service.CreateFromTemplateAsync(TemplateId, destination, "occupied", "main")).ConfigureAwait(false);
         AssertEx.Equal("existing", await File.ReadAllTextAsync(Path.Combine(destination, "keep.txt")).ConfigureAwait(false));
     }
 
@@ -138,8 +136,7 @@ public sealed class DevelopmentTemplateServiceTests : IDisposable
         var service = CreateService(template, new RecordingRepositoryBindings());
         var destination = Path.Combine(_root, "unsafe-branch");
 
-        _ = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(
-            () => service.CreateFromTemplateAsync(TemplateId, destination, "unsafe", "--upload-pack=touch")).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => service.CreateFromTemplateAsync(TemplateId, destination, "unsafe", "--upload-pack=touch")).ConfigureAwait(false);
         AssertEx.False(Directory.Exists(destination));
     }
 
@@ -151,8 +148,7 @@ public sealed class DevelopmentTemplateServiceTests : IDisposable
         Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
         var service = CreateService(template, new FailingRepositoryBindings());
 
-        _ = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(
-            () => service.CreateFromTemplateAsync(TemplateId, destination, "doomed", "main")).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => service.CreateFromTemplateAsync(TemplateId, destination, "doomed", "main")).ConfigureAwait(false);
 
         // A half-materialized tree left behind would register as a repository on the next attempt and silently carry
         // whatever the failed run produced.
@@ -161,7 +157,8 @@ public sealed class DevelopmentTemplateServiceTests : IDisposable
 
     private static readonly Guid TemplateId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
 
-    private string NodeDataRoot() => Path.Combine(_root, "nodedata");
+    private string NodeDataRoot() =>
+        Path.Combine(_root, "nodedata");
 
     private DevelopmentTemplateService CreateService(string templateRoot, IDevelopmentRepositoryBindingService bindings)
     {
@@ -239,14 +236,15 @@ public sealed class DevelopmentTemplateServiceTests : IDisposable
             Task.FromResult<IReadOnlyList<DevelopmentTemplateSnapshot>>([Snapshot()]);
 
         public Task<DevelopmentTemplateSnapshot> GetAsync(Guid templateId, CancellationToken cancellationToken = default) =>
-            templateId == DevelopmentTemplateServiceTests.TemplateId
+            templateId == TemplateId
                 ? Task.FromResult(Snapshot())
                 : throw new KeyNotFoundException($"Development template '{templateId}' was not found.");
 
         public Task<DevelopmentTemplateSnapshot> AddAsync(string templateAlias, string hostPath, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
-        public Task<bool> RemoveAsync(Guid templateId, CancellationToken cancellationToken = default) => Task.FromResult(true);
+        public Task<bool> RemoveAsync(Guid templateId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(true);
 
         public Task RecordMaterializationAsync(DevelopmentTemplateMaterializationSnapshot materialization,
             CancellationToken cancellationToken = default)
@@ -259,7 +257,8 @@ public sealed class DevelopmentTemplateServiceTests : IDisposable
             CancellationToken cancellationToken = default) =>
             Task.FromResult(Recorded);
 
-        private DevelopmentTemplateSnapshot Snapshot() => new(templateId, templateAlias, hostPath, CreatedAtUtc: 0, Version: 1);
+        private DevelopmentTemplateSnapshot Snapshot() =>
+            new(templateId, templateAlias, hostPath, CreatedAtUtc: 0, Version: 1);
     }
 
     private class RecordingRepositoryBindings : IDevelopmentRepositoryBindingService

@@ -24,7 +24,6 @@ internal sealed record DevelopmentCommandEvidence(
     long DurationMilliseconds,
     string StandardOutput,
     string StandardError,
-
     /// <summary>
     ///     The structured test result for this command, or null when the command produces none. Read by a code-owned
     ///     <see cref="IDevelopmentTestResultAdapter" /> from the command's raw output before that output is truncated
@@ -170,7 +169,13 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
             AppendPrunePredicate(predicates, "-ipath", "./" + prefix);
         }
 
-        var arguments = new List<string> { "-P", ".", "-maxdepth", "64" };
+        var arguments = new List<string>
+        {
+            "-P",
+            ".",
+            "-maxdepth",
+            "64"
+        };
         if (predicates.Count > 0)
         {
             arguments.Add("(");
@@ -215,7 +220,11 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
         // Exclude every SECRET name/glob at the grep invocation, so a credential's CONTENT never enters the output in
         // the first place. The post-filter below is defence in depth behind it, not the guard. Build output is
         // deliberately NOT excluded here — searching bin/obj/node_modules is legitimate and leaks nothing.
-        var arguments = new List<string> { "-rnI", "-F" };
+        var arguments = new List<string>
+        {
+            "-rnI",
+            "-F"
+        };
         foreach (var secret in _exclusions.SecretEntryNames)
         {
             arguments.Add("--exclude-dir=" + secret);
@@ -448,8 +457,7 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
         var actual = DevelopmentCommandProfileImport.TryComputeDigest(_session.HostWorktreePath);
         if (!string.Equals(actual, _importBaselineDigest, StringComparison.Ordinal))
         {
-            throw new DevelopmentWorkspaceSecurityException(
-                "A fixed command changed the repository command-profile import file in the managed Development worktree.");
+            throw new DevelopmentWorkspaceSecurityException("A fixed command changed the repository command-profile import file in the managed Development worktree.");
         }
     }
 
@@ -573,9 +581,8 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
     {
         var hostPath = Path.Combine(_session.RuntimePath, name);
         return _session.SandboxHandle.TryResolveSandboxPath(hostPath)
-               ?? throw new InvalidOperationException(
-                   $"The sandbox does not expose the Development runtime directory '{name}'. The workspace provider must request it as an "
-                   + "engine-generated mount before any command runs.");
+               ?? throw new InvalidOperationException($"The sandbox does not expose the Development runtime directory '{name}'. The workspace provider must request it as an "
+                                                      + "engine-generated mount before any command runs.");
     }
 
     private void EnsureRuntimeDirectories()
@@ -607,8 +614,7 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
         if (IsSecretPath(relativePath))
         {
             // Names only the path the caller already supplied — no host path, no matched rule, no file content.
-            throw new DevelopmentWorkspaceSecurityException(
-                $"'{relativePath}' is excluded because files with that name commonly hold credentials.");
+            throw new DevelopmentWorkspaceSecurityException($"'{relativePath}' is excluded because files with that name commonly hold credentials.");
         }
     }
 
@@ -750,8 +756,7 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
         if (IsSecretPath(path))
         {
             // Names only the path the patch itself supplied — no file content, and the patch is refused whole.
-            throw new DevelopmentWorkspaceSecurityException(
-                $"a patch cannot rename or copy from '{path}' because files with that name commonly hold credentials.");
+            throw new DevelopmentWorkspaceSecurityException($"a patch cannot rename or copy from '{path}' because files with that name commonly hold credentials.");
         }
     }
 

@@ -83,5 +83,6 @@ internal static class DevelopmentCommandProfileImport
         return buffer.ToArray();
     }
 
-    private static string ComputeDigest(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
+    private static string ComputeDigest(byte[] bytes) =>
+        Convert.ToHexStringLower(SHA256.HashData(bytes));
 }

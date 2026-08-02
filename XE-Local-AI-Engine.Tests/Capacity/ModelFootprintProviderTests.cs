@@ -17,8 +17,7 @@ public sealed class ModelFootprintProviderTests
     public async Task Footprint_ProjectsSharedAllocationResources()
     {
         var expected = new ResourceFootprint(6 * Gb, 3 * Gb);
-        var (provider, allocationResolver) = BuildProvider(new ProcessContextAllocation(
-            ProcessContextTokens: 16384,
+        var (provider, allocationResolver) = BuildProvider(new ProcessContextAllocation(ProcessContextTokens: 16384,
             ModelTrainContextTokens: 32768,
             ProcessContextAllocationSource.HardwareTier,
             ProcessPlacementMode.Hybrid,
@@ -70,8 +69,7 @@ public sealed class ModelFootprintProviderTests
             Arg.Any<CancellationToken>());
     }
 
-    private static (ModelFootprintProvider Provider, IProcessContextAllocationResolver AllocationResolver) BuildProvider(
-        ProcessContextAllocation? allocation,
+    private static (ModelFootprintProvider Provider, IProcessContextAllocationResolver AllocationResolver) BuildProvider(ProcessContextAllocation? allocation,
         ResolvedLaunchArguments? resolved = null,
         GpuVariant variant = GpuVariant.Cuda)
     {

@@ -48,8 +48,7 @@ internal sealed class ToolCapableModelRegistrar : IToolCapableModelRegistrar
         var added = await AddAsync([descriptor.ModelName], cancellationToken).ConfigureAwait(false);
         if (added > 0)
         {
-            _logger.LogInformation(
-                "Model {ModelName} advertises tool calling in its chat template; added it to the tool-capable model list.",
+            _logger.LogInformation("Model {ModelName} advertises tool calling in its chat template; added it to the tool-capable model list.",
                 descriptor.ModelName);
         }
 
@@ -104,7 +103,10 @@ internal sealed class ToolCapableModelRegistrar : IToolCapableModelRegistrar
         var merged = new List<string>(existing);
         merged.AddRange(fresh);
 
-        await _settingsStore.SaveAsync(stored with { ToolCapableModels = merged }, cancellationToken).ConfigureAwait(false);
+        await _settingsStore.SaveAsync(stored with
+        {
+            ToolCapableModels = merged
+        }, cancellationToken).ConfigureAwait(false);
         return fresh.Length;
     }
 }

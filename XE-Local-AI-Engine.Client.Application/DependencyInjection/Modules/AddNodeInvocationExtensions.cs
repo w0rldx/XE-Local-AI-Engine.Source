@@ -16,7 +16,6 @@ using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Events.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
-using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 using XE_Local_AI_Engine.Client.Services.Invocation.Envelope;
 using XE_Local_AI_Engine.Client.Services.Invocation.Envelope.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
@@ -26,6 +25,7 @@ using XE_Local_AI_Engine.Client.Services.Invocation.RuntimePackage.Implementatio
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.Validation;
 using XE_Local_AI_Engine.Client.Services.Validation.Implementation;
+using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 
 internal static class AddNodeInvocationExtensions
 {
@@ -61,8 +61,7 @@ internal static class AddNodeInvocationExtensions
                    "Invalid ConversationContextBudgetOptions configuration.")
                .ValidateOnStart();
         builder.Services.TryAddSingleton<ITokenEstimatorCalibrationStore, TokenEstimatorCalibrationStore>();
-        builder.Services.AddSingleton(static sp => new LlamaTokenEstimatorCalibrationService(
-            new HttpClient(LlamaTokenEstimatorCalibrationService.CreateProductionHandler(), disposeHandler: true),
+        builder.Services.AddSingleton(static sp => new LlamaTokenEstimatorCalibrationService(new HttpClient(LlamaTokenEstimatorCalibrationService.CreateProductionHandler(), disposeHandler: true),
             sp.GetRequiredService<ITokenEstimatorCalibrationStore>(),
             sp.GetRequiredService<ILogger<LlamaTokenEstimatorCalibrationService>>()));
         builder.Services.AddSingleton<ITokenEstimatorCalibrationScheduler>(static sp =>

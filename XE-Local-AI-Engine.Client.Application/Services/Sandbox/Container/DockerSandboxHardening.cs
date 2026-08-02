@@ -56,11 +56,10 @@ internal static class DockerSandboxHardening
         {
             SandboxNetworkPolicy.None => NoNetworkMode,
             SandboxNetworkPolicy.Unrestricted => BridgeNetworkMode,
-            _ => throw new SandboxCapabilityNotSupportedException(
-                $"The docker sandbox provider has no mechanism for '{policy}'. It serves "
-                + $"{nameof(SandboxNetworkPolicy.None)} (an empty network namespace) and "
-                + $"{nameof(SandboxNetworkPolicy.Unrestricted)} (the default bridge). A restricted egress allow-list is the "
-                + "separate v2 package-proxy project (plan D6).")
+            _ => throw new SandboxCapabilityNotSupportedException($"The docker sandbox provider has no mechanism for '{policy}'. It serves "
+                                                                  + $"{nameof(SandboxNetworkPolicy.None)} (an empty network namespace) and "
+                                                                  + $"{nameof(SandboxNetworkPolicy.Unrestricted)} (the default bridge). A restricted egress allow-list is the "
+                                                                  + "separate v2 package-proxy project (plan D6).")
         };
     }
 
@@ -461,6 +460,5 @@ internal static class DockerSandboxHardening
 public sealed record ResolvedContainerIdentity(int UserId, int GroupId)
 {
     /// <summary>The <c>uid:gid</c> string Docker's <c>User</c> field takes.</summary>
-    public string UserSpecification =>
-        UserId.ToString(CultureInfo.InvariantCulture) + ":" + GroupId.ToString(CultureInfo.InvariantCulture);
+    public string UserSpecification => UserId.ToString(CultureInfo.InvariantCulture) + ":" + GroupId.ToString(CultureInfo.InvariantCulture);
 }

@@ -59,7 +59,10 @@ public sealed class DockerDaemonPreflightServiceTests
 
         var movedEndpoint = new DockerDaemonEndpoint(new Uri("unix:///run/user/1000/docker.sock"),
             DockerDaemonEndpointSource.UserRuntimeUnixSocket);
-        client.Identity = client.Identity with { Endpoint = movedEndpoint };
+        client.Identity = client.Identity with
+        {
+            Endpoint = movedEndpoint
+        };
 
         AssertEx.Equal(DockerDaemonPreflightStatus.Ready, (await service.InspectAsync()).Status);
     }
@@ -69,7 +72,11 @@ public sealed class DockerDaemonPreflightServiceTests
     {
         var (service, client, store) = CreateService();
         await service.InspectAsync();
-        client.Identity = client.Identity with { DaemonId = "daemon-beta", ServerVersion = "28.0.0" };
+        client.Identity = client.Identity with
+        {
+            DaemonId = "daemon-beta",
+            ServerVersion = "28.0.0"
+        };
 
         var preflight = await service.InspectAsync();
 
@@ -86,7 +93,11 @@ public sealed class DockerDaemonPreflightServiceTests
     {
         var (service, client, _) = CreateService();
         await service.InspectAsync();
-        client.Identity = client.Identity with { DaemonId = "daemon-beta", ServerVersion = "28.0.0" };
+        client.Identity = client.Identity with
+        {
+            DaemonId = "daemon-beta",
+            ServerVersion = "28.0.0"
+        };
 
         var message = (await service.InspectAsync()).Message;
 
@@ -101,7 +112,10 @@ public sealed class DockerDaemonPreflightServiceTests
     {
         var (service, client, store) = CreateService();
         await service.InspectAsync();
-        client.Identity = client.Identity with { DaemonId = "daemon-beta" };
+        client.Identity = client.Identity with
+        {
+            DaemonId = "daemon-beta"
+        };
 
         var preflight = await service.ConfirmAsync("daemon-beta");
 
@@ -119,7 +133,10 @@ public sealed class DockerDaemonPreflightServiceTests
         // like one.
         var (service, client, store) = CreateService();
         await service.InspectAsync();
-        client.Identity = client.Identity with { DaemonId = "daemon-gamma" };
+        client.Identity = client.Identity with
+        {
+            DaemonId = "daemon-gamma"
+        };
 
         var preflight = await service.ConfirmAsync("daemon-beta");
 
@@ -165,7 +182,10 @@ public sealed class DockerDaemonPreflightServiceTests
     public async Task InspectAsync_WhenTheDaemonApiIsTooOld_SaysWhichVersionsAndWhy()
     {
         var (service, client, _) = CreateService();
-        client.Identity = client.Identity with { ApiVersion = "1.40" };
+        client.Identity = client.Identity with
+        {
+            ApiVersion = "1.40"
+        };
 
         var preflight = await service.InspectAsync();
 
@@ -180,7 +200,10 @@ public sealed class DockerDaemonPreflightServiceTests
     {
         // 1.9 precedes 1.41. Read as decimals, 1.9 > 1.41 and an ancient daemon would pass the gate.
         var (service, client, _) = CreateService();
-        client.Identity = client.Identity with { ApiVersion = "1.9" };
+        client.Identity = client.Identity with
+        {
+            ApiVersion = "1.9"
+        };
 
         AssertEx.Equal(DockerDaemonPreflightStatus.ApiVersionTooOld, (await service.InspectAsync()).Status);
     }
@@ -188,7 +211,10 @@ public sealed class DockerDaemonPreflightServiceTests
     [Test]
     public async Task InspectAsync_WhenNoApprovedImageIsConfigured_SaysSoWithoutBlamingTheDaemon()
     {
-        var (service, _, _) = CreateService(DockerSandboxHardeningTests.Options() with { Image = null });
+        var (service, _, _) = CreateService(DockerSandboxHardeningTests.Options() with
+        {
+            Image = null
+        });
 
         var preflight = await service.InspectAsync();
 
@@ -208,10 +234,12 @@ public sealed class DockerDaemonPreflightServiceTests
         AssertEx.Contains(preflight.Message, "this node's configuration");
     }
 
-    private static (IDockerDaemonPreflightService Service, FakeDockerRuntimeClient Client, InMemoryAttestationStore Store) CreateService(
-        ContainerSandboxOptions? options = null)
+    private static (IDockerDaemonPreflightService Service, FakeDockerRuntimeClient Client, InMemoryAttestationStore Store) CreateService(ContainerSandboxOptions? options = null)
     {
-        var resolved = options ?? DockerSandboxHardeningTests.Options() with { DaemonEndpoint = "unix:///fake.sock" };
+        var resolved = options ?? DockerSandboxHardeningTests.Options() with
+        {
+            DaemonEndpoint = "unix:///fake.sock"
+        };
         var endpoint = new DockerDaemonEndpoint(new Uri("unix:///fake.sock"), DockerDaemonEndpointSource.Configuration);
         var client = new FakeDockerRuntimeClient(endpoint,
             new DockerDaemonIdentity("daemon-alpha", "29.6.1", "1.55", "1.40", "linux", endpoint));

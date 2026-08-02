@@ -149,7 +149,6 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
             .. knowledgeDescriptors.Select(static descriptor => descriptor.Name),
             SpawnSubAgentToolDefinition.ToolName
         ];
-
     }
 
     /// <summary>

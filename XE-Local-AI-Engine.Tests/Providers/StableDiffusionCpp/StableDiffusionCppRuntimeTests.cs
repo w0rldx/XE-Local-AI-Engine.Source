@@ -85,7 +85,11 @@ public sealed class StableDiffusionCppRuntimeTests
         using var http = new HttpClient(handler, disposeHandler: false);
         var runtime = new StableDiffusionCppRuntime(new FakeImageServerSupervisor(BaseAddress), new SdServerJobClient(http));
 
-        var request = Request() with { Width = 100, Height = 512 };
+        var request = Request() with
+        {
+            Width = 100,
+            Height = 512
+        };
         var result = await runtime.GenerateAsync(request, new RecordingProgress(), CancellationToken.None);
 
         AssertEx.Equal(expected: 128, result.Width, "The result must report the produced width (128), not the requested one (100).");
@@ -96,7 +100,13 @@ public sealed class StableDiffusionCppRuntimeTests
     [Test]
     public async Task Generate_UnreadableImageHeader_FallsBackToTheRequestedDimensions()
     {
-        var base64 = Convert.ToBase64String(new byte[] { 1, 2, 3, 4 });
+        var base64 = Convert.ToBase64String(new byte[]
+        {
+            1,
+            2,
+            3,
+            4
+        });
         using var handler = new RuntimeHandler((_, route) => route switch
         {
             "img_gen" => Json(HttpStatusCode.Accepted, """{"id":"job-1","status":"queued"}"""),
@@ -105,7 +115,11 @@ public sealed class StableDiffusionCppRuntimeTests
         using var http = new HttpClient(handler, disposeHandler: false);
         var runtime = new StableDiffusionCppRuntime(new FakeImageServerSupervisor(BaseAddress), new SdServerJobClient(http));
 
-        var result = await runtime.GenerateAsync(Request() with { Width = 100, Height = 512 }, new RecordingProgress(), CancellationToken.None);
+        var result = await runtime.GenerateAsync(Request() with
+        {
+            Width = 100,
+            Height = 512
+        }, new RecordingProgress(), CancellationToken.None);
 
         AssertEx.Equal(expected: 100, result.Width);
         AssertEx.Equal(expected: 512, result.Height);
@@ -115,7 +129,17 @@ public sealed class StableDiffusionCppRuntimeTests
     // big-endian width and height. Only the header is read, so no pixel data is needed.
     private static byte[] PngWithHeader(uint width, uint height)
     {
-        var bytes = new List<byte>(new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A });
+        var bytes = new List<byte>(new byte[]
+        {
+            0x89,
+            0x50,
+            0x4E,
+            0x47,
+            0x0D,
+            0x0A,
+            0x1A,
+            0x0A
+        });
         bytes.AddRange([0x00, 0x00, 0x00, 0x0D]);
         bytes.AddRange([0x49, 0x48, 0x44, 0x52]);
         bytes.AddRange(BitConverter.GetBytes(width).Reverse());

@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox.Container.Implementation;
 
-using System.Net.Http;
 using System.Net.Sockets;
 using System.Text;
 using Docker.DotNet;
@@ -190,7 +189,11 @@ internal sealed class DockerDotNetRuntimeClient : IDockerRuntimeClient
         try
         {
             await _client.Containers
-                         .RemoveContainerAsync(containerId, new ContainerRemoveParameters { Force = true, RemoveVolumes = true }, cancellationToken)
+                         .RemoveContainerAsync(containerId, new ContainerRemoveParameters
+                         {
+                             Force = true,
+                             RemoveVolumes = true
+                         }, cancellationToken)
                          .ConfigureAwait(false);
         }
         catch (DockerContainerNotFoundException)
@@ -229,7 +232,11 @@ internal sealed class DockerDotNetRuntimeClient : IDockerRuntimeClient
 
             var created = await _client.Exec.CreateContainerExecAsync(containerId, parameters, cancellationToken).ConfigureAwait(false);
             using var stream = await _client.Exec
-                                            .StartContainerExecAsync(created.ID, new ContainerExecStartParameters { Detach = false, TTY = false }, cancellationToken)
+                                            .StartContainerExecAsync(created.ID, new ContainerExecStartParameters
+                                            {
+                                                Detach = false,
+                                                TTY = false
+                                            }, cancellationToken)
                                             .ConfigureAwait(false);
 
             var (standardOutput, standardError) = await PumpAsync(stream, request.StandardInput, cancellationToken).ConfigureAwait(false);
@@ -304,8 +311,8 @@ internal sealed class DockerDotNetRuntimeClient : IDockerRuntimeClient
     private static bool IsRootless(SystemInfoResponse info)
     {
         return info.SecurityOptions?.Any(option => option
-                                                  .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
-                                                  .Any(part => part.Equals("name=rootless", StringComparison.OrdinalIgnoreCase)))
+                                                   .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                                                   .Any(part => part.Equals("name=rootless", StringComparison.OrdinalIgnoreCase)))
                ?? false;
     }
 
@@ -317,7 +324,10 @@ internal sealed class DockerDotNetRuntimeClient : IDockerRuntimeClient
             Source = bindMount.HostPath,
             Target = bindMount.ContainerPath,
             ReadOnly = bindMount.ReadOnly,
-            BindOptions = new BindOptions { Propagation = bindMount.Propagation }
+            BindOptions = new BindOptions
+            {
+                Propagation = bindMount.Propagation
+            }
         };
     }
 

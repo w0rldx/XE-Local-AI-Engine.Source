@@ -201,23 +201,23 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
         try
         {
             var outcome = await state.Client.ExecuteAsync(state.ContainerId,
-                                          new DockerExecutionRequest
-                                          {
-                                              Executable = request.Executable,
-                                              Arguments = request.Arguments,
-                                              // MAPPED, not forwarded. The caller's working directory is a path in the
-                                              // sandbox namespace whose root is the workspace, so Development Mode's
-                                              // literal "/" means the repository root and not the container's root —
-                                              // which is where an unmapped forward would have run every command.
-                                              WorkingDirectory = request.WorkingDirectory is null
-                                                  ? state.WorkspaceMountTarget
-                                                  : DockerSandboxPaths.ResolveContainerPath(state.WorkspaceMountTarget, request.WorkingDirectory),
-                                              Environment = request.Environment,
-                                              StandardInput = request.StandardInput,
-                                              MaxCapturedBytes = DefaultMaxCapturedOutputBytes
-                                          },
-                                          execution.Token)
-                                      .ConfigureAwait(false);
+                                         new DockerExecutionRequest
+                                         {
+                                             Executable = request.Executable,
+                                             Arguments = request.Arguments,
+                                             // MAPPED, not forwarded. The caller's working directory is a path in the
+                                             // sandbox namespace whose root is the workspace, so Development Mode's
+                                             // literal "/" means the repository root and not the container's root —
+                                             // which is where an unmapped forward would have run every command.
+                                             WorkingDirectory = request.WorkingDirectory is null
+                                                 ? state.WorkspaceMountTarget
+                                                 : DockerSandboxPaths.ResolveContainerPath(state.WorkspaceMountTarget, request.WorkingDirectory),
+                                             Environment = request.Environment,
+                                             StandardInput = request.StandardInput,
+                                             MaxCapturedBytes = DefaultMaxCapturedOutputBytes
+                                         },
+                                         execution.Token)
+                                     .ConfigureAwait(false);
 
             return new SandboxCommandResult
             {
@@ -272,11 +272,11 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
         var content = await File.ReadAllBytesAsync(request.SourcePath, cancellationToken).ConfigureAwait(false);
 
         await DockerWorkspaceHostFiles.WriteAsync(state.WorkspaceRoot,
-                                       state.WorkspaceMountTarget,
-                                       request.DestinationPath,
-                                       content,
-                                       cancellationToken)
-                                   .ConfigureAwait(false);
+                                          state.WorkspaceMountTarget,
+                                          request.DestinationPath,
+                                          content,
+                                          cancellationToken)
+                                      .ConfigureAwait(false);
     }
 
     public async Task<string> ReadFileAsync(SandboxHandle handle, string sandboxPath, CancellationToken cancellationToken = default)
@@ -299,16 +299,16 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
         var state = GetAliveState(handle);
         var containerPath = DockerSandboxPaths.ResolveContainerPath(state.WorkspaceMountTarget, sandboxPath);
         var outcome = await state.Client.ExecuteAsync(state.ContainerId,
-                                      new DockerExecutionRequest
-                                      {
-                                          Executable = "cat",
-                                          Arguments = [containerPath],
-                                          // One byte over the caller's bound, so a file exactly at the bound is
-                                          // returned while one over it is detected rather than silently trimmed.
-                                          MaxCapturedBytes = maxBytes + 1
-                                      },
-                                      cancellationToken)
-                                  .ConfigureAwait(false);
+                                     new DockerExecutionRequest
+                                     {
+                                         Executable = "cat",
+                                         Arguments = [containerPath],
+                                         // One byte over the caller's bound, so a file exactly at the bound is
+                                         // returned while one over it is detected rather than silently trimmed.
+                                         MaxCapturedBytes = maxBytes + 1
+                                     },
+                                     cancellationToken)
+                                 .ConfigureAwait(false);
 
         if (outcome.ExitCode != 0)
         {
@@ -332,7 +332,7 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
         // Measured reason: on a rootless daemon the archive endpoint fails with `remount-ro … operation not
         // permitted` for any path under a bind mount — which is where every interesting artifact lives.
         var content = await ReadFileAsync(handle, request.SourcePath, DefaultMaxCapturedOutputBytes, cancellationToken)
-                          .ConfigureAwait(false);
+            .ConfigureAwait(false);
 
         var directory = Path.GetDirectoryName(request.DestinationPath);
         if (!string.IsNullOrEmpty(directory))
@@ -400,20 +400,18 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
 
         if (userId < 0 || groupId < 0)
         {
-            throw new SandboxCapabilityNotSupportedException(
-                $"The docker sandbox provider refuses to create a container as uid {userId}, gid {groupId}: neither may be negative.");
+            throw new SandboxCapabilityNotSupportedException($"The docker sandbox provider refuses to create a container as uid {userId}, gid {groupId}: neither may be negative.");
         }
 
         if ((userId == 0 || groupId == 0) && !daemonIsRootless)
         {
-            throw new SandboxCapabilityNotSupportedException(
-                $"The docker sandbox provider refuses to create a container as uid {userId}, gid {groupId} against a daemon that "
-                + "does not report itself rootless. On a rootful daemon an in-container id maps straight through, so 0 is host "
-                + "root — which the §3.8 hardening contract forbids. (0 is accepted only against a daemon that reports itself "
-                + "rootless, where it maps to the invoking user's own unprivileged account. That is a description of how the "
-                + "two daemon modes differ, not a recommendation to switch: this product neither requires nor supplies rootless "
-                + "Docker.) Set "
-                + $"'{ContainerSandboxOptions.SectionName}:UserId' and ':GroupId' to the ids that own this node's workspace.");
+            throw new SandboxCapabilityNotSupportedException($"The docker sandbox provider refuses to create a container as uid {userId}, gid {groupId} against a daemon that "
+                                                             + "does not report itself rootless. On a rootful daemon an in-container id maps straight through, so 0 is host "
+                                                             + "root — which the §3.8 hardening contract forbids. (0 is accepted only against a daemon that reports itself "
+                                                             + "rootless, where it maps to the invoking user's own unprivileged account. That is a description of how the "
+                                                             + "two daemon modes differ, not a recommendation to switch: this product neither requires nor supplies rootless "
+                                                             + "Docker.) Set "
+                                                             + $"'{ContainerSandboxOptions.SectionName}:UserId' and ':GroupId' to the ids that own this node's workspace.");
         }
 
         return new ResolvedContainerIdentity(userId, groupId);
@@ -499,17 +497,15 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
     {
         if (string.IsNullOrWhiteSpace(options.Image))
         {
-            throw new SandboxCapabilityNotSupportedException(
-                "The docker sandbox provider has no approved container image configured. Set "
-                + $"'{ContainerSandboxOptions.SectionName}:Image' to a digest-pinned reference.");
+            throw new SandboxCapabilityNotSupportedException("The docker sandbox provider has no approved container image configured. Set "
+                                                             + $"'{ContainerSandboxOptions.SectionName}:Image' to a digest-pinned reference.");
         }
 
         if (request.TrustedHostWorkspace is null)
         {
             // This provider creates exactly one engine-generated mount, and it is the workspace. Without it the container
             // would have nothing to act on, and a container with no workspace is not a sandbox, it is an idle process.
-            throw new SandboxCapabilityNotSupportedException(
-                "The docker sandbox provider requires an engine-managed trusted host workspace on the create request.");
+            throw new SandboxCapabilityNotSupportedException("The docker sandbox provider requires an engine-managed trusted host workspace on the create request.");
         }
 
         // `None` and `Unrestricted` both have a mechanism and are both served exactly as asked; `Restricted` does not
@@ -558,9 +554,8 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
                 // as — which under a rootful daemon is root, and the container then cannot write its own HOME. Refused
                 // here so the failure names the missing directory instead of surfacing as a permission error inside a
                 // build.
-                throw new SandboxCapabilityNotSupportedException(
-                    $"The engine-generated sandbox mount source '{mount.HostPath}' does not exist. The engine must create it before the "
-                    + "sandbox: a bind source the daemon has to invent is created with the daemon's own ownership, not the engine's.");
+                throw new SandboxCapabilityNotSupportedException($"The engine-generated sandbox mount source '{mount.HostPath}' does not exist. The engine must create it before the "
+                                                                 + "sandbox: a bind source the daemon has to invent is created with the daemon's own ownership, not the engine's.");
             }
 
             // The RESOLVED target, not the requested one. A mount inside the trusted workspace is placed by derivation
@@ -578,10 +573,9 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
 
         if (ContainerSandboxOptionsValidator.FindOverlap(strict) is { } collision)
         {
-            throw new SandboxCapabilityNotSupportedException(
-                $"The engine-generated sandbox mounts '{collision.First}' ('{collision.FirstPath}') and '{collision.Second}' "
-                + $"('{collision.SecondPath}') overlap. One would shadow the other, and the daemon's read-back would still agree "
-                + "because it applied exactly what it was asked for.");
+            throw new SandboxCapabilityNotSupportedException($"The engine-generated sandbox mounts '{collision.First}' ('{collision.FirstPath}') and '{collision.Second}' "
+                                                             + $"('{collision.SecondPath}') overlap. One would shadow the other, and the daemon's read-back would still agree "
+                                                             + "because it applied exactly what it was asked for.");
         }
 
         // A file overlay is admitted above, but only as an overlay: it must still not land exactly on top of a
@@ -590,8 +584,7 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
             strict.Any(target => string.Equals(target.Path?.TrimEnd('/'), overlay.TrimEnd('/'), StringComparison.Ordinal)));
         if (replaced is not null)
         {
-            throw new SandboxCapabilityNotSupportedException(
-                $"The engine-generated file mount '{replaced}' lands exactly on a directory mount target and would replace it.");
+            throw new SandboxCapabilityNotSupportedException($"The engine-generated file mount '{replaced}' lands exactly on a directory mount target and would replace it.");
         }
     }
 
@@ -604,17 +597,15 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
     {
         if (string.IsNullOrWhiteSpace(mount.HostPath) || string.IsNullOrWhiteSpace(mount.SandboxPath))
         {
-            throw new SandboxCapabilityNotSupportedException(
-                "An engine-generated sandbox mount must name both a host path and an in-container target.");
+            throw new SandboxCapabilityNotSupportedException("An engine-generated sandbox mount must name both a host path and an in-container target.");
         }
 
         if (!mount.SandboxPath.StartsWith('/')
             || mount.SandboxPath.Contains("..", StringComparison.Ordinal)
             || mount.SandboxPath.TrimEnd('/').Length == 0)
         {
-            throw new SandboxCapabilityNotSupportedException(
-                $"The engine-generated sandbox mount target '{mount.SandboxPath}' must be an absolute in-container path below '/', "
-                + "with no '..' segment.");
+            throw new SandboxCapabilityNotSupportedException($"The engine-generated sandbox mount target '{mount.SandboxPath}' must be an absolute in-container path below '/', "
+                                                             + "with no '..' segment.");
         }
     }
 
@@ -662,10 +653,9 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
                     containerId,
                     violations.Count);
 
-                throw new SandboxCapabilityNotSupportedException(
-                    "The docker sandbox provider created a container whose isolation settings could not be verified against the "
-                    + "daemon's own read-back, so it was removed rather than used. Unverified guarantees: "
-                    + string.Join(" ", violations));
+                throw new SandboxCapabilityNotSupportedException("The docker sandbox provider created a container whose isolation settings could not be verified against the "
+                                                                 + "daemon's own read-back, so it was removed rather than used. Unverified guarantees: "
+                                                                 + string.Join(" ", violations));
             }
 
             await VerifyWorkspaceMappingAsync(client, containerId, workspaceRoot, options.WorkspaceMountTarget, identity, cancellationToken)
@@ -814,11 +804,10 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
                     containerId,
                     failure);
 
-                throw new SandboxCapabilityNotSupportedException(
-                    $"The docker sandbox provider created a container as uid {identity.UserSpecification}, but {failure} The container "
-                    + "was removed rather than used: a sandbox whose workspace the engine and the container cannot both write is not "
-                    + "one Development Mode can run in, and the daemon's own read-back cannot detect this — it reports the id that "
-                    + "was asked for, never what that id maps to.");
+                throw new SandboxCapabilityNotSupportedException($"The docker sandbox provider created a container as uid {identity.UserSpecification}, but {failure} The container "
+                                                                 + "was removed rather than used: a sandbox whose workspace the engine and the container cannot both write is not "
+                                                                 + "one Development Mode can run in, and the daemon's own read-back cannot detect this — it reports the id that "
+                                                                 + "was asked for, never what that id maps to.");
             }
         }
         finally
@@ -868,9 +857,8 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
 
         if (!requested.SequenceEqual(applied))
         {
-            throw new SandboxCapabilityNotSupportedException(
-                "An existing sandbox for this attach key carries a different engine-generated mount set. A container's mounts are fixed "
-                + "at creation, so kill it before rebinding.");
+            throw new SandboxCapabilityNotSupportedException("An existing sandbox for this attach key carries a different engine-generated mount set. A container's mounts are fixed "
+                                                             + "at creation, so kill it before rebinding.");
         }
     }
 
@@ -879,8 +867,7 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
         var requested = workspace is null ? null : Path.GetFullPath(workspace.RootPath);
         if (!string.Equals(state.WorkspaceRoot, requested, StringComparison.Ordinal))
         {
-            throw new SandboxCapabilityNotSupportedException(
-                "An existing sandbox for this attach key is bound to a different trusted host workspace. Kill it before rebinding.");
+            throw new SandboxCapabilityNotSupportedException("An existing sandbox for this attach key is bound to a different trusted host workspace. Kill it before rebinding.");
         }
     }
 

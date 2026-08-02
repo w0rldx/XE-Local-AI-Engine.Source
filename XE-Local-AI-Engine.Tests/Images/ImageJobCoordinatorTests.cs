@@ -140,7 +140,11 @@ public sealed class ImageJobCoordinatorTests
     {
         using var harness = Harness.Create(blockRuntime: false, producedSize: (128, 512));
 
-        var input = NewInput("rounded-up") with { Width = 100, Height = 512 };
+        var input = NewInput("rounded-up") with
+        {
+            Width = 100,
+            Height = 512
+        };
         var jobId = await harness.Coordinator.EnqueueAsync(input, CancellationToken.None).ConfigureAwait(false);
 
         await WaitForStatusAsync(harness, jobId, ImageJobStatus.Succeeded).ConfigureAwait(false);

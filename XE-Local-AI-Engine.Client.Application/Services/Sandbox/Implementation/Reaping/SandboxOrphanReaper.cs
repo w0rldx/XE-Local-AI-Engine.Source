@@ -115,8 +115,7 @@ public sealed class SandboxOrphanReaper : IHostedService
 
         if (reapedGroups > 0 || deletedJails > 0)
         {
-            _logger.LogInformation(
-                "Reaped {Groups} orphaned sandbox process group(s) and removed {Jails} stale jail(s) left by a previous run.",
+            _logger.LogInformation("Reaped {Groups} orphaned sandbox process group(s) and removed {Jails} stale jail(s) left by a previous run.",
                 reapedGroups,
                 deletedJails);
         }
@@ -135,8 +134,7 @@ public sealed class SandboxOrphanReaper : IHostedService
         {
             // The pid was recycled onto an unrelated process. Killing its group would take out something that was never
             // ours, so refuse — the stale marker is simply discarded by the caller.
-            _logger.LogDebug(
-                "Skipping sandbox orphan pgid {Pgid}: the pid was recycled (start ticks {Actual} != recorded {Recorded}).",
+            _logger.LogDebug("Skipping sandbox orphan pgid {Pgid}: the pid was recycled (start ticks {Actual} != recorded {Recorded}).",
                 marker.ProcessGroupId,
                 currentStartTicks,
                 marker.LeaderStartTicks);

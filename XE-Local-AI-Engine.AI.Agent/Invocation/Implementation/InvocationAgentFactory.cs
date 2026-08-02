@@ -168,6 +168,7 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
             {
                 requested = explicitContext;
             }
+
             var clampedContext = Math.Min(requested, effectiveContext);
             additionalProperties[OllamaNumCtxKey] = clampedContext;
             if (chatOptions.MaxOutputTokens is { } output)
@@ -221,14 +222,13 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
             // No-skills path: instructions are NULL on the agent — they are carried once by the seed system message
             // (see BuildSeedMessages). Named arguments pin the 1.15.0 ctor order so name/description land as identity
             // and the model receives the instructions exactly once.
-            return new ApprovalResponseValidatingAgent(
-                new ChatClientAgent(_chatClient,
-                    instructions: null,
-                    name: agentName,
-                    description: agentDescription,
-                    tools: tools,
-                    loggerFactory: _loggerFactory,
-                    services: _serviceProvider));
+            return new ApprovalResponseValidatingAgent(new ChatClientAgent(_chatClient,
+                instructions: null,
+                name: agentName,
+                description: agentDescription,
+                tools: tools,
+                loggerFactory: _loggerFactory,
+                services: _serviceProvider));
         }
 
         // MAAI001: Agent Skills (AgentSkillsProvider/AgentInlineSkill) shipped as [Experimental] in Microsoft.Agents.AI
@@ -250,24 +250,23 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
 #pragma warning restore CA2000
 #pragma warning restore MAAI001
 
-        return new ApprovalResponseValidatingAgent(
-            new ChatClientAgent(_chatClient,
-                new ChatClientAgentOptions
+        return new ApprovalResponseValidatingAgent(new ChatClientAgent(_chatClient,
+            new ChatClientAgentOptions
+            {
+                Name = agentName,
+                Description = agentDescription,
+                // Instructions are NOT set here (Instructions null) — they are carried once by the seed system message,
+                // exactly as on the no-skills path, so the two paths deliver instructions identically. Only the agent's
+                // own tools ride these ChatOptions; the per-turn RunOptions.ChatOptions still carries model id / think /
+                // sampling.
+                ChatOptions = new ChatOptions
                 {
-                    Name = agentName,
-                    Description = agentDescription,
-                    // Instructions are NOT set here (Instructions null) — they are carried once by the seed system message,
-                    // exactly as on the no-skills path, so the two paths deliver instructions identically. Only the agent's
-                    // own tools ride these ChatOptions; the per-turn RunOptions.ChatOptions still carries model id / think /
-                    // sampling.
-                    ChatOptions = new ChatOptions
-                    {
-                        Tools = tools
-                    },
-                    AIContextProviders = [skillsProvider]
+                    Tools = tools
                 },
-                _loggerFactory,
-                _serviceProvider));
+                AIContextProviders = [skillsProvider]
+            },
+            _loggerFactory,
+            _serviceProvider));
     }
 
     /// <summary>

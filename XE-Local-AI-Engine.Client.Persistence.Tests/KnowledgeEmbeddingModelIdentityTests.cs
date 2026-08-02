@@ -28,8 +28,10 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
 {
     private const string ConfiguredName = "nomic-embed-text";
     private const string ResolvedGgufName = "nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M";
+
     private const string ResolvedVectorIdentity =
         "nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M::layernorm-population-eps1e-5-truncate-l2:v1:512";
+
     private const int Dimensions = 768;
 
     private readonly INodeSqliteKeyHolder _keyHolder = new NullNodeSqliteKeyHolder();
@@ -191,8 +193,7 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         await SeedChunkAsync(databasePath, documentId, chunkId, "legacy lexical content").ConfigureAwait(false);
 
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
-        var service = CreateSearchService(
-            context,
+        var service = CreateSearchService(context,
             EmptyVectorSearch(),
             ftsHits:
             [
@@ -223,8 +224,7 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
                                    .Returns(_ => throw new InvalidOperationException("provider unavailable"));
 
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
-        var service = CreateSearchService(
-            context,
+        var service = CreateSearchService(context,
             EmptyVectorSearch(),
             providerResolver: unavailableProviderResolver,
             ftsHits:
@@ -232,8 +232,7 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
                 new FtsSearchHit(chunkId, documentId, Bm25Score: -1.0)
             ]);
 
-        var result = await service.SearchAsync(
-            new KnowledgeSearchRequest("current lexical content", Limit: 5),
+        var result = await service.SearchAsync(new KnowledgeSearchRequest("current lexical content", Limit: 5),
             CancellationToken.None).ConfigureAwait(false);
 
         AssertEx.Equal(1, result.Results.Count);
@@ -253,8 +252,7 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         var provider = new FixedEmbeddingProvider(Descriptor(ResolvedGgufName));
         var vectorSearch = EmptyVectorSearch();
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
-        var service = CreateSearchService(
-            context,
+        var service = CreateSearchService(context,
             vectorSearch,
             CreateProviderResolver(provider),
             new KnowledgeQueryEmbeddingCache(options),
@@ -265,8 +263,7 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
 
         AssertEx.Equal(1, provider.GenerateCallCount);
         await vectorSearch.Received(2)
-                          .SearchAsync(
-                              Arg.Any<ReadOnlyMemory<float>>(),
+                          .SearchAsync(Arg.Any<ReadOnlyMemory<float>>(),
                               ResolvedGgufName,
                               $"{ResolvedGgufName}::native:v1:{Dimensions}",
                               Dimensions,
@@ -288,8 +285,7 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         var provider = new FixedEmbeddingProvider(Descriptor(nonNomicModel));
         var vectorSearch = EmptyVectorSearch();
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
-        var service = CreateSearchService(
-            context,
+        var service = CreateSearchService(context,
             vectorSearch,
             CreateProviderResolver(provider),
             new KnowledgeQueryEmbeddingCache(options),
@@ -300,8 +296,7 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
 
         AssertEx.Equal(1, provider.GenerateCallCount);
         await vectorSearch.Received(2)
-                          .SearchAsync(
-                              Arg.Any<ReadOnlyMemory<float>>(),
+                          .SearchAsync(Arg.Any<ReadOnlyMemory<float>>(),
                               nonNomicModel,
                               $"{nonNomicModel}::native:v1:{Dimensions}",
                               Dimensions,
@@ -323,11 +318,9 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         var resolution = new EmbeddingModelResolution(ResolvedGgufName, IsConfident: true);
         var cacheFamily = KnowledgeEmbeddingVectorPolicy.CreateCacheFamilyIdentity(resolution, options.Value.EmbeddingVectorMode);
         var cache = new KnowledgeQueryEmbeddingCache(options);
-        cache.Store(
-            cacheFamily,
+        cache.Store(cacheFamily,
             query,
-            new KnowledgeQueryEmbeddingCacheEntry(
-                new float[KnowledgeEmbeddingVectorPolicy.MatryoshkaWidth],
+            new KnowledgeQueryEmbeddingCacheEntry(new float[KnowledgeEmbeddingVectorPolicy.MatryoshkaWidth],
                 $"{ResolvedGgufName}::native:v1:{Dimensions}"));
         var provider = new FixedEmbeddingProvider(Descriptor(ResolvedGgufName));
         var vectorSearch = EmptyVectorSearch();
@@ -355,11 +348,9 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         var resolution = new EmbeddingModelResolution(ResolvedGgufName, IsConfident: true);
         var cacheFamily = KnowledgeEmbeddingVectorPolicy.CreateCacheFamilyIdentity(resolution, options.Value.EmbeddingVectorMode);
         var cache = new KnowledgeQueryEmbeddingCache(options);
-        cache.Store(
-            cacheFamily,
+        cache.Store(cacheFamily,
             query,
-            new KnowledgeQueryEmbeddingCacheEntry(
-                new float[Dimensions],
+            new KnowledgeQueryEmbeddingCacheEntry(new float[Dimensions],
                 $"different-model::native:v1:{Dimensions}"));
         var provider = new FixedEmbeddingProvider(Descriptor(ResolvedGgufName));
         var vectorSearch = EmptyVectorSearch();
@@ -443,8 +434,7 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
             NullLogger<KnowledgeIngestionService>.Instance);
     }
 
-    private static KnowledgeDocumentCatalogService CreateCatalogService(
-        NodeChatDbContext context,
+    private static KnowledgeDocumentCatalogService CreateCatalogService(NodeChatDbContext context,
         KnowledgeEmbeddingVectorMode vectorMode = KnowledgeEmbeddingVectorMode.Matryoshka512)
     {
         var options = Options.Create(new KnowledgeBaseOptions
@@ -454,8 +444,7 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         return new KnowledgeDocumentCatalogService(context, CreateResolvingProviderResolver(), new EmbeddingModelResolver(options), options, TimeProvider.System);
     }
 
-    private static KnowledgeSearchService CreateSearchService(
-        NodeChatDbContext context,
+    private static KnowledgeSearchService CreateSearchService(NodeChatDbContext context,
         IVectorSearch vectorSearch,
         ILocalModelProviderResolver? providerResolver = null,
         IKnowledgeQueryEmbeddingCache? queryEmbeddingCache = null,
@@ -488,8 +477,7 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
     private static IVectorSearch EmptyVectorSearch()
     {
         var vectorSearch = Substitute.For<IVectorSearch>();
-        vectorSearch.SearchAsync(
-                        Arg.Any<ReadOnlyMemory<float>>(),
+        vectorSearch.SearchAsync(Arg.Any<ReadOnlyMemory<float>>(),
                         Arg.Any<string>(),
                         Arg.Any<string>(),
                         Arg.Any<int>(),

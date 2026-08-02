@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Invocation.Context;
 
 using System.Net;
-using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading.Channels;
 using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
@@ -315,7 +314,9 @@ internal sealed class LlamaTokenEstimatorCalibrationService : BackgroundService,
     }
 
     private sealed record CalibrationTarget(Uri BaseAddress, long Generation, DateTimeOffset NextDueUtc, bool InFlight);
+
     private readonly record struct CalibrationWork(string ModelName, Uri BaseAddress, long Generation);
+
     private readonly record struct CalibrationResult(int? Divisor);
 
     private enum CalibrationFailureReason

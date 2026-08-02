@@ -276,7 +276,10 @@ public sealed partial class CudaBuildService : ICudaBuildService, IDisposable
             // self-referential. Mirrors LlamaCppSourceBuildService, which owns the live path today.
             SetPhase(CudaBuildPhase.Configuring);
             var configureExit = await RunStreamingStepAsync("cmake",
-                ["-B", buildDir, "-S", cloneDir, "-DGGML_CUDA=ON", "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_BUILD_RPATH_USE_ORIGIN=ON", "-DLLAMA_CURL=OFF", $"-DCMAKE_CUDA_ARCHITECTURES={architectures}"],
+                [
+                    "-B", buildDir, "-S", cloneDir, "-DGGML_CUDA=ON", "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_BUILD_RPATH_USE_ORIGIN=ON", "-DLLAMA_CURL=OFF",
+                    $"-DCMAKE_CUDA_ARCHITECTURES={architectures}"
+                ],
                 environment,
                 cloneDir,
                 ConfigureTimeout,

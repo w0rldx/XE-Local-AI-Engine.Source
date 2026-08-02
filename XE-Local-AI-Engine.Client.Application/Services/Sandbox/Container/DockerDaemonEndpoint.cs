@@ -35,8 +35,7 @@ public sealed record DockerDaemonEndpoint(Uri Uri, DockerDaemonEndpointSource So
     ///     For a <c>unix://</c> endpoint, the filesystem path of the socket; null otherwise. Used to tell "there is no
     ///     socket at that path" apart from "there is a socket and it refused us", which are different operator actions.
     /// </summary>
-    public string? UnixSocketPath =>
-        Uri.Scheme.Equals("unix", StringComparison.OrdinalIgnoreCase) ? Uri.LocalPath : null;
+    public string? UnixSocketPath => Uri.Scheme.Equals("unix", StringComparison.OrdinalIgnoreCase) ? Uri.LocalPath : null;
 
     /// <summary>A stable, log-safe rendering. A daemon endpoint carries no credentials, so no redaction is required.</summary>
     public string Display => Uri.ToString();

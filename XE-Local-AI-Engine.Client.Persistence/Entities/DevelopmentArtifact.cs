@@ -24,5 +24,6 @@ internal sealed class DevelopmentArtifact
     /// <see cref="CommandProfileVersion"/>, which carries the artifact protocol version.
     /// </summary>
     public string? CommandProfileDigest { get; set; }
+
     public bool IsValid { get; set; }
 }

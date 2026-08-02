@@ -61,8 +61,7 @@ public sealed class SupervisorProfilingTests
     public async Task Profiling_Explore_AcquiresMachineReadableFitParamsWithProductionLaunchPolicy()
     {
         var launcher = new FakeProcessLauncher();
-        var fitRunner = new FakeLlamaFitParamsRunner(
-            LlamaFitParamsRunResult.Success(["-c 8192 -ngl 32"]));
+        var fitRunner = new FakeLlamaFitParamsRunner(LlamaFitParamsRunResult.Success(["-c 8192 -ngl 32"]));
         await using var supervisor = SupervisorFactory.Create(launcher,
             variantSelector: new FakeVariantSelector(GpuVariant.Cuda),
             fitParamsRunner: fitRunner);
@@ -103,20 +102,16 @@ public sealed class SupervisorProfilingTests
     [Test]
     [Arguments(ModelRole.Embedding, "--embeddings")]
     [Arguments(ModelRole.Reranker, "--rerank")]
-    public async Task Profiling_Explore_AuxiliaryRolesKeepPoolingOnServerButNotFitHelper(
-        ModelRole role,
+    public async Task Profiling_Explore_AuxiliaryRolesKeepPoolingOnServerButNotFitHelper(ModelRole role,
         string roleFlag)
     {
         var launcher = new FakeProcessLauncher();
-        var fitRunner = new FakeLlamaFitParamsRunner(
-            LlamaFitParamsRunResult.Success(["-c 2048 -ngl 32"]));
-        await using var supervisor = SupervisorFactory.Create(
-            launcher,
+        var fitRunner = new FakeLlamaFitParamsRunner(LlamaFitParamsRunResult.Success(["-c 2048 -ngl 32"]));
+        await using var supervisor = SupervisorFactory.Create(launcher,
             variantSelector: new FakeVariantSelector(GpuVariant.Cuda),
             fitParamsRunner: fitRunner);
 
-        await supervisor.RunExclusiveProfilingAsync(
-            "llama3",
+        await supervisor.RunExclusiveProfilingAsync("llama3",
             role,
             ResolvedLaunchArguments.Explore(),
             enableMetrics: false,
@@ -125,8 +120,7 @@ public sealed class SupervisorProfilingTests
 
         AssertEx.True(fitRunner.Calls.TryPeek(out var serverSpec));
         AssertEx.Contains(serverSpec!.Arguments, roleFlag);
-        AssertArgumentValue(
-            serverSpec.Arguments,
+        AssertArgumentValue(serverSpec.Arguments,
             "--pooling",
             role == ModelRole.Reranker ? "rank" : "mean");
 
@@ -145,8 +139,7 @@ public sealed class SupervisorProfilingTests
     public async Task Profiling_Explore_WhenOptimizedCandidateFails_ExposesSuccessfulSafeLaunchArguments()
     {
         var launcher = new FakeProcessLauncher();
-        var fitRunner = new FakeLlamaFitParamsRunner(
-            LlamaFitParamsRunResult.Success(["-c 8192 -ngl 32"]));
+        var fitRunner = new FakeLlamaFitParamsRunner(LlamaFitParamsRunResult.Success(["-c 8192 -ngl 32"]));
         await using var supervisor = SupervisorFactory.Create(launcher,
             healthProbe: new FirstReadinessFailsHealthProbe(),
             variantSelector: new FakeVariantSelector(GpuVariant.Cuda),
@@ -179,10 +172,8 @@ public sealed class SupervisorProfilingTests
     [Test]
     public async Task Profiling_Replay_DoesNotInvokeFitParamsCapability()
     {
-        var fitRunner = new FakeLlamaFitParamsRunner(
-            LlamaFitParamsRunResult.Success(["-c 8192 -ngl 32"]));
-        await using var supervisor = SupervisorFactory.Create(
-            variantSelector: new FakeVariantSelector(GpuVariant.Cuda),
+        var fitRunner = new FakeLlamaFitParamsRunner(LlamaFitParamsRunResult.Success(["-c 8192 -ngl 32"]));
+        await using var supervisor = SupervisorFactory.Create(variantSelector: new FakeVariantSelector(GpuVariant.Cuda),
             fitParamsRunner: fitRunner);
 
         await supervisor.RunExclusiveProfilingAsync("llama3",

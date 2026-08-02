@@ -81,8 +81,7 @@ public sealed class InferenceProfileServiceTests
         var profile = AssertEx.NotNull(result.Profile);
         AssertEx.Equal<int?>(-2, profile.NGpuLayers);
         await fixture.ProfileStore.Received(1)
-                     .CreateOrUpdateExploredAsync(
-                         Arg.Is<InferenceProfileInput>(input => input.CtxSize == 8192 && input.NGpuLayers == -2),
+                     .CreateOrUpdateExploredAsync(Arg.Is<InferenceProfileInput>(input => input.CtxSize == 8192 && input.NGpuLayers == -2),
                          Arg.Any<CancellationToken>());
     }
 
@@ -92,8 +91,7 @@ public sealed class InferenceProfileServiceTests
         var fixture = new ServiceFixture();
         fixture.WithLocalModel();
         fixture.WithMetadata(new GgufModelMetadata(ParamCount: 7_000_000_000, QuantType: "15", ContextLength: 8192, ExpertCount: null, IsMoe: false));
-        fixture.WithExploreFitParamsOutput(
-            startupOutput: [],
+        fixture.WithExploreFitParamsOutput(startupOutput: [],
             successfulLaunchArguments: ["-fa", "on", "-ctk", "q8_0", "-ctv", "q8_0"],
             "-c 8192 -ngl 33");
         fixture.EchoExploredUpsert();
@@ -113,8 +111,7 @@ public sealed class InferenceProfileServiceTests
         var fixture = new ServiceFixture();
         fixture.WithLocalModel();
         fixture.WithMetadata(new GgufModelMetadata(ParamCount: 7_000_000_000, QuantType: "15", ContextLength: 8192, ExpertCount: null, IsMoe: false));
-        fixture.WithExploreFitParamsOutput(
-            startupOutput: [],
+        fixture.WithExploreFitParamsOutput(startupOutput: [],
             successfulLaunchArguments: ["--fit", "on", "-c", "8192"],
             "-c 8192 -ngl 33");
         fixture.EchoExploredUpsert();
@@ -537,12 +534,10 @@ public sealed class InferenceProfileServiceTests
             ProfileStore.ListAsync(Arg.Any<CancellationToken>())
                         .Returns(Task.FromResult<IReadOnlyList<InferenceProfileRecord>>([]));
             LaunchPolicyFingerprintProvider.CaptureAsync(Arg.Any<InferenceProfileFingerprintInput>(), Arg.Any<CancellationToken>())
-                                           .Returns(Task.FromResult(new LaunchPolicyFingerprint(
-                                               XE_Local_AI_Engine.Client.Services.Inference.LaunchPolicyFingerprintProvider.CurrentVersion,
+                                           .Returns(Task.FromResult(new LaunchPolicyFingerprint(Client.Services.Inference.LaunchPolicyFingerprintProvider.CurrentVersion,
                                                "fingerprint")));
             LaunchPolicyFingerprintProvider.CaptureAsync(Arg.Any<InferenceProfileRecord>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-                                           .Returns(Task.FromResult(new LaunchPolicyFingerprint(
-                                               XE_Local_AI_Engine.Client.Services.Inference.LaunchPolicyFingerprintProvider.CurrentVersion,
+                                           .Returns(Task.FromResult(new LaunchPolicyFingerprint(Client.Services.Inference.LaunchPolicyFingerprintProvider.CurrentVersion,
                                                "fingerprint")));
             LaunchPolicyFingerprintProvider.MatchesAsync(Arg.Any<InferenceProfileRecord>(),
                                                Arg.Any<string>(),
@@ -584,8 +579,7 @@ public sealed class InferenceProfileServiceTests
             WithExploreFitParamsOutput(startupOutput, successfulLaunchArguments: [], fitParamsOutput);
         }
 
-        public void WithExploreFitParamsOutput(
-            IReadOnlyList<string> startupOutput,
+        public void WithExploreFitParamsOutput(IReadOnlyList<string> startupOutput,
             IReadOnlyList<string> successfulLaunchArguments,
             params string[] fitParamsOutput)
         {
@@ -631,8 +625,7 @@ public sealed class InferenceProfileServiceTests
                           var captureVram =
                               callInfo.Arg<Func<CancellationToken, Task<LlamaServerProfilingVramSnapshot>>>();
                           var preSpawnVram = await captureVram(CancellationToken.None);
-                          var context = new LlamaServerProfilingContext(
-                              new LlamaServerEndpoint(Model, ModelRole.Chat, new Uri("http://127.0.0.1:18100/v1")),
+                          var context = new LlamaServerProfilingContext(new LlamaServerEndpoint(Model, ModelRole.Chat, new Uri("http://127.0.0.1:18100/v1")),
                               [])
                           {
                               PreSpawnVram = preSpawnVram

@@ -26,10 +26,8 @@ internal sealed record DevelopmentValidationReport(
     string CommandProfileVersion,
     string CommandProfileId,
     string CommandProfileDigest,
-
     /// <summary>A stable <see cref="DevelopmentValidationFailureCodes" /> value when the gate failed, else null.</summary>
     string? FailureCode,
-
     /// <summary>Operator-facing detail for <see cref="FailureCode" />, or null when the gate passed.</summary>
     string? FailureDetail,
     IReadOnlyList<DevelopmentCommandEvidence> Commands,

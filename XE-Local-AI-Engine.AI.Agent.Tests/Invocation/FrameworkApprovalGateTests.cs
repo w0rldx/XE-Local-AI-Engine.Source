@@ -1,10 +1,10 @@
 namespace XE_Local_AI_Engine.AI.Agent.Tests.Invocation;
 
+using System.Runtime.CompilerServices;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
-using System.Runtime.CompilerServices;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -205,11 +205,11 @@ public sealed class FrameworkApprovalGateTests
 
         var resume = BuildResume(seed, first, tamperedResponse);
         _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() => agent
-                                                                          .RunStreamingAsync(resume,
-                                                                              session: null,
-                                                                              options: null,
-                                                                              CancellationToken.None)
-                                                                          .ToAgentResponseAsync(CancellationToken.None));
+                                                                        .RunStreamingAsync(resume,
+                                                                            session: null,
+                                                                            options: null,
+                                                                            CancellationToken.None)
+                                                                        .ToAgentResponseAsync(CancellationToken.None));
 
         AssertEx.Equal(expected: 0, executed, "an altered tool call must not execute under an approval granted for different arguments");
         AssertEx.True(reasonSeen is null, "tampered arguments must never reach the approval-required tool");
@@ -250,11 +250,11 @@ public sealed class FrameworkApprovalGateTests
         resume.Add(new ChatMessage(ChatRole.User, [tamperedResponse]));
 
         _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() => agent
-                                                                          .RunStreamingAsync(resume,
-                                                                              session: null,
-                                                                              options: null,
-                                                                              CancellationToken.None)
-                                                                          .ToAgentResponseAsync(CancellationToken.None));
+                                                                        .RunStreamingAsync(resume,
+                                                                            session: null,
+                                                                            options: null,
+                                                                            CancellationToken.None)
+                                                                        .ToAgentResponseAsync(CancellationToken.None));
 
         AssertEx.Equal(expected: 0, executed, "altering both replay request and response must not replace the surfaced tool call");
         AssertEx.True(reasonSeen is null, "jointly tampered arguments must never reach the approval-required tool");
@@ -280,11 +280,11 @@ public sealed class FrameworkApprovalGateTests
         AssertEx.Equal(expected: 1, executed, "the first approved replay must execute the tool exactly once");
 
         _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() => agent
-                                                                          .RunStreamingAsync(resume,
-                                                                              session: null,
-                                                                              options: null,
-                                                                              CancellationToken.None)
-                                                                          .ToAgentResponseAsync(CancellationToken.None));
+                                                                        .RunStreamingAsync(resume,
+                                                                            session: null,
+                                                                            options: null,
+                                                                            CancellationToken.None)
+                                                                        .ToAgentResponseAsync(CancellationToken.None));
 
         AssertEx.Equal(expected: 1, executed, "an exact sequential replay of a consumed approval must not execute again");
     }
@@ -314,20 +314,20 @@ public sealed class FrameworkApprovalGateTests
         try
         {
             firstResume = Task.Run(() => agent
-                                              .RunStreamingAsync(resume,
-                                                  session: null,
-                                                  options: null,
-                                                  CancellationToken.None)
-                                              .ToAgentResponseAsync(CancellationToken.None));
+                                         .RunStreamingAsync(resume,
+                                             session: null,
+                                             options: null,
+                                             CancellationToken.None)
+                                         .ToAgentResponseAsync(CancellationToken.None));
             AssertEx.True(toolEntered.Wait(TimeSpan.FromSeconds(5)),
                 "the first resume must reserve the approval and enter the tool before the concurrent replay");
 
             _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() => agent
-                                                                              .RunStreamingAsync(resume,
-                                                                                  session: null,
-                                                                                  options: null,
-                                                                                  CancellationToken.None)
-                                                                              .ToAgentResponseAsync(CancellationToken.None));
+                                                                            .RunStreamingAsync(resume,
+                                                                                session: null,
+                                                                                options: null,
+                                                                                CancellationToken.None)
+                                                                            .ToAgentResponseAsync(CancellationToken.None));
 
             AssertEx.Equal(expected: 1, executed, "a concurrent replay must fail before a second tool execution");
         }
@@ -361,11 +361,11 @@ public sealed class FrameworkApprovalGateTests
 
         var resume = BuildResume(seed, first, unmatchedResponse);
         _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() => agent
-                                                                          .RunStreamingAsync(resume,
-                                                                              session: null,
-                                                                              options: null,
-                                                                              CancellationToken.None)
-                                                                          .ToAgentResponseAsync(CancellationToken.None));
+                                                                        .RunStreamingAsync(resume,
+                                                                            session: null,
+                                                                            options: null,
+                                                                            CancellationToken.None)
+                                                                        .ToAgentResponseAsync(CancellationToken.None));
 
         AssertEx.Equal(expected: 0, executed, "an approval response without a surfaced request id must not execute a tool");
     }
@@ -386,11 +386,11 @@ public sealed class FrameworkApprovalGateTests
 
         var resume = BuildResume(seed, first, approved, approved);
         _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() => agent
-                                                                          .RunStreamingAsync(resume,
-                                                                              session: null,
-                                                                              options: null,
-                                                                              CancellationToken.None)
-                                                                          .ToAgentResponseAsync(CancellationToken.None));
+                                                                        .RunStreamingAsync(resume,
+                                                                            session: null,
+                                                                            options: null,
+                                                                            CancellationToken.None)
+                                                                        .ToAgentResponseAsync(CancellationToken.None));
 
         AssertEx.Equal(expected: 0, executed, "duplicate approval responses must fail closed before the tool executes");
     }
@@ -409,17 +409,16 @@ public sealed class FrameworkApprovalGateTests
         await cancellationTokenSource.CancelAsync();
 
         _ = await AssertEx.ThrowsAsync<OperationCanceledException>(() => agent
-                                                                          .RunStreamingAsync(BuildSeed(),
-                                                                              session: null,
-                                                                              options: null,
-                                                                              cancellationTokenSource.Token)
-                                                                          .ToAgentResponseAsync(cancellationTokenSource.Token));
+                                                                         .RunStreamingAsync(BuildSeed(),
+                                                                             session: null,
+                                                                             options: null,
+                                                                             cancellationTokenSource.Token)
+                                                                         .ToAgentResponseAsync(cancellationTokenSource.Token));
 
         AssertEx.Equal(expected: 0, executed, "a cancelled streaming run must not execute an approval-required tool");
     }
 
-    private static async Task<(AgentResponse Response, ToolApprovalRequestContent Request)> RunFirstStreamingApprovalAsync(
-        AIAgent agent,
+    private static async Task<(AgentResponse Response, ToolApprovalRequestContent Request)> RunFirstStreamingApprovalAsync(AIAgent agent,
         IReadOnlyList<ChatMessage> seed)
     {
         var first = await agent
@@ -466,29 +465,27 @@ public sealed class FrameworkApprovalGateTests
 
     private static AIAgent BuildAgent(IChatClient chatClient, AITool tool, IServiceProvider sp)
     {
-        return new ApprovalResponseValidatingAgent(
-            new ChatClientAgent(chatClient,
-                "ci-approval-gate",
-                "Call the destructive_cleanup tool when asked to perform a cleanup.",
-                "Deterministic approval-gate CI guard.",
-                new List<AITool>
-                {
-                    tool
-                },
-                NullLoggerFactory.Instance,
-                sp));
+        return new ApprovalResponseValidatingAgent(new ChatClientAgent(chatClient,
+            "ci-approval-gate",
+            "Call the destructive_cleanup tool when asked to perform a cleanup.",
+            "Deterministic approval-gate CI guard.",
+            new List<AITool>
+            {
+                tool
+            },
+            NullLoggerFactory.Instance,
+            sp));
     }
 
     private static AIAgent BuildAgent(IChatClient chatClient, IList<AITool> tools, IServiceProvider sp)
     {
-        return new ApprovalResponseValidatingAgent(
-            new ChatClientAgent(chatClient,
-                "ci-approval-gate",
-                "Call the destructive tools when asked to perform cleanup.",
-                "Deterministic approval-gate CI guard.",
-                tools,
-                NullLoggerFactory.Instance,
-                sp));
+        return new ApprovalResponseValidatingAgent(new ChatClientAgent(chatClient,
+            "ci-approval-gate",
+            "Call the destructive tools when asked to perform cleanup.",
+            "Deterministic approval-gate CI guard.",
+            tools,
+            NullLoggerFactory.Instance,
+            sp));
     }
 
     private static List<ChatMessage> BuildSeed()
@@ -533,11 +530,11 @@ public sealed class FrameworkApprovalGateTests
             }
 
             var calls = _toolNames.Select(toolName => (AIContent)new FunctionCallContent($"call-{toolName}",
-                    toolName,
-                    new Dictionary<string, object?>
-                    {
-                        ["reason"] = "ci-regression"
-                    }))
+                                      toolName,
+                                      new Dictionary<string, object?>
+                                      {
+                                          ["reason"] = "ci-regression"
+                                      }))
                                   .ToList();
             return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, calls)));
         }
@@ -558,7 +555,8 @@ public sealed class FrameworkApprovalGateTests
         }
 
         private static async IAsyncEnumerable<ChatResponseUpdate> ToUpdates(Task<ChatResponse> responseTask,
-            [EnumeratorCancellation] CancellationToken cancellationToken)
+            [EnumeratorCancellation]
+            CancellationToken cancellationToken)
         {
             var response = await responseTask.ConfigureAwait(false);
             foreach (var message in response.Messages)

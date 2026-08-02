@@ -53,8 +53,7 @@ public sealed class LlamaFitParamsProcessRunnerTests
 
         var arguments = LlamaFitParamsProcessRunner.BuildArguments(spec.Arguments);
 
-        AssertEx.True(arguments.SequenceEqual(
-        [
+        AssertEx.True(arguments.SequenceEqual([
             "-m", "/models/model.gguf",
             "--parallel", "1",
             "--fit", "on",

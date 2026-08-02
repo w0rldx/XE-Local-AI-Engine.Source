@@ -113,11 +113,9 @@ public sealed class InferenceProfileService : IInferenceProfileService
             role,
             ResolvedLaunchArguments.Explore(),
             enableMetrics: false,
-            body: (context, _) => Task.FromResult(
-                result: _fittedArgsParser.TryParseFittedArgs(
-                    context.FitParamsOutput,
-                    context.StartupOutput,
-                    context.SuccessfulLaunchArguments)),
+            body: (context, _) => Task.FromResult(result: _fittedArgsParser.TryParseFittedArgs(context.FitParamsOutput,
+                context.StartupOutput,
+                context.SuccessfulLaunchArguments)),
             ct).ConfigureAwait(false);
 
         if (draft is null)
@@ -130,8 +128,7 @@ public sealed class InferenceProfileService : IInferenceProfileService
                 return ExploreResult.Fail(failure);
             }
 
-            _logger.LogWarning(
-                "Machine-readable llama-fit-params output was unavailable for the CPU explore; persisting the GGUF context because CPU profiles do not replay GPU placement.");
+            _logger.LogWarning("Machine-readable llama-fit-params output was unavailable for the CPU explore; persisting the GGUF context because CPU profiles do not replay GPU placement.");
         }
 
         var input = await BuildExploreInputAsync(machineKey,
@@ -154,8 +151,7 @@ public sealed class InferenceProfileService : IInferenceProfileService
         return BenchmarkAsync(profileId, allowPreSpawnVramPressure: false, ct);
     }
 
-    public async Task<BenchmarkResult> BenchmarkAsync(
-        Guid profileId,
+    public async Task<BenchmarkResult> BenchmarkAsync(Guid profileId,
         bool allowPreSpawnVramPressure,
         CancellationToken ct)
     {
@@ -173,8 +169,7 @@ public sealed class InferenceProfileService : IInferenceProfileService
 
         if (!HasCompletePlacement(profile))
         {
-            return BenchmarkResult.Fail(
-                $"Profile {profileId} has no complete machine-readable GPU placement; re-explore after llama-fit-params is available.");
+            return BenchmarkResult.Fail($"Profile {profileId} has no complete machine-readable GPU placement; re-explore after llama-fit-params is available.");
         }
 
         if (!await FingerprintMatchesCurrentAsync(profile, filePath, ct).ConfigureAwait(false))
@@ -279,8 +274,7 @@ public sealed class InferenceProfileService : IInferenceProfileService
 
         if (!HasCompletePlacement(profile))
         {
-            return ProfileActionResult.Fail(
-                $"Profile {profileId} has no complete machine-readable GPU placement; re-explore after llama-fit-params is available.");
+            return ProfileActionResult.Fail($"Profile {profileId} has no complete machine-readable GPU placement; re-explore after llama-fit-params is available.");
         }
 
         var filePath = await _ggufModelStore.ResolveModelFilePathAsync(profile.ModelName, ct).ConfigureAwait(false);

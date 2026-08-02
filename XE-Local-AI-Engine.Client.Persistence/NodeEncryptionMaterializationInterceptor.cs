@@ -40,7 +40,8 @@ public sealed class NodeEncryptionMaterializationInterceptor : IMaterializationI
                 template.HostPath = NodePayloadProtector.Decrypt(template.HostPath, context.NodeEncryptionKey.Span, Guid.Empty, template.Id, "host_path");
                 break;
             case DevelopmentTemplateMaterialization materialization:
-                materialization.TemplatePath = NodePayloadProtector.Decrypt(materialization.TemplatePath, context.NodeEncryptionKey.Span, Guid.Empty, materialization.SelectedFolderId, "template_path");
+                materialization.TemplatePath =
+                    NodePayloadProtector.Decrypt(materialization.TemplatePath, context.NodeEncryptionKey.Span, Guid.Empty, materialization.SelectedFolderId, "template_path");
                 break;
             case AgentDefinition definition:
                 definition.Instructions = NodePayloadProtector.Decrypt(definition.Instructions, context.NodeEncryptionKey.Span, Guid.Empty, definition.Id, "instructions");

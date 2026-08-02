@@ -60,8 +60,7 @@ public sealed class InferenceInvalidationEvaluatorTests
                         .Returns(Task.FromResult(refreshedHardware));
         var evaluator = BuildEvaluator(FrozenBuild, hardwareProfiler);
 
-        var stale = await evaluator.IsStaleAsync(
-            FrozenRecord(FrozenBuild, freeVramAtFreeze: 8 * Gb),
+        var stale = await evaluator.IsStaleAsync(FrozenRecord(FrozenBuild, freeVramAtFreeze: 8 * Gb),
             CancellationToken.None);
 
         AssertEx.True(stale);
@@ -75,11 +74,11 @@ public sealed class InferenceInvalidationEvaluatorTests
     public async Task Invalidation_FrozenGpuColdValidation_HasNoProcessBudgetProbeDependency()
     {
         var constructorDependsOnProcessBudgetProbe = typeof(InferenceInvalidationEvaluator)
-                                                    .GetConstructors()
-                                                    .SelectMany(static constructor =>
-                                                        constructor.GetParameters())
-                                                    .Any(static parameter =>
-                                                        parameter.ParameterType == typeof(IProcessVramBudgetProbe));
+                                                     .GetConstructors()
+                                                     .SelectMany(static constructor =>
+                                                         constructor.GetParameters())
+                                                     .Any(static parameter =>
+                                                         parameter.ParameterType == typeof(IProcessVramBudgetProbe));
         var evaluator = BuildEvaluator(installedTag: FrozenBuild,
             hardware: NvidiaProfile(24 * Gb, availableVramBytes: 8 * Gb));
 

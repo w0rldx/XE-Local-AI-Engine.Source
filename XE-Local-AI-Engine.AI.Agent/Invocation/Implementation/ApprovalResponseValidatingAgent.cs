@@ -32,11 +32,11 @@ internal sealed class ApprovalResponseValidatingAgent(AIAgent innerAgent) : Dele
         return response;
     }
 
-    protected override async IAsyncEnumerable<AgentResponseUpdate> RunCoreStreamingAsync(
-        IEnumerable<ChatMessage> messages,
+    protected override async IAsyncEnumerable<AgentResponseUpdate> RunCoreStreamingAsync(IEnumerable<ChatMessage> messages,
         AgentSession? session = null,
         AgentRunOptions? options = null,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        [EnumeratorCancellation]
+        CancellationToken cancellationToken = default)
     {
         var validated = Validate(messages);
         var completed = false;
@@ -89,15 +89,13 @@ internal sealed class ApprovalResponseValidatingAgent(AIAgent innerAgent) : Dele
                         if (!requests.TryAdd(request.RequestId, replayedRequest)
                             && !requests[request.RequestId].Matches(request.ToolCall))
                         {
-                            throw new InvalidOperationException(
-                                $"Approval replay contains conflicting requests for request id '{request.RequestId}'.");
+                            throw new InvalidOperationException($"Approval replay contains conflicting requests for request id '{request.RequestId}'.");
                         }
 
                         if (!_surfacedRequests.TryGetValue(request.RequestId, out var surfacedRequest)
                             || !surfacedRequest.Matches(request.ToolCall))
                         {
-                            throw new InvalidOperationException(
-                                $"Approval replay request id '{request.RequestId}' does not match a request surfaced by this invocation.");
+                            throw new InvalidOperationException($"Approval replay request id '{request.RequestId}' does not match a request surfaced by this invocation.");
                         }
 
                         break;
@@ -105,22 +103,19 @@ internal sealed class ApprovalResponseValidatingAgent(AIAgent innerAgent) : Dele
                     case ToolApprovalResponseContent response:
                         if (!responses.Add(response.RequestId))
                         {
-                            throw new InvalidOperationException(
-                                $"Approval replay contains more than one response for request id '{response.RequestId}'.");
+                            throw new InvalidOperationException($"Approval replay contains more than one response for request id '{response.RequestId}'.");
                         }
 
                         if (!requests.TryGetValue(response.RequestId, out var matchingReplayRequest))
                         {
-                            throw new InvalidOperationException(
-                                $"Approval response request id '{response.RequestId}' does not match a pending approval request.");
+                            throw new InvalidOperationException($"Approval response request id '{response.RequestId}' does not match a pending approval request.");
                         }
 
                         if (!_surfacedRequests.TryGetValue(response.RequestId, out var matchingSurfacedRequest)
                             || !matchingReplayRequest.Matches(response.ToolCall)
                             || !matchingSurfacedRequest.Matches(response.ToolCall))
                         {
-                            throw new InvalidOperationException(
-                                $"Approval response request id '{response.RequestId}' does not match its originally surfaced tool call.");
+                            throw new InvalidOperationException($"Approval response request id '{response.RequestId}' does not match its originally surfaced tool call.");
                         }
 
                         switch (_responseStates[response.RequestId])
@@ -130,22 +125,19 @@ internal sealed class ApprovalResponseValidatingAgent(AIAgent innerAgent) : Dele
                                 break;
 
                             case ApprovalResponseState.Reserved:
-                                throw new InvalidOperationException(
-                                    $"Approval response request id '{response.RequestId}' was already reserved; its execution outcome is uncertain.");
+                                throw new InvalidOperationException($"Approval response request id '{response.RequestId}' was already reserved; its execution outcome is uncertain.");
 
                             case ApprovalResponseState.Resolved:
                                 if (string.IsNullOrEmpty(matchingSurfacedRequest.CallId)
                                     || !functionResultCallIds.Contains(matchingSurfacedRequest.CallId))
                                 {
-                                    throw new InvalidOperationException(
-                                        $"Approval response request id '{response.RequestId}' was already consumed.");
+                                    throw new InvalidOperationException($"Approval response request id '{response.RequestId}' was already consumed.");
                                 }
 
                                 break;
 
                             default:
-                                throw new InvalidOperationException(
-                                    $"Approval response request id '{response.RequestId}' has an invalid lifecycle state.");
+                                throw new InvalidOperationException($"Approval response request id '{response.RequestId}' has an invalid lifecycle state.");
                         }
 
                         break;
@@ -171,8 +163,7 @@ internal sealed class ApprovalResponseValidatingAgent(AIAgent innerAgent) : Dele
                 if (!_surfacedRequests.TryAdd(request.RequestId, snapshot)
                     && !_surfacedRequests[request.RequestId].Matches(request.ToolCall))
                 {
-                    throw new InvalidOperationException(
-                        $"The inner agent surfaced conflicting approval requests for request id '{request.RequestId}'.");
+                    throw new InvalidOperationException($"The inner agent surfaced conflicting approval requests for request id '{request.RequestId}'.");
                 }
 
                 _responseStates.TryAdd(request.RequestId, ApprovalResponseState.Pending);
@@ -203,7 +194,8 @@ internal sealed class ApprovalResponseValidatingAgent(AIAgent innerAgent) : Dele
 
     private sealed record ValidatedRun(IReadOnlyList<ChatMessage> Messages, IReadOnlyList<string> ReservedRequestIds);
 
-    private sealed record ToolCallSnapshot(Type RuntimeType,
+    private sealed record ToolCallSnapshot(
+        Type RuntimeType,
         string? CallId,
         string FunctionName,
         JsonElement? Arguments)
@@ -213,8 +205,7 @@ internal sealed class ApprovalResponseValidatingAgent(AIAgent innerAgent) : Dele
             ArgumentNullException.ThrowIfNull(toolCall);
             if (toolCall is not FunctionCallContent functionCall)
             {
-                throw new InvalidOperationException(
-                    $"Approval validation does not support tool-call type '{toolCall.GetType().FullName}'.");
+                throw new InvalidOperationException($"Approval validation does not support tool-call type '{toolCall.GetType().FullName}'.");
             }
 
             return new ToolCallSnapshot(toolCall.GetType(),
@@ -250,8 +241,7 @@ internal sealed class ApprovalResponseValidatingAgent(AIAgent innerAgent) : Dele
             }
             catch (Exception exception) when (exception is JsonException or NotSupportedException)
             {
-                throw new InvalidOperationException(
-                    "Approval tool-call arguments could not be snapshotted safely.",
+                throw new InvalidOperationException("Approval tool-call arguments could not be snapshotted safely.",
                     exception);
             }
         }

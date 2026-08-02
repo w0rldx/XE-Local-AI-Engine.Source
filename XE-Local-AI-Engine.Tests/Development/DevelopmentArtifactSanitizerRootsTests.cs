@@ -100,8 +100,7 @@ public sealed class DevelopmentArtifactSanitizerRootsTests
     [Test]
     public void Sanitize_KeepsNoTailForPathsShallowEnoughToNameTheHostOrItsUser()
     {
-        var sanitized = DevelopmentArtifactSanitizer.SanitizeText(
-            "could not read /home/dev or /etc/passwd or C:\\Users\\operator\\report.txt or \\\\fileserver\\share\\notes.txt",
+        var sanitized = DevelopmentArtifactSanitizer.SanitizeText("could not read /home/dev or /etc/passwd or C:\\Users\\operator\\report.txt or \\\\fileserver\\share\\notes.txt",
             RepositoryRoot);
 
         AssertEx.False(sanitized.Contains("/home/dev", StringComparison.Ordinal), sanitized);
@@ -127,8 +126,7 @@ public sealed class DevelopmentArtifactSanitizerRootsTests
     [Test]
     public void Sanitize_RedactsThePrincipalAtAnyDepth_NotJustTheSecondSegment()
     {
-        var sanitized = DevelopmentArtifactSanitizer.SanitizeText(
-            "denied /mnt/c/Users/operator and /mnt/c/Users/operator/projects and /run/user/1000/docker.sock",
+        var sanitized = DevelopmentArtifactSanitizer.SanitizeText("denied /mnt/c/Users/operator and /mnt/c/Users/operator/projects and /run/user/1000/docker.sock",
             RepositoryRoot);
 
         // The Windows account name is the identity here, and it sits FOURTH.

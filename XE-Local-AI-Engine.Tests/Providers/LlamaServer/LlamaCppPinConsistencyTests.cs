@@ -34,8 +34,7 @@ public sealed class LlamaCppPinConsistencyTests
         // The UI's "Recommended" value comes from StoredNodeSettings, not from the pin table. It was once an
         // independent literal, and it drifted (F-007). It is now a const alias, so this cannot fail by drift — it fails
         // if someone re-introduces a literal, which is the actual regression to prevent.
-        AssertEx.Equal(
-            LlamaCppReleasePins.PinnedTag,
+        AssertEx.Equal(LlamaCppReleasePins.PinnedTag,
             StoredNodeSettings.DefaultRecommendedLlamaCppTag,
             "StoredNodeSettings.DefaultRecommendedLlamaCppTag must stay aliased to LlamaCppReleasePins.PinnedTag. "
             + "Do not re-hardcode it: a hand-maintained second literal is what let the UI advertise a stale tag.");
@@ -48,12 +47,10 @@ public sealed class LlamaCppPinConsistencyTests
         // checked separately below.
         foreach (var (os, arch, variant) in PinnedCombinations)
         {
-            var pin = AssertEx.NotNull(
-                LlamaCppReleasePins.TryResolveExact(os, arch, variant),
+            var pin = AssertEx.NotNull(LlamaCppReleasePins.TryResolveExact(os, arch, variant),
                 $"Expected a pin row for ({os}, {arch}, {variant}).");
 
-            AssertEx.Contains(
-                pin.AssetName,
+            AssertEx.Contains(pin.AssetName,
                 LlamaCppReleasePins.PinnedTag,
                 StringComparison.Ordinal,
                 $"Asset name '{pin.AssetName}' for ({os}, {arch}, {variant}) does not carry the pinned tag "
@@ -67,14 +64,12 @@ public sealed class LlamaCppPinConsistencyTests
         // A CUDA build without its cudart companion silently degrades to CPU-only, so the companion is part of the pin
         // rather than an optional extra. Its name is NOT tag-prefixed upstream — asserting that keeps a well-meaning
         // "make it consistent" edit from inventing an asset that does not exist.
-        var pin = AssertEx.NotNull(
-            LlamaCppReleasePins.TryResolveExact(OSPlatform.Windows, Architecture.X64, GpuVariant.Cuda),
+        var pin = AssertEx.NotNull(LlamaCppReleasePins.TryResolveExact(OSPlatform.Windows, Architecture.X64, GpuVariant.Cuda),
             "Windows x64 CUDA must have a pin row.");
 
         var cudartName = AssertEx.NotNull(pin.CudartAssetName, "Windows x64 CUDA pin must carry a cudart companion.");
         AssertEx.NotNull(pin.CudartSha256, "The cudart companion must carry its own digest.");
-        AssertEx.True(
-            !cudartName.Contains(LlamaCppReleasePins.PinnedTag, StringComparison.Ordinal),
+        AssertEx.True(!cudartName.Contains(LlamaCppReleasePins.PinnedTag, StringComparison.Ordinal),
             $"The cudart asset name is not tag-prefixed upstream, but '{cudartName}' embeds the pinned tag.");
     }
 
@@ -85,18 +80,15 @@ public sealed class LlamaCppPinConsistencyTests
         // it. Checking the shape here turns a per-platform runtime failure into a build-time one.
         foreach (var (os, arch, variant) in PinnedCombinations)
         {
-            var pin = AssertEx.NotNull(
-                LlamaCppReleasePins.TryResolveExact(os, arch, variant),
+            var pin = AssertEx.NotNull(LlamaCppReleasePins.TryResolveExact(os, arch, variant),
                 $"Expected a pin row for ({os}, {arch}, {variant}).");
 
-            AssertEx.True(
-                IsSha256Hex(pin.Sha256),
+            AssertEx.True(IsSha256Hex(pin.Sha256),
                 $"Sha256 for ({os}, {arch}, {variant}) is not 64 hex characters: '{pin.Sha256}'.");
 
             if (pin.CudartSha256 is not null)
             {
-                AssertEx.True(
-                    IsSha256Hex(pin.CudartSha256),
+                AssertEx.True(IsSha256Hex(pin.CudartSha256),
                     $"CudartSha256 for ({os}, {arch}, {variant}) is not 64 hex characters: '{pin.CudartSha256}'.");
             }
         }
@@ -109,8 +101,7 @@ public sealed class LlamaCppPinConsistencyTests
         // would brick the only Linux GPU path rather than degrade gracefully. [secHIGH-1]
         AssertEx.Equal(40, LlamaCppReleasePins.PinnedCudaSourceCommitSha.Length,
             "PinnedCudaSourceCommitSha must be a full 40-character commit SHA, never abbreviated.");
-        AssertEx.True(
-            LlamaCppReleasePins.PinnedCudaSourceCommitSha.All(Uri.IsHexDigit),
+        AssertEx.True(LlamaCppReleasePins.PinnedCudaSourceCommitSha.All(Uri.IsHexDigit),
             "PinnedCudaSourceCommitSha must be hex.");
         AssertEx.Equal(LlamaCppReleasePins.PinnedCudaSourceCommitSha, LlamaCppReleasePins.PinnedSourceCommitSha,
             "PinnedSourceCommitSha is the backend-neutral alias and must track the CUDA source pin.");

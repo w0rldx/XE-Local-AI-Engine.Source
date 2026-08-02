@@ -122,8 +122,7 @@ internal static class DockerWorkspaceHostFiles
             if ((File.Exists(current) || Directory.Exists(current))
                 && File.ResolveLinkTarget(current, returnFinalTarget: false) is not null)
             {
-                throw new UnauthorizedAccessException(
-                    $"Sandbox path '{sandboxPath}' traverses or targets a symlink inside the workspace and is rejected.");
+                throw new UnauthorizedAccessException($"Sandbox path '{sandboxPath}' traverses or targets a symlink inside the workspace and is rejected.");
             }
 
             var parent = Path.GetDirectoryName(current);

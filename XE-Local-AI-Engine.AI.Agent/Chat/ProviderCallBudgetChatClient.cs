@@ -4,9 +4,9 @@ using System.Diagnostics.Metrics;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
-using XE_Local_AI_Engine.AI.Contracts.Telemetry;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
+using XE_Local_AI_Engine.AI.Contracts.Telemetry;
 using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 
 /// <summary>

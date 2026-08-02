@@ -201,8 +201,7 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
 
     // Semantic arm wrapper: times the query-embedding round trip. Only calls the embedding provider — never the DB — so it
     // is safe to overlap with the lexical arm above.
-    private async Task<(ReadOnlyMemory<float> Vector, string ResolvedModel, string VectorIdentity)> RunEmbedArmAsync(
-        string query,
+    private async Task<(ReadOnlyMemory<float> Vector, string ResolvedModel, string VectorIdentity)> RunEmbedArmAsync(string query,
         CancellationToken cancellationToken)
     {
         var start = Stopwatch.GetTimestamp();
@@ -332,8 +331,7 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
     // Returns the query vector plus the resolved model name it was embedded with (the vector-search scope key). On the
     // degrade path the vector is empty and the resolved name falls back to the configured name (unused, since the vector
     // arm is skipped when the vector is empty).
-    private async Task<(ReadOnlyMemory<float> Vector, string ResolvedModel, string VectorIdentity)> TryEmbedQueryAsync(
-        string query,
+    private async Task<(ReadOnlyMemory<float> Vector, string ResolvedModel, string VectorIdentity)> TryEmbedQueryAsync(string query,
         CancellationToken cancellationToken)
     {
         try
@@ -349,8 +347,7 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
             var embeddingModelName = resolution.Name;
             var cacheFamilyIdentity = KnowledgeEmbeddingVectorPolicy.CreateCacheFamilyIdentity(resolution, _options.EmbeddingVectorMode);
             if (_queryEmbeddingCache.TryGet(cacheFamilyIdentity, query, out var cached)
-                && KnowledgeEmbeddingVectorPolicy.MatchesCurrentPolicy(
-                    cached.VectorIdentity,
+                && KnowledgeEmbeddingVectorPolicy.MatchesCurrentPolicy(cached.VectorIdentity,
                     cached.Vector.Length,
                     resolution,
                     _options.EmbeddingVectorMode))
@@ -375,8 +372,7 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
 
             // The pre-generation key isolates the resolved model and policy family. The value retains the exact canonical
             // identity (including native width), which the read path validates before accepting a hit.
-            _queryEmbeddingCache.Store(
-                cacheFamilyIdentity,
+            _queryEmbeddingCache.Store(cacheFamilyIdentity,
                 query,
                 new KnowledgeQueryEmbeddingCacheEntry(transformed.Values, transformed.Identity));
             return (transformed.Values, embeddingModelName, transformed.Identity);

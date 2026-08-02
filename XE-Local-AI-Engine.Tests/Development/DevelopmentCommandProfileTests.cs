@@ -130,14 +130,58 @@ public sealed class DevelopmentCommandProfileTests : IDisposable
 
         (string Field, DevelopmentCommandProfile Profile)[] mutations =
         [
-            ("executable", baseline with { Commands = [baseline.Commands[0] with { Executable = "hg" }, baseline.Commands[1]] }),
-            ("arguments", baseline with { Commands = [baseline.Commands[0], baseline.Commands[1] with { Arguments = ["diff", "--check", "HEAD"] }] }),
-            ("timeout", baseline with { Commands = [baseline.Commands[0] with { TimeoutSeconds = 121 }, baseline.Commands[1]] }),
-            ("validation list", baseline with { ValidationCommandIds = [DevelopmentCommandIds.GitStatus, DevelopmentCommandIds.GitDiffCheck] }),
-            ("protected paths", baseline with { ProtectedPaths = ["**/*Tests.cs", "tests/**/*.cs"] }),
-            ("build target", baseline with { BuildTarget = "Other.slnx" }),
-            ("import digest", baseline with { ImportDigest = new string('a', 64) }),
-            ("custom flag", baseline with { IsCustom = true })
+            ("executable", baseline with
+            {
+                Commands =
+                [
+                    baseline.Commands[0] with
+                    {
+                        Executable = "hg"
+                    },
+                    baseline.Commands[1]
+                ]
+            }),
+            ("arguments", baseline with
+            {
+                Commands =
+                [
+                    baseline.Commands[0], baseline.Commands[1] with
+                    {
+                        Arguments = ["diff", "--check", "HEAD"]
+                    }
+                ]
+            }),
+            ("timeout", baseline with
+            {
+                Commands =
+                [
+                    baseline.Commands[0] with
+                    {
+                        TimeoutSeconds = 121
+                    },
+                    baseline.Commands[1]
+                ]
+            }),
+            ("validation list", baseline with
+            {
+                ValidationCommandIds = [DevelopmentCommandIds.GitStatus, DevelopmentCommandIds.GitDiffCheck]
+            }),
+            ("protected paths", baseline with
+            {
+                ProtectedPaths = ["**/*Tests.cs", "tests/**/*.cs"]
+            }),
+            ("build target", baseline with
+            {
+                BuildTarget = "Other.slnx"
+            }),
+            ("import digest", baseline with
+            {
+                ImportDigest = new string('a', 64)
+            }),
+            ("custom flag", baseline with
+            {
+                IsCustom = true
+            })
         ];
         foreach (var (field, mutated) in mutations)
         {
@@ -153,7 +197,10 @@ public sealed class DevelopmentCommandProfileTests : IDisposable
     public void Digest_DistinguishesCommandOrderFromCommandSet()
     {
         var baseline = Probe();
-        var reordered = baseline with { Commands = [baseline.Commands[1], baseline.Commands[0]] };
+        var reordered = baseline with
+        {
+            Commands = [baseline.Commands[1], baseline.Commands[0]]
+        };
         AssertEx.NotEqual(baseline.ComputeDigest(), reordered.ComputeDigest());
     }
 
@@ -184,13 +231,22 @@ public sealed class DevelopmentCommandProfileTests : IDisposable
 
         // Custom profiles need the container sandbox that does not exist yet: a repository that could describe its
         // own build and test commands could describe `true` as its test command.
-        var custom = Encoding.UTF8.GetString((generic with { IsCustom = true }).ToCanonicalUtf8());
+        var custom = Encoding.UTF8.GetString((generic with
+        {
+            IsCustom = true
+        }).ToCanonicalUtf8());
         Assert.Throws<DevelopmentWorkspaceSecurityException>(() => DevelopmentCommandProfileCatalog.ResolveStored(custom));
 
-        var wrongVersion = Encoding.UTF8.GetString((generic with { ProfileVersion = "v0" }).ToCanonicalUtf8());
+        var wrongVersion = Encoding.UTF8.GetString((generic with
+        {
+            ProfileVersion = "v0"
+        }).ToCanonicalUtf8());
         Assert.Throws<DevelopmentWorkspaceSecurityException>(() => DevelopmentCommandProfileCatalog.ResolveStored(wrongVersion));
 
-        var unknownId = Encoding.UTF8.GetString((generic with { ProfileId = "cargo" }).ToCanonicalUtf8());
+        var unknownId = Encoding.UTF8.GetString((generic with
+        {
+            ProfileId = "cargo"
+        }).ToCanonicalUtf8());
         Assert.Throws<DevelopmentWorkspaceSecurityException>(() => DevelopmentCommandProfileCatalog.ResolveStored(unknownId));
 
         // A project with no snapshotted profile must fail closed rather than fall back to a default, because the
@@ -218,7 +274,11 @@ public sealed class DevelopmentCommandProfileTests : IDisposable
         var generic = DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null);
 
         // Every code-owned profile carries both, so the rule below never rejects a shipped profile.
-        foreach (var profileId in new[] { DevelopmentCommandProfileCatalog.GenericGit, DevelopmentCommandProfileCatalog.DotnetSlnx })
+        foreach (var profileId in new[]
+                 {
+                     DevelopmentCommandProfileCatalog.GenericGit,
+                     DevelopmentCommandProfileCatalog.DotnetSlnx
+                 })
         {
             var profile = DevelopmentCommandProfileCatalog.Materialize(profileId,
                 string.Equals(profileId, DevelopmentCommandProfileCatalog.GenericGit, StringComparison.Ordinal)
@@ -228,7 +288,10 @@ public sealed class DevelopmentCommandProfileTests : IDisposable
             AssertEx.Equal(DevelopmentCommandIds.GitDiffCheck, profile.ResolveCommand(DevelopmentCommandIds.GitDiffCheck).CommandId);
         }
 
-        var withoutStatus = generic with { Commands = Without(generic, DevelopmentCommandIds.GitStatus) };
+        var withoutStatus = generic with
+        {
+            Commands = Without(generic, DevelopmentCommandIds.GitStatus)
+        };
         AssertEx.Equal(DevelopmentCommandIds.GitDiffCheck, string.Join(',', withoutStatus.ValidationCommandIds));
         var statusRejection = Assert.Throws<DevelopmentWorkspaceSecurityException>(() =>
             DevelopmentCommandProfileCatalog.ResolveStored(Encoding.UTF8.GetString(withoutStatus.ToCanonicalUtf8())));
@@ -263,7 +326,10 @@ public sealed class DevelopmentCommandProfileTests : IDisposable
         }).ToCanonicalUtf8());
         Assert.Throws<DevelopmentWorkspaceSecurityException>(() => DevelopmentCommandProfileCatalog.ResolveStored(undefinedValidation));
 
-        var emptyValidation = Encoding.UTF8.GetString((generic with { ValidationCommandIds = [] }).ToCanonicalUtf8());
+        var emptyValidation = Encoding.UTF8.GetString((generic with
+        {
+            ValidationCommandIds = []
+        }).ToCanonicalUtf8());
         Assert.Throws<DevelopmentWorkspaceSecurityException>(() => DevelopmentCommandProfileCatalog.ResolveStored(emptyValidation));
     }
 

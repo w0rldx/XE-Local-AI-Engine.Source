@@ -263,7 +263,8 @@ internal static class DevelopmentSyntheticSolutionRepository
         var packageDirectory = Path.Combine(packagesRoot, "tunit");
         if (!Directory.Exists(packageDirectory))
         {
-            throw new InvalidOperationException($"The NuGet package cache '{packagesRoot}' has no restored TUnit package, so the synthetic Development solution cannot be restored offline. Run a restore of this repository first, or set NUGET_PACKAGES to the cache it was restored into.");
+            throw new InvalidOperationException(
+                $"The NuGet package cache '{packagesRoot}' has no restored TUnit package, so the synthetic Development solution cannot be restored offline. Run a restore of this repository first, or set NUGET_PACKAGES to the cache it was restored into.");
         }
 
         var loaded = typeof(TestAttribute).Assembly
@@ -321,7 +322,8 @@ internal static class DevelopmentSyntheticSolutionRepository
         await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
         if (process.ExitCode != 0)
         {
-            throw new InvalidOperationException($"git {string.Join(' ', arguments)} failed with exit code {process.ExitCode}: {await standardOutput.ConfigureAwait(false)}{await standardError.ConfigureAwait(false)}");
+            throw new InvalidOperationException(
+                $"git {string.Join(' ', arguments)} failed with exit code {process.ExitCode}: {await standardOutput.ConfigureAwait(false)}{await standardError.ConfigureAwait(false)}");
         }
     }
 }

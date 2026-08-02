@@ -1,6 +1,9 @@
 namespace XE_Local_AI_Engine.Tests.Development;
 
+using System.Diagnostics;
 using Microsoft.Extensions.Options;
+using TUnit.Core.Exceptions;
+using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -196,7 +199,7 @@ public sealed class DevelopmentWorkspaceGitConfigTests : IDisposable
     {
         // The vector DevelopmentPatchEvidenceService actually runs under, so the control test is not weaker than the
         // production path it is standing in for.
-        return [.. XE_Local_AI_Engine.Client.Services.AgentHome.Implementation.AgentHomeGit.Arguments()];
+        return [.. AgentHomeGit.Arguments()];
     }
 
     private async Task<PoisonedWorkspace> CreatePoisonedWorkspaceAsync()
@@ -206,8 +209,7 @@ public sealed class DevelopmentWorkspaceGitConfigTests : IDisposable
             // The payload is a shell script, and a Windows equivalent would exercise a different execution mechanism
             // rather than the same one. Skipped with a reason rather than silently passing on a platform where these
             // two tests would prove nothing.
-            throw new TUnit.Core.Exceptions.SkipTestException(
-                "SKIPPED — the .git/config execution payloads are POSIX shell scripts. This pin runs on Linux and macOS.");
+            throw new SkipTestException("SKIPPED — the .git/config execution payloads are POSIX shell scripts. This pin runs on Linux and macOS.");
         }
 
         var workspace = Path.Combine(_root, "poisoned-" + Guid.NewGuid().ToString("N"));
@@ -279,7 +281,7 @@ public sealed class DevelopmentWorkspaceGitConfigTests : IDisposable
 
     private static async Task<string> ReadHeadAsync(string workspace)
     {
-        var startInfo = new System.Diagnostics.ProcessStartInfo
+        var startInfo = new ProcessStartInfo
         {
             FileName = "git",
             WorkingDirectory = workspace,
@@ -290,7 +292,10 @@ public sealed class DevelopmentWorkspaceGitConfigTests : IDisposable
         startInfo.ArgumentList.Add("rev-parse");
         startInfo.ArgumentList.Add("HEAD");
 
-        using var process = new System.Diagnostics.Process { StartInfo = startInfo };
+        using var process = new Process
+        {
+            StartInfo = startInfo
+        };
         process.Start();
         var output = await process.StandardOutput.ReadToEndAsync().ConfigureAwait(false);
         await process.WaitForExitAsync().ConfigureAwait(false);
@@ -319,7 +324,8 @@ public sealed class DevelopmentWorkspaceGitConfigTests : IDisposable
         return workspace;
     }
 
-    private static string ReadConfig(string workspace) => File.ReadAllText(Path.Combine(workspace, ".git", "config"));
+    private static string ReadConfig(string workspace) =>
+        File.ReadAllText(Path.Combine(workspace, ".git", "config"));
 
     private sealed record PoisonedWorkspace(DevelopmentWorkspaceSession Session, string FilterSentinel, string FsmonitorSentinel);
 }

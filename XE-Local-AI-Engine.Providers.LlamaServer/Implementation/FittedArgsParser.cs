@@ -9,8 +9,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 public sealed class FittedArgsParser : IFittedArgsParser
 {
     /// <inheritdoc />
-    public ResolvedLaunchArguments? TryParseFittedArgs(
-        IReadOnlyList<string> fitParamsOutput,
+    public ResolvedLaunchArguments? TryParseFittedArgs(IReadOnlyList<string> fitParamsOutput,
         IReadOnlyList<string> startupOutput,
         IReadOnlyList<string> successfulLaunchArguments)
     {

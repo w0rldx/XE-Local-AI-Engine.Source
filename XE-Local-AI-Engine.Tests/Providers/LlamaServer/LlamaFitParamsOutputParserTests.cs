@@ -45,8 +45,7 @@ public sealed class LlamaFitParamsOutputParserTests
     [Test]
     public void TryParseFittedArgs_OptimizedSuccessfulLaunch_PreservesKvTypesAndFlashAttention()
     {
-        var resolved = LlamaFitParamsOutputParser.TryParseFittedArgs(
-            ["-c 8192 -ngl 32"],
+        var resolved = LlamaFitParamsOutputParser.TryParseFittedArgs(["-c 8192 -ngl 32"],
             startupOutput: [],
             successfulLaunchArguments: ["-fa", "on", "-ctk", "q8_0", "-ctv", "q8_0"]);
 
@@ -59,8 +58,7 @@ public sealed class LlamaFitParamsOutputParserTests
     [Test]
     public void TryParseFittedArgs_SafeSuccessfulLaunch_PreservesAbsentKvAndFlashAttention()
     {
-        var resolved = LlamaFitParamsOutputParser.TryParseFittedArgs(
-            ["-c 8192 -ngl 32"],
+        var resolved = LlamaFitParamsOutputParser.TryParseFittedArgs(["-c 8192 -ngl 32"],
             startupOutput: [],
             successfulLaunchArguments: ["--fit", "on", "-c", "8192"]);
 
@@ -78,8 +76,7 @@ public sealed class LlamaFitParamsOutputParserTests
     [Arguments("-fa off -ctk q8_0 -ctv q8_0")]
     public void TryParseFittedArgs_InconsistentSuccessfulLaunchPolicy_ReturnsNull(string launchArguments)
     {
-        var resolved = LlamaFitParamsOutputParser.TryParseFittedArgs(
-            ["-c 8192 -ngl 32"],
+        var resolved = LlamaFitParamsOutputParser.TryParseFittedArgs(["-c 8192 -ngl 32"],
             startupOutput: [],
             successfulLaunchArguments: launchArguments.Split(' ', StringSplitOptions.RemoveEmptyEntries));
 
@@ -91,8 +88,7 @@ public sealed class LlamaFitParamsOutputParserTests
     {
         // Captured from the real b9692 helper. These are llama.cpp sentinels, not frozen values:
         // context 0 means the model-trained context and GPU layers -1 means automatic placement.
-        var resolved = LlamaFitParamsOutputParser.TryParseFittedArgs(
-            ["-c 0 -ngl -1"],
+        var resolved = LlamaFitParamsOutputParser.TryParseFittedArgs(["-c 0 -ngl -1"],
             ["load_tensors: offloaded 25/25 layers to GPU"]);
 
         AssertEx.Null(resolved);
@@ -101,8 +97,7 @@ public sealed class LlamaFitParamsOutputParserTests
     [Test]
     public void TryParseFittedArgs_AutomaticLayersWithFullOffloadEvidence_NormalizesToExplicitAllLayers()
     {
-        var resolved = LlamaFitParamsOutputParser.TryParseFittedArgs(
-            ["-c 8192 -ngl -1"],
+        var resolved = LlamaFitParamsOutputParser.TryParseFittedArgs(["-c 8192 -ngl -1"],
             ["load_tensors: offloaded 25/25 layers to GPU"]);
 
         var draft = AssertEx.NotNull(resolved);
@@ -113,8 +108,7 @@ public sealed class LlamaFitParamsOutputParserTests
     [Test]
     public void TryParseFittedArgs_AutomaticLayersWithoutFullOffloadEvidence_ReturnsNull()
     {
-        var resolved = LlamaFitParamsOutputParser.TryParseFittedArgs(
-            ["-c 8192 -ngl -1"],
+        var resolved = LlamaFitParamsOutputParser.TryParseFittedArgs(["-c 8192 -ngl -1"],
             ["load_tensors: offloaded 24/25 layers to GPU"]);
 
         AssertEx.Null(resolved);
@@ -123,12 +117,11 @@ public sealed class LlamaFitParamsOutputParserTests
     [Test]
     public void TryParseFittedArgs_AutomaticLayersWithMixedStartupPlacements_ReturnsNull()
     {
-        var resolved = LlamaFitParamsOutputParser.TryParseFittedArgs(
-            ["-c 8192 -ngl -1"],
-            [
-                "load_tensors: offloaded 25/25 layers to GPU",
-                "load_tensors: offloaded 4/10 layers to GPU"
-            ]);
+        var resolved = LlamaFitParamsOutputParser.TryParseFittedArgs(["-c 8192 -ngl -1"],
+        [
+            "load_tensors: offloaded 25/25 layers to GPU",
+            "load_tensors: offloaded 4/10 layers to GPU"
+        ]);
 
         AssertEx.Null(resolved);
     }
@@ -154,8 +147,7 @@ public sealed class LlamaFitParamsOutputParserTests
     [Test]
     public void TryParseFittedArgs_StartupLogLookalikes_ReturnsNull()
     {
-        var resolved = LlamaFitParamsOutputParser.TryParseFittedArgs(
-        [
+        var resolved = LlamaFitParamsOutputParser.TryParseFittedArgs([
             "llama_context: n_ctx = 4096",
             "load_tensors: offloaded 32/32 layers to GPU",
             "common_params_fit: successfully fit params to free device memory"

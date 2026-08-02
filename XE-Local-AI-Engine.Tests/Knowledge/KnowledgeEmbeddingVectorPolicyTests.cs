@@ -13,8 +13,7 @@ public sealed class KnowledgeEmbeddingVectorPolicyTests
         var native = new float[KnowledgeEmbeddingVectorPolicy.MatryoshkaWidth];
         native[0] = 1f;
 
-        var transformed = KnowledgeEmbeddingVectorPolicy.Transform(
-            new EmbeddingModelResolution(NomicV15, IsConfident: true),
+        var transformed = KnowledgeEmbeddingVectorPolicy.Transform(new EmbeddingModelResolution(NomicV15, IsConfident: true),
             native,
             KnowledgeEmbeddingVectorMode.Matryoshka512);
 
@@ -31,8 +30,7 @@ public sealed class KnowledgeEmbeddingVectorPolicyTests
     {
         var native = Enumerable.Repeat(7f, 768).ToArray();
 
-        var transformed = KnowledgeEmbeddingVectorPolicy.Transform(
-            new EmbeddingModelResolution(NomicV15, IsConfident: true),
+        var transformed = KnowledgeEmbeddingVectorPolicy.Transform(new EmbeddingModelResolution(NomicV15, IsConfident: true),
             native,
             KnowledgeEmbeddingVectorMode.Matryoshka512);
 
@@ -50,7 +48,7 @@ public sealed class KnowledgeEmbeddingVectorPolicyTests
 
         AssertEx.Equal(ingestion.Identity, query.Identity);
         AssertEx.True(KnowledgeEmbeddingVectorPolicy.ToBytes(ingestion).AsSpan()
-                                                   .SequenceEqual(KnowledgeEmbeddingVectorPolicy.ToBytes(query)),
+                                                    .SequenceEqual(KnowledgeEmbeddingVectorPolicy.ToBytes(query)),
             "The shared ingestion/query seam must serialize identical input to identical bytes.");
     }
 
@@ -58,16 +56,13 @@ public sealed class KnowledgeEmbeddingVectorPolicyTests
     public void Transform_NonNomicOrExplicitNative_PreservesNativeWidthAndUsesDistinctRollbackIdentity()
     {
         var native = Enumerable.Range(0, 768).Select(static value => value / 100f).ToArray();
-        var nonNomic = KnowledgeEmbeddingVectorPolicy.Transform(
-            new EmbeddingModelResolution("bge-m3", IsConfident: true),
+        var nonNomic = KnowledgeEmbeddingVectorPolicy.Transform(new EmbeddingModelResolution("bge-m3", IsConfident: true),
             native,
             KnowledgeEmbeddingVectorMode.Matryoshka512);
-        var rollback = KnowledgeEmbeddingVectorPolicy.Transform(
-            new EmbeddingModelResolution(NomicV15, IsConfident: true),
+        var rollback = KnowledgeEmbeddingVectorPolicy.Transform(new EmbeddingModelResolution(NomicV15, IsConfident: true),
             native,
             KnowledgeEmbeddingVectorMode.Native);
-        var matryoshka = KnowledgeEmbeddingVectorPolicy.Transform(
-            new EmbeddingModelResolution(NomicV15, IsConfident: true),
+        var matryoshka = KnowledgeEmbeddingVectorPolicy.Transform(new EmbeddingModelResolution(NomicV15, IsConfident: true),
             native,
             KnowledgeEmbeddingVectorMode.Matryoshka512);
 
@@ -84,8 +79,7 @@ public sealed class KnowledgeEmbeddingVectorPolicyTests
     {
         var native = Enumerable.Range(0, 768).Select(static value => (float)value).ToArray();
 
-        var transformed = KnowledgeEmbeddingVectorPolicy.Transform(
-            new EmbeddingModelResolution(NomicV15, IsConfident: false),
+        var transformed = KnowledgeEmbeddingVectorPolicy.Transform(new EmbeddingModelResolution(NomicV15, IsConfident: false),
             native,
             KnowledgeEmbeddingVectorMode.Matryoshka512);
 
@@ -111,14 +105,12 @@ public sealed class KnowledgeEmbeddingVectorPolicyTests
     {
         var resolution = new EmbeddingModelResolution(NomicV15, IsConfident: true);
 
-        var shortException = Capture(() => KnowledgeEmbeddingVectorPolicy.Transform(
-            resolution,
+        var shortException = Capture(() => KnowledgeEmbeddingVectorPolicy.Transform(resolution,
             new float[511],
             KnowledgeEmbeddingVectorMode.Matryoshka512));
         var nonFinite = new float[512];
         nonFinite[123] = float.NaN;
-        var nonFiniteException = Capture(() => KnowledgeEmbeddingVectorPolicy.Transform(
-            resolution,
+        var nonFiniteException = Capture(() => KnowledgeEmbeddingVectorPolicy.Transform(resolution,
             nonFinite,
             KnowledgeEmbeddingVectorMode.Matryoshka512));
 

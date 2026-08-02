@@ -157,8 +157,8 @@ public sealed class PreviewWorkflowEndpointTests
 
         // Fetchable by id, and reaching Paused — the exact state a reloaded page used to be unable to reach.
         var run = await PollRunAsync(client, factory, runId,
-                                    static r => string.Equals(r.GetProperty("state").GetString(), "Paused", StringComparison.Ordinal))
-                      .ConfigureAwait(false);
+                static r => string.Equals(r.GetProperty("state").GetString(), "Paused", StringComparison.Ordinal))
+            .ConfigureAwait(false);
         AssertEx.Equal(runId.ToString(), run.GetProperty("runId").GetString());
         AssertEx.True(run.GetProperty("isLive").GetBoolean(), "a run holding a slot must report isLive.");
         AssertEx.Equal(expected: "pause", run.GetProperty("pausedNodeId").GetString());
@@ -178,7 +178,7 @@ public sealed class PreviewWorkflowEndpointTests
         AssertEx.Equal(expected: 1, cancelAll.GetProperty("cancelledCount").GetInt32());
 
         var after = await PollRunAsync(client, factory, runId, static r => !r.GetProperty("isLive").GetBoolean())
-                        .ConfigureAwait(false);
+            .ConfigureAwait(false);
         AssertEx.False(after.GetProperty("isLive").GetBoolean(), "a cancelled run must no longer hold a concurrency slot.");
         AssertEx.Equal(expected: "Cancelled", after.GetProperty("state").GetString());
     }

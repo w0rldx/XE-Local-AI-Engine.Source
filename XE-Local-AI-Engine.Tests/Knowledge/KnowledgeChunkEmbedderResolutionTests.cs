@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Knowledge;
 
+using System.Net;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 using NSubstitute;
@@ -112,7 +113,7 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
         // conflating them sends the user to fix something that is not broken.
         var provider = new CapturingProvider(Descriptor(ConfiguredName))
         {
-            GenerateFailureStatus = System.Net.HttpStatusCode.InternalServerError
+            GenerateFailureStatus = HttpStatusCode.InternalServerError
         };
         var embedder = CreateEmbedder(provider);
 
@@ -225,7 +226,7 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
         ///     llama.cpp provider translates a llama-server non-2xx into. Distinct from <see cref="ThrowOnGenerate" />,
         ///     which models an unreachable provider (no status).
         /// </summary>
-        public System.Net.HttpStatusCode? GenerateFailureStatus { get; init; }
+        public HttpStatusCode? GenerateFailureStatus { get; init; }
 
         // Width of each produced vector, by position; the last entry repeats when more vectors than entries are generated.
         // Defaults to the shipped nomic width so the resolution tests are unaffected; overridden to exercise arbitrary and
@@ -263,9 +264,10 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
         public Task UnloadModelAsync(string modelName, CancellationToken ct) =>
             throw new NotSupportedException();
 
-        private sealed class FixedEmbeddingGenerator(bool throwOnGenerate,
+        private sealed class FixedEmbeddingGenerator(
+            bool throwOnGenerate,
             IReadOnlyList<int> dimensions,
-            System.Net.HttpStatusCode? failureStatus = null) : IEmbeddingGenerator<string, Embedding<float>>
+            HttpStatusCode? failureStatus = null) : IEmbeddingGenerator<string, Embedding<float>>
         {
             public Task<GeneratedEmbeddings<Embedding<float>>> GenerateAsync(IEnumerable<string> values,
                 EmbeddingGenerationOptions? options = null,
@@ -273,8 +275,7 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
             {
                 if (failureStatus is { } status)
                 {
-                    throw new HttpRequestException(
-                        "The llama-server embedding endpoint returned HTTP 500: input (678 tokens) is too large to process.",
+                    throw new HttpRequestException("The llama-server embedding endpoint returned HTTP 500: input (678 tokens) is too large to process.",
                         inner: null,
                         status);
                 }

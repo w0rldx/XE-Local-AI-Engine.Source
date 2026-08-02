@@ -81,10 +81,12 @@ public sealed class LlamaGrammarLiveSmokeTests
         var offered = LlamaGrammarToolOffer.BuildProductionToolOffer();
         AssertEx.NotEmpty(offered, "the production tool offer must not be empty, or both posts below would be vacuous.");
 
-        var original = new ChatOptions { Tools = [.. offered.Cast<AITool>()] };
+        var original = new ChatOptions
+        {
+            Tools = [.. offered.Cast<AITool>()]
+        };
         var unsanitizedBody = await LlamaGrammarToolOffer.CaptureWireBodyAsync(original, CancellationToken.None);
-        var sanitizedBody = await LlamaGrammarToolOffer.CaptureWireBodyAsync(
-            AssertEx.NotNull(DeferredLlamaServerChatClient.ApplyToolSchemaCompatibility(original)),
+        var sanitizedBody = await LlamaGrammarToolOffer.CaptureWireBodyAsync(AssertEx.NotNull(DeferredLlamaServerChatClient.ApplyToolSchemaCompatibility(original)),
             CancellationToken.None);
 
         // Pre-flight: the negative control can only mean something while the raw offer still carries an uncompilable
@@ -265,9 +267,8 @@ public sealed class LlamaGrammarLiveSmokeTests
         {
             if (process.HasExited)
             {
-                throw new InvalidOperationException(
-                    $"llama-server exited with code {process.ExitCode.ToString(CultureInfo.InvariantCulture)} before becoming healthy.\n"
-                    + string.Join('\n', output));
+                throw new InvalidOperationException($"llama-server exited with code {process.ExitCode.ToString(CultureInfo.InvariantCulture)} before becoming healthy.\n"
+                                                    + string.Join('\n', output));
             }
 
             try
@@ -290,10 +291,9 @@ public sealed class LlamaGrammarLiveSmokeTests
             await Task.Delay(TimeSpan.FromMilliseconds(500)).ConfigureAwait(false);
         }
 
-        throw new InvalidOperationException(
-            $"llama-server did not report healthy within {budget.TotalSeconds.ToString(CultureInfo.InvariantCulture)}s "
-            + $"(raise {ReadyTimeoutVariable} for a large model).\n"
-            + string.Join('\n', output));
+        throw new InvalidOperationException($"llama-server did not report healthy within {budget.TotalSeconds.ToString(CultureInfo.InvariantCulture)}s "
+                                            + $"(raise {ReadyTimeoutVariable} for a large model).\n"
+                                            + string.Join('\n', output));
     }
 
     private static async Task<LiveResponse> PostChatCompletionAsync(HttpClient http, string wireBody)

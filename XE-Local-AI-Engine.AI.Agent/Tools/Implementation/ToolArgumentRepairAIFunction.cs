@@ -23,8 +23,7 @@ internal sealed class ToolArgumentRepairAIFunction : DelegatingAIFunction
 {
     private static readonly Meter Meter = new(TelemetrySourceNames.Agent, "1.0.0");
 
-    private static readonly Counter<long> RepairCounter = Meter.CreateCounter<long>(
-        "xe.agent.tool_argument_repair",
+    private static readonly Counter<long> RepairCounter = Meter.CreateCounter<long>("xe.agent.tool_argument_repair",
         description: "Tool calls intercepted for model-actionable argument repair. Tag: source.");
 
     private readonly int _maxConsecutiveInvalidCalls;

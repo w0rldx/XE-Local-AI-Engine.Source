@@ -141,8 +141,7 @@ internal sealed class ContainerSandboxOptionsValidator : IValidateOptions<Contai
     ///         would have refused becomes reachable at create time.
     ///     </para>
     /// </summary>
-    internal static (string First, string FirstPath, string Second, string SecondPath)? FindOverlap(
-        IReadOnlyList<(string Name, string? Path)> targets)
+    internal static (string First, string FirstPath, string Second, string SecondPath)? FindOverlap(IReadOnlyList<(string Name, string? Path)> targets)
     {
         ArgumentNullException.ThrowIfNull(targets);
 

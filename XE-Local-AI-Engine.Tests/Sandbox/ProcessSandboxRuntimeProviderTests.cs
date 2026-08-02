@@ -1,7 +1,10 @@
 namespace XE_Local_AI_Engine.Tests.Sandbox;
 
+using System.Net;
+using System.Net.Sockets;
 using System.Text;
 using Microsoft.Extensions.Options;
+using TUnit.Core.Exceptions;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
@@ -805,9 +808,9 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
         // A real listener on the host loopback stands in for the node's own API — the most sensitive thing in reach.
         // Using a live socket matters: a connect to a dead port fails on any host, which would make the assertion
         // vacuous.
-        using var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, port: 0);
+        using var listener = new TcpListener(IPAddress.Loopback, port: 0);
         listener.Start();
-        var listenerPort = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
+        var listenerPort = ((IPEndPoint)listener.LocalEndpoint).Port;
 
         try
         {
@@ -868,9 +871,9 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
             NetworkPolicy = resolved
         });
 
-        using var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, port: 0);
+        using var listener = new TcpListener(IPAddress.Loopback, port: 0);
         listener.Start();
-        var listenerPort = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
+        var listenerPort = ((IPEndPoint)listener.LocalEndpoint).Port;
 
         try
         {
@@ -926,9 +929,9 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
         using var provider = CreateHostProvider();
         var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
 
-        using var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, port: 0);
+        using var listener = new TcpListener(IPAddress.Loopback, port: 0);
         listener.Start();
-        var listenerPort = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
+        var listenerPort = ((IPEndPoint)listener.LocalEndpoint).Port;
 
         try
         {
@@ -1115,7 +1118,7 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
     /// </summary>
     private static void Skip(string reason)
     {
-        throw new global::TUnit.Core.Exceptions.SkipTestException(reason);
+        throw new SkipTestException(reason);
     }
 
     /// <summary>Records marker writes and deletions so the launch-side bookkeeping can be asserted without touching disk.</summary>
