@@ -199,7 +199,7 @@ export function KnowledgeBase() {
 				<Card withBorder={true} radius="md" p="lg">
 					<Stack gap="md">
 						<Title order={3}>{t("pages.knowledgeBase.search.heading", "Search")}</Title>
-						<KnowledgeSearchPanel search={search} />
+						<KnowledgeSearchPanel search={search} documents={documentList} />
 					</Stack>
 				</Card>
 			</Stack>

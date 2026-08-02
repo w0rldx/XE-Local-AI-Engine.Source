@@ -16,6 +16,11 @@ internal static class SpawnSubAgentToolDefinition
         + "spawn that would exceed the node's memory or concurrency limits is declined with a reason. Sub-agents cannot "
         + "themselves spawn.";
 
+    // `task.maxLength` and `instructions.maxLength` (8000 each) are deliberately NOT clamped, even though llama.cpp's
+    // GBNF converter cannot compile repetition bounds that large. Do not "fix" them by lowering the values: the bounds
+    // are advisory to the model and the handler's own validation is authoritative, so clamping would narrow the contract
+    // for every provider to work around one provider's limit. The llama.cpp wire representation is sanitized instead, in
+    // LlamaGrammarToolSchemaCompatibility (XE-Local-AI-Engine.Providers.LlamaServer).
     /// <summary>The spawn tool parameter schema. Exactly one of subAgentKey / modelId, plus a required task.</summary>
     public const string ParameterSchema = """
                                           {

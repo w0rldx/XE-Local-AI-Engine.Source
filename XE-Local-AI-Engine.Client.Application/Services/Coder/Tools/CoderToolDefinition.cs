@@ -17,6 +17,12 @@ internal static class CoderToolDefinition
         "List files and folders in the read-only project workspace. Returns workspace-relative paths only; secrets and "
         + "heavy generated directories are excluded.";
 
+    // `path.maxLength` (4096) is deliberately NOT clamped, even though llama.cpp's GBNF converter cannot compile a
+    // repetition bound that large. Do not "fix" it by lowering the value: the bound is advisory to the model and the
+    // handler's own path validation is authoritative, so clamping would narrow the contract for every provider to work
+    // around one provider's limit — and 4096 is the real filesystem path ceiling this tool accepts. The llama.cpp wire
+    // representation is sanitized instead, in LlamaGrammarToolSchemaCompatibility
+    // (XE-Local-AI-Engine.Providers.LlamaServer). The same applies to `path` in the two schemas below.
     public const string ListFilesParameterSchema = """
                                                    {
                                                      "type": "object",
@@ -35,6 +41,7 @@ internal static class CoderToolDefinition
         "Read a UTF-8 text file from the read-only project workspace. Optionally read a line range. Binary files are "
         + "refused and oversized files are truncated.";
 
+    // `path.maxLength` (4096): do not clamp — see the note on ListFilesParameterSchema above.
     public const string ReadFileParameterSchema = """
                                                   {
                                                     "type": "object",
@@ -54,6 +61,7 @@ internal static class CoderToolDefinition
         "Search the read-only project workspace for a text or regex pattern. Returns matches as "
         + "relative/path:line: text; secret files and directories are excluded.";
 
+    // `path.maxLength` (4096): do not clamp — see the note on ListFilesParameterSchema above.
     public const string SearchTextParameterSchema = """
                                                     {
                                                       "type": "object",
