@@ -136,12 +136,23 @@
     <Content Remove="appsettings.AppUpdate.tester.json"/>
     <None Include="appsettings.AppUpdate.main.json"/>
     <None Include="appsettings.AppUpdate.tester.json"/>
-    <!-- Only the active flavor's source is copied to output (renamed), so the artifact carries exactly one channel. -->
+    <!--
+      Only the active flavor's source is copied to output (renamed), so the artifact carries exactly one channel.
+
+      Always, NOT PreserveNewest, and that is load-bearing. publish/package-tester-win.ps1 injects the GitHub App
+      client ID by rewriting the COPY in the publish directory, which leaves the destination permanently newer than
+      its source. Under PreserveNewest the next publish then skipped the copy altogether and a previous run's baked
+      client ID survived into the new artifact — measured on Windows 11 2026-08-02, where it blocked a -SkipUpload
+      rehearsal build whose guard correctly refused a package carrying a stale Iv23… ID. The same mechanism could
+      carry a tester config into a main-channel build, which would break the invariant stated above that a tester
+      build can never point at the main repo. Always makes every publish overwrite the destination regardless of
+      timestamps, so the artifact's channel config is always the one this build selected.
+    -->
     <Content Include="appsettings.AppUpdate.$(UpdateChannel).json"
              Condition="Exists('appsettings.AppUpdate.$(UpdateChannel).json')"
              Link="appsettings.AppUpdate.json"
-             CopyToOutputDirectory="PreserveNewest"
-             CopyToPublishDirectory="PreserveNewest"/>
+             CopyToOutputDirectory="Always"
+             CopyToPublishDirectory="Always"/>
   </ItemGroup>
 
   <ItemGroup>
