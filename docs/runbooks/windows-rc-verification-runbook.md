@@ -18,6 +18,25 @@ function llama  { Get-Process llama-server -ErrorAction SilentlyContinue | Selec
 Note `llama-server` — the OS process table carries no extension on Windows, even though the file on disk is
 `llama-server.exe` (`OsStaleLlamaServerProcessScanner.cs:17`).
 
+### What changed since the last revision of this runbook
+
+Checks **4, 5 and 9** now describe fixed behaviour rather than known-broken behaviour; each carries a "Changed for
+this RC" note saying what was proven on the Linux dev box and what only you can prove. Checks 1, 2, 3, 7 and 8 are
+unchanged and remain open questions.
+
+One change can make a previously-starting install fail to start: check 4's fail-closed key ring. A hard startup
+failure there may be the fix working correctly — read that check before concluding the RC is broken.
+
+### Known and NOT fixed: the Coder agent still shells out to `find` and `grep`
+
+`CoderWorkspaceReader` (the read-only Coder agent, which runs in the AgentHome sandbox rather than the Development
+one) still invokes the bare `find` and `grep` with POSIX argument vectors — the same defect check 5 used to
+describe, in a different feature. It was left alone deliberately: Coder reads a *copy* inside the AgentHome jail
+rather than a host worktree, so the fix applied to Development Mode does not transfer unchanged.
+
+**Expect Coder's `list_files` / `search_text` to fail on Windows.** Confirm it rather than investigating it, and
+note whether the failure is reported to the user or silently returns nothing.
+
 ---
 
 ## 1. Job Object process tree-kill on hard kill
@@ -149,11 +168,16 @@ produces a **~2 s hang then a misleading message** — *"The desktop operator ke
 
 ## 4. `dp-keys` ring stability (`*.enc` orphaning is silent on Windows)
 
-**What it proves.** The fail-closed key-ring resolver that refuses to regenerate an undecryptable ring
-(`NodeDataProtectionKeyRingFailClosedKeyResolver.cs:65-68`) is **registered on Linux only** —
-`ConfigureServices.cs:111-135` takes the `ProtectKeysWithDpapi` branch on Windows and leaves ASP.NET Core's stock
-`DefaultKeyResolver` in place. So on Windows an unreadable DPAPI ring silently mints a new key and orphans every
-`*.enc` credential (HF token, GitHub auth, cloud creds) with no hard failure.
+> **Changed for this RC.** The fail-closed resolver is now registered on **both** branches
+> (`NodeDataProtectionKeyRingFailClosed.Decorate`, called outside the OS branch in `ConfigureServices`), with a
+> DPAPI-specific failure classifier and remediation. An unreadable DPAPI ring should now **stop startup with a
+> named error** rather than silently minting a new key. This is the one change in this pass that can make a
+> previously-starting install fail to start, so read the fail section below carefully — a hard failure here may be
+> the fix working correctly.
+
+**What it proves.** That the fail-closed decorator actually fires on a real DPAPI ring, and — more important —
+that it does **not** fire on a healthy one. The Linux tests cover the decision logic; only a Windows box has a
+real `ProtectedData` blob to fail on.
 
 **Do this.** After check 3, sign in / store a Hugging Face token, then:
 
@@ -170,53 +194,98 @@ Select-String -Path $LOGS -Pattern 'decryption failed. Clearing|Clearing stored 
 
 **Pass looks like.** The same `key-<guid>.xml` set after restart — **no new file per launch**. Zero matches from
 `Select-String`. The HF token still present in the UI (Settings → Hugging Face shows authenticated, not anonymous).
+The app starts normally: on a healthy ring the decorator must be invisible.
 
-**Fail looks like / next step.** A fresh `key-<guid>.xml` on each launch and/or:
+**Then deliberately break it**, because the interesting half is whether the new backstop fires at all. Stop the
+app, copy `$XE\dp-keys` and `$XE\*.enc` to a second Windows user account's `%LOCALAPPDATA%\XE-Local-AI-Engine`,
+and start the app as that user.
+
+**Pass looks like (broken ring).** Startup **fails** with a message containing:
 
 ```
-Hugging Face token decryption failed. Clearing the stored token.
-Worker credential decryption failed. Clearing stored credentials and requiring re-pairing.
+Refusing to regenerate the key-ring
+DPAPI-protected for the Windows user that created it
 ```
 
-Ring is regenerating. On Windows this is silent self-healing by design gap, not by intent — the loud Linux
-backstop does not exist here. Capture whether the ring rotated on a plain restart (bug) or only after a Windows
-credential/profile change (expected DPAPI behaviour, but still silent).
+**Fail looks like / next step.**
+
+- A fresh `key-<guid>.xml` on each launch on the ORIGINAL account, and/or:
+
+  ```
+  Hugging Face token decryption failed. Clearing the stored token.
+  Worker credential decryption failed. Clearing stored credentials and requiring re-pairing.
+  ```
+
+  The ring is still regenerating silently — the decorator did not fire. Capture whether the ring rotated on a
+  plain restart or only after a Windows credential/profile change.
+- The copied-to-another-user case starting up **cleanly** → the decorator is registered but its classifier does
+  not recognise what DPAPI actually threw. Capture the full startup log; the exception type and message from
+  `ProtectedData.Unprotect` is exactly what the classifier needs to match.
+- The **original** account failing to start → a false positive, and a P0 the other way. Capture the full message
+  and the inner exception before deleting anything; that combination is unreachable from the Linux tests
+  (`NodeDataProtectionKeyRingFailClosedTests` proves a readable-but-rotating ring stays quiet, but only against a
+  fake key).
 
 ---
 
-## 5. Development Mode: `find` / `grep` shell-out
+## 5. Development Mode: `list_files` / `search_text`, and the validation gate's first command
 
-**What it proves.** `DevelopmentWorkspaceTools` invokes the **bare** executables `find` and `grep` with POSIX-only
-argument vectors (`DevelopmentWorkspaceTools.cs:127` and `:233`; args built at `:160-187` and `:225-230`) and
-there is **no OS branch anywhere in the file**. On stock Windows 11 `grep` does not exist and `find` resolves to
-the DOS `find.exe`, which rejects `-maxdepth`/`-iname`/`-prune`. This is the most likely genuine Windows failure
-in the whole build, and every test covering it skips off Linux
-(`DevelopmentWorkspaceAndCoderTests.cs:319-323`, `:376-380`, `:518-522`, `:724-728`, `:914-917`).
+> **Changed for this RC.** `DevelopmentWorkspaceTools` no longer shells out to `find` or `grep` at all. Both
+> surveys are managed code (`DevelopmentWorkspaceFileScanner`) on every platform, so the behaviour a Linux test
+> exercises is the behaviour Windows runs — there is no longer an OS branch to get wrong, and no dependency on
+> Git for Windows being installed. Separately, the gate's first command
+> (`git diff --check`) now runs under a per-path whitespace policy the engine derives from the repository's own
+> index (`DevelopmentWorkspaceWhitespacePolicy`). Both are covered by tests that run on the Linux dev box; what
+> the tester adds is the real Windows filesystem and a real Windows `git`.
+
+**What it proves.** That the two surveys return real results against a real NTFS workspace, and that a
+repository which stores CRLF passes the validation gate instead of failing at command one.
 
 **Do this.**
 
 ```powershell
-where.exe find
-where.exe grep
+where.exe find    # expect C:\Windows\System32\find.exe — that is now FINE, nothing invokes it
+where.exe grep    # may find nothing — also fine
+where.exe git     # this one IS required: Development Mode runs real git
 ```
 
-Then open `/development`, accept the consent gate, register a trusted repo, and run a Development task that
-exercises **both** `list_files` and `search_text`.
+Open `/development`, accept the consent gate, register a trusted repo, and run a Development task that exercises
+**both** `list_files` and `search_text`. Run it twice: once against a repository stored with LF, once against one
+stored with CRLF. `git ls-files --eol` in the source repository tells you which you have — look at the `i/`
+column, not `w/`.
 
-**Pass looks like.** `where.exe grep` resolves (typically `C:\Program Files\Git\usr\bin\grep.exe`), the GNU `find`
-precedes `C:\Windows\System32\find.exe` in the `where.exe find` output, and both tool calls return real results.
+**Pass looks like.**
 
-**Fail looks like / next step.** Either of these exact strings in the task output or log:
+- Both tool calls return real results. `list_files` output is `./`-prefixed, name-sorted, and contains no `.git/`
+  entry and no `.env`-style path.
+- On the CRLF repository the validation gate gets **past** `git_diff_check` (it is the first command; a failure
+  there means nothing else ran).
+- In the managed workspace, `%LOCALAPPDATA%\XE-Local-AI-Engine\development\workspaces\<project>\<task>\.git\info\attributes`
+  exists on a CRLF repository and names only the CRLF-stored paths (or `*` on an all-CRLF one). On an LF-only
+  repository the file must **not** exist — its presence there would mean the CR check was retired for a
+  repository that still needs it.
 
-```
-The fixed Development list_files operation failed.
-The fixed Development search_text operation failed.
-```
+**Fail looks like / next step.**
 
-Prepend `C:\Program Files\Git\usr\bin` to `PATH` and retest. **If that fixes it, it is a product bug, not an
-environment problem** — the shipped RC cannot assume Git-for-Windows. Note that `System32` normally precedes
-Git's `usr\bin` in `PATH`, so `find` will resolve to the DOS tool on most boxes even with Git installed; expect
-`list_files` to fail more often than `search_text`.
+- Either of these exact strings in the task output or log:
+
+  ```
+  The fixed Development list_files operation failed.
+  The fixed Development search_text operation failed.
+  ```
+
+  This is now a filesystem or path failure, not a missing tool. Capture the repository path and whether it sits
+  on a network drive, a junction, or a path near `MAX_PATH`.
+- `git_diff_check` reporting `trailing whitespace` on lines the coder did not touch → the whitespace policy did
+  not apply. Check that the attributes file above exists and that the paths it names match the failing file.
+
+**Not verifiable without you.** These paths are exercised on Linux by
+`DevelopmentWorkspaceFileScannerTests` and `DevelopmentWorkspaceWhitespacePolicyTests`, but three things are
+genuinely Windows-only and are what this check is for: NTFS junctions and reparse points (the scanner refuses to
+follow one — a Linux symlink test is close but not identical), `MAX_PATH` behaviour on a deep tree, and whether
+Git for Windows' **system** config (`core.autocrlf=true` is a common default there) changes what
+`git ls-files --eol` reports for the `i/` column. If it does, the policy would be derived from a different
+classification than the Linux tests assume — record the `i/` column verbatim for one file you know is CRLF.
 
 ---
 
@@ -226,6 +295,13 @@ Git's `usr\bin` in `PATH`, so `find` will resolve to the DOS tool on most boxes 
 **nothing** — `HostSandboxContainmentProbe.cs:72-83` returns `SandboxContainment.None` (*"the Windows Job Object
 path is not implemented"*), so there is no process group, no cgroup CPU/mem/PID ceiling, no network isolation, no
 `O_NOFOLLOW`, and no orphan reaping. The consent dialog is the only place the user is told.
+
+> **Unchanged by this pass, and worth stating because check 5 changed.** Moving `list_files`/`search_text` into
+> managed code did **not** change containment, and it did not change what runs inside the sandbox — the engine
+> already read the host worktree directly for its own workspace invariants and for evidence export, and the
+> workspace is the same directory under every provider. Build, test and lint commands still run through the
+> sandbox exactly as before. So the dialog text below must still be verbatim what it was; if it has changed,
+> something else changed it.
 
 **Do this.** Clear the acknowledged flag (fresh browser profile, or clear site data for the loopback origin),
 open `/development`, read the dialog. Then:
@@ -328,34 +404,55 @@ Linux/WSL-flavoured (*"commonly a missing Vulkan ICD under WSL2"*) and is shown 
 
 Skip unless an AMD/Intel-only Windows box is available. Characterization, not pass/fail on the primary target.
 
-**What it proves.** Three known gaps at once: (a) Windows adapter enumeration shells out to **`wmic`**
-(`ProcessGpuVendorProbe.cs:161-174`), which is a deprecated, disabled-by-default Feature-on-Demand on current
-Windows 11 — its absence is swallowed and collapses the vendor to `None` → `GpuVariant.Cpu`, i.e. a Vulkan-capable
-box runs CPU-only with no alert; (b) the two detectors disagree — Detector A can select the **Vulkan** binary
-while `HardwareProfiler.ProbeWindowsAdapterVendor()` (`HardwareProfiler.cs:328-341`) is a hardcoded
-`GpuVendor.Unknown` stub, so the profile shows `gpuVendor: "unknown"`, `gpuAccelAvailable: false`; (c) because
-`cpuFallback` requires `gpuExpected` (`RuntimeDeviceAuditService.cs:176`), the **CPU-fallback alert is
-structurally unreachable** on exactly the machine most likely to be silently CPU-bound.
+> **Changed for this RC.** Both detectors have stopped depending on `wmic`. `ProcessGpuVendorProbe` (which
+> chooses the llama.cpp variant) and `HardwareProfiler` (which fills the hardware-profile card) now read adapter
+> descriptions from `Win32_VideoController` via `Get-CimInstance`, preferring
+> `%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe` by absolute path, then bare `powershell`, then
+> `wmic` last. `HardwareProfiler.ProbeWindowsAdapterVendor` is no longer a hardcoded `Unknown` stub.
+> **This is the single least-verifiable change in the pass**: no Windows machine was available, so what was
+> proven here is the branch logic (with the platform injected) and the vendor mapping — not that
+> `Get-CimInstance Win32_VideoController` actually answers on your box.
+
+**What it still does not fix.** The CPU-fallback alert remains **structurally unreachable** on an AMD/Intel
+Windows box, because `cpuFallback` requires `gpuExpected`, which is `vendor ∈ {nvidia, amd, intel} && vramBytes > 0`
+(`RuntimeDeviceAuditService.BuildState`) — and there is still no Windows VRAM-bytes source for a non-NVIDIA
+adapter. `ProbeWindowsNonNvidiaVramAsync` is deliberately still the deferred DXGI seam: `Win32_VideoController.AdapterRAM`
+is a uint32 that misreports any adapter above 4 GB, and a wrong positive number would feed model-fit sizing, which
+is worse than `null`. So the vendor is now named truthfully and the Vulkan binary is selected again, but the box
+still shows CPU mode and still raises no alert.
 
 **Do this.**
 
 ```powershell
-where.exe wmic
-wmic path win32_VideoController get name
+where.exe wmic                                                  # expected: nothing, on a clean Windows 11
+Get-CimInstance -ClassName Win32_VideoController | Select-Object -ExpandProperty Name
+Measure-Command { Get-CimInstance -ClassName Win32_VideoController | Select-Object -ExpandProperty Name }
 ```
 
 Then read the hardware profile card and record `gpuVendor`, `vramKnown`, `gpuAccelAvailable`, `gpuExpected`,
 `cpuFallback`, `inferenceBackend`, and which badges/alerts render.
 
-**Pass looks like** (the documented degraded behaviour, already disclosed in `CHANGELOG.md`):
-`gpuVendor: "unknown"`, `vramKnown: false`, `gpuAccelAvailable: false`, `gpuExpected: false`,
-`cpuFallback: false`, orange **"CPU mode"** badge shown, and `inferenceBackend` either `"vulkan"` (wmic matched
-the adapter, so the Vulkan binary was selected) or `"cpu"` (it did not).
+**Pass looks like.** `gpuVendor` is now `"amd"` or `"intel"` — **not** `"unknown"` — matching what the
+`Get-CimInstance` line printed. `inferenceBackend: "vulkan"`. `vramKnown: false`, `gpuAccelAvailable: false`,
+`gpuExpected: false`, `cpuFallback: false`, orange **"CPU mode"** badge shown. That combination is the documented
+degraded state, now with a truthful vendor.
 
-**Fail looks like / next step.** `where.exe wmic` finds nothing → `inferenceBackend: "cpu"` on a
-Vulkan-capable box with **no alert of any kind**. That is a silent full-performance loss. Next step is the
-deferred DXGI/`Win32_VideoController` seam named in the code comment at `HardwareProfiler.cs:328-341`; note that
-`ProcessGpuVendorProbe` has no PowerShell/`Get-CimInstance` fallback either, so both detectors fail together.
+**Fail looks like / next step.**
+
+- `gpuVendor: "unknown"` while the `Get-CimInstance` line above printed a real adapter name → the query works on
+  your box but the engine's invocation of it does not. Capture the exact adapter string; the mapping is
+  substring-based (`amd` / `radeon` / `advanced micro devices` / `intel`, case-insensitive) and an adapter name
+  matching none of them is a real gap worth reporting verbatim.
+- `inferenceBackend: "cpu"` on a Vulkan-capable box → the variant selector still could not name the vendor. This
+  is the original defect surviving; capture whether `powershell.exe` exists at the System32 path above and
+  whether it is under a constrained-language or execution policy that would suppress output.
+- `Measure-Command` reporting more than ~8 s → the probe's per-tool deadline would fire and the vendor would
+  degrade to undetected. Report the measured figure; the 8 s cap was chosen against typical PowerShell cold-start
+  times and has never been measured on real Windows.
+
+**Also record even if everything passes**: the wall-clock delay between launching the app and the first-run
+provisioning line appearing. The adapter query is now on that path for non-NVIDIA boxes and its cost has not been
+measured on Windows.
 
 ---
 
