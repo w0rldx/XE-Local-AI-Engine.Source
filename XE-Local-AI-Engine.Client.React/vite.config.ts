@@ -159,6 +159,9 @@ export default defineConfig(({ command, mode }) => {
 		test: {
 			include: ["src/**/*.test.{ts,tsx}"],
 			exclude: ["node_modules/**", "dist/**"],
+			// Pins the ICU default locale. Without it the suite passes only on an en-US machine — see
+			// src/test/PinLocale.ts for the failure this prevents on a non-en-US packaging box.
+			setupFiles: ["src/test/PinLocale.ts"],
 			coverage: {
 				provider: "v8",
 				reportsDirectory: "coverage/vitest",
