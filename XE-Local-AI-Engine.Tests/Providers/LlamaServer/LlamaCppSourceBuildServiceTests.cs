@@ -33,7 +33,10 @@ public sealed class LlamaCppSourceBuildServiceTests
             service.StartAsync(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cpu, LlamaCppSourceSelection.Official),
                 CancellationToken.None));
 
-        AssertEx.Contains("Linux only", exception.Message);
+        // Arguments were reversed here — AssertEx.Contains takes (actual, expectedSubstring), so this asserted that the
+        // literal "Linux only" contains the whole exception message. The early return above means this body runs only
+        // off Linux, so the mistake never executed until this suite was first run on Windows.
+        AssertEx.Contains(exception.Message, "Linux only");
         AssertEx.Equal(0, probe.CallCount);
         AssertEx.Null(activity.ActiveBuildId);
         AssertEx.False(service.GetStatus().IsRunning);
