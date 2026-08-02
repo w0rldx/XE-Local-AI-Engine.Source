@@ -61,15 +61,24 @@ public sealed class LlamaCppRuntimeEndpointTests
         // cached snapshot and NOT re-hit the live catalog (protecting the 60/hr GitHub budget).
         var catalog = Substitute.For<ILlamaCppReleaseCatalog>();
         var updateState = new LlamaCppUpdateState();
+
+        await using var factory = CreateFactory(Substitute.For<ILlamaCppBinaryManager>(), updateState, catalog);
+        using var client = factory.CreateClient();
+
+        // Stamped AFTER the host is up, and that ordering is the whole test. The endpoint reads the wall clock
+        // directly (GetLlamaCppRuntimeEndpoint.IsStale uses DateTimeOffset.UtcNow, not an injected TimeProvider), so
+        // "younger than the 60s refresh interval" is measured against real elapsed time — including however long
+        // booting this host took. Stamping before CreateFactory made the window a race against startup: on Windows,
+        // where the first request waits on 43 pending migrations against a Defender-scanned SQLite file, boot alone
+        // exceeded sixty seconds. The snapshot was then genuinely stale, the throttle correctly permitted a refresh,
+        // and the unconfigured catalog substitute returned a null Task — surfacing as a 500 that looked like an
+        // endpoint defect rather than a fixture that had aged out its own precondition.
         updateState.Store(new LlamaCppUpdateSnapshot(InstalledTag: "b9692",
             RecommendedTag: "b9700",
             UpstreamLatestTag: "b9777",
             UpdateAvailable: true,
             IsOffline: false,
             CheckedAtUtc: DateTimeOffset.UtcNow));
-
-        await using var factory = CreateFactory(Substitute.For<ILlamaCppBinaryManager>(), updateState, catalog);
-        using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/model-fit/llamacpp/runtime?refresh=true");
         factory.AddNodeBearerToken(request);
