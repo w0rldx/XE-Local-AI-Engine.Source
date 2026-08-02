@@ -1095,7 +1095,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         }
 
         // Open the closed SQLite file bytes directly and assert the prompt text is absent from the entire file.
-        var fileBytes = await File.ReadAllBytesAsync(GetDatabasePath(fileName)).ConfigureAwait(false);
+        var fileBytes = await SqliteFileProbe.ReadAllBytesAsync(GetDatabasePath(fileName)).ConfigureAwait(false);
         AssertEx.False(ContainsSubsequence(fileBytes, Encoding.UTF8.GetBytes(prompt)), "The SQLite file must not contain recognizable prompt plaintext.");
     }
 
@@ -1188,7 +1188,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
             "A successful checkpoint/vacuum must report success so the caller can clear the reclamation marker.");
 
         // The whole main DB file — not just the row's current bytes — must be free of the migrated plaintext.
-        var fileBytes = await File.ReadAllBytesAsync(GetDatabasePath(fileName)).ConfigureAwait(false);
+        var fileBytes = await SqliteFileProbe.ReadAllBytesAsync(GetDatabasePath(fileName)).ConfigureAwait(false);
         AssertEx.False(ContainsSubsequence(fileBytes, Encoding.UTF8.GetBytes(legacyText)),
             "After the post-backfill checkpoint/vacuum, no migrated plaintext may remain anywhere in the main DB file.");
 
@@ -1227,7 +1227,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         await backfill.RunOnceAsync(CancellationToken.None).ConfigureAwait(false);
 
         AssertEx.False(await IsReclamationMarkerSetRawAsync(provider).ConfigureAwait(false), "A successful retry must clear the reclamation-pending marker.");
-        AssertEx.False(ContainsSubsequence(await File.ReadAllBytesAsync(GetDatabasePath(fileName)).ConfigureAwait(false), Encoding.UTF8.GetBytes(legacyText)),
+        AssertEx.False(ContainsSubsequence(await SqliteFileProbe.ReadAllBytesAsync(GetDatabasePath(fileName)).ConfigureAwait(false), Encoding.UTF8.GetBytes(legacyText)),
             "After the retried reclamation, no migrated plaintext may remain in the main DB file.");
     }
 
@@ -1249,7 +1249,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
 
         // First startup: migrate + reclaim in one pass; the marker (set before migrating) must be cleared on success.
         await backfill.RunOnceAsync(CancellationToken.None).ConfigureAwait(false);
-        AssertEx.False(ContainsSubsequence(await File.ReadAllBytesAsync(GetDatabasePath(fileName)).ConfigureAwait(false), Encoding.UTF8.GetBytes(legacyText)),
+        AssertEx.False(ContainsSubsequence(await SqliteFileProbe.ReadAllBytesAsync(GetDatabasePath(fileName)).ConfigureAwait(false), Encoding.UTF8.GetBytes(legacyText)),
             "The plaintext residue must be reclaimed on the first startup.");
         AssertEx.False(await IsReclamationMarkerSetRawAsync(provider).ConfigureAwait(false), "A successful reclamation must clear the marker.");
 
@@ -1347,7 +1347,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
 
         AssertEx.False(await IsReclamationMarkerSetRawAsync(restarted).ConfigureAwait(false),
             "The restart retry must complete the reclamation and clear the marker.");
-        AssertEx.False(ContainsSubsequence(await File.ReadAllBytesAsync(databasePath).ConfigureAwait(false), Encoding.UTF8.GetBytes(legacyText)),
+        AssertEx.False(ContainsSubsequence(await SqliteFileProbe.ReadAllBytesAsync(databasePath).ConfigureAwait(false), Encoding.UTF8.GetBytes(legacyText)),
             "After the restart retry reclaims, no migrated plaintext may remain in the main DB file.");
         // The migrated row still round-trips through the read path after the reclamation.
         var loaded = AssertEx.NotNull(await restartedService.GetConversationAsync(

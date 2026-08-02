@@ -312,7 +312,7 @@ public sealed class PlaybookActionStoreTests : IDisposable
             });
         }
 
-        var fileBytes = await File.ReadAllBytesAsync(databasePath);
+        var fileBytes = await SqliteFileProbe.ReadAllBytesAsync(databasePath);
         AssertEx.False(ContainsSubsequence(fileBytes, Encoding.UTF8.GetBytes(behavior)),
             "The SQLite file should not contain the plaintext behavior.");
         AssertEx.False(ContainsSubsequence(fileBytes, Encoding.UTF8.GetBytes(trigger)),

@@ -156,7 +156,7 @@ public sealed class McpServerStoreTests : IDisposable
             });
         }
 
-        var fileBytes = await File.ReadAllBytesAsync(databasePath);
+        var fileBytes = await SqliteFileProbe.ReadAllBytesAsync(databasePath);
         AssertEx.False(ContainsSubsequence(fileBytes, Encoding.UTF8.GetBytes(secretArg)),
             "The SQLite file should not contain the plaintext arguments.");
         AssertEx.False(ContainsSubsequence(fileBytes, Encoding.UTF8.GetBytes(secretEnv)),
