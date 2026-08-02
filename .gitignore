@@ -428,6 +428,12 @@ node-settings.json
 # Generated at release time by scripts/generate-release-notes.sh (vpk --releaseNotes)
 RELEASE_NOTES.md
 
+# git-cliff downloaded into the repo root by Plans/2026-06-25-velopack-operator-setup-runbook.md:118-121.
+# publish/package-tester-win.ps1 caches it under %TEMP% instead and never writes here, but the older manual
+# runbook drops ~13 files in the working tree — which the packager's clean-tree gate then refuses to build on.
+/gc-tmp/
+/git-cliff-*-x86_64-pc-windows-msvc.zip
+
 # DataProtection key-ring (runtime; per-user data dir in prod, content-root fallback in dev/test)
 dp-keys/
 
