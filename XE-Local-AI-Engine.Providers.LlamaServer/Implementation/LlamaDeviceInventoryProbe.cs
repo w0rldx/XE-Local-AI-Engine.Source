@@ -79,6 +79,19 @@ public sealed partial class LlamaDeviceInventoryProbe : ILlamaDeviceInventoryPro
             // Honor genuine caller cancellation — this is not a probe failure.
             throw;
         }
+        catch (LlamaRuntimeException ex)
+        {
+            // The binary manager REFUSED to hand over a binary — most reachably, a bring-your-own
+            // XE_LLAMACPP_SERVER_PATH override rejected by the no-silent-CPU invariant because it enumerates no GPU
+            // device. That is a deliberate, operator-actionable decision, not a transient glitch, and it is the whole
+            // explanation for the "backend undetermined" state the operator then sees on the hardware card. At Debug it
+            // was invisible at the shipped log level, so the card's advice to check the log led nowhere — measured on
+            // Windows 11 2026-08-03. Warn, so the real reason is in the log the card points at.
+            _logger.LogWarning(ex,
+                "Device-inventory probe could not resolve a {Variant} llama.cpp binary; the inference backend will be reported as undetermined.",
+                variant);
+            return LlamaDeviceInventory.Unknown(variant);
+        }
         catch (Exception ex)
         {
             _logger.LogDebug(ex, "Device-inventory probe failed for variant {Variant}; treating the device list as unknown.", variant);

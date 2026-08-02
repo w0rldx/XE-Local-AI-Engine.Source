@@ -199,12 +199,22 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
     // The device probe neither succeeded nor proved a fallback. Everything downstream — the capacity gate, the model
     // advisor's VRAM budget — is sized against a GPU nobody confirmed is reachable, so the operator has to be told
     // that this is an unanswered question rather than a clean bill of health.
+    //
+    // State the possible causes; do NOT assert one. This text used to claim "the probe timed out or the binary could
+    // not be started" and blame "a wedged or busy GPU driver". Measured on Windows 11 2026-08-03, the most reachable
+    // way to land here is neither: with XE_LLAMACPP_SERVER_PATH pointing at a GPU-variant binary that enumerates no
+    // devices, LlamaCppBinaryManager REFUSES the override on purpose (its no-silent-CPU invariant) and that deliberate
+    // refusal arrives here as an exception the probe cannot tell apart from a glitch. The old text then sent the
+    // operator to diagnose a driver that was working perfectly, while the real fix was their own override. Naming the
+    // override case first is what makes this actionable; a truthful list beats a confident wrong guess.
     private static string BuildUndeterminedText(GpuVariant variant)
     {
-        return $"The {VariantName(variant)} llama.cpp runtime is selected, but listing its GPU devices did not complete "
-               + "(the probe timed out or the binary could not be started), so whether inference will use the GPU is unknown. "
-               + "Model sizing on this page still assumes the GPU's VRAM is usable. A wedged or busy GPU driver is the usual "
-               + "cause; refreshing the hardware profile re-runs the probe.";
+        return $"The {VariantName(variant)} llama.cpp runtime is selected, but its GPU devices could not be listed, so "
+               + "whether inference will use the GPU is unknown. Model sizing on this page still assumes the GPU's VRAM "
+               + "is usable. Common causes: a bring-your-own XE_LLAMACPP_SERVER_PATH override that was rejected because "
+               + "it exposes no GPU device for its configured variant (check the log for the override's own error), a "
+               + "runtime whose libraries could not be loaded, or a busy GPU driver that made the probe overrun. "
+               + "Refreshing the hardware profile re-runs the probe.";
     }
 
     // The backend inference actually runs on: a GPU variant that enumerated devices is that variant; a GPU variant with
