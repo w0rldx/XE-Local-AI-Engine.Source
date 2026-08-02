@@ -29,7 +29,7 @@
 		"test": "vitest run",
 		"test:tooling": "node --test scripts/*.test.mjs",
 		"test:coverage": "vitest run --coverage",
-		"test:coverage:check": "VITEST_COVERAGE_CHECK=true vitest run --coverage",
+		"test:coverage:check": "node scripts/RunCoverageCheck.mjs",
 		"openapi:fetch": "node scripts/FetchOpenapi.mjs",
 		"openapi:generate": "openapi-ts --file OpenapiTs.config.ts",
 		"openapi": "pnpm run openapi:fetch && pnpm run openapi:generate",
