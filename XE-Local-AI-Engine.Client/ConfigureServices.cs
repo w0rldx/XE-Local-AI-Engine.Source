@@ -9,7 +9,6 @@ using FastEndpoints.Swagger;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
-using Microsoft.AspNetCore.DataProtection.KeyManagement.Internal;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.JsonWebTokens;
@@ -108,7 +107,8 @@ public static class ConfigureServices
         // application-level COLUMN encryption (not SQLCipher/whole-file), so a wrong secret does NOT reliably fail
         // startup on its own — the loud backstop is the fail-closed key resolver wired below, which refuses to
         // regenerate the ring when an encrypted key cannot be decrypted.
-        if (OperatingSystem.IsWindows())
+        var isWindows = OperatingSystem.IsWindows();
+        if (isWindows)
         {
             dataProtection.ProtectKeysWithDpapi(protectToLocalMachine: false);
         }
@@ -118,21 +118,19 @@ public static class ConfigureServices
             dataProtection.Services.AddSingleton<NodeDataProtectionKeyRingEncryptor>();
             dataProtection.Services.AddOptions<KeyManagementOptions>()
                           .Configure<NodeDataProtectionKeyRingEncryptor>((options, encryptor) => options.XmlEncryptor = encryptor);
-
-            // Hard-fail instead of silently regenerating the ring when an ENCRYPTED key cannot be decrypted (BE-02
-            // follow-up). Data Protection's DefaultKeyResolver swallows a per-key decrypt failure and, finding no usable
-            // default, generates a fresh key — orphaning every stored credential/token. Decorate that resolver so a
-            // wrong/missing operator secret surfaces as a loud startup failure. The decoration is skipped if the
-            // framework ever stops registering the resolver by implementation type (then the pre-existing behavior
-            // stands), so it can never break a correct install.
-            var defaultKeyResolver = dataProtection.Services.LastOrDefault(descriptor => descriptor.ServiceType == typeof(IDefaultKeyResolver));
-            if (defaultKeyResolver?.ImplementationType is { } innerResolverType)
-            {
-                dataProtection.Services.Remove(defaultKeyResolver);
-                dataProtection.Services.AddSingleton<IDefaultKeyResolver>(serviceProvider =>
-                    new NodeDataProtectionKeyRingFailClosedKeyResolver((IDefaultKeyResolver)ActivatorUtilities.CreateInstance(serviceProvider, innerResolverType)));
-            }
         }
+
+        // Hard-fail instead of silently regenerating the ring when an at-rest key cannot be decrypted. Data Protection's
+        // DefaultKeyResolver swallows a per-key decrypt failure and, finding no usable default, generates a fresh key —
+        // orphaning every stored credential/token.
+        //
+        // Applied on BOTH schemes, and deliberately OUTSIDE the branch above. It used to sit inside the non-Windows
+        // arm, which left Windows failing OPEN: an unreadable DPAPI ring quietly minted a new key and made every *.enc
+        // credential (HF token, GitHub auth, cloud creds) undecryptable with no hard failure and no log line. The
+        // decoration wraps the RESOLVER and is orthogonal to how keys are encrypted, so the only thing that has to
+        // differ is which failure counts as a ring failure and what the operator can do about it.
+        _ = NodeDataProtectionKeyRingFailClosed.Decorate(dataProtection.Services,
+            NodeDataProtectionKeyRingFailClosed.ResolverFactoryFor(isWindows));
 
         // Application layer (services, options, persistence, runtime) lives in the
         // XE-Local-AI-Engine.Client.Application class library. The host only wires web-framework
