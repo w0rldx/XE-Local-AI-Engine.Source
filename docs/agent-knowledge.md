@@ -433,7 +433,7 @@ Diagnosing it: confirm `OTEL_EXPORTER_OTLP_ENDPOINT` is on the process (`tr '\0'
 
 ### Other silent-failure traps
 
-- **A native process-probe with no timeout hangs provisioning forever.** `nvidia-smi`/`wmic` GPU detection once had no deadline; a hung call stalled first-run model provisioning indefinitely with nothing logged. Any shell-out to a native diagnostic needs a per-call timeout *and* an outer deadline that degrades to a safe default (CPU variant).
+- **A native process-probe with no timeout hangs provisioning forever.** `nvidia-smi`/adapter-enumeration GPU detection once had no deadline; a hung call stalled first-run model provisioning indefinitely with nothing logged. Any shell-out to a native diagnostic needs a per-call timeout *and* an outer deadline that degrades to a safe default (CPU variant). See §2's Windows section for the matching trap on the other side: a probe that degrades *silently* because the tool it names does not exist.
 - **Desktop mode must treat Ollama as absent, not error-worthy.** Any Ollama call path (`/api/show`, `IOllamaApiClient`) must be provider-gated or tolerate connection-refused gracefully. Repeated source of chat failures and noisy stack traces in desktop mode, where no Ollama daemon runs.
 - **The desktop loopback port is persisted on purpose** (`DesktopPortStore`, `desktop-port.txt`) so browser-origin-scoped `localStorage` prefs survive a relaunch. Don't revert to a random port per launch.
 - Desktop shutdown needs explicit **SIGHUP** (Linux) and **CTRL_CLOSE_EVENT** (Windows, via `SetConsoleCtrlHandler`, blocking ~4s for graceful `ApplicationStopped`) handlers — .NET's default ConsoleLifetime covers neither, and without them console-close orphans `llama-server` again.
@@ -503,6 +503,27 @@ MCP servers supply third-party tool schemas the node does not control, so this i
 Gate 5 catches the rest: the Default Assistant grants zero tools, so even a fully permitted model gets nothing on the default agent. Use the Coder (read-only) agent, or grant tools on the definition, when testing the positive path.
 
 Historical note, so nobody re-introduces it: gate 4 used to be **captured at DI composition** and never re-read, so editing the allow-list did nothing until the node restarted — while gates that read the *same* setting (`GetToolCapableModelsEndpoint`, `OrchestrationResolver`) were already live. It is now read live per offer. Do not "optimize" it back into a constructor field — the read resolves through `CachedNodeSettingsStore`, so it is a memory-cache hit that `SaveAsync` re-primes, not a file read.
+
+---
+
+### Windows is a shipping target, and an inline `OperatingSystem.IsWindows()` is how its branches go untested
+
+Nobody working in this repo has a Windows machine. A 2026-08-02 pass over the *product* paths (as opposed to the test suite's own portability, which was a separate pass) found four defects that compiled, passed every test, and were wrong or absent on Windows. Three of the four share one shape: **the OS decision was inline, so the branch that was wrong was the branch no test on this box could reach.**
+
+The rule that came out of it: when behaviour differs by OS, make the platform a **parameter** — a constructor argument, an injected environment, a factory selector — and unit-test both branches here. `ProcessGpuVendorProbe.ProbePlatform`, `IHardwareProbeEnvironment.IsWindows` and `NodeDataProtectionKeyRingFailClosed.ResolverFactoryFor(bool)` are the shapes to copy. A test that begins `if (!OperatingSystem.IsLinux()) Skip.Test(...)` proves nothing about the platform you are shipping to; check the skip reasons before trusting a green run as Windows evidence.
+
+Better still, where it is affordable: **delete the branch**. Development Mode's `list_files`/`search_text` used to shell out to `find` and `grep`, and now do the work in managed code on every platform (`DevelopmentWorkspaceFileScanner`) — so the Linux test *is* the Windows evidence, and the engine no longer depends on which coreutils build happens to be first on `PATH`.
+
+Four Windows facts worth not re-deriving:
+
+- **`find.exe` exists on Windows and is not GNU find.** `C:\Windows\System32\find.exe` is the DOS tool; it rejects `-maxdepth`, `-iname` and `-prune`. `System32` normally precedes Git for Windows' `usr\bin` on `PATH`, so a bare `find` resolves to the DOS tool **even where GNU find is installed** — which makes "it works on my box with Git installed" an unreliable check. `grep` simply does not exist. **A shipped RC cannot assume Git for Windows.**
+- **`wmic` is gone.** It is a deprecated Feature-on-Demand, not installed by default on current Windows 11. Anything reading `Win32_*` must go through `Get-CimInstance` (Windows PowerShell 5.1 is in-box; prefer it by its absolute `System32\WindowsPowerShell\v1.0\powershell.exe` path so a planted `powershell.exe` cannot answer). Keep `wmic` as a last candidate rather than deleting it — a missing executable fails to start immediately and costs nothing.
+- **`git diff --check` fails on a repository that legitimately stores CRLF.** Git's default whitespace rules count the CR of a CRLF pair as trailing whitespace, so the Development validation gate's *first* command exits 2 on every changed line of a Windows-native repository. Neither `core.whitespace=cr-at-eol` nor deleting the check is the answer — both retire a real check on LF repositories. The policy is derived per path from `git ls-files --eol` (the **`i/`** column: with `core.autocrlf=true`, common in Git for Windows' system config, the worktree is CRLF while the blob is LF) and written to `.git/info/attributes`. Mixed repositories are the common case, not the exotic one — this repo stores 4243 files as LF and one as CRLF.
+- **DPAPI failing open is invisible.** `ProtectKeysWithDpapi` plus the framework's stock `DefaultKeyResolver` means an unreadable key ring silently mints a new key and orphans every `*.enc` credential, with no exception and no log line. The fail-closed decorator is now on both branches; note its classifier necessarily differs per scheme (a DPAPI failure surfaces as `CryptographicException`, not as this node's own exception type), which is why it was inert on Windows before rather than merely unregistered.
+
+**Still open, reported not fixed:** `CoderWorkspaceReader` shells out to `find`/`grep` the same way Development Mode used to. It was left alone because Coder reads a copy inside the AgentHome jail rather than a host worktree, so the managed-scanner fix does not transfer unchanged. Expect Coder's `list_files`/`search_text` to fail on Windows.
+
+`docs/runbooks/windows-rc-verification-runbook.md` is where each of these says what a tester should now see, and — for the parts no Linux test can reach — what they must record instead.
 
 ---
 
