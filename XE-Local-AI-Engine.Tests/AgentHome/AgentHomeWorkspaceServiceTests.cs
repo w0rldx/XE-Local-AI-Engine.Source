@@ -80,6 +80,8 @@ public sealed class AgentHomeWorkspaceServiceTests : IDisposable
     [Test]
     public async Task PrepareSelectedFoldersAsync_WhenSymlinkEscapesRoot_Throws()
     {
+        SymlinkSupport.EnsureSupported();
+
         var source = NewTempDir();
         var outside = NewTempDir();
         await File.WriteAllTextAsync(Path.Combine(outside, "secret.txt"), "leak");
@@ -98,6 +100,8 @@ public sealed class AgentHomeWorkspaceServiceTests : IDisposable
     [Test]
     public async Task PrepareSelectedFoldersAsync_WhenSymlinkStaysInsideRoot_CopiesRealFileAndSkipsLink()
     {
+        SymlinkSupport.EnsureSupported();
+
         var source = NewTempDir();
         await File.WriteAllTextAsync(Path.Combine(source, "real.txt"), "x");
         File.CreateSymbolicLink(Path.Combine(source, "link.txt"), Path.Combine(source, "real.txt"));

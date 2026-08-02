@@ -407,6 +407,8 @@ public sealed class DockerSandboxRuntimeProviderTests
     {
         // A command inside the container can plant one, and it is the HOST that resolves it — so an unguarded write
         // would let the sandbox choose where the engine writes.
+        SymlinkSupport.EnsureSupported();
+
         var (provider, _, workspace) = CreateProvider();
         var handle = await provider.CreateOrAttachAsync(CreateRequest(workspace));
         var outside = Path.Combine(workspace, "..", "outside-" + Guid.NewGuid().ToString("N"));

@@ -148,6 +148,8 @@ public sealed class DevelopmentWorkspaceGitConfigTests : IDisposable
     {
         // A command running in the workspace can replace the file with a link; an ordinary write would then follow it
         // out of the workspace and rewrite whatever it points at.
+        SymlinkSupport.EnsureSupported();
+
         var workspace = CreateWorkspace("[core]\n\trepositoryformatversion = 0\n");
         var outside = Path.Combine(_root, "outside.txt");
         File.WriteAllText(outside, "untouched");
