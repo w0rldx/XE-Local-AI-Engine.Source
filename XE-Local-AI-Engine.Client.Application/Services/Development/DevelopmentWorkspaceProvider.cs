@@ -27,6 +27,9 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
     /// </summary>
     private const string GitConfigSandboxPath = "/.git/config";
 
+    /// <summary>Caps the git stderr excerpt carried in a failure message. See <c>RedactGitError</c>.</summary>
+    private const int GitErrorExcerptLimit = 500;
+
     /// <summary>
     ///     The per-task runtime subdirectories a build needs, and the reason D9 is satisfied at zero cost.
     ///     <para>
@@ -336,10 +339,36 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
 
     private static void EnsureGitSuccess(HostGitResult result, string message)
     {
-        if (result.ExitCode != 0)
+        if (result.ExitCode == 0)
         {
-            throw new InvalidOperationException(message);
+            return;
         }
+
+        throw new InvalidOperationException($"{message} (git exited {result.ExitCode}: {RedactGitError(result.StandardError)})");
+    }
+
+    /// <summary>
+    ///     git's own stderr is the only thing that says <em>why</em> a clone or checkout failed. Dropping it left
+    ///     <see cref="EnsureGitSuccess" /> throwing a bare sentence with the cause unrecoverable — which is exactly what
+    ///     ten Development tests hit on a Windows host, reporting "could not be cloned" and nothing actionable. An
+    ///     operator seeing this in production got the same dead end.
+    ///     <para>
+    ///         Mirrors <c>NodePatchApplyService.Redact</c>: strip the temporary-directory prefix so a workspace path does
+    ///         not ride into an operator-visible message, and bound the length so a runaway git diagnostic cannot become
+    ///         the message.
+    ///     </para>
+    /// </summary>
+    private static string RedactGitError(string standardError)
+    {
+        if (string.IsNullOrWhiteSpace(standardError))
+        {
+            return "git produced no diagnostic output";
+        }
+
+        var redacted = standardError.Replace(Path.GetTempPath(), "<tmp>/", StringComparison.Ordinal).Trim();
+        return redacted.Length > GitErrorExcerptLimit
+            ? string.Concat(redacted.AsSpan(0, GitErrorExcerptLimit), "…")
+            : redacted;
     }
 
     /// <summary>
