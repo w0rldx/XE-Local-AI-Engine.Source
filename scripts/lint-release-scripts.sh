@@ -91,10 +91,14 @@ BEHAVIOR_TESTS=(
   "scripts/tests/project-validate-contract.test.sh"
 )
 
-# Release-path PowerShell scripts.
+# Release-path PowerShell scripts, plus the Windows ports of the two test-integrity guards. The
+# guards are not on the release path, but they are the only thing standing between a Windows agent
+# and a contaminated test run — the same reason the .sh originals are shellcheck'd here.
 PS_TARGETS=(
   "publish/package-tester-win.ps1"
   "publish/windows/uninstall-xe-local-ai-engine.ps1"
+  "scripts/assembly-guard.ps1"
+  "scripts/with-build-lock.ps1"
 )
 
 RUN_SHELL="true"
