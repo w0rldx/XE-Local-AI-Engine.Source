@@ -9,6 +9,7 @@ Read `docs/agent-knowledge.md` before your first non-trivial change in this repo
 - `aspire stop` is a **no-op** on this stack — use `scripts/dev-stop.sh`, or you leave an orphaned `llama-server` holding a port and VRAM.
 - HostAgent was **deliberately removed** — don't reintroduce it. Docker is off the **inference path** and stays there, but is permitted for **Development Mode execution only** (ADR 0004). Ollama was **not** removed — it's a gated secondary provider; llama.cpp is the default runtime.
 - This WSL box **has** an RTX 5090 (32 GB, sm_120) + CUDA. Older notes claiming no GPU — or claiming a 4080/16 GB/sm_89 — are wrong.
+- **NVFP4 GGUFs work** here, on native sm_120 kernels (live-verified; pin `b10201` carries `GGML_TYPE_NVFP4`). Only NVFP4 **safetensors** are unloadable — that's a container limit, not a format one. Don't re-research this.
 
 The doc's "Stale beliefs corrected" table lists rules that were true once and are false now — check it before acting on a remembered convention.
 
