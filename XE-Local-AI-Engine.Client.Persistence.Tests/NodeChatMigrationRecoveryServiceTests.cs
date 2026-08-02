@@ -12,6 +12,25 @@ using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 
 public sealed class NodeChatMigrationRecoveryServiceTests : IDisposable
 {
+    /// <summary>
+    ///     How long a single migration attempt gets before the recovery path treats it as stuck.
+    ///     <para>
+    ///         This must cover the slowest honest run of the whole migration set, not the fastest. At five seconds it
+    ///         covered Linux and nothing else: once the set reached 43 migrations, a Windows run — where the SQLite
+    ///         file sits in a Defender-scanned %TEMP% rather than on ext4 — exceeded it and was cancelled MID-APPLY.
+    ///         That is worse than a slow test. Three of these migrations carry <c>PRAGMA foreign_keys = 0</c> and
+    ///         therefore cannot run in a transaction, so an attempt cut short part-way leaves its schema change
+    ///         applied with no history row: the retry then re-runs it and dies on
+    ///         <c>duplicate column name: selected_folder_id</c>, and the database is unusable.
+    ///     </para>
+    ///     <para>
+    ///         So this value is not test-tuning trivia — it is the margin that keeps the recovery path in the
+    ///         situation it was designed for (an attempt that never started applying) rather than the one it cannot
+    ///         survive.
+    ///     </para>
+    /// </summary>
+    private static readonly TimeSpan DefaultMigrationAttemptTimeout = TimeSpan.FromSeconds(20);
+
     private readonly string _rootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
 
     public void Dispose()
@@ -45,14 +64,11 @@ public sealed class NodeChatMigrationRecoveryServiceTests : IDisposable
         var databasePath = GetDatabasePath("abandoned-lock.sqlite");
         await CreateAbandonedEfMigrationLockAsync(databasePath).ConfigureAwait(false);
 
-        // This budget is spent TWICE and the two spends are not alike. The first attempt is meant to exhaust it — that
-        // is the abandoned lock doing its job — and the second then has to apply the full migration set inside the
-        // same budget. So the value has to cover the slowest real migration run, not the fastest: at five seconds it
-        // covered the Linux run and nothing else, and the retry timed out on Windows once the set reached 43
-        // migrations (a Defender-scanned SQLite file in %TEMP% is markedly slower than an ext4 one). Twenty seconds
-        // restores the headroom the five originally had. The cost is that the first attempt now burns twenty seconds
-        // before recovery starts, which is inherent to what this test asserts.
-        await using var serviceProvider = BuildServiceProvider(databasePath, TimeSpan.FromSeconds(20));
+        // Here the budget is spent TWICE and the two spends are not alike: the first attempt is meant to exhaust it —
+        // that is the abandoned lock doing its job — and the retry then has to apply the whole migration set inside
+        // the same budget. So the first attempt necessarily burns the full DefaultMigrationAttemptTimeout before
+        // recovery starts, which is inherent to what this test asserts.
+        await using var serviceProvider = BuildServiceProvider(databasePath);
         var migrationService = serviceProvider.GetRequiredService<NodeChatMigrationRecoveryService>();
 
         await migrationService.MigrateAsync();
@@ -102,7 +118,7 @@ public sealed class NodeChatMigrationRecoveryServiceTests : IDisposable
         services.AddOptions<NodeChatMigrationRecoveryOptions>()
                 .Configure(options =>
                 {
-                    options.MigrationAttemptTimeout = migrationAttemptTimeout ?? TimeSpan.FromSeconds(5);
+                    options.MigrationAttemptTimeout = migrationAttemptTimeout ?? DefaultMigrationAttemptTimeout;
                     options.StartupLockTimeout = startupLockTimeout ?? TimeSpan.FromSeconds(1);
                     options.StartupLockPollInterval = TimeSpan.FromMilliseconds(5);
                 });
