@@ -541,11 +541,11 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         var (validation, task, commands, report) = await RunDotnetProfileValidationAsync(SlnxProfile(), DevelopmentSyntheticSolutionRepository.PassingLibrarySource)
             .ConfigureAwait(false);
 
-        AssertEx.True(validation.Passed);
+        AssertEx.True(validation.Passed, DescribeValidation(commands, report));
         AssertEx.Equal(DevelopmentTaskStatus.InReview, validation.TaskStatus);
         AssertEx.Equal(DevelopmentTaskStatus.InReview, task.Status);
         AssertEx.Equal(ExpectedDotnetValidationProfile, string.Join(',', commands.Select(static command => command.CommandId)));
-        AssertEx.True(commands.All(static command => command.Completed && command.ExitCode == 0));
+        AssertEx.True(commands.All(static command => command.Completed && command.ExitCode == 0), DescribeValidation(commands, report));
 
         // Slice 4: the gate no longer just knows the test command exited zero, it knows what the suite did. The
         // fixture has exactly one test, and it ran.
@@ -581,8 +581,8 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         AssertEx.Equal(DevelopmentTaskStatus.InProgress, task.Status);
 
         // The build is what rejected it: the whitespace check and the restore ahead of it both succeeded.
-        AssertEx.Equal(expected: 0, CommandExitCode(commands, DevelopmentCommandIds.GitDiffCheck));
-        AssertEx.Equal(expected: 0, CommandExitCode(commands, DevelopmentCommandIds.DotnetRestore));
+        AssertCommandSucceeded(commands, DevelopmentCommandIds.GitDiffCheck);
+        AssertCommandSucceeded(commands, DevelopmentCommandIds.DotnetRestore);
         AssertEx.NotEqual(notExpected: 0, CommandExitCode(commands, DevelopmentCommandIds.DotnetBuildRelease));
 
         // The runner does NOT stop at the first failure — it runs the whole declared profile. (An earlier revision of
@@ -615,9 +615,9 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         AssertEx.Equal(DevelopmentTaskStatus.InProgress, task.Status);
 
         // The change compiles — only the test rejected it, which is the signal the old default could not see at all.
-        AssertEx.Equal(expected: 0, CommandExitCode(commands, DevelopmentCommandIds.GitDiffCheck));
-        AssertEx.Equal(expected: 0, CommandExitCode(commands, DevelopmentCommandIds.DotnetRestore));
-        AssertEx.Equal(expected: 0, CommandExitCode(commands, DevelopmentCommandIds.DotnetBuildRelease));
+        AssertCommandSucceeded(commands, DevelopmentCommandIds.GitDiffCheck);
+        AssertCommandSucceeded(commands, DevelopmentCommandIds.DotnetRestore);
+        AssertCommandSucceeded(commands, DevelopmentCommandIds.DotnetBuildRelease);
         AssertEx.NotEqual(notExpected: 0, CommandExitCode(commands, DevelopmentCommandIds.DotnetTestRelease));
 
         // Slice 4: the report now says WHAT failed, not merely that something did. One test ran and it failed.
@@ -658,9 +658,9 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         AssertEx.Equal(DevelopmentTaskStatus.InProgress, task.Status);
 
         // Everything up to the test command is genuinely green — this is not a build failure wearing a different hat.
-        AssertEx.Equal(expected: 0, CommandExitCode(commands, DevelopmentCommandIds.GitDiffCheck));
-        AssertEx.Equal(expected: 0, CommandExitCode(commands, DevelopmentCommandIds.DotnetRestore));
-        AssertEx.Equal(expected: 0, CommandExitCode(commands, DevelopmentCommandIds.DotnetBuildRelease));
+        AssertCommandSucceeded(commands, DevelopmentCommandIds.GitDiffCheck);
+        AssertCommandSucceeded(commands, DevelopmentCommandIds.DotnetRestore);
+        AssertCommandSucceeded(commands, DevelopmentCommandIds.DotnetBuildRelease);
 
         var outcome = TestOutcome(commands);
         AssertEx.False(outcome.Parsed);
@@ -685,11 +685,11 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         var (validation, task, commands, report) = await RunDotnetProfileValidationAsync(CsprojProfile(), DevelopmentSyntheticSolutionRepository.PassingLibrarySource)
             .ConfigureAwait(false);
 
-        AssertEx.True(validation.Passed);
+        AssertEx.True(validation.Passed, DescribeValidation(commands, report));
         AssertEx.Equal(DevelopmentTaskStatus.InReview, validation.TaskStatus);
         AssertEx.Equal(DevelopmentTaskStatus.InReview, task.Status);
         AssertEx.Equal(ExpectedDotnetValidationProfile, string.Join(',', commands.Select(static command => command.CommandId)));
-        AssertEx.True(commands.All(static command => command.Completed && command.ExitCode == 0));
+        AssertEx.True(commands.All(static command => command.Completed && command.ExitCode == 0), DescribeValidation(commands, report));
 
         // The adapter is bound to the profile FAMILY, not to one profile, so the second .NET profile must read its
         // results too — otherwise dotnet-csproj would silently run without the executed>0 rule applying to it.
@@ -719,9 +719,9 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         AssertEx.Equal(DevelopmentTaskStatus.InProgress, validation.TaskStatus);
         AssertEx.Equal(DevelopmentTaskStatus.InProgress, task.Status);
 
-        AssertEx.Equal(expected: 0, CommandExitCode(commands, DevelopmentCommandIds.GitDiffCheck));
-        AssertEx.Equal(expected: 0, CommandExitCode(commands, DevelopmentCommandIds.DotnetRestore));
-        AssertEx.Equal(expected: 0, CommandExitCode(commands, DevelopmentCommandIds.DotnetBuildRelease));
+        AssertCommandSucceeded(commands, DevelopmentCommandIds.GitDiffCheck);
+        AssertCommandSucceeded(commands, DevelopmentCommandIds.DotnetRestore);
+        AssertCommandSucceeded(commands, DevelopmentCommandIds.DotnetBuildRelease);
         AssertEx.NotEqual(notExpected: 0, CommandExitCode(commands, DevelopmentCommandIds.DotnetTestRelease));
 
         AssertEx.Equal(expected: 1, TestOutcome(commands).Failed);
@@ -809,6 +809,47 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
 
     private static int CommandExitCode(IReadOnlyList<DevelopmentCommandEvidence> commands, string commandId) =>
         AssertEx.NotNull(commands.SingleOrDefault(command => string.Equals(command.CommandId, commandId, StringComparison.Ordinal))).ExitCode;
+
+    /// <summary>
+    ///     Asserts a profile command succeeded, and on failure reports what the command actually said.
+    ///     <para>
+    ///         Worth the helper because these commands are real <c>git</c> and <c>dotnet</c> invocations running
+    ///         inside the sandbox on whatever host the suite is on, so when one of them fails for an environmental
+    ///         reason the bare "Expected: 0, Actual: 1" is close to useless — it names neither the command nor its
+    ///         complaint, and the evidence needed to identify it (a NuGet NU-code, a missing executable, a path
+    ///         rejection) is sitting right there in the captured streams. Diagnosing that from a CI log on a machine
+    ///         you do not have costs a full round-trip per guess.
+    ///     </para>
+    /// </summary>
+    private static void AssertCommandSucceeded(IReadOnlyList<DevelopmentCommandEvidence> commands, string commandId)
+    {
+        var command = AssertEx.NotNull(commands.SingleOrDefault(candidate => string.Equals(candidate.CommandId, commandId, StringComparison.Ordinal)));
+        AssertEx.Equal(expected: 0,
+            command.ExitCode,
+            $"'{commandId}' was expected to succeed but exited {command.ExitCode} (completed: {command.Completed}).{Environment.NewLine}"
+            + $"stderr: {Describe(command.StandardError)}{Environment.NewLine}"
+            + $"stdout: {Describe(command.StandardOutput)}");
+    }
+
+    private static string Describe(string stream) =>
+        string.IsNullOrWhiteSpace(stream) ? "(empty)" : stream.Trim();
+
+    /// <summary>
+    ///     Renders the whole validation run — the reported failure plus every command's exit code, and the streams of
+    ///     the ones that failed — for the "this was supposed to pass" assertions, where the useful question is not
+    ///     which assertion tripped but which command broke and what it said.
+    /// </summary>
+    private static string DescribeValidation(IReadOnlyList<DevelopmentCommandEvidence> commands, DevelopmentValidationReport report)
+    {
+        var lines = commands.Select(command => command.ExitCode == 0
+                                        ? $"  {command.CommandId}: exit 0"
+                                        : $"  {command.CommandId}: exit {command.ExitCode} (completed: {command.Completed}){Environment.NewLine}"
+                                          + $"    stderr: {Describe(command.StandardError)}{Environment.NewLine}"
+                                          + $"    stdout: {Describe(command.StandardOutput)}");
+
+        return $"validation did not pass. failureCode: {report.FailureCode ?? "(none)"}, failureDetail: {report.FailureDetail ?? "(none)"}{Environment.NewLine}"
+               + string.Join(Environment.NewLine, lines);
+    }
 
     /// <summary>The structured result the code-owned adapter read back from the profile's test command.</summary>
     private static DevelopmentTestOutcome TestOutcome(IReadOnlyList<DevelopmentCommandEvidence> commands) =>
