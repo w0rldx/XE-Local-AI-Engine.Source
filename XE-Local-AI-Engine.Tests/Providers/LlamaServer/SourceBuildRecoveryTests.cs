@@ -286,6 +286,13 @@ public sealed class SourceBuildRecoveryTests
     [Test]
     public async Task Start_WhenRecoveryStoreFails_BlocksAndPreservesBackup()
     {
+        if (OperatingSystem.IsWindows())
+        {
+            // StartAsync refuses with "In-app source builds are available on Linux only." before it ever reaches the
+            // recovery store, so there is no failing-store path to exercise here.
+            Skip.Test("In-app source builds run on Linux only, so the recovery path is unreachable.");
+        }
+
         using var temp = new TempDirectory();
         var backup = Path.Combine(temp.Path, "llama.cpp", "source-build", ".backup");
         Directory.CreateDirectory(backup);

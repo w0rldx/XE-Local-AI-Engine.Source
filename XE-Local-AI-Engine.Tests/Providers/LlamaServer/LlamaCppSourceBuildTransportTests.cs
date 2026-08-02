@@ -77,6 +77,13 @@ public sealed class LlamaCppSourceBuildTransportTests
         string expectedReason,
         int runningProcessCount)
     {
+        if (OperatingSystem.IsWindows())
+        {
+            // The endpoint short-circuits with reason "not-linux" before it consults the service, so the substituted
+            // admission outcome never reaches the response and every parameterised case reads back the same reason.
+            Skip.Test("The source-build endpoint refuses with 'not-linux' before admission mapping runs.");
+        }
+
         var service = Substitute.For<ILlamaCppSourceBuildService>();
         service.StartAsync(Arg.Any<LlamaCppSourceBuildRequest>(), Arg.Any<CancellationToken>())
                .Returns(new LlamaCppSourceBuildStartResult(outcome, RunningProcessCount: runningProcessCount));

@@ -77,6 +77,13 @@ public sealed class DockerDaemonEndpointResolverTests
     [Test]
     public void Resolve_WhenOnlyThePerUserSocketExists_UsesIt()
     {
+        if (OperatingSystem.IsWindows())
+        {
+            // The rootless per-user socket under XDG_RUNTIME_DIR is a Linux concept; on Windows the resolver reaches
+            // for the npipe endpoint instead and never considers it.
+            Skip.Test("The per-user Docker socket under XDG_RUNTIME_DIR exists on Linux only.");
+        }
+
         var endpoint = Resolve(new ContainerSandboxOptions(),
             environment: new Dictionary<string, string>
             {
