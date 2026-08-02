@@ -59,15 +59,15 @@ internal static class DevelopmentSyntheticSolutionRepository
     public static string PassingLibrarySource { get; } = LibrarySource(ApprovedValue);
 
     /// <summary>Library source that does not compile — the closing semicolon is missing.</summary>
-    public static string BuildBreakingLibrarySource { get; } = $$"""
-                                                                 namespace Lib;
+    public static string BuildBreakingLibrarySource { get; } = Lf($$"""
+                                                                    namespace Lib;
 
-                                                                 public static class Feature
-                                                                 {
-                                                                     public static string Value() => "{{ApprovedValue}}"
-                                                                 }
+                                                                    public static class Feature
+                                                                    {
+                                                                        public static string Value() => "{{ApprovedValue}}"
+                                                                    }
 
-                                                                 """;
+                                                                    """);
 
     /// <summary>Library source that compiles cleanly but makes the fixture's test assertion fail.</summary>
     public static string TestFailingLibrarySource { get; } = LibrarySource("regressed");
@@ -236,15 +236,33 @@ internal static class DevelopmentSyntheticSolutionRepository
     }
 
     private static string LibrarySource(string value) =>
-        $$"""
-          namespace Lib;
+        Lf($$"""
+             namespace Lib;
 
-          public static class Feature
-          {
-              public static string Value() => "{{value}}";
-          }
+             public static class Feature
+             {
+                 public static string Value() => "{{value}}";
+             }
 
-          """;
+             """);
+
+    /// <summary>
+    ///     Forces LF line endings, and this is load-bearing rather than tidiness.
+    ///     <para>
+    ///         C# raw string literals do NOT normalize their line endings — the compiler embeds whatever bytes the
+    ///         <c>.cs</c> file holds. So on a Windows checkout of this repository (where a <c>.cs</c> file is CRLF
+    ///         unless it was cloned under <c>core.autocrlf=false</c>) every literal in this fixture yields CRLF
+    ///         content. Git's default whitespace rules count the CR before the LF as trailing whitespace, so
+    ///         <c>git diff --check HEAD</c> — the FIRST command in every .NET validation profile — reports a
+    ///         whitespace error on each changed line and exits 2.
+    ///     </para>
+    ///     <para>
+    ///         The gate then fails at its first command on every test in this suite, for a reason that has nothing to
+    ///         do with the change under test, and the exit codes these tests pin become a property of how the runner
+    ///         checked out this repository. Normalizing makes the fixture byte-identical on every host.
+    ///     </para>
+    /// </summary>
+    private static string Lf(string content) => content.ReplaceLineEndings("\n");
 
     /// <summary>
     ///     Resolves the NuGet package cache and the TUnit package version to restore the fixture's test project from.
@@ -292,7 +310,8 @@ internal static class DevelopmentSyntheticSolutionRepository
     {
         var path = Path.Combine(repositoryRoot, relativePath.Replace('/', Path.DirectorySeparatorChar));
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        await File.WriteAllTextAsync(path, content, cancellationToken).ConfigureAwait(false);
+
+        await File.WriteAllTextAsync(path, Lf(content), cancellationToken).ConfigureAwait(false);
     }
 
     private static async Task RunGitAsync(string workingDirectory,
