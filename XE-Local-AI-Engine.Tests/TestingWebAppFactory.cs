@@ -21,6 +21,9 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer.Configuration;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Testing.FakeOllama;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
@@ -42,6 +45,10 @@ public class TestingWebAppFactory : WebApplicationFactory<Program>, IAsyncInitia
     private readonly string _fixtureWebRoot;
     private readonly string _nodeSqlitePath;
     private readonly string _nodeDataDirectory;
+
+    // Transport for the llama.cpp runtime seams below. Every send fails, so the binary manager and the release catalog
+    // can never acquire a runtime from GitHub during a unit-test host build. Owned here and disposed with the factory.
+    private readonly HttpClient _offlineRuntimeHttpClient = new(new OfflineRuntimeHandler(), disposeHandler: true);
 
     public TestingWebAppFactory(FakeOllamaOptions? fakeOllamaOptions = null)
     {
@@ -90,6 +97,8 @@ public class TestingWebAppFactory : WebApplicationFactory<Program>, IAsyncInitia
 
         await base.DisposeAsync();
 
+        _offlineRuntimeHttpClient.Dispose();
+
         // Best-effort cleanup of every temp artifact this host created. Skipping this leaks the fixture web root, the
         // SQLite database (+ WAL/SHM/journal sidecars, since the node runs in WAL mode), and the node-data directory into
         // Path.GetTempPath() on each host build; across full-module runs that accumulates to tens of thousands of files
@@ -101,6 +110,20 @@ public class TestingWebAppFactory : WebApplicationFactory<Program>, IAsyncInitia
         TryDeleteSqliteFamily(_nodeSqlitePath);
 
         GC.SuppressFinalize(this);
+    }
+
+    /// <summary>
+    ///     Fails every send. Wired into the llama.cpp binary manager and release catalog so a unit-test host can never
+    ///     reach GitHub for a runtime — the acquisition path throws and its callers degrade, which is what the
+    ///     endpoint tests assert.
+    /// </summary>
+    private sealed class OfflineRuntimeHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            return Task.FromException<HttpResponseMessage>(
+                new HttpRequestException("The unit-test host has no llama.cpp runtime transport."));
+        }
     }
 
     private static void TryDeleteDirectory(string path)
@@ -239,6 +262,28 @@ public class TestingWebAppFactory : WebApplicationFactory<Program>, IAsyncInitia
             // factory's per-host node data.
             services.AddDataProtection()
                     .PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(_nodeDataDirectory, "dp-keys")));
+
+            // The production llama.cpp runtime seams are rooted at LocalApplicationData and acquire their binaries over
+            // the network. Nothing in the test host opted into that, but any operator-authorized model-fit route that
+            // reaches IRuntimeDeviceAudit walks audit → ILlamaDeviceInventoryProbe → EnsureBinaryAsync — so a plain unit
+            // test downloaded the ~1.1 GB CUDA release into the OPERATOR's %LOCALAPPDATA%\XE-Local-AI-Engine and rewrote
+            // their installed-runtime.json, the record that decides which binary the real app launches (measured on
+            // Windows 11, 2026-08-02, from ModelFitEndpointTests alone). Re-root the runtime state under this factory's
+            // per-host node data directory — deleted in DisposeAsync — and cut the transport, so the device probe
+            // degrades to "unknown" exactly as these tests already assume and the real per-user directory is never
+            // touched. Same intent as the dp-keys isolation above: the test host owns a private copy of per-user state.
+            services.RemoveAll<IInstalledRuntimeStore>();
+            services.AddSingleton<IInstalledRuntimeStore>(_ => new InstalledRuntimeStore(_nodeDataDirectory));
+            services.RemoveAll<ILlamaCppReleaseCatalog>();
+            services.AddSingleton<ILlamaCppReleaseCatalog>(_ => new GitHubLlamaCppReleaseCatalog(_offlineRuntimeHttpClient));
+            services.RemoveAll<ILlamaCppBinaryManager>();
+            services.AddSingleton<ILlamaCppBinaryManager>(sp => new LlamaCppBinaryManager(_offlineRuntimeHttpClient,
+                _nodeDataDirectory,
+                activeTag: null,
+                sp.GetRequiredService<ILlamaCppReleaseCatalog>(),
+                sp.GetRequiredService<IInstalledRuntimeStore>(),
+                sp.GetRequiredService<LlamaServerRuntimeOverrideOptions>(),
+                sp.GetRequiredService<ICudaManagedBuildSignal>()));
 
             if (!SkipDefaultBaseUrlOverride)
             {
