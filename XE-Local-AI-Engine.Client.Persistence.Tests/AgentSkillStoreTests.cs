@@ -69,7 +69,7 @@ public sealed class AgentSkillStoreTests : IDisposable
         }
 
         // The raw SQLite file must never carry the plaintext description or body — only ciphertext at rest.
-        var fileBytes = await File.ReadAllBytesAsync(databasePath);
+        var fileBytes = await SqliteFileProbe.ReadAllBytesAsync(databasePath);
         AssertEx.False(ContainsSubsequence(fileBytes, Encoding.UTF8.GetBytes(description)),
             "The SQLite file should not contain the plaintext skill description.");
         AssertEx.False(ContainsSubsequence(fileBytes, Encoding.UTF8.GetBytes(body)),

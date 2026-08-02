@@ -210,7 +210,7 @@ public sealed class GoldenConversationStoreTests : IDisposable
             });
         }
 
-        var fileBytes = await File.ReadAllBytesAsync(databasePath);
+        var fileBytes = await SqliteFileProbe.ReadAllBytesAsync(databasePath);
         AssertEx.False(ContainsSubsequence(fileBytes, Encoding.UTF8.GetBytes(input)),
             "The SQLite file should not contain the plaintext input turns.");
         AssertEx.False(ContainsSubsequence(fileBytes, Encoding.UTF8.GetBytes(assertion)),

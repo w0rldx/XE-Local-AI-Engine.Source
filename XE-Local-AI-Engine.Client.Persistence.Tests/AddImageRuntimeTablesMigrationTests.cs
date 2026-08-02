@@ -201,7 +201,7 @@ public sealed class AddImageRuntimeTablesMigrationTests : IDisposable
 
     private static async Task<bool> DatabaseContainsAsync(string databasePath, byte[] needle)
     {
-        var fileBytes = await File.ReadAllBytesAsync(databasePath).ConfigureAwait(false);
+        var fileBytes = await SqliteFileProbe.ReadAllBytesAsync(databasePath).ConfigureAwait(false);
         return ContainsSubsequence(fileBytes, needle);
     }
 

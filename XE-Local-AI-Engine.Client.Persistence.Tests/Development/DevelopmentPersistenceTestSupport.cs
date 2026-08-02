@@ -62,6 +62,11 @@ internal sealed class DevelopmentTestFixture : IDisposable
     public void Dispose()
     {
         _keyHolder.Dispose();
+
+        // Windows refuses to remove a directory that still contains an open file, and Microsoft.Data.Sqlite's
+        // connection pool holds the .sqlite handle open after the DbContext is disposed. Linux unlinks it regardless,
+        // which is why this teardown never failed there.
+        SqliteFileProbe.ReleasePooledHandles();
         if (Directory.Exists(_root))
         {
             Directory.Delete(_root, recursive: true);

@@ -95,7 +95,7 @@ public sealed class NodeSelectedFolderStoreTests : IDisposable
             _ = await store.AddAsync("secret-folder", hostPath, SelectedFolderMode.Copy);
         }
 
-        var fileBytes = await File.ReadAllBytesAsync(databasePath);
+        var fileBytes = await SqliteFileProbe.ReadAllBytesAsync(databasePath);
         AssertEx.False(ContainsSubsequence(fileBytes, Encoding.UTF8.GetBytes(hostPath)),
             "The SQLite file should not contain the plaintext host path.");
     }

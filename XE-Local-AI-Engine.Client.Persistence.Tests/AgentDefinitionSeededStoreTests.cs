@@ -108,7 +108,7 @@ public sealed class AgentDefinitionSeededStoreTests : IDisposable
             }, Slug);
         }
 
-        var fileBytes = await File.ReadAllBytesAsync(databasePath);
+        var fileBytes = await SqliteFileProbe.ReadAllBytesAsync(databasePath);
         AssertEx.False(ContainsSubsequence(fileBytes, Encoding.UTF8.GetBytes(instructions)),
             "Seeded instructions must be encrypted at rest exactly like the manual-create path.");
     }

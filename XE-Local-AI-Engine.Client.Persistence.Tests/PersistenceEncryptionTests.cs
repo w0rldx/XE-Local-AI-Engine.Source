@@ -129,7 +129,7 @@ public sealed class PersistenceEncryptionTests : IDisposable
             await context.SaveChangesAsync();
         }
 
-        var fileBytes = await File.ReadAllBytesAsync(databasePath);
+        var fileBytes = await SqliteFileProbe.ReadAllBytesAsync(databasePath);
 
         AssertEx.False(ContainsSubsequence(fileBytes, Encoding.UTF8.GetBytes(messageContentText)), "The SQLite file should not contain plaintext message content.");
         AssertEx.False(ContainsSubsequence(fileBytes, Encoding.UTF8.GetBytes(metadataText)), "The SQLite file should not contain plaintext metadata.");
@@ -164,7 +164,7 @@ public sealed class PersistenceEncryptionTests : IDisposable
         }
 
         // Assert — raw file bytes must not contain the plaintext title sentinel.
-        var fileBytes = await File.ReadAllBytesAsync(databasePath);
+        var fileBytes = await SqliteFileProbe.ReadAllBytesAsync(databasePath);
         AssertEx.False(ContainsSubsequence(fileBytes, Encoding.UTF8.GetBytes(titleText)),
             "The SQLite file should not contain the plaintext conversation title (EF interceptor path).");
 
@@ -203,7 +203,7 @@ public sealed class PersistenceEncryptionTests : IDisposable
         }
 
         // Assert — raw file bytes must not contain the plaintext title sentinel.
-        var fileBytes = await File.ReadAllBytesAsync(databasePath);
+        var fileBytes = await SqliteFileProbe.ReadAllBytesAsync(databasePath);
         AssertEx.False(ContainsSubsequence(fileBytes, Encoding.UTF8.GetBytes(titleText)),
             "The SQLite file should not contain the plaintext conversation title (raw-SQL path).");
 
