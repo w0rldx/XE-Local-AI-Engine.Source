@@ -78,12 +78,82 @@ internal static class StandaloneGitClone
         {
             if (Directory.Exists(path))
             {
-                Directory.Delete(path, recursive: true);
+                Delete(path);
             }
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             // Best-effort cleanup.
+        }
+    }
+
+    /// <summary>
+    ///     Removes a directory tree Git produced, including the read-only files it leaves behind.
+    ///     <para>
+    ///         <see cref="Directory.Delete(string, bool)" /> alone is NOT enough for a clone. Git marks the contents of
+    ///         <c>.git/objects/pack</c> — the <c>*.pack</c> and <c>*.idx</c> files — read-only, because they are
+    ///         immutable once written. On Unix the read-only bit is a mode on the file and deletion is governed by the
+    ///         parent directory's write permission, so the plain recursive delete succeeds. On Windows
+    ///         <c>FILE_ATTRIBUTE_READONLY</c> blocks the delete itself, and the recursive walk fails part-way with
+    ///         <c>UnauthorizedAccessException: Access to the path 'pack-&lt;sha&gt;.idx' is denied</c> — leaving a
+    ///         half-removed tree behind.
+    ///     </para>
+    ///     <para>
+    ///         So the attribute is cleared on the way down and the delete is then an ordinary one. This is why the
+    ///         helper exists rather than each caller writing <c>Directory.Delete(path, true)</c>: every caller here is
+    ///         deleting something Git wrote, so every caller hits it.
+    ///     </para>
+    /// </summary>
+    public static void Delete(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+
+        if (!Directory.Exists(path))
+        {
+            return;
+        }
+
+        ClearReadOnlyAttributes(new DirectoryInfo(path));
+        Directory.Delete(path, recursive: true);
+    }
+
+    /// <summary>
+    ///     Clears <see cref="FileAttributes.ReadOnly" /> from every file in the tree. Symbolic links are not followed:
+    ///     the attribute is cleared on the link itself, never on whatever it points at, so a link planted inside the
+    ///     tree cannot be used to strip the read-only bit off a file outside it.
+    /// </summary>
+    private static void ClearReadOnlyAttributes(DirectoryInfo directory)
+    {
+        foreach (var entry in directory.EnumerateFileSystemInfos())
+        {
+            if (entry.LinkTarget is not null)
+            {
+                TryClearReadOnly(entry);
+                continue;
+            }
+
+            if (entry is DirectoryInfo subdirectory)
+            {
+                ClearReadOnlyAttributes(subdirectory);
+                continue;
+            }
+
+            TryClearReadOnly(entry);
+        }
+    }
+
+    private static void TryClearReadOnly(FileSystemInfo entry)
+    {
+        try
+        {
+            if ((entry.Attributes & FileAttributes.ReadOnly) == FileAttributes.ReadOnly)
+            {
+                entry.Attributes &= ~FileAttributes.ReadOnly;
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // The delete below reports the real failure; a clear that could not be applied is not itself the error.
         }
     }
 }

@@ -178,7 +178,7 @@ internal sealed class DevelopmentTemplateService(
         // state. The managed workspace deliberately does NOT do this — it keeps the cloned history and detaches onto
         // the recorded base commit, because a fabricated initial commit would make its patch unappliable by
         // construction.
-        Directory.Delete(Path.Combine(destination, ".git"), recursive: true);
+        StandaloneGitClone.Delete(Path.Combine(destination, ".git"));
 
         var init = await git.RunAsync(destination,
             AgentHomeGit.Arguments("init", "--initial-branch", baseBranch),
