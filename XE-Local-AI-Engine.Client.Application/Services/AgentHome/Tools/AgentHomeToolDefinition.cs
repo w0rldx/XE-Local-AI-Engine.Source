@@ -13,6 +13,11 @@ internal static class AgentHomeToolDefinition
     public const string Description =
         "Run an agent task inside the node-scoped, supervised AgentHome workspace over selected folders.";
 
+    // `goal.maxLength` (4000) is deliberately NOT clamped, even though llama.cpp's GBNF converter cannot compile a
+    // repetition bound that large. Do not "fix" it by lowering the value: the bound here is advisory to the model and
+    // must keep matching the server seed and the handler's own (authoritative) validation, so clamping it would silently
+    // narrow the contract for every provider to work around one provider's limit. The llama.cpp wire representation is
+    // sanitized instead, in LlamaGrammarToolSchemaCompatibility (XE-Local-AI-Engine.Providers.LlamaServer).
     /// <summary>The AgentHome tool parameter schema. Kept byte-for-byte aligned with the server seed.</summary>
     public const string ParameterSchema = """
                                           {
