@@ -651,6 +651,85 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
         }
     }
 
+    /// <summary>
+    ///     The Windows machine-wide configuration roots must survive the environment scrub.
+    ///     <para>
+    ///         NuGet.Common resolves the machine-wide NuGet configuration directory by reading these names directly and
+    ///         combining the result into a path. With all of them scrubbed the combine receives null, and
+    ///         <c>dotnet restore</c> fails inside every Development workspace on Windows with
+    ///         "NuGet.targets(782,5): error : Value cannot be null. (Parameter 'path1')" — before it considers a single
+    ///         package, so no amount of source or fallback-folder configuration can work around it.
+    ///     </para>
+    ///     <para>
+    ///         Runs on Linux, where these names carry no meaning, precisely so the mechanism is proven where the suite
+    ///         actually runs: the allow-list is OS-agnostic — it forwards whichever of its names exist in the parent —
+    ///         so setting them here exercises the same code path Windows depends on. What this cannot prove is that
+    ///         the list is COMPLETE for Windows; only a Windows run shows that.
+    ///     </para>
+    ///     <para>
+    ///         <c>printenv</c> is executed DIRECTLY rather than through <c>/bin/sh -c</c>, and that detail is not
+    ///         stylistic. <c>ProgramFiles(x86)</c> is not a valid shell identifier, and dash — which is <c>/bin/sh</c>
+    ///         on Debian and Ubuntu — drops such names from the environment it passes on when it execs. Measured: the
+    ///         variable is forwarded correctly by the provider and visible to a directly-executed child, while the
+    ///         same probe behind <c>sh -c</c> reports it missing. Going through a shell would therefore fail this
+    ///         test for a reason that has nothing to do with the allow-list, on the one name most likely to regress.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task ProcessSandboxProvider_Execute_ForwardsTheWindowsMachineWideConfigurationRoots()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        var printenv = new[] { "/usr/bin/printenv", "/bin/printenv" }.FirstOrDefault(File.Exists);
+        if (printenv is null)
+        {
+            Skip("This host has no printenv to read the child environment with.");
+            return;
+        }
+
+        string[] names = ["ProgramData", "ProgramFiles", "ProgramFiles(x86)", "ALLUSERSPROFILE"];
+        var expected = names.ToDictionary(name => name, name => $"/probe/{Guid.NewGuid():N}", StringComparer.Ordinal);
+
+        foreach (var pair in expected)
+        {
+            Environment.SetEnvironmentVariable(pair.Key, pair.Value);
+        }
+
+        try
+        {
+            using var provider = CreateProvider();
+            var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
+
+            var result = await provider.ExecuteAsync(handle, new SandboxCommandRequest
+            {
+                ExecutionId = "machine-wide-env-1",
+                Executable = printenv,
+                Arguments = [],
+                Timeout = TimeSpan.FromSeconds(15)
+            });
+
+            AssertEx.True(result.Completed, $"printenv must complete: {result.StandardError}");
+            AssertEx.Equal(expected: 0, result.ExitCode);
+
+            var output = result.StandardOutput ?? string.Empty;
+            foreach (var pair in expected)
+            {
+                AssertEx.True(output.Contains($"{pair.Key}={pair.Value}", StringComparison.Ordinal),
+                    $"'{pair.Key}' must reach the sandbox child; without it NuGet combines a null machine-wide configuration path and dotnet restore fails on Windows");
+            }
+        }
+        finally
+        {
+            foreach (var name in names)
+            {
+                Environment.SetEnvironmentVariable(name, value: null);
+            }
+        }
+    }
+
     [Test]
     public async Task ProcessSandboxProvider_CreateOrAttach_RejectsUnenforceableNetworkPolicy()
     {

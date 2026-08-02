@@ -130,7 +130,20 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         "HOMEDRIVE",
         "HOMEPATH",
         "APPDATA",
-        "LOCALAPPDATA"
+        "LOCALAPPDATA",
+        // Windows MACHINE-WIDE configuration roots. These are not decoration: NuGet.Common resolves the machine-wide
+        // NuGet configuration directory by reading these names directly and Path.Combine-ing the result, so with all
+        // of them absent the combine receives null and `dotnet restore` dies on
+        // "NuGet.targets(782,5): error : Value cannot be null. (Parameter 'path1')" before it looks at a single
+        // package. The .NET SDK reads the same roots to locate installed workload records, which is the
+        // "An issue was encountered verifying workloads." that accompanies it. Measured against the 10.0.302 SDK:
+        // NuGet.Common.dll carries exactly PROGRAMDATA, PROGRAMFILES, PROGRAMFILES(X86) and ALLUSERSPROFILE.
+        // They name shared installation roots, not user data, so forwarding them leaks nothing the child could not
+        // already read from disk.
+        "ProgramData",
+        "ProgramFiles",
+        "ProgramFiles(x86)",
+        "ALLUSERSPROFILE"
     ];
 
     private readonly string _jailRoot;
