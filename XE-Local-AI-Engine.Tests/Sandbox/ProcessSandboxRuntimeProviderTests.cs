@@ -1071,7 +1071,12 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
         using var provider = CreateProvider(containment: containment, markerStore: markerStore);
         var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
 
-        var (executable, arguments) = ShellCommand("exit 0");
+        // The child must still be ALIVE when the marker is written. WriteProcessMarker reads /proc/<pid>/stat for the
+        // pid-reuse guard and — correctly — records nothing when the process has already gone, so a command that exits
+        // immediately makes this assertion a race against the launch: it passes on a loaded box and fails on an idle
+        // one. The product behaviour under test is "a group-leader launch records a marker while it runs", so the
+        // command has to run.
+        var (executable, arguments) = SleepCommand(seconds: 1);
         var result = await provider.ExecuteAsync(handle, new SandboxCommandRequest
         {
             ExecutionId = "marker-1",
