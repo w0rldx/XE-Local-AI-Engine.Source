@@ -2,6 +2,11 @@
 
 import { describe, expect, it } from "vitest";
 
+// Imported at module scope on purpose. Pulling NodeChatAdapter in through `await import(...)` inside a
+// test body charges its whole graph (SignalR client, axios, the generated SDK) against that test's 5s
+// timeout — it measured 2.5s on a Windows packaging box and tipped over the limit under coverage
+// instrumentation. At module scope the same cost lands in collection, which is not timeout-bounded.
+import { toStreamRequest } from "@/features/chat/api/NodeChatAdapter";
 import { toWireSamplingOptions } from "@/features/chat/models/ChatSamplingOptions";
 
 describe("toWireSamplingOptions", () => {
@@ -100,14 +105,33 @@ describe("toWireSamplingOptions", () => {
 });
 
 describe("NodeChatAdapter toStreamRequest sampling forwarding", () => {
-	it("toStreamRequest forwards samplingOptions when present", async () => {
-		// Access the private toStreamRequest via the sendMessage path by inspecting
-		// the NodeChatStreamRequestDto shape — the adapter's toStreamRequest is not exported,
-		// so we verify via the exported SendMessageRequest interface shape.
-		const { nodeChatAdapter } = await import("@/features/chat/api/NodeChatAdapter");
+	const baseRequest = {
+		conversationId: "c1",
+		content: "hello",
+		userMessageId: "u1",
+		messageId: "m1",
+		requestId: "r1",
+	};
 
-		// Verify the adapter object exists and has sendMessage
-		expect(typeof nodeChatAdapter.sendMessage).toBe("function");
+	it("forwards the wire sampling options onto the stream request", () => {
+		const samplingOptions = toWireSamplingOptions({ temperature: 0.7, seed: 1234 });
+
+		const streamRequest = toStreamRequest({ ...baseRequest, samplingOptions });
+
+		expect(streamRequest.samplingOptions).toEqual({ temperature: 0.7, seed: "1234" });
+	});
+
+	it("omits samplingOptions entirely when none are set (developer mode off)", () => {
+		const streamRequest = toStreamRequest({ ...baseRequest, samplingOptions: toWireSamplingOptions({}) });
+
+		expect(streamRequest.samplingOptions).toBeUndefined();
+	});
+
+	it("carries the identifiers the resume registry keys on", () => {
+		const streamRequest = toStreamRequest(baseRequest);
+
+		expect(streamRequest.messageId).toBe("m1");
+		expect(streamRequest.requestId).toBe("r1");
 	});
 });
 

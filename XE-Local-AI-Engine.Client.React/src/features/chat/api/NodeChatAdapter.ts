@@ -122,7 +122,11 @@ export interface NodeChatAdapter {
 	): AsyncIterable<NodeChatStreamEventDto>;
 }
 
-function toStreamRequest(request: SendMessageRequest): NodeChatStreamRequestDto {
+// Exported for the wire-mapping test only. `sendMessage` hands the result straight to a lazy
+// `signalRStream` closure, so the mapped payload is unobservable from outside without standing up a
+// SignalR stub — and the omit-when-absent rules below (attachments, sampling) are exactly what needs
+// asserting. Kept out of NodeChatAdapter's public interface; only the module and its test use it.
+export function toStreamRequest(request: SendMessageRequest): NodeChatStreamRequestDto {
 	return {
 		conversationId: request.conversationId,
 		content: request.content,
