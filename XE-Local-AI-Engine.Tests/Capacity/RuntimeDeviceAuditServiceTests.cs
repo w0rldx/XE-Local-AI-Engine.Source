@@ -95,6 +95,28 @@ public sealed class RuntimeDeviceAuditServiceTests
     }
 
     [Test]
+    public void BuildState_UndeterminedReason_NamesTheOverrideCause_AndAssertsNoSingleCause()
+    {
+        // Regression pin for a wrong diagnosis measured on Windows 11 2026-08-03. The most reachable route to
+        // "undetermined" is an XE_LLAMACPP_SERVER_PATH override that LlamaCppBinaryManager deliberately refuses because
+        // it exposes no GPU device — NOT a timeout, NOT a failed start, and NOT a wedged driver. The old text asserted
+        // all three and sent the operator to diagnose a healthy driver.
+        var state = RuntimeDeviceAuditService.BuildState(GpuProfile(GpuVendor.Nvidia), GpuVariant.Cuda, LlamaDeviceInventory.Unknown(GpuVariant.Cuda));
+
+        var undetermined = AssertEx.NotNull(state.BackendUndeterminedReason);
+
+        // The actionable cause must be named.
+        AssertEx.True(undetermined.Contains("XE_LLAMACPP_SERVER_PATH", StringComparison.Ordinal),
+            "the undetermined reason must name the override, which is the most reachable cause");
+
+        // The negative control: it must no longer assert a cause it cannot know.
+        AssertEx.False(undetermined.Contains("wedged", StringComparison.OrdinalIgnoreCase),
+            "the undetermined reason must not blame a wedged driver as though it were the known cause");
+        AssertEx.False(undetermined.Contains("the probe timed out or the binary could not be started", StringComparison.Ordinal),
+            "the undetermined reason must not assert a timeout/start failure it did not observe");
+    }
+
+    [Test]
     public void BuildState_WhenBackendIsKnown_CarriesNoUndeterminedReason()
     {
         var working = RuntimeDeviceAuditService.BuildState(GpuProfile(GpuVendor.Nvidia), GpuVariant.Cuda, WithDevices(GpuVariant.Cuda));
