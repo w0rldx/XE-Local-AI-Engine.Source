@@ -755,6 +755,82 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
+    [Arguments("HTTP 400 (invalid_request_error: ) Failed to initialize samplers: failed to parse grammar")]
+    [Arguments("Failed to initialize samplers")]
+    [Arguments("failed to parse grammar")]
+    public async Task RunAsync_WhenToolGrammarFailsToCompile_MapsModelCapabilityUnsupportedFailureCategory(string providerMessage)
+    {
+        // llama-server reports the sampler/grammar compile failure as an HTTP 400, so it must be classified here and not
+        // swallowed by the generic HttpRequestException arm (ProviderUnreachable) or surfaced raw as Unexpected. The
+        // model IS tool-capable, so the message must not claim otherwise.
+        var sender = new MockHubMessageSender();
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
+               .Returns(_ => Task.FromException<InvocationAgentContext>(new HttpRequestException(providerMessage, inner: null, HttpStatusCode.BadRequest)));
+
+        var runner = CreateRunner(sender, factory);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        AssertEx.ContainsSingle(sender.SentEncryptedFailures,
+            failure => failure.FailureCategory == nameof(FailureCategory.ModelCapabilityUnsupported)
+                       && failure.Error == "The model could not be prepared for tool calling with the current tool set. Retry with tools turned off, or select a different model.");
+    }
+
+    [Test]
+    public async Task RunAsync_WhenToolGrammarFailsToCompileWith500_WinsOverModelLoadFailedArm()
+    {
+        // The grammar arm is ordered ahead of ReportsModelLoadFailure, which matches on the status code alone: a 500
+        // carrying the grammar signature must still classify as the (actionable) tool-preparation failure.
+        var sender = new MockHubMessageSender();
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
+               .Returns(_ => Task.FromException<InvocationAgentContext>(new HttpRequestException("Failed to initialize samplers: failed to parse grammar", inner: null,
+                   HttpStatusCode.InternalServerError)));
+
+        var runner = CreateRunner(sender, factory);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        AssertEx.ContainsSingle(sender.SentEncryptedFailures, failure => failure.FailureCategory == nameof(FailureCategory.ModelCapabilityUnsupported));
+    }
+
+    [Test]
+    public async Task RunAsync_WhenToolGrammarFailureIsWrapped_MapsModelCapabilityUnsupportedFailureCategory()
+    {
+        // The agent framework wraps the transport exception, so the signature is only visible on an inner exception.
+        var sender = new MockHubMessageSender();
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
+               .Returns(_ => Task.FromException<InvocationAgentContext>(new InvalidOperationException("The chat client failed.",
+                   new HttpRequestException("Failed to initialize samplers: failed to parse grammar", inner: null, HttpStatusCode.BadRequest))));
+
+        var runner = CreateRunner(sender, factory);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        AssertEx.ContainsSingle(sender.SentEncryptedFailures,
+            failure => failure.FailureCategory == nameof(FailureCategory.ModelCapabilityUnsupported)
+                       && failure.Error == "The model could not be prepared for tool calling with the current tool set. Retry with tools turned off, or select a different model.");
+    }
+
+    [Test]
+    public async Task RunAsync_WhenUnrelatedBadRequest_StillMapsProviderUnreachable()
+    {
+        // The new grammar arm must not widen: an unrelated HTTP 400 keeps its previous classification.
+        var sender = new MockHubMessageSender();
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
+               .Returns(_ => Task.FromException<InvocationAgentContext>(new HttpRequestException("invalid request payload", inner: null, HttpStatusCode.BadRequest)));
+
+        var runner = CreateRunner(sender, factory);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        AssertEx.ContainsSingle(sender.SentEncryptedFailures, failure => failure.FailureCategory == nameof(FailureCategory.ProviderUnreachable));
+    }
+
+    [Test]
     public async Task RunAsync_WhenModelLoadFailsWith500_MapsModelLoadFailedFailureCategory()
     {
         var sender = new MockHubMessageSender();

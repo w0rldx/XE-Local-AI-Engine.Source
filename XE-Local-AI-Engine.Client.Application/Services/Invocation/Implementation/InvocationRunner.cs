@@ -51,6 +51,13 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
     private const string ModelDoesNotSupportToolsMessage = "This model does not support tool calling.";
 
+    // llama-server failed to COMPILE the constrained-decoding grammar for the offered tool schemas ("Failed to
+    // initialize samplers: failed to parse grammar"). The model is tool-capable — the schema set is what it could not
+    // be prepared for — so this must never claim the model lacks tool calling. Fixed and path-free: the provider body
+    // is never forwarded.
+    private const string ToolCallingPreparationFailedMessage =
+        "The model could not be prepared for tool calling with the current tool set. Retry with tools turned off, or select a different model.";
+
     // A provider HTTP 500 means the model was reached but failed to load OR run (e.g. an Ollama build too old for the
     // model architecture, or an out-of-memory at load). Phrased to cover both so it never falsely asserts a permanent
     // model defect, while still being far more actionable than the generic "Provider unreachable.".

@@ -75,7 +75,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
         ChatOptions? options = null,
         CancellationToken cancellationToken = default)
     {
-        options = ApplyThinkingSwitch(options);
+        options = ApplyToolSchemaCompatibility(ApplyThinkingSwitch(options));
         var healed = false;
         while (true)
         {
@@ -131,7 +131,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
         [EnumeratorCancellation]
         CancellationToken cancellationToken = default)
     {
-        options = ApplyThinkingSwitch(options);
+        options = ApplyToolSchemaCompatibility(ApplyThinkingSwitch(options));
         var healed = false;
         while (true)
         {
@@ -268,6 +268,57 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
 #pragma warning restore SCME0001
             return baseOptions;
         };
+        return patched;
+    }
+
+    /// <summary>
+    ///     When at least one offered tool carries a JSON-schema bound llama.cpp's GBNF converter cannot compile, returns
+    ///     a clone of <paramref name="options" /> in which ONLY those tools are replaced by a
+    ///     <see cref="GrammarSafeSchemaAIFunction" /> advertising the sanitised schema. When every tool is already
+    ///     compilable the options are returned unchanged, so every other request stays byte-identical.
+    ///     <para>
+    ///         Why this must exist: llama-server compiles the whole <c>tools</c> array into one constrained grammar
+    ///         before sampling, and an over-large repetition bound makes it reject the request with HTTP 400
+    ///         <c>Failed to initialize samplers: failed to parse grammar</c> — so an oversized bound does not degrade
+    ///         tool calling, it breaks the turn outright. See <see cref="LlamaGrammarToolSchemaCompatibility" /> for the
+    ///         measured limit.
+    ///     </para>
+    ///     <para>
+    ///         Why it is safe: the caller's <see cref="ChatOptions" /> and its tool list are never mutated — the swap
+    ///         happens on a clone whose only consumer is the inner OpenAI adapter's <c>tools</c> serialization. The
+    ///         function-invocation middleware above this client resolves, approval-gates and executes tools from its own
+    ///         (untouched) list, so <c>ApprovalRequiredAIFunction</c> stays the outermost type there, and argument
+    ///         validation still runs against the unsanitised schema. Only the llama.cpp path is affected; cloud
+    ///         providers never reach this client.
+    ///     </para>
+    /// </summary>
+    internal static ChatOptions? ApplyToolSchemaCompatibility(ChatOptions? options)
+    {
+        if (options?.Tools is not { Count: > 0 } tools)
+        {
+            return options;
+        }
+
+        List<AITool>? sanitizedTools = null;
+        for (var index = 0; index < tools.Count; index++)
+        {
+            if (tools[index] is not AIFunction function
+                || !LlamaGrammarToolSchemaCompatibility.RequiresSanitizing(function.JsonSchema))
+            {
+                continue;
+            }
+
+            sanitizedTools ??= [.. tools];
+            sanitizedTools[index] = new GrammarSafeSchemaAIFunction(function, LlamaGrammarToolSchemaCompatibility.Sanitize(function.JsonSchema));
+        }
+
+        if (sanitizedTools is null)
+        {
+            return options;
+        }
+
+        var patched = options.Clone();
+        patched.Tools = sanitizedTools;
         return patched;
     }
 
