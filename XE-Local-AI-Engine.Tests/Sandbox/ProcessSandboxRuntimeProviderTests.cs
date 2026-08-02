@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Sandbox;
 
+using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -107,7 +108,7 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
         var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
 
         // A 30s sleep with a 200ms command timeout must be killed and surface as a non-throwing timed-out result.
-        var (executable, arguments) = ShellCommand("sleep 30");
+        var (executable, arguments) = SleepCommand(30);
         var result = await provider.ExecuteAsync(handle, new SandboxCommandRequest
         {
             ExecutionId = "timeout-1",
@@ -128,7 +129,7 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
         var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
         using var cancellation = new CancellationTokenSource();
 
-        var (executable, arguments) = ShellCommand("sleep 30");
+        var (executable, arguments) = SleepCommand(30);
         var executeTask = provider.ExecuteAsync(handle, new SandboxCommandRequest
         {
             ExecutionId = "cancel-1",
@@ -157,7 +158,7 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
         // Emit far more than the captured-output cap as many MULTIBYTE lines (the pump is line-based); the captured
         // stdout must be bounded by the real UTF-8 BYTE budget (not a char count), so even multibyte content cannot
         // exceed the named byte cap.
-        var (executable, arguments) = ShellCommand("yes 'αααααααααααααααααααααααααααααααααααααααα' | head -n 200000");
+        var (executable, arguments) = BulkOutputCommand();
         var result = await provider.ExecuteAsync(handle, new SandboxCommandRequest
         {
             ExecutionId = "budget-1",
@@ -487,7 +488,7 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
 
         // Start a long-running command, then kill the sandbox: the in-flight execution is tree-killed and the handle
         // is invalidated (a subsequent read throws).
-        var (executable, arguments) = ShellCommand("sleep 30");
+        var (executable, arguments) = SleepCommand(30);
         var executeTask = provider.ExecuteAsync(handle, new SandboxCommandRequest
         {
             ExecutionId = "kill-1",
@@ -513,7 +514,7 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
         using var provider = CreateProvider();
         var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
 
-        var (executable, arguments) = ShellCommand("sleep 30");
+        var (executable, arguments) = SleepCommand(30);
         var executeTask = provider.ExecuteAsync(handle, new SandboxCommandRequest
         {
             ExecutionId = "cancelcmd-1",
@@ -1213,8 +1214,8 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
 
     private static (string Executable, IReadOnlyList<string> Arguments) ShellCommand(string command)
     {
-        // OS-appropriate shell wrapper so the short-lived test commands (sleep/yes/head) run on the primary Linux
-        // runtime and on Windows (via cmd) where the assertion is OS-agnostic.
+        // OS-appropriate shell WRAPPER only. It does not make the command itself portable — see SleepCommand and
+        // BulkOutputCommand for the cases where the command text had to diverge too.
         return OperatingSystem.IsWindows()
             ? ("cmd.exe", new[]
             {
@@ -1226,6 +1227,76 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
                 "-c",
                 command
             });
+    }
+
+    /// <summary>
+    ///     A command that blocks for roughly <paramref name="seconds" /> and does so as a real parent/child process
+    ///     pair, so the tree-kill cases have a descendant to reap.
+    ///     <para>
+    ///         Windows needs its own command, not just its own shell. <c>sleep</c> is not a cmd builtin and there is no
+    ///         <c>sleep.exe</c> on stock Windows 11, so <c>cmd /c sleep 30</c> exits ~instantly with
+    ///         <c>'sleep' is not recognized</c>. That silently inverted three assertions here: the timeout case saw a
+    ///         command that had already completed, the cancel case had nothing left in flight to cancel, and the
+    ///         sandbox-kill case passed for the wrong reason. <c>ping -n</c> is the portable stand-in — it is present on
+    ///         every Windows install, spaces its probes one second apart, and unlike <c>timeout /t</c> it does not
+    ///         refuse to run when standard input is redirected, which it always is here.
+    ///     </para>
+    /// </summary>
+    private static (string Executable, IReadOnlyList<string> Arguments) SleepCommand(int seconds)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return ShellCommand($"sleep {seconds}");
+        }
+
+        // Passed as separate argv elements rather than one cmd command string: cmd's quote-stripping rules for
+        // /c "..." are surprising, and there is nothing here that needs a shell to interpret it.
+        return ("cmd.exe", new[]
+        {
+            "/c",
+            "ping",
+            "-n",
+            (seconds + 1).ToString(CultureInfo.InvariantCulture),
+            "127.0.0.1"
+        });
+    }
+
+    /// <summary>
+    ///     A command that writes far more than the captured-output cap to stdout, as multibyte lines.
+    ///     <para>
+    ///         The Linux form keeps the <c>yes | head</c> pipeline. Windows has neither tool, and building the same
+    ///         volume from a cmd <c>for /L</c> loop takes minutes, so there the bytes are prepared as a file up front
+    ///         and streamed with <c>type</c> — same shape reaching the pump (many multibyte lines, well past the cap),
+    ///         at no measurable cost. The path is absolute so this does not depend on where the jail put the working
+    ///         directory.
+    ///     </para>
+    /// </summary>
+    private (string Executable, IReadOnlyList<string> Arguments) BulkOutputCommand()
+    {
+        const string line = "αααααααααααααααααααααααααααααααααααααααα";
+
+        if (!OperatingSystem.IsWindows())
+        {
+            return ShellCommand($"yes '{line}' | head -n 200000");
+        }
+
+        // 100k lines x 40 two-byte characters + CRLF is ~8.2 MB — comfortably past the 4 MB cap the test asserts.
+        var builder = new StringBuilder(100_000 * (line.Length + 1));
+        for (var i = 0; i < 100_000; i++)
+        {
+            builder.AppendLine(line);
+        }
+
+        var path = Path.Combine(Path.GetTempPath(), "xe-bulk-" + Guid.NewGuid().ToString("N") + ".txt");
+        File.WriteAllText(path, builder.ToString(), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+        _tempPaths.Add(path);
+
+        return ("cmd.exe", new[]
+        {
+            "/c",
+            "type",
+            path
+        });
     }
 
     private string WriteHostTempFile(string content)
