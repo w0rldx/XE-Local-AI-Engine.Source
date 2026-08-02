@@ -59,6 +59,15 @@ public sealed partial class InvocationRunner
                 (FailureCategory.Unexpected, invalidOperationException.Message),
             HttpRequestException httpRequestException when httpRequestException.StatusCode == HttpStatusCode.NotFound =>
                 (FailureCategory.ModelUnavailable, ModelUnavailableMessage),
+            // llama-server could not compile the constrained-decoding grammar for the offered tool schemas. It reports
+            // this as an HTTP 400, so this arm MUST match before the ReportsModelLoadFailure and generic
+            // HttpRequestException arms below, which would otherwise swallow it into ModelLoadFailed/ProviderUnreachable
+            // (today it escapes all of them and surfaces the raw provider body as Unexpected). Reuses the existing
+            // ModelCapabilityUnsupported category with its own fixed, path-free message — adding a new FailureCategory
+            // value would drift the generated OpenAPI/zod client. Still reachable after the node's own tool schemas are
+            // shrunk to compile, because MCP servers supply third-party schemas the node does not control.
+            _ when ReportsToolGrammarPreparationFailure(exception) =>
+                (FailureCategory.ModelCapabilityUnsupported, ToolCallingPreparationFailedMessage),
             // Unmask the Ollama capability/load errors that would otherwise collapse to the generic ProviderUnreachable.
             // The capability check matches BEFORE the HTTP-500 load check so a 400 "does not support ..." is always
             // classified as a capability problem (not a load failure), regardless of the carried status code.
@@ -97,6 +106,29 @@ public sealed partial class InvocationRunner
         }
 
         return null;
+    }
+
+    /// <summary>
+    ///     True when the exception (or any inner exception) reports a llama.cpp sampler/grammar preparation failure — the
+    ///     GBNF converter could not compile the offered tool schemas, so llama-server rejects the request with an HTTP 400
+    ///     body of "Failed to initialize samplers: failed to parse grammar". The chain is walked because the agent
+    ///     framework wraps the transport exception (same reason as
+    ///     <see cref="ResolveUnsupportedCapabilityMessage" />). Only the match decides the surfaced constant; the raw body
+    ///     is never forwarded.
+    /// </summary>
+    private static bool ReportsToolGrammarPreparationFailure(Exception exception)
+    {
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            var message = current.Message;
+            if (message.Contains("failed to parse grammar", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("failed to initialize samplers", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
