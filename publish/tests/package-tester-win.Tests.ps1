@@ -618,6 +618,29 @@ Describe 'Velopack draft asset set and digest verification' {
             Should -Throw '*full.nupkg*'
     }
 
+    It 'ignores the build-local assets.win.json that vpk 1.2.0 leaves in the pack output' {
+        # vpk writes this next to the five channel assets but never uploads it: the published 0.1.0-rc.4.1
+        # release carries five assets and no assets.win.json, from a pack by this same pinned vpk version.
+        Set-Content -Path (Join-Path $script:AssetDir 'assets.win.json') -Value '[]' -NoNewline
+        $assets = Get-ChildItem -Path $script:AssetDir -File
+
+        $resolved = @(Get-ExpectedVelopackAsset -Assets $assets)
+
+        $resolved.Count | Should -Be 5
+        $resolved.Name | Should -Not -Contain 'assets.win.json'
+    }
+
+    It 'still rejects an unexpected asset when assets.win.json is present' {
+        # The ignore-list must not become a blanket "extra files are fine".
+        Set-Content -Path (Join-Path $script:AssetDir 'assets.win.json') -Value '[]' -NoNewline
+        $assets = @(
+            Get-ChildItem -Path $script:AssetDir -File
+            [pscustomobject]@{ Name = 'unexpected.zip' }
+        )
+
+        { Get-ExpectedVelopackAsset -Assets $assets } | Should -Throw '*unexpected.zip*'
+    }
+
     It 'rejects duplicate or unexpected assets' {
         $assets = @(
             Get-ChildItem -Path $script:AssetDir -File
