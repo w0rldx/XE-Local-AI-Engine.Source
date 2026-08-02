@@ -187,7 +187,19 @@ public sealed class FakeWorkerNodeFixture : IAsyncDisposable
         sanBuilder.AddDnsName("localhost");
         request.CertificateExtensions.Add(sanBuilder.Build());
 
-        return request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(30));
+        using var ephemeral = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(30));
+
+        // The PKCS#12 round-trip is mandatory on Windows and must not be "simplified" back to returning `ephemeral`.
+        // CreateSelfSigned hands back a certificate whose private key lives only in this process's memory. OpenSSL —
+        // so, Linux — serves TLS from that happily. Windows serves TLS through SChannel, which can only use a private
+        // key it can reach through a CNG/CAPI key container, and an ephemeral key is in none. Kestrel accepts the
+        // certificate at UseHttps and then aborts every handshake, which reaches the client as the entirely unhelpful
+        // "The SSL connection could not be established ... Received an unexpected EOF or 0 bytes from the transport
+        // stream" — with nothing on the server side naming the cause.
+        //
+        // Exporting to PFX and loading it back is what gives the key a container Windows can open. EphemeralKeySet is
+        // deliberately NOT passed: that flag re-creates exactly the problem this works around.
+        return X509CertificateLoader.LoadPkcs12(ephemeral.Export(X509ContentType.Pfx), password: null);
     }
 
     [SuppressMessage("Sonar", "S1144:Unused private types or members should be removed", Justification = "SignalR invokes hub methods by name via reflection during integration tests.")]
