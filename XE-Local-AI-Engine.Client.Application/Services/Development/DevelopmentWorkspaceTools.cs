@@ -119,87 +119,29 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
 
     public DevelopmentCommandProfile Profile => _profile;
 
-    public async Task<string> ListFilesAsync(string? path, CancellationToken cancellationToken = default)
-    {
-        var confined = RequirePath(path, allowRoot: true);
-        var result = await ExecuteAsync("tool_list_files",
-            "find",
-            BuildListArguments(),
-            confined.SandboxPath,
-            standardInput: null,
-            cancellationToken).ConfigureAwait(false);
-        EnsureCompleted(result, "list_files");
-        return string.Join('\n', result.StandardOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries)
-                                       .Where(entry => !IsSuppressedFromOutput(entry))
-                                       .Take(_options.MaxChangedFiles));
-    }
-
     /// <summary>
-    ///     The listing tool's argument vector, with every suppressed tree PRUNED rather than merely filtered out of the
-    ///     result afterwards.
+    ///     Lists the workspace's regular files. Served by <see cref="DevelopmentWorkspaceFileScanner" /> rather than by
+    ///     <c>find</c> — see that class for why the engine owns this operation on every platform rather than branching
+    ///     on Windows.
     ///     <para>
-    ///         Pruning is what makes the listing usable at all. The raw output is capped at
-    ///         <see cref="DevelopmentOptions.MaxCommandOutputBytes" /> BEFORE the post-filter runs, so on a workspace
-    ///         whose Git metadata alone outruns that cap every surviving line named a suppressed path, the filter
+    ///         The suppression predicate is applied at the PRUNE step, not only to the finished list. Pruning is what
+    ///         makes the listing usable at all: the output budget is spent before any post-filter runs, so on a
+    ///         workspace whose Git metadata alone outruns it every surviving entry named a suppressed path, the filter
     ///         discarded all of them, and <c>list_files</c> answered with nothing while the workspace was full of files
-    ///         the agent could act on. Which files survive depended on the order the filesystem happened to hand back,
-    ///         so the same repository could list correctly on one machine and empty on another.
-    ///     </para>
-    ///     <para>
-    ///         The patterns are read from the same two definitions the post-filter gates on — the credential globs and
-    ///         the protected prefixes — so the generator and the filter cannot drift. Secrets match by NAME at any
-    ///         depth, exactly as the grep exclusions do; protected trees match by their ROOTED path, exactly as
-    ///         <see cref="DevelopmentWorkspaceSecurity.IsProtected" /> does.
-    ///     </para>
-    ///     <para>
-    ///         The post-filter stays behind this as defence in depth, and it still carries real weight: it also covers a
-    ///         listing taken from a subdirectory, where the rooted prefix patterns match nothing.
+    ///         the agent could act on.
     ///     </para>
     /// </summary>
-    private List<string> BuildListArguments()
+    public Task<string> ListFilesAsync(string? path, CancellationToken cancellationToken = default)
     {
-        var predicates = new List<string>();
-        foreach (var secret in _exclusions.SecretEntryNames)
-        {
-            AppendPrunePredicate(predicates, "-iname", secret);
-        }
-
-        foreach (var prefix in DevelopmentWorkspaceSecurity.ProtectedPathPrefixes)
-        {
-            AppendPrunePredicate(predicates, "-ipath", "./" + prefix);
-        }
-
-        var arguments = new List<string>
-        {
-            "-P",
-            ".",
-            "-maxdepth",
-            "64"
-        };
-        if (predicates.Count > 0)
-        {
-            arguments.Add("(");
-            arguments.AddRange(predicates);
-            arguments.Add(")");
-            arguments.Add("-prune");
-            arguments.Add("-o");
-        }
-
-        arguments.Add("-type");
-        arguments.Add("f");
-        arguments.Add("-print");
-        return arguments;
-    }
-
-    private static void AppendPrunePredicate(List<string> predicates, string test, string pattern)
-    {
-        if (predicates.Count > 0)
-        {
-            predicates.Add("-o");
-        }
-
-        predicates.Add(test);
-        predicates.Add(pattern);
+        var confined = RequirePath(path, allowRoot: true);
+        var entries = RunScan(confined,
+            "list_files",
+            (root, token) => DevelopmentWorkspaceFileScanner.ListFiles(root,
+                _options.MaxChangedFiles,
+                IsSuppressedFromOutput,
+                token),
+            cancellationToken);
+        return Task.FromResult(string.Join('\n', entries));
     }
 
     public async Task<string> ReadFileAsync(string path, CancellationToken cancellationToken = default)
@@ -212,46 +154,76 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
             cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<string> SearchTextAsync(string pattern, string? path, CancellationToken cancellationToken = default)
+    /// <summary>
+    ///     Searches the workspace for a LITERAL string. Served by <see cref="DevelopmentWorkspaceFileScanner" /> rather
+    ///     than by <c>grep</c> — see that class for why.
+    ///     <para>
+    ///         Credential-bearing entries are excluded by PRUNING, so a secret's CONTENT never enters the result in the
+    ///         first place; the emitted line is not filtered afterwards because it is never produced. Build output is
+    ///         deliberately not excluded — searching <c>bin</c>/<c>obj</c>/<c>node_modules</c> is legitimate and leaks
+    ///         nothing.
+    ///     </para>
+    ///     <para>
+    ///         The pattern is matched ordinally as a fixed string, never compiled as a regular expression. The
+    ///         shell-out passed <c>grep -F</c> with the pattern bound via <c>-e</c> for the same reason; managed code
+    ///         gets the property for free, because a model-supplied value can no longer be read as a flag or as a
+    ///         catastrophically backtracking expression at all.
+    ///     </para>
+    /// </summary>
+    public Task<string> SearchTextAsync(string pattern, string? path, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(pattern);
         var confined = RequirePath(path, allowRoot: true);
+        var matches = RunScan(confined,
+            "search_text",
+            (root, token) => DevelopmentWorkspaceFileScanner.SearchText(root,
+                pattern,
+                _options.MaxCommandOutputBytes,
+                IsSuppressedFromOutput,
+                token),
+            cancellationToken);
+        return Task.FromResult(string.Join('\n', matches));
+    }
 
-        // Exclude every SECRET name/glob at the grep invocation, so a credential's CONTENT never enters the output in
-        // the first place. The post-filter below is defence in depth behind it, not the guard. Build output is
-        // deliberately NOT excluded here — searching bin/obj/node_modules is legitimate and leaks nothing.
-        var arguments = new List<string>
+    /// <summary>
+    ///     Runs one of the two managed workspace surveys against the confined host directory, under the same per-tool
+    ///     budget the shell-out ran under (<see cref="DevelopmentOptions.ToolCommandTimeoutSeconds" />, itself clamped
+    ///     to the attempt cap) so a pathological tree cannot consume the whole attempt.
+    ///     <para>
+    ///         Reads the HOST worktree rather than routing through the sandbox, which is what the engine already does
+    ///         for its own workspace invariants (<see cref="EnsureCommandProfileImportUnchanged" />) and for evidence
+    ///         export. Every provider's workspace is that same directory — the process provider identity-maps it and
+    ///         the container provider bind-mounts it — so the bytes surveyed are the bytes a command inside the sandbox
+    ///         would see.
+    ///     </para>
+    ///     <para>
+    ///         The failure sentence is kept identical to the one <see cref="EnsureCompleted" /> produced for these two
+    ///         operations, because it is what the operator-facing task output and the Windows RC runbook both name.
+    ///     </para>
+    /// </summary>
+    private List<string> RunScan(DevelopmentConfinedPath confined,
+        string operation,
+        Func<string, CancellationToken, List<string>> scan,
+        CancellationToken cancellationToken)
+    {
+        var root = confined.RelativePath.Length == 0
+            ? _session.HostWorktreePath
+            : Path.Combine(_session.HostWorktreePath, confined.RelativePath.Replace('/', Path.DirectorySeparatorChar));
+
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(ResolveTimeout(_options.ToolCommandTimeoutSeconds));
+        try
         {
-            "-rnI",
-            "-F"
-        };
-        foreach (var secret in _exclusions.SecretEntryNames)
-        {
-            arguments.Add("--exclude-dir=" + secret);
-            arguments.Add("--exclude=" + secret);
+            return scan(root, timeoutCts.Token);
         }
-
-        // The pattern is bound via `-e` so a value beginning with '-' is data, not a flag; `--` then ends option
-        // parsing before the lone path operand.
-        arguments.Add("-e");
-        arguments.Add(pattern);
-        arguments.Add("--");
-        arguments.Add(".");
-
-        var result = await ExecuteAsync("tool_search_text",
-            "grep",
-            arguments,
-            confined.SandboxPath,
-            standardInput: null,
-            cancellationToken).ConfigureAwait(false);
-        if (result.ExitCode == 1 && string.IsNullOrEmpty(result.StandardError))
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            return string.Empty;
+            throw new InvalidOperationException($"The fixed Development {operation} operation failed.");
         }
-
-        EnsureCompleted(result, "search_text");
-        return string.Join('\n', result.StandardOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries)
-                                       .Where(line => !IsSuppressedMatchLine(line)));
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            throw new InvalidOperationException($"The fixed Development {operation} operation failed.");
+        }
     }
 
     public async Task<string> WriteFileAsync(string path, string content, CancellationToken cancellationToken = default)
@@ -620,31 +592,32 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
 
     private bool IsSecretPath(string relativePath)
     {
-        // find and grep emit "./a/b", so the leading "." and the empty segment before it are both skipped.
+        // Callers pass either a bare workspace-relative path or the "./a/b" shape the surveys emit, so the leading "."
+        // and the empty segment before it are both skipped.
         return relativePath.Split('/')
                            .Where(static segment => !string.IsNullOrWhiteSpace(segment) && segment is not ("." or ".."))
                            .Any(segment => _exclusions.IsSecret(segment));
     }
 
     /// <summary>
-    ///     What list_files and search_text drop from their output: credentials, plus the paths
+    ///     What list_files and search_text neither descend into nor emit: credentials, plus the paths
     ///     <see cref="DevelopmentWorkspaceSecurity.Confine" /> already refuses as tool arguments. Build output is
     ///     deliberately absent from both — it is neither secret nor protected, and an agent reads it after a failed
     ///     build.
+    ///     <para>
+    ///         This one predicate is the whole rule now: <see cref="DevelopmentWorkspaceFileScanner" /> consults it to
+    ///         prune a directory and again to admit a file, so there is no separately-built exclusion expression that
+    ///         can drift away from it. Secrets match by NAME at any depth; protected trees match by their path rooted
+    ///         at the SCANNED directory, which is why a listing taken from a subdirectory still suppresses secrets even
+    ///         though the rooted prefixes match nothing there.
+    ///     </para>
     /// </summary>
     private bool IsSuppressedFromOutput(string emittedPath)
     {
-        // find and grep emit "./a/b"; the protected-prefix check needs the same workspace-relative shape Confine sees.
+        // Accepts both shapes: the scanner passes "a/b" while an emitted survey line reads "./a/b". The
+        // protected-prefix check needs the workspace-relative shape Confine sees.
         var relative = emittedPath.StartsWith("./", StringComparison.Ordinal) ? emittedPath[2..] : emittedPath;
         return IsSecretPath(relative) || DevelopmentWorkspaceSecurity.IsProtected(relative);
-    }
-
-    private bool IsSuppressedMatchLine(string matchLine)
-    {
-        // A grep -rn match is "<path>:<line>:<text>"; only the path portion is checked, so a ':' inside the matched
-        // text can never be mistaken for the separator.
-        var separatorIndex = matchLine.IndexOf(':', StringComparison.Ordinal);
-        return IsSuppressedFromOutput(separatorIndex > 0 ? matchLine[..separatorIndex] : matchLine);
     }
 
     private static DevelopmentConfinedPath RequirePath(string? path, bool allowRoot)

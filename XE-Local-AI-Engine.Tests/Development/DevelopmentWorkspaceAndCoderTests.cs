@@ -317,17 +317,21 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     }
 
     /// <summary>
-    ///     Closing <c>read_file</c> while leaving <c>search_text</c> open would be a half-fix: grep returns the MATCHED
-    ///     CONTENT, so <c>search_text("AWS_SECRET")</c> was the same one-step read of <c>.env</c> by another name. The
-    ///     exclusions are passed to grep itself so the bytes never enter its output, with an in-process post-filter
-    ///     behind that.
+    ///     Closing <c>read_file</c> while leaving <c>search_text</c> open would be a half-fix: a search returns the
+    ///     MATCHED CONTENT, so <c>search_text("AWS_SECRET")</c> was the same one-step read of <c>.env</c> by another
+    ///     name. A credential-bearing entry is PRUNED, so its bytes are never read in the first place.
+    ///     <para>
+    ///         This asserts the wiring end to end through a prepared workspace, which is why it needs the process
+    ///         sandbox provider and therefore Linux. The survey behaviour itself is OS-independent and covered on every
+    ///         host by <see cref="DevelopmentWorkspaceFileScannerTests" />.
+    ///     </para>
     /// </summary>
     [Test]
     public async Task SearchAndList_ExcludeSecretFilesButStillReturnOrdinaryContent()
     {
         if (!OperatingSystem.IsLinux())
         {
-            Skip.Test("The assertion runs real find/grep inside the process sandbox.");
+            Skip.Test("The workspace is prepared through the Linux-only process sandbox provider.");
             return;
         }
 
@@ -370,13 +374,14 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     /// <summary>
     ///     The listing tool must not be able to spend its whole output budget on trees it is going to discard anyway.
     ///     <para>
-    ///         <c>find</c>'s raw output is truncated at <see cref="DevelopmentOptions.MaxCommandOutputBytes" /> BEFORE
-    ///         the suppression filter runs, so a managed workspace is a standalone clone whose <c>.git</c> alone can
-    ///         outrun that cap: every surviving line then named a suppressed path, the filter dropped all of them, and
-    ///         <c>list_files</c> answered with nothing while the workspace was full of actionable files. Whether it
-    ///         happened at all depended on the order the filesystem handed the root's entries back, which is why the
-    ///         suppressed trees below are created LAST — on this fixture's filesystem that puts them first in the
-    ///         traversal, so the truncation deterministically lands on the files that matter.
+    ///         The original defect: the listing's raw output was truncated at
+    ///         <see cref="DevelopmentOptions.MaxCommandOutputBytes" /> BEFORE the suppression filter ran, and a managed
+    ///         workspace is a standalone clone whose <c>.git</c> alone can outrun that cap — every surviving line then
+    ///         named a suppressed path, the filter dropped all of them, and <c>list_files</c> answered with nothing
+    ///         while the workspace was full of actionable files. Whether it happened depended on the order the
+    ///         filesystem handed the root's entries back, which is why the suppressed trees below are created LAST.
+    ///         The survey now prunes and sorts, so that ordering dependence is gone as well; the assertion is kept
+    ///         because it is the end-to-end statement of the property.
     ///     </para>
     /// </summary>
     [Test]
@@ -384,7 +389,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     {
         if (!OperatingSystem.IsLinux())
         {
-            Skip.Test("The assertion runs real find inside the process sandbox.");
+            Skip.Test("The workspace is prepared through the Linux-only process sandbox provider.");
             return;
         }
 
