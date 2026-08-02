@@ -130,8 +130,7 @@ public sealed record InferenceBenchmarkSpec(
     public double IncrementalVramDivergenceRatioThreshold { get; init; } = 0.05d;
 
     /// <summary>Builds the canonical golden transcript for <paramref name="backend" />, with the long-context stage sized to ~75% of <paramref name="ctxSize" />.</summary>
-    public static InferenceBenchmarkSpec Golden(
-        string backend,
+    public static InferenceBenchmarkSpec Golden(string backend,
         int ctxSize,
         InferenceBenchmarkVramAdmissionOptions? vramAdmission = null)
     {

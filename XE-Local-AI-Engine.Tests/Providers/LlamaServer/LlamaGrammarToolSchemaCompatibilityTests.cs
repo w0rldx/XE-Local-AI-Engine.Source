@@ -220,8 +220,15 @@ public sealed class LlamaGrammarToolSchemaCompatibilityTests
         // type check — keep seeing their original instances. The wrapper exists only for wire serialization.
         var safe = LlamaGrammarToolOffer.BuildTool("safe_tool", """{ "type": "object", "properties": { "value": { "type": "string", "maxLength": 512 } } }""");
         var oversized = LlamaGrammarToolOffer.BuildTool("oversized_tool", """{ "type": "object", "properties": { "value": { "type": "string", "maxLength": 8000 } } }""");
-        var callerTools = new List<AITool> { safe, oversized };
-        var options = new ChatOptions { Tools = callerTools };
+        var callerTools = new List<AITool>
+        {
+            safe,
+            oversized
+        };
+        var options = new ChatOptions
+        {
+            Tools = callerTools
+        };
 
         var patched = AssertEx.NotNull(DeferredLlamaServerChatClient.ApplyToolSchemaCompatibility(options));
 
@@ -253,7 +260,10 @@ public sealed class LlamaGrammarToolSchemaCompatibilityTests
         // regression test would keep going green after the pass was removed.
         AssertEx.Contains(offered, tool => LlamaGrammarToolSchemaCompatibility.RequiresSanitizing(tool.JsonSchema));
 
-        var options = new ChatOptions { Tools = [.. offered.Cast<AITool>()] };
+        var options = new ChatOptions
+        {
+            Tools = [.. offered.Cast<AITool>()]
+        };
 
         var patched = AssertEx.NotNull(DeferredLlamaServerChatClient.ApplyToolSchemaCompatibility(options));
 
@@ -270,7 +280,10 @@ public sealed class LlamaGrammarToolSchemaCompatibilityTests
         // End-to-end through the REAL MEAI OpenAI adapter (the same client DeferredLlamaServerChatClient builds), so the
         // assertion is about the bytes llama-server would parse, not about an intermediate object. The live smoke
         // (LlamaGrammarLiveSmokeTests) posts these very bytes to a real server; this test asserts the property offline.
-        var options = new ChatOptions { Tools = [.. LlamaGrammarToolOffer.BuildProductionToolOffer().Cast<AITool>()] };
+        var options = new ChatOptions
+        {
+            Tools = [.. LlamaGrammarToolOffer.BuildProductionToolOffer().Cast<AITool>()]
+        };
 
         var patched = DeferredLlamaServerChatClient.ApplyToolSchemaCompatibility(options);
         var body = await LlamaGrammarToolOffer.CaptureWireBodyAsync(patched!, CancellationToken.None);

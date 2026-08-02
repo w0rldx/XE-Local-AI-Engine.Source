@@ -928,8 +928,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                     }
                     else
                     {
-                        _logger.LogWarning(
-                            "llama-fit-params acquisition failed ({Reason}); the live explore spawn will remain auto-fit, but no placement profile will be drafted.",
+                        _logger.LogWarning("llama-fit-params acquisition failed ({Reason}); the live explore spawn will remain auto-fit, but no placement profile will be drafted.",
                             fitResult.FailureReason ?? "unknown failure");
                     }
                 }
@@ -1021,8 +1020,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                     planCandidates.Add(candidate is { UseKvCacheQuantization: false }
                         ? downTierPlan.WithoutKvCacheQuantization()
                         : downTierPlan);
-                    _logger.LogWarning(
-                        "llama-server automatic context allocation encountered a classified startup OOM; retrying at context tier {ContextTokens}.",
+                    _logger.LogWarning("llama-server automatic context allocation encountered a classified startup OOM; retrying at context tier {ContextTokens}.",
                         downTiered.ProcessContextTokens);
                     continue;
                 }
@@ -1080,8 +1078,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
 
         if (offloaded < total)
         {
-            _logger.LogWarning(
-                "llama-server placed {Offloaded}/{Total} of model {ModelName} role {Role} layers on the GPU; the remainder runs from system RAM, which is substantially slower.",
+            _logger.LogWarning("llama-server placed {Offloaded}/{Total} of model {ModelName} role {Role} layers on the GPU; the remainder runs from system RAM, which is substantially slower.",
                 offloaded, total, key.ModelName, key.Role);
             return;
         }
@@ -1348,9 +1345,9 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                 // await every same-model spawn that is already in flight before evicting. A failed spawn leaves no live
                 // process to evict and must not block profiling; caller cancellation still aborts the profiling request.
                 var siblingSpawns = _inflightSpawns
-                    .Where(pair => string.Equals(pair.Key.ModelName, modelName, StringComparison.Ordinal))
-                    .Select(static pair => pair.Value)
-                    .ToArray();
+                                    .Where(pair => string.Equals(pair.Key.ModelName, modelName, StringComparison.Ordinal))
+                                    .Select(static pair => pair.Value)
+                                    .ToArray();
                 foreach (var siblingSpawn in siblingSpawns)
                 {
                     try

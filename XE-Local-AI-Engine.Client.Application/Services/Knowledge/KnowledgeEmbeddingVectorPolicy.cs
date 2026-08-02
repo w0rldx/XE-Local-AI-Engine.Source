@@ -21,8 +21,7 @@ public static class KnowledgeEmbeddingVectorPolicy
     private const string ShortVectorReason = "The Nomic embedding vector is shorter than the configured 512-dimension policy. Reindex in native mode or use Nomic v1.5.";
 
     /// <summary>Transforms one provider-produced vector and returns its canonical identity and width.</summary>
-    public static KnowledgeEmbeddingVector Transform(
-        EmbeddingModelResolution resolution,
+    public static KnowledgeEmbeddingVector Transform(EmbeddingModelResolution resolution,
         ReadOnlyMemory<float> nativeVector,
         KnowledgeEmbeddingVectorMode mode)
     {
@@ -113,8 +112,7 @@ public static class KnowledgeEmbeddingVectorPolicy
     }
 
     /// <summary>Checks whether a persisted identity belongs to the currently resolved model and configured policy.</summary>
-    public static bool MatchesCurrentPolicy(
-        string storedIdentity,
+    public static bool MatchesCurrentPolicy(string storedIdentity,
         int storedWidth,
         EmbeddingModelResolution resolution,
         KnowledgeEmbeddingVectorMode mode)

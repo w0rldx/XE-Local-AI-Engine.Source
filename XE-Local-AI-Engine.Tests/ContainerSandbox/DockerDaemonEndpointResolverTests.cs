@@ -13,8 +13,14 @@ public sealed class DockerDaemonEndpointResolverTests
     [Test]
     public void Resolve_PrefersConfigurationOverEnvironment()
     {
-        var endpoint = Resolve(new ContainerSandboxOptions { DaemonEndpoint = "unix:///configured.sock" },
-            environment: new Dictionary<string, string> { ["DOCKER_HOST"] = "unix:///from-env.sock" },
+        var endpoint = Resolve(new ContainerSandboxOptions
+            {
+                DaemonEndpoint = "unix:///configured.sock"
+            },
+            environment: new Dictionary<string, string>
+            {
+                ["DOCKER_HOST"] = "unix:///from-env.sock"
+            },
             existingPaths: []);
 
         AssertEx.Equal("/configured.sock", endpoint.UnixSocketPath);
@@ -25,7 +31,10 @@ public sealed class DockerDaemonEndpointResolverTests
     public void Resolve_WhenDockerHostIsSet_UsesItAndSaysSo()
     {
         var endpoint = Resolve(new ContainerSandboxOptions(),
-            environment: new Dictionary<string, string> { ["DOCKER_HOST"] = "tcp://10.0.0.5:2375" },
+            environment: new Dictionary<string, string>
+            {
+                ["DOCKER_HOST"] = "tcp://10.0.0.5:2375"
+            },
             existingPaths: ["/var/run/docker.sock"]);
 
         AssertEx.Equal("tcp://10.0.0.5:2375/", endpoint.Uri.ToString());
@@ -38,7 +47,10 @@ public sealed class DockerDaemonEndpointResolverTests
     public void Resolve_AcceptsABareSocketPathInDockerHost()
     {
         var endpoint = Resolve(new ContainerSandboxOptions(),
-            environment: new Dictionary<string, string> { ["DOCKER_HOST"] = "/run/user/1000/docker.sock" },
+            environment: new Dictionary<string, string>
+            {
+                ["DOCKER_HOST"] = "/run/user/1000/docker.sock"
+            },
             existingPaths: []);
 
         AssertEx.Equal("/run/user/1000/docker.sock", endpoint.UnixSocketPath);
@@ -52,7 +64,10 @@ public sealed class DockerDaemonEndpointResolverTests
         // both from the daemon they installed to whichever their shell happens to run — a substitution D10 exists to
         // surface, not to perform silently.
         var endpoint = Resolve(new ContainerSandboxOptions(),
-            environment: new Dictionary<string, string> { ["XDG_RUNTIME_DIR"] = "/run/user/1000" },
+            environment: new Dictionary<string, string>
+            {
+                ["XDG_RUNTIME_DIR"] = "/run/user/1000"
+            },
             existingPaths: ["/var/run/docker.sock", "/run/user/1000/docker.sock"]);
 
         AssertEx.Equal("/var/run/docker.sock", endpoint.UnixSocketPath);
@@ -63,7 +78,10 @@ public sealed class DockerDaemonEndpointResolverTests
     public void Resolve_WhenOnlyThePerUserSocketExists_UsesIt()
     {
         var endpoint = Resolve(new ContainerSandboxOptions(),
-            environment: new Dictionary<string, string> { ["XDG_RUNTIME_DIR"] = "/run/user/1000" },
+            environment: new Dictionary<string, string>
+            {
+                ["XDG_RUNTIME_DIR"] = "/run/user/1000"
+            },
             existingPaths: ["/run/user/1000/docker.sock"]);
 
         AssertEx.Equal("/run/user/1000/docker.sock", endpoint.UnixSocketPath);

@@ -145,7 +145,8 @@ internal static class GgufCapabilityDetector
 ///     NATIVE reasoning: the model reasons on a channel baked into its template with no graded switch (harmony/gpt-oss).
 ///     It must stay OUT of the graded path — the enforcing layer keeps such a model on the omit-<c>think</c> branch.
 /// </param>
-internal readonly record struct GgufCapabilities(bool IsToolCapable,
+internal readonly record struct GgufCapabilities(
+    bool IsToolCapable,
     bool IsReasoningCapable,
     bool IsNativeReasoningCapable,
     IReadOnlyList<string> Capabilities);

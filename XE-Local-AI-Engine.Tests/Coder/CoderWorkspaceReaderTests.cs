@@ -536,9 +536,9 @@ public sealed class CoderWorkspaceReaderTests : IDisposable
 
         // An ordinary source file still reads.
         AssertEx.Contains(await reader.ReadFileAsync(new ReadFileToolRequest
-        {
-            Path = "src/Program.cs"
-        }),
+            {
+                Path = "src/Program.cs"
+            }),
             "coderreadersentinel");
     }
 

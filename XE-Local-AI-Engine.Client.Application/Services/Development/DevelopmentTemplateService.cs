@@ -345,8 +345,7 @@ internal sealed class DevelopmentTemplateService(
     private const string CommitAuthorName = "XE Local AI Engine";
     private const string CommitAuthorEmail = "development@xe-local-ai-engine.invalid";
 
-    private static StringComparison PathComparison =>
-        OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+    private static StringComparison PathComparison => OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 }
 
 public sealed class DevelopmentTemplateMaterializationException : InvalidOperationException

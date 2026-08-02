@@ -50,8 +50,7 @@ internal static class AddNodeModelFitExtensions
         builder.Services.AddGgufMetadataReader();
         builder.Services.AddSingleton<IFittedArgsParser, FittedArgsParser>();
         builder.Services.AddSingleton<IInferenceChatClientFactory, OpenAiInferenceChatClientFactory>();
-        builder.Services.Configure<InferenceBenchmarkVramAdmissionOptions>(
-            configuration.GetSection(InferenceBenchmarkVramAdmissionOptions.SectionName));
+        builder.Services.Configure<InferenceBenchmarkVramAdmissionOptions>(configuration.GetSection(InferenceBenchmarkVramAdmissionOptions.SectionName));
         builder.Services.AddSingleton<IInferenceBenchmarkHarness, InferenceBenchmarkHarness>();
         builder.Services.AddSingleton<ILaunchPolicyFingerprintProvider, LaunchPolicyFingerprintProvider>();
         builder.Services.AddScoped<IInferenceProfileService, InferenceProfileService>();

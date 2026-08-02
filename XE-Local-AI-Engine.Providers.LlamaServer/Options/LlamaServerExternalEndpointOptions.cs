@@ -33,6 +33,7 @@ public sealed class LlamaServerExternalEndpointOptions
         {
             return null;
         }
+
         return map.TryGetValue(modelName, out var uri) ? uri : null;
     }
 }

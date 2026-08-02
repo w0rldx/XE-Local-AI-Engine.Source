@@ -19,7 +19,11 @@ public sealed class ContainerSandboxOptionsValidatorTests
     [Test]
     public void Validate_ADigestPinnedImageWithTheEngineIdentityLeftUnset_IsAccepted()
     {
-        AssertEx.True(Validate(Options() with { UserId = null, GroupId = null }).Succeeded);
+        AssertEx.True(Validate(Options() with
+        {
+            UserId = null,
+            GroupId = null
+        }).Succeeded);
     }
 
     [Test]
@@ -29,7 +33,11 @@ public sealed class ContainerSandboxOptionsValidatorTests
         // unprivileged host account and is the ONLY id that can use an engine-generated bind mount. Against a rootful
         // daemon the same value is refused — by DockerSandboxRuntimeProvider.ResolveIdentity, which has probed the
         // daemon and can tell the two apart.
-        AssertEx.True(Validate(Options() with { UserId = 0, GroupId = 0 }).Succeeded);
+        AssertEx.True(Validate(Options() with
+        {
+            UserId = 0,
+            GroupId = 0
+        }).Succeeded);
     }
 
     [Test]
@@ -37,7 +45,11 @@ public sealed class ContainerSandboxOptionsValidatorTests
     {
         // This one IS answerable at startup: the two halves of the identity would live in different host accounts
         // under either daemon mode, so the container would not own the group of what it creates.
-        var result = Validate(Options() with { UserId = 0, GroupId = 1000 });
+        var result = Validate(Options() with
+        {
+            UserId = 0,
+            GroupId = 1000
+        });
 
         AssertEx.True(result.Failed);
         AssertEx.Contains(string.Join(" ", result.Failures ?? []), "must both be 0");
@@ -46,7 +58,10 @@ public sealed class ContainerSandboxOptionsValidatorTests
     [Test]
     public void Validate_AMutableImageTag_IsRejected()
     {
-        var result = Validate(Options() with { Image = "alpine:3.22" });
+        var result = Validate(Options() with
+        {
+            Image = "alpine:3.22"
+        });
 
         AssertEx.True(result.Failed);
         AssertEx.Contains(string.Join(" ", result.Failures ?? []), "digest-pinned");
@@ -55,7 +70,10 @@ public sealed class ContainerSandboxOptionsValidatorTests
     [Test]
     public void Validate_ARelativeMountTarget_IsRejected()
     {
-        var result = Validate(Options() with { WorkspaceMountTarget = "workspace" });
+        var result = Validate(Options() with
+        {
+            WorkspaceMountTarget = "workspace"
+        });
 
         AssertEx.True(result.Failed);
         AssertEx.Contains(string.Join(" ", result.Failures ?? []), "absolute in-container path");
@@ -64,7 +82,10 @@ public sealed class ContainerSandboxOptionsValidatorTests
     [Test]
     public void Validate_AScratchAreaThatShadowsTheWorkspace_IsRejected()
     {
-        var result = Validate(Options() with { ScratchMountTarget = "/workspace/scratch" });
+        var result = Validate(Options() with
+        {
+            ScratchMountTarget = "/workspace/scratch"
+        });
 
         AssertEx.True(result.Failed);
         AssertEx.Contains(string.Join(" ", result.Failures ?? []), "must not overlap");
@@ -76,7 +97,10 @@ public sealed class ContainerSandboxOptionsValidatorTests
         // The overlap sweep is N-way precisely so a third target cannot be added without being compared to the other
         // two. A tmpfs at an ancestor of the workspace would hide the repository the container was created to build,
         // and the daemon's read-back would still agree, because that is exactly what it was asked for.
-        var result = Validate(Options() with { TempMountTarget = "/workspace/tmp" });
+        var result = Validate(Options() with
+        {
+            TempMountTarget = "/workspace/tmp"
+        });
 
         AssertEx.True(result.Failed);
         AssertEx.Contains(string.Join(" ", result.Failures ?? []), "must not overlap");
@@ -85,7 +109,10 @@ public sealed class ContainerSandboxOptionsValidatorTests
     [Test]
     public void Validate_ARelativeTemporaryMountTarget_IsRejected()
     {
-        var result = Validate(Options() with { TempMountTarget = "tmp" });
+        var result = Validate(Options() with
+        {
+            TempMountTarget = "tmp"
+        });
 
         AssertEx.True(result.Failed);
         AssertEx.Contains(string.Join(" ", result.Failures ?? []), "absolute in-container path");

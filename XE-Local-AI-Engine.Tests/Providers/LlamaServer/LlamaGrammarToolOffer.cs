@@ -31,7 +31,10 @@ internal static class LlamaGrammarToolOffer
     {
         const string Model = "qwen3:8b";
         var runtimeSettings = Substitute.For<INodeRuntimeSettings>();
-        runtimeSettings.GetToolCapableModels().Returns(_ => new List<string> { Model });
+        runtimeSettings.GetToolCapableModels().Returns(_ => new List<string>
+        {
+            Model
+        });
 
         var provider = new LocalToolOfferProvider(new NodeCatalogAgentToolRegistry(),
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),

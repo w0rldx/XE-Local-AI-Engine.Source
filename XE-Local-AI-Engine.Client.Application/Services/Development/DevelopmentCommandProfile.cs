@@ -39,7 +39,6 @@ internal sealed record DevelopmentCommandProfile(
     string ProfileVersion,
     string? TemplateId,
     string? BuildTarget,
-
     /// <summary>
     ///     SHA-256 of the raw <c>.xe-dev/profile.json</c> bytes this profile was imported from, or null when the
     ///     repository shipped no such file. Provenance: it records which declaration the operator confirmed, and it
@@ -66,7 +65,10 @@ internal sealed record DevelopmentCommandProfile(
     public byte[] ToCanonicalUtf8()
     {
         var buffer = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(buffer, new JsonWriterOptions { Indented = false }))
+        using (var writer = new Utf8JsonWriter(buffer, new JsonWriterOptions
+               {
+                   Indented = false
+               }))
         {
             writer.WriteStartObject();
             writer.WriteString("profileId", ProfileId);
@@ -144,14 +146,14 @@ internal sealed record DevelopmentCommandProfile(
     ///     existing <c>command_profile_version</c> column — deliberately a separate column, because that one carries an
     ///     artifact <em>protocol</em> version and the two must not share storage.
     /// </summary>
-    public string ComputeDigest() => Convert.ToHexStringLower(SHA256.HashData(ToCanonicalUtf8()));
+    public string ComputeDigest() =>
+        Convert.ToHexStringLower(SHA256.HashData(ToCanonicalUtf8()));
 
     public DevelopmentProfileCommand ResolveCommand(string commandId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(commandId);
         return Commands.FirstOrDefault(command => string.Equals(command.CommandId, commandId, StringComparison.Ordinal))
-               ?? throw new DevelopmentWorkspaceSecurityException(
-                   "The requested command id is not in the resolved Development command profile.");
+               ?? throw new DevelopmentWorkspaceSecurityException("The requested command id is not in the resolved Development command profile.");
     }
 
     /// <summary>
@@ -220,8 +222,7 @@ internal sealed record DevelopmentCommandProfile(
         string[] required = [DevelopmentCommandIds.GitStatus, DevelopmentCommandIds.GitDiffCheck];
         if (required.Any(id => !Commands.Any(command => string.Equals(command.CommandId, id, StringComparison.Ordinal))))
         {
-            throw new DevelopmentWorkspaceSecurityException(
-                "A Development command profile must define the engine's baseline git commands.");
+            throw new DevelopmentWorkspaceSecurityException("A Development command profile must define the engine's baseline git commands.");
         }
 
         if (ValidationCommandIds.Count == 0)
@@ -232,8 +233,7 @@ internal sealed record DevelopmentCommandProfile(
         if (ValidationCommandIds.Any(commandId =>
                 !Commands.Any(command => string.Equals(command.CommandId, commandId, StringComparison.Ordinal))))
         {
-            throw new DevelopmentWorkspaceSecurityException(
-                "A Development command profile validates a command it does not define.");
+            throw new DevelopmentWorkspaceSecurityException("A Development command profile validates a command it does not define.");
         }
 
         return this;

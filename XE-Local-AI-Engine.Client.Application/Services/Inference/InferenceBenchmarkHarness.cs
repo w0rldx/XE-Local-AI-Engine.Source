@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Client.Services.Inference;
 
 using System.Diagnostics;
 using System.Globalization;
-using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -24,6 +23,7 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
     private const string PredictedTokensMetric = "llamacpp:tokens_predicted_total";
     private const string PromptSecondsMetric = "llamacpp:prompt_seconds_total";
     private const string PredictedSecondsMetric = "llamacpp:tokens_predicted_seconds_total";
+
     private const string IncrementalPressureFailureReason =
         "Benchmark invalid: VRAM divergence grew materially during measurement. Close other GPU workloads and retry.";
 
@@ -574,12 +574,7 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
 
     private static string BuildPreSpawnPressureFailureReason(VramObservation? observation)
     {
-        if (observation is not
-            {
-                GlobalFreeBytes: { } globalFree,
-                ProcessBudgetBytes: { } processBudget,
-                PressureAboveBaselineBytes: { } pressureAboveBaseline
-            })
+        if (observation is not { GlobalFreeBytes: { } globalFree, ProcessBudgetBytes: { } processBudget, PressureAboveBaselineBytes: { } pressureAboveBaseline })
         {
             return "Benchmark invalid: pre-spawn VRAM pressure exceeded the configured ambient allowance. Close other GPU workloads and retry.";
         }

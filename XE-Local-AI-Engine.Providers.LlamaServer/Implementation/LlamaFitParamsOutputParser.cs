@@ -22,8 +22,7 @@ internal static partial class LlamaFitParamsOutputParser
     ///     Attempts to build a replay draft from <paramref name="fitParamsOutput" />. Returns <see langword="null" />
     ///     when no complete machine-readable line can be located.
     /// </summary>
-    public static ResolvedLaunchArguments? TryParseFittedArgs(
-        IReadOnlyList<string> fitParamsOutput,
+    public static ResolvedLaunchArguments? TryParseFittedArgs(IReadOnlyList<string> fitParamsOutput,
         IReadOnlyList<string>? startupOutput = null,
         IReadOnlyList<string>? successfulLaunchArguments = null)
     {
@@ -108,8 +107,7 @@ internal static partial class LlamaFitParamsOutputParser
         return foundPlacement;
     }
 
-    private static bool TryParseSuccessfulLaunchPolicy(
-        IReadOnlyList<string>? arguments,
+    private static bool TryParseSuccessfulLaunchPolicy(IReadOnlyList<string>? arguments,
         out string? kvTypeK,
         out string? kvTypeV,
         out bool flashAttn)
@@ -167,8 +165,7 @@ internal static partial class LlamaFitParamsOutputParser
             : !kvValueSet && !flashAttn;
     }
 
-    private static bool TryReadSingleValue(
-        IReadOnlyList<string> arguments,
+    private static bool TryReadSingleValue(IReadOnlyList<string> arguments,
         ref int index,
         ref string? value)
     {
@@ -187,8 +184,7 @@ internal static partial class LlamaFitParamsOutputParser
         return group.Success && !string.IsNullOrWhiteSpace(group.Value) ? group.Value : null;
     }
 
-    [GeneratedRegex(
-        """^\s*-c\s+(?<ctx>\d+)\s+-ngl\s+(?<ngl>-?\d+)(?:\s+-ts\s+(?<ts>\S+))?(?:\s+-ot\s+"(?<ot>[^"]+)")?\s*$""",
+    [GeneratedRegex("""^\s*-c\s+(?<ctx>\d+)\s+-ngl\s+(?<ngl>-?\d+)(?:\s+-ts\s+(?<ts>\S+))?(?:\s+-ot\s+"(?<ot>[^"]+)")?\s*$""",
         RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture,
         matchTimeoutMilliseconds: 1000)]
     private static partial Regex OutputLineRegex();

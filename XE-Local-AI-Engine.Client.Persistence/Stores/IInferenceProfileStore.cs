@@ -57,8 +57,8 @@ public interface IInferenceProfileStore
 /// <summary>
 ///     The args/attributes an explore run drafts for one profile key. <see cref="Role" /> is the integer value of
 ///     <c>ModelRole</c> (Chat=0, Embedding=1). The store owns <c>Id</c>, timestamps, <c>Status</c>,
-    ///     <c>BenchmarkSnapshotId</c> and the explicit global-free/process-budget VRAM fields (the last two are stamped on
-    ///     freeze, not here).
+///     <c>BenchmarkSnapshotId</c> and the explicit global-free/process-budget VRAM fields (the last two are stamped on
+///     freeze, not here).
 /// </summary>
 public sealed record InferenceProfileInput(
     string MachineKey,

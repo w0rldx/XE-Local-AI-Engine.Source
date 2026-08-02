@@ -1,8 +1,8 @@
 namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
 using System.Net;
+using System.Net.Sockets;
 using System.Text;
-using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -117,7 +117,7 @@ public sealed class DeferredLlamaServerEmbeddingGeneratorFailureTests
             // throwaway TcpListener and reuse the number. A racing bind is possible in principle but the window is
             // sub-millisecond and the alternative (a fixed port) collides with parallel test classes deterministically.
             int port;
-            using (var probe = new System.Net.Sockets.TcpListener(IPAddress.Loopback, port: 0))
+            using (var probe = new TcpListener(IPAddress.Loopback, port: 0))
             {
                 probe.Start();
                 port = ((IPEndPoint)probe.LocalEndpoint).Port;
@@ -143,31 +143,31 @@ public sealed class DeferredLlamaServerEmbeddingGeneratorFailureTests
         private void Serve(HttpStatusCode status, string body)
         {
             _ = Task.Run(async () =>
-            {
-                while (!_cts.IsCancellationRequested)
                 {
-                    HttpListenerContext context;
-                    try
+                    while (!_cts.IsCancellationRequested)
                     {
-                        context = await _listener.GetContextAsync().ConfigureAwait(false);
-                    }
-                    catch (HttpListenerException)
-                    {
-                        return; // Disposed.
-                    }
-                    catch (ObjectDisposedException)
-                    {
-                        return;
-                    }
+                        HttpListenerContext context;
+                        try
+                        {
+                            context = await _listener.GetContextAsync().ConfigureAwait(false);
+                        }
+                        catch (HttpListenerException)
+                        {
+                            return; // Disposed.
+                        }
+                        catch (ObjectDisposedException)
+                        {
+                            return;
+                        }
 
-                    var payload = Encoding.UTF8.GetBytes(body);
-                    context.Response.StatusCode = (int)status;
-                    context.Response.ContentType = "application/json";
-                    context.Response.ContentLength64 = payload.Length;
-                    await context.Response.OutputStream.WriteAsync(payload, _cts.Token).ConfigureAwait(false);
-                    context.Response.Close();
-                }
-            },
+                        var payload = Encoding.UTF8.GetBytes(body);
+                        context.Response.StatusCode = (int)status;
+                        context.Response.ContentType = "application/json";
+                        context.Response.ContentLength64 = payload.Length;
+                        await context.Response.OutputStream.WriteAsync(payload, _cts.Token).ConfigureAwait(false);
+                        context.Response.Close();
+                    }
+                },
                 _cts.Token);
         }
     }

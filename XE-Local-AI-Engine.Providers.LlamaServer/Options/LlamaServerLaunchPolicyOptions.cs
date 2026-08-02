@@ -28,6 +28,7 @@ public sealed class LlamaServerLaunchPolicyOptions
     public const long MinimumRamReserveBytes = 2L * 1024 * 1024 * 1024;
     public const double GpuReserveFraction = 0.05;
     public const double RamReserveFraction = 0.15;
+
     /// <summary>
     ///     The provider-only chat-role fallback used when the composed application's capacity-aware resolver is absent.
     ///     The shipping application selects from <see cref="ChatContextTiers" /> instead of treating this as a fixed

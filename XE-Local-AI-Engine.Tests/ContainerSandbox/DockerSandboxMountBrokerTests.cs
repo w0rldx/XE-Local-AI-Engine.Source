@@ -45,7 +45,12 @@ public sealed class DockerSandboxMountBrokerTests : IDisposable
         var home = CreateDirectory("runtime/home");
 
         var handle = await provider.CreateOrAttachAsync(Request(workspace, [
-            new SandboxMount { HostPath = home, SandboxPath = "/xe-runtime/home", ReadOnly = false }
+            new SandboxMount
+            {
+                HostPath = home,
+                SandboxPath = "/xe-runtime/home",
+                ReadOnly = false
+            }
         ]));
 
         AssertEx.Equal("/xe-runtime/home", handle.TryResolveSandboxPath(home));
@@ -62,7 +67,12 @@ public sealed class DockerSandboxMountBrokerTests : IDisposable
         var config = CreateFile(Path.Combine(workspace, ".git", "config"), "[core]\n\trepositoryformatversion = 0\n");
 
         var handle = await provider.CreateOrAttachAsync(Request(workspace, [
-            new SandboxMount { HostPath = config, SandboxPath = "/.git/config", ReadOnly = true }
+            new SandboxMount
+            {
+                HostPath = config,
+                SandboxPath = "/.git/config",
+                ReadOnly = true
+            }
         ]));
 
         AssertEx.Equal("/workspace/.git/config", handle.TryResolveSandboxPath(config));
@@ -82,10 +92,14 @@ public sealed class DockerSandboxMountBrokerTests : IDisposable
             Mounts = [.. settings.Mounts.Where(static mount => !string.Equals(mount.ContainerPath, "/xe-runtime/home", StringComparison.Ordinal))]
         };
 
-        var exception = await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(
-            () => provider.CreateOrAttachAsync(Request(workspace, [
-                new SandboxMount { HostPath = home, SandboxPath = "/xe-runtime/home", ReadOnly = false }
-            ])));
+        var exception = await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(() => provider.CreateOrAttachAsync(Request(workspace, [
+            new SandboxMount
+            {
+                HostPath = home,
+                SandboxPath = "/xe-runtime/home",
+                ReadOnly = false
+            }
+        ])));
 
         AssertEx.Contains(exception.Message, "/xe-runtime/home");
         AssertEx.Contains(exception.Message, "absent");
@@ -99,13 +113,23 @@ public sealed class DockerSandboxMountBrokerTests : IDisposable
         var config = CreateFile(Path.Combine(workspace, ".git", "config"), "[core]\n");
         client.SettingsMutator = settings => settings with
         {
-            Mounts = [.. settings.Mounts.Select(static mount => mount with { ReadOnly = false })]
+            Mounts =
+            [
+                .. settings.Mounts.Select(static mount => mount with
+                {
+                    ReadOnly = false
+                })
+            ]
         };
 
-        var exception = await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(
-            () => provider.CreateOrAttachAsync(Request(workspace, [
-                new SandboxMount { HostPath = config, SandboxPath = "/.git/config", ReadOnly = true }
-            ])));
+        var exception = await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(() => provider.CreateOrAttachAsync(Request(workspace, [
+            new SandboxMount
+            {
+                HostPath = config,
+                SandboxPath = "/.git/config",
+                ReadOnly = true
+            }
+        ])));
 
         AssertEx.Contains(exception.Message, "read-only and is writable");
     }
@@ -119,11 +143,20 @@ public sealed class DockerSandboxMountBrokerTests : IDisposable
         var outer = CreateDirectory("nested/outer");
         var inner = CreateDirectory("nested/outer/inner");
 
-        var exception = await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(
-            () => provider.CreateOrAttachAsync(Request(workspace, [
-                new SandboxMount { HostPath = outer, SandboxPath = "/xe-runtime", ReadOnly = false },
-                new SandboxMount { HostPath = inner, SandboxPath = "/xe-runtime/home", ReadOnly = false }
-            ])));
+        var exception = await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(() => provider.CreateOrAttachAsync(Request(workspace, [
+            new SandboxMount
+            {
+                HostPath = outer,
+                SandboxPath = "/xe-runtime",
+                ReadOnly = false
+            },
+            new SandboxMount
+            {
+                HostPath = inner,
+                SandboxPath = "/xe-runtime/home",
+                ReadOnly = false
+            }
+        ])));
 
         AssertEx.Contains(exception.Message, "overlap");
     }
@@ -134,10 +167,14 @@ public sealed class DockerSandboxMountBrokerTests : IDisposable
         var (provider, _, workspace) = CreateProvider();
         var home = CreateDirectory("scratch-clash/home");
 
-        var exception = await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(
-            () => provider.CreateOrAttachAsync(Request(workspace, [
-                new SandboxMount { HostPath = home, SandboxPath = "/scratch/home", ReadOnly = false }
-            ])));
+        var exception = await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(() => provider.CreateOrAttachAsync(Request(workspace, [
+            new SandboxMount
+            {
+                HostPath = home,
+                SandboxPath = "/scratch/home",
+                ReadOnly = false
+            }
+        ])));
 
         AssertEx.Contains(exception.Message, "overlap");
     }
@@ -147,10 +184,14 @@ public sealed class DockerSandboxMountBrokerTests : IDisposable
     {
         var (provider, _, workspace) = CreateProvider();
 
-        var exception = await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(
-            () => provider.CreateOrAttachAsync(Request(workspace, [
-                new SandboxMount { HostPath = Path.Combine(_root, "never-created"), SandboxPath = "/xe-runtime/home", ReadOnly = false }
-            ])));
+        var exception = await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(() => provider.CreateOrAttachAsync(Request(workspace, [
+            new SandboxMount
+            {
+                HostPath = Path.Combine(_root, "never-created"),
+                SandboxPath = "/xe-runtime/home",
+                ReadOnly = false
+            }
+        ])));
 
         AssertEx.Contains(exception.Message, "does not exist");
     }
@@ -161,12 +202,21 @@ public sealed class DockerSandboxMountBrokerTests : IDisposable
         var (provider, _, workspace) = CreateProvider();
         var home = CreateDirectory("bad-target/home");
 
-        foreach (var target in new[] { "xe-runtime/home", "/xe-runtime/../../etc", "/" })
+        foreach (var target in new[]
+                 {
+                     "xe-runtime/home",
+                     "/xe-runtime/../../etc",
+                     "/"
+                 })
         {
-            var exception = await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(
-                () => provider.CreateOrAttachAsync(Request(workspace, [
-                    new SandboxMount { HostPath = home, SandboxPath = target, ReadOnly = false }
-                ])));
+            var exception = await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(() => provider.CreateOrAttachAsync(Request(workspace, [
+                new SandboxMount
+                {
+                    HostPath = home,
+                    SandboxPath = target,
+                    ReadOnly = false
+                }
+            ])));
 
             AssertEx.Contains(exception.Message, "absolute in-container path");
         }
@@ -182,7 +232,12 @@ public sealed class DockerSandboxMountBrokerTests : IDisposable
         var config = CreateFile(Path.Combine(workspace, ".git", "config"), "[core]\n");
 
         var handle = await provider.CreateOrAttachAsync(Request(workspace, [
-            new SandboxMount { HostPath = config, SandboxPath = "/.git/config", ReadOnly = true }
+            new SandboxMount
+            {
+                HostPath = config,
+                SandboxPath = "/.git/config",
+                ReadOnly = true
+            }
         ]));
 
         AssertEx.Equal(expected: 2, handle.Mounts.Count);
@@ -234,7 +289,10 @@ public sealed class DockerSandboxMountBrokerTests : IDisposable
             },
             RuntimeProfile = "development",
             NetworkPolicy = SandboxNetworkPolicy.None,
-            TrustedHostWorkspace = new SandboxTrustedHostWorkspace { RootPath = workspace },
+            TrustedHostWorkspace = new SandboxTrustedHostWorkspace
+            {
+                RootPath = workspace
+            },
             Mounts = mounts
         };
     }

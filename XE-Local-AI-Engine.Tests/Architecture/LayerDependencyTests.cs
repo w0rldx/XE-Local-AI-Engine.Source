@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
+using Extensions = Microsoft.Extensions.Hosting.Extensions;
 
 /// <summary>
 /// Freezes the layer-dependency direction of the node solution so that an
@@ -55,7 +56,7 @@ public sealed class LayerDependencyTests
     private static readonly Assembly ApplicationAssembly = typeof(RuntimePackageValidationResult).Assembly;
     private static readonly Assembly PersistenceAssembly = typeof(NodeChatDbContext).Assembly;
     private static readonly Assembly HostAssembly = typeof(WorkerHealthCheck).Assembly;
-    private static readonly Assembly ServiceDefaultsAssembly = typeof(Microsoft.Extensions.Hosting.Extensions).Assembly;
+    private static readonly Assembly ServiceDefaultsAssembly = typeof(Extensions).Assembly;
 
     private static readonly IReadOnlyDictionary<string, string[]> ApprovedProjectReferences =
         new Dictionary<string, string[]>(StringComparer.Ordinal)

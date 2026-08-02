@@ -1,9 +1,9 @@
 namespace XE_Local_AI_Engine.Tests.Inference;
 
+using System.Globalization;
 using System.Net;
 using System.Runtime.CompilerServices;
 using System.Text;
-using System.Globalization;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
@@ -20,12 +20,12 @@ public sealed class InferenceBenchmarkHarnessTests
     private static readonly EmptyMetricsHandler SharedEmptyMetricsHandler = new();
 
     private const string MetricsScrape = """
-                                                 # HELP llamacpp:prompt_tokens_total Number of prompt tokens processed.
-                                                 # TYPE llamacpp:prompt_tokens_total counter
-                                                 llamacpp:prompt_tokens_total 1234
-                                                 # TYPE llamacpp:tokens_predicted_total counter
-                                                 llamacpp:tokens_predicted_total{slot="0"} 567.5
-                                                 """;
+                                         # HELP llamacpp:prompt_tokens_total Number of prompt tokens processed.
+                                         # TYPE llamacpp:prompt_tokens_total counter
+                                         llamacpp:prompt_tokens_total 1234
+                                         # TYPE llamacpp:tokens_predicted_total counter
+                                         llamacpp:tokens_predicted_total{slot="0"} 567.5
+                                         """;
 
     [Test]
     public void PromMetricParser_ExtractsGauge()

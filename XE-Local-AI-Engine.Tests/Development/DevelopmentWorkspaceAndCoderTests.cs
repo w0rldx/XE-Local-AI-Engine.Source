@@ -196,7 +196,12 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         _ = await tools.WriteFileAsync("certs/server.pem", secret + "\n").ConfigureAwait(false);
         _ = await tools.WriteFileAsync("secrets/nested/file.txt", secret + "\n").ConfigureAwait(false);
 
-        foreach (var path in new[] { ".env", "deploy/node.key", "certs/server.pem" })
+        foreach (var path in new[]
+                 {
+                     ".env",
+                     "deploy/node.key",
+                     "certs/server.pem"
+                 })
         {
             var rejection = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => tools.ReadFileAsync(path));
             AssertEx.False(rejection.Message.Contains("devmodesentinelvalue", StringComparison.Ordinal),
@@ -282,7 +287,11 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
                                copy to notes.txt
                                """ + "\n";
 
-        foreach (var patch in new[] { renameOut, copyOut })
+        foreach (var patch in new[]
+                 {
+                     renameOut,
+                     copyOut
+                 })
         {
             _ = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => tools.ApplyPatchAsync(patch));
         }
@@ -394,7 +403,13 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         var tools = new DevelopmentWorkspaceTools(sandbox, session, options, GenericProfile);
 
         // The files the agent is actually there to work on, spread across several root entries.
-        var actionable = new[] { "src/feature.cs", "docs/design.md", "tests/FeatureTests.cs", "tools/build.sh" };
+        var actionable = new[]
+        {
+            "src/feature.cs",
+            "docs/design.md",
+            "tests/FeatureTests.cs",
+            "tools/build.sh"
+        };
         foreach (var relative in actionable)
         {
             var target = Path.Combine(session.HostWorktreePath, relative);
@@ -760,7 +775,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         // the file survives the export.
         _ = await RunProcessAsync(session.HostWorktreePath, "git", "config", "--unset", "core.fsmonitor").ConfigureAwait(false);
         AssertEx.False((await File.ReadAllTextAsync(Path.Combine(session.HostWorktreePath, ".git", "config")).ConfigureAwait(false))
-                       .Contains("fsmonitor", StringComparison.OrdinalIgnoreCase),
+            .Contains("fsmonitor", StringComparison.OrdinalIgnoreCase),
             "the export must leave no fsmonitor definition behind in the workspace config");
         await File.WriteAllTextAsync(Path.Combine(session.HostWorktreePath, ".git", "included.config"),
             $"[core]\n\tfsmonitor = \"touch '{includedMarker}'; false\"\n").ConfigureAwait(false);
@@ -922,17 +937,22 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 
         // An ancestor that would otherwise be inherited, exactly as the live defect had it.
         await File.WriteAllTextAsync(Path.Combine(data, "Directory.Packages.props"),
-            "<Project><PropertyGroup><ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally></PropertyGroup></Project>")
-            .ConfigureAwait(false);
+                      "<Project><PropertyGroup><ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally></PropertyGroup></Project>")
+                  .ConfigureAwait(false);
 
-        var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(
-            DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
+        var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
         using var sandbox = CreateSandbox();
         var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, Options.Create(OptionsValue()), TimeProvider.System);
         var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
 
         var workspaceParent = Path.GetDirectoryName(session.HostWorktreePath)!;
-        foreach (var fileName in new[] { "Directory.Build.props", "Directory.Build.targets", "Directory.Packages.props", "Directory.Solution.props" })
+        foreach (var fileName in new[]
+                 {
+                     "Directory.Build.props",
+                     "Directory.Build.targets",
+                     "Directory.Packages.props",
+                     "Directory.Solution.props"
+                 })
         {
             AssertEx.True(File.Exists(Path.Combine(workspaceParent, fileName)), $"{fileName} must bound the upward search");
             AssertEx.False(File.Exists(Path.Combine(session.HostWorktreePath, fileName)),

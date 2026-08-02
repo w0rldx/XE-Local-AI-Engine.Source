@@ -296,7 +296,8 @@ public sealed class KeepModelWarmBackgroundServiceTests
         return harness;
     }
 
-    private sealed class Harness(ILocalModelProviderResolver resolver,
+    private sealed class Harness(
+        ILocalModelProviderResolver resolver,
         ILocalModelProvider provider,
         ILlamaServerProcessSupervisor supervisor,
         ILlamaCppSourceBuildActivity sourceBuildActivity,

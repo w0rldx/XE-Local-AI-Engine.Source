@@ -19,6 +19,7 @@ internal sealed class DevelopmentProject
     /// <c>DevelopmentProjectConfiguration</c> for the rationale.
     /// </summary>
     public string? CommandProfileJson { get; set; }
+
     public int ConfigurationVersion { get; set; }
     public bool TrustedRepositoryAcknowledged { get; set; }
     public int? TrustedRepositoryPolicyVersion { get; set; }

@@ -344,8 +344,7 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
     // making the resolver fall back to the plain configured name — on a llama.cpp node the stored name is a resolved
     // GGUF name that never equals that fallback, so comparing against it would flag (and reset) the entire indexed
     // corpus during the outage instead of leaving it untouched.
-    private bool IsStaleModel(
-        KnowledgeDocumentStatus status,
+    private bool IsStaleModel(KnowledgeDocumentStatus status,
         string embeddingModel,
         string vectorIdentity,
         int vectorDimension,

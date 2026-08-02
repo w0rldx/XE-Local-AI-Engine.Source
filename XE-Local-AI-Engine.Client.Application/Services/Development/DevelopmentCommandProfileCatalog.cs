@@ -124,8 +124,7 @@ internal static class DevelopmentCommandProfileCatalog
                 ],
                 DefaultProtectedPaths,
                 IsCustom: false).Validated(),
-            _ => throw new DevelopmentWorkspaceSecurityException(
-                "The requested Development command profile is not in the code-owned catalog.")
+            _ => throw new DevelopmentWorkspaceSecurityException("The requested Development command profile is not in the code-owned catalog.")
         };
     }
 
@@ -149,28 +148,24 @@ internal static class DevelopmentCommandProfileCatalog
     {
         if (string.IsNullOrWhiteSpace(storedProfileJson))
         {
-            throw new DevelopmentWorkspaceSecurityException(
-                "The Development project has no command profile. Re-register the repository to detect and confirm one.");
+            throw new DevelopmentWorkspaceSecurityException("The Development project has no command profile. Re-register the repository to detect and confirm one.");
         }
 
         var stored = DevelopmentCommandProfile.FromCanonicalJson(storedProfileJson);
         if (stored.IsCustom)
         {
-            throw new DevelopmentWorkspaceSecurityException(
-                "Custom Development command profiles are not supported yet; they require the container sandbox.");
+            throw new DevelopmentWorkspaceSecurityException("Custom Development command profiles are not supported yet; they require the container sandbox.");
         }
 
         var expected = Materialize(stored.ProfileId, stored.BuildTarget, stored.TemplateId, stored.ImportDigest);
         if (!string.Equals(expected.ProfileVersion, stored.ProfileVersion, StringComparison.Ordinal))
         {
-            throw new DevelopmentWorkspaceSecurityException(
-                "The stored Development command profile was produced by a different catalog version.");
+            throw new DevelopmentWorkspaceSecurityException("The stored Development command profile was produced by a different catalog version.");
         }
 
         if (!expected.ToCanonicalUtf8().AsSpan().SequenceEqual(stored.ToCanonicalUtf8()))
         {
-            throw new DevelopmentWorkspaceSecurityException(
-                "The code-owned Development command profile changed without a version bump, so the stored profile can no longer be trusted.");
+            throw new DevelopmentWorkspaceSecurityException("The code-owned Development command profile changed without a version bump, so the stored profile can no longer be trusted.");
         }
 
         return stored;
@@ -203,14 +198,12 @@ internal static class DevelopmentCommandProfileCatalog
         {
             return buildTarget is null
                 ? null
-                : throw new DevelopmentWorkspaceSecurityException(
-                    "The generic Development command profile does not take a build target.");
+                : throw new DevelopmentWorkspaceSecurityException("The generic Development command profile does not take a build target.");
         }
 
         if (string.IsNullOrWhiteSpace(buildTarget))
         {
-            throw new DevelopmentWorkspaceSecurityException(
-                "A .NET Development command profile requires a solution or project build target.");
+            throw new DevelopmentWorkspaceSecurityException("A .NET Development command profile requires a solution or project build target.");
         }
 
         var confined = DevelopmentWorkspaceSecurity.Confine(buildTarget, allowRoot: false);
@@ -221,12 +214,15 @@ internal static class DevelopmentCommandProfileCatalog
         }
 
         var expectedExtension = string.Equals(profileId, DotnetSlnx, StringComparison.Ordinal)
-            ? new[] { ".slnx", ".sln" }
+            ? new[]
+            {
+                ".slnx",
+                ".sln"
+            }
             : [".csproj"];
         if (!expectedExtension.Any(extension => confined.RelativePath.EndsWith(extension, StringComparison.OrdinalIgnoreCase)))
         {
-            throw new DevelopmentWorkspaceSecurityException(
-                "The Development build target does not match the selected command profile.");
+            throw new DevelopmentWorkspaceSecurityException("The Development build target does not match the selected command profile.");
         }
 
         return confined.RelativePath;

@@ -37,6 +37,7 @@ public sealed class PendingFootprintLedger : IPendingFootprintLedger, IDisposabl
         {
             throw new ArgumentOutOfRangeException(nameof(footprint), "Resource axes must be non-negative.");
         }
+
         Interlocked.Add(ref _reservedGpuBytes, footprint.GpuBytes);
         Interlocked.Add(ref _reservedRamBytes, footprint.RamBytes);
         return new Reservation(this, footprint);

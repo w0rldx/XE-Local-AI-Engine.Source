@@ -46,7 +46,11 @@ internal static class DevelopmentTestWritePolicy
         ArgumentNullException.ThrowIfNull(profile);
         var offending = evidence.ChangedFiles
                                 .Where(static change => !NonDestructiveChangeTypes.Contains(change.ChangeType, StringComparer.Ordinal))
-                                .SelectMany(static change => new[] { change.Path, change.PreviousPath })
+                                .SelectMany(static change => new[]
+                                {
+                                    change.Path,
+                                    change.PreviousPath
+                                })
                                 .Where(path => !string.IsNullOrWhiteSpace(path) && profile.IsProtectedTestPath(path!))
                                 .Distinct(StringComparer.Ordinal)
                                 .ToArray();

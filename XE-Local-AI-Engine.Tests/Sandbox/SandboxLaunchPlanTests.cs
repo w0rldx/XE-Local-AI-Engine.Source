@@ -78,7 +78,10 @@ public sealed class SandboxLaunchPlanTests
         // An empty or non-positive limits record must not produce a systemd-run wrapper carrying no properties.
         foreach (var policy in new[]
                  {
-                     new SandboxLaunchPolicy { ResourceLimits = new SandboxResourceLimits() },
+                     new SandboxLaunchPolicy
+                     {
+                         ResourceLimits = new SandboxResourceLimits()
+                     },
                      Limits(memoryMb: 0),
                      Limits(pidsLimit: -1)
                  })
@@ -94,7 +97,10 @@ public sealed class SandboxLaunchPlanTests
     [Test]
     public async Task SandboxLaunchPlan_WhenEgressDenied_LaunchesInAnEmptyNetworkNamespaceAsTheCurrentUser()
     {
-        var plan = SandboxLaunchPlan.Create("/bin/true", [], new SandboxLaunchPolicy { DenyNetworkEgress = true }, FullContainment());
+        var plan = SandboxLaunchPlan.Create("/bin/true", [], new SandboxLaunchPolicy
+        {
+            DenyNetworkEgress = true
+        }, FullContainment());
 
         var arguments = plan.Arguments;
         AssertEx.True(plan.AppliedNetworkIsolation);
@@ -152,7 +158,10 @@ public sealed class SandboxLaunchPlanTests
     {
         // The bus address exists in the environment ONLY to serve systemd-run. Without that layer it must never be
         // added, because then nothing would strip it back out.
-        var plan = SandboxLaunchPlan.Create("/bin/true", [], new SandboxLaunchPolicy { DenyNetworkEgress = true }, FullContainment());
+        var plan = SandboxLaunchPlan.Create("/bin/true", [], new SandboxLaunchPolicy
+        {
+            DenyNetworkEgress = true
+        }, FullContainment());
 
         AssertEx.Empty(plan.WrapperEnvironment);
 

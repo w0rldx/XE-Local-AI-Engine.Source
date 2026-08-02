@@ -14,8 +14,7 @@ public interface IFittedArgsParser
     ///     output proves every layer was offloaded. KV/flash-attention policy is preserved only from the successful argv,
     ///     so a failed optimized candidate cannot contaminate a safe fallback profile.
     /// </summary>
-    ResolvedLaunchArguments? TryParseFittedArgs(
-        IReadOnlyList<string> fitParamsOutput,
+    ResolvedLaunchArguments? TryParseFittedArgs(IReadOnlyList<string> fitParamsOutput,
         IReadOnlyList<string> startupOutput,
         IReadOnlyList<string> successfulLaunchArguments);
 }

@@ -73,7 +73,14 @@ public sealed class ImageModelStoreFailedDownloadTests
             ModelName = ModelName,
             RepoId = "Comfy-Org/stable-diffusion-v1-5-archive",
             Family = ImageModelFamily.Sd15,
-            Parts = [new ImageModelPartRequest { Role = ImageModelPartRole.Diffusion, FileName = "weights.safetensors" }]
+            Parts =
+            [
+                new ImageModelPartRequest
+                {
+                    Role = ImageModelPartRole.Diffusion,
+                    FileName = "weights.safetensors"
+                }
+            ]
         };
     }
 

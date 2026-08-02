@@ -177,8 +177,7 @@ public sealed class ProcessContextAllocationResolverTests
     [Test]
     public async Task Resolve_AuxiliaryRoleContextPolicyChangesCacheIdentity()
     {
-        var baseline = AssertEx.NotNull(await BuildResolver(
-                Profile(64 * Gb, 32 * Gb, vramKnown: true),
+        var baseline = AssertEx.NotNull(await BuildResolver(Profile(64 * Gb, 32 * Gb, vramKnown: true),
                 processBudget: 32 * Gb,
                 options: new LlamaServerLaunchPolicyOptions
                 {
@@ -189,8 +188,7 @@ public sealed class ProcessContextAllocationResolverTests
                 GpuVariant.Cuda,
                 ResolvedLaunchArguments.Explore(),
                 CancellationToken.None));
-        var changed = AssertEx.NotNull(await BuildResolver(
-                Profile(64 * Gb, 32 * Gb, vramKnown: true),
+        var changed = AssertEx.NotNull(await BuildResolver(Profile(64 * Gb, 32 * Gb, vramKnown: true),
                 processBudget: 32 * Gb,
                 options: new LlamaServerLaunchPolicyOptions
                 {
@@ -453,8 +451,7 @@ public sealed class ProcessContextAllocationResolverTests
         AssertEx.False(resolver.TryDownTierAfterOutOfMemory(frozen, out _));
     }
 
-    private static ProcessContextAllocationResolver BuildResolver(
-        HardwareProfile profile,
+    private static ProcessContextAllocationResolver BuildResolver(HardwareProfile profile,
         long? processBudget = null,
         GgufModelFootprintFacts? facts = null,
         LlamaServerLaunchPolicyOptions? options = null,
@@ -482,8 +479,7 @@ public sealed class ProcessContextAllocationResolverTests
             options ?? new LlamaServerLaunchPolicyOptions());
     }
 
-    private static GgufModelFootprintFacts Facts(
-        string quant = "Q4_K_M",
+    private static GgufModelFootprintFacts Facts(string quant = "Q4_K_M",
         long contextLength = 131072,
         long? expertCount = null,
         long? expertUsedCount = null,

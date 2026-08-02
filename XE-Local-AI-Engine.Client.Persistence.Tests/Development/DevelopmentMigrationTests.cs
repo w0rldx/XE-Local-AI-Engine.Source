@@ -176,8 +176,7 @@ public sealed class DevelopmentMigrationTests : IDisposable
         {
             await connection.OpenAsync().ConfigureAwait(false);
 
-            var attemptProfileColumn = AssertEx.NotNull(
-                await ReadColumnAsync(connection, "development_attempts", "command_profile_json").ConfigureAwait(false));
+            var attemptProfileColumn = AssertEx.NotNull(await ReadColumnAsync(connection, "development_attempts", "command_profile_json").ConfigureAwait(false));
             AssertEx.Equal("TEXT", attemptProfileColumn.Type);
             AssertEx.True(attemptProfileColumn.IsNullable);
 

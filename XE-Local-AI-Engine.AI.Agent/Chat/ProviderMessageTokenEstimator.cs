@@ -151,5 +151,4 @@ internal static class ProviderMessageTokenEstimator
             TokenEstimatorCalibrationStore.MinimumCharsPerToken,
             TokenEstimatorCalibrationStore.MaximumCharsPerToken);
     }
-
 }

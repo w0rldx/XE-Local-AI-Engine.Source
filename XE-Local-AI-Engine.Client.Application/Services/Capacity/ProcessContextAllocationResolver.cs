@@ -33,18 +33,20 @@ public sealed class ProcessContextAllocationResolver(
 
     private readonly ConcurrentDictionary<string, HardwareAllocationContext> _hardwareAllocationContexts =
         new(StringComparer.Ordinal);
+
     private readonly ConcurrentDictionary<string, Lazy<Task<ProcessContextAllocation?>>> _cache = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, ProcessContextAllocation> _oomAdjustedAllocations = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, int> _oomDownTiers = new(StringComparer.Ordinal);
     private readonly MemoryFitEstimator _estimator = estimator ?? throw new ArgumentNullException(nameof(estimator));
     private readonly IGgufModelStore _modelStore = modelStore ?? throw new ArgumentNullException(nameof(modelStore));
     private readonly LlamaServerLaunchPolicyOptions _options = options ?? throw new ArgumentNullException(nameof(options));
+
     private readonly IProcessVramBudgetProbe _processVramBudgetProbe =
         processVramBudgetProbe ?? throw new ArgumentNullException(nameof(processVramBudgetProbe));
+
     private readonly IRuntimeDeviceAudit _runtimeAudit = runtimeAudit ?? throw new ArgumentNullException(nameof(runtimeAudit));
 
-    public async Task<ProcessContextAllocation?> ResolveAsync(
-        string modelName,
+    public async Task<ProcessContextAllocation?> ResolveAsync(string modelName,
         ModelRole role,
         GpuVariant variant,
         ResolvedLaunchArguments resolved,
@@ -63,8 +65,7 @@ public sealed class ProcessContextAllocationResolver(
         var key = BuildCacheKey(contentIdentity, role, variant, resolved);
         var state = (Resolver: this, Key: key, ContentIdentity: contentIdentity, Role: role, Variant: variant, Resolved: resolved, Facts: facts);
         var lazy = _cache.GetOrAdd(key,
-            static (_, captured) => new Lazy<Task<ProcessContextAllocation?>>(
-                () => captured.Resolver.ResolveCoreAsync(captured.Key,
+            static (_, captured) => new Lazy<Task<ProcessContextAllocation?>>(() => captured.Resolver.ResolveCoreAsync(captured.Key,
                     captured.ContentIdentity,
                     captured.Role,
                     captured.Variant,
@@ -89,6 +90,7 @@ public sealed class ProcessContextAllocationResolver(
                 ((ICollection<KeyValuePair<string, Lazy<Task<ProcessContextAllocation?>>>>)_cache)
                     .Remove(new KeyValuePair<string, Lazy<Task<ProcessContextAllocation?>>>(key, lazy));
             }
+
             throw;
         }
 
@@ -120,6 +122,7 @@ public sealed class ProcessContextAllocationResolver(
                 break;
             }
         }
+
         if (next <= 0)
         {
             return false;
@@ -144,8 +147,7 @@ public sealed class ProcessContextAllocationResolver(
         return true;
     }
 
-    private async Task<ProcessContextAllocation?> ResolveCoreAsync(
-        string key,
+    private async Task<ProcessContextAllocation?> ResolveCoreAsync(string key,
         string contentIdentity,
         ModelRole role,
         GpuVariant variant,
@@ -224,8 +226,7 @@ public sealed class ProcessContextAllocationResolver(
     ///         a single configured window rather than a ladder, so they are returned unchanged.
     ///     </para>
     /// </summary>
-    private int ResolveFallbackContextTokens(
-        ModelRole role,
+    private int ResolveFallbackContextTokens(ModelRole role,
         IReadOnlyList<int> candidates,
         GgufModelFootprintFacts facts,
         int? trainCeiling,
@@ -261,8 +262,7 @@ public sealed class ProcessContextAllocationResolver(
         return smallest;
     }
 
-    private ProcessContextAllocation BuildAllocation(
-        string key,
+    private ProcessContextAllocation BuildAllocation(string key,
         string contentIdentity,
         int contextTokens,
         int? trainCeiling,
@@ -370,7 +370,7 @@ public sealed class ProcessContextAllocationResolver(
             _ => "cpu"
         };
         var probed = await _processVramBudgetProbe.TryGetProcessBudgetBytesAsync(backend, ct)
-            .ConfigureAwait(false);
+                                                  .ConfigureAwait(false);
         return probed is > 0 ? probed : profile.VramBytes;
     }
 

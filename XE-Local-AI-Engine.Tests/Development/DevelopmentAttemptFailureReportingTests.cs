@@ -161,16 +161,19 @@ public sealed class DevelopmentAttemptFailureReportingTests
     {
         private DateTimeOffset _current = current;
 
-        public override DateTimeOffset GetUtcNow() => _current;
+        public override DateTimeOffset GetUtcNow() =>
+            _current;
 
-        public void Advance(TimeSpan duration) => _current = _current.Add(duration);
+        public void Advance(TimeSpan duration) =>
+            _current = _current.Add(duration);
     }
 
     private sealed class RecordingLiveBroker : IDevelopmentAttemptLiveBroker
     {
         public List<DevelopmentAttemptLiveUpdate> Updates { get; } = [];
 
-        public bool Register(Guid attemptId) => true;
+        public bool Register(Guid attemptId) =>
+            true;
 
         public bool TryPublish(DevelopmentAttemptLiveUpdate update)
         {
@@ -190,6 +193,7 @@ public sealed class DevelopmentAttemptFailureReportingTests
             return false;
         }
 
-        public bool Complete(Guid attemptId) => true;
+        public bool Complete(Guid attemptId) =>
+            true;
     }
 }

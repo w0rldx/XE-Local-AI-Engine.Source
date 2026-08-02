@@ -37,8 +37,7 @@ internal static partial class LlamaLayerOffloadBanner
                && total > 0;
     }
 
-    [GeneratedRegex(
-        """\boffloaded\s+(?<offloaded>\d+)\s*/\s*(?<total>\d+)\s+layers?\s+to\s+GPU\b""",
+    [GeneratedRegex("""\boffloaded\s+(?<offloaded>\d+)\s*/\s*(?<total>\d+)\s+layers?\s+to\s+GPU\b""",
         RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture | RegexOptions.IgnoreCase,
         matchTimeoutMilliseconds: 1000)]
     private static partial Regex OffloadBannerRegex();

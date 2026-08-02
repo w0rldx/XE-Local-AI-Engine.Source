@@ -28,6 +28,7 @@ internal sealed class DefaultProcessContextAllocationResolver(LlamaServerLaunchP
             tokens = resolved.CtxSize;
             source = ProcessContextAllocationSource.FrozenProfile;
         }
+
         return Task.FromResult<ProcessContextAllocation?>(new ProcessContextAllocation(tokens,
             ModelTrainContextTokens: null,
             source,

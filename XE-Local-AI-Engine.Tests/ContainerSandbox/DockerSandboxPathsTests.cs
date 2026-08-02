@@ -45,15 +45,13 @@ public sealed class DockerSandboxPathsTests
     {
         // UnauthorizedAccessException specifically: the process provider throws that for a jail escape, and a caller
         // that catches one provider's escape signal must catch the other's.
-        await AssertEx.ThrowsAsync<UnauthorizedAccessException>(
-            () => Task.FromResult(DockerSandboxPaths.ResolveContainerPath("/workspace", "/../etc/shadow")));
+        await AssertEx.ThrowsAsync<UnauthorizedAccessException>(() => Task.FromResult(DockerSandboxPaths.ResolveContainerPath("/workspace", "/../etc/shadow")));
     }
 
     [Test]
     public async Task ResolveContainerPath_ANestedEscapeIsRejectedToo()
     {
-        await AssertEx.ThrowsAsync<UnauthorizedAccessException>(
-            () => Task.FromResult(DockerSandboxPaths.ResolveContainerPath("/workspace", "/src/../../../root/.ssh/id_rsa")));
+        await AssertEx.ThrowsAsync<UnauthorizedAccessException>(() => Task.FromResult(DockerSandboxPaths.ResolveContainerPath("/workspace", "/src/../../../root/.ssh/id_rsa")));
     }
 
     [Test]
@@ -85,7 +83,6 @@ public sealed class DockerSandboxPathsTests
     {
         var root = Path.Combine(Path.GetTempPath(), "xe-paths", Guid.NewGuid().ToString("N"));
 
-        await AssertEx.ThrowsAsync<UnauthorizedAccessException>(
-            () => Task.FromResult(DockerSandboxPaths.ResolveHostPath(root, "/workspace", "/../../etc/passwd")));
+        await AssertEx.ThrowsAsync<UnauthorizedAccessException>(() => Task.FromResult(DockerSandboxPaths.ResolveHostPath(root, "/workspace", "/../../etc/passwd")));
     }
 }

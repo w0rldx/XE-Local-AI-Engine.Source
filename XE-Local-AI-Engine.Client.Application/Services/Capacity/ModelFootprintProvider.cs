@@ -12,13 +12,14 @@ public sealed class ModelFootprintProvider(
 {
     private readonly IProcessContextAllocationResolver _allocationResolver =
         allocationResolver ?? throw new ArgumentNullException(nameof(allocationResolver));
+
     private readonly IInferenceProfileResolver _profileResolver =
         profileResolver ?? throw new ArgumentNullException(nameof(profileResolver));
+
     private readonly IGpuVariantSelector _variantSelector =
         variantSelector ?? throw new ArgumentNullException(nameof(variantSelector));
 
-    public async Task<ModelFootprint> ResolveFootprintAsync(
-        string modelName,
+    public async Task<ModelFootprint> ResolveFootprintAsync(string modelName,
         ModelRole role,
         HardwareProfile profile,
         CancellationToken ct)

@@ -511,8 +511,11 @@ public sealed class LlamaTokenEstimatorCalibrationServiceTests
     {
         public List<string> Reasons { get; } = [];
 
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-        public bool IsEnabled(LogLevel logLevel) => true;
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull =>
+            null;
+
+        public bool IsEnabled(LogLevel logLevel) =>
+            true;
 
         public void Log<TState>(LogLevel logLevel,
             EventId eventId,

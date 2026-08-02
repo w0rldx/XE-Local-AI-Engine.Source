@@ -48,6 +48,7 @@ public sealed record ModelFootprint
         {
             throw new ArgumentOutOfRangeException(nameof(resources), "Resource axes must be non-negative.");
         }
+
         return new ModelFootprint(isKnown: true, resources);
     }
 

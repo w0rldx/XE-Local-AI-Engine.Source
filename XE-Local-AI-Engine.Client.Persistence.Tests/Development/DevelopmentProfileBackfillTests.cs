@@ -1,11 +1,11 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests.Development;
 
+using System.Text;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
-using XE_Local_AI_Engine.Client.Services.Development;
-using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
+using XE_Local_AI_Engine.Client.Services.Development;
 
 /// <summary>
 ///     S1.7. Projects created before the command-profile column existed carry a null profile and cannot execute. The
@@ -98,8 +98,7 @@ public sealed class DevelopmentProfileBackfillTests : IDisposable
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
 
-        var confirmed = System.Text.Encoding.UTF8.GetString(
-            DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null).ToCanonicalUtf8());
+        var confirmed = Encoding.UTF8.GetString(DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null).ToCanonicalUtf8());
         var seed = DevelopmentTestFixture.CreateSeed() with
         {
             CommandProfileJson = confirmed
@@ -131,8 +130,7 @@ public sealed class DevelopmentProfileBackfillTests : IDisposable
         _ = await store.CreateProjectAsync(legacy).ConfigureAwait(false);
         var current = DevelopmentTestFixture.CreateSeed() with
         {
-            CommandProfileJson = System.Text.Encoding.UTF8.GetString(
-                DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null).ToCanonicalUtf8())
+            CommandProfileJson = Encoding.UTF8.GetString(DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null).ToCanonicalUtf8())
         };
         _ = await store.CreateProjectAsync(current).ConfigureAwait(false);
 

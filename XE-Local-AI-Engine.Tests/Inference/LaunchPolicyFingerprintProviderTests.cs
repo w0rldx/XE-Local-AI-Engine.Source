@@ -83,12 +83,10 @@ public sealed class LaunchPolicyFingerprintProviderTests
 
             using var secondProvider = BuildProvider(Runtime("runtime-b"), binaryPath);
             var second = await secondProvider.CaptureAsync(Input(path), CancellationToken.None);
-            var crossSpliced = new LaunchPolicyFingerprint(
-                LaunchPolicyFingerprintProvider.CurrentVersion,
+            var crossSpliced = new LaunchPolicyFingerprint(LaunchPolicyFingerprintProvider.CurrentVersion,
                 string.Concat(first.Value.AsSpan(0, 64), ".", second.Value.AsSpan(65)));
 
-            var matches = await secondProvider.MatchesAsync(
-                Profile(Input(path), crossSpliced),
+            var matches = await secondProvider.MatchesAsync(Profile(Input(path), crossSpliced),
                 path,
                 CancellationToken.None);
 
@@ -119,8 +117,7 @@ public sealed class LaunchPolicyFingerprintProviderTests
                             {
                                 if (Interlocked.Increment(ref registryLookupCount) == 2)
                                 {
-                                    await File.WriteAllTextAsync(
-                                        path,
+                                    await File.WriteAllTextAsync(path,
                                         "revision-2",
                                         call.ArgAt<CancellationToken>(1));
                                     File.SetLastWriteTimeUtc(path, DateTime.UnixEpoch.AddSeconds(1));
@@ -129,8 +126,7 @@ public sealed class LaunchPolicyFingerprintProviderTests
                                 return null;
                             });
 
-            using var mutatingProvider = BuildProvider(
-                Runtime("runtime-sha"),
+            using var mutatingProvider = BuildProvider(Runtime("runtime-sha"),
                 binaryPath,
                 modelRegistryOverride: mutatingRegistry);
             var captured = await mutatingProvider.CaptureAsync(Input(path), CancellationToken.None);
@@ -249,28 +245,28 @@ public sealed class LaunchPolicyFingerprintProviderTests
                 Role = (int)ModelRole.Chat
             };
             using var baselineProvider = BuildProvider(Runtime("runtime-a"),
-                    binaryPath,
-                    supervisorOptions: new LlamaServerSupervisorOptions
-                    {
-                        ChatCacheReuse = 256,
-                        SpeculativeMode = "ngram-simple"
-                    });
+                binaryPath,
+                supervisorOptions: new LlamaServerSupervisorOptions
+                {
+                    ChatCacheReuse = 256,
+                    SpeculativeMode = "ngram-simple"
+                });
             var baseline = await baselineProvider.CaptureAsync(input, CancellationToken.None);
             using var cacheChangedProvider = BuildProvider(Runtime("runtime-a"),
-                    binaryPath,
-                    supervisorOptions: new LlamaServerSupervisorOptions
-                    {
-                        ChatCacheReuse = 512,
-                        SpeculativeMode = "ngram-simple"
-                    });
+                binaryPath,
+                supervisorOptions: new LlamaServerSupervisorOptions
+                {
+                    ChatCacheReuse = 512,
+                    SpeculativeMode = "ngram-simple"
+                });
             var cacheChanged = await cacheChangedProvider.CaptureAsync(input, CancellationToken.None);
             using var modeChangedProvider = BuildProvider(Runtime("runtime-a"),
-                    binaryPath,
-                    supervisorOptions: new LlamaServerSupervisorOptions
-                    {
-                        ChatCacheReuse = 256,
-                        SpeculativeMode = "ngram-cache"
-                    });
+                binaryPath,
+                supervisorOptions: new LlamaServerSupervisorOptions
+                {
+                    ChatCacheReuse = 256,
+                    SpeculativeMode = "ngram-cache"
+                });
             var modeChanged = await modeChangedProvider.CaptureAsync(input, CancellationToken.None);
 
             AssertEx.NotEqual(baseline.Value, cacheChanged.Value);
@@ -303,29 +299,29 @@ public sealed class LaunchPolicyFingerprintProviderTests
                 SpeculativeDraftGpuLayers = 12
             };
             using var baselineProvider = BuildProvider(Runtime("runtime-a"),
-                    binaryPath,
-                    supervisorOptions: options,
-                    resolvedDraftPath: draftPath);
+                binaryPath,
+                supervisorOptions: options,
+                resolvedDraftPath: draftPath);
             var baseline = await baselineProvider.CaptureAsync(input, CancellationToken.None);
             var originalTimestamp = File.GetLastWriteTimeUtc(draftPath);
 
             await File.WriteAllTextAsync(draftPath, "revision-2");
             File.SetLastWriteTimeUtc(draftPath, originalTimestamp);
             using var draftChangedProvider = BuildProvider(Runtime("runtime-a"),
-                    binaryPath,
-                    supervisorOptions: options,
-                    resolvedDraftPath: draftPath);
+                binaryPath,
+                supervisorOptions: options,
+                resolvedDraftPath: draftPath);
             var draftBytesChanged = await draftChangedProvider.CaptureAsync(input, CancellationToken.None);
             using var flagsChangedProvider = BuildProvider(Runtime("runtime-a"),
-                    binaryPath,
-                    supervisorOptions: new LlamaServerSupervisorOptions
-                    {
-                        SpeculativeMode = "draft-simple",
-                        SpeculativeDraftModelName = "draft-model",
-                        SpeculativeDraftMaxTokens = 5,
-                        SpeculativeDraftGpuLayers = 24
-                    },
-                    resolvedDraftPath: draftPath);
+                binaryPath,
+                supervisorOptions: new LlamaServerSupervisorOptions
+                {
+                    SpeculativeMode = "draft-simple",
+                    SpeculativeDraftModelName = "draft-model",
+                    SpeculativeDraftMaxTokens = 5,
+                    SpeculativeDraftGpuLayers = 24
+                },
+                resolvedDraftPath: draftPath);
             var flagsChanged = await flagsChangedProvider.CaptureAsync(input, CancellationToken.None);
 
             AssertEx.NotEqual(baseline.Value, draftBytesChanged.Value);
@@ -351,34 +347,34 @@ public sealed class LaunchPolicyFingerprintProviderTests
                 Backend = "cpu"
             };
             using var baselineProvider = BuildProvider(Runtime("runtime-a"),
-                    binaryPath,
-                    launchPolicyOptions: new LlamaServerLaunchPolicyOptions
-                    {
-                        AssumeSimultaneousMultithreading = true,
-                        CpuThreadReserve = 1,
-                        CpuThreadCount = 3,
-                        CpuThreadsBatchCount = 4
-                    });
+                binaryPath,
+                launchPolicyOptions: new LlamaServerLaunchPolicyOptions
+                {
+                    AssumeSimultaneousMultithreading = true,
+                    CpuThreadReserve = 1,
+                    CpuThreadCount = 3,
+                    CpuThreadsBatchCount = 4
+                });
             var baseline = await baselineProvider.CaptureAsync(input, CancellationToken.None);
             using var policyChangedProvider = BuildProvider(Runtime("runtime-a"),
-                    binaryPath,
-                    launchPolicyOptions: new LlamaServerLaunchPolicyOptions
-                    {
-                        AssumeSimultaneousMultithreading = false,
-                        CpuThreadReserve = 2,
-                        CpuThreadCount = 3,
-                        CpuThreadsBatchCount = 4
-                    });
+                binaryPath,
+                launchPolicyOptions: new LlamaServerLaunchPolicyOptions
+                {
+                    AssumeSimultaneousMultithreading = false,
+                    CpuThreadReserve = 2,
+                    CpuThreadCount = 3,
+                    CpuThreadsBatchCount = 4
+                });
             var policyChanged = await policyChangedProvider.CaptureAsync(input, CancellationToken.None);
             using var countsChangedProvider = BuildProvider(Runtime("runtime-a"),
-                    binaryPath,
-                    launchPolicyOptions: new LlamaServerLaunchPolicyOptions
-                    {
-                        AssumeSimultaneousMultithreading = true,
-                        CpuThreadReserve = 1,
-                        CpuThreadCount = 5,
-                        CpuThreadsBatchCount = 6
-                    });
+                binaryPath,
+                launchPolicyOptions: new LlamaServerLaunchPolicyOptions
+                {
+                    AssumeSimultaneousMultithreading = true,
+                    CpuThreadReserve = 1,
+                    CpuThreadCount = 5,
+                    CpuThreadsBatchCount = 6
+                });
             var resolvedCountsChanged = await countsChangedProvider.CaptureAsync(input, CancellationToken.None);
 
             AssertEx.NotEqual(baseline.Value, policyChanged.Value);
@@ -399,8 +395,7 @@ public sealed class LaunchPolicyFingerprintProviderTests
         try
         {
             var input = Input(path);
-            using var baselineProvider = BuildProvider(
-                Runtime("runtime-a"),
+            using var baselineProvider = BuildProvider(Runtime("runtime-a"),
                 binaryPath,
                 launchPolicyOptions: new LlamaServerLaunchPolicyOptions
                 {
@@ -410,8 +405,7 @@ public sealed class LaunchPolicyFingerprintProviderTests
                 });
             var baseline = await baselineProvider.CaptureAsync(input, CancellationToken.None);
 
-            using var embeddingChangedProvider = BuildProvider(
-                Runtime("runtime-a"),
+            using var embeddingChangedProvider = BuildProvider(Runtime("runtime-a"),
                 binaryPath,
                 launchPolicyOptions: new LlamaServerLaunchPolicyOptions
                 {
@@ -421,8 +415,7 @@ public sealed class LaunchPolicyFingerprintProviderTests
                 });
             var embeddingChanged = await embeddingChangedProvider.CaptureAsync(input, CancellationToken.None);
 
-            using var marginChangedProvider = BuildProvider(
-                Runtime("runtime-a"),
+            using var marginChangedProvider = BuildProvider(Runtime("runtime-a"),
                 binaryPath,
                 launchPolicyOptions: new LlamaServerLaunchPolicyOptions
                 {
@@ -496,8 +489,7 @@ public sealed class LaunchPolicyFingerprintProviderTests
         }
     }
 
-    private static LaunchPolicyFingerprintProvider BuildProvider(
-        InstalledRuntimeState runtime,
+    private static LaunchPolicyFingerprintProvider BuildProvider(InstalledRuntimeState runtime,
         string binaryPath,
         string? binaryVersion = null,
         LlamaServerSupervisorOptions? supervisorOptions = null,
@@ -572,8 +564,7 @@ public sealed class LaunchPolicyFingerprintProviderTests
         };
     }
 
-    private static InferenceProfileRecord Profile(
-        InferenceProfileFingerprintInput input,
+    private static InferenceProfileRecord Profile(InferenceProfileFingerprintInput input,
         LaunchPolicyFingerprint fingerprint)
     {
         return new InferenceProfileRecord(Guid.NewGuid(),

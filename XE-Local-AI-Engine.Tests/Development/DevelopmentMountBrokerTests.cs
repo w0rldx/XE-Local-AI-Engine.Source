@@ -5,11 +5,9 @@ using System.Text;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
-using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
-using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Tests.Testing;
 using PersistenceDevelopmentAttemptStatus = XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentAttemptStatus;
 
@@ -49,7 +47,13 @@ public sealed class DevelopmentMountBrokerTests : IDisposable
     {
         var (session, _) = await PrepareAsync(CreateMappingSandbox()).ConfigureAwait(false);
 
-        foreach (var name in new[] { "home", "tmp", "nuget", "dotnet" })
+        foreach (var name in new[]
+                 {
+                     "home",
+                     "tmp",
+                     "nuget",
+                     "dotnet"
+                 })
         {
             AssertEx.NotNull(session.SandboxHandle.TryResolveSandboxPath(Path.Combine(session.RuntimePath, name)));
         }
@@ -127,15 +131,13 @@ public sealed class DevelopmentMountBrokerTests : IDisposable
         AssertEx.Empty(plain.SandboxHandle.Mounts.Where(static mount => mount.ReadOnly));
     }
 
-    private async Task<(DevelopmentWorkspaceSession Session, DevelopmentWorkspaceTools Tools)> PrepareAsync(
-        IDevelopmentSandboxRuntimeProvider sandbox)
+    private async Task<(DevelopmentWorkspaceSession Session, DevelopmentWorkspaceTools Tools)> PrepareAsync(IDevelopmentSandboxRuntimeProvider sandbox)
     {
         var repository = await CreateRepositoryAsync().ConfigureAwait(false);
         var data = Path.Combine(_root, "data-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(data);
         var options = Options.Create(OptionsValue());
-        var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(
-            DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
+        var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
 
         var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System);
         var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
@@ -229,7 +231,10 @@ public sealed class DevelopmentMountBrokerTests : IDisposable
             startInfo.ArgumentList.Add(argument);
         }
 
-        using var process = new Process { StartInfo = startInfo };
+        using var process = new Process
+        {
+            StartInfo = startInfo
+        };
         process.Start();
         var error = process.StandardError.ReadToEndAsync();
         _ = await process.StandardOutput.ReadToEndAsync().ConfigureAwait(false);
@@ -264,7 +269,10 @@ public sealed class DevelopmentMountBrokerTests : IDisposable
         public Task<SandboxHandle> CreateOrAttachAsync(SandboxCreateRequest request, CancellationToken cancellationToken = default)
         {
             var workspaceRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(request.TrustedHostWorkspace!.RootPath));
-            var mounts = new List<SandboxMountBinding> { new(workspaceRoot, WorkspaceTarget, ReadOnly: false) };
+            var mounts = new List<SandboxMountBinding>
+            {
+                new(workspaceRoot, WorkspaceTarget, ReadOnly: false)
+            };
             mounts.AddRange((request.Mounts ?? []).Select(mount =>
             {
                 var hostPath = Path.TrimEndingDirectorySeparator(Path.GetFullPath(mount.HostPath));
@@ -325,6 +333,7 @@ public sealed class DevelopmentMountBrokerTests : IDisposable
         public Task CancelCommandAsync(SandboxHandle handle, string executionId, CancellationToken cancellationToken = default) =>
             Task.CompletedTask;
 
-        public Task KillAsync(SandboxHandle handle, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task KillAsync(SandboxHandle handle, CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
     }
 }

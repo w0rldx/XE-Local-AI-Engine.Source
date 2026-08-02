@@ -64,7 +64,10 @@ public sealed class DevelopmentPersistenceTests : IDisposable
         const string ProfileAtAttemptTime = """{"profileId":"generic-git","profileVersion":"v1"}""";
         const string ProfileAfterEdit = """{"profileId":"dotnet-slnx","profileVersion":"v1"}""";
 
-        var seed = DevelopmentTestFixture.CreateSeed() with { CommandProfileJson = ProfileAtAttemptTime };
+        var seed = DevelopmentTestFixture.CreateSeed() with
+        {
+            CommandProfileJson = ProfileAtAttemptTime
+        };
         _ = await store.CreateProjectAsync(seed).ConfigureAwait(false);
         _ = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
                            Guid.NewGuid(),
@@ -74,13 +77,13 @@ public sealed class DevelopmentPersistenceTests : IDisposable
 
         var coderAttemptId = Guid.NewGuid();
         var coder = await store.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
-                                    coderAttemptId,
-                                    Guid.NewGuid(),
-                                    DevelopmentAttemptRole.Coder,
-                                    "local-model",
-                                    "local",
-                                    ExpectedTaskVersion: 2))
-                                .ConfigureAwait(false);
+                                   coderAttemptId,
+                                   Guid.NewGuid(),
+                                   DevelopmentAttemptRole.Coder,
+                                   "local-model",
+                                   "local",
+                                   ExpectedTaskVersion: 2))
+                               .ConfigureAwait(false);
 
         AssertEx.Equal(ProfileAtAttemptTime,
             (await store.GetExecutionSnapshotAsync(coderAttemptId).ConfigureAwait(false)).CommandProfileJson,
@@ -150,7 +153,10 @@ public sealed class DevelopmentPersistenceTests : IDisposable
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
 
         const string ProjectProfile = """{"profileId":"generic-git","profileVersion":"v1"}""";
-        var seed = DevelopmentTestFixture.CreateSeed() with { CommandProfileJson = ProjectProfile };
+        var seed = DevelopmentTestFixture.CreateSeed() with
+        {
+            CommandProfileJson = ProjectProfile
+        };
         _ = await store.CreateProjectAsync(seed).ConfigureAwait(false);
         _ = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
                            Guid.NewGuid(),

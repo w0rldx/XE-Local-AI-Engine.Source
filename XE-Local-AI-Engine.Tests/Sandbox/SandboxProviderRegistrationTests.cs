@@ -186,6 +186,7 @@ public sealed class SandboxProviderRegistrationTests
     {
         public IServiceProvider Services => host.Services;
 
-        public ValueTask DisposeAsync() => ((IAsyncDisposable)host).DisposeAsync();
+        public ValueTask DisposeAsync() =>
+            ((IAsyncDisposable)host).DisposeAsync();
     }
 }

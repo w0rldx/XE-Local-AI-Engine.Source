@@ -16,8 +16,7 @@ public sealed class LocalModelDraftKindTests
     [Test]
     public void ToLlamaCppModelResponses_ClassifiesTheDrafterAsDraft_AndTheRealModelAsChat()
     {
-        var responses = LocalModelsMapper.ToLlamaCppModelResponses(
-        [
+        var responses = LocalModelsMapper.ToLlamaCppModelResponses([
             Descriptor("unsloth/gemma-4-12b-it-GGUF:MTP-Q8_0", sizeBytes: 400_000_000),
             Descriptor("unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL", sizeBytes: 7_800_000_000)
         ], selectedModelName: null);
@@ -34,8 +33,7 @@ public sealed class LocalModelDraftKindTests
     public void ToLlamaCppModelResponses_LeavesAnMtpNamedBaseModelChat()
     {
         // unsloth/Qwen3.6-27B-MTP-GGUF is a real 21 GB chat model — only the QUANT marker means "draft".
-        var responses = LocalModelsMapper.ToLlamaCppModelResponses(
-            [Descriptor("unsloth/Qwen3.6-27B-MTP-GGUF:Q6_K", sizeBytes: 21_300_000_000)],
+        var responses = LocalModelsMapper.ToLlamaCppModelResponses([Descriptor("unsloth/Qwen3.6-27B-MTP-GGUF:Q6_K", sizeBytes: 21_300_000_000)],
             selectedModelName: null);
 
         AssertEx.Equal(ModelKind.Chat.ToString(), responses.Single().Kind);

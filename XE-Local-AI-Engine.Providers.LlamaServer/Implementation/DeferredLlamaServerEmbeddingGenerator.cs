@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
 using System.ClientModel;
 using System.Globalization;
+using System.Net;
 using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
@@ -68,7 +69,7 @@ internal sealed class DeferredLlamaServerEmbeddingGenerator : IEmbeddingGenerato
             // SDK type never reaches the application layer and callers keep one transport-failure catch set.
             throw new HttpRequestException(DescribeFailure(exception), exception, exception.Status switch
             {
-                > 0 and var status => (System.Net.HttpStatusCode)status,
+                > 0 and var status => (HttpStatusCode)status,
                 _ => null
             });
         }

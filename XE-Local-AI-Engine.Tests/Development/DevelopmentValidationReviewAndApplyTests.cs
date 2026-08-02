@@ -575,7 +575,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         // The build is what rejected it: the whitespace check and the restore ahead of it both succeeded.
         AssertEx.Equal(expected: 0, CommandExitCode(commands, DevelopmentCommandIds.GitDiffCheck));
         AssertEx.Equal(expected: 0, CommandExitCode(commands, DevelopmentCommandIds.DotnetRestore));
-        AssertEx.NotEqual(notExpected: 0, CommandExitCode(commands,DevelopmentCommandIds.DotnetBuildRelease));
+        AssertEx.NotEqual(notExpected: 0, CommandExitCode(commands, DevelopmentCommandIds.DotnetBuildRelease));
 
         // The runner does NOT stop at the first failure — it runs the whole declared profile. (An earlier revision of
         // this test said otherwise in a comment; the loop in DevelopmentValidationRunner has no break.) So the test
@@ -610,7 +610,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         AssertEx.Equal(expected: 0, CommandExitCode(commands, DevelopmentCommandIds.GitDiffCheck));
         AssertEx.Equal(expected: 0, CommandExitCode(commands, DevelopmentCommandIds.DotnetRestore));
         AssertEx.Equal(expected: 0, CommandExitCode(commands, DevelopmentCommandIds.DotnetBuildRelease));
-        AssertEx.NotEqual(notExpected: 0, CommandExitCode(commands,DevelopmentCommandIds.DotnetTestRelease));
+        AssertEx.NotEqual(notExpected: 0, CommandExitCode(commands, DevelopmentCommandIds.DotnetTestRelease));
 
         // Slice 4: the report now says WHAT failed, not merely that something did. One test ran and it failed.
         var outcome = TestOutcome(commands);
@@ -641,9 +641,9 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     public async Task Validation_WhenTheRegisteredRepositoryHasNoTests_FailsWithItsOwnReasonRatherThanPassing()
     {
         var (validation, task, commands, report) = await RunDotnetProfileValidationAsync(SlnxProfile(),
-                                                           DevelopmentSyntheticSolutionRepository.PassingLibrarySource,
-                                                           includeTests: false)
-                                                       .ConfigureAwait(false);
+                DevelopmentSyntheticSolutionRepository.PassingLibrarySource,
+                includeTests: false)
+            .ConfigureAwait(false);
 
         AssertEx.False(validation.Passed);
         AssertEx.Equal(DevelopmentTaskStatus.InProgress, validation.TaskStatus);
@@ -734,9 +734,10 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     ///     — a real code-owned .NET profile bound to a real build target in the fixture — and returns the outcome
     ///     together with the command evidence the validation report recorded.
     /// </summary>
-    private async Task<(DevelopmentValidationResult Validation, DevelopmentTaskSnapshot Task, IReadOnlyList<DevelopmentCommandEvidence> Commands, DevelopmentValidationReport Report)> RunDotnetProfileValidationAsync(DevelopmentCommandProfile profile,
-        string librarySource,
-        bool includeTests = true)
+    private async Task<(DevelopmentValidationResult Validation, DevelopmentTaskSnapshot Task, IReadOnlyList<DevelopmentCommandEvidence> Commands, DevelopmentValidationReport Report)>
+        RunDotnetProfileValidationAsync(DevelopmentCommandProfile profile,
+            string librarySource,
+            bool includeTests = true)
     {
         Directory.CreateDirectory(_root);
         var repository = Path.Combine(_root, "solution-" + Guid.NewGuid().ToString("N"));
@@ -747,9 +748,9 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         // here at all — they are carried by each profile command. The synthetic solution restores, builds and tests
         // in a couple of seconds; the headroom is for a cold NuGet fallback resolve on a loaded machine.
         await using var provider = await BuildProviderAsync(new WritingCoderModel(librarySource, DevelopmentSyntheticSolutionRepository.LibrarySourcePath),
-                                       new ApprovingReviewerModel(),
-                                       maxAttemptDurationSeconds: 600)
-                                   .ConfigureAwait(false);
+                new ApprovingReviewerModel(),
+                maxAttemptDurationSeconds: 600)
+            .ConfigureAwait(false);
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         var coordinator = scope.ServiceProvider.GetRequiredService<IDevelopmentCoordinator>();
@@ -804,7 +805,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     /// <summary>The structured result the code-owned adapter read back from the profile's test command.</summary>
     private static DevelopmentTestOutcome TestOutcome(IReadOnlyList<DevelopmentCommandEvidence> commands) =>
         AssertEx.NotNull(AssertEx.NotNull(commands.SingleOrDefault(static command =>
-                                       string.Equals(command.CommandId, DevelopmentCommandIds.DotnetTestRelease, StringComparison.Ordinal)))
+                                     string.Equals(command.CommandId, DevelopmentCommandIds.DotnetTestRelease, StringComparison.Ordinal)))
                                  .TestOutcome);
 
     private static async Task<(DevelopmentCreateProjectCommand Seed, Guid ReviewerAttemptId, DevelopmentReviewerAttemptResult Review)> RunThroughReviewAsync(IServiceProvider services,

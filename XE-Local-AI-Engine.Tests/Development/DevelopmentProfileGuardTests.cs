@@ -7,7 +7,6 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
-using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 using PersistenceDevelopmentAttemptStatus = XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentAttemptStatus;
 using PersistenceDevelopmentTaskStatus = XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentTaskStatus;
@@ -110,12 +109,17 @@ public sealed class DevelopmentProfileGuardTests : IDisposable
                 new DevelopmentChangedFile("tests/Probe/CopiedTests.cs", "copied", "tests/Probe/FeatureTests.cs")),
             profile);
 
-        foreach (var destructive in new[] { "modified", "deleted", "typechanged", "unknown" })
+        foreach (var destructive in new[]
+                 {
+                     "modified",
+                     "deleted",
+                     "typechanged",
+                     "unknown"
+                 })
         {
             var rejected = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() =>
             {
-                DevelopmentTestWritePolicy.Ensure(
-                    Evidence(new DevelopmentChangedFile("tests/Probe/FeatureTests.cs", destructive)), profile);
+                DevelopmentTestWritePolicy.Ensure(Evidence(new DevelopmentChangedFile("tests/Probe/FeatureTests.cs", destructive)), profile);
                 return Task.CompletedTask;
             }).ConfigureAwait(false);
             AssertEx.Contains(rejected.Message, "test that existed at the base commit", StringComparison.Ordinal);
@@ -125,8 +129,7 @@ public sealed class DevelopmentProfileGuardTests : IDisposable
         // PREVIOUS path has to be checked even though the new one looks innocuous.
         _ = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() =>
         {
-            DevelopmentTestWritePolicy.Ensure(
-                Evidence(new DevelopmentChangedFile("tests/Probe/Feature.txt", "renamed", "tests/Probe/FeatureTests.cs")),
+            DevelopmentTestWritePolicy.Ensure(Evidence(new DevelopmentChangedFile("tests/Probe/Feature.txt", "renamed", "tests/Probe/FeatureTests.cs")),
                 profile);
             return Task.CompletedTask;
         }).ConfigureAwait(false);

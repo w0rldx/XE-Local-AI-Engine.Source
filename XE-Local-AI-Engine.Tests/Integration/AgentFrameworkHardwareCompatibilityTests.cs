@@ -7,7 +7,6 @@ using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
-using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
@@ -28,6 +27,7 @@ using XE_Local_AI_Engine.Tests.Testing.Builders;
 public sealed class AgentFrameworkHardwareCompatibilityTests
 {
     private const string ModelName = "framework-compatibility/Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M";
+
     private static readonly JsonSerializerOptions EvidenceJsonOptions = new()
     {
         WriteIndented = true
@@ -163,8 +163,8 @@ public sealed class AgentFrameworkHardwareCompatibilityTests
         Directory.CreateDirectory(Path.GetDirectoryName(fullPath)
                                   ?? throw new InvalidOperationException("Evidence path has no parent directory."));
         await File.WriteAllTextAsync(fullPath,
-                JsonSerializer.Serialize(payload, EvidenceJsonOptions) + Environment.NewLine)
-            .ConfigureAwait(false);
+                      JsonSerializer.Serialize(payload, EvidenceJsonOptions) + Environment.NewLine)
+                  .ConfigureAwait(false);
     }
 
     private static async Task<string> HashFileAsync(string path)
@@ -199,8 +199,7 @@ public sealed class AgentFrameworkHardwareCompatibilityTests
 
     private sealed class FixedGgufModelStore(string modelPath, long sizeBytes, string contentIdentity) : IGgufModelStore
     {
-        private readonly GgufModelFootprintFacts _facts = new(
-            Quant: "Q4_K_M",
+        private readonly GgufModelFootprintFacts _facts = new(Quant: "Q4_K_M",
             FileSizeBytes: sizeBytes,
             ParamCount: null,
             BlockCount: null,

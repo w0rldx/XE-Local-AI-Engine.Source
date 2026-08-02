@@ -78,7 +78,12 @@ public sealed class SandboxMountBrokerTests : IDisposable
         using var provider = CreateProvider();
 
         var handle = await provider.CreateOrAttachAsync(Request(workspace, [
-            new SandboxMount { HostPath = home, SandboxPath = "/xe-runtime/home", ReadOnly = false }
+            new SandboxMount
+            {
+                HostPath = home,
+                SandboxPath = "/xe-runtime/home",
+                ReadOnly = false
+            }
         ]));
 
         AssertEx.Equal(home, handle.TryResolveSandboxPath(home));
@@ -98,10 +103,14 @@ public sealed class SandboxMountBrokerTests : IDisposable
         // refused rather than silently downgraded — a caller would otherwise believe a file is protected that anything
         // in the sandbox can overwrite.
         AssertEx.False(provider.Capabilities.HasFlag(SandboxProviderCapabilities.SupportsReadOnlyMounts));
-        var exception = await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(
-            () => provider.CreateOrAttachAsync(Request(workspace, [
-                new SandboxMount { HostPath = config, SandboxPath = "/.git/config", ReadOnly = true }
-            ])));
+        var exception = await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(() => provider.CreateOrAttachAsync(Request(workspace, [
+            new SandboxMount
+            {
+                HostPath = config,
+                SandboxPath = "/.git/config",
+                ReadOnly = true
+            }
+        ])));
 
         AssertEx.Contains(exception.Message, "read-only");
     }
@@ -113,7 +122,12 @@ public sealed class SandboxMountBrokerTests : IDisposable
         using var provider = CreateProvider();
 
         await AssertEx.ThrowsAsync<DirectoryNotFoundException>(() => provider.CreateOrAttachAsync(Request(workspace, [
-            new SandboxMount { HostPath = Path.Combine(_root, "never-created"), SandboxPath = "/xe-runtime/home", ReadOnly = false }
+            new SandboxMount
+            {
+                HostPath = Path.Combine(_root, "never-created"),
+                SandboxPath = "/xe-runtime/home",
+                ReadOnly = false
+            }
         ])));
     }
 
@@ -165,7 +179,10 @@ public sealed class SandboxMountBrokerTests : IDisposable
             },
             RuntimeProfile = "development",
             NetworkPolicy = SandboxNetworkPolicy.Unrestricted,
-            TrustedHostWorkspace = new SandboxTrustedHostWorkspace { RootPath = workspace },
+            TrustedHostWorkspace = new SandboxTrustedHostWorkspace
+            {
+                RootPath = workspace
+            },
             Mounts = mounts
         };
     }

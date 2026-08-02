@@ -25,5 +25,6 @@ internal sealed class DevelopmentAttempt
     ///     </para>
     /// </summary>
     public string? CommandProfileJson { get; set; }
+
     public long Version { get; set; }
 }

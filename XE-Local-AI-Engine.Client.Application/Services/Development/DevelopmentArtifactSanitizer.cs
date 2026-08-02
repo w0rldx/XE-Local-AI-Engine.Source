@@ -43,7 +43,12 @@ internal static partial class DevelopmentArtifactSanitizer
     ///     <c>/mnt/c/Users/&lt;user&gt;</c> fourth — a purely positional rule preserved the last of those verbatim.
     /// </summary>
     private static readonly HashSet<string> IdentityContainerSegments =
-        new(StringComparer.OrdinalIgnoreCase) { "home", "Users", "user" };
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            "home",
+            "Users",
+            "user"
+        };
 
     [GeneratedRegex(@"(?<![A-Za-z0-9])![A-Za-z][A-Za-z0-9]{11,}(?![A-Za-z0-9])", RegexOptions.ExplicitCapture, 2000)]
     private static partial Regex BarePasswordLikeValueRegex();
@@ -138,7 +143,12 @@ internal static partial class DevelopmentArtifactSanitizer
     {
         ArgumentNullException.ThrowIfNull(session);
 
-        var roots = new List<string> { repositoryRoot, session.HostWorktreePath, session.RuntimePath };
+        var roots = new List<string>
+        {
+            repositoryRoot,
+            session.HostWorktreePath,
+            session.RuntimePath
+        };
         roots.AddRange(session.SandboxHandle.Mounts.Select(static mount => mount.SandboxPath));
 
         // The runtime mount ROOT as well as each mounted subdirectory: a build prints ".../xe-runtime/nuget/..." but it

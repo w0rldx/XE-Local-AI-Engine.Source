@@ -6,6 +6,7 @@ using TUnit.Core.Exceptions;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container.Implementation;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -156,7 +157,11 @@ public sealed class DockerSandboxRealDaemonTests
         var destination = Path.Combine(fixture.WorkspaceRoot, "..", "copied-out.txt");
 
         await fixture.Provider.CopyOutAsync(fixture.Handle,
-            new SandboxCopyRequest { SourcePath = "/export.txt", DestinationPath = destination });
+            new SandboxCopyRequest
+            {
+                SourcePath = "/export.txt",
+                DestinationPath = destination
+            });
 
         AssertEx.Equal("exported", (await File.ReadAllTextAsync(destination)).Trim());
     }
@@ -288,7 +293,11 @@ public sealed class DockerSandboxRealDaemonTests
         await File.WriteAllTextAsync(source, "written-by-the-engine");
 
         await fixture.Provider.CopyIntoAsync(fixture.Handle,
-            new SandboxCopyRequest { SourcePath = source, DestinationPath = "/nested/written.txt" });
+            new SandboxCopyRequest
+            {
+                SourcePath = source,
+                DestinationPath = "/nested/written.txt"
+            });
 
         AssertEx.Equal("written-by-the-engine",
             await File.ReadAllTextAsync(Path.Combine(fixture.WorkspaceRoot, "nested", "written.txt")));
@@ -304,7 +313,11 @@ public sealed class DockerSandboxRealDaemonTests
         await File.WriteAllTextAsync(source, "should-not-land");
 
         await AssertEx.ThrowsAsync<UnauthorizedAccessException>(() => fixture.Provider.CopyIntoAsync(fixture.Handle,
-            new SandboxCopyRequest { SourcePath = source, DestinationPath = "/../escaped.txt" }));
+            new SandboxCopyRequest
+            {
+                SourcePath = source,
+                DestinationPath = "/../escaped.txt"
+            }));
 
         AssertEx.False(File.Exists(Path.Combine(fixture.WorkspaceRoot, "..", "escaped.txt")));
     }
@@ -326,7 +339,11 @@ public sealed class DockerSandboxRealDaemonTests
         await File.WriteAllTextAsync(source, "should-not-land");
 
         await AssertEx.ThrowsAsync<UnauthorizedAccessException>(() => fixture.Provider.CopyIntoAsync(fixture.Handle,
-            new SandboxCopyRequest { SourcePath = source, DestinationPath = "/escape/planted.txt" }));
+            new SandboxCopyRequest
+            {
+                SourcePath = source,
+                DestinationPath = "/escape/planted.txt"
+            }));
     }
 
     [Test]
@@ -393,12 +410,15 @@ public sealed class DockerSandboxRealDaemonTests
         var options = await RequireDaemonAsync();
         if (!await IsRootlessAsync(options))
         {
-            throw new SkipTestException(
-                "SKIPPED — this daemon is not rootless, so an in-container uid maps straight through and there is no "
-                + "mis-mapping to reproduce. The inverted-identity case is only reachable against a rootless daemon.");
+            throw new SkipTestException("SKIPPED — this daemon is not rootless, so an in-container uid maps straight through and there is no "
+                                        + "mis-mapping to reproduce. The inverted-identity case is only reachable against a rootless daemon.");
         }
 
-        var mismatched = options with { UserId = 1000, GroupId = 1000 };
+        var mismatched = options with
+        {
+            UserId = 1000,
+            GroupId = 1000
+        };
         using var workspace = new TemporaryDirectory();
         var workspaceRoot = Path.Combine(workspace.Path, "workspace");
         Directory.CreateDirectory(workspaceRoot);
@@ -409,21 +429,23 @@ public sealed class DockerSandboxRealDaemonTests
             new FixedTimeProvider(FixedNow),
             NullLogger<DockerSandboxRuntimeProvider>.Instance);
 
-        var exception = await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(() => provider.CreateOrAttachAsync(
-            new SandboxCreateRequest
+        var exception = await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(() => provider.CreateOrAttachAsync(new SandboxCreateRequest
+        {
+            AttachKey = new SandboxAttachKey
             {
-                AttachKey = new SandboxAttachKey
-                {
-                    OwnerUserId = Guid.NewGuid().ToString("N"),
-                    NodeId = "integration-node",
-                    ProviderName = DockerSandboxRuntimeProvider.Name,
-                    RuntimeProfile = "development",
-                    ManifestVersion = 1
-                },
+                OwnerUserId = Guid.NewGuid().ToString("N"),
+                NodeId = "integration-node",
+                ProviderName = DockerSandboxRuntimeProvider.Name,
                 RuntimeProfile = "development",
-                NetworkPolicy = SandboxNetworkPolicy.None,
-                TrustedHostWorkspace = new SandboxTrustedHostWorkspace { RootPath = workspaceRoot }
-            }));
+                ManifestVersion = 1
+            },
+            RuntimeProfile = "development",
+            NetworkPolicy = SandboxNetworkPolicy.None,
+            TrustedHostWorkspace = new SandboxTrustedHostWorkspace
+            {
+                RootPath = workspaceRoot
+            }
+        }));
 
         AssertEx.Contains(exception.Message, "workspace mount");
         AssertEx.Empty(Directory.GetFileSystemEntries(workspaceRoot));
@@ -439,7 +461,13 @@ public sealed class DockerSandboxRealDaemonTests
         var options = await RequireDaemonAsync();
         await using var fixture = await ContainerFixture.CreateWithRuntimeMountsAsync(options);
 
-        foreach (var name in new[] { "home", "tmp", "nuget", "dotnet" })
+        foreach (var name in new[]
+                 {
+                     "home",
+                     "tmp",
+                     "nuget",
+                     "dotnet"
+                 })
         {
             AssertEx.Equal("WROTE", await ProbeAsync(fixture, $"touch /xe-runtime/{name}/probe && echo WROTE"));
             AssertEx.True(File.Exists(Path.Combine(fixture.RuntimeRoot, name, "probe")),
@@ -547,17 +575,15 @@ public sealed class DockerSandboxRealDaemonTests
         }
         catch (DockerRuntimeException exception)
         {
-            throw new SkipTestException(
-                $"SKIPPED — no usable Docker daemon: {exception.Status} at '{endpoint.Display}' ({exception.Message}). "
-                + "These are the ONLY tests that prove the §3.8 hardening contract holds against a real daemon; a green run "
-                + "without them is not evidence of isolation. Start Docker (or set DOCKER_HOST) and re-run.");
+            throw new SkipTestException($"SKIPPED — no usable Docker daemon: {exception.Status} at '{endpoint.Display}' ({exception.Message}). "
+                                        + "These are the ONLY tests that prove the §3.8 hardening contract holds against a real daemon; a green run "
+                                        + "without them is not evidence of isolation. Start Docker (or set DOCKER_HOST) and re-run.");
         }
 
         if (!identity.OperatingSystem.Equals("linux", StringComparison.OrdinalIgnoreCase))
         {
-            throw new SkipTestException(
-                $"SKIPPED — the reachable Docker daemon runs '{identity.OperatingSystem}' containers, not Linux. The §3.8 "
-                + "contract's capability, namespace and read-only-rootfs guarantees are Linux semantics and cannot be verified here.");
+            throw new SkipTestException($"SKIPPED — the reachable Docker daemon runs '{identity.OperatingSystem}' containers, not Linux. The §3.8 "
+                                        + "contract's capability, namespace and read-only-rootfs guarantees are Linux semantics and cannot be verified here.");
         }
 
         return options;
@@ -587,7 +613,12 @@ public sealed class DockerSandboxRealDaemonTests
     private static async Task<string> ProbeAsync(ContainerFixture fixture, string shellCommand)
     {
         var result = await fixture.Provider.ExecuteAsync(fixture.Handle,
-            new SandboxCommandRequest { ExecutionId = Guid.NewGuid().ToString("N"), Executable = "/bin/sh", Arguments = ["-c", shellCommand] });
+            new SandboxCommandRequest
+            {
+                ExecutionId = Guid.NewGuid().ToString("N"),
+                Executable = "/bin/sh",
+                Arguments = ["-c", shellCommand]
+            });
 
         return (result.StandardOutput + result.StandardError).Trim();
     }
@@ -652,7 +683,13 @@ public sealed class DockerSandboxRealDaemonTests
             var mounts = new List<SandboxMount>();
             if (withRuntimeMounts)
             {
-                foreach (var name in new[] { "home", "tmp", "nuget", "dotnet" })
+                foreach (var name in new[]
+                         {
+                             "home",
+                             "tmp",
+                             "nuget",
+                             "dotnet"
+                         })
                 {
                     Directory.CreateDirectory(Path.Combine(runtimeRoot, name));
                     mounts.Add(new SandboxMount
@@ -691,7 +728,10 @@ public sealed class DockerSandboxRealDaemonTests
                 },
                 RuntimeProfile = "development",
                 NetworkPolicy = networkPolicy,
-                TrustedHostWorkspace = new SandboxTrustedHostWorkspace { RootPath = workspaceRoot },
+                TrustedHostWorkspace = new SandboxTrustedHostWorkspace
+                {
+                    RootPath = workspaceRoot
+                },
                 Mounts = mounts
             });
 
@@ -773,7 +813,7 @@ public sealed class DockerSandboxRealDaemonTests
         }
     }
 
-    private sealed class FixedNodeDataDirectory : XE_Local_AI_Engine.Providers.Abstractions.INodeDataDirectory
+    private sealed class FixedNodeDataDirectory : INodeDataDirectory
     {
         public FixedNodeDataDirectory(string root)
         {

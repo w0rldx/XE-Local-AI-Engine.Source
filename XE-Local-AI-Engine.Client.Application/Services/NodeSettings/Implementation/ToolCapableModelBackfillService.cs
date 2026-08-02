@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 
-using Microsoft.Extensions.Hosting;
-
 /// <summary>
 ///     Runs <see cref="IToolCapableModelRegistrar.BackfillInstalledAsync" /> once at startup, off the critical path.
 /// </summary>

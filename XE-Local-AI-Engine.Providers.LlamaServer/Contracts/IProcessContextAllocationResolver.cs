@@ -3,8 +3,7 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// <summary>Resolves and caches the single process-context allocation shared by footprint and launch.</summary>
 public interface IProcessContextAllocationResolver
 {
-    Task<ProcessContextAllocation?> ResolveAsync(
-        string modelName,
+    Task<ProcessContextAllocation?> ResolveAsync(string modelName,
         ModelRole role,
         GpuVariant variant,
         ResolvedLaunchArguments resolved,

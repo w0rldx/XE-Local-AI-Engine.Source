@@ -80,6 +80,7 @@ internal static class AddNodeAgentHomeExtensions
         {
             builder.Services.AddSingleton<ISandboxProcessGroupKiller, NoOpSandboxProcessGroupKiller>();
         }
+
         // The concrete providers are registered as themselves, and the two ROLES are factories over them. Two things
         // follow, both deliberate. (1) When the agent and Development roles name the same provider they get the SAME
         // SINGLETON: ProcessSandboxRuntimeProvider allocates its jail root once per instance, and CoderWorkspaceReader
