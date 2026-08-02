@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Endpoints.ModelFit.V1;
 
 using System.Net;
 using System.Net.Http.Json;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -173,7 +174,18 @@ public sealed class LlamaCppRuntimeEndpointTests
         // is never replaced while a process holds it, and the operator must eject deliberately first (no auto-evict).
         var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
         var supervisor = new FakeProcessSupervisor(FakeProcessSupervisor.RunningChat());
-        await using var factory = CreateFactory(binaryManager, new LlamaCppUpdateState(), supervisor: supervisor);
+        // The endpoint resolves the catalog asset BEFORE the running-process gate, so the 409 is only reachable once an
+        // asset resolves. Stub it: the production catalog queries the live GitHub Releases API, which made this
+        // assertion depend on network reachability and the unauthenticated rate limit (it degraded to the sanitized 400
+        // whenever the lookup failed). The stub keeps the gate — not the transport — the thing under test.
+        var releaseCatalog = Substitute.For<ILlamaCppReleaseCatalog>();
+        releaseCatalog.ResolveAssetAsync(Arg.Any<string>(), Arg.Any<OSPlatform>(), Arg.Any<Architecture>(), Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>())
+                      .Returns(LlamaCppReleaseResult.ForAsset("b9700",
+                          new LlamaCppReleaseAsset("llama-b9700-bin-win-cuda-x64.zip",
+                              new Uri("https://example.invalid/llama-b9700-bin-win-cuda-x64.zip"),
+                              new string('a', count: 64),
+                              Size: 1024)));
+        await using var factory = CreateFactory(binaryManager, new LlamaCppUpdateState(), releaseCatalog, supervisor);
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, $"{ApiPrefix}/model-fit/llamacpp/update")
