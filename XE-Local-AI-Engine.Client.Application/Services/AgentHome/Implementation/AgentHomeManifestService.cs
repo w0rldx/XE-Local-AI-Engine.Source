@@ -376,7 +376,9 @@ internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDis
             throw new InvalidOperationException($"Refusing to recursively delete '{agentHomeRoot}': no AgentHome manifest is present.");
         }
 
-        Directory.Delete(agentHomeRoot, recursive: true);
+        // Read-only-aware: a prepared workspace can carry a copied Git object store, whose pack files Windows refuses
+        // to delete through a plain recursive walk. See StandaloneGitClone.Delete.
+        StandaloneGitClone.Delete(agentHomeRoot);
     }
 
     private void WriteLockFile(string agentHomeRoot)
