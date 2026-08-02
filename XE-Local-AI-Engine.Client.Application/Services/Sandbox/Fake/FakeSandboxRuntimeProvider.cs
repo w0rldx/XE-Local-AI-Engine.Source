@@ -1,7 +1,9 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox.Fake;
 
 using System.Globalization;
+using System.IO.Enumeration;
 using System.Text;
+using System.Text.RegularExpressions;
 
 /// <summary>
 ///     Deterministic, in-memory <see cref="ISandboxRuntimeProvider" /> used as the CI-mandatory provider and as the
@@ -199,6 +201,93 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
         }
 
         return content;
+    }
+
+    /// <summary>
+    ///     Lists the virtual filesystem's entries beneath the requested directory, in the same <c>./relative/path</c>
+    ///     shape the real provider emits — so a test that drives Coder or AgentHome through this provider is asserting
+    ///     the shape production produces, not a fake one.
+    /// </summary>
+    public Task<IReadOnlyList<string>> ListFilesAsync(SandboxHandle handle,
+        SandboxListFilesRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        lock (_sync)
+        {
+            IReadOnlyList<string> entries =
+            [
+                .. EnumerateUnder(handle, request.DirectoryPath, cancellationToken)
+                   .Where(entry => request.NameGlob is not { Length: > 0 } glob
+                                   || FileSystemName.MatchesSimpleExpression(glob, entry.Relative.Split('/')[^1], ignoreCase: true))
+                   .Select(static entry => "./" + entry.Relative)
+                   .Take(Math.Max(request.MaxEntries, val2: 0))
+            ];
+            return Task.FromResult(entries);
+        }
+    }
+
+    /// <inheritdoc cref="ISandboxRuntimeProvider.SearchTextAsync" />
+    public Task<IReadOnlyList<string>> SearchTextAsync(SandboxHandle handle,
+        SandboxSearchTextRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        lock (_sync)
+        {
+            var matches = new List<string>();
+            if (request.Pattern.Length == 0)
+            {
+                return Task.FromResult<IReadOnlyList<string>>(matches);
+            }
+
+            var expression = request.IsRegex
+                ? new Regex(request.Pattern, RegexOptions.None, TimeSpan.FromMilliseconds(250))
+                : null;
+
+            foreach (var (relative, content) in EnumerateUnder(handle, request.DirectoryPath, cancellationToken))
+            {
+                var lineNumber = 0;
+                foreach (var line in content.Split('\n'))
+                {
+                    lineNumber++;
+                    var text = line.TrimEnd('\r');
+                    var hit = expression is null ? text.Contains(request.Pattern, StringComparison.Ordinal) : expression.IsMatch(text);
+                    if (!hit)
+                    {
+                        continue;
+                    }
+
+                    matches.Add(string.Create(CultureInfo.InvariantCulture, $"./{relative}:{lineNumber}:{text}"));
+                    if (matches.Count >= request.MaxMatches)
+                    {
+                        return Task.FromResult<IReadOnlyList<string>>(matches);
+                    }
+                }
+            }
+
+            return Task.FromResult<IReadOnlyList<string>>(matches);
+        }
+    }
+
+    // The virtual filesystem is keyed by sandbox-absolute path, so "under this directory" is a prefix test — and the
+    // directory itself is addressed the way every other operation addresses one.
+    private IEnumerable<(string Relative, string Content)> EnumerateUnder(SandboxHandle handle,
+        string directoryPath,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(handle);
+        ArgumentException.ThrowIfNullOrWhiteSpace(directoryPath);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var state = GetAliveState(handle);
+        var prefix = directoryPath.TrimEnd('/') + "/";
+        return state.SandboxFiles
+                    .Where(file => file.Key.StartsWith(prefix, StringComparison.Ordinal))
+                    .OrderBy(static file => file.Key, StringComparer.Ordinal)
+                    .Select(file => (file.Key[prefix.Length..], file.Value));
     }
 
     public Task CopyOutAsync(SandboxHandle handle, SandboxCopyRequest request, CancellationToken cancellationToken = default)

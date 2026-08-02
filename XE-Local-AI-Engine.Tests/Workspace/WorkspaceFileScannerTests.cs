@@ -1,8 +1,8 @@
-namespace XE_Local_AI_Engine.Tests.Development;
+namespace XE_Local_AI_Engine.Tests.Workspace;
 
 using System.Globalization;
 using System.Text;
-using XE_Local_AI_Engine.Client.Services.Development;
+using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -15,7 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         which need the privilege to plant a link in the first place.
 ///     </para>
 /// </summary>
-public sealed class DevelopmentWorkspaceFileScannerTests : IDisposable
+public sealed class WorkspaceFileScannerTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "xe-development-scanner-" + Guid.NewGuid().ToString("N"));
 
@@ -41,7 +41,7 @@ public sealed class DevelopmentWorkspaceFileScannerTests : IDisposable
         Write(workspace, "src/feature.cs", "// code");
         Write(workspace, "readme.md", "hello");
 
-        var listing = DevelopmentWorkspaceFileScanner.ListFiles(workspace, maxEntries: 100, NeverSuppressed, CancellationToken.None);
+        var listing = WorkspaceFileScanner.ListFiles(workspace, maxEntries: 100, NeverSuppressed, nameGlob: null, CancellationToken.None);
 
         AssertEx.Contains(listing, "./readme.md");
         AssertEx.Contains(listing, "./src/feature.cs");
@@ -65,7 +65,7 @@ public sealed class DevelopmentWorkspaceFileScannerTests : IDisposable
         Write(workspace, "b-dir/inner.txt", "x");
         Write(workspace, "a-dir/inner.txt", "x");
 
-        var listing = DevelopmentWorkspaceFileScanner.ListFiles(workspace, maxEntries: 100, NeverSuppressed, CancellationToken.None);
+        var listing = WorkspaceFileScanner.ListFiles(workspace, maxEntries: 100, NeverSuppressed, nameGlob: null, CancellationToken.None);
 
         // Files of the scanned directory first, name-sorted, then each subdirectory in name order.
         AssertEx.Equal("./alpha.txt", listing[0]);
@@ -92,9 +92,10 @@ public sealed class DevelopmentWorkspaceFileScannerTests : IDisposable
 
         Write(workspace, "zz-src/feature.cs", "// code");
 
-        var listing = DevelopmentWorkspaceFileScanner.ListFiles(workspace,
+        var listing = WorkspaceFileScanner.ListFiles(workspace,
             maxEntries: 8,
             relative => relative.StartsWith(".git", StringComparison.Ordinal),
+            nameGlob: null,
             CancellationToken.None);
 
         AssertEx.Equal(1, listing.Count);
@@ -110,7 +111,7 @@ public sealed class DevelopmentWorkspaceFileScannerTests : IDisposable
             Write(workspace, "f" + index.ToString("D2", CultureInfo.InvariantCulture), "x");
         }
 
-        var listing = DevelopmentWorkspaceFileScanner.ListFiles(workspace, maxEntries: 5, NeverSuppressed, CancellationToken.None);
+        var listing = WorkspaceFileScanner.ListFiles(workspace, maxEntries: 5, NeverSuppressed, nameGlob: null, CancellationToken.None);
 
         AssertEx.Equal(5, listing.Count);
     }
@@ -119,11 +120,11 @@ public sealed class DevelopmentWorkspaceFileScannerTests : IDisposable
     public void ListFiles_StopsAtTheDepthCeilingInsteadOfDescendingForever()
     {
         var workspace = CreateWorkspace();
-        var deep = string.Join('/', Enumerable.Repeat("d", DevelopmentWorkspaceFileScanner.MaxDepth + 2));
+        var deep = string.Join('/', Enumerable.Repeat("d", WorkspaceFileScanner.MaxDepth + 2));
         Write(workspace, deep + "/too-deep.txt", "x");
         Write(workspace, "shallow.txt", "x");
 
-        var listing = DevelopmentWorkspaceFileScanner.ListFiles(workspace, maxEntries: 100, NeverSuppressed, CancellationToken.None);
+        var listing = WorkspaceFileScanner.ListFiles(workspace, maxEntries: 100, NeverSuppressed, nameGlob: null, CancellationToken.None);
 
         AssertEx.Contains(listing, "./shallow.txt");
         AssertEx.False(listing.Any(entry => entry.EndsWith("too-deep.txt", StringComparison.Ordinal)),
@@ -148,7 +149,7 @@ public sealed class DevelopmentWorkspaceFileScannerTests : IDisposable
         Directory.CreateSymbolicLink(Path.Combine(workspace, "escape"), outside);
         File.CreateSymbolicLink(Path.Combine(workspace, "link.txt"), Path.Combine(outside, "secret.txt"));
 
-        var listing = DevelopmentWorkspaceFileScanner.ListFiles(workspace, maxEntries: 100, NeverSuppressed, CancellationToken.None);
+        var listing = WorkspaceFileScanner.ListFiles(workspace, maxEntries: 100, NeverSuppressed, nameGlob: null, CancellationToken.None);
 
         AssertEx.Equal(1, listing.Count);
         AssertEx.Equal("./real.txt", listing[0]);
@@ -166,8 +167,8 @@ public sealed class DevelopmentWorkspaceFileScannerTests : IDisposable
         var linkedRoot = Path.Combine(workspace, "linked");
         Directory.CreateSymbolicLink(linkedRoot, outside);
 
-        _ = Assert.Throws<DevelopmentWorkspaceSecurityException>(() =>
-            DevelopmentWorkspaceFileScanner.ListFiles(linkedRoot, maxEntries: 100, NeverSuppressed, CancellationToken.None));
+        _ = Assert.Throws<WorkspaceScanRejectedException>(() =>
+            WorkspaceFileScanner.ListFiles(linkedRoot, maxEntries: 100, NeverSuppressed, nameGlob: null, CancellationToken.None));
     }
 
     [Test]
@@ -176,7 +177,7 @@ public sealed class DevelopmentWorkspaceFileScannerTests : IDisposable
         var workspace = CreateWorkspace();
 
         _ = Assert.Throws<DirectoryNotFoundException>(() =>
-            DevelopmentWorkspaceFileScanner.ListFiles(Path.Combine(workspace, "nope"), maxEntries: 100, NeverSuppressed, CancellationToken.None));
+            WorkspaceFileScanner.ListFiles(Path.Combine(workspace, "nope"), maxEntries: 100, NeverSuppressed, nameGlob: null, CancellationToken.None));
     }
 
     [Test]
@@ -185,7 +186,7 @@ public sealed class DevelopmentWorkspaceFileScannerTests : IDisposable
         var workspace = CreateWorkspace();
         Write(workspace, "src/feature.cs", "one\ntwo needle two\nthree\n");
 
-        var matches = DevelopmentWorkspaceFileScanner.SearchText(workspace, "needle", maxOutputBytes: 65536, NeverSuppressed, CancellationToken.None);
+        var matches = WorkspaceFileScanner.SearchText(workspace, "needle", isRegex: false, maxMatches: int.MaxValue, maxOutputBytes: 65536, NeverSuppressed, CancellationToken.None);
 
         AssertEx.Equal(1, matches.Count);
         AssertEx.Equal("./src/feature.cs:2:two needle two", matches[0]);
@@ -202,7 +203,7 @@ public sealed class DevelopmentWorkspaceFileScannerTests : IDisposable
         Write(workspace, "a.txt", "abc\n");
         Write(workspace, "b.txt", "a.c\n");
 
-        var matches = DevelopmentWorkspaceFileScanner.SearchText(workspace, "a.c", maxOutputBytes: 65536, NeverSuppressed, CancellationToken.None);
+        var matches = WorkspaceFileScanner.SearchText(workspace, "a.c", isRegex: false, maxMatches: int.MaxValue, maxOutputBytes: 65536, NeverSuppressed, CancellationToken.None);
 
         AssertEx.Equal(1, matches.Count);
         AssertEx.Equal("./b.txt:1:a.c", matches[0]);
@@ -215,9 +216,9 @@ public sealed class DevelopmentWorkspaceFileScannerTests : IDisposable
         Write(workspace, ".env", "AWS_SECRET_ACCESS_KEY=needle\n");
         Write(workspace, "src/feature.cs", "// needle\n");
 
-        var matches = DevelopmentWorkspaceFileScanner.SearchText(workspace,
+        var matches = WorkspaceFileScanner.SearchText(workspace,
             "needle",
-            maxOutputBytes: 65536,
+            isRegex: false, maxMatches: int.MaxValue, maxOutputBytes: 65536,
             relative => relative.EndsWith(".env", StringComparison.Ordinal),
             CancellationToken.None);
 
@@ -233,7 +234,7 @@ public sealed class DevelopmentWorkspaceFileScannerTests : IDisposable
         File.WriteAllBytes(Path.Combine(workspace, "blob.bin"), [.. "needle"u8.ToArray(), 0x00, .. "needle"u8.ToArray()]);
         Write(workspace, "text.txt", "needle\n");
 
-        var matches = DevelopmentWorkspaceFileScanner.SearchText(workspace, "needle", maxOutputBytes: 65536, NeverSuppressed, CancellationToken.None);
+        var matches = WorkspaceFileScanner.SearchText(workspace, "needle", isRegex: false, maxMatches: int.MaxValue, maxOutputBytes: 65536, NeverSuppressed, CancellationToken.None);
 
         AssertEx.Equal(1, matches.Count);
         AssertEx.Equal("./text.txt:1:needle", matches[0]);
@@ -251,7 +252,7 @@ public sealed class DevelopmentWorkspaceFileScannerTests : IDisposable
 
         Write(workspace, "big.txt", builder.ToString());
 
-        var matches = DevelopmentWorkspaceFileScanner.SearchText(workspace, "needle", maxOutputBytes: 256, NeverSuppressed, CancellationToken.None);
+        var matches = WorkspaceFileScanner.SearchText(workspace, "needle", isRegex: false, maxMatches: int.MaxValue, maxOutputBytes: 256, NeverSuppressed, CancellationToken.None);
 
         AssertEx.NotEmpty(matches);
         AssertEx.True(matches.Sum(match => Encoding.UTF8.GetByteCount(match) + 1) < 256 + 128,
@@ -268,7 +269,7 @@ public sealed class DevelopmentWorkspaceFileScannerTests : IDisposable
         var workspace = CreateWorkspace();
         Write(workspace, "crlf.txt", "alpha\r\nneedle here\r\ngamma\r\n");
 
-        var matches = DevelopmentWorkspaceFileScanner.SearchText(workspace, "needle", maxOutputBytes: 65536, NeverSuppressed, CancellationToken.None);
+        var matches = WorkspaceFileScanner.SearchText(workspace, "needle", isRegex: false, maxMatches: int.MaxValue, maxOutputBytes: 65536, NeverSuppressed, CancellationToken.None);
 
         AssertEx.Equal(1, matches.Count);
         AssertEx.Equal("./crlf.txt:2:needle here", matches[0]);
@@ -283,10 +284,10 @@ public sealed class DevelopmentWorkspaceFileScannerTests : IDisposable
     public void SearchText_BoundsAnOverlongLineAndKeepsLaterLineNumbersCorrect()
     {
         var workspace = CreateWorkspace();
-        var overlong = new string('a', DevelopmentWorkspaceFileScanner.MaxSearchLineChars + 4096) + "needle";
+        var overlong = new string('a', WorkspaceFileScanner.MaxSearchLineChars + 4096) + "needle";
         Write(workspace, "long.txt", overlong + "\nsecond needle\n");
 
-        var matches = DevelopmentWorkspaceFileScanner.SearchText(workspace, "needle", maxOutputBytes: 1024 * 1024, NeverSuppressed, CancellationToken.None);
+        var matches = WorkspaceFileScanner.SearchText(workspace, "needle", isRegex: false, maxMatches: int.MaxValue, maxOutputBytes: 1024 * 1024, NeverSuppressed, CancellationToken.None);
 
         // The match past the bound is not reported — the tail of the line was never buffered.
         AssertEx.Equal(1, matches.Count);
@@ -299,9 +300,110 @@ public sealed class DevelopmentWorkspaceFileScannerTests : IDisposable
         var workspace = CreateWorkspace();
         Write(workspace, "a.txt", "alpha\nbeta\n");
 
-        var matches = DevelopmentWorkspaceFileScanner.SearchText(workspace, string.Empty, maxOutputBytes: 65536, NeverSuppressed, CancellationToken.None);
+        var matches = WorkspaceFileScanner.SearchText(workspace, string.Empty, isRegex: false, maxMatches: int.MaxValue, maxOutputBytes: 65536, NeverSuppressed, CancellationToken.None);
 
         AssertEx.Empty(matches);
+    }
+
+    /// <summary>
+    ///     The glob is <c>find -name</c>'s replacement: matched against the entry NAME, never the path, and never used
+    ///     to skip a directory — pruning on it would hide a matching file inside a non-matching directory, which is the
+    ///     case an agent most often wants.
+    /// </summary>
+    [Test]
+    public void ListFiles_WithANameGlob_FiltersByEntryNameAtAnyDepth()
+    {
+        var workspace = CreateWorkspace();
+        Write(workspace, "Program.cs", "x");
+        Write(workspace, "notes.md", "x");
+        Write(workspace, "deep/nested/Widget.cs", "x");
+        Write(workspace, "deep/nested/readme.md", "x");
+
+        var listing = WorkspaceFileScanner.ListFiles(workspace, maxEntries: 100, NeverSuppressed, "*.cs", CancellationToken.None);
+
+        AssertEx.Contains(listing, "./Program.cs");
+        AssertEx.Contains(listing, "./deep/nested/Widget.cs");
+        AssertEx.Equal(2, listing.Count);
+    }
+
+    [Test]
+    public void SearchText_InRegexMode_MatchesTheExpressionRatherThanTheLiteral()
+    {
+        var workspace = CreateWorkspace();
+        Write(workspace, "a.txt", "alpha123\n");
+        Write(workspace, "b.txt", "alphaXYZ\n");
+
+        var matches = WorkspaceFileScanner.SearchText(workspace,
+            "alpha[0-9]+",
+            isRegex: true,
+            maxMatches: int.MaxValue,
+            maxOutputBytes: 65536,
+            NeverSuppressed,
+            CancellationToken.None);
+
+        AssertEx.Equal(1, matches.Count);
+        AssertEx.Equal("./a.txt:1:alpha123", matches[0]);
+    }
+
+    /// <summary>
+    ///     The pattern is model-supplied, so an unparseable one has to come back as something the caller can answer
+    ///     with — not as a survey that silently found nothing.
+    /// </summary>
+    [Test]
+    public void SearchText_WithAnUnparseableExpression_ReportsItRatherThanReturningNoMatches()
+    {
+        var workspace = CreateWorkspace();
+        Write(workspace, "a.txt", "alpha\n");
+
+        _ = Assert.Throws<ArgumentException>(() => WorkspaceFileScanner.SearchText(workspace,
+            "alpha(",
+            isRegex: true,
+            maxMatches: int.MaxValue,
+            maxOutputBytes: 65536,
+            NeverSuppressed,
+            CancellationToken.None));
+    }
+
+    /// <summary>
+    ///     A model-supplied expression can be crafted to backtrack catastrophically. The per-line timeout means one
+    ///     pathological line costs a bounded amount of work and is skipped — the survey still returns, and the ordinary
+    ///     lines in the same tree are still searched.
+    /// </summary>
+    [Test]
+    public void SearchText_WhenAnExpressionBacktracksCatastrophically_AbandonsThatLineAndKeepsGoing()
+    {
+        var workspace = CreateWorkspace();
+        Write(workspace, "a-pathological.txt", new string('a', 64) + "!\n");
+        Write(workspace, "b-ordinary.txt", "aaab\n");
+
+        var matches = WorkspaceFileScanner.SearchText(workspace,
+            "(a+)+$",
+            isRegex: true,
+            maxMatches: int.MaxValue,
+            maxOutputBytes: 65536,
+            NeverSuppressed,
+            CancellationToken.None);
+
+        // The ordinary line matches; the pathological one is abandoned rather than hanging the survey.
+        AssertEx.False(matches.Any(match => match.Contains("pathological", StringComparison.Ordinal)),
+            "a line that exceeds the regex timeout must be skipped");
+    }
+
+    [Test]
+    public void SearchText_StopsAtTheMatchCeiling()
+    {
+        var workspace = CreateWorkspace();
+        Write(workspace, "a.txt", string.Join('\n', Enumerable.Repeat("needle", 50)) + "\n");
+
+        var matches = WorkspaceFileScanner.SearchText(workspace,
+            "needle",
+            isRegex: false,
+            maxMatches: 7,
+            maxOutputBytes: 1024 * 1024,
+            NeverSuppressed,
+            CancellationToken.None);
+
+        AssertEx.Equal(7, matches.Count);
     }
 
     private static bool NeverSuppressed(string relativePath) => false;

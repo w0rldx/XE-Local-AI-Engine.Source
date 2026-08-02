@@ -15,16 +15,33 @@ using XE_Local_AI_Engine.Client.Services.Workspace;
 ///     live sandbox via <see cref="ISandboxRuntimeProvider.ConnectAsync" /> — which takes only the provider's internal
 ///     lock, never the AgentHome <c>SemaphoreSlim</c> run guard, so a coder read never throws
 ///     <c>AgentHomeBusyException</c> during an in-flight AgentHome run. Every model path is confined through
-///     <see cref="WorkspacePathGuard" /> before it reaches the sandbox: reads go through the jail-guarded
-///     <see cref="ISandboxRuntimeProvider.ReadFileAsync" />, while list/search use an allow-listed, arg-confined
-///     <see cref="ISandboxRuntimeProvider.ExecuteAsync" /> (which is NOT a chroot) with the secret-exclusion set applied
-///     both at the grep invocation and as a content post-filter. No write, copy-out, patch, mutating, or
-///     caller-supplied-executable path exists here.
+///     <see cref="WorkspacePathGuard" /> before it reaches the sandbox, and all three reads are then PROVIDER
+///     operations — <see cref="ISandboxRuntimeProvider.ReadFileAsync" />,
+///     <see cref="ISandboxRuntimeProvider.ListFilesAsync" /> and
+///     <see cref="ISandboxRuntimeProvider.SearchTextAsync" /> — so the jail's own confinement applies to each. No write,
+///     copy-out, patch, mutating, or caller-supplied-executable path exists here.
+///     <para>
+///         List and search used to be composed as <c>find</c> / <c>grep</c> argument vectors and run through
+///         <c>ExecuteAsync</c>. That made the operations POSIX-only — on a stock Windows 11 install <c>grep</c> does not
+///         exist and <c>find</c> resolves to the DOS tool, which rejects the vector — and it put the confinement in an
+///         argument list this class had to keep correct rather than in the component that owns the jail. The secret
+///         exclusions stay HERE as a result filter, deliberately: which entries a coder may see is this feature's
+///         policy, and it is broader than Development Mode's (Coder drops its whole copy-filter set, not just
+///         credentials).
+///     </para>
 /// </summary>
 internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
 {
-    private const string ListExecutable = "find";
-    private const string SearchExecutable = "grep";
+    /// <summary>
+    ///     How much more the provider is asked for than is ultimately returned.
+    ///     <para>
+    ///         Secret and build-output exclusions are applied to the RESULT, because which entries a coder may see is
+    ///         this feature's policy rather than the jail's. Asking the provider for exactly the caller's cap would
+    ///         therefore let one directory of excluded entries consume the whole budget and answer with nothing, which
+    ///         is the same defect Development Mode's listing already paid for once.
+    ///     </para>
+    /// </summary>
+    private const int SurveyRequestMultiplier = 4;
 
     private const string NoWorkspaceMessage =
         "No project workspace is available — select a project folder first, then try again.";
@@ -71,40 +88,36 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
 
         var maxResults = ClampCap(request.MaxResults, _options.MaxListResults);
 
-        // find <confinedRoot-relative '.'> -maxdepth ... — WorkingDirectory is the confined root, so the listing is
-        // jailed to that subtree. The pattern/path is NOT a flag (it is the working dir); arg shapes are fixed here.
-        var arguments = new List<string>
-        {
-            ".",
-            "-maxdepth",
-            "64"
-        };
-
-        // Prune every excluded directory/file at the find invocation so a secret dir's contents never enter the output.
-        AppendFindExclusions(arguments);
-
-        if (!string.IsNullOrWhiteSpace(request.Glob))
-        {
-            // A glob is matched against the entry name only (-name), never interpreted as a flag.
-            arguments.Add("-name");
-            arguments.Add(request.Glob);
-        }
-
-        var result = await ExecuteConfinedAsync(handle, ListExecutable, arguments, confined.SandboxPath, cancellationToken)
+        // The provider surveys its own jail (see ISandboxRuntimeProvider.ListFilesAsync): it applies the same
+        // ResolveJailPath + no-symlink controls a read goes through, so the listing is confined to the requested
+        // subtree by the component that owns the jail rather than by an argument vector composed here.
+        //
+        // The cap asked for is deliberately larger than the cap returned. Exclusions are applied to the RESULT — which
+        // entries a coder may see is this feature's policy, not the jail's — so requesting exactly maxResults would let
+        // a directory full of excluded entries consume the whole budget and return nothing actionable.
+        var survey = await TrySurveyAsync(token => _provider.ListFilesAsync(handle,
+                    new SandboxListFilesRequest
+                    {
+                        DirectoryPath = confined.SandboxPath,
+                        MaxEntries = SurveyRequestMultiplier * maxResults,
+                        NameGlob = request.Glob
+                    },
+                    token),
+                cancellationToken)
             .ConfigureAwait(false);
-        if (result.ErrorMessage is not null)
+        if (survey.ErrorMessage is not null)
         {
-            return $"list_files failed: {result.ErrorMessage}";
+            return $"list_files failed: {survey.ErrorMessage}";
         }
 
-        var entries = SplitLines(result.Output!)
-                      .Select(NormalizeFindEntry)
-                      .Where(entry => entry.Length > 0)
-                      .Where(entry => !IsExcludedRelativePath(entry))
-                      .Distinct(StringComparer.Ordinal)
-                      .OrderBy(entry => entry, StringComparer.Ordinal)
-                      .Take(maxResults)
-                      .ToList();
+        var entries = survey.Lines!
+                            .Select(NormalizeFindEntry)
+                            .Where(entry => entry.Length > 0)
+                            .Where(entry => !IsExcludedRelativePath(entry))
+                            .Distinct(StringComparer.Ordinal)
+                            .OrderBy(entry => entry, StringComparer.Ordinal)
+                            .Take(maxResults)
+                            .ToList();
 
         if (entries.Count == 0)
         {
@@ -204,43 +217,37 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
 
         var maxMatches = ClampCap(request.MaxMatches, _options.MaxSearchMatches);
 
-        // grep -rnI [-F] -e <pattern> --exclude-dir=… --exclude=… . — the pattern is bound via `-e` so a value that
-        // starts with '-' can never be parsed as a flag (arg-as-data). -F (fixed-string) unless the caller opts into
-        // regex. -I skips binary files. WorkingDirectory is the confined root, so the search is jailed to that subtree.
-        var arguments = new List<string>
-        {
-            "-rnI"
-        };
-
-        if (request.IsRegex != true)
-        {
-            arguments.Add("-F");
-        }
-
-        // Exclude every secret dir/file at the grep invocation so a secret's content never enters output.
-        AppendGrepExclusions(arguments);
-
-        // The pattern is bound via `-e` (so a value beginning with '-' is data, not a flag); `--` then ends option
-        // parsing before the lone path operand. WorkingDirectory is the confined root, so `.` is jailed to that subtree.
-        arguments.Add("-e");
-        arguments.Add(pattern);
-        arguments.Add("--");
-        arguments.Add(".");
-
-        var result = await ExecuteConfinedAsync(handle, SearchExecutable, arguments, confined.SandboxPath, cancellationToken)
+        // The provider searches its own jail. The pattern is passed as DATA on a typed request rather than composed
+        // into an argument vector, so a value beginning with '-' cannot be read as a flag — the property `grep -e`
+        // used to buy. Fixed-string unless the caller opts into regex, matching `-F`; binary files are skipped, matching
+        // `-I`; and a model-supplied expression runs under a per-line timeout, which the shell-out never had.
+        //
+        // Over-requesting for the same reason as the listing: secret exclusions are applied to the RESULT here, so a
+        // budget of exactly maxMatches could be spent entirely on lines that are about to be dropped.
+        var survey = await TrySurveyAsync(token => _provider.SearchTextAsync(handle,
+                    new SandboxSearchTextRequest
+                    {
+                        DirectoryPath = confined.SandboxPath,
+                        Pattern = pattern,
+                        IsRegex = request.IsRegex == true,
+                        MaxMatches = SurveyRequestMultiplier * maxMatches,
+                        MaxOutputBytes = _options.MaxSearchOutputBytes
+                    },
+                    token),
+                cancellationToken)
             .ConfigureAwait(false);
-        if (result.ErrorMessage is not null)
+        if (survey.ErrorMessage is not null)
         {
-            return $"search_text failed: {result.ErrorMessage}";
+            return $"search_text failed: {survey.ErrorMessage}";
         }
 
         var prefix = confined.RelativePath.Length == 0 ? string.Empty : confined.RelativePath + "/";
-        var matches = SplitLines(result.Output!)
-                      .Select(line => NormalizeGrepMatch(line, prefix))
-                      .Where(line => line.Length > 0)
-                      .Where(line => !IsExcludedMatchLine(line))
-                      .Take(maxMatches)
-                      .ToList();
+        var matches = survey.Lines!
+                            .Select(line => NormalizeGrepMatch(line, prefix))
+                            .Where(line => line.Length > 0)
+                            .Where(line => !IsExcludedMatchLine(line))
+                            .Take(maxMatches)
+                            .ToList();
 
         // Each match line carries an attacker-influenced PATH and the MATCHED FILE CONTENT, so the match list is
         // untrusted DATA, not instructions: fence it (per-call random nonce, like read_file). The node-authored
@@ -278,78 +285,62 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
         }
     }
 
-    // ---- execute (allow-listed, arg-confined) ----
+    // ---- survey (provider-confined) ----
 
-    private async Task<CommandOutcome> ExecuteConfinedAsync(SandboxHandle handle,
-        string executable,
-        IReadOnlyList<string> arguments,
-        string workingDirectorySandboxPath,
+    /// <summary>
+    ///     Runs one provider survey, translating every failure into a model-facing sentence.
+    ///     <para>
+    ///         The refusals stay deliberately vague about WHY: a message naming a canonical jail path, a symlink target
+    ///         or a regular-expression parser's internals would hand the model detail about the host it is not supposed
+    ///         to have. The one exception is an invalid expression, which is the model's own input and which it can only
+    ///         correct if it is told.
+    ///     </para>
+    /// </summary>
+    private async Task<SurveyOutcome> TrySurveyAsync(Func<CancellationToken, Task<IReadOnlyList<string>>> survey,
         CancellationToken cancellationToken)
     {
-        var request = new SandboxCommandRequest
-        {
-            ExecutionId = "coder-" + Guid.NewGuid().ToString("N"),
-            Executable = executable,
-            Arguments = arguments,
-            WorkingDirectory = workingDirectorySandboxPath,
-            Timeout = TimeSpan.FromSeconds(_options.CommandTimeoutSeconds)
-        };
+        // The shell-out carried CommandTimeoutSeconds on its SandboxCommandRequest; a managed survey has to bound
+        // itself, or a pathological tree would run for as long as the caller's token allows.
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(TimeSpan.FromSeconds(_options.CommandTimeoutSeconds));
 
-        SandboxCommandResult result;
         try
         {
-            result = await _provider.ExecuteAsync(handle, request, cancellationToken).ConfigureAwait(false);
+            return new SurveyOutcome(await survey(timeoutCts.Token).ConfigureAwait(false), ErrorMessage: null);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return new SurveyOutcome(Lines: null, "the workspace survey did not complete (it may have timed out).");
         }
         catch (SandboxHandleInvalidException)
         {
-            return new CommandOutcome(Output: null, ErrorMessage: NoWorkspaceMessage);
+            return new SurveyOutcome(Lines: null, NoWorkspaceMessage);
+        }
+        catch (SandboxCapabilityNotSupportedException)
+        {
+            return new SurveyOutcome(Lines: null, "the workspace provider cannot survey files.");
         }
         catch (UnauthorizedAccessException)
         {
-            // The process provider rejected a traversal or an intermediate/leaf symlink in the requested working
-            // directory. Keep the refusal model-safe: no canonical host/jail path or symlink target leaves this seam.
-            return new CommandOutcome(Output: null,
-                ErrorMessage: "the workspace path was rejected because it may escape the workspace.");
+            // The provider rejected a traversal or a symlink component in the requested directory.
+            return new SurveyOutcome(Lines: null, "the workspace path was rejected because it may escape the workspace.");
         }
-
-        if (!result.Completed)
+        catch (WorkspaceScanRejectedException)
         {
-            return new CommandOutcome(Output: null, ErrorMessage: "the command did not complete (it may have timed out).");
+            return new SurveyOutcome(Lines: null, "the workspace path was rejected because it may escape the workspace.");
         }
-
-        // grep exits 1 when there are simply no matches; find/grep exit 0 on success. Treat a clean no-match (exit 1,
-        // empty stderr) as an empty-but-successful result rather than an error.
-        if (result.ExitCode is not (0 or 1))
+        catch (DirectoryNotFoundException)
         {
-            return new CommandOutcome(Output: null, ErrorMessage: "the command reported an error.");
+            return new SurveyOutcome(Lines: null, "that workspace path does not exist.");
         }
-
-        return new CommandOutcome(result.StandardOutput, ErrorMessage: null);
+        catch (ArgumentException)
+        {
+            // Only the pattern can be argument-invalid by the time it reaches here, and the model supplied it.
+            return new SurveyOutcome(Lines: null, "the search pattern is not a valid regular expression.");
+        }
     }
 
-    private void AppendFindExclusions(List<string> arguments)
-    {
-        // -name <pat> -prune -o … : prune each excluded entry (dir or file) so its subtree never enters the listing.
-        foreach (var pattern in _exclusionService.ExcludedEntryNames)
-        {
-            arguments.Add("-name");
-            arguments.Add(pattern);
-            arguments.Add("-prune");
-            arguments.Add("-o");
-        }
-
-        // After the prune clauses, print the surviving entries.
-        arguments.Add("-print");
-    }
-
-    private void AppendGrepExclusions(List<string> arguments)
-    {
-        foreach (var pattern in _exclusionService.ExcludedEntryNames)
-        {
-            arguments.Add("--exclude-dir=" + pattern);
-            arguments.Add("--exclude=" + pattern);
-        }
-    }
+    private sealed record SurveyOutcome(IReadOnlyList<string>? Lines, string? ErrorMessage);
 
     // ---- post-filter / rendering ----
 
@@ -460,14 +451,9 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
         return Math.Min(value, ceiling);
     }
 
-    private static IEnumerable<string> SplitLines(string output)
-    {
-        return output.Split('\n').Select(static line => line.TrimEnd('\r'));
-    }
-
     private static string NormalizeFindEntry(string line)
     {
-        // find prints "./a/b"; strip the leading "./" and the bare "." root entry.
+        // The survey emits "./a/b"; strip the leading "./" and the bare "." root entry.
         var trimmed = line.Trim();
         if (trimmed is "." or "./")
         {
@@ -479,8 +465,8 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
 
     private static string NormalizeGrepMatch(string line, string prefix)
     {
-        // grep -rn prints "./rel:line:text"; strip the leading "./" and prepend the confined sub-path prefix so the
-        // emitted path is workspace-relative from the workspace root.
+        // The survey emits "./rel:line:text"; strip the leading "./" and prepend the confined sub-path prefix so
+        // the emitted path is workspace-relative from the workspace root.
         var trimmed = line.TrimEnd();
         if (trimmed.Length == 0)
         {
@@ -495,5 +481,4 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
         return prefix + trimmed;
     }
 
-    private readonly record struct CommandOutcome(string? Output, string? ErrorMessage);
 }
