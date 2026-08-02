@@ -140,7 +140,9 @@ internal static class DevelopmentWorkspaceWhitespacePolicy
                 continue;
             }
 
-            var indexEol = line[2..].Split(' ', 2)[0].Trim();
+            // Split on either separator: the columns are space-padded today and the path is tab-separated, but reading
+            // the eol token as everything-up-to-the-first-whitespace does not depend on which one git chose.
+            var indexEol = line[2..].Split([' ', '\t'], 2)[0].Trim();
             if (!string.Equals(indexEol, "crlf", StringComparison.Ordinal) && !string.Equals(indexEol, "mixed", StringComparison.Ordinal))
             {
                 continue;
