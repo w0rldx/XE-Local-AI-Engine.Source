@@ -219,12 +219,38 @@ The app starts normally: on a healthy ring the decorator must be invisible.
 app, copy `$XE\dp-keys` and `$XE\*.enc` to a second Windows user account's `%LOCALAPPDATA%\XE-Local-AI-Engine`,
 and start the app as that user.
 
-**Pass looks like (broken ring).** Startup **fails** with a message containing:
+> **Corrected 2026-08-02 — measured on real Windows 11; the previous expectation here was wrong.** A broken ring
+> does **not** stop the host. The key ring is resolved **lazily**, on the first operation that needs an
+> `IDataProtector`, not during startup — so the app starts, serves, and answers HTTP 200, and the failure surfaces
+> as a logged error plus a failing operation. Read the pass criteria below rather than the old "startup fails"
+> wording, or you will file a working fix as a P0.
+>
+> **Easier trigger than a second Windows account.** The runbook used to say copy `dp-keys` to another user
+> profile — which needs an account you may not be able to create. What the classifier actually matches is a
+> `CryptographicException` out of DPAPI, and flipping two bytes inside the base64 `<value>` of the
+> `<encryptedKey>` element in `dp-keys\key-<guid>.xml` raises exactly that, from exactly that call site. Back the
+> file up first; restoring it restores the node. The second-account case is still the more faithful reproduction
+> if you have one.
 
-```
-Refusing to regenerate the key-ring
-DPAPI-protected for the Windows user that created it
-```
+**Pass looks like (broken ring).** All three, together:
+
+1. This exact error in the log — the classifier recognised the DPAPI failure and the remediation is Windows-specific:
+
+   ```
+   [ERR] An error occurred while reading the key ring.
+   System.InvalidOperationException: Data Protection key '<guid>' is encrypted at rest but could not be decrypted.
+   Refusing to regenerate the key-ring, which would silently orphan every stored credential and OAuth token.
+   The key-ring is DPAPI-protected for the Windows user that created it. Sign in as that user and restart. …
+   ```
+
+2. **No new `key-<guid>.xml`.** This is the load-bearing one — it is the whole point of the fix. The ring must
+   still hold exactly the file(s) it held before, with unchanged timestamps.
+
+3. The host **stays up** and keeps serving. That is expected, not a failure: see the correction above.
+
+Measured on Windows 11 (26220): the message appeared verbatim, the ring stayed at its single original key file,
+and the host answered HTTP 200 throughout. Restoring the backed-up key file returned the node to a clean start
+with zero key-ring log lines — on a healthy ring the decorator is invisible, which is the other half of the check.
 
 **Fail looks like / next step.**
 
@@ -237,9 +263,12 @@ DPAPI-protected for the Windows user that created it
 
   The ring is still regenerating silently — the decorator did not fire. Capture whether the ring rotated on a
   plain restart or only after a Windows credential/profile change.
-- The copied-to-another-user case starting up **cleanly** → the decorator is registered but its classifier does
-  not recognise what DPAPI actually threw. Capture the full startup log; the exception type and message from
-  `ProtectedData.Unprotect` is exactly what the classifier needs to match.
+- The broken-ring case producing **no** `Refusing to regenerate the key-ring` line anywhere in the log → the
+  decorator is registered but its classifier does not recognise what DPAPI actually threw. Capture the full log;
+  the exception type and message out of `ProtectedData.Unprotect` is exactly what the classifier needs to match.
+  (Do **not** read "the app started" as this failure — it starts either way. Grep for the line.)
+- A broken ring that produces the line **and still writes a new `key-<guid>.xml`** → the throw is being caught
+  somewhere that then lets regeneration proceed. That is the original defect resurfacing and is a P0.
 - The **original** account failing to start → a false positive, and a P0 the other way. Capture the full message
   and the inner exception before deleting anything; that combination is unreachable from the Linux tests
   (`NodeDataProtectionKeyRingFailClosedTests` proves a readable-but-rotating ring stays quiet, but only against a
@@ -380,8 +409,23 @@ CPU, memory and process-count limits are enforced on Linux only. On Windows ther
 ```
 
 plus *"…run as the signed-in user account that runs the engine"* and *"They have network access, and nothing
-restricts what they can reach."* No container-runtime panel is rendered anywhere on the page. Exactly **one**
-log line, matching:
+restricts what they can reach."* No container-runtime panel is rendered anywhere on the page.
+
+> **The probe line is emitted lazily — do the `/development` visit BEFORE you grep.** Measured on Windows 11
+> across four launches of the packaged build: `Sandbox containment probe` appears **nowhere** in the log after an
+> ordinary start. Containment is measured on first use of the sandbox, not during host startup, so an empty grep
+> on a node where nobody opened Development Mode means "not probed yet", not "the probe is missing". Grepping
+> first and finding nothing is the easiest way to file a false failure here.
+>
+> **What was confirmed statically for this RC, and what still needs your session.** The container branch cannot
+> render on a stock node: the shipped `appsettings.json` leaves `Development:Sandbox:Provider` unset (the
+> `Development` section is `{"Enabled": true}` only), `DockerSandboxRuntimeProvider` is selected only by an
+> explicit `docker` value, and the consent gate picks its branch from the `sandboxProvider` the backend reports
+> rather than from anything the screen assumes. So a false container-safety claim is structurally unreachable
+> here. What was **not** exercised is the live render — that needs an authenticated browser session, which is
+> yours to do.
+
+Then exactly **one** log line, matching:
 
 ```
 Sandbox containment probe: process group False, resource limits False (the host is not Linux (the Windows Job Object path is not implemented)), network isolation False (the host is not Linux (the Windows Job Object path is not implemented)).
