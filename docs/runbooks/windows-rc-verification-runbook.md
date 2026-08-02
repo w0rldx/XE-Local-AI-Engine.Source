@@ -27,16 +27,6 @@ unchanged and remain open questions.
 One change can make a previously-starting install fail to start: check 4's fail-closed key ring. A hard startup
 failure there may be the fix working correctly — read that check before concluding the RC is broken.
 
-### Known and NOT fixed: the Coder agent still shells out to `find` and `grep`
-
-`CoderWorkspaceReader` (the read-only Coder agent, which runs in the AgentHome sandbox rather than the Development
-one) still invokes the bare `find` and `grep` with POSIX argument vectors — the same defect check 5 used to
-describe, in a different feature. It was left alone deliberately: Coder reads a *copy* inside the AgentHome jail
-rather than a host worktree, so the fix applied to Development Mode does not transfer unchanged.
-
-**Expect Coder's `list_files` / `search_text` to fail on Windows.** Confirm it rather than investigating it, and
-note whether the failure is reported to the user or silently returns nothing.
-
 ---
 
 ## 1. Job Object process tree-kill on hard kill
@@ -279,13 +269,38 @@ column, not `w/`.
 - `git_diff_check` reporting `trailing whitespace` on lines the coder did not touch → the whitespace policy did
   not apply. Check that the attributes file above exists and that the paths it names match the failing file.
 
-**Not verifiable without you.** These paths are exercised on Linux by
-`DevelopmentWorkspaceFileScannerTests` and `DevelopmentWorkspaceWhitespacePolicyTests`, but three things are
-genuinely Windows-only and are what this check is for: NTFS junctions and reparse points (the scanner refuses to
-follow one — a Linux symlink test is close but not identical), `MAX_PATH` behaviour on a deep tree, and whether
-Git for Windows' **system** config (`core.autocrlf=true` is a common default there) changes what
-`git ls-files --eol` reports for the `i/` column. If it does, the policy would be derived from a different
-classification than the Linux tests assume — record the `i/` column verbatim for one file you know is CRLF.
+**Not verifiable without you.** These paths are exercised on Linux by `WorkspaceFileScannerTests` and
+`DevelopmentWorkspaceWhitespacePolicyTests`, but three things are genuinely Windows-only and are what this check
+is for: NTFS junctions and reparse points (the scanner refuses to follow one — a Linux symlink test is close but
+not identical), `MAX_PATH` behaviour on a deep tree, and whether Git for Windows' **system** config
+(`core.autocrlf=true` is a common default there) changes what `git ls-files --eol` reports for the `i/` column. If
+it does, the policy would be derived from a different classification than the Linux tests assume — record the
+`i/` column verbatim for one file you know is CRLF.
+
+---
+
+## 5b. Coder agent: `list_files` / `search_text`
+
+> **Changed for this RC.** `CoderWorkspaceReader` was the last place `find` and `grep` were shelled out. Both are
+> now provider operations (`ISandboxRuntimeProvider.ListFilesAsync` / `SearchTextAsync`), served by the process
+> provider through the same jail confinement a read goes through. Coder previously failed on Windows exactly as
+> Development Mode did; an earlier revision of this runbook told you to expect that, and it is no longer true.
+
+**What it proves.** That Coder's two read tools work against a real Windows jail, and that the secret exclusions
+still apply now that they are a result filter rather than a `grep --exclude` flag.
+
+**Do this.** Select a project folder, then ask the Coder agent (read-only) to list the workspace files and to
+search for a string you know appears in one source file. Put a `.env` file containing a recognisable sentinel in
+the selected folder first.
+
+**Pass looks like.** Both tools return real results. The listing shows source files and no `.env`, no
+`node_modules`, no `bin`. The search returns `path:line:text` matches and **never** a line from `.env`. A regex
+search (the tool's opt-in mode) works, and a deliberately invalid one — e.g. `alpha(` — comes back as
+*"the search pattern is not a valid regular expression"* rather than as an empty result.
+
+**Fail looks like / next step.** `list_files failed:` or `search_text failed:` in the tool output. Record the
+sentence after the colon verbatim — each one names a distinct cause (no workspace, path rejected, path missing,
+timed out, provider cannot survey), and which one appears is the whole diagnostic.
 
 ---
 
