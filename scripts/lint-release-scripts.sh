@@ -69,6 +69,7 @@ SHELL_TARGETS=(
   "scripts/run-tests-memory-safe.sh"
   "scripts/run-e2e-local.sh"
   "scripts/run-gpu-smoke-local.sh"
+  "scripts/run-tool-grammar-smoke-local.sh"
   "scripts/run-agent-framework-validation.sh"
   "scripts/capture-agent-framework-dependencies.sh"
   "scripts/lint-release-scripts.sh"
