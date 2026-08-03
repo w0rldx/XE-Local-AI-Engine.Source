@@ -71,6 +71,13 @@ public static class LlamaServerServiceCollectionExtensions
         // update install, read by the read-only runtime-status endpoint. Decoupled from any app-package updater channel.
         services.TryAddSingleton<ILlamaCppUpdateState, LlamaCppUpdateState>();
 
+        // First-run runtime-acquisition visibility. The no-op publisher keeps provider-only / headless / CI hosts silent
+        // and byte-behavior-identical; the Client host swaps in a hub-backed one. The manager depends on the REGISTRY,
+        // never on the publisher directly: the registry is what stamps the monotonic sequence the late-join hydrate
+        // reconciles against, so routing every write through it makes "recorded but never broadcast" unrepresentable.
+        services.TryAddSingleton<IRuntimeAcquisitionEventPublisher, NullRuntimeAcquisitionEventPublisher>();
+        services.TryAddSingleton<IRuntimeAcquisitionStatusRegistry, RuntimeAcquisitionStatusRegistry>();
+
         services.TryAddSingleton<ILlamaCppBinaryManager>(static sp =>
             new LlamaCppBinaryManager(sp.GetRequiredService<HttpClient>(),
                 cacheRoot: null,
@@ -78,7 +85,8 @@ public static class LlamaServerServiceCollectionExtensions
                 sp.GetRequiredService<ILlamaCppReleaseCatalog>(),
                 sp.GetRequiredService<IInstalledRuntimeStore>(),
                 sp.GetRequiredService<LlamaServerRuntimeOverrideOptions>(),
-                sp.GetRequiredService<ICudaManagedBuildSignal>()));
+                sp.GetRequiredService<ICudaManagedBuildSignal>(),
+                sp.GetRequiredService<IRuntimeAcquisitionStatusRegistry>()));
 
         // In-app Linux CUDA source build (no upstream prebuilt exists): the prerequisite probe, the no-op build-event
         // publisher (the Client host swaps in a hub-backed one), and the single-flight build service. The startup service

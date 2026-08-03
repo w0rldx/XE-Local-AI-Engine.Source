@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import type { XeLocalAiEngineClientEndpointsModelFitV1RuntimeAcquisitionStatusResponse } from "@/core/api/generated";
 import {
 	cancelCudaBuildMutation,
 	cancelLlamaCppSourceBuildMutation,
@@ -10,6 +11,7 @@ import {
 	getLlamaCppRuntimeOptions,
 	getLlamaCppSourceBuildPrerequisitesOptions,
 	getLlamaCppSourceBuildStatusOptions,
+	getRuntimeAcquisitionStatusOptions,
 	removeCudaBuildMutation,
 	removeLlamaCppSourceBuildMutation,
 	setHfTokenMutation,
@@ -44,6 +46,7 @@ export const localRuntimeQueryIds = {
 	cudaBuildStatus: "getCudaBuildStatus",
 	sourceBuildPrerequisites: "getLlamaCppSourceBuildPrerequisites",
 	sourceBuildStatus: "getLlamaCppSourceBuildStatus",
+	runtimeAcquisitionStatus: "getRuntimeAcquisitionStatus",
 } as const;
 
 /** Builds the partial generated-query-key filter that matches every cached variant of one local-runtime endpoint. */
@@ -112,6 +115,45 @@ export function useUpdateLlamaCppRuntime() {
 			return await options.mutationFn?.({ body: { tag: variables.tag, variant: variables.variant ?? null } }, undefined as never);
 		},
 		onSuccess: () => invalidate(queryClient, localRuntimeQueryIds.llamaCppRuntime),
+	});
+}
+
+/** The llama.cpp runtime-acquisition snapshot, exactly as it travels on both the hydrate GET and the hub push. */
+export type RuntimeAcquisitionStatus = XeLocalAiEngineClientEndpointsModelFitV1RuntimeAcquisitionStatusResponse;
+
+/**
+ * The monotonic-sequence guard, and the ONLY rule by which the acquisition cache entry may advance.
+ *
+ * The hydrate GET and the hub push carry the same snapshot but travel different paths, so they race in BOTH
+ * directions: a GET issued just before a terminal transition can *arrive* after the corresponding push. Taking the
+ * later arrival would overwrite `Completed`/`Failed` with a stale `Downloading` and leave the banner running forever
+ * with nothing left to end it. The backend therefore stamps every status write with a strictly increasing `sequence`,
+ * and both writers funnel through here: an update is accepted only when its sequence beats what is already cached.
+ * Timestamps would not do — the two paths have no common clock and no ordering relative to each other.
+ */
+export function keepLatestAcquisitionStatus(
+	current: RuntimeAcquisitionStatus | undefined,
+	incoming: RuntimeAcquisitionStatus,
+): RuntimeAcquisitionStatus {
+	return current !== undefined && current.sequence >= incoming.sequence ? current : incoming;
+}
+
+// Read-only llama.cpp runtime-acquisition status (GET model-fit/llamacpp/acquisition) — the hydrate leg of the
+// first-run banner. Like the runtime-status GET above this is side-effect free: it reports what the host is already
+// doing and never starts an acquisition (unlike the `ensure` POST), so it is safe to auto-run on mount. That mount
+// read is what covers the late-join case the banner exists for: the runtime download starts within seconds of boot,
+// typically before the client has authenticated and opened its hub connection, so a push-only channel would show the
+// user nothing at all for precisely the slow first run this surfaces.
+//
+// `structuralSharing` is the choke-point for the sequence guard: TanStack routes BOTH this query's own fetch result
+// and every `setQueryData` from the hub through it, so the stale-hydrate-after-terminal-push race cannot be won by
+// arrival order no matter which leg lands last.
+export function useRuntimeAcquisitionStatus(enabled = true) {
+	return useQuery({
+		...withResponseValidation(getRuntimeAcquisitionStatusOptions()),
+		structuralSharing: (current, incoming) =>
+			keepLatestAcquisitionStatus(current as RuntimeAcquisitionStatus | undefined, incoming as RuntimeAcquisitionStatus),
+		enabled,
 	});
 }
 

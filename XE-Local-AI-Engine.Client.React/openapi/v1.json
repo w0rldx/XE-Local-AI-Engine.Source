@@ -2494,6 +2494,40 @@
         ]
       }
     },
+    "/api/local/v1/model-fit/llamacpp/acquisition": {
+      "get": {
+        "tags": [
+          "Model-Fit"
+        ],
+        "operationId": "getRuntimeAcquisitionStatus",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1RuntimeAcquisitionStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/model-fit/gguf/inspect": {
       "get": {
         "tags": [
@@ -12423,6 +12457,52 @@
           },
           "refreshSourceConfigured": {
             "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1RuntimeAcquisitionStatusResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sequence",
+          "phase",
+          "stepIndex",
+          "stepCount"
+        ],
+        "properties": {
+          "sequence": {
+            "type": "integer"
+          },
+          "phase": {
+            "type": "string"
+          },
+          "variant": {
+            "type": "string",
+            "nullable": true
+          },
+          "tag": {
+            "type": "string",
+            "nullable": true
+          },
+          "completedBytes": {
+            "type": "integer",
+            "nullable": true
+          },
+          "totalBytes": {
+            "type": "integer",
+            "nullable": true
+          },
+          "stepIndex": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "stepCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "sanitizedError": {
+            "type": "string",
+            "nullable": true
           }
         }
       },
