@@ -683,7 +683,11 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
             return;
         }
 
-        var printenv = new[] { "/usr/bin/printenv", "/bin/printenv" }.FirstOrDefault(File.Exists);
+        var printenv = new[]
+        {
+            "/usr/bin/printenv",
+            "/bin/printenv"
+        }.FirstOrDefault(File.Exists);
         if (printenv is null)
         {
             Skip("This host has no printenv to read the child environment with.");

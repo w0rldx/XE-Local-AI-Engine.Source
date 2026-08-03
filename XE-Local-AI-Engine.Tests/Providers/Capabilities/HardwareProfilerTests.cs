@@ -326,7 +326,7 @@ public sealed class HardwareProfilerTests
         };
 
         var profile = await new HardwareProfiler(probe, environment, new HardwareProfilerOptions())
-                            .GetProfileAsync(forceRefresh: false, CancellationToken.None);
+            .GetProfileAsync(forceRefresh: false, CancellationToken.None);
 
         AssertEx.Equal(GpuVendor.Amd, profile.GpuVendor);
         AssertEx.False(probe.Calls.Any(call => call.FileName.Contains("powershell", StringComparison.OrdinalIgnoreCase)

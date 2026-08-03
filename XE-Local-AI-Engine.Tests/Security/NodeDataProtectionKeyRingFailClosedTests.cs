@@ -6,8 +6,6 @@ using Microsoft.AspNetCore.DataProtection.AuthenticatedEncryption.ConfigurationM
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.AspNetCore.DataProtection.KeyManagement.Internal;
 using Microsoft.Extensions.DependencyInjection;
-using TUnit.Core.Exceptions;
-using XE_Local_AI_Engine.Client.Persistence.Cryptography;
 using XE_Local_AI_Engine.Client.Security.DataProtection;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -128,7 +126,11 @@ public sealed class NodeDataProtectionKeyRingFailClosedTests
     [Test]
     public void Decorate_ReplacesTheFrameworkResolverOnEitherScheme()
     {
-        foreach (var isWindows in new[] { true, false })
+        foreach (var isWindows in new[]
+                 {
+                     true,
+                     false
+                 })
         {
             var services = new ServiceCollection();
             services.AddSingleton<IDefaultKeyResolver, PlaceholderResolver>();
@@ -234,8 +236,10 @@ public sealed class NodeDataProtectionKeyRingFailClosedTests
 
     private sealed class NoopEncryptor : IAuthenticatedEncryptor
     {
-        public byte[] Decrypt(ArraySegment<byte> ciphertext, ArraySegment<byte> additionalAuthenticatedData) => [];
+        public byte[] Decrypt(ArraySegment<byte> ciphertext, ArraySegment<byte> additionalAuthenticatedData) =>
+            [];
 
-        public byte[] Encrypt(ArraySegment<byte> plaintext, ArraySegment<byte> additionalAuthenticatedData) => [];
+        public byte[] Encrypt(ArraySegment<byte> plaintext, ArraySegment<byte> additionalAuthenticatedData) =>
+            [];
     }
 }

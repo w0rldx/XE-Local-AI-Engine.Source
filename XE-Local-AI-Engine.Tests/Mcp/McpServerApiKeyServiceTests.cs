@@ -233,7 +233,10 @@ public sealed class McpServerApiKeyServiceTests
         {
             if (_record is not null)
             {
-                _record = _record with { LastUsedAtUtc = timestampUtc };
+                _record = _record with
+                {
+                    LastUsedAtUtc = timestampUtc
+                };
             }
 
             return Task.CompletedTask;

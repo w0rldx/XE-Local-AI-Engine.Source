@@ -262,7 +262,8 @@ internal static class DevelopmentSyntheticSolutionRepository
     ///         checked out this repository. Normalizing makes the fixture byte-identical on every host.
     ///     </para>
     /// </summary>
-    private static string Lf(string content) => content.ReplaceLineEndings("\n");
+    private static string Lf(string content) =>
+        content.ReplaceLineEndings("\n");
 
     /// <summary>
     ///     Resolves the NuGet package cache and the TUnit package version to restore the fixture's test project from.

@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Security.DataProtection;
 
 using Microsoft.AspNetCore.DataProtection.KeyManagement.Internal;
-using Microsoft.Extensions.DependencyInjection;
 
 /// <summary>
 ///     Wires <see cref="NodeDataProtectionKeyRingFailClosedKeyResolver" /> over Data Protection's own default resolver.

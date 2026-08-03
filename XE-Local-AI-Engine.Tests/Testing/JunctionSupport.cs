@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Testing;
 
+using System.ComponentModel;
 using System.Diagnostics;
 
 /// <summary>
@@ -87,7 +88,7 @@ internal static class JunctionSupport
                    && process.ExitCode == 0
                    && new DirectoryInfo(linkPath).Attributes.HasFlag(FileAttributes.ReparsePoint);
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or Win32Exception)
         {
             return false;
         }

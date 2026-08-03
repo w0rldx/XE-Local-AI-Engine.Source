@@ -480,5 +480,4 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
 
         return prefix + trimmed;
     }
-
 }

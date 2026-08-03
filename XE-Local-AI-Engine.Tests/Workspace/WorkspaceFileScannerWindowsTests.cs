@@ -184,7 +184,8 @@ public sealed class WorkspaceFileScannerWindowsTests : IDisposable
         AssertEx.Equal("./" + relative + "/needle.txt:2:needle here", matches[0]);
     }
 
-    private static bool NeverSuppressed(string relativePath) => false;
+    private static bool NeverSuppressed(string relativePath) =>
+        false;
 
     private string CreateWorkspace()
     {
