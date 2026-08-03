@@ -419,21 +419,22 @@ public sealed class NodePatchApplyServiceTests : IDisposable
     {
         // FIX 1 + EscapesViaReparsePoint coverage: a symlinked intermediate directory inside the host root that
         // points outside it must be rejected before git touches any file.
+
+        // This is a SECURITY guard, so a host that cannot plant the link must SKIP and say so — never return
+        // early. This test used to swallow the creation failure and return, which reported it as a PASS having
+        // asserted nothing; on a stock Windows box, where symlinks need Developer Mode or elevation, that is
+        // exactly what happened, so the one escape this test exists to catch went unproven on the shipping
+        // platform in silence. The swallow also matched only IOException, missing the UnauthorizedAccessException
+        // that Windows raises the rest of the time.
+        SymlinkSupport.EnsureSupported();
+
         var harness = NewHarness();
         var hostRoot = harness.AddFolder("repo-01");
 
         // Create a subdirectory that is a symlink pointing outside the root.
         var outside = NewTempDir();
         var symlinkDir = Path.Combine(hostRoot, "subdir");
-        try
-        {
-            Directory.CreateSymbolicLink(symlinkDir, outside);
-        }
-        catch (IOException)
-        {
-            // Symlink creation not supported in this environment; skip gracefully.
-            return;
-        }
+        Directory.CreateSymbolicLink(symlinkDir, outside);
 
         // A valid patch that would write into subdir/ — the symlink escape must be caught.
         var throwaway = NewTempDir();

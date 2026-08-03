@@ -541,7 +541,7 @@ Nobody working in this repo has a Windows machine. A 2026-08-02 pass over the *p
 
 The rule that came out of it: when behaviour differs by OS, make the platform a **parameter** — a constructor argument, an injected environment, a factory selector — and unit-test both branches here. `ProcessGpuVendorProbe.ProbePlatform`, `IHardwareProbeEnvironment.IsWindows` and `NodeDataProtectionKeyRingFailClosed.ResolverFactoryFor(bool)` are the shapes to copy. A test that begins `if (!OperatingSystem.IsLinux()) Skip.Test(...)` proves nothing about the platform you are shipping to; check the skip reasons before trusting a green run as Windows evidence.
 
-Better still, where it is affordable: **delete the branch**. Development Mode's `list_files`/`search_text` used to shell out to `find` and `grep`, and now do the work in managed code on every platform (`DevelopmentWorkspaceFileScanner`) — so the Linux test *is* the Windows evidence, and the engine no longer depends on which coreutils build happens to be first on `PATH`.
+Better still, where it is affordable: **delete the branch**. Development Mode's `list_files`/`search_text` used to shell out to `find` and `grep`, and now do the work in managed code on every platform (`WorkspaceFileScanner`, at `Client.Application/Services/Workspace/WorkspaceFileScanner.cs` — there is no type named `DevelopmentWorkspaceFileScanner`, despite earlier notes) — so the Linux test *is* the Windows evidence, and the engine no longer depends on which coreutils build happens to be first on `PATH`.
 
 Four Windows facts worth not re-deriving:
 
