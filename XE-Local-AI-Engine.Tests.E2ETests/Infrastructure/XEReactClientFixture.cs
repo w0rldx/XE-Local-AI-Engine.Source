@@ -178,10 +178,22 @@ public sealed class XEReactClientFixture : IAsyncInitializer, IAsyncDisposable
         int timeoutMs,
         Dictionary<string, string>? environmentOverrides = null)
     {
+        // Windows: run the tool through cmd.exe rather than by bare name.
+        //   `UseShellExecute = false` means CreateProcessW, which appends only ".exe" and does NOT
+        //   consult PATHEXT. pnpm installs itself on Windows as shims — `pnpm` (extensionless),
+        //   `pnpm.CMD`, `pnpm.ps1` — with the real binary content-addressed under the store at a
+        //   path that changes with every pnpm version, so there is no `pnpm.exe` on PATH to find.
+        //   Starting "pnpm" therefore threw Win32Exception "The system cannot find the file
+        //   specified" inside InitializeAsync, before a single test ran, on a box where
+        //   `pnpm --version` works perfectly from any shell — measured 2026-08-03, pnpm 11.18.0.
+        //   Resolving the shim's full path is not enough either: CreateProcessW cannot execute a
+        //   .CMD directly. cmd.exe is what makes the shim runnable, and it keeps stdout/stderr
+        //   redirection working (UseShellExecute = true would not). This mirrors the guard the
+        //   repo's own JS already carries at scripts/RunPackageTool.mjs (`shell: platform === "win32"`).
         var startInfo = new ProcessStartInfo
         {
-            FileName = fileName,
-            Arguments = arguments,
+            FileName = OperatingSystem.IsWindows() ? "cmd.exe" : fileName,
+            Arguments = OperatingSystem.IsWindows() ? $"/c {fileName} {arguments}" : arguments,
             WorkingDirectory = workingDirectory,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
