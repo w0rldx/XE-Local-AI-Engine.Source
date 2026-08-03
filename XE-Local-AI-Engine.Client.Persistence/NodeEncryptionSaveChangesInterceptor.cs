@@ -163,6 +163,14 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
             EncryptOptionalProperty(entry, entry.Property(entity => entity.Description), Guid.Empty, entry.Entity.Id, "description", trackedProperties);
         }
 
+        // The inbound-MCP bearer credential is node-scoped, so the AAD binds the empty conversation id to the row's own
+        // (constant, singleton) id plus the column name. The key material is required — a row without it would
+        // authenticate nothing — so it always encrypts.
+        foreach (var entry in nodeContext.ChangeTracker.Entries<McpServerApiKey>())
+        {
+            EncryptRequiredProperty(entry, entry.Property(entity => entity.Material), Guid.Empty, entry.Entity.Id, "mcp_api_key_material", trackedProperties);
+        }
+
         // Scheduled job definitions are node-scoped (no conversation/message), so the AAD binds the empty conversation
         // id to the definition's own id plus the column name. Only the opaque job parameters are encrypted; they are
         // optional, so they encrypt only when present.
