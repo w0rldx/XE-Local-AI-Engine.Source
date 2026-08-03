@@ -74,6 +74,25 @@ export function estimateDownloadRate(
 }
 
 /**
+ * Formats a byte count into a compact, locale-neutral size (e.g. "324 MB", "1.2 GB"). Shared by every byte-progress
+ * surface — the GGUF download panel and the llama.cpp runtime-acquisition banner — so the two never drift into
+ * disagreeing about how a transfer's size reads. Deliberately NOT `formatBytesAsGb` (the model-fit helper), which is
+ * GB-only and would render a few-hundred-MB runtime archive as "0.3 GB".
+ */
+export function humanizeBytes(bytes: number): string {
+	if (bytes >= 1_073_741_824) {
+		return `${(bytes / 1_073_741_824).toFixed(1)} GB`;
+	}
+	if (bytes >= 1_048_576) {
+		return `${Math.round(bytes / 1_048_576)} MB`;
+	}
+	if (bytes >= 1024) {
+		return `${Math.round(bytes / 1024)} KB`;
+	}
+	return `${bytes} B`;
+}
+
+/**
  * Formats a remaining-seconds estimate as a compact, locale-neutral duration (e.g. "45s", "2m 10s", "1h 5m"). The
  * caller wraps this in a localized "~{{duration}} left" label. Returns undefined for a missing/non-finite estimate so
  * the caller can render a neutral placeholder instead.
