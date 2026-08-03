@@ -1356,6 +1356,24 @@
 					"review": "Review update",
 					"dismiss": "Dismiss"
 				},
+				"acquisition": {
+					"title": "Setting up the local AI runtime",
+					"detectingGpu": "Detecting your graphics hardware…",
+					"downloading": "Downloading the llama.cpp runtime…",
+					"verifying": "Verifying the downloaded runtime…",
+					"extracting": "Installing the runtime…",
+					"step": "Step {{index}} of {{count}}",
+					"progress": "{{completed}} of {{total}}",
+					"progressUnknownTotal": "{{completed}} downloaded",
+					"rate": "{{rate}}/s",
+					"eta": "about {{eta}} left",
+					"explainer": "Chat is unavailable until this finishes. You can keep using the rest of the app.",
+					"failedTitle": "The local AI runtime could not be installed",
+					"failedFallback": "The llama.cpp runtime could not be downloaded. Check your internet connection and try again.",
+					"retry": "Try again",
+					"retrying": "Retrying…",
+					"dismiss": "Dismiss"
+				},
 				"cudaBuild": {
 					"title": "CUDA (build from source)",
 					"devBadge": "Dev",

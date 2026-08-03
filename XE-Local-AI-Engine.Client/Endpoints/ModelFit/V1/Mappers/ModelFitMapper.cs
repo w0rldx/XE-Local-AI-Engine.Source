@@ -375,6 +375,33 @@ internal static class ModelFitMapper
     }
 
     // -----------------------------------------------------------------------
+    // First-run runtime acquisition → hydrate response
+    // -----------------------------------------------------------------------
+
+    /// <summary>
+    ///     Projects the registry's current acquisition snapshot to its wire DTO. This is a field-for-field copy rather
+    ///     than a projection: the hydrate response and the hub push must stay the same shape so the client reconciles both
+    ///     through one <c>Sequence</c> comparison. The payload is already sanitized by the registry.
+    /// </summary>
+    public static RuntimeAcquisitionStatusResponse ToResponse(this RuntimeAcquisitionStatusHubEvent statusEvent)
+    {
+        ArgumentNullException.ThrowIfNull(statusEvent);
+
+        return new RuntimeAcquisitionStatusResponse
+        {
+            Sequence = statusEvent.Sequence,
+            Phase = statusEvent.Phase,
+            Variant = statusEvent.Variant,
+            Tag = statusEvent.Tag,
+            CompletedBytes = statusEvent.CompletedBytes,
+            TotalBytes = statusEvent.TotalBytes,
+            StepIndex = statusEvent.StepIndex,
+            StepCount = statusEvent.StepCount,
+            SanitizedError = statusEvent.SanitizedError
+        };
+    }
+
+    // -----------------------------------------------------------------------
     // In-app CUDA build → responses
     // -----------------------------------------------------------------------
 

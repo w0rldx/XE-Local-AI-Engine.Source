@@ -118,6 +118,7 @@ import {
 	getPreviewRun,
 	getPreviewWorkflow,
 	getRunningLocalModels,
+	getRuntimeAcquisitionStatus,
 	getScheduledJob,
 	getScheduledJobRun,
 	getSkill,
@@ -449,6 +450,8 @@ import type {
 	GetPreviewWorkflowResponse,
 	GetRunningLocalModelsData,
 	GetRunningLocalModelsResponse,
+	GetRuntimeAcquisitionStatusData,
+	GetRuntimeAcquisitionStatusResponse,
 	GetScheduledJobData,
 	GetScheduledJobResponse,
 	GetScheduledJobRunData,
@@ -1876,6 +1879,28 @@ export const getModelCatalogInfoOptions = (options?: Options<GetModelCatalogInfo
 			return data;
 		},
 		queryKey: getModelCatalogInfoQueryKey(options),
+	});
+
+export const getRuntimeAcquisitionStatusQueryKey = (options?: Options<GetRuntimeAcquisitionStatusData>) =>
+	createQueryKey("getRuntimeAcquisitionStatus", options);
+
+export const getRuntimeAcquisitionStatusOptions = (options?: Options<GetRuntimeAcquisitionStatusData>) =>
+	queryOptions<
+		GetRuntimeAcquisitionStatusResponse,
+		AxiosError<DefaultError>,
+		GetRuntimeAcquisitionStatusResponse,
+		ReturnType<typeof getRuntimeAcquisitionStatusQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getRuntimeAcquisitionStatus({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getRuntimeAcquisitionStatusQueryKey(options),
 	});
 
 export const inspectGgufRepositoryQueryKey = (options?: Options<InspectGgufRepositoryData>) =>

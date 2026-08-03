@@ -350,6 +350,8 @@ try
        .RequireAuthorization(NodeAuthorizationPolicies.Operator);
     app.MapHub<LlamaCppSourceBuildHub>(LocalApiRoutes.ModelFit.SourceBuildHub)
        .RequireAuthorization(NodeAuthorizationPolicies.Operator);
+    app.MapHub<RuntimeAcquisitionHub>(LocalApiRoutes.ModelFit.LlamaCppAcquisitionHub)
+       .RequireAuthorization(NodeAuthorizationPolicies.Operator);
     app.MapHub<KnowledgeBaseHub>(LocalApiRoutes.KnowledgeBase.Hub)
        .RequireAuthorization(NodeAuthorizationPolicies.Operator);
     app.MapHub<ImageJobHub>(LocalApiRoutes.Images.Hub)

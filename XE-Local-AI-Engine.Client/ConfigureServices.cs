@@ -165,6 +165,12 @@ public static class ConfigureServices
         builder.Services.AddSingleton<ICudaBuildEventPublisher, CudaBuildEventPublisher>();
         builder.Services.AddSingleton<ILlamaCppSourceBuildEventPublisher, LlamaCppSourceBuildEventPublisher>();
 
+        // Hub-backed first-run runtime-acquisition event publisher — supersedes the no-op default the provider registers
+        // (a plain AddSingleton, so it wins over that TryAdd) and turns the previously-silent GPU probe / archive download
+        // / verify / extract sequence into live pushes on RuntimeAcquisitionHub. IHubContext is singleton-safe, so the
+        // singleton status registry can resolve it.
+        builder.Services.AddSingleton<IRuntimeAcquisitionEventPublisher, RuntimeAcquisitionEventPublisher>();
+
         // Hub-backed knowledge-base indexing notifier — supersedes the no-op default registered in AddNodeKnowledgeBase so
         // document status changes push live to operator clients (KnowledgeBaseHub mapped in Program). IHubContext is
         // singleton-safe, so the scoped ingestion service can resolve this singleton.

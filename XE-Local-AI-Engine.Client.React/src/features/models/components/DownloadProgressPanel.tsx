@@ -3,7 +3,7 @@ import { IconAlertTriangle, IconCloudDownload, IconX } from "@tabler/icons-react
 import { useTranslation } from "react-i18next";
 
 import { useDownloadRateEstimates } from "@/features/models/hooks/useDownloadRateEstimates";
-import { formatDownloadEta } from "@/features/models/models/DownloadRateEstimate";
+import { formatDownloadEta, humanizeBytes } from "@/features/models/models/DownloadRateEstimate";
 import type { GgufDownloadStatus } from "@/features/models/queries/useGgufDownload";
 
 interface DownloadProgressPanelProps {
@@ -14,20 +14,6 @@ interface DownloadProgressPanelProps {
 	downloadStatuses: ReadonlyMap<string, GgufDownloadStatus>;
 	onCancel: (modelName: string) => void;
 	cancellingModelName: string | null;
-}
-
-/** Formats a byte count into a human-readable string (e.g. "324 MB", "1.2 GB"). */
-function humanizeBytes(bytes: number): string {
-	if (bytes >= 1_073_741_824) {
-		return `${(bytes / 1_073_741_824).toFixed(1)} GB`;
-	}
-	if (bytes >= 1_048_576) {
-		return `${Math.round(bytes / 1_048_576)} MB`;
-	}
-	if (bytes >= 1024) {
-		return `${Math.round(bytes / 1024)} KB`;
-	}
-	return `${bytes} B`;
 }
 
 // In-flight GGUF download panel. Shows real byte-level progress when the backend reports Content-Length;

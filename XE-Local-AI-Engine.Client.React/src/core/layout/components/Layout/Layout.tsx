@@ -12,6 +12,7 @@ import { useDesktopNavigationBarStore } from "@/core/layout/stores/DesktopNaviga
 import { ChatConnectionStatusChip } from "@/features/chat/components/ChatConnectionStatusChip";
 import { CpuFallbackBanner } from "@/features/model-fit/components/CpuFallbackBanner";
 import { LlamaCppUpdateBanner } from "@/features/node-settings/components/LlamaCppUpdateBanner";
+import { RuntimeAcquisitionBanner } from "@/features/node-settings/components/RuntimeAcquisitionBanner";
 
 const DevelopmentUi = import.meta.env.DEV
 	? lazy(() => import("@/core/dev-tools/components/DevelopmentUi/DevelopmentUi").then((m) => ({ default: m.DevelopmentUi })))
@@ -64,6 +65,9 @@ export function Layout() {
 						<HeaderBar />
 						{nodeCapabilities.modelFit ? <CpuFallbackBanner /> : null}
 						<LlamaCppUpdateBanner />
+						{/* First-run runtime acquisition. Mounted here, not on a page, because the download starts at host boot
+						    and the user can be anywhere in the app while it runs. */}
+						<RuntimeAcquisitionBanner />
 					</div>
 
 					<div className="flex-1 min-h-0 overflow-y-auto md:px-8 px-2 pt-2">

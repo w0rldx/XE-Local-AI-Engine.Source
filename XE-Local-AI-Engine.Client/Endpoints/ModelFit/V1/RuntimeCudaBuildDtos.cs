@@ -163,6 +163,54 @@ public sealed class LlamaCppUpdateBlockedResponse
 }
 
 // ---------------------------------------------------------------------------
+// First-run runtime-acquisition DTO (IRuntimeAcquisitionStatusRegistry — hydrate)
+// ---------------------------------------------------------------------------
+
+/// <summary>
+///     Response for <c>GET model-fit/llamacpp/acquisition</c>: the current first-run llama.cpp runtime acquisition
+///     snapshot. Its fields mirror the <c>RuntimeAcquisitionStatusHubEvent</c> push payload 1:1 <b>on purpose</b> — the
+///     client hydrates from this endpoint on mount and is then pushed the same shape over the acquisition hub, so both
+///     paths reconcile through one type and one <see cref="Sequence" /> comparison.
+/// </summary>
+public sealed class RuntimeAcquisitionStatusResponse
+{
+    /// <summary>
+    ///     Monotonic counter stamped on every status write, never reset within a process lifetime. Hydrate and push travel
+    ///     different paths and race in BOTH directions, so the client drops any update whose sequence is not greater than
+    ///     the one it already holds — otherwise a late-arriving hydrate would overwrite a terminal push and strand the
+    ///     banner on a phase that already finished. Timestamps are not sufficient for this.
+    /// </summary>
+    public required long Sequence { get; init; }
+
+    /// <summary>
+    ///     Phase string: <c>Idle</c>, <c>DetectingGpu</c>, <c>Downloading</c>, <c>Verifying</c>, <c>Extracting</c>,
+    ///     <c>Completed</c>, or <c>Failed</c>. <c>Idle</c> means nothing has been attempted in this process lifetime.
+    /// </summary>
+    public required string Phase { get; init; }
+
+    /// <summary>The acceleration variant being acquired (<c>Cpu|Cuda|Vulkan</c>); null before it is known.</summary>
+    public string? Variant { get; init; }
+
+    /// <summary>The llama.cpp release tag being acquired; null before it is resolved.</summary>
+    public string? Tag { get; init; }
+
+    /// <summary>Bytes written so far during <c>Downloading</c>; null in every other phase.</summary>
+    public long? CompletedBytes { get; init; }
+
+    /// <summary>Total download size when the response carried a <c>Content-Length</c>; null while unknown.</summary>
+    public long? TotalBytes { get; init; }
+
+    /// <summary>1-based index of the archive being acquired (the Windows-CUDA path fetches two back to back).</summary>
+    public required int StepIndex { get; init; }
+
+    /// <summary>How many archives this acquisition fetches in total (1, or 2 for Windows CUDA).</summary>
+    public required int StepCount { get; init; }
+
+    /// <summary>Operator-safe reason the runtime could not be acquired; non-null only when <see cref="Phase" /> is <c>Failed</c>.</summary>
+    public string? SanitizedError { get; init; }
+}
+
+// ---------------------------------------------------------------------------
 // In-app CUDA build DTOs (ICudaBuildPrerequisiteProbe + ICudaBuildService)
 // ---------------------------------------------------------------------------
 
