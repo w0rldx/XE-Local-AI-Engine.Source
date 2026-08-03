@@ -47,12 +47,14 @@ what is left for you:
 | 4 — `dp-keys` fail-closed ring | Verified in the earlier session, both directions |
 | 5 — Development Mode surveys | **Blocked** by a redirected `%LOCALAPPDATA%` in that harness — see the note in check 5; not a product failure, but read it before re-running |
 | 5b — Coder surveys | **Unproven** — attempted with a *reasoning* model, which cannot produce a tool call; see the note in 5b |
-| 6 — consent disclosure | **Dialog verified live**; the containment probe **line** is still unobserved (needs a real sandbox run, which 5 blocked) |
+| 6 — consent disclosure | **Dialog verified live**; the containment-probe **line** half is **RETIRED** — it is unemittable on Windows, so it was never an open question (see check 6) |
 | 7 — partial GPU offload | **Verified**, all five criteria, by deliberately oversizing the quant on a 32 GB card |
 | 8 — zero-device runtime | **Answered: managed path PASSES**; only a bring-your-own override misreported the cause — fixed |
 | 9 — non-NVIDIA adapter | **Not applicable** on a dual-adapter box; unexercised, not passed |
 
-Still fully open: **checks 5, 5b and the probe-line half of 6**, plus check 9's AMD/Intel result.
+Still fully open: **checks 5 and 5b**, plus check 9's AMD/Intel result. (The probe-line half of check 6 was
+listed here as open until 2026-08-03, when it turned out to be unreachable rather than unobserved — retired, not
+answered.)
 
 Everything measured in that session came from a **32 GB / 61 GB RAM / 32 CPU** box against a ≈16 GB consumer
 target, so every timing, VRAM and fit figure in it **over-reports**. See "16 GB target notes" at the end.
@@ -328,7 +330,9 @@ with zero key-ring log lines — on a healthy ring the decorator is invisible, w
 ## 5. Development Mode: `list_files` / `search_text`, and the validation gate's first command
 
 > **Changed for this RC.** `DevelopmentWorkspaceTools` no longer shells out to `find` or `grep` at all. Both
-> surveys are managed code (`DevelopmentWorkspaceFileScanner`) on every platform, so the behaviour a Linux test
+> surveys are managed code (`WorkspaceFileScanner`, at
+> `Client.Application/Services/Workspace/WorkspaceFileScanner.cs` — earlier revisions of this runbook called it
+> `DevelopmentWorkspaceFileScanner`, which is not a type that exists) on every platform, so the behaviour a Linux test
 > exercises is the behaviour Windows runs — there is no longer an OS branch to get wrong, and no dependency on
 > Git for Windows being installed. Separately, the gate's first command
 > (`git diff --check`) now runs under a per-path whitespace policy the engine derives from the repository's own
@@ -499,11 +503,10 @@ path is not implemented"*), so there is no process group, no cgroup CPU/mem/PID 
 > something else changed it.
 
 **Do this.** Clear the acknowledged flag (fresh browser profile, or clear site data for the loopback origin),
-open `/development`, read the dialog. Then:
+open `/development`, read the dialog.
 
-```powershell
-Select-String -Path $LOGS -Pattern 'Sandbox containment probe'
-```
+> **Do NOT grep for `Sandbox containment probe` on Windows — that line cannot be emitted there.** See the
+> correction below; the whole log half of this check was based on a false premise and has been retired.
 
 **Pass looks like.** The dialog shows the **process-provider** branch, containing verbatim:
 
@@ -532,17 +535,27 @@ restricts what they can reach."* No container-runtime panel is rendered anywhere
 > (`development-consent-dialog|-terms|-checkbox|-decline|-accept`). No container panel, no Docker preflight.
 > What remains open in this check is only the probe LINE — see the correction below.
 
-> **The probe line is emitted lazily — and the `/development` VISIT IS NOT ENOUGH.** Measured on Windows 11
-> across four launches of the packaged build: `Sandbox containment probe` appears **nowhere** in the log after an
-> ordinary start. Containment is measured on first use of the sandbox, not during host startup, so an empty grep
-> on a node where nobody opened Development Mode means "not probed yet", not "the probe is missing".
+> ### RETIRED 2026-08-03 (second correction) — the probe line is UNEMITTABLE on Windows, not merely lazy
 >
-> **Corrected 2026-08-03 — the previous wording here under-specified the trigger.** A session measured 0 matches
-> before opening `/development`, and **still 0 matches** after opening it *and* accepting the consent gate. The
-> page render, the consent acknowledgement and the capability fetch all happen without ever constructing a
-> sandbox. Only a Development attempt that actually reaches `ISandboxRuntimeProvider.CreateOrAttachAsync` emits
-> the line. So the sequence is **grep → run a Development task → grep again**, and "I opened the page and the
-> line is missing" is not a finding.
+> **This half of the check was never answerable, and two earlier corrections both missed why.** The first said
+> the line is emitted lazily; the second said the `/development` visit is not enough and you must run a real
+> Development task. Both are wrong on Windows for the same reason: `HostSandboxContainmentProbe.MeasureCore()`
+> **returns at its `if (!OperatingSystem.IsLinux())` guard** (`HostSandboxContainmentProbe.cs:72-83`), and the
+> `_logger.LogInformation("Sandbox containment probe: …")` call sits *below* that guard, at `:108`. Only one
+> `ISandboxContainmentProbe` is registered (`AddNodeAgentHomeExtensions.cs:70`). So on Windows the line is
+> **structurally unreachable** — no launch, no page visit, no Development task, and no amount of waiting will
+> ever produce it.
+>
+> The two sessions that measured "0 matches" were therefore measuring the guard, not a missing probe, and the
+> instruction to grep-run-grep sent an operator to chase an outcome the code cannot produce. **An empty grep for
+> `Sandbox containment probe` on Windows is the correct and only possible result. Do not report it as a finding,
+> and do not spend a session on it.**
+>
+> What the Windows containment posture actually is remains exactly as documented above: `SandboxContainment.None`
+> with reason *"the host is not Linux (the Windows Job Object path is not implemented)"*, returned at `:77-82`.
+> That posture is worth verifying — but through the **dialog** (closed above) and through the *absence* of any
+> containment claim, not through a log line. If you want the reason string observed at runtime, it reaches the UI
+> via the capability/consent payload, not the log.
 >
 > **What was confirmed statically for this RC, and what still needs your session.** The container branch cannot
 > render on a stock node: the shipped `appsettings.json` leaves `Development:Sandbox:Provider` unset (the
@@ -552,7 +565,8 @@ restricts what they can reach."* No container-runtime panel is rendered anywhere
 > here. What was **not** exercised is the live render — that needs an authenticated browser session, which is
 > yours to do.
 
-Then exactly **one** log line, matching:
+There is **no** accompanying log line to look for. The text below is what the probe *would* log on a Linux host
+and is kept only so nobody re-derives it and goes looking for it on Windows:
 
 ```
 Sandbox containment probe: process group False, resource limits False (the host is not Linux (the Windows Job Object path is not implemented)), network isolation False (the host is not Linux (the Windows Job Object path is not implemented)).
@@ -757,10 +771,27 @@ of the two alerts renders.
 >
 > Reproduce it with the CUDA binary and `CUDA_VISIBLE_DEVICES=-1`; no exotic runtime or broken ICD is needed.
 
-**Fail looks like / next step.** The undetermined-backend alert instead, with a reason blaming a wedged/busy
-driver or a timed-out probe. Capture the full string and whether the probe genuinely timed out (15 s cap) or ran
-and returned nothing — those must not collapse to the same verdict. Also note the remediation text is
-Linux/WSL-flavoured (*"commonly a missing Vulkan ICD under WSL2"*) and is shown verbatim to a Windows operator.
+**Fail looks like / next step.** The undetermined-backend alert on the **managed** path (no
+`XE_LLAMACPP_SERVER_PATH` set) — that is the regression this check guards, because the managed path is what a
+tester runs and it is documented above as passing.
+
+> **The string to match changed in `9f189ab0` — do not grep for the old one.** The wedged-driver wording quoted
+> in the evidence block above (*"the probe timed out or the binary could not be started"* / *"A wedged or busy
+> GPU driver is the usual cause"*) was **deleted**, and `RuntimeDeviceAuditServiceTests.cs:115` now asserts it is
+> absent. The current text (`RuntimeDeviceAuditService.cs:212-217`) lists causes instead of asserting one:
+>
+> ```
+> …but its GPU devices could not be listed… Common causes: a bring-your-own XE_LLAMACPP_SERVER_PATH override
+> that was rejected…, a runtime whose libraries could not be loaded, or a busy GPU driver that made the probe
+> overrun.
+> ```
+>
+> Grepping for the retired phrase will always miss, which reads as "the alert never fired" — the opposite of the
+> truth. Match on `backendUndeterminedReason` being non-null instead of on any particular sentence.
+
+Capture whether the probe genuinely overran or ran and returned nothing — those must not collapse to the same
+verdict. Also note the `cpuFallbackReason` remediation is still Linux/WSL-flavoured (*"commonly a missing Vulkan
+ICD under WSL2"*, `RuntimeDeviceAuditService.cs:246`) and is shown verbatim to a Windows operator.
 
 ---
 
@@ -830,8 +861,19 @@ degraded state, now with a truthful vendor.
 - `inferenceBackend: "cpu"` on a Vulkan-capable box → the variant selector still could not name the vendor. This
   is the original defect surviving; capture whether `powershell.exe` exists at the System32 path above and
   whether it is under a constrained-language or execution policy that would suppress output.
-- `Measure-Command` reporting more than ~8 s → the probe's per-tool deadline would fire and the vendor would
-  degrade to undetected. Report the measured figure; the 8 s cap was chosen against typical PowerShell cold-start
+- `Measure-Command` reporting more than **~5 s** → the *hardware-profile card's* deadline fires first and the
+  vendor degrades to undetected.
+
+  > **Two different deadlines, and the runbook previously named only the looser one.** The adapter query feeds
+  > two independent consumers: `HardwareProfiler` (the hardware-profile card) bounds each native probe by
+  > `HardwareProfilerOptions.HardwareProbeTimeoutSeconds`, which **defaults to 5 s**
+  > (`HardwareProfilerOptions.cs:10`, read at `HardwareProfiler.cs:240`) and which the host wires without
+  > overriding (`CapabilitiesServiceCollectionExtensions.cs:27-33`). The 8 s figure belongs to
+  > `ProcessGpuVendorProbe.DefaultProbeTimeout` (`:41`), which selects the llama.cpp *variant*. So the card
+  > degrades at **5 s**, the variant selector at 8 s. Judge against **5 s**. The measured 1.3 s clears both, so
+  > no previously recorded pass is affected — only the threshold to fail against was wrong.
+
+  Report the measured figure; the 8 s cap was chosen against typical PowerShell cold-start
   times and has never been measured on real Windows.
 
 **Also record even if everything passes**: the wall-clock delay between launching the app and the first-run
