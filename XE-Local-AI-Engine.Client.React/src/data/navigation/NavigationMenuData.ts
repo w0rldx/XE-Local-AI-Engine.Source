@@ -9,7 +9,6 @@ import {
 	IconHome,
 	IconListDetails,
 	IconMessageCircle,
-	IconPhoto,
 	IconPlugConnected,
 	IconRobot,
 	IconSettings,
@@ -51,7 +50,7 @@ export interface INavigationLink {
 	capability?: NavigationCapabilityKey;
 }
 
-// Full link set with the related node pages collapsed into groups (Models / Settings / Automation). A group
+// Full link set with the related node pages collapsed into groups (Models / Settings / Automation / Preview). A group
 // entry has no `to` of its own — it is a pure expand/collapse toggle whose children carry the routes. The
 // exported navigationLinks below is this list with capability-gated children removed (and any group left
 // empty dropped) — see the filter at the bottom of this file. The nav bars stay capability-unaware.
@@ -132,24 +131,20 @@ const allNavigationLinks: INavigationLink[] = [
 			{ translationKey: "navigation.tools", to: nodeRoutePaths.tools },
 		],
 	},
-	// Preview group: collects experimental / preview features under one menu point. Open Canvas (the MAF
-	// workflow builder) is the first member; future preview features become additional children here. The
-	// whole group is gated on the preview capability — when it is off the group (and its only child) drop.
+	// Preview group: collects experimental / preview features under one menu point. Open Canvas (the MAF workflow
+	// builder) and Image Generation (stable-diffusion.cpp) both live here — image generation is not yet confidently
+	// verified end-to-end, so it is presented as a preview surface rather than a flagship top-level entry.
+	// Each child carries its OWN capability (the group itself is ungated, like Models / Automation), so turning one
+	// capability off drops only that child and the generic empty-group filter below removes the group when both are
+	// off. That keeps every child's nav visibility exactly aligned with its route's own capability redirect.
 	{
 		id: "preview",
 		icon: IconBinaryTree2,
 		translationKey: "navigation.previewGroup",
-		capability: "preview",
-		links: [{ translationKey: "navigation.preview", to: nodeRoutePaths.preview }],
-	},
-	// Image generation (stable-diffusion.cpp) — a top-level entry gated on the images capability. Ships dark
-	// (capability off) until the runtime is live-GPU verified.
-	{
-		id: "images",
-		icon: IconPhoto,
-		translationKey: "navigation.images",
-		to: nodeRoutePaths.images,
-		capability: "images",
+		links: [
+			{ translationKey: "navigation.preview", to: nodeRoutePaths.preview, capability: "preview" },
+			{ translationKey: "navigation.images", to: nodeRoutePaths.images, capability: "images" },
+		],
 	},
 	{
 		id: "invocations",

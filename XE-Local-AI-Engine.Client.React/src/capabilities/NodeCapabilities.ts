@@ -41,9 +41,10 @@ export interface NodeCapabilityConfig {
 	readonly loadedModels: boolean;
 	readonly preview: boolean;
 	readonly knowledgeBase: boolean;
-	// Local image-generation surface (stable-diffusion.cpp text-to-image). Enabled by default: the runtime has been
-	// live-GPU verified end-to-end on target hardware, so the nav entry + /images route ship on by default as a
-	// flagship feature.
+	// Local image-generation surface (stable-diffusion.cpp text-to-image). Enabled by default, but surfaced as a
+	// PREVIEW feature: its nav entry is a child of the Preview group (next to Open Canvas) rather than a top-level
+	// link, because the runtime is not yet confidently verified end-to-end. This flag alone gates both the nav child
+	// and the /images route — it is independent of the `preview` flag, which gates only Open Canvas.
 	readonly images: boolean;
 	// Dedicated durable software-development workflow. The surface ships in every build; the authenticated
 	// runtime capability controls whether its actions are available on this node.
@@ -117,8 +118,8 @@ export const nodeCapabilities: NodeCapabilityConfig = {
 	// knowledge-base SignalR hub. Selective encryption: source document blobs and display names are encrypted
 	// at rest; the extracted chunk text and its FTS search index are stored unencrypted in local SQLite.
 	knowledgeBase: true,
-	// Image generation (stable-diffusion.cpp) surface. ON by default — the runtime module (Lanes A–D) is built and
-	// has been live-GPU verified end-to-end on target hardware; ships as a flagship feature.
+	// Image generation (stable-diffusion.cpp) surface. ON by default — the runtime module (Lanes A–D) is built — but
+	// it ships under the Preview nav group, not as a top-level entry, until it is confidently verified end-to-end.
 	images: true,
 	// The route ships by default. DevelopmentPage resolves the authenticated server capability before exposing
 	// projects or actions, so an operator kill switch still fails closed without requiring a separate frontend build.
