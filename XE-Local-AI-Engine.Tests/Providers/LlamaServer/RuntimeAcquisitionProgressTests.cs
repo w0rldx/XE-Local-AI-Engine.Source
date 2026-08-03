@@ -176,7 +176,9 @@ public sealed class RuntimeAcquisitionProgressTests
         // banner flicker on a warm cache, so an acquisition that acquired nothing must stay entirely silent.
         using var cache = new TempCacheDir();
         var pin = LlamaCppReleasePins.Resolve(OSPlatform.Linux, Architecture.X64, GpuVariant.Cpu)!;
-        var serverPath = Path.Combine(cache.Path, "llama.cpp", LlamaCppReleasePins.PinnedTag, "cpu", pin.ServerRelativePath);
+        // The pin's relative path is archive-shaped ('/'), and the manager runs it through Path.GetFullPath — which
+        // rewrites the separators on Windows. Normalize here or the equality below compares 'build/bin' to 'build\bin'.
+        var serverPath = Path.Combine(cache.Path, "llama.cpp", LlamaCppReleasePins.PinnedTag, "cpu", pin.ServerRelativePath.Replace(oldChar: '/', newChar: Path.DirectorySeparatorChar));
         Directory.CreateDirectory(Path.GetDirectoryName(serverPath)!);
         await File.WriteAllTextAsync(serverPath, "fake-llama-server");
 
