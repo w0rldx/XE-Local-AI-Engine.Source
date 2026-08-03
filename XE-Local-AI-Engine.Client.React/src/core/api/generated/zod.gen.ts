@@ -1288,21 +1288,27 @@ export const zXeLocalAiEngineClientEndpointsMcpV1DeleteMcpServerRequest = z.reco
 
 export const zXeLocalAiEngineClientEndpointsMcpV1McpServerApiKeyResponse = z.object({
 	prefix: z.string(),
-	key: z.string(),
 	createdAt: z.iso.datetime({ offset: true }),
 	lastUsedAt: z.iso.datetime({ offset: true }).nullish(),
 });
 
-export const zXeLocalAiEngineClientEndpointsMcpV1McpServerApiKeyStatusResponse = z.object({
+export const zXeLocalAiEngineClientEndpointsMcpV1GeneratedMcpServerApiKeyResponse = z.object({
 	configured: z.boolean(),
 	apiKey: zXeLocalAiEngineClientEndpointsMcpV1McpServerApiKeyResponse.nullish(),
 	endpointUrl: z.string(),
+	key: z.string(),
 });
 
 /**
  * a request dto that doesn't have any properties
  */
 export const zFastEndpointsEmptyRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsMcpV1McpServerApiKeyStatusResponse = z.object({
+	configured: z.boolean(),
+	apiKey: zXeLocalAiEngineClientEndpointsMcpV1McpServerApiKeyResponse.nullish(),
+	endpointUrl: z.string(),
+});
 
 export const zXeLocalAiEngineClientEndpointsMcpV1GetMcpServerRequest = z.record(z.string(), z.never());
 
@@ -3689,7 +3695,7 @@ export const zGetMcpServerApiKeyResponse = zXeLocalAiEngineClientEndpointsMcpV1M
 /**
  * Success
  */
-export const zGenerateMcpServerApiKeyResponse = zXeLocalAiEngineClientEndpointsMcpV1McpServerApiKeyStatusResponse;
+export const zGenerateMcpServerApiKeyResponse = zXeLocalAiEngineClientEndpointsMcpV1GeneratedMcpServerApiKeyResponse;
 
 export const zGetMcpServerToolsPath = z.object({
 	mcpServerId: z.guid(),

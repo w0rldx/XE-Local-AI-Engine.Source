@@ -3255,7 +3255,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsMcpV1McpServerApiKeyStatusResponse"
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsMcpV1GeneratedMcpServerApiKeyResponse"
                 }
               }
             }
@@ -12871,6 +12871,61 @@
         "type": "object",
         "additionalProperties": false
       },
+      "XE_Local_AI_EngineClientEndpointsMcpV1GeneratedMcpServerApiKeyResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "configured",
+          "endpointUrl",
+          "key"
+        ],
+        "properties": {
+          "configured": {
+            "type": "boolean"
+          },
+          "apiKey": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsMcpV1McpServerApiKeyResponse"
+              }
+            ]
+          },
+          "endpointUrl": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsMcpV1McpServerApiKeyResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "prefix",
+          "createdAt"
+        ],
+        "properties": {
+          "prefix": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastUsedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        }
+      },
+      "FastEndpointsEmptyRequest": {
+        "type": "object",
+        "description": "a request dto that doesn't have any properties",
+        "additionalProperties": false
+      },
       "XE_Local_AI_EngineClientEndpointsMcpV1McpServerApiKeyStatusResponse": {
         "type": "object",
         "additionalProperties": false,
@@ -12894,37 +12949,6 @@
             "type": "string"
           }
         }
-      },
-      "XE_Local_AI_EngineClientEndpointsMcpV1McpServerApiKeyResponse": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "prefix",
-          "key",
-          "createdAt"
-        ],
-        "properties": {
-          "prefix": {
-            "type": "string"
-          },
-          "key": {
-            "type": "string"
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "lastUsedAt": {
-            "type": "string",
-            "format": "date-time",
-            "nullable": true
-          }
-        }
-      },
-      "FastEndpointsEmptyRequest": {
-        "type": "object",
-        "description": "a request dto that doesn't have any properties",
-        "additionalProperties": false
       },
       "XE_Local_AI_EngineClientEndpointsMcpV1GetMcpServerRequest": {
         "type": "object",

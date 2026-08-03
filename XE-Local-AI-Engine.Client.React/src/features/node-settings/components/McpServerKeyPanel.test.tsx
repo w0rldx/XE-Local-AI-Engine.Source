@@ -8,8 +8,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { McpServerKeyPanel } from "@/features/node-settings/components/McpServerKeyPanel";
 
 // The panel manages the INBOUND MCP credential — the key an external client presents to this node's own MCP endpoint.
-// What is worth pinning: it SHOWS the key in full (unlike the deliberately write-only HF token panel beside it),
-// surfaces the endpoint URL to paste into a client config, and warns that regenerating replaces the existing key.
+// What is worth pinning: the key is NEVER rendered on load (the node stores only a hash, so the GET has none to give),
+// it appears exactly once in the response to a generate action behind a copy-it-now warning, and the panel surfaces
+// the endpoint URL and warns that regenerating replaces the existing key.
 
 const getMock = vi.fn();
 const generateMock = vi.fn();
@@ -82,15 +83,20 @@ function renderPanel() {
 	);
 }
 
+// Deliberately has no `key`: the GET response type carries none, because the node cannot recover one from a digest.
 const configuredResponse = {
 	configured: true,
 	endpointUrl: "http://127.0.0.1:5000/api/local/v1/mcp/server",
 	apiKey: {
 		prefix: "xemcp_abc123",
-		key: "xemcp_abc123-the-rest-of-the-secret",
 		createdAt: "2026-08-03T00:00:00+00:00",
 		lastUsedAt: null,
 	},
+};
+
+const generatedResponse = {
+	...configuredResponse,
+	key: "xemcp_abc123-the-rest-of-the-secret",
 };
 
 const emptyResponse = {
@@ -120,7 +126,7 @@ describe("McpServerKeyPanel", () => {
 		expect(screen.queryByTestId("mcp-server-key-value")).toBeNull();
 	});
 
-	it("reveals the full key and the endpoint URL when a key is configured", async () => {
+	it("never renders the key on load, only its prefix and the endpoint URL", async () => {
 		getMock.mockResolvedValue(configuredResponse);
 
 		renderPanel();
@@ -128,11 +134,69 @@ describe("McpServerKeyPanel", () => {
 		await waitFor(() => {
 			expect(screen.getByTestId("mcp-server-key-status").textContent).toBe("Key configured");
 		});
-		// Reversible by design: the operator must be able to re-copy the key without rotating it.
-		expect(screen.getByTestId("mcp-server-key-value").textContent).toBe("xemcp_abc123-the-rest-of-the-secret");
+		// The load-bearing assertion of hashed storage: a configured key is NOT recoverable, so an operator arriving
+		// at this page must never be shown one. Only the non-secret prefix and the endpoint URL are rendered.
+		expect(screen.queryByTestId("mcp-server-key-value")).toBeNull();
+		expect(screen.queryByTestId("mcp-server-key-reveal")).toBeNull();
+		expect(screen.getByTestId("mcp-server-key-prefix").textContent).toContain("xemcp_abc123");
+		expect(screen.getByTestId("mcp-server-key-card").textContent).not.toContain(
+			"xemcp_abc123-the-rest-of-the-secret",
+		);
 		expect(screen.getByTestId("mcp-server-key-endpoint").textContent).toBe(
 			"http://127.0.0.1:5000/api/local/v1/mcp/server",
 		);
+	});
+
+	it("tells the operator the configured key cannot be shown again", async () => {
+		getMock.mockResolvedValue(configuredResponse);
+
+		renderPanel();
+
+		await waitFor(() => {
+			expect(screen.getByTestId("mcp-server-key-not-retrievable").textContent).toContain(
+				"cannot be shown again",
+			);
+		});
+	});
+
+	it("reveals the key exactly once after generating, behind a copy-it-now warning", async () => {
+		getMock.mockResolvedValue(emptyResponse);
+		generateMock.mockResolvedValue(generatedResponse);
+
+		renderPanel();
+		await waitFor(() => {
+			expect(screen.getByTestId("mcp-server-key-status").textContent).toBe("No key");
+		});
+		expect(screen.queryByTestId("mcp-server-key-value")).toBeNull();
+
+		fireEvent.click(screen.getByTestId("mcp-server-key-generate"));
+
+		await waitFor(() => {
+			expect(screen.getByTestId("mcp-server-key-value").textContent).toBe(
+				"xemcp_abc123-the-rest-of-the-secret",
+			);
+		});
+		expect(screen.getByTestId("mcp-server-key-reveal").textContent).toContain("cannot be recovered");
+	});
+
+	it("drops the revealed key once the operator dismisses it", async () => {
+		getMock.mockResolvedValue(emptyResponse);
+		generateMock.mockResolvedValue(generatedResponse);
+
+		renderPanel();
+		await waitFor(() => {
+			expect(screen.getByTestId("mcp-server-key-status").textContent).toBe("No key");
+		});
+		fireEvent.click(screen.getByTestId("mcp-server-key-generate"));
+		await waitFor(() => {
+			expect(screen.getByTestId("mcp-server-key-value")).not.toBeNull();
+		});
+
+		fireEvent.click(screen.getByTestId("mcp-server-key-dismiss-reveal"));
+
+		await waitFor(() => {
+			expect(screen.queryByTestId("mcp-server-key-value")).toBeNull();
+		});
 	});
 
 	it("reports that a configured key has never been used", async () => {
