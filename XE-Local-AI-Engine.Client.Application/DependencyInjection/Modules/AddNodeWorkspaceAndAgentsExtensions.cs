@@ -40,6 +40,9 @@ internal static class AddNodeWorkspaceAndAgentsExtensions
         // Node-local MCP registrations. Secret-bearing args/env/description columns are encrypted at rest; the
         // connection manager reads enabled rows and the CRUD service owns registration changes.
         builder.Services.AddScoped<IMcpServerStore, McpServerStore>();
+        // The single INBOUND-MCP bearer credential (opposite direction to the registrations above): the key an external
+        // MCP client presents to this node's own MCP server endpoint. Material is encrypted at rest.
+        builder.Services.AddScoped<IMcpServerApiKeyStore, McpServerApiKeyStore>();
         // Model-type classification store. Persists the digest-keyed detection cache and the operator override, keyed by
         // model name (NOCASE). Unencrypted — model names/digests/capabilities/kinds are not secrets. The classification
         // service reads/writes through it to resolve the effective kind that filters the chat picker. Scoped to match

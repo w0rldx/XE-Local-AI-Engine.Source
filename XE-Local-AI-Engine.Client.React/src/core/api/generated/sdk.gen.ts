@@ -212,6 +212,9 @@ import type {
 	FreezeInferenceProfileData,
 	FreezeInferenceProfileErrors,
 	FreezeInferenceProfileResponses,
+	GenerateMcpServerApiKeyData,
+	GenerateMcpServerApiKeyErrors,
+	GenerateMcpServerApiKeyResponses,
 	GetAgentDefinitionData,
 	GetAgentDefinitionErrors,
 	GetAgentDefinitionResponses,
@@ -293,6 +296,9 @@ import type {
 	GetLocalModelDetailsData,
 	GetLocalModelDetailsErrors,
 	GetLocalModelDetailsResponses,
+	GetMcpServerApiKeyData,
+	GetMcpServerApiKeyErrors,
+	GetMcpServerApiKeyResponses,
 	GetMcpServerData,
 	GetMcpServerErrors,
 	GetMcpServerResponses,
@@ -525,6 +531,9 @@ import type {
 	RetrieveImageData,
 	RetrieveImageErrors,
 	RetrieveImageResponses,
+	RevokeMcpServerApiKeyData,
+	RevokeMcpServerApiKeyErrors,
+	RevokeMcpServerApiKeyResponses,
 	RunPlaybookActionEvalData,
 	RunPlaybookActionEvalErrors,
 	RunPlaybookActionEvalResponses,
@@ -754,6 +763,7 @@ import {
 	zExploreInferenceProfileResponse,
 	zFreezeInferenceProfileBody,
 	zFreezeInferenceProfileResponse,
+	zGenerateMcpServerApiKeyResponse,
 	zGetAgentDefinitionPath,
 	zGetAgentDefinitionResponse,
 	zGetAgentFeedbackInsightsPath,
@@ -797,6 +807,7 @@ import {
 	zGetLlamaCppSourceBuildStatusResponse,
 	zGetLocalModelDetailsPath,
 	zGetLocalModelDetailsResponse,
+	zGetMcpServerApiKeyResponse,
 	zGetMcpServerPath,
 	zGetMcpServerResponse,
 	zGetMcpServerToolsPath,
@@ -926,6 +937,7 @@ import {
 	zResolveToolApprovalResponse,
 	zRetrieveImagePath,
 	zRetrieveImageResponse,
+	zRevokeMcpServerApiKeyResponse,
 	zRunPlaybookActionEvalPath,
 	zRunPlaybookActionEvalResponse,
 	zSaveCloudSettingsBody,
@@ -2698,6 +2710,71 @@ export const updateMcpServer = <ThrowOnError extends boolean = false>(options: O
 			"Content-Type": "application/json",
 			...options.headers,
 		},
+	});
+
+export const revokeMcpServerApiKey = <ThrowOnError extends boolean = false>(
+	options?: Options<RevokeMcpServerApiKeyData, ThrowOnError>,
+) =>
+	(options?.client ?? client).delete<RevokeMcpServerApiKeyResponses, RevokeMcpServerApiKeyErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseValidator: async (data) => await zRevokeMcpServerApiKeyResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/mcp/server-key",
+		...options,
+	});
+
+export const getMcpServerApiKey = <ThrowOnError extends boolean = false>(
+	options?: Options<GetMcpServerApiKeyData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<GetMcpServerApiKeyResponses, GetMcpServerApiKeyErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetMcpServerApiKeyResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/mcp/server-key",
+		...options,
+	});
+
+export const generateMcpServerApiKey = <ThrowOnError extends boolean = false>(
+	options?: Options<GenerateMcpServerApiKeyData, ThrowOnError>,
+) =>
+	(options?.client ?? client).post<GenerateMcpServerApiKeyResponses, GenerateMcpServerApiKeyErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGenerateMcpServerApiKeyResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/mcp/server-key",
+		...options,
 	});
 
 export const getMcpServerTools = <ThrowOnError extends boolean = false>(options: Options<GetMcpServerToolsData, ThrowOnError>) =>

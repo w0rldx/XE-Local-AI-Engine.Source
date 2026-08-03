@@ -22,6 +22,7 @@ import { DownloadProgressPanel } from "@/features/models/components/DownloadProg
 import { useActiveGgufDownloads, useCancelGgufDownload } from "@/features/models/queries/useGgufDownload";
 import { useGgufBrowseStore } from "@/features/models/stores/GgufBrowseStore";
 import { HfTokenPanel } from "@/features/node-settings/components/HfTokenPanel";
+import { McpServerKeyPanel } from "@/features/node-settings/components/McpServerKeyPanel";
 import { ImageRuntimeSourceBuildCard } from "@/features/node-settings/components/ImageRuntimeSourceBuildCard";
 import { LlamaCppUpdaterPanel } from "@/features/node-settings/components/LlamaCppUpdaterPanel";
 import { NodeSettingsFieldsCard } from "@/features/node-settings/components/NodeSettingsFieldsCard";
@@ -497,6 +498,8 @@ export function NodeSettings() {
 					onClear={handleClearToken}
 					isSaving={setHfToken.isPending}
 				/>
+
+				<McpServerKeyPanel />
 
 				<VoiceSettingsCard />
 

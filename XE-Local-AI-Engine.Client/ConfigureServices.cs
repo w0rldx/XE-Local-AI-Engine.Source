@@ -6,6 +6,7 @@ using System.Text.Json.Serialization.Metadata;
 using System.Threading.RateLimiting;
 using FastEndpoints;
 using FastEndpoints.Swagger;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
@@ -141,6 +142,11 @@ public static class ConfigureServices
         // Scheduler:Enabled is false. The QRTZ_ tables are created by the same node-chat EF migration.
         builder.AddNodeScheduler(configuration);
 
+        // This node's INBOUND MCP server: the Streamable HTTP surface an external MCP client connects to in order to
+        // delegate a task to the local model. Registration is unconditional, but the endpoint authenticates nobody
+        // until the operator generates a key, so a node that never opts in exposes no reachable tool.
+        builder.AddNodeMcpServer();
+
         // Hub-backed scheduler event publisher — supersedes the no-op default registered in AddNodeScheduler so
         // run/definition lifecycle events broadcast to connected SignalR clients (SchedulerHub mapped in Program).
         builder.Services.AddSingleton<ISchedulerEventPublisher, SchedulerEventPublisher>();
@@ -236,7 +242,10 @@ public static class ConfigureServices
                .AddEntityFrameworkStores<NodeIdentityDbContext>()
                .AddSignInManager();
         builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-               .AddJwtBearer();
+               .AddJwtBearer()
+               // Second scheme, applied ONLY by the McpServer policy on the inbound MCP endpoint. JWT bearer stays the
+               // default scheme, so every existing endpoint and hub keeps its current behavior unchanged.
+               .AddScheme<AuthenticationSchemeOptions, McpApiKeyAuthenticationHandler>(McpApiKeyAuthenticationHandler.SchemeName, configureOptions: null);
         builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
                .Configure<IOptions<NodeAuthOptions>, INodeJwtKeyProvider>((options, nodeAuthOptions, jwtKeyProvider) =>
                {
@@ -280,6 +289,13 @@ public static class ConfigureServices
                 policy => policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme)
                                 .RequireAuthenticatedUser()
                                 .RequireRole(NodeAuthorizationPolicies.AdminRole));
+
+            // The inbound MCP endpoint accepts ONLY the MCP API key scheme — never the operator's JWT. Listing just the
+            // one scheme is what stops a browser session (or a stolen operator token) from driving the MCP surface, and
+            // stops an MCP client from ever presenting as the operator. No role requirement: the key IS the authorization.
+            options.AddPolicy(NodeAuthorizationPolicies.McpServer,
+                policy => policy.AddAuthenticationSchemes(McpApiKeyAuthenticationHandler.SchemeName)
+                                .RequireAuthenticatedUser());
         });
         builder.Services.AddAntiforgery();
 
@@ -295,6 +311,22 @@ public static class ConfigureServices
                     {
                         AutoReplenishment = true,
                         PermitLimit = authPermitLimit,
+                        QueueLimit = 0,
+                        Window = TimeSpan.FromMinutes(1)
+                    }));
+
+            // Inbound MCP. The key is 256 bits, so this is not what makes guessing infeasible — it bounds the attempt
+            // rate so a local process cannot grind at it, and it turns a runaway/misconfigured client into a 429 rather
+            // than an unbounded load on the node. Sized for real MCP traffic (a connect does tools/list, then a call per
+            // delegated task), which is why it is 120/min rather than the auth endpoints' 10/min. Testing gets the same
+            // relaxed treatment as AuthPolicy so integration/E2E runs from one loopback partition stay deterministic.
+            var mcpPermitLimit = builder.Environment.IsEnvironment("Testing") ? 100_000 : 120;
+            options.AddPolicy(NodeAuthRateLimits.McpPolicy, httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(GetRateLimitPartitionKey(httpContext),
+                    _ => new FixedWindowRateLimiterOptions
+                    {
+                        AutoReplenishment = true,
+                        PermitLimit = mcpPermitLimit,
                         QueueLimit = 0,
                         Window = TimeSpan.FromMinutes(1)
                     }));
