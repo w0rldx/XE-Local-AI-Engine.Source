@@ -28,6 +28,12 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///         <b>Idempotent.</b> It no-ops when a GGUF is already installed or a non-default <c>DefaultModelName</c> is set,
 ///         so it provisions at most once and is safe to run on every boot.
 ///     </para>
+///     <para>
+///         <b>Acquisition visibility.</b> The GPU-probe segment reports to
+///         <see cref="IRuntimeAcquisitionStatusRegistry" /> so the operator sees why a fresh install sits idle; the binary
+///         manager reports the download/verify/extract phases itself. This service owns the terminal
+///         <see cref="RuntimeAcquisitionPhase.Failed" /> for the probe segment ALONE — never for the whole flow.
+///     </para>
 /// </remarks>
 public sealed class FirstRunModelProvisioningService : BackgroundService
 {
@@ -36,6 +42,7 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
     // where the fast path + both shelling probes chain. Generous so a slow-but-working detection still succeeds.
     private static readonly TimeSpan DefaultGpuProbeCeiling = TimeSpan.FromSeconds(25);
 
+    private readonly IRuntimeAcquisitionStatusRegistry _acquisitionStatus;
     private readonly ILlamaCppBinaryManager _binaryManager;
     private readonly IConfiguration _configuration;
     private readonly IGgufDownloadCoordinator _downloadCoordinator;
@@ -53,6 +60,7 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
         ILlamaCppBinaryManager binaryManager,
         IGpuVariantSelector variantSelector,
         INodeSettingsStore nodeSettingsStore,
+        IRuntimeAcquisitionStatusRegistry acquisitionStatus,
         ILogger<FirstRunModelProvisioningService> logger)
         : this(configuration,
             ggufModelStore,
@@ -60,6 +68,7 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
             binaryManager,
             variantSelector,
             nodeSettingsStore,
+            acquisitionStatus,
             logger,
             DesktopLaunch.IsDesktopMode(Environment.GetCommandLineArgs(), VelopackInstall.IsManaged()),
             TimeSpan.FromSeconds(2),
@@ -77,6 +86,7 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
         ILlamaCppBinaryManager binaryManager,
         IGpuVariantSelector variantSelector,
         INodeSettingsStore nodeSettingsStore,
+        IRuntimeAcquisitionStatusRegistry acquisitionStatus,
         ILogger<FirstRunModelProvisioningService> logger,
         bool isDesktopMode,
         TimeSpan pollInterval,
@@ -88,6 +98,7 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
         _binaryManager = binaryManager ?? throw new ArgumentNullException(nameof(binaryManager));
         _variantSelector = variantSelector ?? throw new ArgumentNullException(nameof(variantSelector));
         _nodeSettingsStore = nodeSettingsStore ?? throw new ArgumentNullException(nameof(nodeSettingsStore));
+        _acquisitionStatus = acquisitionStatus ?? throw new ArgumentNullException(nameof(acquisitionStatus));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _isDesktopMode = isDesktopMode;
         _pollInterval = pollInterval;
@@ -171,14 +182,34 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
         probeCts.CancelAfter(_gpuProbeCeiling);
         try
         {
+            // The acquisition channel opens HERE, not at the top of ProvisionAsync: this probe is the first of the two
+            // silent multi-second phases the operator sees no explanation for (the archive download is the other, and the
+            // binary manager reports that one itself). Reporting is fire-and-forget inside the registry, so it adds no
+            // await to the startup path.
+            _acquisitionStatus.Report(new RuntimeAcquisitionUpdate(RuntimeAcquisitionPhase.DetectingGpu));
             variant = await _variantSelector.SelectVariantAsync(probeCts.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (probeCts.IsCancellationRequested && !ct.IsCancellationRequested)
         {
             // The probe overran the ceiling (a wedged vendor tool); the probe's own finally reaped its child. Fall back
-            // to the CPU runtime so a stuck probe never blocks first-run provisioning beyond the ceiling.
+            // to the CPU runtime so a stuck probe never blocks first-run provisioning beyond the ceiling. This is a
+            // FALLBACK, not a failure — publishing Failed here would show an error banner for a run that goes on to
+            // acquire the CPU runtime and provision normally.
             _logger.LogWarning("First-run provisioning: GPU runtime detection did not complete within {Ceiling}; falling back to the CPU runtime.", _gpuProbeCeiling);
             variant = GpuVariant.Cpu;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // Terminal state is scoped to the ONE segment this service owns. The manager owns Failed for the phases it
+            // performs (download/verify/extract), and the outer ExecuteAsync catch must never publish it: that catch also
+            // spans the model download and the settings save, so a throw from either would overwrite a legitimate
+            // Completed with a false runtime failure — and the banner's retry would then be a dead button attached to a
+            // wrong diagnosis. Cancellation is excluded above because a shutting-down host is not an acquisition failure.
+            _acquisitionStatus.Report(new RuntimeAcquisitionUpdate(RuntimeAcquisitionPhase.Failed,
+                SanitizedError: SanitizeAcquisitionFailure(exception)));
+
+            // Propagate exactly as before, so the outer catch still swallows + logs and startup never crashes.
+            throw;
         }
 
         _logger.LogInformation(
@@ -216,6 +247,19 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
         };
         await _nodeSettingsStore.SaveAsync(updated, ct).ConfigureAwait(false);
         _logger.LogInformation("First-run provisioning installed and selected '{Model}'.", ticket.ModelName);
+    }
+
+    /// <summary>
+    ///     Reduces a GPU-probe failure to operator-safe text for the acquisition banner.
+    ///     <see cref="LlamaRuntimeException" /> messages are user-safe by contract, so they pass through; anything else is
+    ///     collapsed to a generic reason rather than surfaced verbatim, since an arbitrary exception message can carry an
+    ///     absolute path or a command line.
+    /// </summary>
+    private static string SanitizeAcquisitionFailure(Exception exception)
+    {
+        return exception is LlamaRuntimeException runtimeException
+            ? runtimeException.Message
+            : "Could not detect the graphics runtime for this machine.";
     }
 
     /// <summary>

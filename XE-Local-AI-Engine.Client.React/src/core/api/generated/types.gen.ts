@@ -866,6 +866,18 @@ export type XeLocalAiEngineClientEndpointsModelFitV1ModelCatalogInfoResponse = {
 	refreshSourceConfigured: boolean;
 };
 
+export type XeLocalAiEngineClientEndpointsModelFitV1RuntimeAcquisitionStatusResponse = {
+	sequence: number;
+	phase: string;
+	variant?: string | null;
+	tag?: string | null;
+	completedBytes?: number | null;
+	totalBytes?: number | null;
+	stepIndex: number;
+	stepCount: number;
+	sanitizedError?: string | null;
+};
+
 export type XeLocalAiEngineClientEndpointsModelFitV1InspectGgufRepositoryResponse = {
 	repoId: string;
 	files: Array<XeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryFileResponse>;
@@ -4278,6 +4290,34 @@ export type GetModelCatalogInfoResponses = {
 };
 
 export type GetModelCatalogInfoResponse = GetModelCatalogInfoResponses[keyof GetModelCatalogInfoResponses];
+
+export type GetRuntimeAcquisitionStatusData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/llamacpp/acquisition";
+};
+
+export type GetRuntimeAcquisitionStatusErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetRuntimeAcquisitionStatusResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1RuntimeAcquisitionStatusResponse;
+};
+
+export type GetRuntimeAcquisitionStatusResponse =
+	GetRuntimeAcquisitionStatusResponses[keyof GetRuntimeAcquisitionStatusResponses];
 
 export type InspectGgufRepositoryData = {
 	body?: never;

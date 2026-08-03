@@ -117,6 +117,41 @@ public sealed class OpenApiDocumentTests
     }
 
     [Test]
+    public async Task LocalOpenApiDocument_DescribesRuntimeAcquisitionHydrateSurface()
+    {
+        await using var factory = new TestingWebAppFactory();
+        using var client = factory.CreateClient();
+        using var response = await client.GetAsync("/openapi/local/v1/v1.json").ConfigureAwait(false);
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await using var responseStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
+        using var document = await JsonDocument.ParseAsync(responseStream).ConfigureAwait(false);
+        var paths = document.RootElement.GetProperty("paths");
+
+        const string acquisitionPath = "/api/local/v1/model-fit/llamacpp/acquisition";
+        AssertEx.True(paths.TryGetProperty(acquisitionPath, out var acquisition),
+            $"Expected the runtime-acquisition hydrate path '{acquisitionPath}'.");
+        AssertResponses(paths, acquisitionPath, "get", ["200"]);
+
+        // Read-only by contract: the hydrate is queried on every mount, so a mutating verb on this route would kick off a
+        // multi-hundred-MB runtime download from a page load.
+        foreach (var verb in HttpVerbs.Where(static verb => verb != "get"))
+        {
+            AssertEx.False(acquisition.TryGetProperty(verb, out _),
+                $"The runtime-acquisition hydrate must expose GET only; found {verb.ToUpperInvariant()}.");
+        }
+
+        // The hydrate response must mirror the hub push payload field-for-field — the client reconciles both through one
+        // shape and one sequence comparison, so a missing field here silently breaks the late-join case.
+        var schemas = document.RootElement.GetProperty("components").GetProperty("schemas");
+        AssertSchemaProperties(schemas, "RuntimeAcquisitionStatusResponse",
+        [
+            "sequence", "phase", "variant", "tag", "completedBytes", "totalBytes", "stepIndex", "stepCount",
+            "sanitizedError"
+        ]);
+    }
+
+    [Test]
     public async Task LocalOpenApiDocument_DescribesImageRuntimeSourceBuildSurface()
     {
         await using var factory = new TestingWebAppFactory();

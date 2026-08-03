@@ -1356,6 +1356,24 @@
 					"review": "Update prüfen",
 					"dismiss": "Schließen"
 				},
+				"acquisition": {
+					"title": "Lokale KI-Laufzeit wird eingerichtet",
+					"detectingGpu": "Grafikhardware wird erkannt…",
+					"downloading": "llama.cpp-Laufzeit wird heruntergeladen…",
+					"verifying": "Heruntergeladene Laufzeit wird überprüft…",
+					"extracting": "Laufzeit wird installiert…",
+					"step": "Schritt {{index}} von {{count}}",
+					"progress": "{{completed}} von {{total}}",
+					"progressUnknownTotal": "{{completed}} heruntergeladen",
+					"rate": "{{rate}}/s",
+					"eta": "noch etwa {{eta}}",
+					"explainer": "Der Chat ist erst nach Abschluss verfügbar. Die übrige App kannst du weiter nutzen.",
+					"failedTitle": "Die lokale KI-Laufzeit konnte nicht installiert werden",
+					"failedFallback": "Die llama.cpp-Laufzeit konnte nicht heruntergeladen werden. Prüfe deine Internetverbindung und versuche es erneut.",
+					"retry": "Erneut versuchen",
+					"retrying": "Wird wiederholt…",
+					"dismiss": "Schließen"
+				},
 				"cudaBuild": {
 					"title": "CUDA (aus Quellcode erstellen)",
 					"devBadge": "Dev",

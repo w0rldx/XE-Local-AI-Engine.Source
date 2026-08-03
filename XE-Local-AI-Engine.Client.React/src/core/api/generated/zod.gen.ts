@@ -1146,6 +1146,24 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1ModelCatalogInfoResponse =
 	refreshSourceConfigured: z.boolean(),
 });
 
+export const zXeLocalAiEngineClientEndpointsModelFitV1RuntimeAcquisitionStatusResponse = z.object({
+	sequence: z.int(),
+	phase: z.string(),
+	variant: z.string().nullish(),
+	tag: z.string().nullish(),
+	completedBytes: z.int().nullish(),
+	totalBytes: z.int().nullish(),
+	stepIndex: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	stepCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	sanitizedError: z.string().nullish(),
+});
+
 export const zXeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryFileResponse = z.object({
 	fileName: z.string(),
 	quant: z.string(),
@@ -3566,6 +3584,11 @@ export const zGetLlamaCppSourceBuildStatusResponse = zXeLocalAiEngineClientEndpo
  * Success
  */
 export const zGetModelCatalogInfoResponse = zXeLocalAiEngineClientEndpointsModelFitV1ModelCatalogInfoResponse;
+
+/**
+ * Success
+ */
+export const zGetRuntimeAcquisitionStatusResponse = zXeLocalAiEngineClientEndpointsModelFitV1RuntimeAcquisitionStatusResponse;
 
 export const zInspectGgufRepositoryQuery = z.object({
 	repoId: z.string().nullish(),

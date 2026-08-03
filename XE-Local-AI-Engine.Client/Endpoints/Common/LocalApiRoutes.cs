@@ -393,6 +393,19 @@ public static class LocalApiRoutes
         public const string SourceBuildRemove = "model-fit/llamacpp/source-build/remove";
         public const string SourceBuildHub = "/api/local/v1/model-fit/llamacpp/source-build/hub";
 
+        // Read-only first-run runtime-acquisition snapshot (IRuntimeAcquisitionStatusRegistry): the GPU-probe → download →
+        // verify → extract phase, byte progress, and the archive step counter. This is the one-shot hydrate on mount —
+        // acquisition starts within seconds of boot, well before the client has authenticated and opened the hub below, so
+        // without it the banner would never appear for the slow-first-run case it exists to explain. It NEVER triggers an
+        // acquisition (unlike the ensure POST on LlamaCppVersion). The literal "acquisition" segment follows "llamacpp",
+        // so it collides with none of the version/runtime/update/cuda-build/source-build routes above.
+        public const string LlamaCppAcquisition = "model-fit/llamacpp/acquisition";
+
+        // SignalR push hub for runtime acquisition progress. Full path (mapped via MapHub, not the FastEndpoints prefix),
+        // mirroring the other local hubs. Each push carries the same sanitized payload the hydrate GET serves, stamped
+        // with the monotonic sequence the client reconciles hydrate and push by.
+        public const string LlamaCppAcquisitionHub = "/api/local/v1/model-fit/llamacpp/acquisition/hub";
+
         // HF access-token set/clear (IHfTokenStore). The endpoint NEVER returns the token; GET reports presence
         // only (security gate).
         public const string HfToken = "model-fit/hf-token";
