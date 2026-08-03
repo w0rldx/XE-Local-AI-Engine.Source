@@ -72,7 +72,11 @@
          future Microsoft.Extensions.AI.OpenAI bump becomes a conscious version change here rather than a silent
          transitive drift. -->
     <PackageVersion Include="OpenAI" Version="2.12.0" />
-    <PackageVersion Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.9" />
+    <!-- 10.0.10 (not 10.0.9): ModelContextProtocol 2.0.0 pulls Microsoft.Extensions.Hosting.Abstractions 10.0.10,
+         which requires Configuration.Abstractions >= 10.0.10, and central transitive pinning turns the mismatch into
+         an NU1109 downgrade error across five projects. Same servicing band as the DependencyInjection.Abstractions
+         and Logging.Abstractions pins directly below. -->
+    <PackageVersion Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.10" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.9" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.10" />
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.10" />
@@ -88,7 +92,7 @@
     <PackageVersion Include="Microsoft.Agents.AI.Hosting.OpenAI" Version="1.15.0-alpha.260722.1" />
     <PackageVersion Include="Microsoft.Agents.AI.DevUI" Version="1.15.0-preview.260722.1" />
     <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery" Version="10.7.0" />
-    <PackageVersion Include="ModelContextProtocol" Version="1.4.1" />
+    <PackageVersion Include="ModelContextProtocol" Version="2.0.0" />
     <PackageVersion Include="NSubstitute" Version="5.3.0" />
     <PackageVersion Include="NSec.Cryptography" Version="26.4.0" />
     <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.16.0" />
