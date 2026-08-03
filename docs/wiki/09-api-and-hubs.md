@@ -82,7 +82,7 @@ One row per nested class in `LocalApiRoutes.cs`, in file order. The "Owner page"
 | **GitHubAuth** (`github-auth/*`) | `github-auth/start\|poll\|status\|sign-out` — device-flow sign-in for app self-update. **Desktop-mode only** (`IDesktopOnlyEndpoint`); the device code and access token never appear in any contract | [Hosting & Deployment](11-hosting-and-deployment.md) |
 | **AppUpdate** (`app-update/*`) | `app-update/status` (cached snapshot; `?refresh=true` forces a check with a 60 s floor), `app-update/apply`. **Desktop-mode only** | [Hosting & Deployment](11-hosting-and-deployment.md) |
 | **KnowledgeBase** (`knowledge-base/*`) | `knowledge-base/documents` (POST multipart upload / GET list), `knowledge-base/documents/{documentId}(/reindex)`, `knowledge-base/reindex`, `knowledge-base/search`, `knowledge-base/reranker/download-recommended` | [Knowledge Base](15-knowledge-base.md) |
-| **Mcp** (`mcp/*`) | `mcp/servers`, `mcp/servers/{id}(/enabled\|/tools)`, `tool-catalog` | [Agent Mode](04-agent-mode.md) |
+| **Mcp** (`mcp/*`) | **Outbound** (node as MCP *client*): `mcp/servers`, `mcp/servers/{id}(/enabled\|/tools)`, `tool-catalog`. **Inbound** (node as MCP *server*): `mcp/server-key` (GET reveal / POST generate / DELETE revoke, Operator-gated) plus the non-FastEndpoints `mcp/server` transport itself — see §2.1 | [Agent Mode](04-agent-mode.md) |
 
 > **Endpoints are orchestration-only.** They validate input, call a service in `XE-Local-AI-Engine.Client.Application/Services/*`, and map to a DTO. Business logic does not live in the endpoint. When tracing a route, jump straight to the matching service area.
 

@@ -559,5 +559,21 @@ public static class LocalApiRoutes
         // The full dynamic tool catalog (built-ins + enabled MCP tools). A distinct top-level literal so it never
         // collides with the {mcpServerId} route param under the servers surface.
         public const string ToolCatalog = "tool-catalog";
+
+        // ---- INBOUND: this node acting AS an MCP server. Everything above is OUTBOUND (this node as MCP client). ----
+
+        /// <summary>
+        ///     Operator-gated management of the single inbound bearer credential (GET reveal / POST generate /
+        ///     DELETE revoke). A literal segment under <c>mcp/</c>, so it can never be parsed as an {mcpServerId}.
+        /// </summary>
+        public const string ServerApiKey = "mcp/server-key";
+
+        /// <summary>
+        ///     The MCP Streamable HTTP endpoint itself, mapped by <c>MapMcp</c> OUTSIDE FastEndpoints (like the SignalR
+        ///     hubs) but deliberately INSIDE the <c>/api/local/v1</c> prefix so
+        ///     <c>LocalApiSecurityMiddleware</c>'s loopback peer + Host + Origin gate still covers it. Moving it outside
+        ///     the prefix would silently drop that gate and leave the bearer key as the only control.
+        /// </summary>
+        public const string ServerEndpoint = "mcp/server";
     }
 }
