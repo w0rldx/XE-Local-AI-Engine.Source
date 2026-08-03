@@ -200,6 +200,19 @@ function Invoke-Verify {
 function Invoke-Guard {
     param([string[]] $Arguments)
 
+    # Why the status leaves through a script-scoped variable rather than `return`
+    #   `& $command[0] @commandArgs` writes the wrapped command's stdout to THIS FUNCTION'S output
+    #   stream. A `return $status` therefore appends the status to that stream, and the caller's
+    #   `exit (Invoke-Guard ...)` consumed the whole array: every line the command printed was
+    #   swallowed as a return value and `exit` received an array instead of an int. The result was a
+    #   perfect hollow gate — the guard printed its own "result is trustworthy" line, showed nothing
+    #   from the run, and exited 0 no matter what the command did. Measured on pwsh 7.6.3: a guarded
+    #   `cmd /c echo CHILD_OK` printed nothing and exited 0, and a guarded solution-wide `dotnet
+    #   test` produced no output at all while reporting success.
+    #   Keeping the output stream clear of the status is what lets the command's stdout reach the
+    #   console and a caller's `| Tee-Object` unchanged.
+    $script:GuardExit = 0
+
     $state = ''
     $ownState = $false
     $roots = @()
@@ -242,9 +255,11 @@ function Invoke-Guard {
         if ($status -ne 0) {
             Write-GuardLog "(the wrapped command also exited $status, but that verdict is unusable — see above)"
         }
-        return $verifyStatus
+        $script:GuardExit = $verifyStatus
+        return
     }
-    return $status
+    $script:GuardExit = $status
+    return
 }
 
 $argv = @($args)
@@ -276,7 +291,10 @@ switch -CaseSensitive ($Subcommand) {
         exit (Invoke-Verify -State $Rest[0])
     }
     'guard' {
-        exit (Invoke-Guard -Arguments $Rest)
+        # Not `exit (Invoke-Guard ...)`: that subexpression captures the wrapped command's stdout
+        # along with the status. See the note in Invoke-Guard.
+        Invoke-Guard -Arguments $Rest
+        exit $script:GuardExit
     }
     default { Exit-Usage "unknown subcommand '$Subcommand' (expected: snapshot | verify | guard)" }
 }
