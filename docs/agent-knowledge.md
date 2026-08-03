@@ -463,6 +463,33 @@ Diagnosing it: confirm `OTEL_EXPORTER_OTLP_ENDPOINT` is on the process (`tr '\0'
 - Desktop publish is self-contained single-file but **explicitly not trimmed** (`PublishTrimmed=false`) — trimming breaks EF Core / Serilog / FastEndpoints / MEAI reflection wiring.
 - Desktop mode is opt-in via `XE_LAUNCH_MODE=desktop`; off-flag behaviour (headless/Aspire/CI) must stay byte-identical.
 
+### The node is an MCP server too, and three things about it will bite you
+
+The inbound surface (`/api/local/v1/mcp/server`, C# SDK 2.0.0 / spec revision 2026-07-28) is the
+mirror of the `mcp/servers` registrations. Don't confuse the directions — they share only the name.
+
+- **An `[McpServerTool]` parameter is REQUIRED unless it has a default. Nullability is not enough.**
+  `string? agent` with no `= null` is advertised in `inputSchema.required`, and the SDK's binder
+  rejects the call *before* your handler runs with "the arguments dictionary is missing a value for
+  the required parameter 'agent'". Measured live — `tools/list` looked perfectly correct while every
+  `tools/call` that omitted the parameter failed. Because injected parameters (`IProgress<…>`,
+  `CancellationToken`) carry no default, they must sit *before* the optional ones, which makes the
+  signature order look wrong and invites someone to "tidy" it. Don't.
+- **`LocalApiSecurityMiddleware` matches on the `/api/local/v1` prefix alone.** `MapMcp` must mount
+  inside it or the loopback peer/Host/Origin gate silently does not apply to the MCP endpoint. Same
+  trap for any future non-FastEndpoints route.
+- **A second auth scheme needs its own policy, and the policy must list only that scheme.** The
+  `McpServer` policy names `McpApiKey` and nothing else, which is what stops an operator JWT from
+  driving the MCP tool surface. `AddAuthentication(JwtBearer…)` keeps JWT as the default so no
+  existing endpoint changes behavior.
+
+Two facts worth not re-deriving: the **1.4.1 → 2.0.0 SDK upgrade is a source-level no-op here** (the
+client only touches `McpClient.CreateAsync`, `ListToolsAsync`, the two transports and `McpException`,
+none of which changed, and none of which are the `MCP9005`-deprecated Roots/Sampling/Logging), and
+spec 2026-07-28 states **"Authorization is OPTIONAL for MCP implementations"** — so the pre-shared
+bearer key is a supported deviation, not a violation, provided the server advertises no Protected
+Resource Metadata.
+
 ### Tool calling has FIVE independent gates, and the UI shows only one of them
 
 Before concluding "tool calling is broken", walk all five. A live evaluation burned most of a session on this: the installed-models row advertised a **`TOOLS`** capability chip, the node's *Enable tools* switch was on, the per-message *Local tools* toggle was on — and the model still answered `NO TOOLS AVAILABLE`, because two of the five gates are invisible from the chat screen.

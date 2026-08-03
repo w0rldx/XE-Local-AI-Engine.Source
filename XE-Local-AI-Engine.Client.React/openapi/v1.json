@@ -3243,6 +3243,97 @@
         ]
       }
     },
+    "/api/local/v1/mcp/server-key": {
+      "post": {
+        "tags": [
+          "Mcp"
+        ],
+        "operationId": "generateMcpServerApiKey",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsMcpV1McpServerApiKeyStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "Mcp"
+        ],
+        "operationId": "getMcpServerApiKey",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsMcpV1McpServerApiKeyStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Mcp"
+        ],
+        "operationId": "revokeMcpServerApiKey",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/mcp/servers/{mcpServerId}/tools": {
       "get": {
         "tags": [
@@ -12778,6 +12869,61 @@
       },
       "XE_Local_AI_EngineClientEndpointsMcpV1DeleteMcpServerRequest": {
         "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsMcpV1McpServerApiKeyStatusResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "configured",
+          "endpointUrl"
+        ],
+        "properties": {
+          "configured": {
+            "type": "boolean"
+          },
+          "apiKey": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsMcpV1McpServerApiKeyResponse"
+              }
+            ]
+          },
+          "endpointUrl": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsMcpV1McpServerApiKeyResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "prefix",
+          "key",
+          "createdAt"
+        ],
+        "properties": {
+          "prefix": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastUsedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        }
+      },
+      "FastEndpointsEmptyRequest": {
+        "type": "object",
+        "description": "a request dto that doesn't have any properties",
         "additionalProperties": false
       },
       "XE_Local_AI_EngineClientEndpointsMcpV1GetMcpServerRequest": {

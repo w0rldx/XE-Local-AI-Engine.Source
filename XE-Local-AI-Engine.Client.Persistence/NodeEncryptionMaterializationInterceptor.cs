@@ -68,6 +68,9 @@ public sealed class NodeEncryptionMaterializationInterceptor : IMaterializationI
                 registration.EnvJson = DecryptIfPresent(registration.EnvJson, context.NodeEncryptionKey.Span, Guid.Empty, registration.Id, "env");
                 registration.Description = DecryptIfPresent(registration.Description, context.NodeEncryptionKey.Span, Guid.Empty, registration.Id, "description");
                 break;
+            case McpServerApiKey apiKey:
+                apiKey.Material = NodePayloadProtector.Decrypt(apiKey.Material, context.NodeEncryptionKey.Span, Guid.Empty, apiKey.Id, "mcp_api_key_material");
+                break;
             case ScheduledJobDefinition jobDefinition:
                 jobDefinition.ParameterJson = DecryptIfPresent(jobDefinition.ParameterJson, context.NodeEncryptionKey.Span, Guid.Empty, jobDefinition.Id, "parameter_json");
                 break;

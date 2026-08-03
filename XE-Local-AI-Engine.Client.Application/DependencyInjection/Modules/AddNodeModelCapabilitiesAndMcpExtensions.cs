@@ -62,6 +62,9 @@ internal static class AddNodeModelCapabilitiesAndMcpExtensions
         // MCP registration service: validates transport fields, loopback URL, and unique names, then republishes the
         // live tool snapshot after enabled-set changes.
         builder.Services.AddScoped<IMcpServerService, McpServerService>();
+        // INBOUND direction: the bearer credential an external MCP client presents to this node's own MCP endpoint.
+        // Scoped to match the scoped, DbContext-backed key store it reads through.
+        builder.Services.AddScoped<IMcpServerApiKeyService, McpServerApiKeyService>();
 
         return builder;
     }

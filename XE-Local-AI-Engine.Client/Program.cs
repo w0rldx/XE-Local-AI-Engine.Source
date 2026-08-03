@@ -362,6 +362,20 @@ try
            .RequireAuthorization(NodeAuthorizationPolicies.Operator);
     }
 
+    // The inbound MCP Streamable HTTP endpoint. Mapped here, beside the hubs, for two reasons that are both
+    // load-bearing:
+    //   1. The path sits INSIDE /api/local/v1, so LocalApiSecurityMiddleware (registered well above, before
+    //      UseRouting) has already enforced loopback peer + allowed Host + same-origin Origin on it. That middleware
+    //      matches on the /api/local/v1 prefix ALONE — mapping this at a bare "/mcp" would silently drop the entire
+    //      loopback gate and leave the bearer key as the only control. Do not move it out of the prefix.
+    //   2. It is mapped outside UseFastEndpoints (like MapHub) because MapMcp owns its own JSON-RPC transport rather
+    //      than being a FastEndpoints endpoint; it therefore does not appear in the OpenAPI document, and the React
+    //      client never talks to it — only external MCP clients do.
+    // The McpServer policy accepts ONLY the MCP API key scheme, never the operator's JWT.
+    app.MapMcp($"/{LocalApiRoutes.Prefix}/{LocalApiRoutes.Mcp.ServerEndpoint}")
+       .RequireAuthorization(NodeAuthorizationPolicies.McpServer)
+       .RequireRateLimiting(NodeAuthRateLimits.McpPolicy);
+
     if (!app.Environment.IsProduction())
     {
         app.UseSwaggerGen(static options =>

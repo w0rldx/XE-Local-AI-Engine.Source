@@ -80,6 +80,7 @@ import {
 	executeUnsavedPreviewWorkflow,
 	exploreInferenceProfile,
 	freezeInferenceProfile,
+	generateMcpServerApiKey,
 	getAgentDefinition,
 	getAgentFeedbackInsights,
 	getAgentPlaybookMonitor,
@@ -108,6 +109,7 @@ import {
 	getLlamaCppSourceBuildStatus,
 	getLocalModelDetails,
 	getMcpServer,
+	getMcpServerApiKey,
 	getMcpServerTools,
 	getModelCatalogInfo,
 	getNodeChatConversation,
@@ -186,6 +188,7 @@ import {
 	renameNodeChatConversation,
 	resolveToolApproval,
 	retrieveImage,
+	revokeMcpServerApiKey,
 	runPlaybookActionEval,
 	saveCloudSettings,
 	saveNodeSettings,
@@ -367,6 +370,8 @@ import type {
 	ExploreInferenceProfileResponse,
 	FreezeInferenceProfileData,
 	FreezeInferenceProfileResponse,
+	GenerateMcpServerApiKeyData,
+	GenerateMcpServerApiKeyResponse,
 	GetAgentDefinitionData,
 	GetAgentDefinitionResponse,
 	GetAgentFeedbackInsightsData,
@@ -423,6 +428,8 @@ import type {
 	GetLocalModelDetailsData,
 	GetLocalModelDetailsError,
 	GetLocalModelDetailsResponse,
+	GetMcpServerApiKeyData,
+	GetMcpServerApiKeyResponse,
 	GetMcpServerData,
 	GetMcpServerResponse,
 	GetMcpServerToolsData,
@@ -588,6 +595,8 @@ import type {
 	ResolveToolApprovalResponse,
 	RetrieveImageData,
 	RetrieveImageResponse,
+	RevokeMcpServerApiKeyData,
+	RevokeMcpServerApiKeyResponse,
 	RunPlaybookActionEvalData,
 	RunPlaybookActionEvalResponse,
 	SaveCloudSettingsData,
@@ -2194,6 +2203,68 @@ export const updateMcpServerMutation = (
 	const mutationOptions: UseMutationOptions<UpdateMcpServerResponse, AxiosError<DefaultError>, Options<UpdateMcpServerData>> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await updateMcpServer({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const revokeMcpServerApiKeyMutation = (
+	options?: Partial<Options<RevokeMcpServerApiKeyData>>,
+): UseMutationOptions<RevokeMcpServerApiKeyResponse, AxiosError<DefaultError>, Options<RevokeMcpServerApiKeyData>> => {
+	const mutationOptions: UseMutationOptions<
+		RevokeMcpServerApiKeyResponse,
+		AxiosError<DefaultError>,
+		Options<RevokeMcpServerApiKeyData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await revokeMcpServerApiKey({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getMcpServerApiKeyQueryKey = (options?: Options<GetMcpServerApiKeyData>) =>
+	createQueryKey("getMcpServerApiKey", options);
+
+export const getMcpServerApiKeyOptions = (options?: Options<GetMcpServerApiKeyData>) =>
+	queryOptions<
+		GetMcpServerApiKeyResponse,
+		AxiosError<DefaultError>,
+		GetMcpServerApiKeyResponse,
+		ReturnType<typeof getMcpServerApiKeyQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getMcpServerApiKey({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getMcpServerApiKeyQueryKey(options),
+	});
+
+export const generateMcpServerApiKeyMutation = (
+	options?: Partial<Options<GenerateMcpServerApiKeyData>>,
+): UseMutationOptions<GenerateMcpServerApiKeyResponse, AxiosError<DefaultError>, Options<GenerateMcpServerApiKeyData>> => {
+	const mutationOptions: UseMutationOptions<
+		GenerateMcpServerApiKeyResponse,
+		AxiosError<DefaultError>,
+		Options<GenerateMcpServerApiKeyData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await generateMcpServerApiKey({
 				...options,
 				...fnOptions,
 				throwOnError: true,
