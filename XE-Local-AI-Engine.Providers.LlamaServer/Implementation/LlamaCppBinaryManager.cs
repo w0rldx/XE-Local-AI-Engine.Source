@@ -201,7 +201,8 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             }
 
             // The pinned path has no catalog-reported size — pass "unknown" (0) so only the absolute ceiling is enforced.
-            await DownloadVerifyExtractAsync(LlamaCppReleasePins.DownloadUri(resolvedTag, pin.AssetName), pin.AssetName, pin.Sha256, expectedSize: 0, variantDir, reporter, stepIndex: 1, ct).ConfigureAwait(false);
+            await DownloadVerifyExtractAsync(LlamaCppReleasePins.DownloadUri(resolvedTag, pin.AssetName), pin.AssetName, pin.Sha256, expectedSize: 0, variantDir, reporter, stepIndex: 1, ct)
+                .ConfigureAwait(false);
 
             var serverPath = ResolveServerPath(variantDir, pin);
             if (serverPath is null)
@@ -463,7 +464,8 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     ///         untouched — nothing is acquired, so nothing may be announced.
     ///     </para>
     /// </summary>
-    private async Task EnsureCudartRuntimeAsync(string tag, LlamaCppAssetPin? pin, string? cudartAsset, GpuVariant variant, string variantDir, string serverPath, AcquisitionReporter? reporter, CancellationToken ct)
+    private async Task EnsureCudartRuntimeAsync(string tag, LlamaCppAssetPin? pin, string? cudartAsset, GpuVariant variant, string variantDir, string serverPath, AcquisitionReporter? reporter,
+        CancellationToken ct)
     {
         // Windows-CUDA only — Vulkan/CPU/Linux need no second archive and must be byte-unchanged.
         if (variant != GpuVariant.Cuda || _os != OSPlatform.Windows)
@@ -574,7 +576,8 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             secondError);
     }
 
-    private async Task<Exception?> TryDownloadVerifyFlattenCudartAsync(Uri url, string assetName, string expectedSha256, long expectedSize, string serverDir, AcquisitionReporter? reporter, CancellationToken ct)
+    private async Task<Exception?> TryDownloadVerifyFlattenCudartAsync(Uri url, string assetName, string expectedSha256, long expectedSize, string serverDir, AcquisitionReporter? reporter,
+        CancellationToken ct)
     {
         var tempArchive = Path.Combine(Path.GetTempPath(), $"llamacpp-cudart-{Guid.NewGuid():N}-{Path.GetFileName(assetName)}");
         var stagingDir = Path.Combine(Path.GetTempPath(), $"llamacpp-cudart-{Guid.NewGuid():N}");
@@ -747,7 +750,8 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     ///     (<see cref="InstallTagAsync" />) — so both acquisition paths run identical verification logic. A transient
     ///     failure or a hash mismatch is discarded and retried exactly once.
     /// </summary>
-    private async Task DownloadVerifyExtractAsync(Uri url, string assetName, string expectedSha256, long expectedSize, string variantDir, AcquisitionReporter? reporter, int stepIndex, CancellationToken ct)
+    private async Task DownloadVerifyExtractAsync(Uri url, string assetName, string expectedSha256, long expectedSize, string variantDir, AcquisitionReporter? reporter, int stepIndex,
+        CancellationToken ct)
     {
         var firstError = await TryDownloadVerifyExtractAsync(url, assetName, expectedSha256, expectedSize, variantDir, reporter, stepIndex, ct).ConfigureAwait(false);
         if (firstError is null)
@@ -770,7 +774,8 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     ///     Runs one download → SHA256 verify → extract pass. Returns <see langword="null" /> on success, or the
     ///     non-fatal failure cause to drive a single retry. Cancellation propagates rather than being swallowed.
     /// </summary>
-    private async Task<Exception?> TryDownloadVerifyExtractAsync(Uri url, string assetName, string expectedSha256, long expectedSize, string variantDir, AcquisitionReporter? reporter, int stepIndex, CancellationToken ct)
+    private async Task<Exception?> TryDownloadVerifyExtractAsync(Uri url, string assetName, string expectedSha256, long expectedSize, string variantDir, AcquisitionReporter? reporter, int stepIndex,
+        CancellationToken ct)
     {
         // Defense-in-depth: even though assetName is allow-list-validated upstream, strip any directory component before
         // it composes a temp path so a future caller can never traverse out of the temp dir.
