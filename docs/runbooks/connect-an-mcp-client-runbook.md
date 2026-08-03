@@ -120,4 +120,19 @@ The node implements MCP specification revision **2026-07-28** via C# SDK 2.0.0, 
 (the revision removed protocol-level sessions and the `initialize` handshake). Authorization is
 **optional** in that revision; this node deliberately does not implement the OAuth 2.1 profile and
 therefore advertises no Protected Resource Metadata — the pre-shared bearer key is the whole
-authentication story, backed by the loopback gate described in §5.
+authentication story, backed by the loopback gate described in §5. Not advertising PRM is also what
+keeps Claude Code from discarding your configured `Authorization` header and attempting OAuth
+discovery instead (`anthropics/claude-code#59467`).
+
+The revision's transport security requirements are met by the existing local-API gate rather than by
+anything MCP-specific: servers **MUST** validate `Origin` and answer `403` when it is present and
+invalid, **SHOULD** bind only to loopback when running locally, and **SHOULD** authenticate every
+connection. `LocalApiSecurityMiddleware`, `LoopbackBindGuard` and the bearer key cover all three.
+
+**On long-running work.** Today `run_agent` holds the request open and reports progress. The official
+alternative for genuinely long calls is the `io.modelcontextprotocol/tasks` extension (SEP-2663,
+NuGet `ModelContextProtocol.Extensions.Tasks` 2.0.0): the server returns a task handle and the client
+polls `tasks/get`. If that is ever adopted here, note that the two mechanisms are **mutually
+exclusive** — the SEP states `notifications/progress` MUST NOT be sent for a task — so adopting tasks
+means *replacing* the progress reporting on that path, not adding to it. The tool's own arguments and
+return shape would not change.
