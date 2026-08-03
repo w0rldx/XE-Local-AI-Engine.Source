@@ -6,8 +6,9 @@ using System.Text;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Default <see cref="IMcpServerApiKeyService" />. Mints 256-bit keys, compares them in constant time, and delegates
-///     storage to <see cref="IMcpServerApiKeyStore" /> (which encrypts the material at rest).
+///     Default <see cref="IMcpServerApiKeyService" />. Mints 256-bit keys, persists only their SHA-256 digest through
+///     <see cref="IMcpServerApiKeyStore" />, and compares a presented key against that digest in constant time. The
+///     plaintext never leaves <see cref="GenerateAsync" />.
 /// </summary>
 internal sealed class McpServerApiKeyService : IMcpServerApiKeyService
 {
@@ -32,7 +33,7 @@ internal sealed class McpServerApiKeyService : IMcpServerApiKeyService
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     }
 
-    public async Task<McpServerApiKeyView> GenerateAsync(CancellationToken cancellationToken = default)
+    public async Task<GeneratedMcpServerApiKey> GenerateAsync(CancellationToken cancellationToken = default)
     {
         // Base64Url: no padding and no '+', '/' or '=' , so the key survives a shell argument, a JSON config file and an
         // HTTP header untouched — all three are on the path between this node and an external MCP client.
@@ -40,8 +41,10 @@ internal sealed class McpServerApiKeyService : IMcpServerApiKeyService
         var key = KeyScheme + secret;
         var prefix = KeyScheme + secret[..PrefixSecretCharacters];
 
-        var record = await _store.SetAsync(prefix, key, cancellationToken).ConfigureAwait(false);
-        return ToView(record);
+        var record = await _store.SetAsync(prefix, HashKey(key), cancellationToken).ConfigureAwait(false);
+
+        // The only moment the plaintext exists outside the caller. Nothing downstream can reproduce it.
+        return new GeneratedMcpServerApiKey(key, ToView(record));
     }
 
     public async Task<McpServerApiKeyView?> GetAsync(CancellationToken cancellationToken = default)
@@ -70,14 +73,15 @@ internal sealed class McpServerApiKeyService : IMcpServerApiKeyService
             return false;
         }
 
-        // FixedTimeEquals over the UTF-8 bytes rather than string equality: a short-circuiting comparison leaks the
-        // length of the matching prefix, which over a loopback socket is a practical byte-at-a-time oracle.
-        var expected = Encoding.UTF8.GetBytes(record.Material);
-        var actual = Encoding.UTF8.GetBytes(presented);
-        var matches = CryptographicOperations.FixedTimeEquals(expected, actual);
+        // Hash the candidate and compare DIGESTS, never the plaintext — the plaintext is not recoverable here, which is
+        // the whole point of storing a digest. FixedTimeEquals rather than SequenceEqual: a short-circuiting comparison
+        // leaks the length of the matching prefix, which over a loopback socket is a practical byte-at-a-time oracle.
+        // Two fixed-length SHA-256 digests also make the comparison naturally length-invariant, so a truncated
+        // candidate is rejected on content rather than on an early length check.
+        var candidate = HashKey(presented);
+        var matches = CryptographicOperations.FixedTimeEquals(record.KeyHash.Span, candidate);
 
-        CryptographicOperations.ZeroMemory(expected);
-        CryptographicOperations.ZeroMemory(actual);
+        CryptographicOperations.ZeroMemory(candidate);
 
         if (!matches)
         {
@@ -88,10 +92,21 @@ internal sealed class McpServerApiKeyService : IMcpServerApiKeyService
         return true;
     }
 
+    /// <summary>
+    ///     A single SHA-256 over the key's UTF-8 bytes — deliberately NOT a password KDF. PBKDF2/Argon2/bcrypt exist to
+    ///     make guessing a low-entropy human-chosen password expensive; the input here is 256 bits of CSPRNG output, so
+    ///     there is no guess space to slow down and the only thing a KDF would buy is latency on every authenticated
+    ///     MCP request. Unsalted for the same reason: a salt defeats precomputation across many weak secrets, and this
+    ///     node has exactly one strong one. This is the standard construction for high-entropy API tokens.
+    /// </summary>
+    private static byte[] HashKey(string key)
+    {
+        return SHA256.HashData(Encoding.UTF8.GetBytes(key));
+    }
+
     private static McpServerApiKeyView ToView(McpServerApiKeyRecord record)
     {
         return new McpServerApiKeyView(record.Prefix,
-            record.Material,
             DateTimeOffset.FromUnixTimeMilliseconds(record.CreatedAtUtc),
             record.LastUsedAtUtc is null ? null : DateTimeOffset.FromUnixTimeMilliseconds(record.LastUsedAtUtc.Value));
     }

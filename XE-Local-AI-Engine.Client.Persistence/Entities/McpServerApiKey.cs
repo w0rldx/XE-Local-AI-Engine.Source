@@ -30,17 +30,24 @@ internal sealed record class McpServerApiKey
     public string Prefix { get; set; } = string.Empty;
 
     /// <summary>
-    ///     The full key as UTF-8 bytes. Plaintext while tracked in memory; encrypted at rest by
-    ///     <see cref="NodeEncryptionSaveChangesInterceptor" /> and decrypted by
-    ///     <see cref="NodeEncryptionMaterializationInterceptor" /> using AAD column name <c>mcp_api_key_material</c>.
+    ///     The SHA-256 digest of the full key's UTF-8 bytes — 32 bytes, one way. The plaintext key exists only in the
+    ///     response to the generate call that minted it and is never written anywhere; a read of this row therefore
+    ///     yields nothing an attacker can present to the MCP endpoint.
     ///     <para>
-    ///         Stored reversibly rather than as a one-way hash by deliberate product decision: this is a single-user,
-    ///         loopback-only node, and the operator must be able to re-read the key to paste it into a client config
-    ///         without invalidating every already-configured client. The threat this defends against is an attacker who
-    ///         reads the database file, which the node encryption key already covers.
+    ///         A plain digest rather than a password KDF is correct here: the input is a 256-bit cryptographically
+    ///         random token, so there is no low-entropy guess space for PBKDF2/Argon2 to slow down, and a KDF would tax
+    ///         every authenticated MCP request. No salt for the same reason — salt defends against precomputation
+    ///         across many low-entropy secrets, and there is exactly one high-entropy secret here.
+    ///     </para>
+    ///     <para>
+    ///         Still encrypted at rest by <see cref="NodeEncryptionSaveChangesInterceptor" /> and decrypted by
+    ///         <see cref="NodeEncryptionMaterializationInterceptor" /> using AAD column name <c>mcp_api_key_hash</c>,
+    ///         for INTEGRITY rather than confidentiality: hashing defends the read direction, but a bare hash column
+    ///         would let anyone who can WRITE the database file substitute a digest whose preimage they know and take
+    ///         over an agent-execution surface. The AAD-bound AEAD is what makes that substitution fail.
     ///     </para>
     /// </summary>
-    public byte[] Material { get; set; } = [];
+    public byte[] KeyHash { get; set; } = [];
 
     public long CreatedAtUtc { get; set; }
 

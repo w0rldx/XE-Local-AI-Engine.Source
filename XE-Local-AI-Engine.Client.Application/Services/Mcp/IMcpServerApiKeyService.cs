@@ -12,14 +12,17 @@ namespace XE_Local_AI_Engine.Client.Services.Mcp;
 public interface IMcpServerApiKeyService
 {
     /// <summary>
-    ///     Mints a fresh key, REPLACING any existing one, and returns it in full. The plaintext key is returned here and
-    ///     by <see cref="GetAsync" />; every other surface sees only the prefix.
+    ///     Mints a fresh key, REPLACING any existing one, and returns it in full. This is the ONLY time the plaintext
+    ///     key exists outside the caller that presents it: only its SHA-256 digest is persisted, so a key not captured
+    ///     from this return value is gone and can only be replaced by generating another. Every other surface —
+    ///     <see cref="GetAsync" /> included — sees only the prefix.
     /// </summary>
-    Task<McpServerApiKeyView> GenerateAsync(CancellationToken cancellationToken = default);
+    Task<GeneratedMcpServerApiKey> GenerateAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Returns the current credential including its plaintext material, or <see langword="null" /> when none has
-    ///     been generated. Reversible retrieval is a deliberate product decision — see <c>McpServerApiKey</c>.
+    ///     Returns the current credential's non-secret metadata, or <see langword="null" /> when none has been
+    ///     generated. Deliberately cannot return the key: the node stores only a one-way digest, so a lost key is
+    ///     unrecoverable and the operator must generate a replacement and reconfigure every client.
     /// </summary>
     Task<McpServerApiKeyView?> GetAsync(CancellationToken cancellationToken = default);
 
@@ -35,7 +38,15 @@ public interface IMcpServerApiKeyService
 }
 
 /// <summary>
-///     The credential as shown to the operator. <see cref="Key" /> is the full secret — it belongs only in the node
-///     settings response the operator explicitly requested, never in a log, an audit record or an error body.
+///     The credential as shown to the operator. Carries no secret by construction — the key is not recoverable from
+///     the node — so this shape is safe to return from any Operator-gated surface.
 /// </summary>
-public sealed record McpServerApiKeyView(string Prefix, string Key, DateTimeOffset CreatedAt, DateTimeOffset? LastUsedAt);
+public sealed record McpServerApiKeyView(string Prefix, DateTimeOffset CreatedAt, DateTimeOffset? LastUsedAt);
+
+/// <summary>
+///     A freshly minted credential: the one-time plaintext <see cref="Key" /> plus the metadata that will remain
+///     retrievable afterwards. Separate from <see cref="McpServerApiKeyView" /> so the type system — not a comment —
+///     is what stops the secret being returned from a retrieval path. Never log it, never persist it, never put it in
+///     an audit record or an error body: once this value is dropped, the key is gone.
+/// </summary>
+public sealed record GeneratedMcpServerApiKey(string Key, McpServerApiKeyView View);

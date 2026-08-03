@@ -1,13 +1,16 @@
 namespace XE_Local_AI_Engine.Tests.Mcp;
 
+using System.Security.Cryptography;
+using System.Text;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The inbound-MCP credential lifecycle: generation, reversible retrieval, revocation, and the fail-closed
-///     validation the authentication handler depends on.
+///     The inbound-MCP credential lifecycle: generation, ONE-WAY storage, revocation, and the fail-closed validation
+///     the authentication handler depends on. The load-bearing property is that the key is shown exactly once and is
+///     unrecoverable afterwards — a database read must yield nothing that can be presented to the MCP endpoint.
 /// </summary>
 public sealed class McpServerApiKeyServiceTests
 {
@@ -16,13 +19,13 @@ public sealed class McpServerApiKeyServiceTests
     {
         var service = CreateService(out _);
 
-        var view = await service.GenerateAsync().ConfigureAwait(false);
+        var generated = await service.GenerateAsync().ConfigureAwait(false);
 
-        AssertEx.True(view.Key.StartsWith("xemcp_", StringComparison.Ordinal), "The key must carry the scheme marker so a leaked value is attributable.");
-        AssertEx.True(view.Key.Length > 40, "A 256-bit base64url secret must be substantially longer than its prefix.");
-        AssertEx.True(view.Key.StartsWith(view.Prefix, StringComparison.Ordinal), "The display prefix must be a genuine prefix of the key.");
-        AssertEx.True(view.Prefix.Length < view.Key.Length, "The display prefix must not be the whole key.");
-        AssertEx.Null(view.LastUsedAt);
+        AssertEx.True(generated.Key.StartsWith("xemcp_", StringComparison.Ordinal), "The key must carry the scheme marker so a leaked value is attributable.");
+        AssertEx.True(generated.Key.Length > 40, "A 256-bit base64url secret must be substantially longer than its prefix.");
+        AssertEx.True(generated.Key.StartsWith(generated.View.Prefix, StringComparison.Ordinal), "The display prefix must be a genuine prefix of the key.");
+        AssertEx.True(generated.View.Prefix.Length < generated.Key.Length, "The display prefix must not be the whole key.");
+        AssertEx.Null(generated.View.LastUsedAt);
     }
 
     [Test]
@@ -37,6 +40,23 @@ public sealed class McpServerApiKeyServiceTests
     }
 
     [Test]
+    public async Task GenerateAsync_PersistsOnlyAOneWayDigest_SoAStoreReadYieldsNothingUsable()
+    {
+        // The core guarantee of hashed storage: everything the node retains is derivable FROM the key, and nothing
+        // retained can reproduce it. This is what makes a database backup, a sync folder or a forensic image inert.
+        var service = CreateService(out var store);
+
+        var generated = await service.GenerateAsync().ConfigureAwait(false);
+        var stored = AssertEx.NotNull(await store.GetAsync().ConfigureAwait(false));
+
+        AssertEx.Equal(32, stored.KeyHash.Length);
+        AssertEx.True(stored.KeyHash.Span.SequenceEqual(SHA256.HashData(Encoding.UTF8.GetBytes(generated.Key))),
+            "The stored value must be the SHA-256 digest of the key.");
+        AssertEx.False(stored.KeyHash.Span.SequenceEqual(Encoding.UTF8.GetBytes(generated.Key)),
+            "The stored value must not be the key's own bytes — that would be reversible storage under a new name.");
+    }
+
+    [Test]
     public async Task GetAsync_WhenNoKeyGenerated_ReturnsNull()
     {
         var service = CreateService(out _);
@@ -45,14 +65,20 @@ public sealed class McpServerApiKeyServiceTests
     }
 
     [Test]
-    public async Task GetAsync_ReturnsThePlaintextKey_SoTheOperatorCanReCopyIt()
+    public async Task GetAsync_ReturnsMetadataOnly_AndCannotRecoverTheKey()
     {
+        // The inverse of the retrieval contract this surface used to have. The key is shown exactly once, at
+        // generation; afterwards only non-secret metadata is retrievable and a lost key can only be replaced.
+        // `McpServerApiKeyView` having no key member is the primary enforcement — this pins the behaviour that
+        // nothing retrievable can stand in for the key either.
         var service = CreateService(out _);
         var generated = await service.GenerateAsync().ConfigureAwait(false);
 
         var fetched = AssertEx.NotNull(await service.GetAsync().ConfigureAwait(false));
 
-        AssertEx.Equal(generated.Key, fetched.Key);
+        AssertEx.Equal(generated.View.Prefix, fetched.Prefix);
+        AssertEx.False(await service.ValidateAsync(fetched.Prefix).ConfigureAwait(false),
+            "Everything still retrievable after generation must be useless as a credential.");
     }
 
     [Test]
@@ -68,9 +94,9 @@ public sealed class McpServerApiKeyServiceTests
     public async Task ValidateAsync_WithTheCorrectKey_Succeeds()
     {
         var service = CreateService(out _);
-        var view = await service.GenerateAsync().ConfigureAwait(false);
+        var generated = await service.GenerateAsync().ConfigureAwait(false);
 
-        AssertEx.True(await service.ValidateAsync(view.Key).ConfigureAwait(false));
+        AssertEx.True(await service.ValidateAsync(generated.Key).ConfigureAwait(false));
     }
 
     [Test]
@@ -98,10 +124,10 @@ public sealed class McpServerApiKeyServiceTests
         // Guards the comparison against accepting a truncated candidate, which is the failure mode a naive
         // StartsWith/prefix comparison would introduce.
         var service = CreateService(out _);
-        var view = await service.GenerateAsync().ConfigureAwait(false);
+        var generated = await service.GenerateAsync().ConfigureAwait(false);
 
-        AssertEx.False(await service.ValidateAsync(view.Key[..^1]).ConfigureAwait(false));
-        AssertEx.False(await service.ValidateAsync(view.Prefix).ConfigureAwait(false));
+        AssertEx.False(await service.ValidateAsync(generated.Key[..^1]).ConfigureAwait(false));
+        AssertEx.False(await service.ValidateAsync(generated.View.Prefix).ConfigureAwait(false));
     }
 
     [Test]
@@ -121,12 +147,12 @@ public sealed class McpServerApiKeyServiceTests
     public async Task RevokeAsync_RemovesTheKeyAndClosesTheEndpoint()
     {
         var service = CreateService(out _);
-        var view = await service.GenerateAsync().ConfigureAwait(false);
+        var generated = await service.GenerateAsync().ConfigureAwait(false);
 
         AssertEx.True(await service.RevokeAsync().ConfigureAwait(false));
 
         AssertEx.Null(await service.GetAsync().ConfigureAwait(false));
-        AssertEx.False(await service.ValidateAsync(view.Key).ConfigureAwait(false), "A revoked key must no longer authenticate.");
+        AssertEx.False(await service.ValidateAsync(generated.Key).ConfigureAwait(false), "A revoked key must no longer authenticate.");
     }
 
     [Test]
@@ -141,10 +167,10 @@ public sealed class McpServerApiKeyServiceTests
     public async Task ValidateAsync_OnSuccess_StampsLastUsed()
     {
         var service = CreateService(out var store);
-        var view = await service.GenerateAsync().ConfigureAwait(false);
-        AssertEx.Null(view.LastUsedAt);
+        var generated = await service.GenerateAsync().ConfigureAwait(false);
+        AssertEx.Null(generated.View.LastUsedAt);
 
-        _ = await service.ValidateAsync(view.Key).ConfigureAwait(false);
+        _ = await service.ValidateAsync(generated.Key).ConfigureAwait(false);
 
         AssertEx.True(AssertEx.NotNull(await store.GetAsync().ConfigureAwait(false)).LastUsedAtUtc.HasValue,
             "A successful authentication must stamp last-used.");
@@ -190,9 +216,9 @@ public sealed class McpServerApiKeyServiceTests
             return Task.FromResult(_record);
         }
 
-        public Task<McpServerApiKeyRecord> SetAsync(string prefix, string material, CancellationToken cancellationToken = default)
+        public Task<McpServerApiKeyRecord> SetAsync(string prefix, ReadOnlyMemory<byte> keyHash, CancellationToken cancellationToken = default)
         {
-            _record = new McpServerApiKeyRecord(prefix, material, CreatedAtUtc: 1, LastUsedAtUtc: null);
+            _record = new McpServerApiKeyRecord(prefix, keyHash, CreatedAtUtc: 1, LastUsedAtUtc: null);
             return Task.FromResult(_record);
         }
 
