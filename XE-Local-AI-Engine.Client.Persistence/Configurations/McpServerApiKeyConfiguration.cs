@@ -17,8 +17,8 @@ internal sealed class McpServerApiKeyConfiguration : IEntityTypeConfiguration<Mc
         builder.Property(entity => entity.Prefix)
                .HasColumnName("prefix");
 
-        builder.Property(entity => entity.Material)
-               .HasColumnName("material");
+        builder.Property(entity => entity.KeyHash)
+               .HasColumnName("key_hash");
 
         builder.Property(entity => entity.CreatedAtUtc)
                .HasColumnName("created_at_utc");

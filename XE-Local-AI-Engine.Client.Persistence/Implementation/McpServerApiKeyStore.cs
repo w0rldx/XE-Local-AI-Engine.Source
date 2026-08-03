@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Implementation;
 
-using System.Text;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -22,11 +21,18 @@ public sealed class McpServerApiKeyStore(NodeChatDbContext dbContext, TimeProvid
         return entity is null ? null : ToRecord(entity);
     }
 
-    public async Task<McpServerApiKeyRecord> SetAsync(string prefix, string material, CancellationToken cancellationToken = default)
+    public async Task<McpServerApiKeyRecord> SetAsync(string prefix, ReadOnlyMemory<byte> keyHash, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(prefix);
-        ArgumentException.ThrowIfNullOrWhiteSpace(material);
 
+        if (keyHash.IsEmpty)
+        {
+            throw new ArgumentException("The key hash must not be empty — an empty digest would authenticate nothing.", nameof(keyHash));
+        }
+
+        // Copy rather than alias: the entity owns its bytes for the lifetime of the tracked graph, and the caller must
+        // not be able to mutate a persisted credential out from under the encryption interceptor.
+        var storedHash = keyHash.ToArray();
         var now = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
         var entity = await _dbContext.McpServerApiKeys
                                      .FirstOrDefaultAsync(row => row.Id == McpServerApiKey.SingletonId, cancellationToken)
@@ -38,7 +44,7 @@ public sealed class McpServerApiKeyStore(NodeChatDbContext dbContext, TimeProvid
             {
                 Id = McpServerApiKey.SingletonId,
                 Prefix = prefix,
-                Material = Encoding.UTF8.GetBytes(material),
+                KeyHash = storedHash,
                 CreatedAtUtc = now,
                 LastUsedAtUtc = null
             };
@@ -48,7 +54,7 @@ public sealed class McpServerApiKeyStore(NodeChatDbContext dbContext, TimeProvid
         else
         {
             entity.Prefix = prefix;
-            entity.Material = Encoding.UTF8.GetBytes(material);
+            entity.KeyHash = storedHash;
             // A regenerated key is a NEW credential: reset both stamps so the settings UI cannot show a last-used time
             // that belonged to the key this one just replaced.
             entity.CreatedAtUtc = now;
@@ -78,9 +84,9 @@ public sealed class McpServerApiKeyStore(NodeChatDbContext dbContext, TimeProvid
 
     public async Task TouchLastUsedAsync(long timestampUtc, CancellationToken cancellationToken = default)
     {
-        // ExecuteUpdate rather than a tracked save: it touches ONLY last_used_at_utc, so the encrypted material column
-        // is never re-read, re-encrypted or rewritten on the authentication hot path. A tracked save would round-trip
-        // the secret through the interceptors on every single authenticated MCP request.
+        // ExecuteUpdate rather than a tracked save: it touches ONLY last_used_at_utc, so the sealed hash column is
+        // never re-read, re-encrypted or rewritten on the authentication hot path. A tracked save would round-trip the
+        // credential through the interceptors on every single authenticated MCP request.
         _ = await _dbContext.McpServerApiKeys
                             .Where(row => row.Id == McpServerApiKey.SingletonId)
                             .ExecuteUpdateAsync(setters => setters.SetProperty(row => row.LastUsedAtUtc, timestampUtc), cancellationToken)
@@ -90,7 +96,7 @@ public sealed class McpServerApiKeyStore(NodeChatDbContext dbContext, TimeProvid
     private static McpServerApiKeyRecord ToRecord(McpServerApiKey entity)
     {
         return new McpServerApiKeyRecord(entity.Prefix,
-            Encoding.UTF8.GetString(entity.Material),
+            entity.KeyHash,
             entity.CreatedAtUtc,
             entity.LastUsedAtUtc);
     }

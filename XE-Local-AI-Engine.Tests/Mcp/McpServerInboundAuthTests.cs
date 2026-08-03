@@ -153,10 +153,11 @@ public sealed class McpServerInboundAuthTests
         var apiKeyService = Substitute.For<IMcpServerApiKeyService>();
         apiKeyService.ValidateAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
                      .Returns(call => storedKey is not null && string.Equals(call.Arg<string?>(), storedKey, StringComparison.Ordinal));
+        // The view deliberately has no key field — the node keeps only a digest — so the fake supplies metadata only.
         apiKeyService.GetAsync(Arg.Any<CancellationToken>())
                      .Returns(storedKey is null
                          ? (McpServerApiKeyView?)null
-                         : new McpServerApiKeyView("xemcp_valid", storedKey, DateTimeOffset.UnixEpoch, LastUsedAt: null));
+                         : new McpServerApiKeyView("xemcp_valid", DateTimeOffset.UnixEpoch, LastUsedAt: null));
 
         return new TestingWebAppFactory
         {

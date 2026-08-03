@@ -164,11 +164,14 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
         }
 
         // The inbound-MCP bearer credential is node-scoped, so the AAD binds the empty conversation id to the row's own
-        // (constant, singleton) id plus the column name. The key material is required — a row without it would
-        // authenticate nothing — so it always encrypts.
+        // (constant, singleton) id plus the column name. The stored value is a one-way SHA-256 digest, not the key, so
+        // this is not protecting a secret from a reader — it is protecting the digest from a WRITER. Without the
+        // AAD-bound AEAD, anyone who could edit the database file could drop in the hash of a key they chose and
+        // authenticate against an agent-execution surface. The hash is required — a row without it would authenticate
+        // nothing — so it always encrypts.
         foreach (var entry in nodeContext.ChangeTracker.Entries<McpServerApiKey>())
         {
-            EncryptRequiredProperty(entry, entry.Property(entity => entity.Material), Guid.Empty, entry.Entity.Id, "mcp_api_key_material", trackedProperties);
+            EncryptRequiredProperty(entry, entry.Property(entity => entity.KeyHash), Guid.Empty, entry.Entity.Id, "mcp_api_key_hash", trackedProperties);
         }
 
         // Scheduled job definitions are node-scoped (no conversation/message), so the AAD binds the empty conversation
