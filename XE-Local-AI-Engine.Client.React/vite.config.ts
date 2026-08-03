@@ -159,6 +159,14 @@ export default defineConfig(({ command, mode }) => {
 		test: {
 			include: ["src/**/*.test.{ts,tsx}"],
 			exclude: ["node_modules/**", "dist/**"],
+			// Raised from the 5s default because several store-hydration tests must re-import a component graph
+			// per test (`vi.resetModules()` + `await import(...)`) to exercise the read-localStorage-at-module-init
+			// path — see ChatSamplingOptionsDialog.test.tsx and NodeSettings.sampling.test.tsx. That import pays a
+			// cold transform + evaluation of Mantine, @tabler/icons-react, react-i18next and the feature graph, and
+			// it is charged to the test's own timeout. It costs ~2s on an idle box but the packaging run executes
+			// 200+ files with coverage across parallel workers, where it intermittently exceeded 5s and failed the
+			// tester build on a timeout unrelated to the assertion. 20s still catches a genuinely hung test.
+			testTimeout: 20_000,
 			// Pins the ICU default locale. Without it the suite passes only on an en-US machine — see
 			// src/test/PinLocale.ts for the failure this prevents on a non-en-US packaging box.
 			setupFiles: ["src/test/PinLocale.ts"],

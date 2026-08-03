@@ -5,6 +5,9 @@ import { cleanup, render, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
+import { ChatInputArea } from "@/features/chat/components/ChatInputArea";
+
 function renderWithProviders(ui: ReactElement) {
 	return render(<MantineProvider>{ui}</MantineProvider>);
 }
@@ -35,13 +38,20 @@ function installJsdomEnvironmentMocks(): void {
 	});
 }
 
-// The DeveloperModeStore reads localStorage at module-init, so each test must seed storage
-// and then re-import with a fresh module registry (mirrors NodeChatPreferencesStore.test pattern).
-async function loadChatInputArea(developerMode: boolean) {
-	localStorage.setItem("xe-developer-mode", String(developerMode));
-	vi.resetModules();
-	const mod = await import("@/features/chat/components/ChatInputArea");
-	return mod.ChatInputArea;
+// DeveloperModeStore hydrates from localStorage at module-init, but it also exposes a setter that writes
+// through to storage — so these tests drive the flag through the setter rather than seeding storage and
+// re-importing ChatInputArea under `vi.resetModules()`.
+//
+// That matters for stability, not just tidiness: a per-test `await import()` charges the cold transform +
+// evaluation of ChatInputArea's whole graph (Mantine, @tabler/icons-react, react-i18next, the selector cards,
+// the sampling dialog, the voice controls) against the 5s `testTimeout`. It measures ~1.8s on an idle box for
+// the first test in this file versus ~0.1s for the rest, and on a loaded packaging box running all 209 files
+// with coverage it intermittently blew past 5s — a timeout that said nothing about the behaviour under test.
+// A static import moves that cost to collection time, which no test timeout applies to.
+//
+// Hydration-from-storage is covered where it belongs, in NodeSettings.sampling.test.tsx.
+function setDeveloperMode(developerMode: boolean): void {
+	useDeveloperModeStore.getState().actions.setDeveloperMode(developerMode);
 }
 
 function baseProps() {
@@ -69,24 +79,24 @@ describe("ChatInputArea sampling options trigger", () => {
 		localStorage.clear();
 	});
 
-	it("hides the sampling options trigger when developer mode is OFF", async () => {
-		const ChatInputArea = await loadChatInputArea(false);
+	it("hides the sampling options trigger when developer mode is OFF", () => {
+		setDeveloperMode(false);
 
 		renderWithProviders(<ChatInputArea {...baseProps()} />);
 
 		expect(screen.queryByTestId("chat-sampling-options-trigger")).toBeNull();
 	});
 
-	it("shows the sampling options trigger when developer mode is ON", async () => {
-		const ChatInputArea = await loadChatInputArea(true);
+	it("shows the sampling options trigger when developer mode is ON", () => {
+		setDeveloperMode(true);
 
 		renderWithProviders(<ChatInputArea {...baseProps()} />);
 
 		expect(screen.getByTestId("chat-sampling-options-trigger")).toBeDefined();
 	});
 
-	it("trigger button is not disabled and has expected aria-label", async () => {
-		const ChatInputArea = await loadChatInputArea(true);
+	it("trigger button is not disabled and has expected aria-label", () => {
+		setDeveloperMode(true);
 
 		renderWithProviders(<ChatInputArea {...baseProps()} />);
 
