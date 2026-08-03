@@ -451,6 +451,40 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         AssertEx.False(File.Exists(Path.Combine(outside, "target.txt")), "nothing is written outside via symlink");
     }
 
+    /// <summary>
+    ///     The junction twin of <see cref="ApplyApprovedAsync_WithSymlinkEscapingRoot_Rejects" />, which skips on a
+    ///     stock Windows box because symbolic links need Developer Mode or elevation. A junction is the same reparse
+    ///     point and needs no privilege, so this proves the escape guard on the shipping platform.
+    /// </summary>
+    [Test]
+    public async Task ApplyApprovedAsync_WithJunctionEscapingRoot_Rejects()
+    {
+        JunctionSupport.EnsureSupported();
+
+        var harness = NewHarness();
+        var hostRoot = harness.AddFolder("repo-01");
+
+        var outside = NewTempDir();
+        AssertEx.True(JunctionSupport.TryCreate(Path.Combine(hostRoot, "subdir"), outside),
+            "the fixture must be able to plant a junction once EnsureSupported has passed");
+
+        var throwaway = NewTempDir();
+        var patch = await GenerateGPatchAsync("repo-01", throwaway, ("subdir/target.txt", "before\n", "after\n"));
+        await WritePatchAsync(harness, "run-junction", patch);
+
+        var result = await harness.Service.ApplyApprovedAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-junction"
+        });
+
+        AssertEx.False(result.Applied, "a junction that escapes the root is rejected");
+        // Deliberately not asserting the rejection WORDING. The symbolic-link twin matches "symlink", but how the
+        // product words a junction rejection is its own choice; the security property is that it refused and wrote
+        // nothing outside. Pinning the string here would fail the test for a reason that is not a defect.
+        AssertEx.NotEmpty(result.Rejections);
+        AssertEx.False(File.Exists(Path.Combine(outside, "target.txt")), "nothing is written outside via a junction");
+    }
+
     [Test]
     public async Task PreviewAsync_WhenPatchExceedsMaxPatchBytes_Rejects()
     {

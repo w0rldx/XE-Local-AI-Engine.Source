@@ -427,6 +427,35 @@ public sealed class DockerSandboxRuntimeProviderTests
         File.Delete(source);
     }
 
+    /// <summary>
+    ///     The junction twin of <see cref="CopyIntoAsync_WhenAComponentOfTheDestinationIsASymlink_Refuses" />, which
+    ///     skips on a stock Windows box for want of symbolic-link privilege. Junctions need none, so this proves the
+    ///     destination-component guard where the symbolic-link test cannot run.
+    /// </summary>
+    [Test]
+    public async Task CopyIntoAsync_WhenAComponentOfTheDestinationIsAJunction_Refuses()
+    {
+        JunctionSupport.EnsureSupported();
+
+        var (provider, _, workspace) = CreateProvider();
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(workspace));
+        var outside = Path.Combine(workspace, "..", "outside-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(outside);
+        AssertEx.True(JunctionSupport.TryCreate(Path.Combine(workspace, "escape"), outside),
+            "the fixture must be able to plant a junction once EnsureSupported has passed");
+        var source = Path.Combine(workspace, "..", Guid.NewGuid().ToString("N") + ".source");
+        await File.WriteAllTextAsync(source, "x");
+
+        await AssertEx.ThrowsAsync<UnauthorizedAccessException>(() => provider.CopyIntoAsync(handle, new SandboxCopyRequest
+        {
+            SourcePath = source,
+            DestinationPath = "/escape/planted.txt"
+        }));
+
+        AssertEx.False(File.Exists(Path.Combine(outside, "planted.txt")));
+        File.Delete(source);
+    }
+
     [Test]
     public async Task ReadFileAsync_WhenTheFileExceedsTheBound_Rejects()
     {

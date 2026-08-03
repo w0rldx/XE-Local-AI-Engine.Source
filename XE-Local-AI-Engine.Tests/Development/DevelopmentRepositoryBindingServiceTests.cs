@@ -135,6 +135,29 @@ public sealed class DevelopmentRepositoryBindingServiceTests : IDisposable
         _ = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => service.ResolveFolderAsync(selectedFolderId));
     }
 
+    /// <summary>
+    ///     The junction twin of <see cref="ResolveFolderAsync_WhenRegisteredPathTraversesSymlink_ThrowsSecurityException" />,
+    ///     which skips outright on Windows. Junctions are the same reparse point and need no privilege, so the
+    ///     registered-path resolution guard is proven on the shipping platform rather than assumed from Linux.
+    /// </summary>
+    [Test]
+    public async Task ResolveFolderAsync_WhenRegisteredPathTraversesJunction_ThrowsSecurityException()
+    {
+        JunctionSupport.EnsureSupported();
+
+        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var linkedRepository = Path.Combine(_root, "repository-junction");
+        AssertEx.True(JunctionSupport.TryCreate(linkedRepository, repository),
+            "the fixture must be able to plant a junction once EnsureSupported has passed");
+        var selectedFolderId = Guid.NewGuid();
+        var selectedFolders = Substitute.For<ISelectedFolderResolver>();
+        selectedFolders.ResolveAsync(selectedFolderId.ToString(), Arg.Any<CancellationToken>())
+                       .Returns(new ResolvedSelectedFolder(selectedFolderId, "repo", linkedRepository, SelectedFolderMode.Copy));
+        var service = CreateService(selectedFolders);
+
+        _ = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => service.ResolveFolderAsync(selectedFolderId));
+    }
+
     [Test]
     public async Task ResolveFolderAsync_WhenRegisteredFolderIsReadOnly_ThrowsSecurityException()
     {

@@ -118,6 +118,75 @@ public sealed class AgentHomeWorkspaceServiceTests : IDisposable
         AssertEx.True(paths.All(path => !path.EndsWith("/link.txt", StringComparison.Ordinal)), "an in-root symlink is not copied");
     }
 
+    /// <summary>
+    ///     The junction twin of <see cref="PrepareSelectedFoldersAsync_WhenSymlinkEscapesRoot_Throws" />.
+    ///     <para>
+    ///         That test needs <c>SeCreateSymbolicLinkPrivilege</c>, so on a stock Windows 11 box (Developer Mode off,
+    ///         unelevated) it skips and this guard has no Windows coverage at all — measured on the machine this was
+    ///         written on. A junction is the same reparse point and needs no privilege, so it proves the same guard on
+    ///         exactly the hosts where the symbolic-link test cannot run. It is also the likelier real-world shape:
+    ///         <c>mklink /J</c> and most build tooling produce junctions, so a selected folder can contain one without
+    ///         anyone having arranged it.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task PrepareSelectedFoldersAsync_WhenJunctionEscapesRoot_Throws()
+    {
+        JunctionSupport.EnsureSupported();
+
+        var source = NewTempDir();
+        var outside = NewTempDir();
+        await File.WriteAllTextAsync(Path.Combine(outside, "secret.txt"), "leak");
+        AssertEx.True(JunctionSupport.TryCreate(Path.Combine(source, "escape"), outside),
+            "the fixture must be able to plant a junction once EnsureSupported has passed");
+
+        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var handle = await provider.CreateOrAttachAsync(CreateRequest());
+        var service = CreateService(provider);
+
+        await AssertEx.ThrowsAsync<AgentHomeRequestRejectedException>(() =>
+            service.PrepareSelectedFoldersAsync(handle, [Folder("proj", source)]));
+
+        // Nothing may reach the sandbox: a partial copy that stops at the escape is still a copy of whatever
+        // preceded it, and the caller cannot tell the difference from a clean refusal.
+        AssertEx.Empty(provider.SnapshotSandboxPaths(handle));
+    }
+
+    /// <summary>
+    ///     The junction twin of
+    ///     <see cref="PrepareSelectedFoldersAsync_WhenSymlinkStaysInsideRoot_CopiesRealFileAndSkipsLink" />.
+    ///     <para>
+    ///         The symbolic-link version links a FILE; a junction is a directory reparse point only, so the analogue
+    ///         plants a directory junction that stays inside the root. The guard must still decline to walk it — the
+    ///         file is copied once through its real path and never a second time through the link, which is what stops
+    ///         a contained listing from silently doubling or cycling.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task PrepareSelectedFoldersAsync_WhenJunctionStaysInsideRoot_CopiesRealFileAndSkipsLink()
+    {
+        JunctionSupport.EnsureSupported();
+
+        var source = NewTempDir();
+        var real = Path.Combine(source, "real");
+        Directory.CreateDirectory(real);
+        await File.WriteAllTextAsync(Path.Combine(real, "file.txt"), "x");
+        AssertEx.True(JunctionSupport.TryCreate(Path.Combine(source, "link"), real),
+            "the fixture must be able to plant a junction once EnsureSupported has passed");
+
+        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var handle = await provider.CreateOrAttachAsync(CreateRequest());
+        var service = CreateService(provider);
+
+        var snapshots = await service.PrepareSelectedFoldersAsync(handle, [Folder("proj", source)]);
+
+        AssertEx.Equal(SelectedFolderCopyStatus.Copied, snapshots[0].Status);
+        var paths = provider.SnapshotSandboxPaths(handle);
+        AssertEx.Contains(paths, path => path.EndsWith("/real/file.txt", StringComparison.Ordinal));
+        AssertEx.True(paths.All(path => !path.Contains("/link/", StringComparison.Ordinal)),
+            "an in-root junction is not walked");
+    }
+
     [Test]
     public async Task PrepareSelectedFoldersAsync_WhenHostPathMissingOrExtended_FailsClosed()
     {
