@@ -548,7 +548,18 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
             ["NUGET_PACKAGES"] = ResolveRuntimeDirectory("nuget"),
             ["DOTNET_CLI_HOME"] = ResolveRuntimeDirectory("dotnet"),
             ["DOTNET_CLI_TELEMETRY_OPTOUT"] = "1",
-            ["DOTNET_NOLOGO"] = "1"
+            ["DOTNET_NOLOGO"] = "1",
+            // Without this, the .NET CLI's first-run experience appends "$DOTNET_CLI_HOME/.dotnet/tools" to the
+            // PERSISTED per-user PATH (on Windows, the HKCU\Environment registry value). DOTNET_CLI_HOME above is a
+            // fresh per-task directory, so every task leaked one more entry that outlived the directory it named.
+            // Measured on Windows 11 2026-08-03: 153 dead entries, 28 387 characters, and the entry count still
+            // climbing during a single session. The damage is not untidiness — cmd.exe silently receives an EMPTY
+            // %PATH% once the variable grows past its limit, so every bare-name command run through it fails. That
+            // broke three sandbox tests whose fixture is "cmd /c ping -n 31": ping could not resolve, the command
+            // exited instantly, and cancel/timeout/tree-kill had nothing left to kill. Stripping the dead entries
+            // took PATH to 847 characters and the same tests went green with no code change.
+            // DOTNET_SKIP_FIRST_TIME_EXPERIENCE is NOT an alternative — it is a no-op in .NET 10.
+            ["DOTNET_ADD_GLOBAL_TOOLS_TO_PATH"] = "0"
         };
     }
 
