@@ -75,13 +75,19 @@ public sealed class NodeAgentMcpTools
 
     [McpServerTool(Name = "run_agent")]
     [Description("Run a task on this node's local model and return the result. Supply either agent (a saved agent's id or name, which brings its persona, tools and skills) or model (a local model id) — exactly one. Runs are admission-gated: a request that would exceed the node's memory or concurrency limits is declined with a reason rather than queued indefinitely.")]
+    // Parameter order is dictated by C#, not by preference: `progress` and `cancellationToken` are injected by the SDK
+    // and excluded from the generated schema, but they carry no default, so they must precede the optional arguments.
+    // Those defaults are load-bearing — the SDK derives `required` from the ABSENCE of a default, not from nullability,
+    // so a nullable-but-defaultless `string? agent` is advertised as REQUIRED and every call that binds a bare model is
+    // rejected by the binder before the handler runs (measured live: "the arguments dictionary is missing a value for
+    // the required parameter 'agent'"). Do not remove the `= null`s.
     public async Task<string> RunAgentAsync(
         [Description("The task for the local agent to carry out.")] string task,
-        [Description("A saved agent's id or name. Mutually exclusive with model.")] string? agent,
-        [Description("A local model id to bind an ad-hoc agent to. Mutually exclusive with agent.")] string? model,
-        [Description("Optional system-prompt override. Only applies when binding a bare model; ignored when a saved agent is named.")] string? instructions,
         IProgress<ProgressNotificationValue> progress,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        [Description("A saved agent's id or name. Mutually exclusive with model.")] string? agent = null,
+        [Description("A local model id to bind an ad-hoc agent to. Mutually exclusive with agent.")] string? model = null,
+        [Description("Optional system-prompt override. Only applies when binding a bare model; ignored when a saved agent is named.")] string? instructions = null)
     {
         if (string.IsNullOrWhiteSpace(task))
         {

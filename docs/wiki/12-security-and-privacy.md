@@ -132,7 +132,36 @@ if (IsLocalApiRequest(context.Request.Path)
 
 > **Reverse proxies / headless deployment are unsupported.** The peer check reads the socket peer, and no forwarded-headers middleware is registered, so `X-Forwarded-For` is never honoured. A reverse proxy on the **same host** would appear as a loopback peer on every forwarded request and defeat the peer gate — this is by design: the app is single-user, same-machine only. Putting `/api/local/v1` behind a proxy or exposing it beyond the local machine is out of scope and not a supported configuration.
 
+### 3.1a The inbound MCP endpoint sits inside the gate — deliberately
+
+`MapMcp` mounts this node's own MCP server at `/api/local/v1/mcp/server` (`Program.cs`, beside the
+`MapHub` calls). The path is not cosmetic: `IsLocalApiRequest` matches on the `/api/local/v1` prefix
+**alone**, so an MCP endpoint mounted at a bare `/mcp` would be reachable without any of §3.1's peer,
+Host or Origin checks, leaving the bearer key as the only control. Keep it inside the prefix.
+
+Measured 2026-08-03 on WSL2 (NAT networking, `localhostForwarding=true`): a client on the **Windows**
+host connecting to a node inside WSL presents peer `127.0.0.1` and Host `127.0.0.1`/`localhost`, so
+all three checks pass unchanged and no relaxation is needed for that topology. Not re-verified under
+WSL mirrored networking.
+
 ### 3.2 Authentication & authorization
+
+Two authentication schemes are registered. **JWT bearer** is the default and gates everything the
+browser touches via the `NodeOperator` policy. **`McpApiKey`** is a second scheme used by exactly one
+endpoint — the inbound MCP transport — via the `McpServer` policy, which lists only that scheme. The
+two principals therefore cannot impersonate each other: an operator JWT does not open the MCP
+endpoint, and the MCP key does not open the key-management endpoints (or anything else). Both
+directions are asserted in `XE-Local-AI-Engine.Tests/Mcp/McpServerInboundAuthTests.cs`.
+
+The MCP credential is a single 256-bit `xemcp_`-prefixed secret stored **encrypted at rest** in the
+node database. It is stored reversibly by deliberate product decision so the operator can re-copy it
+without invalidating configured clients; `node-settings.json` was rejected as a home because it is
+plaintext and carries no restrictive ACL on Windows. Generating replaces the previous key with no
+window in which both authenticate, comparison is `CryptographicOperations.FixedTimeEquals` over the
+UTF-8 bytes (a short-circuiting compare is a byte-at-a-time oracle over loopback), and a node with no
+key generated authenticates nobody. Spec revision 2026-07-28 makes authorization **OPTIONAL** for MCP
+implementations, so this node implements no OAuth profile and advertises no Protected Resource
+Metadata — see the [connect runbook](../runbooks/connect-an-mcp-client-runbook.md).
 
 Local endpoints are still authenticated and policy-gated; loopback is necessary but not sufficient. `NodeAuthorizationPolicies` (`Services/Auth/NodeAuthorizationPolicies.cs`) defines the `NodeOperator` policy (claim type `role`, `Admin`), and endpoints apply it — e.g. `ListAgentExecutionLogsEndpoint.Configure()` calls `Policies(NodeAuthorizationPolicies.Operator)` (`XE-Local-AI-Engine.Client/Endpoints/Agents/V1/ListAgentExecutionLogsEndpoint.cs:27`). JWTs are signed with the separately-derived node JWT key (§2.1). Auth wiring lives in `AddNodeAuthAndConnectionExtensions`. See [API & Hubs](09-api-and-hubs.md) for the full endpoint inventory.
 

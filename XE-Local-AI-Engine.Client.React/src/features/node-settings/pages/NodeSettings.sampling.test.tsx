@@ -86,6 +86,12 @@ vi.mock("@/features/node-settings/components/SourceBuildCard", () => ({
 	SourceBuildCard: () => null,
 }));
 
+// The MCP server-key panel owns its own data layer (the inbound-credential SDK endpoints) and has its own dedicated
+// test; stub it to null here, matching the source-build cards above, so these page tests stay isolated.
+vi.mock("@/features/node-settings/components/McpServerKeyPanel", () => ({
+	McpServerKeyPanel: () => null,
+}));
+
 vi.mock("@/features/node-settings/components/ImageRuntimeSourceBuildCard", () => ({
 	ImageRuntimeSourceBuildCard: () => null,
 }));
