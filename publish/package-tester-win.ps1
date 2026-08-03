@@ -564,19 +564,82 @@ finally {
 }
 
 # --- 2. Publish (single-file self-contained win-x64, tester update flavor) ----------
+# The publish directory is wiped FIRST because `dotnet publish` never removes stale files from it, and the app
+# writes runtime state next to its own executable. Running the published exe straight out of this directory —
+# a manual smoke test — leaves artifacts behind that the next pack silently ships:
+#   - logs\        ResolveLogFileDirectory (LoggerExtensions.cs) uses NodeData:Directory, which ONLY desktop mode
+#                  layers in; a non-desktop run falls back to ContentRootPath = the exe's own folder. That is how
+#                  0.1.0-rc.5.0 shipped a maintainer log containing G:\Repos\... source paths and a stack trace.
+#   - dead-letter-queue\  FileDeadLetterStore roots on AppContext.BaseDirectory UNCONDITIONALLY and calls
+#                  Directory.CreateDirectory in its constructor, so every launch recreates it regardless of mode.
+# Both are pure write-sinks that recreate themselves on demand, so deleting them cannot break a tester install.
+# The same ContentRootPath fallback also governs dp-keys\ (ConfigureServices.cs) and, behind the desktop flag,
+# node.sqlite / node.key — so the next stray run could leak real secrets rather than just paths. Wiping the
+# directory removes the accumulation mechanism itself instead of blacklisting today's known offenders.
+#
+# Only the publish leaf is cleared: incremental state lives in obj\ and bin\<config>\<tfm>\<rid>\, so this forces
+# a fresh output copy, not a full rebuild. Nothing carries content across runs — every consumer below (the SPA
+# check, the update-config rewrite, the rehearsal marker, and `vpk pack --packDir`) reads only what this publish
+# produces.
+$publishDir = "XE-Local-AI-Engine.Client\bin\Release\net10.0\win-x64\publish"
+if (Test-Path $publishDir) {
+    Remove-Item -Path $publishDir -Recurse -Force
+    Write-Host ">> Cleared the previous publish output so no stale runtime state can ride into the package."
+}
+
 dotnet publish XE-Local-AI-Engine.Client\XE-Local-AI-Engine.Client.csproj `
     --configuration Release `
     -p:PublishProfile=win-x64 `
     -p:UpdateChannel=tester
 Assert-LastExitCode "dotnet publish"
 
-$publishDir = "XE-Local-AI-Engine.Client\bin\Release\net10.0\win-x64\publish"
 foreach ($required in @("$publishDir\wwwroot\index.html", "$publishDir\wwwroot\assets")) {
     if (-not (Test-Path $required)) {
         throw "SPA missing from publish output: $required — packing would ship a blank page."
     }
 }
 Write-Host ">> Publish output verified (SPA present)."
+
+# Tripwire for runtime state that must never ship. The wipe above removes the accumulation mechanism; this catches
+# anything created DURING this run (a smoke test added between publish and pack, or a new code path that writes
+# beside the executable). It fails the build rather than deleting quietly: a silent scrub is how the original leak
+# stayed invisible, and a maintainer who sees this throw learns the publish directory was executed in.
+#
+# These patterns are the state/secret classes specifically — logs and the dead-letter queue leak host paths, while
+# dp-keys / node.sqlite / node.key / *.enc would leak real secrets. A strict allow-list of expected filenames would
+# be stronger still, but authoring one requires a captured inventory of a real win-x64 publish; add it here once
+# that inventory exists rather than guessing at it and failing a release on a legitimate file.
+$forbiddenPublishArtifacts = @(
+    @{ Pattern = "logs";             Reason = "log output from running the app in the publish directory (leaks host paths)" },
+    @{ Pattern = "dead-letter-queue"; Reason = "dead-letter queue created beside the executable on every launch" },
+    @{ Pattern = "dp-keys";          Reason = "Data Protection key ring" },
+    @{ Pattern = "*.sqlite";         Reason = "node database" },
+    @{ Pattern = "*.sqlite-wal";     Reason = "node database write-ahead log" },
+    @{ Pattern = "*.sqlite-shm";     Reason = "node database shared memory" },
+    @{ Pattern = "node.key";         Reason = "node encryption key" },
+    @{ Pattern = "*.enc";            Reason = "encrypted secret store (HF token, GitHub token, provider credentials)" },
+    @{ Pattern = "desktop-port.txt"; Reason = "persisted desktop loopback port" },
+    @{ Pattern = "*.log";            Reason = "log file" }
+)
+$leakedArtifacts = [System.Collections.Generic.List[string]]::new()
+foreach ($forbidden in $forbiddenPublishArtifacts) {
+    foreach ($match in @(Get-ChildItem -Path $publishDir -Recurse -Force -Filter $forbidden.Pattern -ErrorAction SilentlyContinue)) {
+        $relativePath = $match.FullName.Substring((Resolve-Path $publishDir).Path.Length).TrimStart('\')
+        $leakedArtifacts.Add("$relativePath — $($forbidden.Reason)")
+    }
+}
+if ($leakedArtifacts.Count -gt 0) {
+    throw @"
+Runtime state found in the publish output. Packing would ship it to testers:
+
+$($leakedArtifacts -join "`n")
+
+This means the application was executed from '$publishDir'. Never run the published executable in place —
+it writes logs, queues and (in desktop mode) its database and keys next to itself. Delete that directory and
+re-run this script. Smoke-test the packed Portable.zip instead, which is what testers actually receive.
+"@
+}
+Write-Host ">> Publish output carries no runtime state (no logs, queues, keys or databases)."
 
 $publishedUpdateConfigPath = Join-Path $publishDir "appsettings.AppUpdate.json"
 if (-not (Test-Path $publishedUpdateConfigPath -PathType Leaf)) {

@@ -83,10 +83,12 @@ A published tester release carries exactly these assets:
 | `releases.win.json` | the update feed for the `win` channel |
 | `RELEASES` | legacy feed index |
 
-Inside the bundle, `LICENSE` and `NOTICE` ship next to the executable — wired in as `Content`
+Inside the bundle, `LICENSE` and `NOTICE` ship inside the `current` folder — wired in as `Content`
 items in `XE-Local-AI-Engine.Client.csproj`, so they land in the publish directory that **both**
-packaging paths stage from. The software is **proprietary, all rights reserved**; `NOTICE` carries the
-third-party attributions, and `READ-ME-FIRST.txt` states the proprietary terms and points at `LICENSE`.
+packaging paths stage from. The software is **proprietary, all rights reserved**; `LICENSE` states
+the terms and `NOTICE` carries the third-party attributions. There is no `READ-ME-FIRST.txt` in this
+bundle — that file is generated only by the separate `publish/package-rc.sh` Linux/manual packaging
+path, not by the Velopack `vpk pack` path this guide describes.
 
 **There is no `Setup.exe` and no `.AppImage`.** `vpk pack` is invoked with `--noInst`, which suppresses installer
 generation entirely; the portable zip is the shipped flavor. Any instruction telling a tester to download
