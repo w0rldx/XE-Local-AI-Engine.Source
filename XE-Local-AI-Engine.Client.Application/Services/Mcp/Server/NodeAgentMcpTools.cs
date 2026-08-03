@@ -74,20 +74,23 @@ public sealed class NodeAgentMcpTools
     }
 
     [McpServerTool(Name = "run_agent")]
-    [Description("Run a task on this node's local model and return the result. Supply either agent (a saved agent's id or name, which brings its persona, tools and skills) or model (a local model id) — exactly one. Runs are admission-gated: a request that would exceed the node's memory or concurrency limits is declined with a reason rather than queued indefinitely.")]
+    [Description(
+        "Run a task on this node's local model and return the result. Supply either agent (a saved agent's id or name, which brings its persona, tools and skills) or model (a local model id) — exactly one. Runs are admission-gated: a request that would exceed the node's memory or concurrency limits is declined with a reason rather than queued indefinitely.")]
     // Parameter order is dictated by C#, not by preference: `progress` and `cancellationToken` are injected by the SDK
     // and excluded from the generated schema, but they carry no default, so they must precede the optional arguments.
     // Those defaults are load-bearing — the SDK derives `required` from the ABSENCE of a default, not from nullability,
     // so a nullable-but-defaultless `string? agent` is advertised as REQUIRED and every call that binds a bare model is
     // rejected by the binder before the handler runs (measured live: "the arguments dictionary is missing a value for
     // the required parameter 'agent'"). Do not remove the `= null`s.
-    public async Task<string> RunAgentAsync(
-        [Description("The task for the local agent to carry out.")] string task,
+    public async Task<string> RunAgentAsync([Description("The task for the local agent to carry out.")] string task,
         IProgress<ProgressNotificationValue> progress,
         CancellationToken cancellationToken,
-        [Description("A saved agent's id or name. Mutually exclusive with model.")] string? agent = null,
-        [Description("A local model id to bind an ad-hoc agent to. Mutually exclusive with agent.")] string? model = null,
-        [Description("Optional system-prompt override. Only applies when binding a bare model; ignored when a saved agent is named.")] string? instructions = null)
+        [Description("A saved agent's id or name. Mutually exclusive with model.")]
+        string? agent = null,
+        [Description("A local model id to bind an ad-hoc agent to. Mutually exclusive with agent.")]
+        string? model = null,
+        [Description("Optional system-prompt override. Only applies when binding a bare model; ignored when a saved agent is named.")]
+        string? instructions = null)
     {
         if (string.IsNullOrWhiteSpace(task))
         {
@@ -102,7 +105,11 @@ public sealed class NodeAgentMcpTools
         // A local model can take well over a minute to load and generate. An MCP client aborts a call that produces
         // neither a response nor a progress notification inside its idle window (five minutes for Claude Code), so an
         // early progress report is what keeps a legitimate cold-start run alive rather than being killed as hung.
-        progress.Report(new ProgressNotificationValue { Progress = 0f, Message = "Admitting the run on the local node…" });
+        progress.Report(new ProgressNotificationValue
+        {
+            Progress = 0f,
+            Message = "Admitting the run on the local node…"
+        });
 
         // The fan-out and cloud-spawn caps hang off a per-root-invocation SpawnContext, which a chat turn seeds and an
         // MCP call has no equivalent of. Seed one synthetic root per call so an MCP-driven run is bounded by exactly
@@ -117,14 +124,22 @@ public sealed class NodeAgentMcpTools
             Instructions = instructions
         };
 
-        progress.Report(new ProgressNotificationValue { Progress = 0.1f, Message = "Running on the local model…" });
+        progress.Report(new ProgressNotificationValue
+        {
+            Progress = 0.1f,
+            Message = "Running on the local model…"
+        });
 
         // SubAgentSpawnService returns a sanitized reason string for every EXPECTED rejection (over-cap, no fit, busy,
         // unresolved agent/model) rather than throwing, so those reach the caller as an ordinary tool result. Only a
         // genuinely exceptional fault propagates, and the SDK turns that into a protocol error.
         var result = await _spawnService.SpawnAsync(request, cancellationToken).ConfigureAwait(false);
 
-        progress.Report(new ProgressNotificationValue { Progress = 1f, Message = "Completed." });
+        progress.Report(new ProgressNotificationValue
+        {
+            Progress = 1f,
+            Message = "Completed."
+        });
 
         if (result.Length <= MaxResultCharacters)
         {

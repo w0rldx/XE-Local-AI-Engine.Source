@@ -58,8 +58,7 @@ public sealed class DevelopmentWorkspaceWhitespacePolicyTests : IDisposable
     [Test]
     public void Render_GrantsCrAtEolToTheCrlfStoredPathsAndToNothingElse()
     {
-        var rendered = AssertEx.NotNull(DevelopmentWorkspaceWhitespacePolicy.Render(
-            Listing(("lf", "src/a.cs"), ("crlf", "tools/setup.bat"), ("mixed", "docs/notes.txt"), ("lf", "src/b.cs"))));
+        var rendered = AssertEx.NotNull(DevelopmentWorkspaceWhitespacePolicy.Render(Listing(("lf", "src/a.cs"), ("crlf", "tools/setup.bat"), ("mixed", "docs/notes.txt"), ("lf", "src/b.cs"))));
 
         AssertEx.Contains(rendered, "/tools/setup.bat whitespace=cr-at-eol");
         AssertEx.Contains(rendered, "/docs/notes.txt whitespace=cr-at-eol");
@@ -95,7 +94,12 @@ public sealed class DevelopmentWorkspaceWhitespacePolicyTests : IDisposable
     [Test]
     public void Render_WhenACrlfPathCannotBeExpressedAsAPattern_WidensToTheWholeRepository()
     {
-        foreach (var awkward in new[] { "\"tools/qu\\\"ote.bat\"", "tools/star[1].bat", "tools/back\\slash.bat" })
+        foreach (var awkward in new[]
+                 {
+                     "\"tools/qu\\\"ote.bat\"",
+                     "tools/star[1].bat",
+                     "tools/back\\slash.bat"
+                 })
         {
             var rendered = AssertEx.NotNull(DevelopmentWorkspaceWhitespacePolicy.Render(Listing(("crlf", awkward))));
             AssertEx.Contains(rendered, "* whitespace=cr-at-eol");
@@ -195,7 +199,8 @@ public sealed class DevelopmentWorkspaceWhitespacePolicyTests : IDisposable
             "a policy the current index does not justify must be removed, not preserved");
     }
 
-    private static HostGitRunner NewGit() => new(timeoutSeconds: 120);
+    private static HostGitRunner NewGit() =>
+        new(timeoutSeconds: 120);
 
     // One `git ls-files --eol` row: "i/<eol>  w/<eol>  attr/<attr>  \t<path>".
     private static string Listing(params (string IndexEol, string Path)[] entries)

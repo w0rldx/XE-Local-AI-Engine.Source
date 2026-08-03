@@ -842,10 +842,10 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     private static string DescribeValidation(IReadOnlyList<DevelopmentCommandEvidence> commands, DevelopmentValidationReport report)
     {
         var lines = commands.Select(command => command.ExitCode == 0
-                                        ? $"  {command.CommandId}: exit 0"
-                                        : $"  {command.CommandId}: exit {command.ExitCode} (completed: {command.Completed}){Environment.NewLine}"
-                                          + $"    stderr: {Describe(command.StandardError)}{Environment.NewLine}"
-                                          + $"    stdout: {Describe(command.StandardOutput)}");
+            ? $"  {command.CommandId}: exit 0"
+            : $"  {command.CommandId}: exit {command.ExitCode} (completed: {command.Completed}){Environment.NewLine}"
+              + $"    stderr: {Describe(command.StandardError)}{Environment.NewLine}"
+              + $"    stdout: {Describe(command.StandardOutput)}");
 
         return $"validation did not pass. failureCode: {report.FailureCode ?? "(none)"}, failureDetail: {report.FailureDetail ?? "(none)"}{Environment.NewLine}"
                + string.Join(Environment.NewLine, lines);

@@ -57,7 +57,12 @@ public sealed class WorkspaceFileScannerTests : IDisposable
     public void ListFiles_OrdersTheTreeDeterministicallyRatherThanInFilesystemOrder()
     {
         var workspace = CreateWorkspace();
-        foreach (var name in new[] { "zebra.txt", "alpha.txt", "middle.txt" })
+        foreach (var name in new[]
+                 {
+                     "zebra.txt",
+                     "alpha.txt",
+                     "middle.txt"
+                 })
         {
             Write(workspace, name, "x");
         }
@@ -406,7 +411,8 @@ public sealed class WorkspaceFileScannerTests : IDisposable
         AssertEx.Equal(7, matches.Count);
     }
 
-    private static bool NeverSuppressed(string relativePath) => false;
+    private static bool NeverSuppressed(string relativePath) =>
+        false;
 
     private string CreateWorkspace()
     {

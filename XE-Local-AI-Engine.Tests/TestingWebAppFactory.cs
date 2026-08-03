@@ -121,8 +121,7 @@ public class TestingWebAppFactory : WebApplicationFactory<Program>, IAsyncInitia
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            return Task.FromException<HttpResponseMessage>(
-                new HttpRequestException("The unit-test host has no llama.cpp runtime transport."));
+            return Task.FromException<HttpResponseMessage>(new HttpRequestException("The unit-test host has no llama.cpp runtime transport."));
         }
     }
 

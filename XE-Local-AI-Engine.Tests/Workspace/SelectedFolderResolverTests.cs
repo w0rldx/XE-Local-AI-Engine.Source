@@ -42,8 +42,7 @@ public sealed class SelectedFolderResolverTests
         var resolver = CreateResolver();
 
         // Still fully qualified on both platforms, so the '..' segment — not the qualification check — is what rejects it.
-        _ = await AssertEx.ThrowsAsync<SelectedFolderValidationException>(
-            () => resolver.RegisterAsync(new SelectedFolderRegistration("repo-one", HostPath("trusted", "..", "etc", "passwd"))),
+        _ = await AssertEx.ThrowsAsync<SelectedFolderValidationException>(() => resolver.RegisterAsync(new SelectedFolderRegistration("repo-one", HostPath("trusted", "..", "etc", "passwd"))),
             "A traversal host path should be rejected.");
     }
 
@@ -62,8 +61,7 @@ public sealed class SelectedFolderResolverTests
         var resolver = CreateResolver();
         _ = await resolver.RegisterAsync(new SelectedFolderRegistration("repo-one", TrustedHostPath));
 
-        _ = await AssertEx.ThrowsAsync<SelectedFolderValidationException>(
-            () => resolver.RegisterAsync(new SelectedFolderRegistration("Repo-One", HostPath("trusted", "host", "other"))),
+        _ = await AssertEx.ThrowsAsync<SelectedFolderValidationException>(() => resolver.RegisterAsync(new SelectedFolderRegistration("Repo-One", HostPath("trusted", "host", "other"))),
             "A colliding alias should be rejected after normalization.");
     }
 

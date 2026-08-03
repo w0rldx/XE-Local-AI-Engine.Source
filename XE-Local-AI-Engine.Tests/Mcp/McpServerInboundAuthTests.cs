@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Mcp;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using NSubstitute;
@@ -145,7 +146,7 @@ public sealed class McpServerInboundAuthTests
 
     private static StringContent EmptyRpcContent()
     {
-        return new StringContent("{}", System.Text.Encoding.UTF8, "application/json");
+        return new StringContent("{}", Encoding.UTF8, "application/json");
     }
 
     private static TestingWebAppFactory CreateFactory(string? storedKey)

@@ -29,5 +29,6 @@ internal static class SqliteFileProbe
     ///     Releases pooled handles so a fixture can delete its database directory. Windows refuses to remove a
     ///     directory containing an open file; Linux happily unlinks it, which is why teardown never failed there.
     /// </summary>
-    public static void ReleasePooledHandles() => SqliteConnection.ClearAllPools();
+    public static void ReleasePooledHandles() =>
+        SqliteConnection.ClearAllPools();
 }
