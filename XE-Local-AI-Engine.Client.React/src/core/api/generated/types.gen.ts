@@ -999,6 +999,26 @@ export type XeLocalAiEngineClientEndpointsMcpV1DeleteMcpServerRequest = {
 	[key: string]: never;
 };
 
+export type XeLocalAiEngineClientEndpointsMcpV1McpServerApiKeyStatusResponse = {
+	configured: boolean;
+	apiKey?: XeLocalAiEngineClientEndpointsMcpV1McpServerApiKeyResponse | null;
+	endpointUrl: string;
+};
+
+export type XeLocalAiEngineClientEndpointsMcpV1McpServerApiKeyResponse = {
+	prefix: string;
+	key: string;
+	createdAt: string;
+	lastUsedAt?: string | null;
+};
+
+/**
+ * a request dto that doesn't have any properties
+ */
+export type FastEndpointsEmptyRequest = {
+	[key: string]: never;
+};
+
 export type XeLocalAiEngineClientEndpointsMcpV1GetMcpServerRequest = {
 	[key: string]: never;
 };
@@ -4736,6 +4756,87 @@ export type UpdateMcpServerResponses = {
 };
 
 export type UpdateMcpServerResponse = UpdateMcpServerResponses[keyof UpdateMcpServerResponses];
+
+export type RevokeMcpServerApiKeyData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/mcp/server-key";
+};
+
+export type RevokeMcpServerApiKeyErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type RevokeMcpServerApiKeyResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type RevokeMcpServerApiKeyResponse = RevokeMcpServerApiKeyResponses[keyof RevokeMcpServerApiKeyResponses];
+
+export type GetMcpServerApiKeyData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/mcp/server-key";
+};
+
+export type GetMcpServerApiKeyErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetMcpServerApiKeyResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsMcpV1McpServerApiKeyStatusResponse;
+};
+
+export type GetMcpServerApiKeyResponse = GetMcpServerApiKeyResponses[keyof GetMcpServerApiKeyResponses];
+
+export type GenerateMcpServerApiKeyData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/mcp/server-key";
+};
+
+export type GenerateMcpServerApiKeyErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GenerateMcpServerApiKeyResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsMcpV1McpServerApiKeyStatusResponse;
+};
+
+export type GenerateMcpServerApiKeyResponse = GenerateMcpServerApiKeyResponses[keyof GenerateMcpServerApiKeyResponses];
 
 export type GetMcpServerToolsData = {
 	body?: never;
