@@ -330,9 +330,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Configuration.Abstractions@10.0.9",
+			"id": "backend:Microsoft.Extensions.Configuration.Abstractions@10.0.10",
 			"name": "Microsoft.Extensions.Configuration.Abstractions",
-			"version": "10.0.9",
+			"version": "10.0.10",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
@@ -418,9 +418,17 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:ModelContextProtocol@1.4.1",
+			"id": "backend:ModelContextProtocol@2.0.0",
 			"name": "ModelContextProtocol",
-			"version": "1.4.1",
+			"version": "2.0.0",
+			"license": "Apache-2.0",
+			"homepageUrl": "https://csharp.sdk.modelcontextprotocol.io/",
+			"source": "backend"
+		},
+		{
+			"id": "backend:ModelContextProtocol.AspNetCore@2.0.0",
+			"name": "ModelContextProtocol.AspNetCore",
+			"version": "2.0.0",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://csharp.sdk.modelcontextprotocol.io/",
 			"source": "backend"
