@@ -75,9 +75,13 @@ Either way: a console/terminal opens with live logs and your default browser ope
 on a local loopback URL (`http://127.0.0.1:<port>/`). If the browser does not open, the URL
 is printed in the console — paste it manually.
 
-The bundle ships `LICENSE` and `NOTICE` alongside the executable. **This software is
-proprietary — all rights reserved**; `LICENSE` states the terms and `NOTICE` carries the
-third-party attributions. `READ-ME-FIRST.txt` says the same and points at `LICENSE`.
+**This software is proprietary — all rights reserved**; `LICENSE` states the terms and
+`NOTICE` carries the third-party attributions.
+
+- **Windows:** `LICENSE` and `NOTICE` ship inside the `current` folder, not alongside the
+  top-level `XE-Local-AI-Engine.exe` you launch.
+- **Linux:** `LICENSE`, `NOTICE`, and a `READ-ME-FIRST.txt` one-screen quickstart ship
+  directly alongside the executable and `start-xe-local-ai-engine.sh`.
 
 ## What to expect on first run
 
