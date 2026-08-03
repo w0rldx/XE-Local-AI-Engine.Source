@@ -220,11 +220,22 @@ These are the things that no environment other than yours can settle. Ranked.
 This is the largest single risk in the RC, and it is entirely yours: `publish/package-tester-win.ps1` is the only
 real release path (CI is disabled and has never produced an artifact).
 
-**Start from the version, because it is currently inconsistent.** `Directory.Build.props:5-6` says
-`0.1.0-rc.4.2`, but the newest tag in the repo and on `origin` is **`v0.1.0-rc.4.0`** — 824 commits behind HEAD.
-An `rc.4.2` build was smoke-tested on 2026-08-03 and its tag was never pushed. `-PublishDraft` verifies that the
-pushed source tag resolves to HEAD, so **decide first**: bump to `rc.4.3` and tag that, or tag `rc.4.2` at the
-commit it was actually built from. Do not publish until the version and the tag agree.
+**Start from the version — it has NOT been bumped, and the next release is `rc.5.0`, not `rc.4.x`.**
+`Directory.Build.props:5-6` still reads `0.1.0-rc.4.2`, and the newest tag in the repo and on `origin` is
+**`v0.1.0-rc.4.0`** — 824 commits behind HEAD. An `rc.4.2` build was smoke-tested on 2026-08-03 and its tag was
+never pushed.
+
+**Operator decision, 2026-08-03: the next RC is `0.1.0-rc.5.0`** — the change volume since `rc.4.0` is large
+enough that a patch-level bump would understate it. So the first action in this phase is:
+
+```powershell
+# Directory.Build.props: VersionSuffix rc.4.2 -> rc.5.0
+git tag v0.1.0-rc.5.0
+git push origin v0.1.0-rc.5.0        # -PublishDraft verifies the PUSHED tag resolves to HEAD
+```
+
+Do not publish until `Directory.Build.props` and the pushed tag agree. Nothing here re-cuts `rc.4.2`; treat it as
+a build that existed only on the verification box.
 
 Then, in order:
 
@@ -242,10 +253,16 @@ Then, in order:
    script, and confirm the value reverts. Then republish with `-p:UpdateChannel=main` and confirm the file
    actually switches to the `main` config. Under the old `PreserveNewest` both would have silently kept the stale
    file — which is how a rotated credential could ride into a shipped artifact.
-4. **Self-update, which needs two published releases to observe at all.** Publish `rc.4.3`, then from an
-   `rc.4.2` install sign in and press Update. Record: does it relaunch by itself; does it come back on the **same
-   loopback port**; is `node.key`'s SHA-256 **identical** before and after; is the `dp-keys\key-<guid>.xml` set
-   unchanged; are the models still there; is any `llama-server` orphaned across the restart.
+4. **Self-update, which needs two published releases to observe at all.** The tester repo already has
+   **`0.1.0-rc.4.1`** published, so `rc.5.0` gives you the pair for free — and it is the *real* upgrade a tester
+   will take, across a large version jump, which is a better test than a synthetic adjacent pair. Install
+   `rc.4.1` from the tester repo first, publish `rc.5.0`, then from the `rc.4.1` install sign in and press
+   Update. Record: does it relaunch by itself; does it come back on the **same loopback port**; is `node.key`'s
+   SHA-256 **identical** before and after; is the `dp-keys\key-<guid>.xml` set unchanged; are the models still
+   there; is any `llama-server` orphaned across the restart.
+
+   > Note `rc.4.1` predates `Get-ExpectedVelopackAsset` (added in `93afa98d`, after `rc.4.1` shipped), so the
+   > pack inventory gate has never gated a real published release. `rc.5.0` will be the first.
 
    A **new** `key-<guid>.xml` after an update, or `Hugging Face token decryption failed. Clearing the stored
    token.` in the log, is a **P0**: it silently signs the tester out of everything.
@@ -328,8 +345,9 @@ them wastes the one environment that can do everything above.
 
 ## Open questions for the operator, not the agent
 
-- **Is `rc.4.2` being re-cut, or is the next RC `rc.4.3`?** The version in `Directory.Build.props` and the newest
-  pushed tag disagree, and the publish step enforces tag-at-HEAD.
+- ~~Is `rc.4.2` being re-cut, or is the next RC `rc.4.3`?~~ **Answered 2026-08-03: the next RC is `0.1.0-rc.5.0`.**
+  The version has not been bumped yet — `Directory.Build.props` still reads `rc.4.2` — so bumping it and pushing
+  the tag is the first action of Phase 3.
 - **Does the RC ship signed?** Code signing is still deferred. If it ships unsigned, `TESTER-QUICKSTART.md` needs
   the SmartScreen paragraph it currently lacks.
 - **Is an AMD/Intel-only Windows box available for check 9?** The verification box is dual-adapter, so
