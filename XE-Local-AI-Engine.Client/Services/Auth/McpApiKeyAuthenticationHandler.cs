@@ -74,9 +74,14 @@ internal sealed class McpApiKeyAuthenticationHandler : AuthenticationHandler<Aut
     protected override Task HandleChallengeAsync(AuthenticationProperties properties)
     {
         Response.StatusCode = StatusCodes.Status401Unauthorized;
-        // RFC 6750 bearer challenge. No `resource_metadata` parameter: this server does not implement the spec's
-        // optional OAuth profile, so advertising Protected Resource Metadata would point clients at a discovery
-        // document that does not exist.
+        // RFC 6750 bearer challenge. The ABSENCE of a `resource_metadata` parameter is deliberate and load-bearing, for
+        // two reasons — do not "complete" this header by adding one:
+        //   1. This server does not implement the spec's optional OAuth profile, so advertising Protected Resource
+        //      Metadata would point clients at a discovery document that does not exist.
+        //   2. Claude Code has an open defect (anthropics/claude-code#59467) where a server that advertises OAuth
+        //      *while also* accepting a static header can make the client discard its configured Authorization header
+        //      and fall back to OAuth discovery — i.e. advertising PRM here would break the very clients this endpoint
+        //      exists to serve.
         Response.Headers.WWWAuthenticate = "Bearer realm=\"xe-local-ai-engine-mcp\"";
         return Task.CompletedTask;
     }

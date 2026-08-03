@@ -373,7 +373,8 @@ try
     //      client never talks to it — only external MCP clients do.
     // The McpServer policy accepts ONLY the MCP API key scheme, never the operator's JWT.
     app.MapMcp($"/{LocalApiRoutes.Prefix}/{LocalApiRoutes.Mcp.ServerEndpoint}")
-       .RequireAuthorization(NodeAuthorizationPolicies.McpServer);
+       .RequireAuthorization(NodeAuthorizationPolicies.McpServer)
+       .RequireRateLimiting(NodeAuthRateLimits.McpPolicy);
 
     if (!app.Environment.IsProduction())
     {
