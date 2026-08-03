@@ -463,7 +463,7 @@ Diagnosing it: confirm `OTEL_EXPORTER_OTLP_ENDPOINT` is on the process (`tr '\0'
 - Desktop publish is self-contained single-file but **explicitly not trimmed** (`PublishTrimmed=false`) — trimming breaks EF Core / Serilog / FastEndpoints / MEAI reflection wiring.
 - Desktop mode is opt-in via `XE_LAUNCH_MODE=desktop`; off-flag behaviour (headless/Aspire/CI) must stay byte-identical.
 
-### The node is an MCP server too, and three things about it will bite you
+### The node is an MCP server too, and four things about it will bite you
 
 The inbound surface (`/api/local/v1/mcp/server`, C# SDK 2.0.0 / spec revision 2026-07-28) is the
 mirror of the `mcp/servers` registrations. Don't confuse the directions — they share only the name.
@@ -482,6 +482,14 @@ mirror of the `mcp/servers` registrations. Don't confuse the directions — they
   `McpServer` policy names `McpApiKey` and nothing else, which is what stops an operator JWT from
   driving the MCP tool surface. `AddAuthentication(JwtBearer…)` keeps JWT as the default so no
   existing endpoint changes behavior.
+- **The inbound key is hashed, and the GET *cannot* return it.** The node stores a SHA-256 digest, so
+  the plaintext exists only in the `POST /mcp/server/api-key` response. That is enforced by the type
+  system, not a comment: `GET` answers `McpServerApiKeyStatusResponse` (no key field) and only the
+  generate path answers `GeneratedMcpServerApiKeyResponse`. Don't "helpfully" add a key field to the
+  status shape or re-point the generate endpoint at `ToStatus` — either silently reverts the whole
+  change. The digest is *still* AEAD-encrypted at rest, but now for **integrity**: without it, a
+  writer of the database file could drop in a digest whose preimage they know. Keep both interceptor
+  branches (`mcp_api_key_hash`) — deleting only one makes every read of the table throw.
 
 Two facts worth not re-deriving: the **1.4.1 → 2.0.0 SDK upgrade is a source-level no-op here** (the
 client only touches `McpClient.CreateAsync`, `ListToolsAsync`, the two transports and `McpException`,
@@ -900,6 +908,7 @@ Old notes (and agents who half-remember them) assert these. They are **false tod
 | "llama.cpp has native MCP support now, so the app could use it." | The MCP client lives in llama-server's **web UI**, which this app never serves; the backend addition is only the experimental `--ui-mcp-proxy` CORS proxy. The .NET `ModelContextProtocol` client remains the correct integration point, and a browser-side host would move tool execution below the approval/sandbox boundary. See `Plans/2026-07-26-llamacpp-native-mcp-decision.md`. |
 | "Ollama was removed from the app." | Removed only from *Aspire dev orchestration*. It remains a supported, gated, opt-in secondary provider with 50+ live call sites. llama.cpp is the *default*, not the *only*, runtime. |
 | "NVFP4 isn't supported — llama.cpp can't load it, or it can't be used on this box." | **False since `75cc519a`, and live-proven 2026-07-31.** llama.cpp carries `GGML_TYPE_NVFP4` with sm_120 tensor-core kernels, our pin `b10201` includes them, and a 27B NVFP4 GGUF loaded and generated at 95% GPU utilisation here. The *true* limitation is narrower and is about the **container**: NVFP4 **safetensors** (compressed-tensors/ModelOpt) remain unloadable, since the upstream convert script is still an unmerged PR. Don't restate the narrow fact as the broad one — see §3. |
+| "The inbound MCP key is stored reversibly on purpose, so Node Settings can re-show it and the operator can re-copy it without rotating." | **True until 2026-08-03, false now.** It is stored as a one-way SHA-256 digest. The plaintext is returned exactly once, by the generate endpoint, and is unrecoverable afterwards — `GET` has no key field at all. A lost key means regenerate + reconfigure every client. The old rationale is gone from the code, wiki and runbook; if you find prose still arguing for reversibility, it is a leftover, not a decision. |
 | "`dotnet test` reports zero tests — run the native test-host exe instead." | Fixed by the `global.json` MTP runner pin. `dotnet test` works against the whole solution. Native exe still works, but is no longer required. |
 | "Any build catches a bare `TODO`, a banned API, or a style violation — so a green `dotnet build` means the analyzer wall passed." | **False since 2026-07-31.** `Directory.Build.targets` disables analyzer *execution* in local Debug builds (84 s → 10 s on the Tests module). The wall is Release-only. **Finish with `dotnet build … --configuration Release`** or you will hand off code the packaging script rejects. `XE_FULL_ANALYSIS=1` forces the full pass in Debug. |
 | "`RunAnalyzers=false` also turns off source generators, so gating analyzers would break TUnit discovery." | **False.** It maps to csc `-skipanalyzers`, which skips diagnostic analyzers only; generators still run. Verified — a Debug build of `XE-Local-AI-Engine.AI.Agent.Tests` still lists 209 tests. |

@@ -999,15 +999,15 @@ export type XeLocalAiEngineClientEndpointsMcpV1DeleteMcpServerRequest = {
 	[key: string]: never;
 };
 
-export type XeLocalAiEngineClientEndpointsMcpV1McpServerApiKeyStatusResponse = {
+export type XeLocalAiEngineClientEndpointsMcpV1GeneratedMcpServerApiKeyResponse = {
 	configured: boolean;
 	apiKey?: XeLocalAiEngineClientEndpointsMcpV1McpServerApiKeyResponse | null;
 	endpointUrl: string;
+	key: string;
 };
 
 export type XeLocalAiEngineClientEndpointsMcpV1McpServerApiKeyResponse = {
 	prefix: string;
-	key: string;
 	createdAt: string;
 	lastUsedAt?: string | null;
 };
@@ -1017,6 +1017,12 @@ export type XeLocalAiEngineClientEndpointsMcpV1McpServerApiKeyResponse = {
  */
 export type FastEndpointsEmptyRequest = {
 	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsMcpV1McpServerApiKeyStatusResponse = {
+	configured: boolean;
+	apiKey?: XeLocalAiEngineClientEndpointsMcpV1McpServerApiKeyResponse | null;
+	endpointUrl: string;
 };
 
 export type XeLocalAiEngineClientEndpointsMcpV1GetMcpServerRequest = {
@@ -4833,7 +4839,7 @@ export type GenerateMcpServerApiKeyResponses = {
 	/**
 	 * Success
 	 */
-	200: XeLocalAiEngineClientEndpointsMcpV1McpServerApiKeyStatusResponse;
+	200: XeLocalAiEngineClientEndpointsMcpV1GeneratedMcpServerApiKeyResponse;
 };
 
 export type GenerateMcpServerApiKeyResponse = GenerateMcpServerApiKeyResponses[keyof GenerateMcpServerApiKeyResponses];

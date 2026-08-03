@@ -16,16 +16,36 @@ internal static class McpServerApiKeyMapper
         return new McpServerApiKeyStatusResponse
         {
             Configured = view is not null,
-            ApiKey = view is null
-                ? null
-                : new McpServerApiKeyResponse
-                {
-                    Prefix = view.Prefix,
-                    Key = view.Key,
-                    CreatedAt = view.CreatedAt,
-                    LastUsedAt = view.LastUsedAt
-                },
+            ApiKey = view is null ? null : ToApiKey(view),
             EndpointUrl = BuildEndpointUrl(httpContext)
+        };
+    }
+
+    /// <summary>
+    ///     Maps a freshly minted credential, carrying the one-time plaintext key. This is the only mapping that emits
+    ///     the secret; <see cref="ToStatus" /> structurally cannot, because its response type has no key field.
+    /// </summary>
+    public static GeneratedMcpServerApiKeyResponse ToGenerated(GeneratedMcpServerApiKey generated, HttpContext httpContext)
+    {
+        ArgumentNullException.ThrowIfNull(generated);
+        ArgumentNullException.ThrowIfNull(httpContext);
+
+        return new GeneratedMcpServerApiKeyResponse
+        {
+            Configured = true,
+            ApiKey = ToApiKey(generated.View),
+            EndpointUrl = BuildEndpointUrl(httpContext),
+            Key = generated.Key
+        };
+    }
+
+    private static McpServerApiKeyResponse ToApiKey(McpServerApiKeyView view)
+    {
+        return new McpServerApiKeyResponse
+        {
+            Prefix = view.Prefix,
+            CreatedAt = view.CreatedAt,
+            LastUsedAt = view.LastUsedAt
         };
     }
 

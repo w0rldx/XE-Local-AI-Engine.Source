@@ -153,13 +153,22 @@ two principals therefore cannot impersonate each other: an operator JWT does not
 endpoint, and the MCP key does not open the key-management endpoints (or anything else). Both
 directions are asserted in `XE-Local-AI-Engine.Tests/Mcp/McpServerInboundAuthTests.cs`.
 
-The MCP credential is a single 256-bit `xemcp_`-prefixed secret stored **encrypted at rest** in the
-node database. It is stored reversibly by deliberate product decision so the operator can re-copy it
-without invalidating configured clients; `node-settings.json` was rejected as a home because it is
-plaintext and carries no restrictive ACL on Windows. Generating replaces the previous key with no
-window in which both authenticate, comparison is `CryptographicOperations.FixedTimeEquals` over the
-UTF-8 bytes (a short-circuiting compare is a byte-at-a-time oracle over loopback), and a node with no
-key generated authenticates nobody. Spec revision 2026-07-28 makes authorization **OPTIONAL** for MCP
+The MCP credential is a single 256-bit `xemcp_`-prefixed secret stored as a **one-way SHA-256 digest**
+in the node database. The plaintext is returned exactly once — in the response to the generate call —
+and is unrecoverable afterwards: `GET` returns only the prefix and timestamps, and the response type
+has no key field at all, so the guarantee is enforced by the contract rather than by convention. A
+lost key therefore cannot be recovered; the remedy is to regenerate and reconfigure every client.
+A plain digest rather than a password KDF is deliberate: the input is 256 bits of CSPRNG output, so
+PBKDF2/Argon2 would buy no guessing resistance and would tax every authenticated request, and no salt
+is needed for a single high-entropy secret. The digest is *additionally* encrypted at rest, now for
+**integrity rather than confidentiality** — hashing already defends a database read, but a bare hash
+column would let anyone who can write the database file substitute a digest whose preimage they know
+and take over an agent-execution surface; the AAD-bound AEAD (`mcp_api_key_hash`) is what makes that
+substitution fail. (`node-settings.json` was rejected as a home because it is plaintext and carries no
+restrictive ACL on Windows.) Generating replaces the previous key with no window in which both
+authenticate, comparison hashes the presented value and runs
+`CryptographicOperations.FixedTimeEquals` over the **digest bytes** (a short-circuiting compare is a
+byte-at-a-time oracle over loopback), and a node with no key generated authenticates nobody. Spec revision 2026-07-28 makes authorization **OPTIONAL** for MCP
 implementations, so this node implements no OAuth profile and advertises no Protected Resource
 Metadata — see the [connect runbook](../runbooks/connect-an-mcp-client-runbook.md).
 

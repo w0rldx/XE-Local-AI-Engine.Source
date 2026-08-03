@@ -25,10 +25,13 @@ same rule unattended scheduled runs follow.
 
 Node Settings → **MCP server** → *Generate key*. The key looks like `xemcp_…`.
 
-It is stored encrypted in the node database and can be re-read from that page, so you can copy it
-again later without invalidating clients that already hold it. **Regenerating replaces it
-immediately** — every client configured with the old value stops working at once. Revoking removes it
-and closes the inbound surface entirely.
+**Copy it now — this is the only time it is shown.** The node stores only a one-way SHA-256 hash, so
+the key cannot be re-read from that page or recovered from the database by any means. Afterwards the
+page shows only the prefix (`xemcp_abc123…`) so you can tell which key the node holds.
+
+If you lose it, your only option is to generate a new one and update every client that used the old
+one. **Regenerating replaces the key immediately** — every client configured with the old value stops
+working at once. Revoking removes it and closes the inbound surface entirely.
 
 ## 3. Point Claude Code at it
 
@@ -108,7 +111,7 @@ mode.
 
 | Symptom | Cause |
 |---|---|
-| `401` | No key generated, wrong key, or the key was regenerated/revoked. Re-copy from Node Settings. |
+| `401` | No key generated, wrong key, or the key was regenerated/revoked. The key cannot be re-read — generate a new one in Node Settings and update this client. |
 | `403` | The request did not look loopback — check you used `127.0.0.1`/`localhost` and not a LAN address or hostname. |
 | Tool call aborts after ~60 s | No per-server `timeout` set. See §3. |
 | Tool call aborts after ~5 min | Same fix; the idle window is floored by `timeout`. |
