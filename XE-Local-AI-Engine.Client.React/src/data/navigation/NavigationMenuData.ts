@@ -5,7 +5,6 @@ import {
 	IconCpu,
 	IconDashboard,
 	IconDatabase,
-	IconCode,
 	IconHome,
 	IconListDetails,
 	IconMessageCircle,
@@ -71,13 +70,6 @@ const allNavigationLinks: INavigationLink[] = [
 		to: nodeRoutePaths.chat,
 	},
 	{
-		id: "development",
-		icon: IconCode,
-		translationKey: "navigation.development",
-		to: nodeRoutePaths.development,
-		capability: "development",
-	},
-	{
 		id: "knowledgeBase",
 		icon: IconDatabase,
 		translationKey: "navigation.knowledgeBase",
@@ -132,11 +124,12 @@ const allNavigationLinks: INavigationLink[] = [
 		],
 	},
 	// Preview group: collects experimental / preview features under one menu point. Open Canvas (the MAF workflow
-	// builder) and Image Generation (stable-diffusion.cpp) both live here — image generation is not yet confidently
-	// verified end-to-end, so it is presented as a preview surface rather than a flagship top-level entry.
+	// builder), Image Generation (stable-diffusion.cpp) and Development Mode (the registered-source worktree
+	// workflow) all live here — none of the three is confidently verified end-to-end yet, so each is presented as a
+	// preview surface rather than a flagship top-level entry.
 	// Each child carries its OWN capability (the group itself is ungated, like Models / Automation), so turning one
-	// capability off drops only that child and the generic empty-group filter below removes the group when both are
-	// off. That keeps every child's nav visibility exactly aligned with its route's own capability redirect.
+	// capability off drops only that child and the generic empty-group filter below removes the group once every
+	// child is off. That keeps every child's nav visibility exactly aligned with its route's own capability redirect.
 	{
 		id: "preview",
 		icon: IconBinaryTree2,
@@ -144,6 +137,7 @@ const allNavigationLinks: INavigationLink[] = [
 		links: [
 			{ translationKey: "navigation.preview", to: nodeRoutePaths.preview, capability: "preview" },
 			{ translationKey: "navigation.images", to: nodeRoutePaths.images, capability: "images" },
+			{ translationKey: "navigation.development", to: nodeRoutePaths.development, capability: "development" },
 		],
 	},
 	{
