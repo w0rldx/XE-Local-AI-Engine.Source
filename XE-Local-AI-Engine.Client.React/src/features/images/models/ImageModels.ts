@@ -2,8 +2,11 @@ import { z } from "zod";
 
 import type {
 	XeLocalAiEngineClientEndpointsImagesV1ImageJobResponse as ImageJobResponse,
+	XeLocalAiEngineClientEndpointsImagesV1ImageModelCatalogEntryResponse as ImageModelCatalogEntryResponse,
 	XeLocalAiEngineClientEndpointsImagesV1ImageModelDownloadStatusResponse as ImageModelDownloadStatusResponse,
 	XeLocalAiEngineClientEndpointsImagesV1ImageModelResponse as ImageModelResponse,
+	XeLocalAiEngineClientEndpointsImagesV1ImageRepositoryFileResponse as ImageRepositoryFileResponse,
+	XeLocalAiEngineClientEndpointsImagesV1ImageRepositoryResponse as ImageRepositoryResponse,
 } from "@/core/api/generated";
 
 // Coarse image-job lifecycle, mirroring the backend ImageJobStatus enum (Queued/Generating/Succeeded/Failed/
@@ -146,6 +149,154 @@ export function imageFormDefaultsForModel(model: ImageModelView | undefined): Im
 	}
 	const sampler = (imageSamplers as readonly string[]).includes(model.defaultSampler) ? (model.defaultSampler as ImageSampler) : base.sampler;
 	return { ...base, steps: model.defaultSteps, cfgScale: model.defaultCfgScale, sampler };
+}
+
+// The diffusion families the install forms offer. Must match the backend ImageModelFamily enum names (parsed
+// case-insensitively). Sd15 is single-file; every other family is a file SET.
+export const imageModelFamilies = ["Sd15", "Sdxl", "Sd3", "Flux", "QwenImage"] as const;
+export type ImageModelFamily = (typeof imageModelFamilies)[number];
+
+// Part roles the backend ImageModelPartRole enum accepts, in the order a file-set is normally listed. Llm/LlmVision
+// are the Qwen-Image text encoder (a full Qwen2.5-VL language model) and its vision tower.
+export const imageModelPartRoles = ["Diffusion", "Vae", "ClipL", "ClipG", "T5", "Llm", "LlmVision"] as const;
+export type ImageModelPartRole = (typeof imageModelPartRoles)[number];
+
+export function toImageModelPartRole(raw: string | null | undefined): ImageModelPartRole {
+	return (imageModelPartRoles as readonly string[]).includes(raw ?? "") ? (raw as ImageModelPartRole) : "Diffusion";
+}
+
+export function toImageModelFamily(raw: string | null | undefined): ImageModelFamily {
+	return (imageModelFamilies as readonly string[]).includes(raw ?? "") ? (raw as ImageModelFamily) : "Sd15";
+}
+
+// How a catalog entry's weights compare to this box's measured memory budget. "Unknown" is a real answer, not a soft
+// yes: VRAM goes unmeasured on every non-NVIDIA GPU, and a badge that read "Fits" there would be a guess.
+export const imageModelFitVerdicts = ["Fits", "Tight", "WontFit", "Unknown"] as const;
+export type ImageModelFitVerdict = (typeof imageModelFitVerdicts)[number];
+
+function toImageModelFitVerdict(raw: string | null | undefined): ImageModelFitVerdict {
+	return (imageModelFitVerdicts as readonly string[]).includes(raw ?? "") ? (raw as ImageModelFitVerdict) : "Unknown";
+}
+
+/** One weight file of a catalog entry, already in the shape the download mutation posts. */
+export interface ImageModelCatalogPartView {
+	role: ImageModelPartRole;
+	fileName: string;
+	repoId: string | null;
+	sizeBytes: number;
+}
+
+/** One curated, one-click-installable image model annotated for this machine. */
+export interface ImageModelCatalogEntryView {
+	id: string;
+	displayName: string;
+	publisher: string;
+	repoId: string;
+	family: ImageModelFamily;
+	license: string;
+	recommended: boolean;
+	notes: string | null;
+	parts: readonly ImageModelCatalogPartView[];
+	totalSizeBytes: number;
+	isInstalled: boolean;
+	fitVerdict: ImageModelFitVerdict;
+	residentBytes: number;
+	fitBudgetBytes: number;
+	fitsOnDisk: boolean;
+}
+
+export function toImageModelCatalogEntryView(dto: ImageModelCatalogEntryResponse): ImageModelCatalogEntryView {
+	return {
+		id: dto.id,
+		displayName: dto.displayName,
+		publisher: dto.publisher,
+		repoId: dto.repoId,
+		family: toImageModelFamily(dto.family),
+		license: dto.license,
+		recommended: dto.recommended,
+		notes: dto.notes ?? null,
+		parts: (dto.parts ?? []).map((part) => ({
+			role: toImageModelPartRole(part.role),
+			fileName: part.fileName,
+			repoId: part.repoId ?? null,
+			sizeBytes: part.sizeBytes,
+		})),
+		totalSizeBytes: dto.totalSizeBytes,
+		isInstalled: dto.isInstalled,
+		fitVerdict: toImageModelFitVerdict(dto.fitVerdict),
+		residentBytes: dto.residentBytes,
+		fitBudgetBytes: dto.fitBudgetBytes,
+		fitsOnDisk: dto.fitsOnDisk,
+	};
+}
+
+/** How many distinct repositories a catalog entry's parts are pulled from (a Qwen-Image set spans two). */
+export function catalogEntryRepoCount(entry: ImageModelCatalogEntryView): number {
+	return new Set([entry.repoId, ...entry.parts.map((part) => part.repoId ?? entry.repoId)]).size;
+}
+
+/** One discovered Hugging Face image repository. */
+export interface ImageRepositoryView {
+	repoId: string;
+	isGated: boolean;
+	downloads: number;
+	likes: number;
+	lastModifiedAtUtc: number;
+	license: string | null;
+	hasUsableWeights: boolean;
+	isTrustedPublisher: boolean;
+}
+
+export function toImageRepositoryView(dto: ImageRepositoryResponse): ImageRepositoryView {
+	return {
+		repoId: dto.repoId,
+		isGated: dto.isGated,
+		downloads: dto.downloads,
+		likes: dto.likes,
+		lastModifiedAtUtc: dto.lastModifiedAtUtc,
+		license: dto.license ?? null,
+		hasUsableWeights: dto.hasUsableWeights,
+		isTrustedPublisher: dto.isTrustedPublisher,
+	};
+}
+
+/** One selectable weight file inside an inspected repository. */
+export interface ImageRepositoryFileView {
+	fileName: string;
+	format: string;
+	sizeBytes: number;
+	suggestedRole: ImageModelPartRole;
+}
+
+export function toImageRepositoryFileView(dto: ImageRepositoryFileResponse): ImageRepositoryFileView {
+	return {
+		fileName: dto.fileName,
+		format: dto.format,
+		sizeBytes: dto.sizeBytes,
+		suggestedRole: toImageModelPartRole(dto.suggestedRole),
+	};
+}
+
+/**
+ * Guesses the family a repository's selected file-set belongs to, so the install form starts on the right one instead
+ * of on SD 1.5 for every model. Purely a starting value the operator can override — the family drives which sampling
+ * defaults the generation form pre-fills, and getting it wrong does not fail loudly, it just produces a worse image.
+ */
+export function suggestFamilyForRepo(repoId: string, files: readonly ImageRepositoryFileView[]): ImageModelFamily {
+	const haystack = `${repoId} ${files.map((file) => file.fileName).join(" ")}`.toLowerCase();
+	if (haystack.includes("qwen")) {
+		return "QwenImage";
+	}
+	if (haystack.includes("flux")) {
+		return "Flux";
+	}
+	if (haystack.includes("sd3") || haystack.includes("stable-diffusion-3")) {
+		return "Sd3";
+	}
+	if (haystack.includes("xl")) {
+		return "Sdxl";
+	}
+	return "Sd15";
 }
 
 // Coarse lifecycle of an image-model weight download, mirroring the backend ImageModelDownloadPhase enum. A download

@@ -29,6 +29,9 @@ import type {
 	BrowseGgufRepositoriesData,
 	BrowseGgufRepositoriesErrors,
 	BrowseGgufRepositoriesResponses,
+	BrowseImageRepositoriesData,
+	BrowseImageRepositoriesErrors,
+	BrowseImageRepositoriesResponses,
 	CancelAllPreviewRunsData,
 	CancelAllPreviewRunsErrors,
 	CancelAllPreviewRunsResponses,
@@ -278,6 +281,9 @@ import type {
 	GetImageJobData,
 	GetImageJobErrors,
 	GetImageJobResponses,
+	GetImageModelCatalogData,
+	GetImageModelCatalogErrors,
+	GetImageModelCatalogResponses,
 	GetImageRuntimeStatusData,
 	GetImageRuntimeStatusErrors,
 	GetImageRuntimeStatusResponses,
@@ -371,6 +377,9 @@ import type {
 	InspectGgufRepositoryData,
 	InspectGgufRepositoryErrors,
 	InspectGgufRepositoryResponses,
+	InspectImageRepositoryData,
+	InspectImageRepositoryErrors,
+	InspectImageRepositoryResponses,
 	InvalidateInferenceProfileData,
 	InvalidateInferenceProfileErrors,
 	InvalidateInferenceProfileResponses,
@@ -665,6 +674,8 @@ import {
 	zBranchNodeChatConversationResponse,
 	zBrowseGgufRepositoriesQuery,
 	zBrowseGgufRepositoriesResponse,
+	zBrowseImageRepositoriesQuery,
+	zBrowseImageRepositoriesResponse,
 	zCancelAllPreviewRunsResponse,
 	zCancelCudaBuildResponse,
 	zCancelDevelopmentAttemptPath,
@@ -807,6 +818,7 @@ import {
 	zGetHfTokenStatusResponse,
 	zGetImageJobPath,
 	zGetImageJobResponse,
+	zGetImageModelCatalogResponse,
 	zGetImageRuntimeStatusResponse,
 	zGetInvocationMonitorResponse,
 	zGetKnowledgeDocumentPath,
@@ -856,6 +868,8 @@ import {
 	zImportAgentTemplatesResponse,
 	zInspectGgufRepositoryQuery,
 	zInspectGgufRepositoryResponse,
+	zInspectImageRepositoryQuery,
+	zInspectImageRepositoryResponse,
 	zInvalidateInferenceProfileBody,
 	zInvalidateInferenceProfileResponse,
 	zListAgentDefinitionsResponse,
@@ -5893,5 +5907,71 @@ export const deleteImageModel = <ThrowOnError extends boolean = false>(options: 
 			{ scheme: "bearer", type: "http" },
 		],
 		url: "/api/local/v1/images/models/{modelName}",
+		...options,
+	});
+
+export const getImageModelCatalog = <ThrowOnError extends boolean = false>(
+	options?: Options<GetImageModelCatalogData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<GetImageModelCatalogResponses, GetImageModelCatalogErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetImageModelCatalogResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/images/models/catalog",
+		...options,
+	});
+
+export const browseImageRepositories = <ThrowOnError extends boolean = false>(
+	options?: Options<BrowseImageRepositoriesData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<BrowseImageRepositoriesResponses, BrowseImageRepositoriesErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: zBrowseImageRepositoriesQuery.optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zBrowseImageRepositoriesResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/images/models/browse",
+		...options,
+	});
+
+export const inspectImageRepository = <ThrowOnError extends boolean = false>(
+	options?: Options<InspectImageRepositoryData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<InspectImageRepositoryResponses, InspectImageRepositoryErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: zInspectImageRepositoryQuery.optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zInspectImageRepositoryResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/images/models/inspect",
 		...options,
 	});

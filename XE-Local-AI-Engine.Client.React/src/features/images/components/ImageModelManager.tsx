@@ -1,30 +1,34 @@
-import { ActionIcon, Alert, Badge, Button, Card, Group, Loader, Progress, Select, Stack, Switch, Text, TextInput, Tooltip } from "@mantine/core";
-import { IconDownload, IconPlus, IconTrash, IconX } from "@tabler/icons-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { ActionIcon, Alert, Badge, Button, Card, Group, Loader, Progress, Select, Stack, Switch, Tabs, Text, TextInput, Tooltip } from "@mantine/core";
+import { IconCloudDownload, IconDownload, IconPlus, IconSparkles, IconTrash, IconX } from "@tabler/icons-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ApiError } from "@/core/api/errors/ApiError";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { toast } from "@/core/ui/notifications/Toast";
+import { type BrowseInstallRequest, ImageModelBrowsePanel } from "@/features/images/components/ImageModelBrowsePanel";
+import { ImageModelCatalogPanel } from "@/features/images/components/ImageModelCatalogPanel";
 import { useActiveImageModelDownloads } from "@/features/images/hooks/useActiveImageModelDownloads";
-import type { ImageModelDownloadView, ImageModelView } from "@/features/images/models/ImageModels";
+import {
+	type ImageModelCatalogEntryView,
+	type ImageModelDownloadView,
+	type ImageModelFamily,
+	imageModelFamilies,
+	type ImageModelPartRole,
+	imageModelPartRoles,
+	type ImageModelView,
+} from "@/features/images/models/ImageModels";
 import {
 	useCancelImageModelDownload,
 	useDeleteImageModel,
+	useImageModelCatalog,
 	useStartImageModelDownload,
 } from "@/features/images/queries/useImageQueries";
 import { useDownloadRateEstimates } from "@/features/models/hooks/useDownloadRateEstimates";
 import { formatDownloadEta, humanizeBytes } from "@/features/models/models/DownloadRateEstimate";
 
-// Diffusion families the download form offers. Must match the backend ImageModelFamily enum names (parsed
-// case-insensitively). Sd15 is single-file; every other family is a file SET and needs the advanced form below.
-const families = ["Sd15", "Sdxl", "Sd3", "Flux", "QwenImage"] as const;
-type ImageModelFamily = (typeof families)[number];
-
-// Part roles the backend ImageModelPartRole enum accepts, in the order a file-set is normally listed. Llm/LlmVision
-// are the Qwen-Image text encoder (a full Qwen2.5-VL language model) and its vision tower.
-const partRoles = ["Diffusion", "Vae", "ClipL", "ClipG", "T5", "Llm", "LlmVision"] as const;
-type ImageModelPartRole = (typeof partRoles)[number];
+const families = imageModelFamilies;
+const partRoles = imageModelPartRoles;
 
 interface PartDraft {
 	// Stable identity for the row, so removing a middle row does not remount the ones after it.
@@ -88,10 +92,17 @@ interface ImageModelManagerProps {
 }
 
 // Image-model management. Lists installed image models (with a confirmed delete to reclaim the disk a multi-gigabyte
-// file-set occupies) and offers a "download model" action (202 accepted) that starts a weight download. The download
-// itself runs on the backend coordinator, which records a terminal phase for every attempt; while any are in flight
-// this component polls their status so a FAILED download surfaces its reason instead of leaving the operator watching
-// an indeterminate bar forever (F-031), and each in-flight row can be cancelled.
+// file-set occupies) and offers three ways to add one, in increasing order of effort: a curated catalog (one click,
+// nothing typed), a Hugging Face browse → pick-files flow, and the original manual form.
+//
+// The manual form is kept rather than replaced. Discovery covers the Hub's text-to-image facet, which is most of what
+// anyone wants and none of what a brand-new or untagged repo offers — without the escape hatch, a model the Hub has
+// not classified yet becomes uninstallable.
+//
+// The download itself runs on the backend coordinator, which records a terminal phase for every attempt; while any are
+// in flight this component polls their status so a FAILED download surfaces its reason instead of leaving the operator
+// watching an indeterminate bar forever (F-031), and each in-flight row can be cancelled. Those progress rows and the
+// per-model error alerts sit ABOVE the tabs, so switching tab mid-download never hides a running transfer.
 export function ImageModelManager({ models, isLoading, onPendingDownloadChange }: ImageModelManagerProps) {
 	const { t } = useTranslation();
 	const { confirm } = useConfirm();
@@ -100,6 +111,8 @@ export function ImageModelManager({ models, isLoading, onPendingDownloadChange }
 	const [downloadErrors, setDownloadErrors] = useState<Readonly<Record<string, string>>>({});
 	const [cancellingModelName, setCancellingModelName] = useState<string | null>(null);
 	const [deletingModelName, setDeletingModelName] = useState<string | null>(null);
+	// The catalog entry whose Install button was clicked, so only that row spins while the 202 is in flight.
+	const [installingCatalogId, setInstallingCatalogId] = useState<string | null>(null);
 	// Model names whose terminal phase has already been reacted to (see the reconcile effect below).
 	const handledTerminals = useRef<Set<string>>(new Set());
 
@@ -107,6 +120,9 @@ export function ImageModelManager({ models, isLoading, onPendingDownloadChange }
 	const cancelMutation = useCancelImageModelDownload();
 	const deleteMutation = useDeleteImageModel();
 	const { statuses, inFlight, track, untrack } = useActiveImageModelDownloads();
+	// Poll the catalog while anything is transferring: its installed flag only becomes true once the download actually
+	// finishes, long after the 202 that invalidated it.
+	const catalogQuery = useImageModelCatalog(inFlight.length > 0);
 	// Client-derived speed + ETA: the status carries byte counts but no timestamps, so the rate comes from successive
 	// polls. On an 18 GB file-set this is the number that tells the operator whether to wait or walk away.
 	const rateEstimates = useDownloadRateEstimates(statuses);
@@ -120,6 +136,12 @@ export function ImageModelManager({ models, isLoading, onPendingDownloadChange }
 		draft.modelName.trim().length > 0 &&
 		(draft.isAdvanced ? hasDiffusionPart : draft.fileName.trim().length > 0);
 	const isDraftInFlight = inFlight.includes(draft.modelName.trim());
+	const installedModelNames = useMemo(() => models.map((model) => model.modelName), [models]);
+	// A catalog row is busy while its 202 is in flight AND for as long as the transfer it started is running.
+	const busyCatalogIds = useMemo(
+		() => (installingCatalogId === null ? inFlight : [...new Set([installingCatalogId, ...inFlight])]),
+		[installingCatalogId, inFlight],
+	);
 
 	// Resolve each tracked download the moment the backend reports a terminal phase. A failure raises a toast AND leaves
 	// an inline reason on the card; a success/cancel just drops the row. Without this the UI could only ever observe
@@ -155,18 +177,65 @@ export function ImageModelManager({ models, isLoading, onPendingDownloadChange }
 		onPendingDownloadChange?.(inFlight.length > 0);
 	}, [inFlight, onPendingDownloadChange]);
 
+	// The single install path every entry point funnels through — the curated catalog, the Hugging Face picker and the
+	// manual form all post the same file-set shape. Keeping one implementation is what stops the catalog's one-click
+	// install from drifting away from the tracking/error handling the manual form already got right.
+	const startDownload = useCallback(
+		(payload: {
+			modelName: string;
+			repoId: string;
+			family: ImageModelFamily;
+			parts: readonly {
+				role: ImageModelPartRole;
+				fileName: string;
+				repoId?: string;
+				sizeBytes?: number;
+				sha256?: string;
+			}[];
+		},
+		onStarted?: () => void) => {
+			const { modelName } = payload;
+			setDownloadErrors((current) => {
+				const { [modelName]: _removed, ...rest } = current;
+				return rest;
+			});
+			// A retry of the same name must be able to report its OWN terminal phase; without this the second attempt's
+			// failure would be swallowed by the first attempt's entry.
+			handledTerminals.current.delete(modelName);
+
+			downloadMutation.mutate(
+				{
+					modelName,
+					repoId: payload.repoId,
+					family: payload.family,
+					parts: payload.parts.map((part) => ({ ...part })),
+				},
+				{
+					onSuccess: () => {
+						track(modelName);
+						toast.success(t("pages.images.models.download.started", "Download started. The model will appear once ready."));
+						onStarted?.();
+					},
+					onError: (error) => {
+						const message =
+							error instanceof ApiError && error.message
+								? error.message
+								: t("pages.images.models.download.error", "Could not start the model download.");
+						toast.error(message);
+					},
+					// Clears the per-row catalog spinner on BOTH outcomes; a rejected start that left the button
+					// spinning would look like a download that never reports.
+					onSettled: () => setInstallingCatalogId(null),
+				},
+			);
+		},
+		[downloadMutation, t, track],
+	);
+
 	const handleDownload = useCallback(() => {
 		if (!canSubmit) {
 			return;
 		}
-		const modelName = draft.modelName.trim();
-		setDownloadErrors((current) => {
-			const { [modelName]: _removed, ...rest } = current;
-			return rest;
-		});
-		// A retry of the same name must be able to report its OWN terminal phase; without this the second attempt's
-		// failure would be swallowed by the first attempt's entry.
-		handledTerminals.current.delete(modelName);
 		const parts = draft.isAdvanced
 			? advancedParts.map((part) => ({
 					role: part.role,
@@ -175,38 +244,58 @@ export function ImageModelManager({ models, isLoading, onPendingDownloadChange }
 					sizeBytes: parseOptionalSize(part.sizeBytes),
 					sha256: part.sha256.trim() === "" ? undefined : part.sha256.trim(),
 				}))
-			: [{ role: "Diffusion", fileName: draft.fileName.trim() }];
+			: [{ role: "Diffusion" as ImageModelPartRole, fileName: draft.fileName.trim() }];
 
-		downloadMutation.mutate(
+		startDownload(
 			{
-				modelName,
+				modelName: draft.modelName.trim(),
 				repoId: draft.repoId.trim(),
 				family: draft.family,
 				parts,
 			},
-			{
-				onSuccess: () => {
-					track(modelName);
-					toast.success(t("pages.images.models.download.started", "Download started. The model will appear once ready."));
-					// Clear the entered values but stay in the mode and family the operator chose — a second multi-part
-					// install almost always follows the first, and silently dropping back to the simple form loses it.
-					setDraft((current) => ({
-						...emptyDraft,
-						isAdvanced: current.isAdvanced,
-						family: current.family,
-						parts: [newPart("Diffusion"), newPart("Vae")],
-					}));
-				},
-				onError: (error) => {
-					const message =
-						error instanceof ApiError && error.message
-							? error.message
-							: t("pages.images.models.download.error", "Could not start the model download.");
-					toast.error(message);
-				},
-			},
+			() =>
+				// Clear the entered values but stay in the mode and family the operator chose — a second multi-part
+				// install almost always follows the first, and silently dropping back to the simple form loses it.
+				setDraft((current) => ({
+					...emptyDraft,
+					isAdvanced: current.isAdvanced,
+					family: current.family,
+					parts: [newPart("Diffusion"), newPart("Vae")],
+				})),
 		);
-	}, [advancedParts, canSubmit, downloadMutation, draft, t, track]);
+	}, [advancedParts, canSubmit, draft, startDownload]);
+
+	// A catalog row already carries the exact file-set (including the per-part repository overrides a cross-repo set
+	// needs) and verified sizes, so installing it is a straight pass-through with nothing typed.
+	const handleCatalogInstall = useCallback(
+		(entry: ImageModelCatalogEntryView) => {
+			setInstallingCatalogId(entry.id);
+			startDownload({
+				modelName: entry.id,
+				repoId: entry.repoId,
+				family: entry.family,
+				parts: entry.parts.map((part) => ({
+					role: part.role,
+					fileName: part.fileName,
+					repoId: part.repoId ?? undefined,
+					sizeBytes: part.sizeBytes,
+				})),
+			});
+		},
+		[startDownload],
+	);
+
+	const handleBrowseInstall = useCallback(
+		(request: BrowseInstallRequest) => {
+			startDownload({
+				modelName: request.modelName,
+				repoId: request.repoId,
+				family: request.family,
+				parts: request.parts.map((part) => ({ ...part })),
+			});
+		},
+		[startDownload],
+	);
 
 	const updatePart = useCallback((id: string, patch: Partial<PartDraft>) => {
 		setDraft((current) => ({
@@ -319,9 +408,125 @@ export function ImageModelManager({ models, isLoading, onPendingDownloadChange }
 				)}
 			</Stack>
 
-			<Stack gap="xs">
-				<Text fw={600}>{t("pages.images.models.download.title", "Download a model")}</Text>
-				<TextInput
+			{inFlight.length > 0 ? (
+				<Stack gap="sm" data-testid="image-model-download-progress">
+					{inFlight.map((modelName) => (
+						<DownloadRow
+							key={modelName}
+							modelName={modelName}
+							status={statuses.get(modelName)}
+							etaSeconds={rateEstimates.get(modelName)?.etaSeconds}
+							bytesPerSecond={rateEstimates.get(modelName)?.bytesPerSecond}
+							isCancelling={cancellingModelName === modelName}
+							onCancel={handleCancel}
+						/>
+					))}
+				</Stack>
+			) : null}
+
+			{Object.entries(downloadErrors).map(([modelName, reason]) => (
+				<Alert
+					key={modelName}
+					variant="light"
+					color="red"
+					withCloseButton={true}
+					closeButtonLabel={t("pages.images.models.download.dismissError", "Dismiss")}
+					onClose={() =>
+						setDownloadErrors((current) => {
+							const { [modelName]: _removed, ...rest } = current;
+							return rest;
+						})
+					}
+					data-testid="image-model-download-error"
+				>
+					{reason}
+				</Alert>
+			))}
+
+			<Tabs defaultValue="catalog" keepMounted={false} data-testid="image-model-add-tabs">
+				<Tabs.List>
+					<Tabs.Tab value="catalog" leftSection={<IconSparkles size={14} />} data-testid="image-model-tab-catalog">
+						{t("pages.images.models.tabs.catalog", "Recommended")}
+					</Tabs.Tab>
+					<Tabs.Tab value="browse" leftSection={<IconCloudDownload size={14} />} data-testid="image-model-tab-browse">
+						{t("pages.images.models.tabs.browse", "Hugging Face")}
+					</Tabs.Tab>
+					<Tabs.Tab value="manual" leftSection={<IconPlus size={14} />} data-testid="image-model-tab-manual">
+						{t("pages.images.models.tabs.manual", "Advanced")}
+					</Tabs.Tab>
+				</Tabs.List>
+
+				<Tabs.Panel value="catalog" pt="md">
+					<ImageModelCatalogPanel
+						entries={catalogQuery.data ?? []}
+						isLoading={catalogQuery.isPending}
+						error={catalogQuery.error}
+						busyEntryIds={busyCatalogIds}
+						onInstall={handleCatalogInstall}
+					/>
+				</Tabs.Panel>
+
+				<Tabs.Panel value="browse" pt="md">
+					<ImageModelBrowsePanel
+						installedModelNames={installedModelNames}
+						isInstalling={downloadMutation.isPending}
+						onInstall={handleBrowseInstall}
+					/>
+				</Tabs.Panel>
+
+				<Tabs.Panel value="manual" pt="md">
+					<ManualDownloadForm
+						draft={draft}
+						setDraft={setDraft}
+						advancedParts={advancedParts}
+						hasDiffusionPart={hasDiffusionPart}
+						canSubmit={canSubmit}
+						isDraftInFlight={isDraftInFlight}
+						isSubmitting={downloadMutation.isPending}
+						onSubmit={handleDownload}
+						onUpdatePart={updatePart}
+						onAddPart={addPart}
+						onRemovePart={removePart}
+					/>
+				</Tabs.Panel>
+			</Tabs>
+		</Stack>
+	);
+}
+
+interface ManualDownloadFormProps {
+	draft: DownloadDraft;
+	setDraft: React.Dispatch<React.SetStateAction<DownloadDraft>>;
+	advancedParts: readonly PartDraft[];
+	hasDiffusionPart: boolean;
+	canSubmit: boolean;
+	isDraftInFlight: boolean;
+	isSubmitting: boolean;
+	onSubmit: () => void;
+	onUpdatePart: (id: string, patch: Partial<PartDraft>) => void;
+	onAddPart: () => void;
+	onRemovePart: (id: string) => void;
+}
+
+// The manual escape hatch, unchanged in behaviour. It stays because discovery cannot cover everything: a brand-new
+// repo the Hub has not tagged text-to-image yet, or a private mirror, is still installable by typing it in.
+function ManualDownloadForm({
+	draft,
+	setDraft,
+	hasDiffusionPart,
+	canSubmit,
+	isDraftInFlight,
+	isSubmitting,
+	onSubmit,
+	onUpdatePart,
+	onAddPart,
+	onRemovePart,
+}: ManualDownloadFormProps) {
+	const { t } = useTranslation();
+
+	return (
+		<Stack gap="xs">
+			<TextInput
 					label={t("pages.images.models.download.repoId.label", "Hugging Face repo")}
 					placeholder="Qwen/Qwen-Image-GGUF"
 					value={draft.repoId}
@@ -382,8 +587,8 @@ export function ImageModelManager({ models, isLoading, onPendingDownloadChange }
 								part={part}
 								index={index}
 								canRemove={draft.parts.length > 1}
-								onChange={updatePart}
-								onRemove={removePart}
+								onChange={onUpdatePart}
+								onRemove={onRemovePart}
 							/>
 						))}
 						<Group justify="space-between">
@@ -391,7 +596,7 @@ export function ImageModelManager({ models, isLoading, onPendingDownloadChange }
 								size="xs"
 								variant="light"
 								leftSection={<IconPlus size={14} />}
-								onClick={addPart}
+								onClick={onAddPart}
 								data-testid="image-model-download-add-part"
 							>
 								{t("pages.images.models.download.advanced.addPart", "Add file")}
@@ -417,51 +622,17 @@ export function ImageModelManager({ models, isLoading, onPendingDownloadChange }
 						)}
 					</Alert>
 				)}
-				{Object.entries(downloadErrors).map(([modelName, reason]) => (
-					<Alert
-						key={modelName}
-						variant="light"
-						color="red"
-						withCloseButton={true}
-						closeButtonLabel={t("pages.images.models.download.dismissError", "Dismiss")}
-						onClose={() =>
-							setDownloadErrors((current) => {
-								const { [modelName]: _removed, ...rest } = current;
-								return rest;
-							})
-						}
-						data-testid="image-model-download-error"
-					>
-						{reason}
-					</Alert>
-				))}
-				{inFlight.length > 0 ? (
-					<Stack gap="sm" data-testid="image-model-download-progress">
-						{inFlight.map((modelName) => (
-							<DownloadRow
-								key={modelName}
-								modelName={modelName}
-								status={statuses.get(modelName)}
-								etaSeconds={rateEstimates.get(modelName)?.etaSeconds}
-								bytesPerSecond={rateEstimates.get(modelName)?.bytesPerSecond}
-								isCancelling={cancellingModelName === modelName}
-								onCancel={handleCancel}
-							/>
-						))}
-					</Stack>
-				) : null}
 				<Group justify="flex-end">
 					<Button
 						leftSection={<IconDownload size={16} />}
-						loading={downloadMutation.isPending}
+						loading={isSubmitting}
 						disabled={!canSubmit || isDraftInFlight}
-						onClick={handleDownload}
+						onClick={onSubmit}
 						data-testid="image-model-download-submit"
 					>
 						{t("pages.images.models.download.submit", "Download")}
 					</Button>
 				</Group>
-			</Stack>
 		</Stack>
 	);
 }

@@ -54,13 +54,32 @@ internal sealed class HfHubClient
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        var url = BuildListUrl(query);
-        return _searchCache.GetOrAddAsync(url, _options.HubMetadataCacheTtl, token => FetchGgufModelsAsync(url, token), ct);
+        return ListModelsAsync(new HubListQuery
+            {
+                Filter = "gguf",
+                Sort = MapSort(query.Sort),
+                Limit = query.Limit,
+                SearchText = query.SearchText
+            },
+            ct);
     }
 
-    private async Task<IReadOnlyList<HubModelSummary>> FetchGgufModelsAsync(string url, CancellationToken ct)
+    /// <summary>
+    ///     Lists repos for an arbitrary Hub facet (<see cref="HubListQuery.Filter" /> tag and/or
+    ///     <see cref="HubListQuery.PipelineTag" />) using the same listing shape, cache and parsing as the GGUF search.
+    ///     Image-model discovery rides this with <c>pipeline_tag=text-to-image</c>; the GGUF lane keeps <c>filter=gguf</c>.
+    /// </summary>
+    public Task<IReadOnlyList<HubModelSummary>> ListModelsAsync(HubListQuery query, CancellationToken ct)
     {
-        using var document = await GetJsonAsync(url, "GGUF listing", ct).ConfigureAwait(false);
+        ArgumentNullException.ThrowIfNull(query);
+
+        var url = BuildListUrl(query);
+        return _searchCache.GetOrAddAsync(url, _options.HubMetadataCacheTtl, token => FetchModelsAsync(url, token), ct);
+    }
+
+    private async Task<IReadOnlyList<HubModelSummary>> FetchModelsAsync(string url, CancellationToken ct)
+    {
+        using var document = await GetJsonAsync(url, "model listing", ct).ConfigureAwait(false);
         if (document is null)
         {
             return [];
@@ -69,7 +88,7 @@ internal sealed class HfHubClient
         var root = document.RootElement;
         if (root.ValueKind != JsonValueKind.Array)
         {
-            _logger.LogWarning("Hugging Face Hub GGUF listing was not a JSON array.");
+            _logger.LogWarning("Hugging Face Hub model listing was not a JSON array.");
             return [];
         }
 
@@ -191,9 +210,10 @@ internal sealed class HfHubClient
         }
     }
 
-    private string BuildListUrl(GgufSearchQuery query)
+    /// <summary>Maps the GGUF sort enum onto the Hub's <c>sort</c> query token.</summary>
+    private static string MapSort(GgufSearchSort sort)
     {
-        var sort = query.Sort switch
+        return sort switch
         {
             GgufSearchSort.Likes => "likes",
             GgufSearchSort.LastModified => "lastModified",
@@ -202,14 +222,35 @@ internal sealed class HfHubClient
             // downloads is age-biased and surfaces years-old repos; trendingScore reflects current download/like velocity.
             _ => "trendingScore"
         };
+    }
 
+    private string BuildListUrl(HubListQuery query)
+    {
         var limit = Math.Clamp(query.Limit, min: 1, max: 100);
         var builder = new StringBuilder();
         builder.Append(TrimBase(_options.HubBaseUrl));
-        // filter=gguf (tag-based) NOT library=gguf — community repos (bartowski/unsloth) report library_name "None"
-        // and would be under-matched by library=. direction=-1 makes the popularity sort explicitly descending.
-        builder.Append("/api/models?filter=gguf&full=true&direction=-1&sort=");
-        builder.Append(sort);
+        builder.Append("/api/models?");
+        // filter=<tag> (tag-based) NOT library=<tag> — community repos (bartowski/unsloth) report library_name "None"
+        // and would be under-matched by library=. pipeline_tag narrows by TASK (text-to-image) and is what makes image
+        // discovery return diffusion repos instead of every GGUF on the Hub. Emitted before the shared parameters so
+        // the GGUF listing URL keeps the exact shape its pin test froze.
+        if (!string.IsNullOrWhiteSpace(query.Filter))
+        {
+            builder.Append("filter=");
+            builder.Append(Uri.EscapeDataString(query.Filter));
+            builder.Append('&');
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.PipelineTag))
+        {
+            builder.Append("pipeline_tag=");
+            builder.Append(Uri.EscapeDataString(query.PipelineTag));
+            builder.Append('&');
+        }
+
+        // direction=-1 makes the popularity sort explicitly descending.
+        builder.Append("full=true&direction=-1&sort=");
+        builder.Append(query.Sort);
         builder.Append("&limit=");
         builder.Append(limit.ToString(CultureInfo.InvariantCulture));
         if (!string.IsNullOrWhiteSpace(query.SearchText))
@@ -304,6 +345,24 @@ internal sealed class HfHubClient
     private static string TrimBase(string baseUrl)
     {
         return baseUrl.TrimEnd('/');
+    }
+
+    /// <summary>
+    ///     One Hub listing request. <see cref="Filter" /> is a <b>tag</b> facet (<c>gguf</c>) and
+    ///     <see cref="PipelineTag" /> a <b>task</b> facet (<c>text-to-image</c>); either, both or neither may be set.
+    ///     <see cref="Sort" /> is the raw Hub token (<c>trendingScore|downloads|likes|lastModified</c>).
+    /// </summary>
+    internal sealed record HubListQuery
+    {
+        public string? Filter { get; init; }
+
+        public string? PipelineTag { get; init; }
+
+        public required string Sort { get; init; }
+
+        public int Limit { get; init; } = 30;
+
+        public string? SearchText { get; init; }
     }
 
     /// <summary>A repo as it appears in the Hub GGUF listing (filenames only, no per-file size).</summary>

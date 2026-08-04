@@ -225,6 +225,34 @@ public sealed class ImageModelManagementEndpointTests
         AssertEx.Null(coordinator.LastRequest?.Parts[0].SizeBytes);
     }
 
+    [Test]
+    public async Task StartDownload_WithTwoPartsClaimingTheSameRole_Returns400AndNeverStarts()
+    {
+        // The launch argument builder emits ONE flag per role and iterates the whole set, so a second VAE would pass
+        // --vae twice and a second diffusion file would be downloaded and then never referenced. Easy to produce from
+        // the repo file picker with two clicks, so it is rejected before a multi-gigabyte transfer starts rather than
+        // surfacing later as a model the runtime cannot launch.
+        var coordinator = new RecordingImageModelDownloadCoordinator();
+        await using var factory = FactoryWith(coordinator);
+        using var client = factory.CreateClient();
+
+        using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/images/models/downloads", new
+        {
+            modelName = "flux-broken",
+            repoId = "second-state/FLUX.1-schnell-GGUF",
+            family = "Flux",
+            parts = new object[]
+            {
+                new { role = "Diffusion", fileName = "flux1-schnell-Q4_0.gguf", sizeBytes = 6_688_845_536L },
+                new { role = "Diffusion", fileName = "flux1-schnell-Q8_0.gguf", sizeBytes = 12_634_000_000L }
+            }
+        });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        AssertEx.Null(coordinator.LastRequest, "A duplicate role must be rejected at the boundary, before any transfer.");
+    }
+
     private static TestingWebAppFactory FactoryWith(IImageModelDownloadCoordinator coordinator)
     {
         return new TestingWebAppFactory

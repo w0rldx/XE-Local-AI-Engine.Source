@@ -3199,6 +3199,83 @@
 					"T5": "T5-XXL text encoder",
 					"Llm": "LLM text encoder",
 					"LlmVision": "LLM vision tower"
+				},
+				"tabs": {
+					"catalog": "Recommended",
+					"browse": "Hugging Face",
+					"manual": "Advanced"
+				},
+				"catalog": {
+					"title": "Recommended image models",
+					"description": "Verified model sets you can install with one click. Sizes and hardware fit are for this machine.",
+					"empty": "No catalog entries are available in this build.",
+					"error": "Could not load the model catalog.",
+					"recommended": "Recommended",
+					"installed": "Installed",
+					"install": "Install",
+					"parts_one": "{{count}} file",
+					"parts_other": "{{count}} files",
+					"multiRepo": "Spans {{count}} repositories",
+					"diskWarning": "Not enough free disk space for this download.",
+					"fit": {
+						"Fits": "Fits",
+						"Tight": "Tight fit",
+						"WontFit": "Too large",
+						"Unknown": "Fit unknown",
+						"FitsHint": "The weights that must stay resident ({{resident}}) fit inside the measured budget ({{budget}}).",
+						"TightHint": "The resident weights ({{resident}}) only just fit inside the measured budget ({{budget}}). Expect it to be slow.",
+						"WontFitHint": "The resident weights ({{resident}}) exceed the measured budget ({{budget}}).",
+						"UnknownHint": "This machine's memory budget could not be measured, so no claim is made about whether this model runs."
+					}
+				},
+				"browse": {
+					"title": "Browse Hugging Face",
+					"description": "Search text-to-image repositories, then pick the weight files that make up the model.",
+					"searchLabel": "Search repositories",
+					"searchPlaceholder": "e.g. flux schnell",
+					"search": "Search",
+					"searching": "Searching…",
+					"empty": "No image repositories matched that search.",
+					"error": "Could not search repositories.",
+					"gated": "Gated",
+					"gatedHint": "This repository requires an accepted licence and a Hugging Face token — a one-click install will fail with 401 until you add one.",
+					"untrustedPublisher": "Unverified publisher",
+					"untrustedPublisherHint": "This publisher is not a known packager — review the repository before downloading.",
+					"noWeights": "No weights",
+					"select": "Open",
+					"back": "Back to results",
+					"columns": {
+						"repo": "Repository",
+						"downloads": "Downloads",
+						"likes": "Likes",
+						"updated": "Updated",
+						"license": "License",
+						"action": "Action"
+					},
+					"files": {
+						"title": "Weight files in {{repoId}}",
+						"loading": "Loading files…",
+						"empty": "This repository exposes no installable weight files.",
+						"error": "Could not read this repository's files.",
+						"hint": "Tick each file the model needs and check its role. Sharded files (…-00001-of-00003) are not listed: a part is a single file.",
+						"columns": {
+							"select": "Use",
+							"file": "File",
+							"role": "Role",
+							"size": "Size"
+						}
+					},
+					"modelName": {
+						"label": "Install as",
+						"placeholder": "flux.1-schnell"
+					},
+					"family": {
+						"label": "Family"
+					},
+					"nameTaken": "A model with that name is already installed.",
+					"diffusionRequired": "Select one diffusion file before installing.",
+					"duplicateRole": "Each role can only be filled by one file.",
+					"install": "Install selected files"
 				}
 			},
 			"viewer": {

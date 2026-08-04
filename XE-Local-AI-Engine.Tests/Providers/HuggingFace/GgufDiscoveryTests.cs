@@ -92,6 +92,39 @@ public sealed class GgufDiscoveryTests
     }
 
     [Test]
+    public async Task GgufDiscovery_ListUrl_IsPinnedToTheExactHubQueryShape()
+    {
+        // A PIN, not a spot-check. The other URL assertions here are `Contains`, so they stay green no matter what
+        // else the query string gains, loses or reorders — including the load-bearing `filter=gguf` becoming
+        // `library=gguf` (community repos such as bartowski/unsloth report library_name "None" and would silently
+        // vanish from search). This test freezes the whole string so any change to the listing query has to be
+        // deliberate.
+        using var harness = BuildHarness("[]");
+
+        await harness.Discovery.SearchAsync(new GgufSearchQuery(), CancellationToken.None);
+
+        AssertEx.Equal("https://huggingface.co/api/models?filter=gguf&full=true&direction=-1&sort=trendingScore&limit=30",
+            harness.Handler.LastListUrl);
+    }
+
+    [Test]
+    public async Task GgufDiscovery_ListUrl_AppendsTheEscapedSearchTerm_Last()
+    {
+        using var harness = BuildHarness("[]");
+
+        await harness.Discovery.SearchAsync(new GgufSearchQuery
+            {
+                SearchText = "llama 3.1/8b",
+                Limit = 7,
+                Sort = GgufSearchSort.Downloads
+            },
+            CancellationToken.None);
+
+        AssertEx.Equal("https://huggingface.co/api/models?filter=gguf&full=true&direction=-1&sort=downloads&limit=7&search=llama%203.1%2F8b",
+            harness.Handler.LastListUrl);
+    }
+
+    [Test]
     public async Task GgufDiscovery_TrendingSort_RequestsTrendingScore_AndTagsPublisherTrust()
     {
         var listing = """
@@ -428,7 +461,9 @@ public sealed class GgufDiscoveryTests
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            var url = request.RequestUri!.ToString();
+            // OriginalString, not ToString(): Uri.ToString() UNESCAPES a %20 back to a literal space, which would make
+            // a URL-shape pin unable to tell "we escaped the search term" from "we did not".
+            var url = request.RequestUri!.OriginalString;
 
             if (url.Contains("/resolve/", StringComparison.Ordinal))
             {

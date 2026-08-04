@@ -1,10 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
+	browseImageRepositoriesOptions,
 	cancelImageJobMutation,
 	cancelImageModelDownloadMutation,
 	createImageJobMutation,
 	deleteImageModelMutation,
+	getImageModelCatalogOptions,
+	inspectImageRepositoryOptions,
 	listImageJobsOptions,
 	listImageModelDownloadsOptions,
 	listImageModelsOptions,
@@ -15,7 +18,14 @@ import type {
 	XeLocalAiEngineClientEndpointsImagesV1StartImageModelDownloadRequest as StartImageModelDownloadRequest,
 } from "@/core/api/generated";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
-import { toImageJobView, toImageModelDownloadView, toImageModelView } from "@/features/images/models/ImageModels";
+import {
+	toImageJobView,
+	toImageModelCatalogEntryView,
+	toImageModelDownloadView,
+	toImageModelView,
+	toImageRepositoryFileView,
+	toImageRepositoryView,
+} from "@/features/images/models/ImageModels";
 
 // Server-state for the image feature. Reads use the generated hey-api `*Options()` (shared axios + TanStack
 // AbortSignal wired automatically) with a `select` mapping the optional-field generated response into the strict
@@ -30,6 +40,7 @@ const imageQueryIds = {
 	jobs: "listImageJobs",
 	models: "listImageModels",
 	downloads: "listImageModelDownloads",
+	catalog: "getImageModelCatalog",
 } as const;
 
 /** Builds the partial generated-query-key filter that matches every cached variant of one image endpoint. */
@@ -66,6 +77,52 @@ export function useImageModels(pollWhilePending = false) {
 		select: (data) => (data.items ?? []).map(toImageModelView),
 		staleTime: 30_000,
 		refetchInterval: pollWhilePending ? 5_000 : false,
+	});
+}
+
+// The curated image-model catalog: the one-click install list, annotated by the backend with this box's hardware fit
+// and an installed flag. Both annotations are derived server-side from the registry and the hardware probe.
+//
+// `pollWhilePending` exists because the start mutation's invalidation fires on the 202 — at which point the model is
+// emphatically NOT installed yet. Without a poll the row an operator just clicked keeps offering Install for the whole
+// transfer and until the next manual refresh, which invites a second download of weights already landing on disk.
+export function useImageModelCatalog(pollWhilePending = false) {
+	return useQuery({
+		...withResponseValidation(getImageModelCatalogOptions()),
+		select: (data) => (data.items ?? []).map(toImageModelCatalogEntryView),
+		staleTime: 30_000,
+		refetchInterval: pollWhilePending ? 5_000 : false,
+	});
+}
+
+// Hugging Face image-repository search. Disabled until the user commits a search term: the trending list is not what
+// somebody who opened this panel is looking for, and an unprompted fetch on mount costs a Hub round trip per page view.
+export function useBrowseImageRepositories(query: string) {
+	return useQuery({
+		...withResponseValidation(browseImageRepositoriesOptions({
+			query: { query, limit: 20 },
+		})),
+		select: (data) => (data.items ?? []).map(toImageRepositoryView),
+		enabled: query.trim().length > 0,
+		staleTime: 60_000,
+	});
+}
+
+// One repository's selectable weight files. Enabled only once a repo is chosen, because inspection is a second Hub
+// round trip per repo and the browse table lists twenty of them.
+export function useInspectImageRepository(repoId: string | null) {
+	return useQuery({
+		...withResponseValidation(inspectImageRepositoryOptions({
+			query: { repoId: repoId ?? "" },
+		})),
+		select: (data) => ({
+			repoId: data.repoId,
+			isGated: data.isGated,
+			license: data.license ?? null,
+			files: (data.files ?? []).map(toImageRepositoryFileView),
+		}),
+		enabled: repoId !== null && repoId.trim().length > 0,
+		staleTime: 60_000,
 	});
 }
 
@@ -120,6 +177,8 @@ export function useStartImageModelDownload() {
 		onSuccess: async () => {
 			await invalidate(queryClient, imageQueryIds.models);
 			await invalidate(queryClient, imageQueryIds.downloads);
+			// The catalog carries a server-derived "installed" flag, so it goes stale the moment a download is accepted.
+			await invalidate(queryClient, imageQueryIds.catalog);
 		},
 	});
 }
@@ -149,6 +208,10 @@ export function useDeleteImageModel() {
 			const options = withResponseValidation(deleteImageModelMutation());
 			return await options.mutationFn?.({ path: { modelName } }, undefined as never);
 		},
-		onSuccess: () => invalidate(queryClient, imageQueryIds.models),
+		onSuccess: async () => {
+			await invalidate(queryClient, imageQueryIds.models);
+			// Deleting frees the catalog row to offer Install again.
+			await invalidate(queryClient, imageQueryIds.catalog);
+		},
 	});
 }

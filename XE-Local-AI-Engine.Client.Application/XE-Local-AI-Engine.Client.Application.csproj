@@ -49,6 +49,10 @@
          Face API before being added. Loaded by manifest-resource-name suffix; the provider optionally replaces this
          in-memory with a remote refresh, but the app always has a working catalog with zero configuration. -->
     <EmbeddedResource Include="Services\ModelFit\Catalog\model-catalog.seed.json"/>
+    <!-- Bundled image-model catalog (schema v1). Every repo id, file name and per-file byte size was verified against
+         the live Hugging Face API before being added: a one-click install that 404s, or one whose declared size is
+         wrong, is worse than an absent row (the size drives the free-disk pre-flight AND the aggregate progress). -->
+    <EmbeddedResource Include="Services\Images\Catalog\image-model-catalog.seed.json"/>
   </ItemGroup>
 
   <ItemGroup>

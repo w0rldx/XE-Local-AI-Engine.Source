@@ -310,3 +310,171 @@ public sealed class DeleteImageModelRequest
     /// <summary>The installed model to remove, from the route.</summary>
     public required string ModelName { get; init; }
 }
+
+// ---------------------------------------------------------------------------
+// Model-discovery DTOs (curated catalog + Hugging Face browse/inspect)
+// ---------------------------------------------------------------------------
+
+/// <summary>One weight file of a catalog entry's file-set, in the exact shape the download endpoint accepts.</summary>
+public sealed class ImageModelCatalogPartResponse
+{
+    /// <summary>String name of the <c>ImageModelPartRole</c> enum.</summary>
+    public required string Role { get; init; }
+
+    /// <summary>Repo-relative weight file name.</summary>
+    public required string FileName { get; init; }
+
+    /// <summary>Repository this part is pulled from when it differs from the entry's; <c>null</c> uses the entry's repo.</summary>
+    public string? RepoId { get; init; }
+
+    /// <summary>Exact size in bytes (verified against the Hub); drives the disk pre-flight and the set percentage.</summary>
+    public required long SizeBytes { get; init; }
+}
+
+/// <summary>
+///     One curated image model the operator can install with a single click, annotated for THIS box: whether it is
+///     already installed and how its weights compare to the measured memory budget.
+/// </summary>
+public sealed class ImageModelCatalogEntryResponse
+{
+    /// <summary>Stable catalog id; also the model name the install is registered under.</summary>
+    public required string Id { get; init; }
+
+    public required string DisplayName { get; init; }
+
+    public required string Publisher { get; init; }
+
+    /// <summary>The set's primary Hugging Face repository.</summary>
+    public required string RepoId { get; init; }
+
+    /// <summary>String name of the <c>ImageModelFamily</c> enum.</summary>
+    public required string Family { get; init; }
+
+    public required string License { get; init; }
+
+    /// <summary>Editorial "start here" flag — an entry the catalog recommends as a first install.</summary>
+    public required bool Recommended { get; init; }
+
+    /// <summary>Short editorial note (why this entry, what it costs). May be <c>null</c>.</summary>
+    public string? Notes { get; init; }
+
+    /// <summary>The whole file-set, ready to post to <c>images/models/downloads</c> unchanged.</summary>
+    public required IReadOnlyList<ImageModelCatalogPartResponse> Parts { get; init; }
+
+    /// <summary>Sum of every part's size — what the download will actually transfer.</summary>
+    public required long TotalSizeBytes { get; init; }
+
+    /// <summary><c>true</c> when a model with this id is already present in the installed registry.</summary>
+    public required bool IsInstalled { get; init; }
+
+    /// <summary>
+    ///     Hardware verdict for this box: <c>Fits</c> / <c>Tight</c> / <c>WontFit</c> / <c>Unknown</c>. <c>Unknown</c>
+    ///     is a real answer, not a soft yes — VRAM is unmeasured on every non-NVIDIA GPU, and claiming a fit there
+    ///     would be a guess.
+    /// </summary>
+    public required string FitVerdict { get; init; }
+
+    /// <summary>
+    ///     Bytes that must be memory-resident under the verdict's mode. On a GPU this is the diffusion weights only —
+    ///     the runtime pins the text encoder and VAE to the CPU — and in CPU mode it is the whole set.
+    /// </summary>
+    public required long ResidentBytes { get; init; }
+
+    /// <summary>The budget the verdict was scored against (free VRAM on GPU, available RAM on CPU); 0 when unknown.</summary>
+    public required long FitBudgetBytes { get; init; }
+
+    /// <summary><c>false</c> when the measured free disk is smaller than the download.</summary>
+    public required bool FitsOnDisk { get; init; }
+}
+
+/// <summary>Response envelope for <c>GET images/models/catalog</c>.</summary>
+public sealed class GetImageModelCatalogResponse
+{
+    /// <summary>The catalog document's version, so a support conversation can identify which list a user saw.</summary>
+    public required string CatalogVersion { get; init; }
+
+    public required IReadOnlyList<ImageModelCatalogEntryResponse> Items { get; init; }
+}
+
+/// <summary>
+///     Query-string request for <c>GET images/models/browse</c>. <see cref="Query" /> is a free-text repo search term
+///     (null returns the trending text-to-image repos); <see cref="Sort" /> is one of
+///     <c>trending|downloads|likes|lastModified</c>; <see cref="GgufOnly" /> additionally requires the <c>gguf</c> tag.
+/// </summary>
+public sealed class BrowseImageRepositoriesRequest
+{
+    public string? Query { get; init; }
+
+    public int? Limit { get; init; }
+
+    public string? Sort { get; init; }
+
+    /// <summary>Restrict to repos also tagged <c>gguf</c>. Off by default — VAEs ship as untagged <c>.safetensors</c>.</summary>
+    public bool? GgufOnly { get; init; }
+}
+
+/// <summary>Sanitized summary of one discovered image-model repo (no token, no internal URL).</summary>
+public sealed class ImageRepositoryResponse
+{
+    public required string RepoId { get; init; }
+
+    /// <summary>Access is gated — a download needs an accepted licence and a token, so a one-click install would 401.</summary>
+    public required bool IsGated { get; init; }
+
+    public required long Downloads { get; init; }
+
+    public required int Likes { get; init; }
+
+    /// <summary>Unix-ms instant the repo was last modified.</summary>
+    public required long LastModifiedAtUtc { get; init; }
+
+    public string? License { get; init; }
+
+    /// <summary>Whether the repo ships at least one installable weight file.</summary>
+    public required bool HasUsableWeights { get; init; }
+
+    /// <summary>Soft publisher-trust signal — never an exclusion gate; the UI badges an unverified publisher.</summary>
+    public required bool IsTrustedPublisher { get; init; }
+}
+
+/// <summary>Response envelope for <c>GET images/models/browse</c>.</summary>
+public sealed class BrowseImageRepositoriesResponse
+{
+    public required IReadOnlyList<ImageRepositoryResponse> Items { get; init; }
+}
+
+/// <summary>Query-string request for <c>GET images/models/inspect</c>: the <c>owner/repo</c> to list weight files for.</summary>
+public sealed class InspectImageRepositoryRequest
+{
+    public string? RepoId { get; init; }
+}
+
+/// <summary>One selectable weight file from an inspected repo.</summary>
+public sealed class ImageRepositoryFileResponse
+{
+    /// <summary>Repo-relative file name (may include a directory, e.g. <c>split_files/vae/...</c>).</summary>
+    public required string FileName { get; init; }
+
+    /// <summary>String name of the <c>ImageWeightFormat</c> enum (<c>Gguf</c>/<c>Safetensors</c>).</summary>
+    public required string Format { get; init; }
+
+    public required long SizeBytes { get; init; }
+
+    /// <summary>
+    ///     The part role this file's name suggests (<c>Diffusion</c>/<c>Vae</c>/<c>ClipL</c>/<c>ClipG</c>/<c>T5</c>/
+    ///     <c>Llm</c>/<c>LlmVision</c>). A pre-selection for the picker, not a fact — the operator can change it.
+    /// </summary>
+    public required string SuggestedRole { get; init; }
+}
+
+/// <summary>Response envelope for <c>GET images/models/inspect</c>.</summary>
+public sealed class InspectImageRepositoryResponse
+{
+    public required string RepoId { get; init; }
+
+    public required bool IsGated { get; init; }
+
+    public string? License { get; init; }
+
+    public required IReadOnlyList<ImageRepositoryFileResponse> Files { get; init; }
+}
