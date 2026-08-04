@@ -26,6 +26,10 @@
 #     --latest when HEAD is tagged, else --unreleased --tag.
 #   - vpk sets the GH release body only when it CREATES the release; a re-upload to an
 #     existing release leaves the body stale. `gh release edit` forces the notes.
+#   - `vpk upload --merge` REWRITES releases.win.json and RELEASES on its way out, so neither can
+#     ever byte-match the pack-time manifest. Only the three content packages are hash-compared;
+#     the indexes are checked semantically (Assert-VelopackChannelIndex). Verified the
+#     hard way on 0.1.0-rc.5.0, where a sound draft was blocked by exactly that mismatch.
 #   - `dotnet test` exits 0 when ZERO test projects enrol (a misnamed project, or a lost
 #     IsTestingPlatformApplication / TestingPlatformDotnetTestSupport property). The only signal is
 #     the absence of an MTP "Passed!"/"Failed!" summary, so the test output is grepped for it.
@@ -242,6 +246,19 @@ function Get-ExpectedVelopackAsset {
     return @($resolved)
 }
 
+# The two channel indexes are REWRITTEN between pack and upload: `vpk pack` writes them, then
+# `vpk upload github --merge` merges the local feed with the channel's remote feed and re-serializes before
+# attaching. Byte-comparing what comes back against the pack-time manifest therefore fails by construction —
+# and did, on 0.1.0-rc.5.0: all three content packages matched, releases.win.json did not (expected
+# 1756888A…, got 1BD2ED67…), leaving a fully verified draft unpublishable.
+#
+# They are verified by Assert-VelopackChannelIndex instead, which is strictly stronger than the byte
+# comparison ever was. Matching bytes only proved the feed was the one this run packed; it said nothing about
+# what the feed POINTS AT. The semantic check proves the feed a tester's updater will read describes exactly
+# the packages whose bytes this run verified — so a feed naming some other payload is caught, which a byte
+# comparison against a stale local copy would have waved through.
+$script:UploadRewrittenVelopackAssets = @('releases.win.json', 'RELEASES')
+
 function Assert-VelopackAssetHash {
     param(
         [Parameter(Mandatory)][object[]]$Files,
@@ -250,7 +267,13 @@ function Assert-VelopackAssetHash {
 
     $actualFiles = @(Get-ExpectedVelopackAsset -Assets $Files)
     $expected = @(Get-ExpectedVelopackAsset -Assets $ExpectedAssets)
+    $verified = 0
     foreach ($file in $actualFiles) {
+        # Skip only the indexes the upload step rewrites. The content packages — Portable.zip, full.nupkg and
+        # delta.nupkg, i.e. every byte a tester actually installs — are still compared against the pack manifest.
+        if ($script:UploadRewrittenVelopackAssets -ccontains ([string]$file.Name)) {
+            continue
+        }
         $expectedAsset = $expected | Where-Object Name -CEQ $file.Name | Select-Object -First 1
         $expectedHash = [string]$expectedAsset.Sha256
         if ($expectedHash -notmatch '^[0-9A-Fa-f]{64}$') {
@@ -260,7 +283,114 @@ function Assert-VelopackAssetHash {
         if ($actualHash -ne $expectedHash) {
             throw "Velopack asset '$($file.Name)' SHA-256 mismatch (expected $expectedHash, got $actualHash)."
         }
+        $verified++
     }
+
+    # Guard the guard, with a CONSTANT rather than a count derived from the skip list: deriving it would rise in
+    # step with the list, so adding a content package to the skip list would keep the two equal and verify nothing.
+    # Get-ExpectedVelopackAsset admits exactly five assets, two of which are the rewritten indexes, so three
+    # content packages must be hashed on every release — no more, no fewer.
+    $contentPackageCount = 3
+    if ($verified -ne $contentPackageCount) {
+        throw "Byte-verified $verified Velopack content package(s), expected $contentPackageCount. The upload-rewritten skip list must never cover a content package."
+    }
+    Write-Host ">> Byte-verified $verified Velopack content package(s) against the pack manifest."
+}
+
+# Prove the channel indexes describe the packages actually attached to this release. Runs against the DOWNLOADED
+# assets, so it validates what a tester's updater will really fetch — not a local copy of what we meant to send.
+function Assert-VelopackChannelIndex {
+    # SHA-1 is not a security choice here. Velopack's legacy RELEASES index states a SHA-1 per package, and the
+    # check below recomputes exactly that stated value to hold the index against the file it names — any other
+    # algorithm would compare nothing at all. This release's real integrity guarantee is the SHA-256 comparison
+    # in Assert-VelopackAssetHash plus the SHA-256 fields of releases.win.json, both verified alongside it.
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingBrokenHashAlgorithms', '',
+        Justification = 'Recomputes the SHA-1 that Velopack''s RELEASES index itself states, to verify that index.')]
+    param(
+        [Parameter(Mandatory)][object[]]$Files,
+        [Parameter(Mandatory)][string]$ExpectedVersion
+    )
+
+    $byName = @{}
+    foreach ($file in $Files) {
+        $byName[[string]$file.Name] = $file
+    }
+
+    # --- releases.win.json: the feed the Velopack client reads ---------------------------
+    $feedFile = $byName['releases.win.json']
+    if ($null -eq $feedFile) {
+        throw "Velopack feed 'releases.win.json' is missing from the downloaded asset set."
+    }
+    $feed = Get-Content $feedFile.FullName -Raw | ConvertFrom-Json
+    $feedEntries = @($feed.Assets | Where-Object { $_ })
+    if ($feedEntries.Count -eq 0) {
+        throw "Velopack feed 'releases.win.json' lists no assets — a tester's updater would find nothing to install."
+    }
+
+    $describedPackages = [System.Collections.Generic.List[string]]::new()
+    foreach ($entry in $feedEntries) {
+        $entryVersion = [string]$entry.Version
+        if ($entryVersion -cne $ExpectedVersion) {
+            throw "Velopack feed lists version '$entryVersion', but this release is '$ExpectedVersion'."
+        }
+        $entryFileName = [string]$entry.FileName
+        $package = $byName[$entryFileName]
+        if ($null -eq $package) {
+            throw "Velopack feed references '$entryFileName', which is not attached to this release."
+        }
+        $packageHash = (Get-FileHash $package.FullName -Algorithm SHA256).Hash
+        if ([string]$entry.SHA256 -ne $packageHash) {
+            throw "Velopack feed claims SHA-256 $($entry.SHA256) for '$entryFileName', but the attached file hashes to $packageHash."
+        }
+        if ([long]$entry.Size -ne [long]$package.Length) {
+            throw "Velopack feed claims size $($entry.Size) for '$entryFileName', but the attached file is $($package.Length) bytes."
+        }
+        $describedPackages.Add($entryFileName)
+    }
+
+    # The reverse direction matters just as much: a feed that simply omits the delta would pass every check above
+    # while leaving an update path broken.
+    foreach ($packageName in @($byName.Keys | Where-Object { $_ -like '*.nupkg' })) {
+        if ($describedPackages -cnotcontains $packageName) {
+            throw "Velopack feed does not describe '$packageName', so an updater would never fetch it."
+        }
+    }
+    Write-Host ">> Velopack feed verified: $($feedEntries.Count) entries for $ExpectedVersion, each matching an attached package by SHA-256 and size."
+
+    # --- RELEASES: the legacy index, one '<SHA1> <filename> <size>' line per package ------
+    $legacyFile = $byName['RELEASES']
+    if ($null -eq $legacyFile) {
+        throw "Velopack legacy index 'RELEASES' is missing from the downloaded asset set."
+    }
+    # vpk writes this file with a UTF-8 BOM; strip it or the first SHA1 never matches the pattern below.
+    $legacyLines = @(
+        Get-Content $legacyFile.FullName |
+            ForEach-Object { ([string]$_).Trim([char]0xFEFF).Trim() } |
+            Where-Object { $_ }
+    )
+    if ($legacyLines.Count -eq 0) {
+        throw "Velopack legacy index 'RELEASES' is empty."
+    }
+    foreach ($line in $legacyLines) {
+        if ($line -notmatch '^([0-9A-Fa-f]{40})\s+(\S+)\s+([0-9]+)$') {
+            throw "Velopack legacy index 'RELEASES' has an unparseable line: $line"
+        }
+        $legacySha1 = $Matches[1]
+        $legacyName = $Matches[2]
+        $legacySize = [long]$Matches[3]
+        $package = $byName[$legacyName]
+        if ($null -eq $package) {
+            throw "Velopack legacy index references '$legacyName', which is not attached to this release."
+        }
+        $actualSha1 = (Get-FileHash $package.FullName -Algorithm SHA1).Hash
+        if ($legacySha1 -ne $actualSha1) {
+            throw "Velopack legacy index claims SHA-1 $legacySha1 for '$legacyName', but the attached file hashes to $actualSha1."
+        }
+        if ($legacySize -ne [long]$package.Length) {
+            throw "Velopack legacy index claims size $legacySize for '$legacyName', but the attached file is $($package.Length) bytes."
+        }
+    }
+    Write-Host ">> Velopack legacy index verified: $($legacyLines.Count) line(s), each matching an attached package by SHA-1 and size."
 }
 
 function Assert-VelopackManifestSource {
@@ -408,6 +538,7 @@ if ($PublishDraft) {
 
         $downloadedVelopackAssets = @(Get-ExpectedVelopackAsset -Assets @(Get-ChildItem -Path $remoteArtifactDir -File))
         Assert-VelopackAssetHash -Files $downloadedVelopackAssets -ExpectedAssets $expectedVelopackAssets
+        Assert-VelopackChannelIndex -Files $downloadedVelopackAssets -ExpectedVersion $Version
         $downloadedPortable = $downloadedVelopackAssets | Where-Object Name -Like '*Portable*.zip' | Select-Object -First 1
         $remotePortableHash = (Get-FileHash $downloadedPortable.FullName -Algorithm SHA256).Hash
         if ($remotePortableHash -ne $ExpectedPortableSha256) {
