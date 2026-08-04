@@ -19,6 +19,12 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 ///         dropping the one active job. The job coordinator invokes both paths simply by cancelling the token it passes to
 ///         <see cref="GenerateAsync" />.
 ///     </para>
+///     <para>
+///         <strong>Fine progress.</strong> The HTTP contract carries only a queue position, so the load / encode /
+///         sample / decode timeline is read from the daemon's own stdout via <see cref="IImageServerProgressBroker" />.
+///         The subscription taken here is this generation's epoch: it is disposed on EVERY exit path, so a job that was
+///         abandoned by a cancel whose cleanup failed can never have its remaining output attributed to the next job.
+///     </para>
 /// </remarks>
 internal sealed class StableDiffusionCppRuntime : IImageRuntime
 {
@@ -26,11 +32,13 @@ internal sealed class StableDiffusionCppRuntime : IImageRuntime
 
     private readonly SdServerJobClient _jobClient;
     private readonly IImageServerSupervisor _supervisor;
+    private readonly IImageServerProgressBroker _progressBroker;
 
-    public StableDiffusionCppRuntime(IImageServerSupervisor supervisor, SdServerJobClient jobClient)
+    public StableDiffusionCppRuntime(IImageServerSupervisor supervisor, SdServerJobClient jobClient, IImageServerProgressBroker progressBroker)
     {
         _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
         _jobClient = jobClient ?? throw new ArgumentNullException(nameof(jobClient));
+        _progressBroker = progressBroker ?? throw new ArgumentNullException(nameof(progressBroker));
     }
 
     /// <inheritdoc />
@@ -40,6 +48,13 @@ internal sealed class StableDiffusionCppRuntime : IImageRuntime
 
         // The model name is validated by the supervisor's EnsureRunningAsync.
         var startedTimestamp = Stopwatch.GetTimestamp();
+        var tracker = new GenerationProgressTracker(progress, startedTimestamp);
+
+        // Subscribed BEFORE the ensure so a cold model load — minutes for a large file-set — shows as "preparing"
+        // rather than as a silent gap. The tracker refuses the step/decode observations until this job's own status
+        // says Generating, so only the load phase can be attributed this early.
+        using var progressSubscription = _progressBroker.Subscribe(request.ModelName, tracker.ObserveFine);
+
         var endpoint = await _supervisor.EnsureRunningAsync(request.ModelName, ct).ConfigureAwait(false);
 
         // Hold an active-job lease for the whole submit→poll→complete window so the idle reaper / LRU evictor never
@@ -50,48 +65,52 @@ internal sealed class StableDiffusionCppRuntime : IImageRuntime
         using var jobLease = _supervisor.TryAcquireJobLease(request.ModelName);
 
         string? jobId = null;
-        var lastPhase = (ImageGenPhase?)null;
         try
         {
             jobId = await _jobClient.SubmitAsync(endpoint.BaseAddress, request, ct).ConfigureAwait(false);
-            Report(progress, ref lastPhase, ImageGenPhase.Queued, queuePosition: null, startedTimestamp);
+            tracker.ReportCoarse(ImageGenPhase.Queued, queuePosition: null);
 
             while (true)
             {
                 jobLease?.Touch();
                 var state = await _jobClient.GetJobAsync(endpoint.BaseAddress, jobId, ct).ConfigureAwait(false);
+
+                // Drives the tracker's attribution gate: only a job the daemon says it is generating may claim the
+                // step and decode lines coming off that daemon's stdout.
+                tracker.SetGenerating(state.Status == SdJobStatus.Generating);
+
                 switch (state.Status)
                 {
                     case SdJobStatus.Completed:
-                        Report(progress, ref lastPhase, ImageGenPhase.Completed, queuePosition: null, startedTimestamp);
+                        tracker.ReportCoarse(ImageGenPhase.Completed, queuePosition: null);
                         return BuildResult(request, state, startedTimestamp);
 
                     case SdJobStatus.Failed:
-                        Report(progress, ref lastPhase, ImageGenPhase.Failed, queuePosition: null, startedTimestamp);
+                        tracker.ReportCoarse(ImageGenPhase.Failed, queuePosition: null);
                         throw new StableDiffusionRuntimeException("The image runtime failed to generate the image.");
 
                     case SdJobStatus.Expired:
-                        Report(progress, ref lastPhase, ImageGenPhase.Failed, queuePosition: null, startedTimestamp);
+                        tracker.ReportCoarse(ImageGenPhase.Failed, queuePosition: null);
                         throw new StableDiffusionRuntimeException("The generated image expired before it could be retrieved.");
 
                     case SdJobStatus.Unknown:
-                        Report(progress, ref lastPhase, ImageGenPhase.Failed, queuePosition: null, startedTimestamp);
+                        tracker.ReportCoarse(ImageGenPhase.Failed, queuePosition: null);
                         throw new StableDiffusionRuntimeException("The image runtime lost track of the generation job.");
 
                     case SdJobStatus.Cancelled:
-                        Report(progress, ref lastPhase, ImageGenPhase.Cancelled, queuePosition: null, startedTimestamp);
+                        tracker.ReportCoarse(ImageGenPhase.Cancelled, queuePosition: null);
                         throw new OperationCanceledException("The image generation job was cancelled by the runtime.");
 
                     case SdJobStatus.Generating:
-                        Report(progress, ref lastPhase, ImageGenPhase.Generating, queuePosition: null, startedTimestamp);
+                        tracker.ReportCoarse(ImageGenPhase.Generating, queuePosition: null);
                         break;
 
                     case SdJobStatus.Queued:
-                        Report(progress, ref lastPhase, ImageGenPhase.Queued, state.QueuePosition, startedTimestamp);
+                        tracker.ReportCoarse(ImageGenPhase.Queued, state.QueuePosition);
                         break;
 
                     default:
-                        Report(progress, ref lastPhase, ImageGenPhase.Queued, state.QueuePosition, startedTimestamp);
+                        tracker.ReportCoarse(ImageGenPhase.Queued, state.QueuePosition);
                         break;
                 }
 
@@ -100,12 +119,17 @@ internal sealed class StableDiffusionCppRuntime : IImageRuntime
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
+            // Close the epoch FIRST. The cleanup below may fail to stop the daemon (the cancel POST can throw an
+            // HttpRequestException, and the restart can be refused while the spawn gate is busy), in which case the
+            // abandoned job keeps printing steps — which must reach nobody, not the next job's tracker.
+            progressSubscription.Dispose();
+
             if (jobId is not null)
             {
                 await HandleCancellationAsync(endpoint.BaseAddress, jobId, request.ModelName).ConfigureAwait(false);
             }
 
-            Report(progress, ref lastPhase, ImageGenPhase.Cancelled, queuePosition: null, startedTimestamp);
+            tracker.ReportCoarse(ImageGenPhase.Cancelled, queuePosition: null);
             throw;
         }
     }
@@ -158,31 +182,4 @@ internal sealed class StableDiffusionCppRuntime : IImageRuntime
         };
     }
 
-    /// <summary>Reports a coarse phase transition, de-duplicating repeat observations of the same phase+position.</summary>
-    private static void Report(IProgress<ImageGenProgress>? progress,
-        ref ImageGenPhase? lastPhase,
-        ImageGenPhase phase,
-        int? queuePosition,
-        long startedTimestamp)
-    {
-        if (progress is null)
-        {
-            lastPhase = phase;
-            return;
-        }
-
-        // Report the first observation of each phase; for the queued phase also report a changed queue position.
-        if (lastPhase == phase && phase != ImageGenPhase.Queued)
-        {
-            return;
-        }
-
-        lastPhase = phase;
-        progress.Report(new ImageGenProgress
-        {
-            Phase = phase,
-            QueuePosition = queuePosition,
-            Elapsed = Stopwatch.GetElapsedTime(startedTimestamp)
-        });
-    }
 }

@@ -3053,7 +3053,13 @@
 			"job": {
 				"elapsed": "{{seconds}}s",
 				"duration": "{{seconds}}s",
-				"meta": "{{model}} · {{width}}×{{height}} · {{steps}} steps · {{sampler}}"
+				"meta": "{{model}} · {{width}}×{{height}} · {{steps}} steps · {{sampler}}",
+				"queuePosition": "Waiting — position {{position}} in the queue",
+				"preparing": "Preparing model…",
+				"finishing": "Finishing (decoding image)…",
+				"steps": "Step {{step}} of {{totalSteps}}",
+				"stepProgressLabel": "Generation progress",
+				"eta": "~{{seconds}}s left"
 			},
 			"status": {
 				"Queued": "Queued",
