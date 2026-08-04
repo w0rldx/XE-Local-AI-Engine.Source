@@ -9482,6 +9482,90 @@
           }
         ]
       }
+    },
+    "/api/local/v1/images/models/downloads/cancel": {
+      "post": {
+        "tags": [
+          "Images"
+        ],
+        "operationId": "cancelImageModelDownload",
+        "requestBody": {
+          "x-name": "CancelImageModelDownloadRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1CancelImageModelDownloadRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1CancelImageModelDownloadResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/images/models/{modelName}": {
+      "delete": {
+        "tags": [
+          "Images"
+        ],
+        "operationId": "deleteImageModel",
+        "parameters": [
+          {
+            "name": "modelName",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -15339,6 +15423,16 @@
           "sanitizedError": {
             "type": "string",
             "nullable": true
+          },
+          "partIndex": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "partCount": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
           }
         }
       },
@@ -18429,6 +18523,38 @@
             "format": "int32"
           }
         }
+      },
+      "XE_Local_AI_EngineClientEndpointsImagesV1CancelImageModelDownloadResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "modelName",
+          "cancelled"
+        ],
+        "properties": {
+          "modelName": {
+            "type": "string"
+          },
+          "cancelled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsImagesV1CancelImageModelDownloadRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "modelName"
+        ],
+        "properties": {
+          "modelName": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsImagesV1DeleteImageModelRequest": {
+        "type": "object",
+        "additionalProperties": false
       }
     },
     "securitySchemes": {

@@ -16,15 +16,16 @@ using XE_Local_AI_Engine.Providers.Abstractions.Image;
 ///     </para>
 ///     <para>
 ///         <b>Honest limits.</b> The registry is RAM-only, so a node restart drops in-flight state (the partial
-///         <c>.part</c> file resumes on the next start). Byte progress is whatever the underlying store reports, and for
-///         a multi-part file-set it reflects the part currently transferring, not the set total.
+///         <c>.part</c> file resumes on the next start). Byte progress is set-relative — the store offsets each part by
+///         the bytes already finished — but the set <i>total</i> is only known when every part declared a size, so a
+///         manually-entered file-set reports advancing bytes against a null total rather than a fabricated percentage.
 ///     </para>
 /// </summary>
 public sealed class ImageModelDownloadCoordinator : IImageModelDownloadCoordinator
 {
-    // In-flight model names. Single-flight only — there is no cancel surface for image downloads yet, so a token source
-    // per entry would be dead weight; the value is a presence marker.
-    private readonly ConcurrentDictionary<string, byte> _inFlight = new(StringComparer.OrdinalIgnoreCase);
+    // In-flight downloads, each owning the token source that cancels it. Single-flight per model name: the presence of
+    // an entry is what makes a double-submit rejoin instead of starting a second transfer.
+    private readonly ConcurrentDictionary<string, CancellationTokenSource> _inFlight = new(StringComparer.OrdinalIgnoreCase);
     private readonly ILogger<ImageModelDownloadCoordinator> _logger;
     private readonly IImageModelStore _modelStore;
     private readonly ConcurrentDictionary<string, ImageModelDownloadStatus> _status = new(StringComparer.OrdinalIgnoreCase);
@@ -41,8 +42,10 @@ public sealed class ImageModelDownloadCoordinator : IImageModelDownloadCoordinat
         ArgumentNullException.ThrowIfNull(request);
 
         var modelName = request.ModelName;
-        if (!_inFlight.TryAdd(modelName, value: 0))
+        var cts = new CancellationTokenSource();
+        if (!_inFlight.TryAdd(modelName, cts))
         {
+            cts.Dispose();
             return new ImageModelDownloadTicket(modelName, AlreadyInFlight: true);
         }
 
@@ -50,8 +53,33 @@ public sealed class ImageModelDownloadCoordinator : IImageModelDownloadCoordinat
         // the download rather than an empty registry.
         _status[modelName] = new ImageModelDownloadStatus(modelName, ImageModelDownloadPhase.Running, CompletedBytes: null, TotalBytes: null, SanitizedError: null);
 
-        _ = RunDownloadAsync(modelName, request);
+        // Hand the detached run the TOKEN, not the source. The source stays owned by the _inFlight entry (Cancel reads
+        // it there, the run disposes it from there), which keeps a disposable out of an unawaited task's arguments —
+        // the shape CA2025 rejects, because in the general case the caller's `using` would dispose it mid-flight.
+        _ = RunDownloadAsync(modelName, request, cts.Token);
         return new ImageModelDownloadTicket(modelName, AlreadyInFlight: false);
+    }
+
+    /// <inheritdoc />
+    public bool Cancel(string modelName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
+
+        if (!_inFlight.TryGetValue(modelName, out var cts))
+        {
+            return false;
+        }
+
+        try
+        {
+            cts.Cancel();
+            return true;
+        }
+        catch (ObjectDisposedException)
+        {
+            // The run completed and disposed its source between the lookup and the cancel — nothing to stop.
+            return false;
+        }
     }
 
     /// <inheritdoc />
@@ -69,13 +97,13 @@ public sealed class ImageModelDownloadCoordinator : IImageModelDownloadCoordinat
 
     // Detached, self-contained download run. Every exit path writes a terminal status; the task itself never faults
     // (an unobserved background fault would take the reason with it).
-    private async Task RunDownloadAsync(string modelName, ImageModelRequest request)
+    private async Task RunDownloadAsync(string modelName, ImageModelRequest request, CancellationToken ct)
     {
         var progress = new Progress<PullProgress>(update => ReportRunningProgress(modelName, update));
 
         try
         {
-            _ = await _modelStore.EnsureModelAsync(request, progress, CancellationToken.None).ConfigureAwait(false);
+            _ = await _modelStore.EnsureModelAsync(request, progress, ct).ConfigureAwait(false);
 
             var last = _status.TryGetValue(modelName, out var snapshot) ? snapshot : null;
             _status[modelName] = new ImageModelDownloadStatus(modelName,
@@ -110,7 +138,12 @@ public sealed class ImageModelDownloadCoordinator : IImageModelDownloadCoordinat
         }
         finally
         {
-            _ = _inFlight.TryRemove(modelName, out _);
+            // Remove before disposing so a concurrent Cancel() either finds a live source or finds nothing — never a
+            // disposed one it is about to call Cancel on.
+            if (_inFlight.TryRemove(modelName, out var source))
+            {
+                source.Dispose();
+            }
         }
     }
 
@@ -120,13 +153,19 @@ public sealed class ImageModelDownloadCoordinator : IImageModelDownloadCoordinat
     private void ReportRunningProgress(string modelName, PullProgress update)
     {
         _ = _status.AddOrUpdate(modelName,
-            key => new ImageModelDownloadStatus(key, ImageModelDownloadPhase.Running, update.CompletedBytes, update.TotalBytes, SanitizedError: null),
+            key => new ImageModelDownloadStatus(key, ImageModelDownloadPhase.Running, update.CompletedBytes, update.TotalBytes, SanitizedError: null)
+            {
+                PartIndex = update.PartIndex,
+                PartCount = update.PartCount
+            },
             (_, existing) => existing.Phase != ImageModelDownloadPhase.Running
                 ? existing
                 : existing with
                 {
                     CompletedBytes = update.CompletedBytes,
-                    TotalBytes = update.TotalBytes
+                    TotalBytes = update.TotalBytes,
+                    PartIndex = update.PartIndex,
+                    PartCount = update.PartCount
                 });
     }
 

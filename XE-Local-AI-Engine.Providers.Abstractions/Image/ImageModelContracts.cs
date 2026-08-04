@@ -71,6 +71,18 @@ public sealed record ImageModelPartRequest
 
     /// <summary>Expected sha256 (hash-pin) when the source exposed it; otherwise <see langword="null" />.</summary>
     public string? Sha256 { get; init; }
+
+    /// <summary>
+    ///     Known size of this part when the source exposed one (catalog entry / repo listing), otherwise
+    ///     <see langword="null" />.
+    ///     <para>
+    ///         Two things depend on it. The pre-flight disk check is a no-op without a size, so a file-set that does not
+    ///         fit only fails part-way through the transfer instead of before it starts. And a set total is only
+    ///         computable when <b>every</b> part declares a size — without it the UI can honestly report per-part
+    ///         progress but not an overall percentage.
+    ///     </para>
+    /// </summary>
+    public long? SizeBytes { get; init; }
 }
 
 /// <summary>

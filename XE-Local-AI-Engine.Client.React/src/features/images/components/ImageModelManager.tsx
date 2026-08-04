@@ -1,12 +1,20 @@
-import { Alert, Badge, Button, Card, Group, Loader, Progress, Select, Stack, Text, TextInput } from "@mantine/core";
-import { IconDownload } from "@tabler/icons-react";
-import { useCallback, useEffect, useState } from "react";
+import { ActionIcon, Alert, Badge, Button, Card, Group, Loader, Progress, Select, Stack, Text, TextInput, Tooltip } from "@mantine/core";
+import { IconDownload, IconTrash, IconX } from "@tabler/icons-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ApiError } from "@/core/api/errors/ApiError";
+import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { toast } from "@/core/ui/notifications/Toast";
-import type { ImageModelView } from "@/features/images/models/ImageModels";
-import { useImageModelDownloads, useStartImageModelDownload } from "@/features/images/queries/useImageQueries";
+import { useActiveImageModelDownloads } from "@/features/images/hooks/useActiveImageModelDownloads";
+import type { ImageModelDownloadView, ImageModelView } from "@/features/images/models/ImageModels";
+import {
+	useCancelImageModelDownload,
+	useDeleteImageModel,
+	useStartImageModelDownload,
+} from "@/features/images/queries/useImageQueries";
+import { useDownloadRateEstimates } from "@/features/models/hooks/useDownloadRateEstimates";
+import { formatDownloadEta, humanizeBytes } from "@/features/models/models/DownloadRateEstimate";
 
 // Diffusion families the download form offers. Must match the backend ImageModelFamily enum names (parsed
 // case-insensitively). Step 1 targets SD1.5 (single-file); the others are admitted but need extra parts — the minimal
@@ -26,71 +34,84 @@ const emptyDraft: DownloadDraft = { repoId: "", fileName: "", modelName: "", fam
 interface ImageModelManagerProps {
 	models: readonly ImageModelView[];
 	isLoading: boolean;
-	// Notifies the page that a detached download is (or is no longer) in flight, so it can poll listImageModels for the
-	// model appearing on completion. See useImageModels(pollWhilePending).
+	// Notifies the page that at least one detached download is (or is no longer) in flight, so it can poll
+	// listImageModels for the models appearing on completion. See useImageModels(pollWhilePending).
 	onPendingDownloadChange?: (pending: boolean) => void;
 }
 
-// Minimal image-model management. Lists installed image models and offers a "download model" action (202 accepted) that
-// starts a single-file (Diffusion-part) weight download. The download itself runs on the backend coordinator, which
-// records a terminal phase for every attempt; while one is pending this component polls that status so a FAILED
-// download surfaces its reason instead of leaving the operator watching an indeterminate bar forever (F-031).
+// Image-model management. Lists installed image models (with a confirmed delete to reclaim the disk a multi-gigabyte
+// file-set occupies) and offers a "download model" action (202 accepted) that starts a weight download. The download
+// itself runs on the backend coordinator, which records a terminal phase for every attempt; while any are in flight
+// this component polls their status so a FAILED download surfaces its reason instead of leaving the operator watching
+// an indeterminate bar forever (F-031), and each in-flight row can be cancelled.
 export function ImageModelManager({ models, isLoading, onPendingDownloadChange }: ImageModelManagerProps) {
 	const { t } = useTranslation();
+	const { confirm } = useConfirm();
 	const [draft, setDraft] = useState<DownloadDraft>(emptyDraft);
-	const [pendingModelName, setPendingModelName] = useState<string | null>(null);
-	const [downloadError, setDownloadError] = useState<string | null>(null);
+	// Keyed by model name: several downloads can run at once, so one shared error slot would hide all but the last.
+	const [downloadErrors, setDownloadErrors] = useState<Readonly<Record<string, string>>>({});
+	const [cancellingModelName, setCancellingModelName] = useState<string | null>(null);
+	const [deletingModelName, setDeletingModelName] = useState<string | null>(null);
+	// Model names whose terminal phase has already been reacted to (see the reconcile effect below).
+	const handledTerminals = useRef<Set<string>>(new Set());
+
 	const downloadMutation = useStartImageModelDownload();
+	const cancelMutation = useCancelImageModelDownload();
+	const deleteMutation = useDeleteImageModel();
+	const { statuses, inFlight, track, untrack } = useActiveImageModelDownloads();
+	// Client-derived speed + ETA: the status carries byte counts but no timestamps, so the rate comes from successive
+	// polls. On an 18 GB file-set this is the number that tells the operator whether to wait or walk away.
+	const rateEstimates = useDownloadRateEstimates(statuses);
 
 	const canSubmit = draft.repoId.trim().length > 0 && draft.fileName.trim().length > 0 && draft.modelName.trim().length > 0;
-	const isDownloadPending = pendingModelName !== null;
+	const isDraftInFlight = inFlight.includes(draft.modelName.trim());
 
-	const downloadsQuery = useImageModelDownloads(isDownloadPending);
-	const pendingDownload = downloadsQuery.data?.find((entry) => entry.modelName === pendingModelName);
-
-	// Real percentage once the source reported a content length; null keeps the indeterminate bar.
-	const downloadPercent =
-		pendingDownload?.totalBytes != null && pendingDownload.totalBytes > 0 && pendingDownload.completedBytes != null
-			? Math.min(100, Math.round((pendingDownload.completedBytes / pendingDownload.totalBytes) * 100))
-			: null;
-
-	// Resolve the pending download the moment the backend reports a terminal phase. A failure raises a toast AND leaves
-	// an inline reason on the card; a success/cancel just clears the indicator. Without this the UI could only ever
-	// observe success (the model appearing), which is precisely why a typo used to hang forever.
+	// Resolve each tracked download the moment the backend reports a terminal phase. A failure raises a toast AND leaves
+	// an inline reason on the card; a success/cancel just drops the row. Without this the UI could only ever observe
+	// success (the model appearing), which is precisely why a typo used to hang forever.
+	//
+	// `untrack` only queues a state update, so a poll landing before it flushes would re-deliver the same terminal
+	// status and raise a duplicate toast. The handled set makes each terminal phase fire exactly once per model.
 	useEffect(() => {
-		if (pendingModelName === null || pendingDownload === undefined) {
-			return;
+		for (const status of statuses.values()) {
+			if (status.phase === "Running" || handledTerminals.current.has(status.modelName)) {
+				continue;
+			}
+			handledTerminals.current.add(status.modelName);
+			if (status.phase === "Failed") {
+				const reason = status.sanitizedError ?? t("pages.images.models.download.failed", "The model download failed.");
+				setDownloadErrors((current) => ({ ...current, [status.modelName]: reason }));
+				toast.error(reason);
+			}
+			untrack(status.modelName);
 		}
-		if (pendingDownload.phase === "Failed") {
-			setDownloadError(pendingDownload.sanitizedError ?? t("pages.images.models.download.failed", "The model download failed."));
-			toast.error(pendingDownload.sanitizedError ?? t("pages.images.models.download.failed", "The model download failed."));
-			setPendingModelName(null);
-			return;
-		}
-		if (pendingDownload.phase === "Completed" || pendingDownload.phase === "Cancelled") {
-			setPendingModelName(null);
-		}
-	}, [pendingDownload, pendingModelName, t]);
+	}, [statuses, untrack, t]);
 
-	// Belt-and-braces: clear the indicator once the downloaded model surfaces in the polled list, even if the status
-	// registry was lost (a node restart drops it) and the terminal phase above never arrives.
+	// Belt-and-braces: stop tracking once the downloaded model surfaces in the polled list, even if the status registry
+	// was lost (a node restart drops it) and the terminal phase above never arrives.
 	useEffect(() => {
-		if (pendingModelName !== null && models.some((model) => model.modelName === pendingModelName)) {
-			setPendingModelName(null);
+		for (const model of models) {
+			untrack(model.modelName);
 		}
-	}, [models, pendingModelName]);
+	}, [models, untrack]);
 
-	// Keep the page's poll flag in sync with whether a download is in flight.
+	// Keep the page's poll flag in sync with whether any download is in flight.
 	useEffect(() => {
-		onPendingDownloadChange?.(isDownloadPending);
-	}, [isDownloadPending, onPendingDownloadChange]);
+		onPendingDownloadChange?.(inFlight.length > 0);
+	}, [inFlight, onPendingDownloadChange]);
 
 	const handleDownload = useCallback(() => {
 		if (!canSubmit) {
 			return;
 		}
 		const modelName = draft.modelName.trim();
-		setDownloadError(null);
+		setDownloadErrors((current) => {
+			const { [modelName]: _removed, ...rest } = current;
+			return rest;
+		});
+		// A retry of the same name must be able to report its OWN terminal phase; without this the second attempt's
+		// failure would be swallowed by the first attempt's entry.
+		handledTerminals.current.delete(modelName);
 		downloadMutation.mutate(
 			{
 				modelName,
@@ -100,7 +121,7 @@ export function ImageModelManager({ models, isLoading, onPendingDownloadChange }
 			},
 			{
 				onSuccess: () => {
-					setPendingModelName(modelName);
+					track(modelName);
 					toast.success(t("pages.images.models.download.started", "Download started. The model will appear once ready."));
 					setDraft(emptyDraft);
 				},
@@ -113,7 +134,54 @@ export function ImageModelManager({ models, isLoading, onPendingDownloadChange }
 				},
 			},
 		);
-	}, [canSubmit, downloadMutation, draft, t]);
+	}, [canSubmit, downloadMutation, draft, t, track]);
+
+	const handleCancel = useCallback(
+		(modelName: string) => {
+			setCancellingModelName(modelName);
+			cancelMutation.mutate(modelName, {
+				onError: (error) => {
+					const message =
+						error instanceof ApiError && error.message
+							? error.message
+							: t("pages.images.models.download.cancelError", "Could not cancel the download.");
+					toast.error(message);
+				},
+				onSettled: () => setCancellingModelName(null),
+			});
+		},
+		[cancelMutation, t],
+	);
+
+	const handleDelete = useCallback(
+		async (modelName: string) => {
+			const confirmed = await confirm({
+				title: t("pages.images.models.delete.title", "Delete image model"),
+				description: t("pages.images.models.delete.description", "Delete '{{modelName}}' and its weight files? This cannot be undone.", {
+					modelName,
+				}),
+				confirmationText: t("pages.images.models.delete.confirm", "Delete"),
+				cancellationText: t("pages.images.models.delete.cancel", "Cancel"),
+			});
+			if (!confirmed) {
+				return;
+			}
+
+			setDeletingModelName(modelName);
+			deleteMutation.mutate(modelName, {
+				onSuccess: () => toast.success(t("pages.images.models.delete.deleted", "Model deleted.")),
+				onError: (error) => {
+					const message =
+						error instanceof ApiError && error.message
+							? error.message
+							: t("pages.images.models.delete.error", "Could not delete the model.");
+					toast.error(message);
+				},
+				onSettled: () => setDeletingModelName(null),
+			});
+		},
+		[confirm, deleteMutation, t],
+	);
 
 	return (
 		<Stack gap="md" data-testid="image-model-manager">
@@ -138,7 +206,25 @@ export function ImageModelManager({ models, isLoading, onPendingDownloadChange }
 											{model.repoId}
 										</Text>
 									</Stack>
-									<Badge variant="light">{model.family}</Badge>
+									<Group gap="xs" wrap="nowrap">
+										<Text size="xs" c="dimmed">
+											{humanizeBytes(model.sizeBytes)}
+										</Text>
+										<Badge variant="light">{model.family}</Badge>
+										<Tooltip label={t("pages.images.models.delete.action", "Delete model")}>
+											<ActionIcon
+												variant="light"
+												color="red"
+												aria-label={t("pages.images.models.delete.action", "Delete model")}
+												loading={deletingModelName === model.modelName}
+												disabled={deletingModelName === model.modelName}
+												onClick={() => handleDelete(model.modelName)}
+												data-testid={`image-model-delete-${model.modelName}`}
+											>
+												<IconTrash size={16} />
+											</ActionIcon>
+										</Tooltip>
+									</Group>
 								</Group>
 							</Card>
 						))}
@@ -189,35 +275,44 @@ export function ImageModelManager({ models, isLoading, onPendingDownloadChange }
 				<Alert variant="light" color="gray" data-testid="image-model-download-hint">
 					{t("pages.images.models.download.hint", "Single-file (SD1.5-style) weights only. Multi-part models are a follow-up.")}
 				</Alert>
-				{downloadError !== null ? (
-					<Alert variant="light" color="red" data-testid="image-model-download-error">
-						{downloadError}
+				{Object.entries(downloadErrors).map(([modelName, reason]) => (
+					<Alert
+						key={modelName}
+						variant="light"
+						color="red"
+						withCloseButton={true}
+						closeButtonLabel={t("pages.images.models.download.dismissError", "Dismiss")}
+						onClose={() =>
+							setDownloadErrors((current) => {
+								const { [modelName]: _removed, ...rest } = current;
+								return rest;
+							})
+						}
+						data-testid="image-model-download-error"
+					>
+						{reason}
 					</Alert>
-				) : null}
-				{isDownloadPending ? (
-					<Stack gap={4} data-testid="image-model-download-progress">
-						<Progress
-							value={downloadPercent ?? 100}
-							striped={true}
-							animated={true}
-							size="sm"
-							data-testid="image-model-download-bar"
-						/>
-						<Text size="xs" c="dimmed">
-							{downloadPercent === null
-								? t(
-										"pages.images.models.download.inFlight",
-										"Download runs in the background; the model appears when ready. Large files can take several minutes.",
-									)
-								: t("pages.images.models.download.progress", "Downloading… {{percent}}%", { percent: downloadPercent })}
-						</Text>
+				))}
+				{inFlight.length > 0 ? (
+					<Stack gap="sm" data-testid="image-model-download-progress">
+						{inFlight.map((modelName) => (
+							<DownloadRow
+								key={modelName}
+								modelName={modelName}
+								status={statuses.get(modelName)}
+								etaSeconds={rateEstimates.get(modelName)?.etaSeconds}
+								bytesPerSecond={rateEstimates.get(modelName)?.bytesPerSecond}
+								isCancelling={cancellingModelName === modelName}
+								onCancel={handleCancel}
+							/>
+						))}
 					</Stack>
 				) : null}
 				<Group justify="flex-end">
 					<Button
 						leftSection={<IconDownload size={16} />}
-						loading={downloadMutation.isPending || isDownloadPending}
-						disabled={!canSubmit || isDownloadPending}
+						loading={downloadMutation.isPending}
+						disabled={!canSubmit || isDraftInFlight}
 						onClick={handleDownload}
 						data-testid="image-model-download-submit"
 					>
@@ -225,6 +320,92 @@ export function ImageModelManager({ models, isLoading, onPendingDownloadChange }
 					</Button>
 				</Group>
 			</Stack>
+		</Stack>
+	);
+}
+
+interface DownloadRowProps {
+	modelName: string;
+	status: ImageModelDownloadView | undefined;
+	etaSeconds: number | undefined;
+	bytesPerSecond: number | undefined;
+	isCancelling: boolean;
+	onCancel: (modelName: string) => void;
+}
+
+// One in-flight file-set pull. A percentage is shown ONLY when the set total is known — every part must have declared a
+// size for the backend to compute one — because a bar derived from a partial total would pass 100% and read as broken.
+// Without a total the row still advances honestly: bytes transferred, the part being fetched, and the measured speed.
+function DownloadRow({ modelName, status, etaSeconds, bytesPerSecond, isCancelling, onCancel }: DownloadRowProps) {
+	const { t } = useTranslation();
+
+	const completedBytes = status?.completedBytes ?? null;
+	const totalBytes = status?.totalBytes ?? null;
+	const percent =
+		totalBytes != null && totalBytes > 0 && completedBytes != null ? Math.min(100, Math.round((completedBytes / totalBytes) * 100)) : null;
+
+	const partLabel =
+		status?.partIndex != null && status.partCount != null && status.partCount > 1
+			? t("pages.images.models.download.part", "Part {{index}} of {{count}}", { index: status.partIndex, count: status.partCount })
+			: undefined;
+	const speedLabel =
+		bytesPerSecond !== undefined
+			? t("pages.images.models.download.speed", "{{value}}/s", { value: humanizeBytes(bytesPerSecond) })
+			: undefined;
+	const etaDuration = formatDownloadEta(etaSeconds);
+	const etaLabel = etaDuration ? t("pages.images.models.download.eta", "~{{duration}} left", { duration: etaDuration }) : undefined;
+
+	// The headline: a percentage when one is computable, otherwise the bytes that HAVE moved. Never a fabricated
+	// percentage — the operator reading "100%" on a bar that keeps moving is the failure this guards against.
+	let headline = t("pages.images.models.download.starting", "Starting…");
+	if (percent !== null) {
+		headline = t("pages.images.models.download.progress", "Downloading… {{percent}}%", { percent });
+	} else if (completedBytes != null) {
+		headline = t("pages.images.models.download.transferred", "{{completed}} transferred", { completed: humanizeBytes(completedBytes) });
+	}
+
+	const bytesLabel =
+		percent !== null && completedBytes != null && totalBytes != null
+			? t("pages.images.models.download.bytesOf", "{{completed}} / {{total}}", {
+					completed: humanizeBytes(completedBytes),
+					total: humanizeBytes(totalBytes),
+				})
+			: undefined;
+
+	return (
+		<Stack gap={4} data-testid={`image-model-download-row-${modelName}`}>
+			<Group justify="space-between" wrap="nowrap" align="center">
+				<Group gap="xs" wrap="nowrap" style={{ minWidth: 0 }}>
+					{percent === null ? <Loader size="xs" /> : null}
+					<Text size="sm" fw={500} truncate={true}>
+						{modelName}
+					</Text>
+				</Group>
+				<Button
+					size="xs"
+					variant="light"
+					color="red"
+					leftSection={<IconX size={14} />}
+					loading={isCancelling}
+					disabled={isCancelling}
+					onClick={() => onCancel(modelName)}
+					data-testid={`image-model-download-cancel-${modelName}`}
+				>
+					{t("pages.images.models.download.cancel", "Cancel")}
+				</Button>
+			</Group>
+			<Progress
+				value={percent ?? 100}
+				striped={percent === null}
+				animated={percent === null}
+				size="sm"
+				radius="sm"
+				aria-label={t("pages.images.models.download.progressAriaLabel", "Download progress")}
+				data-testid={`image-model-download-bar-${modelName}`}
+			/>
+			<Text size="xs" c="dimmed" data-testid={`image-model-download-detail-${modelName}`}>
+				{[headline, bytesLabel, partLabel, speedLabel, etaLabel].filter(Boolean).join(" · ")}
+			</Text>
 		</Stack>
 	);
 }

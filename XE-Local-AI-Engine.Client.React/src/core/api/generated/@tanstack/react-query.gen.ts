@@ -24,6 +24,7 @@ import {
 	cancelDevelopmentAttempt,
 	cancelGgufDownload,
 	cancelImageJob,
+	cancelImageModelDownload,
 	cancelLlamaCppSourceBuild,
 	cancelNodeBinding,
 	cancelNodeChatMessage,
@@ -52,6 +53,7 @@ import {
 	deleteAgentDefinition,
 	deleteConversationFile,
 	deleteGoldenConversation,
+	deleteImageModel,
 	deleteKnowledgeDocument,
 	deleteLocalModel,
 	deleteMcpServer,
@@ -252,6 +254,8 @@ import type {
 	CancelGgufDownloadResponse,
 	CancelImageJobData,
 	CancelImageJobResponse,
+	CancelImageModelDownloadData,
+	CancelImageModelDownloadResponse,
 	CancelLlamaCppSourceBuildData,
 	CancelLlamaCppSourceBuildResponse,
 	CancelNodeBindingData,
@@ -311,6 +315,8 @@ import type {
 	DeleteConversationFileResponse,
 	DeleteGoldenConversationData,
 	DeleteGoldenConversationResponse,
+	DeleteImageModelData,
+	DeleteImageModelResponse,
 	DeleteKnowledgeDocumentData,
 	DeleteKnowledgeDocumentResponse,
 	DeleteLocalModelData,
@@ -5149,6 +5155,42 @@ export const updateSuggestedPlaybookActionMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await updateSuggestedPlaybookAction({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const cancelImageModelDownloadMutation = (
+	options?: Partial<Options<CancelImageModelDownloadData>>,
+): UseMutationOptions<CancelImageModelDownloadResponse, AxiosError<DefaultError>, Options<CancelImageModelDownloadData>> => {
+	const mutationOptions: UseMutationOptions<
+		CancelImageModelDownloadResponse,
+		AxiosError<DefaultError>,
+		Options<CancelImageModelDownloadData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await cancelImageModelDownload({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const deleteImageModelMutation = (
+	options?: Partial<Options<DeleteImageModelData>>,
+): UseMutationOptions<DeleteImageModelResponse, AxiosError<DefaultError>, Options<DeleteImageModelData>> => {
+	const mutationOptions: UseMutationOptions<DeleteImageModelResponse, AxiosError<DefaultError>, Options<DeleteImageModelData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await deleteImageModel({
 				...options,
 				...fnOptions,
 				throwOnError: true,

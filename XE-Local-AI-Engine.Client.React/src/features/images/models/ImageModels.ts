@@ -143,6 +143,10 @@ export interface ImageModelDownloadView {
 	completedBytes: number | null;
 	totalBytes: number | null;
 	sanitizedError: string | null;
+	// An image model is a file SET (diffusion + VAE + text encoders). Without the part framing the operator cannot tell
+	// "the bar advanced into part 2" from "something restarted"; null until the first progress event names a part.
+	partIndex: number | null;
+	partCount: number | null;
 }
 
 export function toImageModelDownloadView(dto: ImageModelDownloadStatusResponse): ImageModelDownloadView {
@@ -152,6 +156,8 @@ export function toImageModelDownloadView(dto: ImageModelDownloadStatusResponse):
 		completedBytes: dto.completedBytes ?? null,
 		totalBytes: dto.totalBytes ?? null,
 		sanitizedError: dto.sanitizedError ?? null,
+		partIndex: dto.partIndex ?? null,
+		partCount: dto.partCount ?? null,
 	};
 }
 

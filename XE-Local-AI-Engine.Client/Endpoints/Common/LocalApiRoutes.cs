@@ -481,6 +481,14 @@ public static class LocalApiRoutes
         // (Running/Completed/Cancelled/Failed) so a failure is observable instead of silent.
         public const string ModelDownloads = "images/models/downloads";
 
+        // Cancels an in-flight file-set pull. An image model can be tens of gigabytes, so a mis-started download that
+        // could not be stopped would hold the node's bandwidth and disk until it finished.
+        public const string ModelDownloadCancel = "images/models/downloads/cancel";
+
+        // Removes an installed model's weights and registry entry. Without it a node that has installed several
+        // multi-gigabyte file-sets has no in-app way to reclaim the disk.
+        public const string ModelByName = "images/models/{modelName}";
+
         // Managed stable-diffusion.cpp runtime and Linux source-build orchestration.
         public const string Runtime = "images/runtime";
         public const string RuntimeEject = "images/runtime/eject";
