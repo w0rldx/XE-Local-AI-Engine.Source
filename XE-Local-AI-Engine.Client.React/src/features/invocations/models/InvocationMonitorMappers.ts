@@ -34,6 +34,7 @@ function toInvocationCurrent(
 		streamedThinkingChunkCount: dto.streamedThinkingChunkCount ?? 0,
 		pendingToolCallCount: dto.pendingToolCallCount ?? 0,
 		hasPendingApproval: dto.hasPendingApproval ?? false,
+		hasPendingQuestion: dto.hasPendingQuestion ?? false,
 		traceId: dto.traceId ?? null,
 	};
 }

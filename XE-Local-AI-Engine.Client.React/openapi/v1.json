@@ -15003,7 +15003,8 @@
           "streamedChunkCount",
           "streamedThinkingChunkCount",
           "pendingToolCallCount",
-          "hasPendingApproval"
+          "hasPendingApproval",
+          "hasPendingQuestion"
         ],
         "properties": {
           "invocationId": {
@@ -15059,6 +15060,9 @@
             "format": "int32"
           },
           "hasPendingApproval": {
+            "type": "boolean"
+          },
+          "hasPendingQuestion": {
             "type": "boolean"
           },
           "traceId": {

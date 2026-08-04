@@ -1554,6 +1554,7 @@ export type XeLocalAiEngineClientEndpointsInvocationsV1InvocationCurrentResponse
 	streamedThinkingChunkCount: number;
 	pendingToolCallCount: number;
 	hasPendingApproval: boolean;
+	hasPendingQuestion: boolean;
 	traceId?: string | null;
 };
 

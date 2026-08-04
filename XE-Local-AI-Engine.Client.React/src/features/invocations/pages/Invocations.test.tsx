@@ -77,6 +77,8 @@ describe("Invocations (generated hey-api data layer)", () => {
 		expect(await screen.findByText(/Model: qwen3:8b/)).toBeTruthy();
 		expect(screen.getByText("Active")).toBeTruthy();
 		expect(screen.getByText("Pending approval: Yes")).toBeTruthy();
+		// A turn parked on an ask_user question is otherwise indistinguishable from an ordinary running one here.
+		expect(screen.getByText("Pending question: Yes")).toBeTruthy();
 		expect(screen.getByText("Invocation ended with a failure. See local logs for details.")).toBeTruthy();
 		expect(screen.getByText("1.0 min")).toBeTruthy();
 	});
@@ -130,6 +132,7 @@ function createMonitor(): GetInvocationMonitorResponse {
 			streamedThinkingChunkCount: 1,
 			pendingToolCallCount: 1,
 			hasPendingApproval: true,
+			hasPendingQuestion: true,
 		},
 		history: [
 			{
