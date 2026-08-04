@@ -9,14 +9,16 @@ using XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 
 /// <summary>
-///     DI wiring for the Hugging Face image-model file-set store + registry. Registers
-///     <see cref="IImageModelStore" /> and <see cref="IImageModelRegistry" /> over the SAME reused
-///     <see cref="HfDownloadClient" /> the GGUF store uses (the downloader is never forked), plus the bound options.
+///     DI wiring for the Hugging Face image-model file-set store + registry + discovery. Registers
+///     <see cref="IImageModelStore" />, <see cref="IImageModelRegistry" /> and <see cref="IImageModelDiscovery" /> over
+///     the SAME reused <see cref="HfDownloadClient" /> / <see cref="HfHubClient" /> the GGUF lane uses (neither is ever
+///     forked), plus the bound options.
 /// </summary>
 /// <remarks>
 ///     <strong>Caller contract:</strong> call <see cref="HuggingFaceServiceCollectionExtensions.AddHuggingFaceGgufStore" />
-///     first — it registers the shared <see cref="HfDownloadClient" /> (and its <c>IHfTokenStore</c> / free-space probe /
-///     named download <see cref="System.Net.Http.HttpClient" /> dependencies) that the image store depends on.
+///     first — it registers the shared <see cref="HfDownloadClient" /> and <see cref="HfHubClient" /> (and their
+///     <c>IHfTokenStore</c> / free-space probe / named <see cref="System.Net.Http.HttpClient" /> dependencies) that the
+///     image store and discovery depend on.
 /// </remarks>
 public static class HuggingFaceImageServiceCollectionExtensions
 {
@@ -43,6 +45,10 @@ public static class HuggingFaceImageServiceCollectionExtensions
             sp.GetRequiredService<ImageModelRegistry>(),
             sp.GetRequiredService<ImageModelStoreOptions>(),
             sp.GetRequiredService<ILogger<HuggingFaceImageModelStore>>()));
+
+        // Image-model discovery rides the SAME HfHubClient the GGUF lane registers (shared listing cache, one HttpClient).
+        services.TryAddSingleton<IImageModelDiscovery>(static sp => new HuggingFaceImageModelDiscovery(sp.GetRequiredService<HfHubClient>(),
+            sp.GetRequiredService<ILogger<HuggingFaceImageModelDiscovery>>()));
 
         return services;
     }

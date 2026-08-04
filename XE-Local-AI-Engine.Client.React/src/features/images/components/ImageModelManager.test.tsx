@@ -6,18 +6,22 @@ import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ImageModelManager } from "@/features/images/components/ImageModelManager";
-import type { ImageModelDownloadView, ImageModelView } from "@/features/images/models/ImageModels";
+import type { ImageModelCatalogEntryView, ImageModelDownloadView, ImageModelView } from "@/features/images/models/ImageModels";
 
 const startMutate = vi.fn();
 const cancelMutate = vi.fn();
 const deleteMutate = vi.fn();
 let downloads: ImageModelDownloadView[] = [];
+let catalogEntries: ImageModelCatalogEntryView[] = [];
 
 vi.mock("@/features/images/queries/useImageQueries", () => ({
 	useStartImageModelDownload: () => ({ mutate: startMutate, isPending: false }),
 	useImageModelDownloads: () => ({ data: downloads }),
 	useCancelImageModelDownload: () => ({ mutate: cancelMutate, isPending: false }),
 	useDeleteImageModel: () => ({ mutate: deleteMutate, isPending: false }),
+	useImageModelCatalog: () => ({ data: catalogEntries, isPending: false, error: null }),
+	useBrowseImageRepositories: () => ({ data: [], isFetching: false, error: null }),
+	useInspectImageRepository: () => ({ data: undefined, isPending: false, error: null }),
 }));
 
 let confirmResult = true;
@@ -88,6 +92,7 @@ function model(overrides: Partial<ImageModelView> = {}): ImageModelView {
 describe("ImageModelManager", () => {
 	beforeEach(() => {
 		downloads = [];
+		catalogEntries = [];
 		confirmResult = true;
 		startMutate.mockReset();
 		cancelMutate.mockReset();
@@ -138,7 +143,16 @@ describe("ImageModelManager", () => {
 		});
 	}
 
+	// The manual form now lives behind the "Advanced" tab (the catalog is the default), and Tabs is mounted with
+	// keepMounted={false}, so the inputs do not exist until that tab is opened.
+	function openManualTab() {
+		if (screen.queryByTestId("image-model-download-repo") === null) {
+			fireEvent.click(screen.getByTestId("image-model-tab-manual"));
+		}
+	}
+
 	function fillAndSubmit(modelName = "bogus-model") {
+		openManualTab();
 		setValue(screen.getByTestId("image-model-download-repo") as HTMLInputElement, "Comfy-Org/stable-diffusion-v1-5-archive");
 		setValue(screen.getByTestId("image-model-download-file") as HTMLInputElement, "this-file-does-not-exist.safetensors");
 		setValue(screen.getByTestId("image-model-download-name") as HTMLInputElement, modelName);
@@ -312,11 +326,13 @@ describe("ImageModelManager", () => {
 	// of that, which is why installing such a model was impossible before this form existed.
 	describe("advanced multi-part file set", () => {
 		function enableAdvanced() {
+			openManualTab();
 			fireEvent.click(screen.getByTestId("image-model-download-advanced-toggle"));
 		}
 
 		it("swaps the single weight-file input for a per-role file list", () => {
 			renderWithProviders(<ImageModelManager models={[]} isLoading={false} />);
+			openManualTab();
 			expect(screen.getByTestId("image-model-download-file")).toBeTruthy();
 
 			enableAdvanced();
@@ -369,7 +385,104 @@ describe("ImageModelManager", () => {
 			expect(screen.getByTestId("image-model-download-parts-warning")).toBeTruthy();
 		});
 	});
+
+	// The whole point of Stage 4: a user should not have to type a repo id, a weight file name, a model name and a
+	// family to install a model. A catalog row already carries all four plus the sizes.
+	describe("curated catalog", () => {
+		it("installs the whole file-set from one click, with nothing typed", () => {
+			catalogEntries = [catalogEntry()];
+			renderWithProviders(<ImageModelManager models={[]} isLoading={false} />);
+
+			fireEvent.click(screen.getByTestId("image-model-catalog-install-qwen-image"));
+
+			expect(startMutate).toHaveBeenCalledTimes(1);
+			const body = startMutate.mock.calls[0]?.[0] as {
+				modelName: string;
+				repoId: string;
+				family: string;
+				parts: { role: string; fileName: string; repoId?: string; sizeBytes?: number }[];
+			};
+			expect(body.modelName).toBe("qwen-image");
+			expect(body.family).toBe("QwenImage");
+			expect(body.parts).toHaveLength(2);
+			// The cross-repo override survives: the Qwen2.5-VL text encoder lives in a DIFFERENT repository from the
+			// diffusion weights, and dropping that field makes the model impossible to install rather than merely awkward.
+			expect(body.parts[1]).toMatchObject({
+				role: "Llm",
+				repoId: "mradermacher/Qwen2.5-VL-7B-Instruct-GGUF",
+				sizeBytes: 4_683_072_512,
+			});
+			// An in-repo part sends no repoId at all, so the backend applies the set's.
+			expect(body.parts[0]?.repoId).toBeUndefined();
+		});
+
+		it("keeps a row busy while its own download is still transferring", () => {
+			// The 202 lands in milliseconds; the transfer takes minutes. A row that went back to "Install" in between
+			// invites a second click on a download already running.
+			catalogEntries = [catalogEntry({ id: "sdxl-1.0" })];
+			downloads = [download({ modelName: "sdxl-1.0", phase: "Running", completedBytes: 10, totalBytes: 100 })];
+			renderWithProviders(<ImageModelManager models={[]} isLoading={false} />);
+
+			fireEvent.click(screen.getByTestId("image-model-catalog-install-sdxl-1.0"));
+			resolveLastStart();
+
+			expect((screen.getByTestId("image-model-catalog-install-sdxl-1.0") as HTMLButtonElement).disabled).toBe(true);
+		});
+
+		it("shows an installed entry as installed instead of offering a second download", () => {
+			catalogEntries = [catalogEntry({ id: "sd-1.5", isInstalled: true })];
+			renderWithProviders(<ImageModelManager models={[model()]} isLoading={false} />);
+
+			expect(screen.getByTestId("image-model-catalog-installed-sd-1.5")).toBeTruthy();
+			expect(screen.queryByTestId("image-model-catalog-install-sd-1.5")).toBeNull();
+		});
+
+		it("renders the fit verdict the backend computed, including Unknown", () => {
+			// Unknown is a real answer on a box whose VRAM could not be probed. It must render as its own state, never
+			// silently as a comfortable fit.
+			catalogEntries = [catalogEntry({ fitVerdict: "Unknown" })];
+			renderWithProviders(<ImageModelManager models={[]} isLoading={false} />);
+
+			expect(screen.getByTestId("image-model-catalog-fit-qwen-image").textContent).toContain("Fit unknown");
+		});
+
+		it("warns when the download does not fit the free disk", () => {
+			catalogEntries = [catalogEntry({ fitsOnDisk: false })];
+			renderWithProviders(<ImageModelManager models={[]} isLoading={false} />);
+
+			expect(screen.getByTestId("image-model-catalog-disk-qwen-image")).toBeTruthy();
+		});
+	});
 });
+
+function catalogEntry(overrides: Partial<ImageModelCatalogEntryView> = {}): ImageModelCatalogEntryView {
+	return {
+		id: "qwen-image",
+		displayName: "Qwen-Image",
+		publisher: "QuantStack",
+		repoId: "QuantStack/Qwen-Image-GGUF",
+		family: "QwenImage",
+		license: "apache-2.0",
+		recommended: false,
+		notes: null,
+		parts: [
+			{ role: "Diffusion", fileName: "Qwen_Image-Q4_K_M.gguf", repoId: null, sizeBytes: 13_065_746_976 },
+			{
+				role: "Llm",
+				fileName: "Qwen2.5-VL-7B-Instruct.Q4_K_M.gguf",
+				repoId: "mradermacher/Qwen2.5-VL-7B-Instruct-GGUF",
+				sizeBytes: 4_683_072_512,
+			},
+		],
+		totalSizeBytes: 17_748_819_488,
+		isInstalled: false,
+		fitVerdict: "Fits",
+		residentBytes: 13_065_746_976,
+		fitBudgetBytes: 34_359_738_368,
+		fitsOnDisk: true,
+		...overrides,
+	};
+}
 
 // React tracks the input's value on the DOM node, so a native setter + input event is needed for a controlled input.
 function setValue(input: HTMLInputElement, value: string) {
