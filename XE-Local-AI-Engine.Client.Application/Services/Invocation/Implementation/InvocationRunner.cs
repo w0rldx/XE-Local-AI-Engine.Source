@@ -79,7 +79,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
     // The budgeter's hard-stop (see ApplyContextBudgetAsync): history still exceeds the resolved context budget after
     // the two-pass truncation. A fixed, path-free constant carrying no token counts, model names, or content.
     private const string ContextBudgetExceededMessage =
-        "Conversation exceeds the model's context window even after truncation — start a new chat or switch to a larger-context model.";
+        "Conversation exceeds the model's context window even after truncation — Compact the conversation to summarize older messages, start a new chat, or switch to a larger-context model.";
 
     private static readonly Regex FrameworkExceptionNamePattern =
         new(@"\b(?:Microsoft|System)(?:\.[A-Za-z_][A-Za-z0-9_]*)*\.[A-Za-z_][A-Za-z0-9_]*Exception\b|\b(?:AgentException|ChatClientAgentException)\b", RegexOptions.CultureInvariant,

@@ -590,11 +590,13 @@ public sealed class NodeChatStreamService(
         // context; the resolver keeps only the chosen branch.
         var selected = SelectedPathResolver.Resolve(conversation.Messages, selectedPath);
 
-        // The synthetic context messages (attachment inlining, then knowledge-base grounding) apply to plain chat only
-        // and are prepended so the model reads their content before the conversation history. They take the first slots
-        // and the history shifts down by their count. Attachments precede knowledge so uploaded files (explicitly
-        // attached this conversation) read ahead of the retrieved knowledge supplement.
-        var leadingContext = new List<ConversationMessageDto>(capacity: 2);
+        // The synthetic context messages (attachment inlining, then knowledge-base grounding, then the compaction
+        // synopsis) apply to plain chat only and are prepended so the model reads their content before the recent
+        // conversation history. They take the first slots and the history shifts down by their count. Attachments precede
+        // knowledge so uploaded files (explicitly attached this conversation) read ahead of the retrieved knowledge
+        // supplement; the compaction synopsis comes last of the three so the condensed older history sits immediately
+        // before the recent verbatim turns.
+        var leadingContext = new List<ConversationMessageDto>(capacity: 3);
         if (attachmentContext is not null)
         {
             leadingContext.Add(attachmentContext with
@@ -609,6 +611,25 @@ public sealed class NodeChatStreamService(
             {
                 SortOrder = leadingContext.Count
             });
+        }
+
+        // Non-destructive compaction: when a synopsis covers messages up to a sequence, send it in their place and drop
+        // those older messages from the verbatim history. The originals remain persisted — this only shapes what is sent,
+        // and the newest turns beyond the covered sequence are always kept verbatim.
+        int? compactionCoversToSequence = conversation.CompactionSummary is { Length: > 0 } && conversation.CompactionSummaryCoversToSequence is { } cover
+            ? cover
+            : null;
+        if (compactionCoversToSequence is { } coveredSequence)
+        {
+            leadingContext.Add(new ConversationMessageDto
+            {
+                Id = Guid.NewGuid(),
+                Role = MessageRole.User,
+                Content = $"[Summary of the earlier conversation, condensed to fit the context window]\n{conversation.CompactionSummary}",
+                SortOrder = leadingContext.Count
+            });
+
+            selected = [.. selected.Where(message => message.Sequence > coveredSequence)];
         }
 
         var history = selected

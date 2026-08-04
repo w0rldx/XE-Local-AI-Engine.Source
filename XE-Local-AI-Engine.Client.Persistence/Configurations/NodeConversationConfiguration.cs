@@ -56,6 +56,17 @@ internal sealed class NodeConversationConfiguration : IEntityTypeConfiguration<N
                .HasColumnName("memory_excluded")
                .HasDefaultValue(false);
 
+        // Non-destructive compaction synopsis (encrypted BLOB) + the highest message sequence it folds in + its
+        // last-updated timestamp. All nullable and additive; a pre-feature conversation reads all three as NULL.
+        builder.Property(entity => entity.CompactionSummary)
+               .HasColumnName("compaction_summary");
+
+        builder.Property(entity => entity.CompactionSummaryCoversToSequence)
+               .HasColumnName("compaction_summary_covers_to_sequence");
+
+        builder.Property(entity => entity.CompactionSummaryUpdatedAtUtc)
+               .HasColumnName("compaction_summary_updated_at_utc");
+
         builder.HasMany(entity => entity.Messages)
                .WithOne(entity => entity.Conversation)
                .HasForeignKey(entity => entity.ConversationId)

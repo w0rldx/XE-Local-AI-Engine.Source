@@ -16,6 +16,7 @@ import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
 import { AgentSelectorCard } from "@/features/chat/components/AgentSelectorCard";
 import { ChatAttachmentChips } from "@/features/chat/components/ChatAttachmentChips";
 import { ChatSamplingOptionsDialog } from "@/features/chat/components/ChatSamplingOptionsDialog";
+import { CompactButton } from "@/features/chat/components/CompactButton";
 import { ContextUsageBadge } from "@/features/chat/components/ContextUsageBadge";
 import { ModelSelectorCard } from "@/features/chat/components/ModelSelectorCard";
 import type { ChatAttachment, PendingAttachmentUpload } from "@/features/chat/models/ChatAttachmentModels";
@@ -382,7 +383,21 @@ export function ChatInputArea({
 					</Tooltip>
 				) : null}
 				{showVoiceControls ? <VoiceComposerControls /> : null}
-				{showContextUsage && contextUsage ? <ContextUsageBadge {...contextUsage} /> : null}
+				{showContextUsage && contextUsage ? (
+					<Group gap={4} wrap="nowrap">
+						<ContextUsageBadge {...contextUsage} />
+						<CompactButton
+							percentUsed={
+								contextUsage.usedTokens !== undefined && contextUsage.maxTokens !== undefined && contextUsage.maxTokens > 0
+									? (contextUsage.usedTokens / contextUsage.maxTokens) * 100
+									: undefined
+							}
+							// Read-only (e.g. remote) conversations reject the mutation with 409, and a live turn is already
+							// driving the local runtime — disable compaction in both cases, mirroring the composer.
+							disabled={disabled || isSending}
+						/>
+					</Group>
+				) : null}
 			</Group>
 			<Button
 				data-testid="chat-send-button"

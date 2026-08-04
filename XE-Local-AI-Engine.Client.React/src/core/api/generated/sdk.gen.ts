@@ -80,6 +80,9 @@ import type {
 	CodexStatusData,
 	CodexStatusErrors,
 	CodexStatusResponses,
+	CompactNodeChatConversationData,
+	CompactNodeChatConversationErrors,
+	CompactNodeChatConversationResponses,
 	ConfirmDevelopmentContainerRuntimeData,
 	ConfirmDevelopmentContainerRuntimeErrors,
 	ConfirmDevelopmentContainerRuntimeResponses,
@@ -703,6 +706,9 @@ import {
 	zCodexLoginResponse,
 	zCodexLogoutResponse,
 	zCodexStatusResponse,
+	zCompactNodeChatConversationBody,
+	zCompactNodeChatConversationPath,
+	zCompactNodeChatConversationResponse,
 	zConfirmDevelopmentContainerRuntimeBody,
 	zConfirmDevelopmentContainerRuntimeResponse,
 	zConnectConnectionResponse,
@@ -3092,6 +3098,32 @@ export const cancelNodeChatMessage = <ThrowOnError extends boolean = false>(
 		...options,
 		headers: {
 			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const compactNodeChatConversation = <ThrowOnError extends boolean = false>(
+	options: Options<CompactNodeChatConversationData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<CompactNodeChatConversationResponses, CompactNodeChatConversationErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zCompactNodeChatConversationBody,
+					path: zCompactNodeChatConversationPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zCompactNodeChatConversationResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/chat/conversations/{conversationId}/compact",
+		...options,
+		headers: {
+			"Content-Type": "*/*",
 			...options.headers,
 		},
 	});
