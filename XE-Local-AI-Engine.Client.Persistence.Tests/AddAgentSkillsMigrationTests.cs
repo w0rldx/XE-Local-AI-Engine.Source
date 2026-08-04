@@ -53,7 +53,15 @@ public sealed class AddAgentSkillsMigrationTests : IDisposable
             "enabled",
             "version",
             "created_at_utc",
-            "updated_at_utc"
+            "updated_at_utc",
+
+            // Added later by AddAgentSkillImportProvenance; asserted here too because this test pins the whole column
+            // set after every migration has run, not just the ones this file names.
+            "frontmatter_json",
+            "origin",
+            "source_uri",
+            "imported_at_utc",
+            "content_sha256"
         }), "agent_skills should expose the mapped columns.");
 
         AssertEx.True(await NameUsesNoCaseUniqueAsync(connection).ConfigureAwait(false),
