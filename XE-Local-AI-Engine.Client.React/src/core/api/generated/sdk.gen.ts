@@ -80,6 +80,9 @@ import type {
 	CodexStatusData,
 	CodexStatusErrors,
 	CodexStatusResponses,
+	CommitSkillImportData,
+	CommitSkillImportErrors,
+	CommitSkillImportResponses,
 	ConfirmDevelopmentContainerRuntimeData,
 	ConfirmDevelopmentContainerRuntimeErrors,
 	ConfirmDevelopmentContainerRuntimeResponses,
@@ -349,6 +352,9 @@ import type {
 	GetScheduledJobRunResponses,
 	GetSkillData,
 	GetSkillErrors,
+	GetSkillResourceData,
+	GetSkillResourceErrors,
+	GetSkillResourceResponses,
 	GetSkillResponses,
 	GetStableDiffusionCppSourceBuildPrerequisitesData,
 	GetStableDiffusionCppSourceBuildPrerequisitesErrors,
@@ -464,6 +470,9 @@ import type {
 	ListScheduledJobTemplatesData,
 	ListScheduledJobTemplatesErrors,
 	ListScheduledJobTemplatesResponses,
+	ListSkillResourcesData,
+	ListSkillResourcesErrors,
+	ListSkillResourcesResponses,
 	ListSkillsData,
 	ListSkillsErrors,
 	ListSkillsResponses,
@@ -498,6 +507,9 @@ import type {
 	PreviewDevelopmentPatchData,
 	PreviewDevelopmentPatchErrors,
 	PreviewDevelopmentPatchResponses,
+	PreviewSkillImportData,
+	PreviewSkillImportErrors,
+	PreviewSkillImportResponses,
 	PromoteSuggestedPlaybookActionData,
 	PromoteSuggestedPlaybookActionErrors,
 	PromoteSuggestedPlaybookActionResponses,
@@ -703,6 +715,8 @@ import {
 	zCodexLoginResponse,
 	zCodexLogoutResponse,
 	zCodexStatusResponse,
+	zCommitSkillImportBody,
+	zCommitSkillImportResponse,
 	zConfirmDevelopmentContainerRuntimeBody,
 	zConfirmDevelopmentContainerRuntimeResponse,
 	zConnectConnectionResponse,
@@ -857,6 +871,8 @@ import {
 	zGetScheduledJobRunPath,
 	zGetScheduledJobRunResponse,
 	zGetSkillPath,
+	zGetSkillResourcePath,
+	zGetSkillResourceResponse,
 	zGetSkillResponse,
 	zGetStableDiffusionCppSourceBuildPrerequisitesQuery,
 	zGetStableDiffusionCppSourceBuildPrerequisitesResponse,
@@ -915,6 +931,8 @@ import {
 	zListScheduledJobsQuery,
 	zListScheduledJobsResponse,
 	zListScheduledJobTemplatesResponse,
+	zListSkillResourcesPath,
+	zListSkillResourcesResponse,
 	zListSkillsResponse,
 	zNodeAuthStatusResponse,
 	zNodeChangePasswordBody,
@@ -935,6 +953,8 @@ import {
 	zPreviewDevelopmentPatchBody,
 	zPreviewDevelopmentPatchPath,
 	zPreviewDevelopmentPatchResponse,
+	zPreviewSkillImportBody,
+	zPreviewSkillImportResponse,
 	zPromoteSuggestedPlaybookActionPath,
 	zPromoteSuggestedPlaybookActionResponse,
 	zPutModelKindBody,
@@ -1130,6 +1150,30 @@ export const saveTutorialState = <ThrowOnError extends boolean = false>(options:
 		},
 	});
 
+export const commitSkillImport = <ThrowOnError extends boolean = false>(options: Options<CommitSkillImportData, ThrowOnError>) =>
+	(options.client ?? client).post<CommitSkillImportResponses, CommitSkillImportErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zCommitSkillImportBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zCommitSkillImportResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/skills/import",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
 export const listSkills = <ThrowOnError extends boolean = false>(options?: Options<ListSkillsData, ThrowOnError>) =>
 	(options?.client ?? client).get<ListSkillsResponses, ListSkillsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
@@ -1233,6 +1277,75 @@ export const updateSkill = <ThrowOnError extends boolean = false>(options: Optio
 		...options,
 		headers: {
 			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const getSkillResource = <ThrowOnError extends boolean = false>(options: Options<GetSkillResourceData, ThrowOnError>) =>
+	(options.client ?? client).get<GetSkillResourceResponses, GetSkillResourceErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zGetSkillResourcePath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetSkillResourceResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/skills/{skillId}/resources/{resourceName}",
+		...options,
+	});
+
+export const listSkillResources = <ThrowOnError extends boolean = false>(
+	options: Options<ListSkillResourcesData, ThrowOnError>,
+) =>
+	(options.client ?? client).get<ListSkillResourcesResponses, ListSkillResourcesErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zListSkillResourcesPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListSkillResourcesResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/skills/{skillId}/resources",
+		...options,
+	});
+
+export const previewSkillImport = <ThrowOnError extends boolean = false>(
+	options: Options<PreviewSkillImportData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<PreviewSkillImportResponses, PreviewSkillImportErrors, ThrowOnError>({
+		...formDataBodySerializer,
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zPreviewSkillImportBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zPreviewSkillImportResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/skills/import/preview",
+		...options,
+		headers: {
+			"Content-Type": null,
 			...options.headers,
 		},
 	});
