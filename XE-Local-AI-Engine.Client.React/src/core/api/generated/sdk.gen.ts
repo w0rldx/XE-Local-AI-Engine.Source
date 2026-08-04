@@ -546,6 +546,9 @@ import type {
 	ResolveToolApprovalData,
 	ResolveToolApprovalErrors,
 	ResolveToolApprovalResponses,
+	ResolveUserQuestionData,
+	ResolveUserQuestionErrors,
+	ResolveUserQuestionResponses,
 	RetrieveImageData,
 	RetrieveImageErrors,
 	RetrieveImageResponses,
@@ -963,6 +966,8 @@ import {
 	zRenameNodeChatConversationResponse,
 	zResolveToolApprovalBody,
 	zResolveToolApprovalResponse,
+	zResolveUserQuestionBody,
+	zResolveUserQuestionResponse,
 	zRetrieveImagePath,
 	zRetrieveImageResponse,
 	zRevokeMcpServerApiKeyResponse,
@@ -3535,6 +3540,32 @@ export const resolveToolApproval = <ThrowOnError extends boolean = false>(
 		},
 	});
 
+export const resolveUserQuestion = <ThrowOnError extends boolean = false>(
+	options: Options<ResolveUserQuestionData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<ResolveUserQuestionResponses, ResolveUserQuestionErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zResolveUserQuestionBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zResolveUserQuestionResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/chat/questions/resolve",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
 export const deleteKnowledgeDocument = <ThrowOnError extends boolean = false>(
 	options: Options<DeleteKnowledgeDocumentData, ThrowOnError>,
 ) =>
@@ -3758,6 +3789,28 @@ export const getInvocationMonitor = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
+export const browseImageRepositories = <ThrowOnError extends boolean = false>(
+	options?: Options<BrowseImageRepositoriesData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<BrowseImageRepositoriesResponses, BrowseImageRepositoriesErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: zBrowseImageRepositoriesQuery.optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zBrowseImageRepositoriesResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/images/models/browse",
+		...options,
+	});
+
 export const cancelImageJob = <ThrowOnError extends boolean = false>(options: Options<CancelImageJobData, ThrowOnError>) =>
 	(options.client ?? client).post<CancelImageJobResponses, CancelImageJobErrors, ThrowOnError>({
 		requestValidator: async (data) =>
@@ -3775,6 +3828,32 @@ export const cancelImageJob = <ThrowOnError extends boolean = false>(options: Op
 		],
 		url: "/api/local/v1/images/jobs/{jobId}/cancel",
 		...options,
+	});
+
+export const cancelImageModelDownload = <ThrowOnError extends boolean = false>(
+	options: Options<CancelImageModelDownloadData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<CancelImageModelDownloadResponses, CancelImageModelDownloadErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zCancelImageModelDownloadBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zCancelImageModelDownloadResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/images/models/downloads/cancel",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
 	});
 
 export const cancelStableDiffusionCppSourceBuild = <ThrowOnError extends boolean = false>(
@@ -3851,6 +3930,25 @@ export const createImageJob = <ThrowOnError extends boolean = false>(options: Op
 		},
 	});
 
+export const deleteImageModel = <ThrowOnError extends boolean = false>(options: Options<DeleteImageModelData, ThrowOnError>) =>
+	(options.client ?? client).delete<DeleteImageModelResponses, DeleteImageModelErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zDeleteImageModelPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseValidator: async (data) => await zDeleteImageModelResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/images/models/{modelName}",
+		...options,
+	});
+
 export const ejectImageRuntime = <ThrowOnError extends boolean = false>(options: Options<EjectImageRuntimeData, ThrowOnError>) =>
 	(options.client ?? client).post<EjectImageRuntimeResponses, EjectImageRuntimeErrors, ThrowOnError>({
 		requestValidator: async (data) =>
@@ -3892,6 +3990,28 @@ export const getImageJob = <ThrowOnError extends boolean = false>(options: Optio
 			{ scheme: "bearer", type: "http" },
 		],
 		url: "/api/local/v1/images/jobs/{jobId}",
+		...options,
+	});
+
+export const getImageModelCatalog = <ThrowOnError extends boolean = false>(
+	options?: Options<GetImageModelCatalogData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<GetImageModelCatalogResponses, GetImageModelCatalogErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetImageModelCatalogResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/images/models/catalog",
 		...options,
 	});
 
@@ -3966,6 +4086,28 @@ export const getStableDiffusionCppSourceBuildStatus = <ThrowOnError extends bool
 			{ scheme: "bearer", type: "http" },
 		],
 		url: "/api/local/v1/images/runtime/source-build/status",
+		...options,
+	});
+
+export const inspectImageRepository = <ThrowOnError extends boolean = false>(
+	options?: Options<InspectImageRepositoryData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<InspectImageRepositoryResponses, InspectImageRepositoryErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: zInspectImageRepositoryQuery.optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zInspectImageRepositoryResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/images/models/inspect",
 		...options,
 	});
 
@@ -5863,115 +6005,4 @@ export const updateSuggestedPlaybookAction = <ThrowOnError extends boolean = fal
 			"Content-Type": "application/json",
 			...options.headers,
 		},
-	});
-
-export const cancelImageModelDownload = <ThrowOnError extends boolean = false>(
-	options: Options<CancelImageModelDownloadData, ThrowOnError>,
-) =>
-	(options.client ?? client).post<CancelImageModelDownloadResponses, CancelImageModelDownloadErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: zCancelImageModelDownloadBody,
-					path: z.never().optional(),
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zCancelImageModelDownloadResponse.parseAsync(data),
-		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
-		],
-		url: "/api/local/v1/images/models/downloads/cancel",
-		...options,
-		headers: {
-			"Content-Type": "application/json",
-			...options.headers,
-		},
-	});
-
-export const deleteImageModel = <ThrowOnError extends boolean = false>(options: Options<DeleteImageModelData, ThrowOnError>) =>
-	(options.client ?? client).delete<DeleteImageModelResponses, DeleteImageModelErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: z.never().optional(),
-					path: zDeleteImageModelPath,
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseValidator: async (data) => await zDeleteImageModelResponse.parseAsync(data),
-		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
-		],
-		url: "/api/local/v1/images/models/{modelName}",
-		...options,
-	});
-
-export const getImageModelCatalog = <ThrowOnError extends boolean = false>(
-	options?: Options<GetImageModelCatalogData, ThrowOnError>,
-) =>
-	(options?.client ?? client).get<GetImageModelCatalogResponses, GetImageModelCatalogErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: z.never().optional(),
-					path: z.never().optional(),
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zGetImageModelCatalogResponse.parseAsync(data),
-		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
-		],
-		url: "/api/local/v1/images/models/catalog",
-		...options,
-	});
-
-export const browseImageRepositories = <ThrowOnError extends boolean = false>(
-	options?: Options<BrowseImageRepositoriesData, ThrowOnError>,
-) =>
-	(options?.client ?? client).get<BrowseImageRepositoriesResponses, BrowseImageRepositoriesErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: z.never().optional(),
-					path: z.never().optional(),
-					query: zBrowseImageRepositoriesQuery.optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zBrowseImageRepositoriesResponse.parseAsync(data),
-		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
-		],
-		url: "/api/local/v1/images/models/browse",
-		...options,
-	});
-
-export const inspectImageRepository = <ThrowOnError extends boolean = false>(
-	options?: Options<InspectImageRepositoryData, ThrowOnError>,
-) =>
-	(options?.client ?? client).get<InspectImageRepositoryResponses, InspectImageRepositoryErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: z.never().optional(),
-					path: z.never().optional(),
-					query: zInspectImageRepositoryQuery.optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zInspectImageRepositoryResponse.parseAsync(data),
-		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
-		],
-		url: "/api/local/v1/images/models/inspect",
-		...options,
 	});

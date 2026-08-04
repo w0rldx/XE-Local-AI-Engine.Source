@@ -185,6 +185,28 @@ describe("ToolCallCard", () => {
 		expect(resolveApprovalSpy.mock.calls[0]?.[0]).toEqual({ body: { requestId: "approval-77", approved: false } });
 	});
 
+	it("renders the inline answer card instead of the generic waiting body when the part carries a question", () => {
+		renderWithProviders(
+			<ToolCallCard
+				part={toolPart({
+					name: "ask_user",
+					state: "waiting",
+					requiresApproval: true,
+					// An ask_user call is approval-routed, so it also carries an approval request id; the question
+					// payload must win, otherwise the operator gets Approve/Deny on a question they cannot answer.
+					pendingApprovalRequestId: "approval-42",
+					pendingQuestion: {
+						requestId: "question-42",
+						questions: [{ question: "Which auth method?", options: [{ label: "OAuth" }, { label: "API key" }] }],
+					},
+				})}
+			/>,
+		);
+
+		expect(screen.getByTestId("chat-ask-user-card")).toBeTruthy();
+		expect(screen.queryByTestId("chat-tool-call-approve-ask_user")).toBeNull();
+	});
+
 	it("starts minimized and keeps an operator-expanded state across a remount (keyed by tool id)", () => {
 		// Default is collapsed.
 		const first = renderWithProviders(<ToolCallCard part={toolPart({ id: "persist-1", name: "persist_tool" })} />);

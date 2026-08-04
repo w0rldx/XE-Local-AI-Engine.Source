@@ -1707,6 +1707,25 @@ export const zXeLocalAiEngineClientEndpointsLocalChatV1ResolveToolApprovalReques
 	approved: z.boolean(),
 });
 
+export const zXeLocalAiEngineClientEndpointsLocalChatV1ResolveUserQuestionResponse = z.object({
+	requestId: z.string(),
+	answerCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalChatV1ResolveUserQuestionAnswerDto = z.object({
+	question: z.string(),
+	selected: z.array(z.string()).nullish(),
+	other: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalChatV1ResolveUserQuestionRequest = z.object({
+	requestId: z.string().min(1),
+	answers: z.array(zXeLocalAiEngineClientEndpointsLocalChatV1ResolveUserQuestionAnswerDto),
+});
+
 export const zXeLocalAiEngineClientEndpointsLocalChatV1UploadConversationFileRequest = z.object({
 	file: z.string().nullish(),
 });
@@ -1911,7 +1930,36 @@ export const zXeLocalAiEngineClientEndpointsInvocationsV1InvocationMonitorRespon
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 });
 
+export const zXeLocalAiEngineClientEndpointsImagesV1ImageRepositoryResponse = z.object({
+	repoId: z.string(),
+	isGated: z.boolean(),
+	downloads: z.int(),
+	likes: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	lastModifiedAtUtc: z.int(),
+	license: z.string().nullish(),
+	hasUsableWeights: z.boolean(),
+	isTrustedPublisher: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1BrowseImageRepositoriesResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsImagesV1ImageRepositoryResponse),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1BrowseImageRepositoriesRequest = z.record(z.string(), z.never());
+
 export const zXeLocalAiEngineClientEndpointsImagesV1ImageJobRouteRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsImagesV1CancelImageModelDownloadResponse = z.object({
+	modelName: z.string(),
+	cancelled: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1CancelImageModelDownloadRequest = z.object({
+	modelName: z.string(),
+});
 
 export const zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBackendDto = z.enum(["cpu", "vulkan", "cuda"]);
 
@@ -2027,6 +2075,8 @@ export const zXeLocalAiEngineClientEndpointsImagesV1CreateImageJobRequest = z.ob
 	cfgScale: z.number().optional(),
 });
 
+export const zXeLocalAiEngineClientEndpointsImagesV1DeleteImageModelRequest = z.record(z.string(), z.never());
+
 export const zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionInstalledRuntimeValidityDto = z.enum(["active", "invalid"]);
 
 export const zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionInstalledRuntimeResponse = z.object({
@@ -2046,6 +2096,36 @@ export const zXeLocalAiEngineClientEndpointsImagesV1ImageRuntimeStatusResponse =
 	activity: zXeLocalAiEngineClientEndpointsImagesV1ImageRuntimeActivityResponse,
 });
 
+export const zXeLocalAiEngineClientEndpointsImagesV1ImageModelCatalogPartResponse = z.object({
+	role: z.string(),
+	fileName: z.string(),
+	repoId: z.string().nullish(),
+	sizeBytes: z.int(),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1ImageModelCatalogEntryResponse = z.object({
+	id: z.string(),
+	displayName: z.string(),
+	publisher: z.string(),
+	repoId: z.string(),
+	family: z.string(),
+	license: z.string(),
+	recommended: z.boolean(),
+	notes: z.string().nullish(),
+	parts: z.array(zXeLocalAiEngineClientEndpointsImagesV1ImageModelCatalogPartResponse),
+	totalSizeBytes: z.int(),
+	isInstalled: z.boolean(),
+	fitVerdict: z.string(),
+	residentBytes: z.int(),
+	fitBudgetBytes: z.int(),
+	fitsOnDisk: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1GetImageModelCatalogResponse = z.object({
+	catalogVersion: z.string(),
+	items: z.array(zXeLocalAiEngineClientEndpointsImagesV1ImageModelCatalogEntryResponse),
+});
+
 export const zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildPrerequisiteItemResponse = z.object({
 	key: z.string(),
 	satisfied: z.boolean(),
@@ -2062,6 +2142,22 @@ export const zXeLocalAiEngineClientEndpointsImagesV1GetStableDiffusionCppSourceB
 	z.string(),
 	z.never(),
 );
+
+export const zXeLocalAiEngineClientEndpointsImagesV1ImageRepositoryFileResponse = z.object({
+	fileName: z.string(),
+	format: z.string(),
+	sizeBytes: z.int(),
+	suggestedRole: z.string(),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1InspectImageRepositoryResponse = z.object({
+	repoId: z.string(),
+	isGated: z.boolean(),
+	license: z.string().nullish(),
+	files: z.array(zXeLocalAiEngineClientEndpointsImagesV1ImageRepositoryFileResponse),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1InspectImageRepositoryRequest = z.record(z.string(), z.never());
 
 export const zXeLocalAiEngineClientEndpointsImagesV1ListImageJobsResponse = z.object({
 	items: z.array(zXeLocalAiEngineClientEndpointsImagesV1ImageJobResponse),
@@ -3165,79 +3261,6 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActio
 		.optional(),
 });
 
-export const zXeLocalAiEngineClientEndpointsImagesV1CancelImageModelDownloadResponse = z.object({
-	modelName: z.string(),
-	cancelled: z.boolean(),
-});
-
-export const zXeLocalAiEngineClientEndpointsImagesV1CancelImageModelDownloadRequest = z.object({
-	modelName: z.string(),
-});
-
-export const zXeLocalAiEngineClientEndpointsImagesV1DeleteImageModelRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsImagesV1ImageModelCatalogPartResponse = z.object({
-	role: z.string(),
-	fileName: z.string(),
-	repoId: z.string().nullish(),
-	sizeBytes: z.int(),
-});
-
-export const zXeLocalAiEngineClientEndpointsImagesV1ImageModelCatalogEntryResponse = z.object({
-	id: z.string(),
-	displayName: z.string(),
-	publisher: z.string(),
-	repoId: z.string(),
-	family: z.string(),
-	license: z.string(),
-	recommended: z.boolean(),
-	notes: z.string().nullish(),
-	parts: z.array(zXeLocalAiEngineClientEndpointsImagesV1ImageModelCatalogPartResponse),
-	totalSizeBytes: z.int(),
-	isInstalled: z.boolean(),
-	fitVerdict: z.string(),
-	residentBytes: z.int(),
-	fitBudgetBytes: z.int(),
-	fitsOnDisk: z.boolean(),
-});
-
-export const zXeLocalAiEngineClientEndpointsImagesV1GetImageModelCatalogResponse = z.object({
-	catalogVersion: z.string(),
-	items: z.array(zXeLocalAiEngineClientEndpointsImagesV1ImageModelCatalogEntryResponse),
-});
-
-export const zXeLocalAiEngineClientEndpointsImagesV1ImageRepositoryFileResponse = z.object({
-	fileName: z.string(),
-	format: z.string(),
-	sizeBytes: z.int(),
-	suggestedRole: z.string(),
-});
-
-export const zXeLocalAiEngineClientEndpointsImagesV1ImageRepositoryResponse = z.object({
-	repoId: z.string(),
-	isGated: z.boolean(),
-	downloads: z.int(),
-	likes: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	lastModifiedAtUtc: z.int(),
-	license: z.string().nullish(),
-	hasUsableWeights: z.boolean(),
-	isTrustedPublisher: z.boolean(),
-});
-
-export const zXeLocalAiEngineClientEndpointsImagesV1BrowseImageRepositoriesResponse = z.object({
-	items: z.array(zXeLocalAiEngineClientEndpointsImagesV1ImageRepositoryResponse),
-});
-
-export const zXeLocalAiEngineClientEndpointsImagesV1InspectImageRepositoryResponse = z.object({
-	repoId: z.string(),
-	isGated: z.boolean(),
-	license: z.string().nullish(),
-	files: z.array(zXeLocalAiEngineClientEndpointsImagesV1ImageRepositoryFileResponse),
-});
-
 /**
  * Success
  */
@@ -4096,6 +4119,13 @@ export const zResolveToolApprovalBody = zXeLocalAiEngineClientEndpointsLocalChat
  */
 export const zResolveToolApprovalResponse = zXeLocalAiEngineClientEndpointsLocalChatV1ResolveToolApprovalResponse;
 
+export const zResolveUserQuestionBody = zXeLocalAiEngineClientEndpointsLocalChatV1ResolveUserQuestionRequest;
+
+/**
+ * Success
+ */
+export const zResolveUserQuestionResponse = zXeLocalAiEngineClientEndpointsLocalChatV1ResolveUserQuestionResponse;
+
 export const zDeleteKnowledgeDocumentPath = z.object({
 	documentId: z.guid(),
 });
@@ -4163,6 +4193,22 @@ export const zSearchKnowledgeResponse = zXeLocalAiEngineClientEndpointsKnowledge
  */
 export const zGetInvocationMonitorResponse = zXeLocalAiEngineClientEndpointsInvocationsV1InvocationMonitorResponse;
 
+export const zBrowseImageRepositoriesQuery = z.object({
+	query: z.string().nullish(),
+	limit: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	sort: z.string().nullish(),
+	ggufOnly: z.boolean().nullish(),
+});
+
+/**
+ * Success
+ */
+export const zBrowseImageRepositoriesResponse = zXeLocalAiEngineClientEndpointsImagesV1BrowseImageRepositoriesResponse;
+
 export const zCancelImageJobPath = z.object({
 	jobId: z.guid(),
 });
@@ -4171,6 +4217,13 @@ export const zCancelImageJobPath = z.object({
  * No Content
  */
 export const zCancelImageJobResponse = z.void();
+
+export const zCancelImageModelDownloadBody = zXeLocalAiEngineClientEndpointsImagesV1CancelImageModelDownloadRequest;
+
+/**
+ * Success
+ */
+export const zCancelImageModelDownloadResponse = zXeLocalAiEngineClientEndpointsImagesV1CancelImageModelDownloadResponse;
 
 export const zCancelStableDiffusionCppSourceBuildBody = zXeLocalAiEngineClientEndpointsImagesV1ImageRuntimeActionRequest;
 
@@ -4192,6 +4245,15 @@ export const zCreateImageJobBody = zXeLocalAiEngineClientEndpointsImagesV1Create
  */
 export const zCreateImageJobResponse = zXeLocalAiEngineClientEndpointsImagesV1ImageJobResponse;
 
+export const zDeleteImageModelPath = z.object({
+	modelName: z.string(),
+});
+
+/**
+ * No Content
+ */
+export const zDeleteImageModelResponse = z.void();
+
 export const zEjectImageRuntimeBody = zXeLocalAiEngineClientEndpointsImagesV1ImageRuntimeActionRequest;
 
 /**
@@ -4207,6 +4269,11 @@ export const zGetImageJobPath = z.object({
  * Success
  */
 export const zGetImageJobResponse = zXeLocalAiEngineClientEndpointsImagesV1ImageJobResponse;
+
+/**
+ * Success
+ */
+export const zGetImageModelCatalogResponse = zXeLocalAiEngineClientEndpointsImagesV1GetImageModelCatalogResponse;
 
 /**
  * Success
@@ -4228,6 +4295,15 @@ export const zGetStableDiffusionCppSourceBuildPrerequisitesResponse =
  */
 export const zGetStableDiffusionCppSourceBuildStatusResponse =
 	zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildStatusResponse;
+
+export const zInspectImageRepositoryQuery = z.object({
+	repoId: z.string().nullish(),
+});
+
+/**
+ * Success
+ */
+export const zInspectImageRepositoryResponse = zXeLocalAiEngineClientEndpointsImagesV1InspectImageRepositoryResponse;
 
 /**
  * Success
@@ -4896,49 +4972,3 @@ export const zUpdateSuggestedPlaybookActionPath = z.object({
  * Success
  */
 export const zUpdateSuggestedPlaybookActionResponse = zXeLocalAiEngineClientEndpointsAgentsV1PlaybookActionResponse;
-
-export const zCancelImageModelDownloadBody = zXeLocalAiEngineClientEndpointsImagesV1CancelImageModelDownloadRequest;
-
-/**
- * Success
- */
-export const zCancelImageModelDownloadResponse = zXeLocalAiEngineClientEndpointsImagesV1CancelImageModelDownloadResponse;
-
-export const zDeleteImageModelPath = z.object({
-	modelName: z.string(),
-});
-
-/**
- * No Content
- */
-export const zDeleteImageModelResponse = z.void();
-
-/**
- * Success
- */
-export const zGetImageModelCatalogResponse = zXeLocalAiEngineClientEndpointsImagesV1GetImageModelCatalogResponse;
-
-export const zBrowseImageRepositoriesQuery = z.object({
-	query: z.string().nullish(),
-	limit: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	sort: z.string().nullish(),
-	ggufOnly: z.boolean().nullish(),
-});
-
-/**
- * Success
- */
-export const zBrowseImageRepositoriesResponse = zXeLocalAiEngineClientEndpointsImagesV1BrowseImageRepositoriesResponse;
-
-export const zInspectImageRepositoryQuery = z.object({
-	repoId: z.string().nullish(),
-});
-
-/**
- * Success
- */
-export const zInspectImageRepositoryResponse = zXeLocalAiEngineClientEndpointsImagesV1InspectImageRepositoryResponse;

@@ -17,6 +17,7 @@ using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Implementation;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration;
+using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
@@ -31,6 +32,7 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
 using XE_Local_AI_Engine.Client.Services.Events;
+using XE_Local_AI_Engine.Client.Services.Interaction;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Client.Services.Invocation.Envelope.Implementation;
@@ -45,6 +47,8 @@ using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
 public sealed class InvocationRunnerTests
 {
+    private static readonly JsonSerializerOptions AskUserArgumentOptions = new(JsonSerializerDefaults.Web);
+
     [Test]
     public async Task RunAsync_ValidPackage_SendsAcceptance()
     {
@@ -1166,6 +1170,193 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
+    public async Task RunAsync_WhenAskUserQuestionSurfaces_PromptsTheOperatorAndResumesWithTheAnswer()
+    {
+        // ask_user rides the approval seam for its BLOCKING behaviour, not for a risk verdict: the runner must present
+        // the QUESTIONS (not an approve/deny card), park, then always approve so the framework executes the tool and the
+        // handler returns the stashed answer as the tool result.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        UserQuestionLifecyclePayload? question = null;
+        dispatcher.ReportUserQuestionAsync(Arg.Do<UserQuestionLifecyclePayload>(payload => question = payload)).Returns(Task.CompletedTask);
+        var stash = new UserQuestionAnswerStash(TimeProvider.System);
+        IReadOnlyList<ChatMessage>? resumeMessages = null;
+        var segment = 0;
+        var factory = CreateMessageCapturingFactory(_ =>
+            {
+                segment++;
+                return segment == 1 ? AskUserRequestUpdates(ValidAskUserArguments()) : CreateUpdates("done");
+            },
+            messages => resumeMessages = messages);
+        var runner = CreateRunner(sender, factory, eventDispatcher: dispatcher, userQuestionAnswerStash: stash);
+
+        var runTask = RunAsync(runner, RuntimePackageBuilder.Valid().WithAllowedTool(AskUserTool.ToolName).Build());
+        await AssertEx.EventuallyAsync(() => question is not null, TimeSpan.FromSeconds(5));
+
+        var surfaced = AssertEx.NotNull(question);
+        AssertEx.Equal(AskUserTool.ToolName, surfaced.ToolName);
+        AssertEx.Equal("call-ask-user", surfaced.CallId, "the question card must attach to the tool-call card the model is waiting on");
+        AssertEx.Equal("Which auth method?", surfaced.Questions.Single().Question);
+        AssertEx.True(surfaced.Questions.Single().Options[0].Recommended);
+        AssertEx.False(runTask.IsCompleted, "the turn must hold until the operator answers");
+
+        runner.ResolveUserQuestionResult(new UserQuestionAnsweredEvent(surfaced.RequestId,
+            [new UserQuestionAnswer("Which auth method?", ["OAuth device flow"], Other: null)]));
+        await runTask;
+
+        AssertEx.Equal(expected: 2, segment, "the answered question must resume the turn threadlessly");
+        var response = AssertEx.NotNull(resumeMessages).SelectMany(static message => message.Contents).OfType<ToolApprovalResponseContent>().Single();
+        AssertEx.True(response.Approved, "a question round-trip always approves — the answer travels as the TOOL RESULT, not as an approval verdict");
+
+        AssertEx.True(stash.TryPop("call-ask-user", out var stashed), "the answer must be stashed under the tool call's CallId for the handler to pop");
+        AssertEx.Contains(stashed, "\"answered\":true");
+        AssertEx.Contains(stashed, "OAuth device flow");
+    }
+
+    [Test]
+    public async Task RunAsync_WhenAskUserArgumentsAreMalformed_NeverPromptsAndTheTurnStillCompletes()
+    {
+        // Nothing unvalidated may reach a human: ask_user is intercepted before ToolArgumentRepairAIFunction, so the
+        // runner is the first guard. A bad call is answered to the MODEL, not shown to the operator.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var stash = new UserQuestionAnswerStash(TimeProvider.System);
+        var segment = 0;
+        var factory = CreateFactory(_ =>
+        {
+            segment++;
+            return segment == 1 ? AskUserRequestUpdates(new Dictionary<string, object?>(StringComparer.Ordinal) { ["questions"] = Array.Empty<object>() }) : CreateUpdates("done");
+        });
+        var runner = CreateRunner(sender, factory, eventDispatcher: dispatcher, userQuestionAnswerStash: stash);
+        var package = RuntimePackageBuilder.Valid().WithAllowedTool(AskUserTool.ToolName).Build();
+
+        await RunAsync(runner, package).WaitAsync(TimeSpan.FromSeconds(10));
+
+        await dispatcher.DidNotReceive().ReportUserQuestionAsync(Arg.Any<UserQuestionLifecyclePayload>());
+        AssertEx.Equal(expected: 2, segment, "a malformed call must still resume the turn rather than fail it");
+        AssertEx.True(stash.TryPop("call-ask-user", out var stashed));
+        AssertEx.Contains(stashed, "\"answered\":false");
+        AssertEx.Contains(stashed, UserQuestionResults.MalformedCallReason);
+        await dispatcher.DidNotReceive().ReportInvocationFailedAsync(package.InvocationId, Arg.Any<string>(), Arg.Any<FailureCategory>());
+    }
+
+    [Test]
+    public async Task RunAsync_WhenAskUserCallHasABlankCallId_StillCompletesInsteadOfFaultingTheTurn()
+    {
+        // ResolveToolCallCardId preserves a non-null EMPTY-STRING CallId (so the card key matches the streaming
+        // lifecycle's), and a blank key would otherwise throw out of the stash and take the whole turn with it.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        UserQuestionLifecyclePayload? question = null;
+        dispatcher.ReportUserQuestionAsync(Arg.Do<UserQuestionLifecyclePayload>(payload => question = payload)).Returns(Task.CompletedTask);
+        var segment = 0;
+        var factory = CreateFactory(_ =>
+        {
+            segment++;
+            return segment == 1 ? BlankCallIdAskUserUpdates() : CreateUpdates("done");
+        });
+        var runner = CreateRunner(sender, factory, eventDispatcher: dispatcher);
+        var package = RuntimePackageBuilder.Valid().WithAllowedTool(AskUserTool.ToolName).Build();
+
+        var runTask = RunAsync(runner, package);
+        await AssertEx.EventuallyAsync(() => question is not null, TimeSpan.FromSeconds(5));
+        runner.ResolveUserQuestionResult(new UserQuestionAnsweredEvent(AssertEx.NotNull(question).RequestId, [new UserQuestionAnswer("Q?", ["A"], Other: null)]));
+        await runTask.WaitAsync(TimeSpan.FromSeconds(10));
+
+        AssertEx.Equal(expected: 2, segment);
+        await dispatcher.DidNotReceive().ReportInvocationFailedAsync(package.InvocationId, Arg.Any<string>(), Arg.Any<FailureCategory>());
+    }
+
+    [Test]
+    public async Task ResolveUserQuestionResult_WhenRequestIdIsUnmatched_DoesNotResumeTheParkedTurn()
+    {
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        UserQuestionLifecyclePayload? question = null;
+        dispatcher.ReportUserQuestionAsync(Arg.Do<UserQuestionLifecyclePayload>(payload => question = payload)).Returns(Task.CompletedTask);
+        var segment = 0;
+        var factory = CreateFactory(_ =>
+        {
+            segment++;
+            return segment == 1 ? AskUserRequestUpdates(ValidAskUserArguments()) : CreateUpdates("done");
+        });
+        var runner = CreateRunner(sender, factory, eventDispatcher: dispatcher);
+
+        var runTask = RunAsync(runner, RuntimePackageBuilder.Valid().WithAllowedTool(AskUserTool.ToolName).Build());
+        await AssertEx.EventuallyAsync(() => question is not null, TimeSpan.FromSeconds(5));
+
+        runner.ResolveUserQuestionResult(new UserQuestionAnsweredEvent($"unmatched-{Guid.NewGuid():N}", [new UserQuestionAnswer("Q?", ["A"], Other: null)]));
+
+        AssertEx.False(runTask.IsCompleted, "a stale or unknown answer must be a no-op, never a resume");
+        AssertEx.Equal(expected: 1, segment);
+
+        runner.ResolveUserQuestionResult(new UserQuestionAnsweredEvent(AssertEx.NotNull(question).RequestId, [new UserQuestionAnswer("Q?", ["A"], Other: null)]));
+        await runTask;
+
+        AssertEx.Equal(expected: 2, segment, "the matching answer must resume the invocation");
+    }
+
+    [Test]
+    public async Task RunAsync_WhenParkedOnAQuestion_TheOperatorsThinkingTimeIsNotChargedToTheTurnDeadline()
+    {
+        // D5 regression. The invocation deadline (CancelAfter(InvocationTimeout)) used to keep running while a human
+        // was thinking, so the operator got "300 s minus whatever the model already spent" and the 10-minute
+        // MaxPendingToolCallAge cap was dead code. Here the turn budget is 1 s and the operator takes ~2 s — without the
+        // re-arm the turn dies as a Timeout before the answer can land.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        UserQuestionLifecyclePayload? question = null;
+        dispatcher.ReportUserQuestionAsync(Arg.Do<UserQuestionLifecyclePayload>(payload => question = payload)).Returns(Task.CompletedTask);
+        var segment = 0;
+        var factory = CreateFactory(_ =>
+        {
+            segment++;
+            return segment == 1 ? AskUserRequestUpdates(ValidAskUserArguments()) : CreateUpdates("done");
+        });
+        var runner = CreateRunner(sender, factory, eventDispatcher: dispatcher);
+        var package = RuntimePackageBuilder.Valid().WithTimeout(invocationSeconds: 1).WithAllowedTool(AskUserTool.ToolName).Build();
+
+        var runTask = RunAsync(runner, package);
+        await AssertEx.EventuallyAsync(() => question is not null, TimeSpan.FromSeconds(5));
+        await Task.Delay(TimeSpan.FromSeconds(2));
+
+        AssertEx.False(runTask.IsCompleted, "the turn must still be parked after the (unextended) invocation deadline would have fired");
+        runner.ResolveUserQuestionResult(new UserQuestionAnsweredEvent(AssertEx.NotNull(question).RequestId, [new UserQuestionAnswer("Q?", ["A"], Other: null)]));
+        await runTask.WaitAsync(TimeSpan.FromSeconds(10));
+
+        AssertEx.Equal(expected: 2, segment);
+        await dispatcher.DidNotReceive().ReportInvocationFailedAsync(package.InvocationId, Arg.Any<string>(), Arg.Any<FailureCategory>());
+    }
+
+    [Test]
+    public async Task RunAsync_WhenParkedOnAToolApproval_TheOperatorsThinkingTimeIsNotChargedToTheTurnDeadline()
+    {
+        // The same D5 re-arm applies to the SHIPPING tool-approval round-trip — a deliberate, separately reviewable
+        // behaviour change to an existing feature, so it gets its own regression test.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var segment = 0;
+        var factory = CreateFactory(_ =>
+        {
+            segment++;
+            return segment == 1 ? ApprovalRequestUpdates() : CreateUpdates("done");
+        });
+        var runner = CreateRunner(sender, factory, eventDispatcher: dispatcher);
+        var package = RuntimePackageBuilder.Valid().WithTimeout(invocationSeconds: 1).WithAllowedTool("run_in_agent_home").Build();
+
+        var runTask = RunAsync(runner, package);
+        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
+        await Task.Delay(TimeSpan.FromSeconds(2));
+
+        AssertEx.False(runTask.IsCompleted, "an operator weighing an approval must not be pre-empted by the model's own turn budget");
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals.Single().RequestId, Approved: true));
+        await runTask.WaitAsync(TimeSpan.FromSeconds(10));
+
+        AssertEx.Equal(expected: 2, segment);
+        await dispatcher.DidNotReceive().ReportInvocationFailedAsync(package.InvocationId, Arg.Any<string>(), Arg.Any<FailureCategory>());
+    }
+
+    [Test]
     public async Task RunAsync_WhenTwoToolApprovalsInOneSegment_AnswersBothOnResume()
     {
         // A parallel-tool-call turn surfaces TWO approval requests in one segment. The runner must present and
@@ -1801,7 +1992,8 @@ public sealed class InvocationRunnerTests
         IOrchestrationAgentFactory? orchestrationAgentFactory = null,
         ILocalModelProviderResolver? providerResolver = null,
         IProviderStreamResilience? providerStreamResilience = null,
-        ConversationContextBudgetOptions? contextBudgetOptions = null)
+        ConversationContextBudgetOptions? contextBudgetOptions = null,
+        UserQuestionAnswerStash? userQuestionAnswerStash = null)
     {
         var resolvedContextBudgetOptions = contextBudgetOptions ?? new ConversationContextBudgetOptions();
         var resolvedFactory = invocationAgentFactory ?? CreateFactory(agentUpdates ?? CreateUpdates("ok"));
@@ -1875,6 +2067,7 @@ public sealed class InvocationRunnerTests
             runtimeSettings,
             Options.Create(new SpawnOptions()),
             Substitute.For<IToolApprovalAuditRecorder>(),
+            userQuestionAnswerStash ?? new UserQuestionAnswerStash(TimeProvider.System),
             NullLogger<InvocationRunner>.Instance);
     }
 
@@ -1985,6 +2178,51 @@ public sealed class InvocationRunnerTests
             secondApproval
         });
         await Task.Yield();
+    }
+
+    // Stands in for FunctionInvokingChatClient surfacing the approval request for the approval-wrapped ask_user tool.
+    // The concrete FunctionCallContent is what carries the tool NAME and the model's raw arguments, and both are what
+    // the runner branches and parses on.
+    private static async IAsyncEnumerable<AgentResponseUpdate> AskUserRequestUpdates(IDictionary<string, object?> arguments)
+    {
+        var approvalRequest = new ToolApprovalRequestContent("approval-ask-user", new FunctionCallContent("call-ask-user", AskUserTool.ToolName, arguments));
+        yield return new AgentResponseUpdate(ChatRole.Assistant, new List<AIContent>
+        {
+            approvalRequest
+        });
+        await Task.Yield();
+    }
+
+    // An ask_user call whose CallId is a non-null EMPTY STRING — the shape the approval dedup already guards against.
+    private static async IAsyncEnumerable<AgentResponseUpdate> BlankCallIdAskUserUpdates()
+    {
+        var approvalRequest = new ToolApprovalRequestContent("approval-ask-user", new FunctionCallContent(string.Empty, AskUserTool.ToolName, ValidAskUserArguments()));
+        yield return new AgentResponseUpdate(ChatRole.Assistant, new List<AIContent>
+        {
+            approvalRequest
+        });
+        await Task.Yield();
+    }
+
+    // A well-formed ask_user call, shaped exactly as a provider hands it back (JsonElement values in the argument bag).
+    private static Dictionary<string, object?> ValidAskUserArguments()
+    {
+        const string Json = """
+            {
+              "questions": [
+                {
+                  "header": "Auth method",
+                  "question": "Which auth method?",
+                  "options": [
+                    { "label": "OAuth device flow", "description": "Works headless.", "recommended": true },
+                    { "label": "API key" }
+                  ]
+                }
+              ]
+            }
+            """;
+
+        return JsonSerializer.Deserialize<Dictionary<string, object?>>(Json, AskUserArgumentOptions)!;
     }
 
     private static async IAsyncEnumerable<AgentResponseUpdate> BlankCallIdApprovalUpdates()

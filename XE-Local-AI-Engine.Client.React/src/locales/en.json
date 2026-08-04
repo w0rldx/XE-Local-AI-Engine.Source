@@ -96,6 +96,14 @@
 			"approve": "Approve",
 			"deny": "Deny"
 		},
+		"askUser": {
+			"title": "The assistant needs your input",
+			"recommended": "Recommended",
+			"otherOption": "Other…",
+			"otherPlaceholder": "Type your own answer",
+			"submit": "Send answer",
+			"answerAllHint": "Answer every question to continue."
+		},
 		"notices": {
 			"modelSubstituted": "Model substituted",
 			"toolDisabled": "Tool disabled",
