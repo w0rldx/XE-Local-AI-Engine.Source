@@ -1412,6 +1412,22 @@ export type XeLocalAiEngineClientEndpointsLocalChatV1ResolveToolApprovalRequest 
 	approved: boolean;
 };
 
+export type XeLocalAiEngineClientEndpointsLocalChatV1ResolveUserQuestionResponse = {
+	requestId: string;
+	answerCount: number;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalChatV1ResolveUserQuestionRequest = {
+	requestId: string;
+	answers: Array<XeLocalAiEngineClientEndpointsLocalChatV1ResolveUserQuestionAnswerDto>;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalChatV1ResolveUserQuestionAnswerDto = {
+	question: string;
+	selected?: Array<string> | null;
+	other?: string | null;
+};
+
 export type XeLocalAiEngineClientEndpointsLocalChatV1UploadConversationFileRequest = {
 	file?: Blob | File | null;
 };
@@ -1538,6 +1554,7 @@ export type XeLocalAiEngineClientEndpointsInvocationsV1InvocationCurrentResponse
 	streamedThinkingChunkCount: number;
 	pendingToolCallCount: number;
 	hasPendingApproval: boolean;
+	hasPendingQuestion: boolean;
 	traceId?: string | null;
 };
 
@@ -1578,8 +1595,36 @@ export type XeLocalAiEngineClientEndpointsInvocationsV1InvocationHistoryResponse
 	traceId?: string | null;
 };
 
+export type XeLocalAiEngineClientEndpointsImagesV1BrowseImageRepositoriesResponse = {
+	items: Array<XeLocalAiEngineClientEndpointsImagesV1ImageRepositoryResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1ImageRepositoryResponse = {
+	repoId: string;
+	isGated: boolean;
+	downloads: number;
+	likes: number;
+	lastModifiedAtUtc: number;
+	license?: string | null;
+	hasUsableWeights: boolean;
+	isTrustedPublisher: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1BrowseImageRepositoriesRequest = {
+	[key: string]: never;
+};
+
 export type XeLocalAiEngineClientEndpointsImagesV1ImageJobRouteRequest = {
 	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1CancelImageModelDownloadResponse = {
+	modelName: string;
+	cancelled: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1CancelImageModelDownloadRequest = {
+	modelName: string;
 };
 
 export type XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildStatusResponse = {
@@ -1665,6 +1710,10 @@ export type XeLocalAiEngineClientEndpointsImagesV1CreateImageJobRequest = {
 	cfgScale?: number;
 };
 
+export type XeLocalAiEngineClientEndpointsImagesV1DeleteImageModelRequest = {
+	[key: string]: never;
+};
+
 export type XeLocalAiEngineClientEndpointsImagesV1ImageRuntimeStatusResponse = {
 	managedRuntime?: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionInstalledRuntimeResponse | null;
 	activity: XeLocalAiEngineClientEndpointsImagesV1ImageRuntimeActivityResponse;
@@ -1684,6 +1733,36 @@ export type XeLocalAiEngineClientEndpointsImagesV1StableDiffusionInstalledRuntim
 
 export type XeLocalAiEngineClientEndpointsImagesV1StableDiffusionInstalledRuntimeValidityDto = "active" | "invalid";
 
+export type XeLocalAiEngineClientEndpointsImagesV1GetImageModelCatalogResponse = {
+	catalogVersion: string;
+	items: Array<XeLocalAiEngineClientEndpointsImagesV1ImageModelCatalogEntryResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1ImageModelCatalogEntryResponse = {
+	id: string;
+	displayName: string;
+	publisher: string;
+	repoId: string;
+	family: string;
+	license: string;
+	recommended: boolean;
+	notes?: string | null;
+	parts: Array<XeLocalAiEngineClientEndpointsImagesV1ImageModelCatalogPartResponse>;
+	totalSizeBytes: number;
+	isInstalled: boolean;
+	fitVerdict: string;
+	residentBytes: number;
+	fitBudgetBytes: number;
+	fitsOnDisk: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1ImageModelCatalogPartResponse = {
+	role: string;
+	fileName: string;
+	repoId?: string | null;
+	sizeBytes: number;
+};
+
 export type XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildPrerequisitesResponse = {
 	backend: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBackendDto;
 	items: Array<XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildPrerequisiteItemResponse>;
@@ -1697,6 +1776,24 @@ export type XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildP
 };
 
 export type XeLocalAiEngineClientEndpointsImagesV1GetStableDiffusionCppSourceBuildPrerequisitesRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1InspectImageRepositoryResponse = {
+	repoId: string;
+	isGated: boolean;
+	license?: string | null;
+	files: Array<XeLocalAiEngineClientEndpointsImagesV1ImageRepositoryFileResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1ImageRepositoryFileResponse = {
+	fileName: string;
+	format: string;
+	sizeBytes: number;
+	suggestedRole: string;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1InspectImageRepositoryRequest = {
 	[key: string]: never;
 };
 
@@ -2649,78 +2746,6 @@ export type XeLocalAiEngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActionR
 	triggerCondition?: string | null;
 	scope?: string | null;
 	priority?: number;
-};
-
-export type XeLocalAiEngineClientEndpointsImagesV1CancelImageModelDownloadResponse = {
-	modelName: string;
-	cancelled: boolean;
-};
-
-export type XeLocalAiEngineClientEndpointsImagesV1CancelImageModelDownloadRequest = {
-	modelName: string;
-};
-
-export type XeLocalAiEngineClientEndpointsImagesV1DeleteImageModelRequest = {
-	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsImagesV1BrowseImageRepositoriesResponse = {
-	items: Array<XeLocalAiEngineClientEndpointsImagesV1ImageRepositoryResponse>;
-};
-
-export type XeLocalAiEngineClientEndpointsImagesV1GetImageModelCatalogResponse = {
-	catalogVersion: string;
-	items: Array<XeLocalAiEngineClientEndpointsImagesV1ImageModelCatalogEntryResponse>;
-};
-
-export type XeLocalAiEngineClientEndpointsImagesV1ImageModelCatalogEntryResponse = {
-	id: string;
-	displayName: string;
-	publisher: string;
-	repoId: string;
-	family: string;
-	license: string;
-	recommended: boolean;
-	notes?: string | null;
-	parts: Array<XeLocalAiEngineClientEndpointsImagesV1ImageModelCatalogPartResponse>;
-	totalSizeBytes: number;
-	isInstalled: boolean;
-	fitVerdict: string;
-	residentBytes: number;
-	fitBudgetBytes: number;
-	fitsOnDisk: boolean;
-};
-
-export type XeLocalAiEngineClientEndpointsImagesV1ImageModelCatalogPartResponse = {
-	role: string;
-	fileName: string;
-	repoId?: string | null;
-	sizeBytes: number;
-};
-
-export type XeLocalAiEngineClientEndpointsImagesV1ImageRepositoryFileResponse = {
-	fileName: string;
-	format: string;
-	sizeBytes: number;
-	suggestedRole: string;
-};
-
-export type XeLocalAiEngineClientEndpointsImagesV1ImageRepositoryResponse = {
-	repoId: string;
-	isGated: boolean;
-	downloads: number;
-	likes: number;
-	lastModifiedAtUtc: number;
-	license?: string | null;
-	hasUsableWeights: boolean;
-	isTrustedPublisher: boolean;
-};
-
-export type XeLocalAiEngineClientEndpointsImagesV1InspectImageRepositoryResponse = {
-	repoId: string;
-	isGated: boolean;
-	license?: string | null;
-	files: Array<XeLocalAiEngineClientEndpointsImagesV1ImageRepositoryFileResponse>;
 };
 
 export type GetVoiceManifestData = {
@@ -5896,6 +5921,39 @@ export type ResolveToolApprovalResponses = {
 
 export type ResolveToolApprovalResponse = ResolveToolApprovalResponses[keyof ResolveToolApprovalResponses];
 
+export type ResolveUserQuestionData = {
+	body: XeLocalAiEngineClientEndpointsLocalChatV1ResolveUserQuestionRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/chat/questions/resolve";
+};
+
+export type ResolveUserQuestionErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ResolveUserQuestionError = ResolveUserQuestionErrors[keyof ResolveUserQuestionErrors];
+
+export type ResolveUserQuestionResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsLocalChatV1ResolveUserQuestionResponse;
+};
+
+export type ResolveUserQuestionResponse = ResolveUserQuestionResponses[keyof ResolveUserQuestionResponses];
+
 export type DeleteKnowledgeDocumentData = {
 	body?: never;
 	path: {
@@ -6174,6 +6232,38 @@ export type GetInvocationMonitorResponses = {
 
 export type GetInvocationMonitorResponse = GetInvocationMonitorResponses[keyof GetInvocationMonitorResponses];
 
+export type BrowseImageRepositoriesData = {
+	body?: never;
+	path?: never;
+	query?: {
+		query?: string | null;
+		limit?: number | null;
+		sort?: string | null;
+		ggufOnly?: boolean | null;
+	};
+	url: "/api/local/v1/images/models/browse";
+};
+
+export type BrowseImageRepositoriesErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type BrowseImageRepositoriesResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsImagesV1BrowseImageRepositoriesResponse;
+};
+
+export type BrowseImageRepositoriesResponse = BrowseImageRepositoriesResponses[keyof BrowseImageRepositoriesResponses];
+
 export type CancelImageJobData = {
 	body?: never;
 	path: {
@@ -6202,6 +6292,33 @@ export type CancelImageJobResponses = {
 };
 
 export type CancelImageJobResponse = CancelImageJobResponses[keyof CancelImageJobResponses];
+
+export type CancelImageModelDownloadData = {
+	body: XeLocalAiEngineClientEndpointsImagesV1CancelImageModelDownloadRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/images/models/downloads/cancel";
+};
+
+export type CancelImageModelDownloadErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type CancelImageModelDownloadResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsImagesV1CancelImageModelDownloadResponse;
+};
+
+export type CancelImageModelDownloadResponse = CancelImageModelDownloadResponses[keyof CancelImageModelDownloadResponses];
 
 export type CancelStableDiffusionCppSourceBuildData = {
 	body: XeLocalAiEngineClientEndpointsImagesV1ImageRuntimeActionRequest;
@@ -6292,6 +6409,35 @@ export type CreateImageJobResponses = {
 
 export type CreateImageJobResponse = CreateImageJobResponses[keyof CreateImageJobResponses];
 
+export type DeleteImageModelData = {
+	body?: never;
+	path: {
+		modelName: string;
+	};
+	query?: never;
+	url: "/api/local/v1/images/models/{modelName}";
+};
+
+export type DeleteImageModelErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type DeleteImageModelResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type DeleteImageModelResponse = DeleteImageModelResponses[keyof DeleteImageModelResponses];
+
 export type EjectImageRuntimeData = {
 	body: XeLocalAiEngineClientEndpointsImagesV1ImageRuntimeActionRequest;
 	path?: never;
@@ -6350,6 +6496,33 @@ export type GetImageJobResponses = {
 };
 
 export type GetImageJobResponse = GetImageJobResponses[keyof GetImageJobResponses];
+
+export type GetImageModelCatalogData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/images/models/catalog";
+};
+
+export type GetImageModelCatalogErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetImageModelCatalogResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsImagesV1GetImageModelCatalogResponse;
+};
+
+export type GetImageModelCatalogResponse = GetImageModelCatalogResponses[keyof GetImageModelCatalogResponses];
 
 export type GetImageRuntimeStatusData = {
 	body?: never;
@@ -6442,6 +6615,35 @@ export type GetStableDiffusionCppSourceBuildStatusResponses = {
 
 export type GetStableDiffusionCppSourceBuildStatusResponse =
 	GetStableDiffusionCppSourceBuildStatusResponses[keyof GetStableDiffusionCppSourceBuildStatusResponses];
+
+export type InspectImageRepositoryData = {
+	body?: never;
+	path?: never;
+	query?: {
+		repoId?: string | null;
+	};
+	url: "/api/local/v1/images/models/inspect";
+};
+
+export type InspectImageRepositoryErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type InspectImageRepositoryResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsImagesV1InspectImageRepositoryResponse;
+};
+
+export type InspectImageRepositoryResponse = InspectImageRepositoryResponses[keyof InspectImageRepositoryResponses];
 
 export type ListImageModelDownloadsData = {
 	body?: never;
@@ -8823,147 +9025,3 @@ export type UpdateSuggestedPlaybookActionResponses = {
 
 export type UpdateSuggestedPlaybookActionResponse =
 	UpdateSuggestedPlaybookActionResponses[keyof UpdateSuggestedPlaybookActionResponses];
-
-export type CancelImageModelDownloadData = {
-	body: XeLocalAiEngineClientEndpointsImagesV1CancelImageModelDownloadRequest;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/images/models/downloads/cancel";
-};
-
-export type CancelImageModelDownloadErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type CancelImageModelDownloadResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsImagesV1CancelImageModelDownloadResponse;
-};
-
-export type CancelImageModelDownloadResponse = CancelImageModelDownloadResponses[keyof CancelImageModelDownloadResponses];
-
-export type DeleteImageModelData = {
-	body?: never;
-	path: {
-		modelName: string;
-	};
-	query?: never;
-	url: "/api/local/v1/images/models/{modelName}";
-};
-
-export type DeleteImageModelErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type DeleteImageModelResponses = {
-	/**
-	 * No Content
-	 */
-	204: void;
-};
-
-export type DeleteImageModelResponse = DeleteImageModelResponses[keyof DeleteImageModelResponses];
-
-export type GetImageModelCatalogData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/images/models/catalog";
-};
-
-export type GetImageModelCatalogErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type GetImageModelCatalogResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsImagesV1GetImageModelCatalogResponse;
-};
-
-export type GetImageModelCatalogResponse = GetImageModelCatalogResponses[keyof GetImageModelCatalogResponses];
-
-export type BrowseImageRepositoriesData = {
-	body?: never;
-	path?: never;
-	query?: {
-		query?: string | null;
-		limit?: number | null;
-		sort?: string | null;
-		ggufOnly?: boolean | null;
-	};
-	url: "/api/local/v1/images/models/browse";
-};
-
-export type BrowseImageRepositoriesErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type BrowseImageRepositoriesResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsImagesV1BrowseImageRepositoriesResponse;
-};
-
-export type BrowseImageRepositoriesResponse = BrowseImageRepositoriesResponses[keyof BrowseImageRepositoriesResponses];
-
-export type InspectImageRepositoryData = {
-	body?: never;
-	path?: never;
-	query?: {
-		repoId?: string | null;
-	};
-	url: "/api/local/v1/images/models/inspect";
-};
-
-export type InspectImageRepositoryErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type InspectImageRepositoryResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsImagesV1InspectImageRepositoryResponse;
-};
-
-export type InspectImageRepositoryResponse = InspectImageRepositoryResponses[keyof InspectImageRepositoryResponses];

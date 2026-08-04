@@ -344,7 +344,11 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
                 string.Join(", ", droppedNames));
         }
 
-        return projected;
+        // Same post-intersection union as AgentDefinitionResolver.ProjectAllowedTools: a participant is a live agent in
+        // an interactive turn, so it can always ask the operator a question regardless of its AllowedToolNames. Omitting
+        // it here would make ask_user silently unavailable for the whole turn as soon as the conversation routes through
+        // an orchestrator.
+        return AskUserToolOffer.EnsureOffered(projected, offered, _toolApprovalPolicy);
     }
 
     private async Task<IReadOnlySet<string>> BuildToolCapableSetAsync(CancellationToken cancellationToken)

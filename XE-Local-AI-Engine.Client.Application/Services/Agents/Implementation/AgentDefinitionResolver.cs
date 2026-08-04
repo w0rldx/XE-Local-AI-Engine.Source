@@ -198,14 +198,20 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
             // plain mode-off chat. With NO node policy configured the Permissive floor is identity, so the offer — and the
             // runtime-package config hash — stay byte-identical to the pre-OPP-03 mode-off path. Per-agent ToolApprovals
             // are intentionally NOT applied here: this path reproduces plain chat, which carries no per-agent overrides.
-            return
+            var wholeOffer = _localToolOfferProvider.GetOfferedTools(effectiveModelId, effectiveModelIsCloud);
+            AllowedToolDto[] composedWholeOffer =
             [
-                .. _localToolOfferProvider.GetOfferedTools(effectiveModelId, effectiveModelIsCloud)
-                                          .Select(tool => tool with
-                                          {
-                                              RequiresApproval = _toolApprovalPolicy.RequiresApproval(tool.Name, tool.Category, tool.RequiresApproval)
-                                          })
+                .. wholeOffer.Select(tool => tool with
+                {
+                    RequiresApproval = _toolApprovalPolicy.RequiresApproval(tool.Name, tool.Category, tool.RequiresApproval)
+                })
             ];
+
+            // The Default Assistant ships with ZERO AllowedToolNames, so ask_user must not depend on the allowed set to
+            // reach it. It arrives here inside the whole offer already, which makes this call a no-op today; it is kept
+            // so the availability rule is enforced AT the seam rather than remotely, and a future gate on the offer side
+            // cannot silently drop the tool from mode-off chat.
+            return AskUserToolOffer.EnsureOffered(composedWholeOffer, wholeOffer, _toolApprovalPolicy);
         }
 
         // Start from the PROFILE offer pool for the effective model (the whole capability-gated offer PLUS the
@@ -243,6 +249,11 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
                 string.Join(", ", droppedNames));
         }
 
-        return projected;
+        // ask_user is unioned in AFTER the intersection, so a bound agent gets it whatever its AllowedToolNames says
+        // (including the empty set): being able to ask the operator a question is a property of running an interactive
+        // turn, not a per-agent permission. Widening is safe here in a way it would not be for any other tool — the
+        // union adds an approval-gated, side-effect-free tool whose only action is to show the operator a question, and
+        // its approval flag goes through the same tighten-only compose as everything else.
+        return AskUserToolOffer.EnsureOffered(projected, offered, _toolApprovalPolicy);
     }
 }

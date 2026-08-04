@@ -108,6 +108,18 @@ public sealed class InvocationState
 
     public InvocationApprovalState? PendingApproval { get; set; }
 
+    /// <summary>
+    ///     The <c>ask_user</c> question currently waiting on the operator, or null. Carries the questions themselves (not
+    ///     just a correlation id) so a reconnecting browser can be handed a still-answerable prompt.
+    ///     <para>
+    ///         WARNING: <see cref="InvocationState" /> has TWO hand-rolled <c>Clone()</c> methods
+    ///         (<c>WorkerEventDispatcher.Clone</c> and <c>InvocationResumeRegistry.Clone</c>) and the CLONE — not the live
+    ///         mutated state — is what reaches the chat pump and persistence. Any field added here must be added to BOTH
+    ///         or it silently travels as null. This class of bug passes unit tests and only shows up live.
+    ///     </para>
+    /// </summary>
+    public InvocationUserQuestionState? PendingQuestion { get; set; }
+
     public InvocationApprovalResolutionState? LastApprovalResolution { get; set; }
 
     public IReadOnlyList<InvocationToolCallState> PendingToolCalls { get; set; } = [];

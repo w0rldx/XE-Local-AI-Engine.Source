@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Events.Implementation;
 
 using System.Diagnostics.CodeAnalysis;
 using System.Threading.Channels;
+using XE_Local_AI_Engine.AI.Contracts.Events;
 using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
@@ -71,6 +72,8 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
     public event EventHandler<TurnNoticeChangedEventArgs>? TurnNoticeChanged;
 
     public event EventHandler<ApprovalRequestedChangedEventArgs>? ApprovalRequestedChanged;
+
+    public event EventHandler<UserQuestionRequestedChangedEventArgs>? UserQuestionRequestedChanged;
 
     // The live invocation, mutated in place only under _syncRoot. Its StreamedContent/StreamedThinkingContent now
     // materialize from an immutable append-only accumulator, so an off-lock read is memory-safe (though it may observe a
@@ -493,6 +496,7 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
                 state.ReasoningTokens = reasoningTokens;
                 state.GenerationDurationMs = generationDurationMs;
                 state.PendingApproval = null;
+                state.PendingQuestion = null;
                 state.PendingToolCalls = [];
                 return state;
             });
@@ -517,6 +521,7 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
                 state.FailureCategory = failureCategory;
                 state.CompletedAt = DateTimeOffset.UtcNow;
                 state.PendingApproval = null;
+                state.PendingQuestion = null;
                 state.PendingToolCalls = [];
                 return state;
             });
@@ -579,6 +584,50 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
         ArgumentNullException.ThrowIfNull(payload);
 
         ApprovalRequestedChanged?.Invoke(this, new ApprovalRequestedChangedEventArgs(payload));
+
+        return Task.CompletedTask;
+    }
+
+    public Task ReportUserQuestionAsync(UserQuestionLifecyclePayload payload)
+    {
+        ArgumentNullException.ThrowIfNull(payload);
+
+        // Record on the invocation state FIRST, then fan out. The state write is what a reconnecting browser is
+        // replayed from, so doing it first means a client that attaches in the gap still sees the pending question
+        // rather than missing both the live event and the snapshot.
+        UpdateInvocation(payload.InvocationId,
+            state =>
+            {
+                state.PendingQuestion = new InvocationUserQuestionState(payload.RequestId,
+                    payload.CallId,
+                    payload.ToolName,
+                    payload.Questions,
+                    DateTimeOffset.UtcNow);
+                return state;
+            });
+
+        UserQuestionRequestedChanged?.Invoke(this, new UserQuestionRequestedChangedEventArgs(payload));
+
+        return Task.CompletedTask;
+    }
+
+    public Task DispatchUserQuestionAnsweredAsync(UserQuestionAnsweredEvent evt)
+    {
+        ArgumentNullException.ThrowIfNull(evt);
+
+        // Content-free log: the request id only. The answers are the operator's words and never reach the log.
+        _logger.LogInformation("Received user-question answers for request {RequestId}.", evt.RequestId);
+
+        _invocationRunner.ResolveUserQuestionResult(evt);
+
+        UpdateCurrentInvocation(state =>
+        {
+            if (state.PendingQuestion is not null
+                && string.Equals(state.PendingQuestion.RequestId, evt.RequestId, StringComparison.Ordinal))
+            {
+                state.PendingQuestion = null;
+            }
+        });
 
         return Task.CompletedTask;
     }

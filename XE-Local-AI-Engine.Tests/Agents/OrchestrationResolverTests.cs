@@ -304,6 +304,58 @@ public sealed class OrchestrationResolverTests
     }
 
     [Test]
+    public async Task ResolveAsync_WhenParticipantAllowsNoTools_StillResolvesAskUser()
+    {
+        // The participant seam. Each participant's tools are its own offer ∩ AllowedToolNames, so without the union an
+        // orchestrated turn would lose ask_user entirely the moment the conversation routes through an orchestrator —
+        // silently, on that path only.
+        var triage = CreateDefinition("Triage", modelProfile: ToolCapableModel, allowedTools: ["GetCurrentTime"]);
+        var specialist = CreateDefinition("Specialist", modelProfile: ToolCapableModel, allowedTools: []);
+        var orchestrator = CreateOrchestrator(ToolCapableModel, triage, [triage, specialist]);
+        var resolver = CreateResolver(out var store, OfferTool("GetCurrentTime"), AskUserOffer());
+        SeedParticipants(store, triage, specialist);
+
+        var resolved = await resolver.ResolveAsync(orchestrator, ToolCapableModel).ConfigureAwait(false);
+
+        AssertEx.NotNull(resolved);
+        var specialistSpec = resolved!.Spec.Participants.Single(participant => participant.Key == specialist.Id.ToString("D"));
+        AssertEx.Equal(expected: 1, specialistSpec.Tools.Count);
+        AssertEx.Equal(AskUserTool.ToolName, specialistSpec.Tools[0].Name);
+        AssertEx.True(specialistSpec.Tools[0].RequiresApproval,
+            "ask_user must stay approval-gated on a participant too — the flag is what routes it to the human round-trip");
+
+        // Every participant gets it, not just the one with an empty allowed set.
+        var triageSpec = resolved.Spec.Participants.Single(participant => participant.Key == triage.Id.ToString("D"));
+        AssertEx.Contains(triageSpec.Tools, tool => tool.Name == AskUserTool.ToolName);
+        AssertEx.Contains(triageSpec.Tools, tool => tool.Name == "GetCurrentTime");
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenParticipantWaivesAskUserApproval_KeepsItApprovalGated()
+    {
+        // Tighten-only compose, unchanged by the union: a participant's per-agent `false` is a no-op against a catalog
+        // default of true, exactly as on the single-agent path.
+        var triage = CreateDefinition("Triage", modelProfile: ToolCapableModel, allowedTools: ["GetCurrentTime"]);
+        var specialist = CreateDefinition("Specialist",
+            modelProfile: ToolCapableModel,
+            allowedTools: [],
+            toolApprovals: new Dictionary<string, bool>(StringComparer.Ordinal)
+            {
+                [AskUserTool.ToolName] = false
+            });
+        var orchestrator = CreateOrchestrator(ToolCapableModel, triage, [triage, specialist]);
+        var resolver = CreateResolver(out var store, OfferTool("GetCurrentTime"), AskUserOffer());
+        SeedParticipants(store, triage, specialist);
+
+        var resolved = await resolver.ResolveAsync(orchestrator, ToolCapableModel).ConfigureAwait(false);
+
+        AssertEx.NotNull(resolved);
+        var specialistSpec = resolved!.Spec.Participants.Single(participant => participant.Key == specialist.Id.ToString("D"));
+        AssertEx.True(specialistSpec.Tools.Single(tool => tool.Name == AskUserTool.ToolName).RequiresApproval,
+            "a per-agent approval override can only ADD approval, so it must not waive ask_user's catalog default");
+    }
+
+    [Test]
     public async Task ResolveAsync_AppliesNodeApprovalPolicyToParticipantTools()
     {
         // A node policy must tighten an orchestration participant's tools too, or a node-wide policy is bypassable by
@@ -722,6 +774,13 @@ public sealed class OrchestrationResolverTests
             RequiresApproval = requiresApproval,
             Category = category
         };
+    }
+
+    // The ask_user offer descriptor as the real LocalToolOfferProvider merges it: approval-required (structural — that
+    // flag is what routes the call to the out-of-stream human round-trip) and ReadLocal.
+    private static AllowedToolDto AskUserOffer()
+    {
+        return OfferTool(AskUserTool.ToolName, requiresApproval: true, ToolCategory.ReadLocal);
     }
 
     // Mirrors CreateResolver but wires a caller-supplied node approval policy, so the seam test can prove the node

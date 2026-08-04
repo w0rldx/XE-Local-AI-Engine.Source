@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Chat;
 
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
+using XE_Local_AI_Engine.AI.Contracts.Events;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
@@ -294,6 +295,176 @@ public sealed class InvocationResumeRegistryTests
         {
             await enumerator.DisposeAsync();
         }
+    }
+
+    [Test]
+    public async Task ResumeAsync_WhenPendingQuestion_ReplaysQuestionRequestedOnceWithTheQuestions()
+    {
+        // D6: a mid-turn reload used to lose the prompt permanently — question-requested is emitted from ONE live
+        // subscription and is never accumulated into parts[], so the pending slot on InvocationState is the only
+        // surface a reconnecting browser has. The turn cannot proceed without an answer, so losing it wastes the turn.
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var registry = CreateRegistry(dispatcher);
+        var invocationId = Guid.NewGuid();
+        var conversationId = Guid.NewGuid();
+
+        var parked = NewState(invocationId, conversationId, InvocationStatus.Running, "thinking");
+        parked.PendingQuestion = NewQuestion("question-1", "call-1");
+        RaiseState(dispatcher, parked);
+
+        var events = new List<ChatStreamEvent>();
+        var consumer = Task.Run(async () =>
+        {
+            await foreach (var streamEvent in registry.ResumeAsync(invocationId, CancellationToken.None))
+            {
+                events.Add(streamEvent);
+            }
+        });
+
+        await AssertEx.EventuallyAsync(() => events.Any(evt => evt.Type == ChatStreamEventTypes.QuestionRequested), TimeSpan.FromSeconds(5));
+
+        // More publishes while the question is still pending must NOT re-emit it: every state publish carries the
+        // pending slot, so without the dedupe the card would be re-pushed on every delta.
+        var stillParked = NewState(invocationId, conversationId, InvocationStatus.Running, "thinking more");
+        stillParked.PendingQuestion = NewQuestion("question-1", "call-1");
+        RaiseState(dispatcher, stillParked);
+        RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Completed, "done"));
+
+        await consumer;
+
+        var replayed = events.Where(evt => evt.Type == ChatStreamEventTypes.QuestionRequested).ToList();
+        AssertEx.Equal(expected: 1, replayed.Count);
+        AssertEx.Equal("question-1", replayed[0].QuestionRequestId);
+        AssertEx.Equal("call-1", replayed[0].ToolCallId);
+        AssertEx.Equal("ask_user", replayed[0].ToolName);
+        // The questions themselves must ride the replay: a client cannot render an answerable prompt from an id.
+        AssertEx.Contains(replayed[0].Questions, "Which auth method?");
+        // Sequence numbers stay contiguous and ascending across the replay (the client rebases them at the boundary).
+        AssertEx.True(events.Select(evt => evt.Sequence).SequenceEqual(Enumerable.Range(start: 0, events.Count).Select(static index => (long)index)),
+            "Replayed and live events must share one contiguous ascending sequence space.");
+    }
+
+    [Test]
+    public async Task ResumeAsync_WhenPendingApproval_ReplaysApprovalRequested()
+    {
+        // Same defect, pre-existing on the shipped tool-approval feature: a reload lost the Approve/Deny controls and
+        // the turn stayed blocked until it timed out. Closed by D6 through the same replay.
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var registry = CreateRegistry(dispatcher);
+        var invocationId = Guid.NewGuid();
+        var conversationId = Guid.NewGuid();
+
+        var parked = NewState(invocationId, conversationId, InvocationStatus.Running, "thinking");
+        parked.PendingApproval = new InvocationApprovalState("approval-1", "Run a command", DateTimeOffset.UtcNow)
+        {
+            CallId = "call-7",
+            ToolName = "run_command"
+        };
+        RaiseState(dispatcher, parked);
+
+        var events = new List<ChatStreamEvent>();
+        var consumer = Task.Run(async () =>
+        {
+            await foreach (var streamEvent in registry.ResumeAsync(invocationId, CancellationToken.None))
+            {
+                events.Add(streamEvent);
+            }
+        });
+
+        await AssertEx.EventuallyAsync(() => events.Any(evt => evt.Type == ChatStreamEventTypes.ApprovalRequested), TimeSpan.FromSeconds(5));
+        RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Completed, "done"));
+        await consumer;
+
+        var replayed = events.Single(evt => evt.Type == ChatStreamEventTypes.ApprovalRequested);
+        AssertEx.Equal("approval-1", replayed.ApprovalRequestId);
+        AssertEx.Equal("call-7", replayed.ToolCallId);
+        AssertEx.Equal("run_command", replayed.ToolName);
+    }
+
+    [Test]
+    public async Task ResumeAsync_WhenApprovalHasNoCallId_StillReplaysWithNullToolCallId()
+    {
+        // A platform-hub approval carries only an id and a description. Degrade gracefully: the prompt still reaches
+        // the client, it just cannot be attached to a specific tool-call card.
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var registry = CreateRegistry(dispatcher);
+        var invocationId = Guid.NewGuid();
+        var conversationId = Guid.NewGuid();
+
+        var parked = NewState(invocationId, conversationId, InvocationStatus.Running, "thinking");
+        parked.PendingApproval = new InvocationApprovalState("approval-2", "Run a command", DateTimeOffset.UtcNow);
+        RaiseState(dispatcher, parked);
+
+        var events = new List<ChatStreamEvent>();
+        var consumer = Task.Run(async () =>
+        {
+            await foreach (var streamEvent in registry.ResumeAsync(invocationId, CancellationToken.None))
+            {
+                events.Add(streamEvent);
+            }
+        });
+
+        await AssertEx.EventuallyAsync(() => events.Any(evt => evt.Type == ChatStreamEventTypes.ApprovalRequested), TimeSpan.FromSeconds(5));
+        RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Completed, "done"));
+        await consumer;
+
+        var replayed = events.Single(evt => evt.Type == ChatStreamEventTypes.ApprovalRequested);
+        AssertEx.Equal("approval-2", replayed.ApprovalRequestId);
+        AssertEx.Null(replayed.ToolCallId);
+        AssertEx.Null(replayed.ToolName);
+    }
+
+    [Test]
+    public async Task ResumeAsync_WhenQuestionRaisedWhileAttached_EmitsItOnceFromTheLiveState()
+    {
+        // The prompt can also arrive AFTER the reconnect. The dispatcher records the pending slot before fanning the
+        // live event out, so the state publish carries it — and the same dedupe keeps it to exactly one emit.
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var registry = CreateRegistry(dispatcher);
+        var invocationId = Guid.NewGuid();
+        var conversationId = Guid.NewGuid();
+
+        RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Running, "thinking"));
+
+        var events = new List<ChatStreamEvent>();
+        var consumer = Task.Run(async () =>
+        {
+            await foreach (var streamEvent in registry.ResumeAsync(invocationId, CancellationToken.None))
+            {
+                events.Add(streamEvent);
+            }
+        });
+
+        await AssertEx.EventuallyAsync(() => events.Count >= 1, TimeSpan.FromSeconds(5));
+        AssertEx.False(events.Any(evt => evt.Type == ChatStreamEventTypes.QuestionRequested), "No question was pending at reconnect time.");
+
+        var parked = NewState(invocationId, conversationId, InvocationStatus.Running, "thinking");
+        parked.PendingQuestion = NewQuestion("question-live", "call-live");
+        RaiseState(dispatcher, parked);
+
+        await AssertEx.EventuallyAsync(() => events.Any(evt => evt.Type == ChatStreamEventTypes.QuestionRequested), TimeSpan.FromSeconds(5));
+        RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Completed, "done"));
+        await consumer;
+
+        AssertEx.Equal(expected: 1, events.Count(evt => evt.Type == ChatStreamEventTypes.QuestionRequested));
+        AssertEx.Equal("question-live", events.Single(evt => evt.Type == ChatStreamEventTypes.QuestionRequested).QuestionRequestId);
+    }
+
+    private static InvocationUserQuestionState NewQuestion(string requestId, string callId)
+    {
+        return new InvocationUserQuestionState(requestId,
+            callId,
+            "ask_user",
+            [
+                new UserQuestionSpec("Auth",
+                    "Which auth method?",
+                    MultiSelect: false,
+                    [
+                        new UserQuestionOption("OAuth", Description: null, Recommended: true),
+                        new UserQuestionOption("API key", Description: null, Recommended: false)
+                    ])
+            ],
+            DateTimeOffset.UtcNow);
     }
 
     private static InvocationResumeRegistry CreateRegistry(IWorkerEventDispatcher dispatcher)

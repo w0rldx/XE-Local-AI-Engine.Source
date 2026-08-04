@@ -193,6 +193,7 @@ import {
 	removeStableDiffusionCppSourceBuild,
 	renameNodeChatConversation,
 	resolveToolApproval,
+	resolveUserQuestion,
 	retrieveImage,
 	revokeMcpServerApiKey,
 	runPlaybookActionEval,
@@ -611,6 +612,9 @@ import type {
 	ResolveToolApprovalData,
 	ResolveToolApprovalError,
 	ResolveToolApprovalResponse,
+	ResolveUserQuestionData,
+	ResolveUserQuestionError,
+	ResolveUserQuestionResponse,
 	RetrieveImageData,
 	RetrieveImageResponse,
 	RevokeMcpServerApiKeyData,
@@ -2953,6 +2957,26 @@ export const resolveToolApprovalMutation = (
 	return mutationOptions;
 };
 
+export const resolveUserQuestionMutation = (
+	options?: Partial<Options<ResolveUserQuestionData>>,
+): UseMutationOptions<ResolveUserQuestionResponse, AxiosError<ResolveUserQuestionError>, Options<ResolveUserQuestionData>> => {
+	const mutationOptions: UseMutationOptions<
+		ResolveUserQuestionResponse,
+		AxiosError<ResolveUserQuestionError>,
+		Options<ResolveUserQuestionData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await resolveUserQuestion({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
 export const deleteKnowledgeDocumentMutation = (
 	options?: Partial<Options<DeleteKnowledgeDocumentData>>,
 ): UseMutationOptions<DeleteKnowledgeDocumentResponse, AxiosError<DefaultError>, Options<DeleteKnowledgeDocumentData>> => {
@@ -3159,12 +3183,54 @@ export const getInvocationMonitorOptions = (options?: Options<GetInvocationMonit
 		queryKey: getInvocationMonitorQueryKey(options),
 	});
 
+export const browseImageRepositoriesQueryKey = (options?: Options<BrowseImageRepositoriesData>) =>
+	createQueryKey("browseImageRepositories", options);
+
+export const browseImageRepositoriesOptions = (options?: Options<BrowseImageRepositoriesData>) =>
+	queryOptions<
+		BrowseImageRepositoriesResponse,
+		AxiosError<DefaultError>,
+		BrowseImageRepositoriesResponse,
+		ReturnType<typeof browseImageRepositoriesQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await browseImageRepositories({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: browseImageRepositoriesQueryKey(options),
+	});
+
 export const cancelImageJobMutation = (
 	options?: Partial<Options<CancelImageJobData>>,
 ): UseMutationOptions<CancelImageJobResponse, AxiosError<DefaultError>, Options<CancelImageJobData>> => {
 	const mutationOptions: UseMutationOptions<CancelImageJobResponse, AxiosError<DefaultError>, Options<CancelImageJobData>> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await cancelImageJob({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const cancelImageModelDownloadMutation = (
+	options?: Partial<Options<CancelImageModelDownloadData>>,
+): UseMutationOptions<CancelImageModelDownloadResponse, AxiosError<DefaultError>, Options<CancelImageModelDownloadData>> => {
+	const mutationOptions: UseMutationOptions<
+		CancelImageModelDownloadResponse,
+		AxiosError<DefaultError>,
+		Options<CancelImageModelDownloadData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await cancelImageModelDownload({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -3235,6 +3301,22 @@ export const createImageJobMutation = (
 	return mutationOptions;
 };
 
+export const deleteImageModelMutation = (
+	options?: Partial<Options<DeleteImageModelData>>,
+): UseMutationOptions<DeleteImageModelResponse, AxiosError<DefaultError>, Options<DeleteImageModelData>> => {
+	const mutationOptions: UseMutationOptions<DeleteImageModelResponse, AxiosError<DefaultError>, Options<DeleteImageModelData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await deleteImageModel({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
 export const ejectImageRuntimeMutation = (
 	options?: Partial<Options<EjectImageRuntimeData>>,
 ): UseMutationOptions<EjectImageRuntimeResponse, AxiosError<EjectImageRuntimeError>, Options<EjectImageRuntimeData>> => {
@@ -3269,6 +3351,28 @@ export const getImageJobOptions = (options: Options<GetImageJobData>) =>
 			return data;
 		},
 		queryKey: getImageJobQueryKey(options),
+	});
+
+export const getImageModelCatalogQueryKey = (options?: Options<GetImageModelCatalogData>) =>
+	createQueryKey("getImageModelCatalog", options);
+
+export const getImageModelCatalogOptions = (options?: Options<GetImageModelCatalogData>) =>
+	queryOptions<
+		GetImageModelCatalogResponse,
+		AxiosError<DefaultError>,
+		GetImageModelCatalogResponse,
+		ReturnType<typeof getImageModelCatalogQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getImageModelCatalog({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getImageModelCatalogQueryKey(options),
 	});
 
 export const getImageRuntimeStatusQueryKey = (options?: Options<GetImageRuntimeStatusData>) =>
@@ -3338,6 +3442,28 @@ export const getStableDiffusionCppSourceBuildStatusOptions = (options?: Options<
 			return data;
 		},
 		queryKey: getStableDiffusionCppSourceBuildStatusQueryKey(options),
+	});
+
+export const inspectImageRepositoryQueryKey = (options?: Options<InspectImageRepositoryData>) =>
+	createQueryKey("inspectImageRepository", options);
+
+export const inspectImageRepositoryOptions = (options?: Options<InspectImageRepositoryData>) =>
+	queryOptions<
+		InspectImageRepositoryResponse,
+		AxiosError<DefaultError>,
+		InspectImageRepositoryResponse,
+		ReturnType<typeof inspectImageRepositoryQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await inspectImageRepository({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: inspectImageRepositoryQueryKey(options),
 	});
 
 export const listImageModelDownloadsQueryKey = (options?: Options<ListImageModelDownloadsData>) =>
@@ -5173,105 +5299,3 @@ export const updateSuggestedPlaybookActionMutation = (
 	};
 	return mutationOptions;
 };
-
-export const cancelImageModelDownloadMutation = (
-	options?: Partial<Options<CancelImageModelDownloadData>>,
-): UseMutationOptions<CancelImageModelDownloadResponse, AxiosError<DefaultError>, Options<CancelImageModelDownloadData>> => {
-	const mutationOptions: UseMutationOptions<
-		CancelImageModelDownloadResponse,
-		AxiosError<DefaultError>,
-		Options<CancelImageModelDownloadData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await cancelImageModelDownload({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const deleteImageModelMutation = (
-	options?: Partial<Options<DeleteImageModelData>>,
-): UseMutationOptions<DeleteImageModelResponse, AxiosError<DefaultError>, Options<DeleteImageModelData>> => {
-	const mutationOptions: UseMutationOptions<DeleteImageModelResponse, AxiosError<DefaultError>, Options<DeleteImageModelData>> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await deleteImageModel({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const getImageModelCatalogQueryKey = (options?: Options<GetImageModelCatalogData>) =>
-	createQueryKey("getImageModelCatalog", options);
-
-export const getImageModelCatalogOptions = (options?: Options<GetImageModelCatalogData>) =>
-	queryOptions<
-		GetImageModelCatalogResponse,
-		AxiosError<DefaultError>,
-		GetImageModelCatalogResponse,
-		ReturnType<typeof getImageModelCatalogQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await getImageModelCatalog({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: getImageModelCatalogQueryKey(options),
-	});
-
-export const browseImageRepositoriesQueryKey = (options?: Options<BrowseImageRepositoriesData>) =>
-	createQueryKey("browseImageRepositories", options);
-
-export const browseImageRepositoriesOptions = (options?: Options<BrowseImageRepositoriesData>) =>
-	queryOptions<
-		BrowseImageRepositoriesResponse,
-		AxiosError<DefaultError>,
-		BrowseImageRepositoriesResponse,
-		ReturnType<typeof browseImageRepositoriesQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await browseImageRepositories({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: browseImageRepositoriesQueryKey(options),
-	});
-
-export const inspectImageRepositoryQueryKey = (options?: Options<InspectImageRepositoryData>) =>
-	createQueryKey("inspectImageRepository", options);
-
-export const inspectImageRepositoryOptions = (options?: Options<InspectImageRepositoryData>) =>
-	queryOptions<
-		InspectImageRepositoryResponse,
-		AxiosError<DefaultError>,
-		InspectImageRepositoryResponse,
-		ReturnType<typeof inspectImageRepositoryQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await inspectImageRepository({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: inspectImageRepositoryQueryKey(options),
-	});

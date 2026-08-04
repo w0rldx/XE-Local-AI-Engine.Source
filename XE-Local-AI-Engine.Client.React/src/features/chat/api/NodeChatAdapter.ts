@@ -120,6 +120,7 @@ export interface NodeChatAdapter {
 		selectedPath: Record<string, string> | undefined,
 		signal: AbortSignal,
 	): AsyncIterable<NodeChatStreamEventDto>;
+	resumeConversation(conversationId: string, signal: AbortSignal): AsyncIterable<NodeChatStreamEventDto>;
 }
 
 // Exported for the wire-mapping test only. `sendMessage` hands the result straight to a lazy
@@ -162,7 +163,7 @@ function isTerminalStreamEvent(event: NodeChatStreamEventDto): boolean {
 
 /** The opening hub call for a stream: a local send, a server-driven regenerate, or a re-attach to a run. */
 interface StreamOpening {
-	method: "SendMessage" | "RegenerateMessage" | "ResumeMessage";
+	method: "SendMessage" | "RegenerateMessage" | "ResumeMessage" | "ResumeConversation";
 	args: unknown[];
 	// The assistant message id the caller renders into. Known up front for a send; for a regenerate it is the
 	// server-minted variant id, latched from the first event; for a resume it is the target id that resume
@@ -222,7 +223,7 @@ function signalRStream(opening: StreamOpening, signal: AbortSignal): AsyncIterab
 			};
 
 			const subscribe = (
-				methodName: "SendMessage" | "RegenerateMessage" | "ResumeMessage",
+				methodName: "SendMessage" | "RegenerateMessage" | "ResumeMessage" | "ResumeConversation",
 				args: unknown[],
 				isResume: boolean,
 			): void => {
@@ -496,6 +497,22 @@ export const nodeChatAdapter: NodeChatAdapter = {
 				},
 				signal,
 			),
+		);
+	},
+	resumeConversation(conversationId, signal) {
+		// Cold-load re-attach. `regenerateMessage`/`sendMessage` own a run they started, and the reconnect path
+		// re-attaches with an invocation id it still holds in memory — but a client that has just RELOADED holds
+		// nothing, so the server resolves the live invocation from the conversation instead.
+		//
+		// This is what keeps a reload from stranding an in-flight ask_user question or tool approval: the prompt is
+		// transient live state that is deliberately never written into the conversation's persisted parts, so
+		// re-fetching the conversation cannot bring it back and the run would sit parked until it timed out.
+		//
+		// Opened as a RESUME so an "unknown/terminal invocation" error completes cleanly rather than surfacing a
+		// failure, and so the server's restarted sequence numbering is rebased before the dedupe guard sees it.
+		// The hub returns an empty stream when nothing is live, so calling this on every open is safe.
+		return guardNodeChatStream(
+			signalRStream({ method: "ResumeConversation", args: [conversationId], isResumeOpening: true }, signal),
 		);
 	},
 };

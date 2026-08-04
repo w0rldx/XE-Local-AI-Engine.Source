@@ -35,6 +35,10 @@ vi.mock("@/features/chat/api/NodeChatAdapter", () => ({
 		getConversation: vi.fn(),
 		sendMessage: vi.fn(),
 		regenerateMessage: vi.fn(),
+		// Chat re-attaches on every conversation open; an idle conversation gets an empty stream back.
+		resumeConversation: vi.fn(() => ({
+			[Symbol.asyncIterator]: () => ({ next: async () => ({ done: true, value: undefined }) }),
+		})),
 		deleteConversation: vi.fn(),
 		renameConversation: vi.fn(),
 		setConversationPinned: vi.fn(),

@@ -357,6 +357,79 @@ public sealed class LocalToolOfferProviderTests
             "the profile-intersection pool applies the same knowledge-tool locality gate");
     }
 
+    // ---- ask_user: capability-gated, locality-ungated ----
+
+    [Test]
+    public void GetOfferedTools_OffersAskUserToACapableModel_LocalOrCloud_AndWithholdsItFromANonCapableOne()
+    {
+        // ask_user sits on exactly ONE of the two offer gates.
+        //   * Capability gate: ON. A model that is not tool-capable cannot call it, and an offered schema is not free —
+        //     llama.cpp compiles the whole offered tools array into one GBNF grammar with a hard repetition ceiling, and
+        //     this is the most deeply nested schema in the catalog (docs/agent-knowledge.md §3).
+        //   * Locality gate: OFF. A tool-capable CLOUD model is still offered it: the payload is the model's own
+        //     question, so the cloud-egress gate has nothing to withhold.
+        var provider = CreateProvider("qwen3:8b");
+
+        AssertEx.Contains(provider.GetOfferedTools("qwen3:8b"), tool => tool.Name == AskUserTool.ToolName,
+            "a tool-capable LOCAL model must be offered ask_user");
+        AssertEx.Contains(provider.GetOfferedTools("qwen3:8b", isCloudModel: true), tool => tool.Name == AskUserTool.ToolName,
+            "a tool-capable CLOUD model must still be offered ask_user — no node-local content travels through it");
+        AssertEx.False(provider.GetOfferedTools("some-other-model").Any(tool => tool.Name == AskUserTool.ToolName),
+            "a model that is not tool-capable must NOT be offered ask_user");
+        AssertEx.Contains(provider.GetOfferedToolsForProfile("qwen3:8b"), tool => tool.Name == AskUserTool.ToolName,
+            "the profile-intersection pool must carry ask_user so a bound agent's projection can union it in");
+        AssertEx.False(provider.GetOfferedToolsForProfile("some-other-model").Any(tool => tool.Name == AskUserTool.ToolName),
+            "the profile pool applies the same capability gate, so an opt-in cannot bypass it");
+    }
+
+    [Test]
+    public void ProductionCatalog_WhenModelIsNotToolCapable_OffersNothingBeyondTheUngatedArithmeticBuiltins()
+    {
+        // The point of gating ask_user: a non-tool-capable model must not be handed a schema it cannot drive. Against the
+        // REAL catalog the non-capable offer collapses to the two ungated LocalAgentToolRegistry builtins (the clock and
+        // arithmetic tools docs/agent-knowledge.md §3 records as the partial-failure residue) — every gated tool,
+        // ask_user included, is withheld.
+        var provider = new LocalToolOfferProvider(new LocalAgentToolRegistry(),
+            new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
+            StubNodeRuntimeSettings.Create().WithToolCapableModels("qwen3:8b").Build(),
+            allowCloudKnowledgeAccess: false);
+
+        var offered = provider.GetOfferedTools("some-other-model");
+
+        AssertEx.Equal("Calculate,GetCurrentTime",
+            string.Join(',', offered.Select(tool => tool.Name).OrderBy(name => name, StringComparer.Ordinal)));
+    }
+
+    [Test]
+    public void GetOfferedTools_AskUser_IsApprovalGatedReadLocalAndCarriesTheSharedSchema()
+    {
+        // RequiresApproval is STRUCTURAL here, not a risk judgement: it is what makes the runner surface the call as an
+        // approval request and do the human wait OUTSIDE the stream-idle watchdog. A handler that simply blocked would
+        // trip StreamIdleTimeout. The schema/description come from the single AskUserTool source, so the offered
+        // contract cannot drift from what the handler validates.
+        var provider = CreateProvider("qwen3:8b");
+
+        var askUser = provider.GetOfferedTools("qwen3:8b").Single(tool => tool.Name == AskUserTool.ToolName);
+
+        AssertEx.True(askUser.RequiresApproval, "ask_user must be approval-gated — that is what routes it to the human round-trip");
+        AssertEx.Equal(ToolCategory.ReadLocal, askUser.Category);
+        AssertEx.Equal(AskUserTool.ParameterSchema, askUser.ParameterSchema);
+    }
+
+    [Test]
+    public void GetKnownTools_IncludesAskUserWithItsSharedDescription()
+    {
+        // The catalog surface (agent form + CRUD name validation) must know ask_user, so an operator who lists it in an
+        // agent's AllowedToolNames is not warned about an unknown tool.
+        var provider = CreateProvider("qwen3:8b");
+
+        AssertEx.Contains(provider.GetKnownToolNames(), AskUserTool.ToolName);
+        var entry = provider.GetKnownTools().Single(candidate => candidate.Name == AskUserTool.ToolName);
+        AssertEx.Equal("builtin", entry.Source);
+        AssertEx.Equal(AskUserTool.Description, entry.Description);
+        AssertEx.True(entry.RequiresApproval);
+    }
+
     private static McpRegisteredTool BuildMcpTool(string qualifiedName)
     {
         var executable = AIFunctionFactory.Create((string input) => input, qualifiedName);
@@ -385,6 +458,8 @@ public sealed class LocalToolOfferProviderTests
         AssertEx.Equal(ToolCategory.Orchestration, offered.Single(tool => tool.Name == "spawn_subagent").Category);
         AssertEx.Equal(ToolCategory.ReadLocal, offered.Single(tool => tool.Name == "list_files").Category);
         AssertEx.Equal(ToolCategory.ReadLocal, offered.Single(tool => tool.Name == "search_knowledge_base").Category);
+        // ask_user reads an answer from the node-local operator and has no side effect of its own.
+        AssertEx.Equal(ToolCategory.ReadLocal, offered.Single(tool => tool.Name == AskUserTool.ToolName).Category);
     }
 
     private static LocalToolOfferProvider CreateProvider(params string[] toolCapableModels)

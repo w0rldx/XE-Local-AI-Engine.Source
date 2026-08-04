@@ -896,4 +896,168 @@ describe("node chat stream state", () => {
 			{ id: "assistant-1", role: "assistant", status: "cancelled" },
 		]);
 	});
+
+	it("attaches the parsed ask_user question to the matching tool card and keeps the turn live", () => {
+		const optimistic = appendOptimisticNodeChatSend(
+			conversation,
+			{ userMessageId: "user-1", assistantMessageId: "assistant-1", requestId: "request-1" },
+			"which auth?",
+			"2026-05-24T00:00:01.000Z",
+		);
+		const requested = applyNodeChatStreamEvent(
+			optimistic,
+			streamEvent({
+				type: nodeChatStreamEventTypes.toolCallRequested,
+				toolCallId: "call-ask",
+				toolName: "ask_user",
+				content: null,
+				delta: null,
+			}),
+		);
+
+		const question = applyNodeChatStreamEvent(
+			requested.conversation,
+			streamEvent({
+				type: nodeChatStreamEventTypes.questionRequested,
+				toolCallId: "call-ask",
+				toolName: "ask_user",
+				questionRequestId: "question-42",
+				// The backend serializes `UserQuestionSpec[]` directly, and its non-nullable `Header` rides as "" when
+				// the model omitted one — the parser must treat that as absent, not as an empty heading.
+				questions: JSON.stringify([
+					{
+						header: "",
+						question: "Which auth method?",
+						multiSelect: false,
+						options: [
+							{ label: "OAuth device flow", description: null, recommended: true },
+							{ label: "API key", description: null, recommended: false },
+						],
+					},
+				]),
+				content: null,
+				delta: null,
+			}),
+		);
+
+		const toolPart = question.streamingMessage.parts?.find((part) => part.kind === "tool");
+		expect(toolPart).toMatchObject({
+			kind: "tool",
+			id: "call-ask",
+			state: "waiting",
+			pendingQuestion: {
+				requestId: "question-42",
+				questions: [
+					{
+						header: undefined,
+						question: "Which auth method?",
+						multiSelect: false,
+						options: [
+							{ label: "OAuth device flow", description: undefined, recommended: true },
+							{ label: "API key", description: undefined, recommended: false },
+						],
+					},
+				],
+			},
+		});
+		// Like the approval prompt, a question never mutates content/status and yields no timeline entry.
+		expect(question.timelineEntry).toBeUndefined();
+		expect(question.isTerminal).toBe(false);
+		expect(question.streamingMessage.isActive).toBe(true);
+	});
+
+	it("clears the pending question once the answered ask_user call completes", () => {
+		const optimistic = appendOptimisticNodeChatSend(
+			conversation,
+			{ userMessageId: "user-1", assistantMessageId: "assistant-1", requestId: "request-1" },
+			"which auth?",
+			"2026-05-24T00:00:01.000Z",
+		);
+		const question = applyNodeChatStreamEvent(
+			optimistic,
+			streamEvent({
+				type: nodeChatStreamEventTypes.questionRequested,
+				toolCallId: "call-ask",
+				toolName: "ask_user",
+				questionRequestId: "question-42",
+				questions: JSON.stringify([{ question: "Which?", options: [{ label: "a" }, { label: "b" }] }]),
+				content: null,
+				delta: null,
+			}),
+		);
+		expect(question.streamingMessage.parts?.find((part) => part.kind === "tool")).toMatchObject({ state: "waiting" });
+
+		const completed = applyNodeChatStreamEvent(
+			question.conversation,
+			streamEvent({
+				type: nodeChatStreamEventTypes.toolCallCompleted,
+				toolCallId: "call-ask",
+				toolName: "ask_user",
+				result: '{"answers":[{"question":"Which?","selected":["a"]}]}',
+				isError: false,
+				content: null,
+				delta: null,
+			}),
+		);
+
+		const toolPart = completed.streamingMessage.parts?.find((part) => part.kind === "tool");
+		expect(toolPart).toMatchObject({ id: "call-ask", state: "received" });
+		expect(toolPart && "pendingQuestion" in toolPart ? toolPart.pendingQuestion : undefined).toBeUndefined();
+	});
+
+	it("retires an unanswered question card when the turn terminalizes", () => {
+		const optimistic = appendOptimisticNodeChatSend(
+			conversation,
+			{ userMessageId: "user-1", assistantMessageId: "assistant-1", requestId: "request-1" },
+			"which auth?",
+			"2026-05-24T00:00:01.000Z",
+		);
+		const question = applyNodeChatStreamEvent(
+			optimistic,
+			streamEvent({
+				type: nodeChatStreamEventTypes.questionRequested,
+				toolCallId: "call-ask",
+				toolName: "ask_user",
+				questionRequestId: "question-42",
+				questions: JSON.stringify([{ question: "Which?", options: [{ label: "a" }, { label: "b" }] }]),
+				content: null,
+				delta: null,
+			}),
+		);
+
+		const failed = applyNodeChatStreamEvent(
+			question.conversation,
+			streamEvent({
+				type: nodeChatStreamEventTypes.assistantFailed,
+				status: "failed",
+				content: null,
+				delta: null,
+				error: "The turn was interrupted.",
+			}),
+		);
+
+		const toolPart = failed.streamingMessage.parts?.find((part) => part.kind === "tool");
+		expect(toolPart).toMatchObject({ id: "call-ask", state: "failed" });
+		expect(toolPart && "pendingQuestion" in toolPart ? toolPart.pendingQuestion : undefined).toBeUndefined();
+	});
+
+	it("ignores a malformed question payload rather than rendering a half-built card", () => {
+		const question = applyNodeChatStreamEvent(
+			conversation,
+			streamEvent({
+				type: nodeChatStreamEventTypes.questionRequested,
+				toolCallId: "call-ask",
+				toolName: "ask_user",
+				questionRequestId: "question-42",
+				questions: "{ not json",
+				content: null,
+				delta: null,
+			}),
+		);
+
+		const toolPart = question.streamingMessage.parts?.find((part) => part.kind === "tool");
+		// The card still shows as a waiting tool call; it just carries no question to answer.
+		expect(toolPart).toMatchObject({ id: "call-ask", state: "waiting" });
+		expect(toolPart && "pendingQuestion" in toolPart ? toolPart.pendingQuestion : undefined).toBeUndefined();
+	});
 });

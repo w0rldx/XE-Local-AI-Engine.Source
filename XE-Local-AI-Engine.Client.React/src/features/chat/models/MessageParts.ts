@@ -1,3 +1,4 @@
+import type { PendingUserQuestion } from "@/features/chat/api/AskUserQuestionWire";
 import type {
 	ChatMessagePart,
 	ChatNoticePart,
@@ -32,6 +33,9 @@ export interface ToolEntryInput {
 	// Set while the tool waits on the operator's approval decision; the approval request id the resolve
 	// endpoint keys on. Cleared once the tool completes/rejects.
 	pendingApprovalRequestId?: string;
+	// Set while an `ask_user` call waits on the operator's answer; the question payload the inline card renders and
+	// posts back. Cleared on the same terms as the approval prompt above.
+	pendingQuestion?: PendingUserQuestion;
 }
 
 /** A mid-turn answer/narration run (rare for local models; here for forward-compat round-trips). */
@@ -64,6 +68,7 @@ function toToolPart(entry: ToolEntryInput): ChatToolPart {
 		result: entry.result,
 		requiresApproval: entry.requiresApproval,
 		pendingApprovalRequestId: entry.pendingApprovalRequestId,
+		pendingQuestion: entry.pendingQuestion,
 	};
 }
 

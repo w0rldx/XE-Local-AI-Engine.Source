@@ -1,5 +1,8 @@
 import type { ReactNode } from "react";
 
+// Type-only import (erased at runtime, so no models→api cycle): the `ask_user` wire shape is owned by the wire
+// module so a backend field rename stays a one-line fix.
+import type { PendingUserQuestion } from "@/features/chat/api/AskUserQuestionWire";
 import type { ChatAttachment, PendingAttachmentUpload } from "@/features/chat/models/ChatAttachmentModels";
 
 export type ChatRole = "user" | "assistant" | "system" | "tool";
@@ -45,6 +48,10 @@ export interface ChatToolPart {
 	// Approve/Deny controls post to the loopback resolve endpoint. Transient, live-only: cleared once the tool
 	// completes (approved) or is rejected, and never present on a reloaded/persisted turn.
 	pendingApprovalRequestId?: string;
+	// When set, this is an `ask_user` call parked on the operator's answer: the question payload the inline answer
+	// card renders. Transient and live-only on exactly the same terms as `pendingApprovalRequestId` — cleared when
+	// the tool call completes/fails or the turn terminalizes, and never present on a reloaded/persisted turn.
+	pendingQuestion?: PendingUserQuestion;
 }
 
 /**

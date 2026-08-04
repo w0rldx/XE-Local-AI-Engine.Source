@@ -26,6 +26,7 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
 using XE_Local_AI_Engine.Client.Services.Events;
+using XE_Local_AI_Engine.Client.Services.Interaction;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Client.Services.Invocation.Envelope;
 using XE_Local_AI_Engine.Client.Services.Invocation.Policy;
@@ -100,6 +101,11 @@ public sealed partial class InvocationRunner : IInvocationRunner
     private readonly TimeSpan _maxPendingToolCallAge;
     private readonly int _maxResponseSizeBytes;
     private readonly IOrchestrationAgentFactory _orchestrationAgentFactory;
+    // Questions parked on the operator, keyed by the opaque request id the browser echoes back. Deliberately separate
+    // from _pendingToolCalls: an approval resolves to a bool, a question resolves to the operator's answers, and
+    // conflating them would let an approve/deny post release a question with no answer at all.
+    private readonly ConcurrentDictionary<string, TaskCompletionSource<IReadOnlyList<UserQuestionAnswer>>> _pendingQuestions = new(StringComparer.Ordinal);
+
     private readonly ConcurrentDictionary<string, PendingToolCall> _pendingToolCalls = new(StringComparer.Ordinal);
     private readonly ProviderCallBudgetOptions _providerCallBudgetOptions;
     private readonly IProviderStreamResilience _providerStreamResilience;
@@ -116,6 +122,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
     // tool call outside an active invocation) it falls back to the node-global age.
     private readonly ConcurrentDictionary<Guid, TimeSpan> _toolResultTimeoutsByInvocation = new();
 
+    private readonly UserQuestionAnswerStash _userQuestionAnswerStash;
+
     private Guid? _currentInvocationId;
 
     // Set once (never reset) when shutdown drain begins, guarded by _syncRoot. A local invocation that reaches
@@ -130,6 +138,10 @@ public sealed partial class InvocationRunner : IInvocationRunner
     private CancellationToken _hostCancellationToken;
 
     private CancellationTokenSource? _invocationCancellationTokenSource;
+
+    // The active turn's whole-turn budget, retained so the deadline can be RE-ARMED around a human round-trip
+    // (see SetInvocationDeadline). Written and read only under _syncRoot, alongside the source it arms.
+    private TimeSpan _invocationTimeout;
 
     // Why the active invocation was DELIBERATELY cancelled, recorded synchronously under _syncRoot by the requester
     // itself (Cancel / CancelAll). Unknown means nobody asked: the cancellation then came from the invocation's own
@@ -155,10 +167,12 @@ public sealed partial class InvocationRunner : IInvocationRunner
         INodeRuntimeSettings runtimeSettings,
         IOptions<SpawnOptions> spawnOptions,
         IToolApprovalAuditRecorder approvalAuditRecorder,
+        UserQuestionAnswerStash userQuestionAnswerStash,
         ILogger<InvocationRunner> logger)
     {
         _hubSender = hubSender ?? throw new ArgumentNullException(nameof(hubSender));
         _approvalAuditRecorder = approvalAuditRecorder ?? throw new ArgumentNullException(nameof(approvalAuditRecorder));
+        _userQuestionAnswerStash = userQuestionAnswerStash ?? throw new ArgumentNullException(nameof(userQuestionAnswerStash));
         _eventDispatcher = eventDispatcher ?? throw new ArgumentNullException(nameof(eventDispatcher));
         _invocationAgentFactory = invocationAgentFactory ?? throw new ArgumentNullException(nameof(invocationAgentFactory));
         _orchestrationAgentFactory = orchestrationAgentFactory ?? throw new ArgumentNullException(nameof(orchestrationAgentFactory));
@@ -526,6 +540,18 @@ public sealed partial class InvocationRunner : IInvocationRunner
         if (_pendingToolCalls.TryGetValue(evt.RequestId, out var pendingToolCall))
         {
             pendingToolCall.ApprovalCompletion.TrySetResult(evt.Approved);
+        }
+    }
+
+    public void ResolveUserQuestionResult(UserQuestionAnsweredEvent evt)
+    {
+        ArgumentNullException.ThrowIfNull(evt);
+
+        // TryGetValue (not TryRemove) mirrors ResolveApprovalResult: the waiter owns removal in its finally, and
+        // TrySetResult makes the FIRST answer win, so a duplicate or stale post is a no-op rather than a fault.
+        if (_pendingQuestions.TryGetValue(evt.RequestId, out var questionCompletion))
+        {
+            questionCompletion.TrySetResult(evt.Answers);
         }
     }
 
@@ -979,6 +1005,17 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 var approvalResponses = new List<AIContent>(pendingApprovals.Count);
                 foreach (var approvalRequest in pendingApprovals)
                 {
+                    // ask_user rides the approval seam for its BLOCKING behaviour, not for a risk verdict (see
+                    // AskUserToolHandler). Its round-trip collects an ANSWER and then always approves, so the framework
+                    // executes the tool and the handler returns the stashed answer as the tool result. Every other tool
+                    // keeps the unchanged approve/deny path.
+                    if (IsUserQuestionRequest(approvalRequest))
+                    {
+                        var answerNote = await RequestUserAnswerAsync(package, approvalRequest, invocationToken).ConfigureAwait(false);
+                        approvalResponses.Add(approvalRequest.CreateResponse(approved: true, answerNote));
+                        continue;
+                    }
+
                     var approved = await RequestToolApprovalAsync(package, approvalRequest, invocationToken).ConfigureAwait(false);
                     approvalResponses.Add(approvalRequest.CreateResponse(approved, approved ? "Approved by user." : "Rejected by user."));
                 }
@@ -1285,7 +1322,17 @@ public sealed partial class InvocationRunner : IInvocationRunner
             using var approvalTimeoutCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             approvalTimeoutCancellationTokenSource.CancelAfter(_maxPendingToolCallAge);
 
-            var approved = await approvalCompletion.Task.WaitAsync(approvalTimeoutCancellationTokenSource.Token).ConfigureAwait(false);
+            bool approved;
+            SetInvocationDeadline(parkedOnHuman: true);
+            try
+            {
+                approved = await approvalCompletion.Task.WaitAsync(approvalTimeoutCancellationTokenSource.Token).ConfigureAwait(false);
+            }
+            finally
+            {
+                SetInvocationDeadline(parkedOnHuman: false);
+            }
+
             await RecordApprovalDecisionAuditAsync(package,
                 approvalToolName,
                 approved ? ApprovalDecisions.Approve : ApprovalDecisions.Deny,
@@ -1308,6 +1355,143 @@ public sealed partial class InvocationRunner : IInvocationRunner
         finally
         {
             _pendingToolCalls.TryRemove(requestId, out _);
+        }
+    }
+
+    /// <summary>
+    ///     Whether a framework-surfaced approval request belongs to <c>ask_user</c>. Matched on the tool NAME rather
+    ///     than on any flag, because the name is the only thing that survives the framework's approval wrapping —
+    ///     <c>ToolApprovalRequestContent.ToolCall</c> is the base type and the concrete
+    ///     <see cref="FunctionCallContent" /> is what carries it.
+    /// </summary>
+    private static bool IsUserQuestionRequest(ToolApprovalRequestContent approvalRequest) =>
+        string.Equals((approvalRequest.ToolCall as FunctionCallContent)?.Name, AskUserTool.ToolName, StringComparison.Ordinal);
+
+    /// <summary>
+    ///     Runs the <c>ask_user</c> human round-trip: validates the model's questions, surfaces them to the operator,
+    ///     waits for the answers, and stashes the resulting tool-result JSON under the tool call's <c>CallId</c> so
+    ///     <c>AskUserToolHandler</c> can return it the moment the framework executes the (always-approved) call. Returns
+    ///     the short, content-free note that rides the approval response.
+    ///     <para>
+    ///         NOTHING here fails the turn (decision D4). A timeout, a cancelled browser, or arguments the model got
+    ///         wrong all stash an explicit "not answered" result and still approve, so the model receives a clean,
+    ///         branchable answer instead of a dead turn. Only a cancellation of the invocation itself propagates —
+    ///         the turn is already ending.
+    ///     </para>
+    /// </summary>
+    private async Task<string> RequestUserAnswerAsync(RuntimePackage package,
+        ToolApprovalRequestContent approvalRequest,
+        CancellationToken cancellationToken)
+    {
+        // The SAME id-derivation the streaming tool-call lifecycle uses, so the browser attaches the question card to
+        // the tool-call card the model is waiting on — and so the handler's CurrentContext.CallContent.CallId lookup
+        // finds what is stashed here.
+        var callId = ResolveToolCallCardId(approvalRequest.ToolCall.CallId, AskUserTool.ToolName);
+
+        // ResolveToolCallCardId deliberately preserves a non-null EMPTY-STRING CallId so the card key matches the
+        // streaming lifecycle's. The stash cannot key on blank, so it falls back to the tool name — the handler will
+        // then miss and return its fail-safe, which is the right degradation: a provider that emits no call id gives the
+        // framework nothing to correlate on either, and a wrong answer is worse than an honest "not collected".
+        var stashKey = string.IsNullOrEmpty(callId) ? AskUserTool.ToolName : callId;
+
+        if (!UserQuestionParser.TryParse((approvalRequest.ToolCall as FunctionCallContent)?.Arguments, out var questions, out var parseError))
+        {
+            // Never prompt an operator with unvalidated model output. Tell the MODEL its call was malformed and let it
+            // retry properly; the operator sees nothing. The parse error is a fixed-shape structural sentence, so no
+            // operator content and no raw model text reaches the log.
+            _logger.LogInformation("Rejected a malformed {ToolName} call for invocation {InvocationId} without prompting the operator: {Reason}",
+                AskUserTool.ToolName,
+                package.InvocationId,
+                parseError);
+            _userQuestionAnswerStash.Stash(stashKey, UserQuestionResults.Unanswered(UserQuestionResults.MalformedCallReason, parseError));
+            return "The question was not shown: the call's arguments were invalid.";
+        }
+
+        var requestId = Guid.NewGuid().ToString("N");
+        var questionCompletion = new TaskCompletionSource<IReadOnlyList<UserQuestionAnswer>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        if (!_pendingQuestions.TryAdd(requestId, questionCompletion))
+        {
+            throw new InvalidOperationException("Failed to register pending user question.");
+        }
+
+        try
+        {
+            await _eventDispatcher.Value.ReportUserQuestionAsync(new UserQuestionLifecyclePayload
+            {
+                InvocationId = package.InvocationId,
+                RequestId = requestId,
+                CallId = callId,
+                ToolName = AskUserTool.ToolName,
+                Questions = questions
+            }).ConfigureAwait(false);
+
+            // The hard cap on any human wait. Linked to the invocation token so a user cancel or shutdown still ends
+            // the wait promptly; SetInvocationDeadline below is what stops the invocation's own (shorter) budget from
+            // pre-empting this cap.
+            using var questionTimeoutCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            questionTimeoutCancellationTokenSource.CancelAfter(_maxPendingToolCallAge);
+
+            IReadOnlyList<UserQuestionAnswer> answers;
+            SetInvocationDeadline(parkedOnHuman: true);
+            try
+            {
+                answers = await questionCompletion.Task.WaitAsync(questionTimeoutCancellationTokenSource.Token).ConfigureAwait(false);
+            }
+            finally
+            {
+                SetInvocationDeadline(parkedOnHuman: false);
+            }
+
+            _userQuestionAnswerStash.Stash(stashKey, UserQuestionResults.Answered(answers));
+            return "The user answered.";
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // The pending-question cap elapsed WITHOUT the invocation being cancelled: a genuine no-answer. Unlike the
+            // approval path — which rethrows and fails the turn — D4 requires the turn to continue, so this swallows the
+            // timeout and hands the model an explicit "not answered" result.
+            _logger.LogInformation("No answer arrived for the pending {ToolName} question on invocation {InvocationId}; the turn continues without one.",
+                AskUserTool.ToolName,
+                package.InvocationId);
+            _userQuestionAnswerStash.Stash(stashKey, UserQuestionResults.Unanswered(UserQuestionResults.TimeoutReason));
+            return "No answer arrived in time.";
+        }
+        finally
+        {
+            _pendingQuestions.TryRemove(requestId, out _);
+        }
+    }
+
+    /// <summary>
+    ///     Re-points the whole-turn watchdog — the <c>CancelAfter</c> armed in <see cref="RegisterActiveInvocation" /> —
+    ///     at a deadline measured from NOW, so a human round-trip is not charged to the model's turn budget (decision
+    ///     D5).
+    ///     <para>
+    ///         Before parking on a human the deadline is pushed past the longest permitted wait; once the human has
+    ///         answered it is re-armed to a full, fresh <c>InvocationTimeout</c>. This does NOT make any wait unbounded:
+    ///         each wait keeps its own linked <c>CancelAfter(_maxPendingToolCallAge)</c>, which was previously dead code
+    ///         because the shorter invocation deadline always fired first. The net effect is that
+    ///         <c>MaxPendingToolCallAge</c> (operator-configurable, 10 min by default) becomes the real cap on operator
+    ///         thinking time, instead of "whatever the model left over from its 300 s".
+    ///     </para>
+    ///     <para>
+    ///         Re-arming under <see cref="_syncRoot" /> is what makes it safe against a concurrent teardown:
+    ///         <see cref="ClearActiveInvocation" /> nulls the field under the same lock BEFORE disposing the source, so a
+    ///         non-null source observed here cannot already be disposed.
+    ///     </para>
+    /// </summary>
+    private void SetInvocationDeadline(bool parkedOnHuman)
+    {
+        lock (_syncRoot)
+        {
+            if (_invocationCancellationTokenSource is not { } invocationCancellationTokenSource)
+            {
+                return;
+            }
+
+            // The parked deadline keeps the model's own budget on top of the human cap purely as a backstop: if the
+            // re-arm below were ever skipped, the turn still gets its normal InvocationTimeout rather than none.
+            invocationCancellationTokenSource.CancelAfter(parkedOnHuman ? _maxPendingToolCallAge + _invocationTimeout : _invocationTimeout);
         }
     }
 
@@ -1564,6 +1748,9 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 _requestedCancellationOrigin = CancellationOrigin.Unknown;
                 _hostCancellationToken = cancellationToken;
                 _invocationCancellationTokenSource = invocationCancellationTokenSource;
+
+                // Retained so a human round-trip can re-arm this same deadline (see SetInvocationDeadline).
+                _invocationTimeout = invocationTimeout;
                 invocationCancellationTokenSource = null;
             }
         }
@@ -1607,6 +1794,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
             invocationCancellationTokenSource = _invocationCancellationTokenSource;
             _invocationCancellationTokenSource = null;
+            _invocationTimeout = TimeSpan.Zero;
             _currentInvocationId = null;
             _requestedCancellationOrigin = CancellationOrigin.Unknown;
             _hostCancellationToken = CancellationToken.None;

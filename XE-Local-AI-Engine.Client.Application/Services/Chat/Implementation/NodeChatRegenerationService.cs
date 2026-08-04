@@ -162,9 +162,10 @@ public sealed class NodeChatRegenerationService(
         var eventChannel = Channel.CreateUnbounded<ChatStreamEvent>(new UnboundedChannelOptions
         {
             SingleReader = true,
-            // Four producers write this channel concurrently: the streaming-transition emit in RunInvocationAsync,
+            // Five producers write this channel concurrently: the streaming-transition emit in RunInvocationAsync,
             // the delta/terminal emits in the invocation-state pump, the tool-call lifecycle emits in
-            // OnToolCallLifecycleChanged, and the turn-notice emits in OnTurnNoticeChanged. SingleWriter must be false.
+            // OnToolCallLifecycleChanged, the turn-notice emits in OnTurnNoticeChanged, and the pending-question emits
+            // in OnUserQuestionRequestedChanged. SingleWriter must be false.
             SingleWriter = false
         });
 
@@ -202,6 +203,19 @@ public sealed class NodeChatRegenerationService(
             }
         }
 
+        // A pending ask_user question, mirroring the send path (NodeChatStreamService). NOT accumulated into parts[]:
+        // the prompt is transient live state the resolve endpoint clears, and the reloaded terminal turn shows the tool
+        // result instead. A regenerated turn offers the same tools as a send, so without this subscription an ask_user
+        // call here would park the run with no card ever reaching the browser.
+        void OnUserQuestionRequestedChanged(object? _, UserQuestionRequestedChangedEventArgs args)
+        {
+            if (args.Payload.InvocationId == requestId)
+            {
+                eventChannel.Writer.TryWrite(ChatStreamEventMapper.QuestionRequestedEvent(correlation.ConversationId, correlation.MessageId, correlation.RequestId, args.Payload,
+                    NowUnixMilliseconds(), sequence.Next()));
+            }
+        }
+
         // The active-model precedence, the effective-agent resolution, and the orchestration spec were all computed up
         // front (ResolveTurnAsync) so the variant could be stamped with the resolved agent's attribution; reuse those
         // results here unchanged.
@@ -222,6 +236,7 @@ public sealed class NodeChatRegenerationService(
         eventDispatcher.InvocationStateChanged += OnInvocationStateChanged;
         eventDispatcher.ToolCallLifecycleChanged += OnToolCallLifecycleChanged;
         eventDispatcher.TurnNoticeChanged += OnTurnNoticeChanged;
+        eventDispatcher.UserQuestionRequestedChanged += OnUserQuestionRequestedChanged;
 
         try
         {
@@ -394,6 +409,7 @@ public sealed class NodeChatRegenerationService(
             eventDispatcher.InvocationStateChanged -= OnInvocationStateChanged;
             eventDispatcher.ToolCallLifecycleChanged -= OnToolCallLifecycleChanged;
             eventDispatcher.TurnNoticeChanged -= OnTurnNoticeChanged;
+            eventDispatcher.UserQuestionRequestedChanged -= OnUserQuestionRequestedChanged;
         }
     }
 

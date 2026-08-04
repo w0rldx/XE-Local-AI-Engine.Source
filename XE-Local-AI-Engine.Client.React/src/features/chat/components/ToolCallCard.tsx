@@ -9,6 +9,7 @@ import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
 import { resolveToolApprovalMutation } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { CodeBlock } from "@/core/ui/components/CodeBlock/CodeBlock";
+import { AskUserQuestionCard } from "@/features/chat/components/AskUserQuestionCard";
 import { CHAT_ACCENT, CHAT_ACCENT_SOFT } from "@/features/chat/components/ChatVisualTokens";
 import classes from "@/features/chat/components/ThoughtsSection.module.css";
 import { buildChatUiCapabilities } from "@/features/chat/models/ChatCapabilityGates";
@@ -185,7 +186,9 @@ export const ToolCallCard = memo(function ToolCallCard({ part }: ToolCallCardPro
 					</span>
 				</summary>
 				</details>
-				{awaitingApproval ? (
+				{part.pendingQuestion ? (
+					<AskUserQuestionCard pending={part.pendingQuestion} />
+				) : awaitingApproval ? (
 					<Group gap="xs" wrap="nowrap" className={classes["tool-body"]} data-testid={`chat-tool-call-approval-actions-${part.name}`}>
 						<Text size="xs" c="dimmed" style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
 							{t("chat.toolCall.approvalPrompt", "This tool needs your approval to run.")}

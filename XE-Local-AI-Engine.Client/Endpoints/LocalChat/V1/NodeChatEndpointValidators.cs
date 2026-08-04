@@ -73,3 +73,30 @@ public sealed class ResolveToolApprovalRequestValidator : Validator<ResolveToolA
             .NotEmpty();
     }
 }
+
+public sealed class ResolveUserQuestionRequestValidator : Validator<ResolveUserQuestionRequest>
+{
+    public ResolveUserQuestionRequestValidator()
+    {
+        RuleFor(static request => request.RequestId)
+            .NotEmpty();
+
+        RuleFor(static request => request.Answers)
+            .NotEmpty();
+
+        RuleForEach(static request => request.Answers)
+            .ChildRules(static answer =>
+            {
+                answer.RuleFor(static a => a.Question)
+                      .NotEmpty();
+
+                // An answer must actually answer: either at least one selected option or free text from the "Other"
+                // row. Neither would park the turn on an empty result the model cannot branch on, so reject it here
+                // rather than feeding a content-free answer into the run.
+                answer.RuleFor(static a => a)
+                      .Must(static a => a.Selected?.Any(static selected => !string.IsNullOrWhiteSpace(selected)) == true
+                                        || !string.IsNullOrWhiteSpace(a.Other))
+                      .WithMessage("An answer must carry at least one selected option or free text.");
+            });
+    }
+}
