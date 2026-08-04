@@ -32,6 +32,7 @@ import type {
 	ChatMessageFeedback,
 	ChatStreamingState,
 	ChatTimelineEntry,
+	MessageStatus,
 	ModelOption,
 	ReasoningEffort,
 } from "@/features/chat/models/ChatModels";
@@ -111,6 +112,18 @@ function mergeSelectedConversation(
 	}
 
 	return conversations.map((conversation) => (conversation.id === selectedConversation.id ? selectedConversation : conversation));
+}
+
+// Assistant statuses that mean the persisted turn is still running server-side.
+const liveAssistantStatuses = new Set<MessageStatus>(["pending", "queued", "streaming"]);
+
+// The persisted in-flight assistant row a cold-load resume belongs to. A resumed stream stamps the INVOCATION id as
+// its event message id (the server has no way to know which row a freshly-reloaded client is rendering), so its
+// events are remapped onto this row before they are reduced; unmapped they would append a second, phantom assistant
+// turn beside the one already on screen and replay its content there.
+function inFlightAssistantMessageId(conversation: ChatConversationModel): string | undefined {
+	return conversation.messages.findLast((message) => message.role === "assistant" && liveAssistantStatuses.has(message.status))
+		?.id;
 }
 
 function errorMessage(error: unknown): string {
@@ -1065,6 +1078,124 @@ export function Chat() {
 		},
 		[regenerate],
 	);
+
+	// Cold-load re-attach to a turn that is still running. The adapter's `onReconnected` path covers a SignalR drop
+	// inside a LIVING page, where the invocation id is still in memory; a page that has RELOADED holds nothing, so
+	// nothing re-attaches — and an in-flight `ask_user` question (transient live state, deliberately never written
+	// into the conversation's persisted parts) is then lost for good while the run stays parked until it times out.
+	// Opening a conversation therefore asks the server whether it still has a live turn for it; an idle conversation
+	// answers with an empty stream and this whole loop is a no-op.
+	const resumeActiveTurn = useCallback(
+		async (conversationId: string, abortController: AbortController): Promise<void> => {
+			// A send/regenerate — or an earlier resume — already owns the turn; re-attaching would double-subscribe.
+			if (activeStream.current) {
+				return;
+			}
+
+			// Latched on the FIRST event, never before: until one arrives the conversation is most likely idle, and
+			// claiming stream ownership there would spin the composer into the in-flight state (and block sends) for a
+			// thread with nothing running.
+			let attachedMessageId: string | undefined;
+			let lastVoiceStreaming: ChatStreamingState | undefined;
+			// Running reduced conversation for THIS re-attach (see handleSend): each event folds onto the previous one
+			// so batched frames never read a query cache the scheduler hasn't flushed yet.
+			let latestConversation: ChatConversationModel | undefined;
+			try {
+				for await (const streamEvent of nodeChatAdapter.resumeConversation(conversationId, abortController.signal)) {
+					// The conversation was deleted mid-stream: drop any batched commit and stop touching its cache.
+					if (deletedConversationIds.current.has(conversationId)) {
+						streamScheduler.cancel();
+						break;
+					}
+					const currentConversation =
+						latestConversation ??
+						queryClient.getQueryData<ChatConversationModel>(nodeChatQueryKeys.conversation(conversationId));
+					if (!currentConversation) {
+						break;
+					}
+					if (!attachedMessageId) {
+						// A send/regenerate that started while this stream was opening now owns the turn — leave it alone.
+						if (activeStream.current) {
+							break;
+						}
+						attachedMessageId = inFlightAssistantMessageId(currentConversation) ?? streamEvent.messageId;
+						setTimelineEntries([]);
+						activeStream.current = {
+							conversationId,
+							messageId: attachedMessageId,
+							// The resume's request id IS the invocation id, which is what Stop cancels.
+							requestId: streamEvent.requestId,
+							abortController,
+						};
+					}
+					// Remap onto the persisted in-flight row (see inFlightAssistantMessageId).
+					const applied = applyNodeChatStreamEvent(currentConversation, { ...streamEvent, messageId: attachedMessageId });
+					latestConversation = applied.conversation;
+					lastVoiceStreaming = applied.streamingMessage;
+					streamScheduler.schedule({
+						conversation: applied.conversation,
+						writeConversationList: applied.isTerminal,
+						streamingMessage: applied.streamingMessage,
+						toolTimelineEntries: applied.timelineEntry ? [applied.timelineEntry] : [],
+					});
+					if (applied.isTerminal) {
+						streamScheduler.flush();
+					}
+				}
+				// Flush any trailing batched delta. A no-op for the idle case, which schedules nothing at all.
+				streamScheduler.flush();
+				if (lastVoiceStreaming) {
+					onVoiceAnswerProgress({ ...lastVoiceStreaming, isActive: false });
+				}
+			} catch (error) {
+				streamScheduler.cancel();
+				// Nothing attached ⇒ nothing was resumed, so there is no turn to fail: opening an idle conversation must
+				// never raise a banner. A failure AFTER attaching interrupted a turn the operator can see, so surface it.
+				if (attachedMessageId && !abortController.signal.aborted && !deletedConversationIds.current.has(conversationId)) {
+					setStreamError(errorMessage(error));
+				}
+			} finally {
+				// Only the attached path owns state to release; the idle path must leave everything untouched.
+				if (attachedMessageId) {
+					// Re-bound as a const so the updater below keeps the narrowing (a `let` loses it inside a closure).
+					const resumedMessageId = attachedMessageId;
+					activeStream.current = null;
+					setStreamingMessage((current) =>
+						current?.messageId === resumedMessageId ? { ...current, isActive: false } : current,
+					);
+					if (!deletedConversationIds.current.has(conversationId)) {
+						await refreshConversation(conversationId);
+					}
+				}
+			}
+		},
+		[onVoiceAnswerProgress, queryClient, refreshConversation, streamScheduler],
+	);
+
+	// Read through a ref so the effect below can key on the conversation alone (mirrors useStreamCommitScheduler's
+	// commitRef): re-running the effect on an unrelated dependency change would abort a live re-attach in its
+	// cleanup, losing the very question card this exists to restore.
+	const resumeActiveTurnRef = useRef(resumeActiveTurn);
+	resumeActiveTurnRef.current = resumeActiveTurn;
+
+	// The conversation whose FULL payload has loaded — id-matched, so never a keepPreviousData placeholder from the
+	// thread we just switched away from. The re-attach waits for it because the resumed events are folded onto the
+	// persisted in-flight assistant row.
+	const loadedSelectedConversationId = selectedConversationData?.id === selectedConversationId ? selectedConversationId : "";
+
+	useEffect(() => {
+		if (!loadedSelectedConversationId) {
+			return;
+		}
+
+		// Keyed on the conversation id alone, so one open attaches at most once: neither a re-render nor a background
+		// refetch of the same thread can re-fire it. Switching away aborts; returning later attaches again.
+		const abortController = new AbortController();
+		// The loop surfaces the only failure worth showing (see its catch); a rejection escaping here is the
+		// post-turn refresh, which must not raise a banner on conversation open.
+		resumeActiveTurnRef.current(loadedSelectedConversationId, abortController).catch(() => undefined);
+		return () => abortController.abort();
+	}, [loadedSelectedConversationId]);
 
 	const handleCancel = useCallback(async (): Promise<void> => {
 		const active = activeStream.current;
