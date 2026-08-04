@@ -56,6 +56,25 @@ internal sealed record class NodeConversation
     /// </summary>
     public bool MemoryExcluded { get; set; }
 
+    /// <summary>
+    ///     Derived, non-destructive compaction synopsis: a local-model summary of the older turns, sent in their place so
+    ///     a long conversation keeps its gist within the context window without deleting the originals (which remain in
+    ///     <see cref="Messages" />). UTF-8 bytes encrypted at rest under AAD column name <c>compaction_summary</c> — same
+    ///     posture as <see cref="Title" />. Null until the user compacts the conversation. See
+    ///     <see cref="CompactionSummaryCoversToSequence" /> for which messages it folds in.
+    /// </summary>
+    public byte[]? CompactionSummary { get; set; }
+
+    /// <summary>
+    ///     The highest message <c>Sequence</c> folded into <see cref="CompactionSummary" />. On a send, messages at or
+    ///     below this sequence are replaced by the synopsis and only newer turns are sent verbatim. Plaintext; null when
+    ///     no summary exists.
+    /// </summary>
+    public int? CompactionSummaryCoversToSequence { get; set; }
+
+    /// <summary>When <see cref="CompactionSummary" /> was last (re)generated. Plaintext Unix-ms; null when no summary exists.</summary>
+    public long? CompactionSummaryUpdatedAtUtc { get; set; }
+
     public List<NodeMessage> Messages { get; } = [];
 
     public List<NodeToolEvent> ToolEvents { get; } = [];

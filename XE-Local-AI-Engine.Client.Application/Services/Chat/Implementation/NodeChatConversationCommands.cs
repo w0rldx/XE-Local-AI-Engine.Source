@@ -291,6 +291,33 @@ internal sealed class NodeChatConversationCommands(NodeChatPersistenceWriter wri
             cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task<NodeChatConversationDto?> SetCompactionSummaryAsync(NodeChatSetCompactionSummaryRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var summary = string.IsNullOrWhiteSpace(request.Summary) ? null : request.Summary;
+
+        return await _writer.ExecuteConversationExclusiveAsync(request.ConversationId,
+            async (dbContext, token) =>
+            {
+                // Raw ADO.NET (not ExecuteSqlRawAsync): the encrypted summary blob and the nullable covered-sequence both
+                // write NULL when cleared, and EF's raw-SQL parameter builder has no store-type mapping for DBNull, so
+                // typed DbParameters via AddParameter are required. The summary is encrypted before writing; null stays null.
+                await using var command = dbContext.Database.GetDbConnection().CreateCommand();
+                command.CommandText = "UPDATE conversations SET compaction_summary = $summary, compaction_summary_covers_to_sequence = $covers_to, compaction_summary_updated_at_utc = $updated_at, last_seen_utc = $last_seen_utc WHERE conversation_id = $conversation_id AND purged = 0;";
+                AddParameter(command, "$summary", dbContext.EncryptConversationCompactionSummary(summary, request.ConversationId));
+                AddParameter(command, "$covers_to", summary is null ? null : request.CoversToSequence);
+                AddParameter(command, "$updated_at", summary is null ? null : request.UpdatedAtUtc);
+                AddParameter(command, "$last_seen_utc", request.UpdatedAtUtc);
+                AddParameter(command, "$conversation_id", request.ConversationId);
+                await OpenIfNeededAsync(command.Connection, token).ConfigureAwait(false);
+                var updated = await command.ExecuteNonQueryAsync(token).ConfigureAwait(false);
+
+                return updated == 0 ? null : await ReadConversationWithMessagesAsync(dbContext, request.ConversationId, token).ConfigureAwait(false);
+            },
+            cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task<NodeChatConversationDto?> SetConversationMemoryExcludedAsync(NodeChatSetConversationMemoryExcludedRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);

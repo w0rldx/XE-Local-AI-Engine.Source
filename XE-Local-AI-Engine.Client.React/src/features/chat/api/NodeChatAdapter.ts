@@ -4,6 +4,7 @@ import {
 	archiveNodeChatConversation,
 	branchNodeChatConversation,
 	cancelNodeChatMessage,
+	compactNodeChatConversation,
 	createNodeChatConversation,
 	deleteNodeChatConversation,
 	getNodeChatConversation,
@@ -26,6 +27,7 @@ import {
 } from "@/features/chat/api/NodeChatMapper";
 import { guardNodeChatStream } from "@/features/chat/api/NodeChatStreamGuard";
 import type {
+	ChatCompactionResult,
 	ChatConversationModel,
 	ChatFeedbackRating,
 	ChatMessageFeedback,
@@ -83,6 +85,7 @@ export interface NodeChatAdapter {
 	createConversation(request?: CreateConversationRequest, options?: RequestOptions): Promise<ChatConversationModel>;
 	deleteConversation(conversationId: string, purgeImmediately?: boolean, options?: RequestOptions): Promise<void>;
 	renameConversation(conversationId: string, title: string, options?: RequestOptions): Promise<ChatConversationModel>;
+	compactConversation(conversationId: string, model?: string, options?: RequestOptions): Promise<ChatCompactionResult>;
 	setConversationPinned(conversationId: string, isPinned: boolean, options?: RequestOptions): Promise<ChatConversationModel>;
 	setConversationArchived(conversationId: string, archived: boolean, options?: RequestOptions): Promise<ChatConversationModel>;
 	setConversationMemoryExcluded(
@@ -397,6 +400,20 @@ export const nodeChatAdapter: NodeChatAdapter = {
 			renameNodeChatConversation({ path: { conversationId }, body: { title }, signal: options?.signal, throwOnError: true }),
 		);
 		return mapConversation(data);
+	},
+	async compactConversation(conversationId, model, options) {
+		const { data } = await callWithResponseValidation(
+			compactNodeChatConversation({ path: { conversationId }, body: { model: model ?? null }, signal: options?.signal, throwOnError: true }),
+		);
+		return {
+			outcome: data.outcome,
+			summary: data.summary ?? undefined,
+			coversToSequence: data.coversToSequence ?? undefined,
+			messagesFolded: data.messagesFolded ?? 0,
+			updatedAtUtc: data.updatedAtUtc ?? undefined,
+			modelUsed: data.modelUsed ?? undefined,
+			usedFallbackModel: data.usedFallbackModel ?? false,
+		};
 	},
 	async setConversationPinned(conversationId, isPinned, options) {
 		const { data } = await callWithResponseValidation(

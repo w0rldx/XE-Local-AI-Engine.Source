@@ -29,7 +29,7 @@ internal sealed class NodeChatReadModel(NodeChatPersistenceWriter writer)
             {
                 await using var conversationCommand = dbContext.Database.GetDbConnection().CreateCommand();
                 conversationCommand.CommandText = """
-                                                  SELECT conversation_id, title, user_id, created_at_utc, last_seen_utc, purged, origin, is_pinned, archived, branch_of_conversation_id, selected_path_json, agent_definition_id, memory_excluded
+                                                  SELECT conversation_id, title, user_id, created_at_utc, last_seen_utc, purged, origin, is_pinned, archived, branch_of_conversation_id, selected_path_json, agent_definition_id, memory_excluded, compaction_summary, compaction_summary_covers_to_sequence, compaction_summary_updated_at_utc
                                                   FROM conversations
                                                   WHERE conversation_id = $conversation_id AND purged = 0;
                                                   """;
@@ -61,7 +61,13 @@ internal sealed class NodeChatReadModel(NodeChatPersistenceWriter writer)
                     await conversationReader.IsDBNullAsync(ordinal: 9, token).ConfigureAwait(false) ? null : Guid.Parse(conversationReader.GetString(9)),
                     DeserializeSelectedPath(await conversationReader.IsDBNullAsync(ordinal: 10, token).ConfigureAwait(false) ? null : conversationReader.GetString(10)),
                     await conversationReader.IsDBNullAsync(ordinal: 11, token).ConfigureAwait(false) ? null : Guid.Parse(conversationReader.GetString(11)),
-                    conversationReader.GetBoolean(12));
+                    conversationReader.GetBoolean(12),
+                    // compaction_summary is an encrypted BLOB; decrypt via the same db-context gateway used for the title.
+                    dbContext.DecryptConversationCompactionSummary(
+                        await conversationReader.IsDBNullAsync(ordinal: 13, token).ConfigureAwait(false) ? null : await conversationReader.GetFieldValueAsync<byte[]>(ordinal: 13, token).ConfigureAwait(false),
+                        conversationId),
+                    await conversationReader.IsDBNullAsync(ordinal: 14, token).ConfigureAwait(false) ? null : conversationReader.GetInt32(14),
+                    await conversationReader.IsDBNullAsync(ordinal: 15, token).ConfigureAwait(false) ? null : conversationReader.GetInt64(15));
 
                 return dto;
             },

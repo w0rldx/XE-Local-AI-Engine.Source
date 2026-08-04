@@ -105,7 +105,7 @@ internal static class NodeChatPersistenceSql
     {
         await using var command = dbContext.Database.GetDbConnection().CreateCommand();
         command.CommandText = """
-                              SELECT conversation_id, title, user_id, created_at_utc, last_seen_utc, purged, origin, is_pinned, archived, branch_of_conversation_id, agent_definition_id, memory_excluded
+                              SELECT conversation_id, title, user_id, created_at_utc, last_seen_utc, purged, origin, is_pinned, archived, branch_of_conversation_id, agent_definition_id, memory_excluded, compaction_summary, compaction_summary_covers_to_sequence, compaction_summary_updated_at_utc
                               FROM conversations
                               WHERE conversation_id = $conversation_id;
                               """;
@@ -133,7 +133,12 @@ internal static class NodeChatPersistenceSql
             reader.GetBoolean(8),
             await reader.IsDBNullAsync(ordinal: 9, cancellationToken).ConfigureAwait(false) ? null : Guid.Parse(reader.GetString(9)),
             AgentDefinitionId: await reader.IsDBNullAsync(ordinal: 10, cancellationToken).ConfigureAwait(false) ? null : Guid.Parse(reader.GetString(10)),
-            MemoryExcluded: reader.GetBoolean(11));
+            MemoryExcluded: reader.GetBoolean(11),
+            CompactionSummary: dbContext.DecryptConversationCompactionSummary(
+                await reader.IsDBNullAsync(ordinal: 12, cancellationToken).ConfigureAwait(false) ? null : await reader.GetFieldValueAsync<byte[]>(ordinal: 12, cancellationToken).ConfigureAwait(false),
+                conversationId),
+            CompactionSummaryCoversToSequence: await reader.IsDBNullAsync(ordinal: 13, cancellationToken).ConfigureAwait(false) ? null : reader.GetInt32(13),
+            CompactionSummaryUpdatedAtUtc: await reader.IsDBNullAsync(ordinal: 14, cancellationToken).ConfigureAwait(false) ? null : reader.GetInt64(14));
     }
 
     internal static async Task<NodeChatPersistedMessageDto?> ReadMessageAsync(NodeChatDbContext dbContext, Guid conversationId, Guid messageId, CancellationToken cancellationToken)

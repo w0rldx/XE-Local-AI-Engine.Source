@@ -71,6 +71,47 @@ public sealed class SetNodeChatConversationMemoryExcludedRequest
     public bool MemoryExcluded { get; init; }
 }
 
+/// <summary>
+///     Triggers non-destructive compaction of a conversation: its older turns are summarized (local model) into an
+///     encrypted synopsis sent in their place on later turns. The conversation id travels in the route; there is no body.
+/// </summary>
+public sealed class CompactNodeChatConversationRequest
+{
+    public Guid ConversationId { get; init; }
+
+    /// <summary>
+    ///     The model the user is chatting with, forwarded so compaction summarizes with the user's own selection when it
+    ///     is an installed local chat model (a cloud/unknown selection falls back to a node-local model). Optional; a
+    ///     body-less request (null) uses the node's local default. Travels in the body; the id travels in the route.
+    /// </summary>
+    public string? Model { get; init; }
+}
+
+/// <summary>
+///     Result of a compaction attempt. <see cref="Outcome" /> is one of the
+///     <c>ConversationCompactionOutcome</c> names ("Compacted", "NothingToCompact", "NoLocalModel",
+///     "SummarizerReturnedNothing", "ConversationNotFound"); the remaining fields are populated only when a synopsis was
+///     produced.
+/// </summary>
+public sealed class CompactNodeChatConversationResponse
+{
+    public required string Outcome { get; init; }
+
+    public string? Summary { get; init; }
+
+    public int? CoversToSequence { get; init; }
+
+    public int MessagesFolded { get; init; }
+
+    public long? UpdatedAtUtc { get; init; }
+
+    /// <summary>The local model that produced the synopsis.</summary>
+    public string? ModelUsed { get; init; }
+
+    /// <summary>True when the user's selected model was a cloud/unknown model and summarization ran on a node-local model instead.</summary>
+    public bool UsedFallbackModel { get; init; }
+}
+
 public sealed class CancelNodeChatMessageRequest
 {
     public Guid ConversationId { get; init; }

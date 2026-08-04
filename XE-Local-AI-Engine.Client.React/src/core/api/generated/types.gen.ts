@@ -1200,6 +1200,20 @@ export type XeLocalAiEngineClientEndpointsLocalChatV1CancelNodeChatMessageReques
 	requestId: string;
 };
 
+export type XeLocalAiEngineClientEndpointsLocalChatV1CompactNodeChatConversationResponse = {
+	outcome: string;
+	summary?: string | null;
+	coversToSequence?: number | null;
+	messagesFolded?: number;
+	updatedAtUtc?: number | null;
+	modelUsed?: string | null;
+	usedFallbackModel?: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalChatV1CompactNodeChatConversationRequest = {
+	model?: string | null;
+};
+
 export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationResponse = {
 	conversationId: string;
 	title?: string | null;
@@ -5355,6 +5369,36 @@ export type CancelNodeChatMessageResponses = {
 };
 
 export type CancelNodeChatMessageResponse = CancelNodeChatMessageResponses[keyof CancelNodeChatMessageResponses];
+
+export type CompactNodeChatConversationData = {
+	body: XeLocalAiEngineClientEndpointsLocalChatV1CompactNodeChatConversationRequest;
+	path: {
+		conversationId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/chat/conversations/{conversationId}/compact";
+};
+
+export type CompactNodeChatConversationErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type CompactNodeChatConversationResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsLocalChatV1CompactNodeChatConversationResponse;
+};
+
+export type CompactNodeChatConversationResponse =
+	CompactNodeChatConversationResponses[keyof CompactNodeChatConversationResponses];
 
 export type ListNodeChatConversationsData = {
 	body?: never;
