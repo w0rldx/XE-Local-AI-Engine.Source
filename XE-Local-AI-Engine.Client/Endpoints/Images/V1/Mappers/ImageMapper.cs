@@ -78,6 +78,7 @@ internal static class ImageMapper
     {
         ArgumentNullException.ThrowIfNull(entry);
 
+        var defaults = ImageFamilyDefaults.For(entry.Family);
         return new ImageModelResponse
         {
             ModelName = entry.ModelName,
@@ -95,7 +96,10 @@ internal static class ImageMapper
                     SizeBytes = p.SizeBytes
                 })
             ],
-            DownloadedAtUtc = entry.DownloadedAtUtc.ToUnixTimeMilliseconds()
+            DownloadedAtUtc = entry.DownloadedAtUtc.ToUnixTimeMilliseconds(),
+            DefaultSteps = defaults.Steps,
+            DefaultCfgScale = defaults.CfgScale,
+            DefaultSampler = defaults.Sampler
         };
     }
 }

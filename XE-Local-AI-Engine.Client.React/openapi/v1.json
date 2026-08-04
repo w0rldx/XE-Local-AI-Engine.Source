@@ -15461,7 +15461,10 @@
           "kind",
           "sizeBytes",
           "parts",
-          "downloadedAtUtc"
+          "downloadedAtUtc",
+          "defaultSteps",
+          "defaultCfgScale",
+          "defaultSampler"
         ],
         "properties": {
           "modelName": {
@@ -15487,6 +15490,17 @@
           },
           "downloadedAtUtc": {
             "type": "integer"
+          },
+          "defaultSteps": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "defaultCfgScale": {
+            "type": "number",
+            "format": "double"
+          },
+          "defaultSampler": {
+            "type": "string"
           }
         }
       },
@@ -15585,6 +15599,14 @@
           },
           "sha256": {
             "type": "string",
+            "nullable": true
+          },
+          "repoId": {
+            "type": "string",
+            "nullable": true
+          },
+          "sizeBytes": {
+            "type": "integer",
             "nullable": true
           }
         }

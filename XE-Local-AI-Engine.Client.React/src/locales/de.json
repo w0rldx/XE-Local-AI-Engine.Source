@@ -3124,7 +3124,8 @@
 					"Sd15": "Stable Diffusion 1.5",
 					"Sdxl": "Stable Diffusion XL",
 					"Sd3": "Stable Diffusion 3",
-					"Flux": "FLUX.1"
+					"Flux": "FLUX.1",
+					"QwenImage": "Qwen-Image"
 				},
 				"download": {
 					"title": "Modell herunterladen",
@@ -3132,7 +3133,7 @@
 					"failed": "Der Modell-Download ist fehlgeschlagen.",
 					"progress": "Wird heruntergeladen… {{percent}} %",
 					"error": "Der Modell-Download konnte nicht gestartet werden.",
-					"hint": "Nur Einzeldatei-Gewichte (SD1.5-Stil). Mehrteilige Modelle folgen später.",
+					"hint": "Eine Gewichtsdatei, für Einzeldatei-Modelle wie SD1.5. Für mehrteilige Modelle „Erweitert“ einschalten.",
 					"submit": "Herunterladen",
 					"repoId": {
 						"label": "Hugging-Face-Repository"
@@ -3155,7 +3156,31 @@
 					"transferred": "{{completed}} übertragen",
 					"starting": "Wird gestartet…",
 					"bytesOf": "{{completed}} / {{total}}",
-					"progressAriaLabel": "Download-Fortschritt"
+					"progressAriaLabel": "Download-Fortschritt",
+					"advanced": {
+						"toggle": "Erweitert: mehrteiliger Dateisatz",
+						"toggleDescription": "SDXL, SD3, FLUX und Qwen-Image bestehen aus mehreren Dateien (Diffusionsgewichte, VAE, Textencoder) statt aus einer.",
+						"addPart": "Datei hinzufügen",
+						"removePart": "Datei entfernen",
+						"diffusionRequired": "Ein Dateisatz braucht eine Diffusionsdatei.",
+						"hint": "Repository einer Datei leer lassen, um das obige zu verwenden — ein Satz kann sich über mehrere Repositories erstrecken. Größen sind optional, aktivieren aber die Speicherplatzprüfung und einen gemeinsamen Fortschrittsbalken.",
+						"role": {
+							"label": "Rolle"
+						},
+						"fileName": {
+							"label": "Datei"
+						},
+						"repoId": {
+							"label": "Repository (optional)",
+							"placeholder": "Wie oben"
+						},
+						"sizeBytes": {
+							"label": "Größe in Bytes (optional)"
+						},
+						"sha256": {
+							"label": "SHA-256 (optional)"
+						}
+					}
 				},
 				"delete": {
 					"action": "Modell löschen",
@@ -3165,6 +3190,15 @@
 					"cancel": "Abbrechen",
 					"deleted": "Modell gelöscht.",
 					"error": "Das Modell konnte nicht gelöscht werden."
+				},
+				"partRoles": {
+					"Diffusion": "Diffusionsgewichte",
+					"Vae": "VAE",
+					"ClipL": "CLIP-L-Textencoder",
+					"ClipG": "CLIP-G-Textencoder",
+					"T5": "T5-XXL-Textencoder",
+					"Llm": "LLM-Textencoder",
+					"LlmVision": "LLM-Vision-Turm"
 				}
 			},
 			"viewer": {

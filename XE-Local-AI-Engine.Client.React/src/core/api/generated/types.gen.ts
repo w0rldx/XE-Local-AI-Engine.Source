@@ -1730,6 +1730,9 @@ export type XeLocalAiEngineClientEndpointsImagesV1ImageModelResponse = {
 	sizeBytes: number;
 	parts: Array<XeLocalAiEngineClientEndpointsImagesV1ImageModelPartResponse>;
 	downloadedAtUtc: number;
+	defaultSteps: number;
+	defaultCfgScale: number;
+	defaultSampler: string;
 };
 
 export type XeLocalAiEngineClientEndpointsImagesV1ImageModelPartResponse = {
@@ -1761,6 +1764,8 @@ export type XeLocalAiEngineClientEndpointsImagesV1ImageModelPartDownloadRequest 
 	role: string;
 	fileName: string;
 	sha256?: string | null;
+	repoId?: string | null;
+	sizeBytes?: number | null;
 };
 
 export type XeLocalAiEngineClientEndpointsImagesV1StartStableDiffusionCppSourceBuildResponse = {

@@ -1,11 +1,11 @@
 import { Alert, Button, Group, NumberInput, Select, Stack, Textarea } from "@mantine/core";
 import { IconSparkles } from "@tabler/icons-react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
+	imageFormDefaultsForModel,
 	type ImageGenerationFormValues,
-	imageFormDefaults,
 	imageGenerationFormSchema,
 	type ImageModelView,
 	imageSamplers,
@@ -34,11 +34,27 @@ interface ImageGenerationFormProps {
 // sourced from the installed image models; with none installed the form disables so a job can't be enqueued modelless.
 export function ImageGenerationForm({ models, isSubmitting, submitError, onSubmit }: ImageGenerationFormProps) {
 	const { t } = useTranslation();
-	const [values, setValues] = useState<ImageGenerationFormValues>(() => ({
-		...imageFormDefaults,
-		modelName: models[0]?.modelName ?? "",
-	}));
+	const [values, setValues] = useState<ImageGenerationFormValues>(() => imageFormDefaultsForModel(models[0]));
 	const [errors, setErrors] = useState<Record<string, string>>({});
+
+	// Picking a different model re-seeds the sampling parameters from ITS family, keeping the prompts. The families
+	// disagree sharply — FLUX-schnell wants ~4 steps at CFG 1.0 where SD1.5 wants 20 at 7.0 — and carrying one family's
+	// numbers into another produces a bad image rather than an error, which is far harder to diagnose than a failure.
+	const handleModelChange = useCallback(
+		(modelName: string) => {
+			const model = models.find((candidate) => candidate.modelName === modelName);
+			setValues((current) => ({
+				...imageFormDefaultsForModel(model),
+				modelName,
+				prompt: current.prompt,
+				negativePrompt: current.negativePrompt,
+				width: current.width,
+				height: current.height,
+				seed: current.seed,
+			}));
+		},
+		[models],
+	);
 
 	const modelData = useMemo(() => models.map((model) => ({ value: model.modelName, label: model.modelName })), [models]);
 	const samplerData = useMemo(
@@ -68,6 +84,16 @@ export function ImageGenerationForm({ models, isSubmitting, submitError, onSubmi
 		onSubmit(result.data);
 	}, [models, onSubmit, values]);
 
+	// The model list arrives after the first render, so the initial state was seeded from an empty list. Adopt the first
+	// model's family defaults the moment it lands — otherwise the auto-selected model would silently be driven by the
+	// generic fallback parameters instead of its own.
+	useEffect(() => {
+		const first = models[0];
+		if (values.modelName === "" && first !== undefined) {
+			handleModelChange(first.modelName);
+		}
+	}, [handleModelChange, models, values.modelName]);
+
 	const selectedModel = values.modelName || models[0]?.modelName || null;
 
 	return (
@@ -80,7 +106,7 @@ export function ImageGenerationForm({ models, isSubmitting, submitError, onSubmi
 				disabled={!hasModels}
 				allowDeselect={false}
 				error={fieldError(errors, "modelName")}
-				onChange={(value) => setValues((current) => ({ ...current, modelName: value ?? "" }))}
+				onChange={(value) => handleModelChange(value ?? "")}
 				data-testid="image-form-model"
 			/>
 

@@ -156,9 +156,16 @@ internal sealed class HuggingFaceImageModelStore : IImageModelStore
                         // offset this part's byte counts must be added to.
                         : new SetProgressAdapter(progress, request.ModelName, totalBytes, knownSetTotal, partIndex, partCount);
 
-                    var result = await _downloadClient.DownloadAsync(request.RepoId,
+                    // A part may name its own repo (a file-set split across repos — see ImageModelPartRequest.RepoId).
+                    // The set-level revision pins the SET's repo, so a part sourced elsewhere resolves that repo's
+                    // default branch rather than being handed a commit SHA that does not exist there.
+                    var partRepoId = string.IsNullOrWhiteSpace(partRequest.RepoId) ? request.RepoId : partRequest.RepoId;
+                    var isSetRepo = string.Equals(partRepoId, request.RepoId, StringComparison.Ordinal);
+                    var partRevision = isSetRepo ? revision : DefaultRevision;
+
+                    var result = await _downloadClient.DownloadAsync(partRepoId,
                         partRequest.FileName,
-                        revision,
+                        partRevision,
                         request.ModelName,
                         destinationPath,
                         // A real size makes the pre-flight disk check actually run (it early-returns on 0). Checking per
@@ -169,7 +176,9 @@ internal sealed class HuggingFaceImageModelStore : IImageModelStore
                         partProgress,
                         ct).ConfigureAwait(false);
 
-                    if (!string.IsNullOrEmpty(result.ResolvedRevision))
+                    // The entry records ONE source revision, which belongs to the set's repo — an override part's
+                    // revision would otherwise overwrite it with a commit from a completely different repository.
+                    if (isSetRepo && !string.IsNullOrEmpty(result.ResolvedRevision))
                     {
                         resolvedRevision = result.ResolvedRevision;
                     }
