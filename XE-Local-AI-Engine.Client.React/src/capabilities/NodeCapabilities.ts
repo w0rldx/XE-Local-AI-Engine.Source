@@ -46,8 +46,10 @@ export interface NodeCapabilityConfig {
 	// link, because the runtime is not yet confidently verified end-to-end. This flag alone gates both the nav child
 	// and the /images route — it is independent of the `preview` flag, which gates only Open Canvas.
 	readonly images: boolean;
-	// Dedicated durable software-development workflow. The surface ships in every build; the authenticated
-	// runtime capability controls whether its actions are available on this node.
+	// Durable software-development workflow (Development Mode). The surface ships in every build; the authenticated
+	// runtime capability controls whether its actions are available on this node. It is an EXPERIMENTAL surface, so
+	// its nav entry is a child of the Preview group (next to Open Canvas and Image Generation) rather than a
+	// top-level link. This flag alone gates both the nav child and the /development route.
 	readonly development: boolean;
 }
 
@@ -121,8 +123,9 @@ export const nodeCapabilities: NodeCapabilityConfig = {
 	// Image generation (stable-diffusion.cpp) surface. ON by default — the runtime module (Lanes A–D) is built — but
 	// it ships under the Preview nav group, not as a top-level entry, until it is confidently verified end-to-end.
 	images: true,
-	// The route ships by default. DevelopmentPage resolves the authenticated server capability before exposing
-	// projects or actions, so an operator kill switch still fails closed without requiring a separate frontend build.
+	// The route ships by default, under the Preview nav group (Development Mode is an experimental surface).
+	// DevelopmentPage resolves the authenticated server capability before exposing projects or actions, so an
+	// operator kill switch still fails closed without requiring a separate frontend build.
 	development: true,
 };
 

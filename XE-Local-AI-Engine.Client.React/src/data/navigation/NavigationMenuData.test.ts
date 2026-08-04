@@ -28,7 +28,6 @@ describe("navigationLinks", () => {
 		expect(navigationLinks.map((link) => link.id)).toEqual([
 			"home",
 			"chat",
-			"development",
 			"knowledgeBase",
 			"models",
 			"settings",
@@ -37,8 +36,10 @@ describe("navigationLinks", () => {
 			"invocations",
 			"usage",
 		]);
-		// Image generation is no longer a top-level entry — it moved under the Preview group (see the group test below).
+		// Image generation and Development Mode are no longer top-level entries — both moved under the Preview group
+		// (see the group test below).
 		expect(navigationLinks.some((link) => link.id === "images")).toBe(false);
+		expect(navigationLinks.some((link) => link.id === "development")).toBe(false);
 	});
 
 	it("shows Dashboard and Node Binding as top-level entries when their Central-Platform capabilities are on", async () => {
@@ -48,7 +49,6 @@ describe("navigationLinks", () => {
 			"home",
 			"dashboard",
 			"chat",
-			"development",
 			"knowledgeBase",
 			"binding",
 			"models",
@@ -67,11 +67,15 @@ describe("navigationLinks", () => {
 		expect(gatedLinks.some((link) => link.id === "binding")).toBe(false);
 	});
 
-	it("shows Development as a dedicated top-level route and hides it when its capability is off", async () => {
-		const development = navigationLinks.find((link) => link.id === "development");
-		expect(development?.to).toBe(nodeRoutePaths.development);
+	it("carries Development Mode as a Preview child and hides it when its capability is off", async () => {
+		const preview = navigationLinks.find((link) => link.id === "preview");
+		expect(preview?.links?.some((nestedLink) => nestedLink.to === nodeRoutePaths.development)).toBe(true);
 
 		const { navigationLinks: gatedLinks } = await mockCapabilities({ development: false });
+		const gatedPreview = gatedLinks.find((link) => link.id === "preview");
+
+		expect(gatedPreview?.links?.some((nestedLink) => nestedLink.to === nodeRoutePaths.development)).toBe(false);
+		// It must not reappear as a top-level entry either.
 		expect(gatedLinks.some((link) => link.id === "development")).toBe(false);
 	});
 
@@ -164,34 +168,38 @@ describe("navigationLinks", () => {
 		expect(settings?.links?.some((nestedLink) => nestedLink.to === nodeRoutePaths.cloudSettings)).toBe(false);
 	});
 
-	it("groups Open Canvas and Image Generation under the Preview group as a pure toggle", () => {
+	it("groups Open Canvas, Image Generation and Development Mode under the Preview group as a pure toggle", () => {
 		const preview = navigationLinks.find((link) => link.id === "preview");
 
-		// Preview is a group (no own route); Open Canvas and Image Generation are its children.
+		// Preview is a group (no own route); Open Canvas, Image Generation and Development Mode are its children.
 		expect(preview?.to).toBeUndefined();
-		expect(preview?.links?.map((nestedLink) => nestedLink.to)).toEqual([nodeRoutePaths.preview, nodeRoutePaths.images]);
+		expect(preview?.links?.map((nestedLink) => nestedLink.to)).toEqual([
+			nodeRoutePaths.preview,
+			nodeRoutePaths.images,
+			nodeRoutePaths.development,
+		]);
 	});
 
-	it("keeps Image Generation under Preview when the preview (Open Canvas) capability is off", async () => {
+	it("keeps the other preview children when the preview (Open Canvas) capability is off", async () => {
 		// The group itself is ungated — each child carries its own capability — so turning Open Canvas off leaves the
-		// Preview group standing with Image Generation as its only child.
+		// Preview group standing with its remaining children.
 		const { navigationLinks: gatedLinks } = await mockCapabilities({ preview: false });
 		const preview = gatedLinks.find((link) => link.id === "preview");
 
-		expect(preview?.links?.map((nestedLink) => nestedLink.to)).toEqual([nodeRoutePaths.images]);
+		expect(preview?.links?.map((nestedLink) => nestedLink.to)).toEqual([nodeRoutePaths.images, nodeRoutePaths.development]);
 	});
 
 	it("drops the Image Generation child from Preview when the images capability is off", async () => {
 		const { navigationLinks: gatedLinks } = await mockCapabilities({ images: false });
 		const preview = gatedLinks.find((link) => link.id === "preview");
 
-		expect(preview?.links?.map((nestedLink) => nestedLink.to)).toEqual([nodeRoutePaths.preview]);
+		expect(preview?.links?.map((nestedLink) => nestedLink.to)).toEqual([nodeRoutePaths.preview, nodeRoutePaths.development]);
 		// It must not reappear as a top-level entry either.
 		expect(gatedLinks.some((link) => link.id === "images")).toBe(false);
 	});
 
-	it("drops the Preview group entirely when both preview and images capabilities are off", async () => {
-		const { navigationLinks: gatedLinks } = await mockCapabilities({ preview: false, images: false });
+	it("drops the Preview group entirely when the preview, images and development capabilities are all off", async () => {
+		const { navigationLinks: gatedLinks } = await mockCapabilities({ preview: false, images: false, development: false });
 
 		expect(gatedLinks.some((link) => link.id === "preview")).toBe(false);
 	});
