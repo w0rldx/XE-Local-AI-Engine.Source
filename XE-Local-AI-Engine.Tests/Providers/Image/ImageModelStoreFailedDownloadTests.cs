@@ -36,7 +36,7 @@ public sealed class ImageModelStoreFailedDownloadTests
         _ = await AssertEx.ThrowsAsync<HuggingFaceDownloadException>(() => store.EnsureModelAsync(Request(), progress: null, CancellationToken.None))
                           .ConfigureAwait(false);
 
-        var modelDirectory = Path.Combine(models.Path, ModelName);
+        var modelDirectory = Path.Combine(models.Path, HuggingFaceImageModelStore.SafeModelDirectorySegment(ModelName));
         AssertEx.False(Directory.Exists(modelDirectory), "A failed download must not leave an orphan empty model directory behind.");
     }
 
@@ -49,7 +49,7 @@ public sealed class ImageModelStoreFailedDownloadTests
         using var registry = new ImageModelRegistry(ImageOptions(models.Path), NullLogger<ImageModelRegistry>.Instance);
 
         // Seed a partial transfer, exactly as an interrupted earlier attempt would have left it.
-        var modelDirectory = Path.Combine(models.Path, ModelName);
+        var modelDirectory = Path.Combine(models.Path, HuggingFaceImageModelStore.SafeModelDirectorySegment(ModelName));
         _ = Directory.CreateDirectory(modelDirectory);
         var partPath = Path.Combine(modelDirectory, "weights.safetensors.part");
         await File.WriteAllTextAsync(partPath, "half-a-file").ConfigureAwait(false);

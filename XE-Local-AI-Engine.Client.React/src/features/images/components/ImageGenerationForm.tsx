@@ -84,17 +84,25 @@ export function ImageGenerationForm({ models, isSubmitting, submitError, onSubmi
 		onSubmit(result.data);
 	}, [models, onSubmit, values]);
 
-	// The model list arrives after the first render, so the initial state was seeded from an empty list. Adopt the first
-	// model's family defaults the moment it lands — otherwise the auto-selected model would silently be driven by the
-	// generic fallback parameters instead of its own.
+	// Reconcile the selection against the models that actually exist.
+	//
+	// Two cases, and the second used to be missed. The list arrives after the first render, so an empty selection has to
+	// adopt the first model (and its family defaults, or the pick would silently run on the generic fallback numbers).
+	// But a selection can also go stale *while* it is non-empty — deleting the selected model leaves the Select pointing
+	// at a value no longer in its options, and Generate happily submits the deleted name and creates a job that fails.
+	// Keying on "is the current name still present" covers both; the prompt fields are untouched either way.
 	useEffect(() => {
 		const first = models[0];
-		if (values.modelName === "" && first !== undefined) {
+		if (first === undefined) {
+			return;
+		}
+		const stillInstalled = models.some((model) => model.modelName === values.modelName);
+		if (!stillInstalled) {
 			handleModelChange(first.modelName);
 		}
 	}, [handleModelChange, models, values.modelName]);
 
-	const selectedModel = values.modelName || models[0]?.modelName || null;
+	const selectedModel = models.some((model) => model.modelName === values.modelName) ? values.modelName : (models[0]?.modelName ?? null);
 
 	return (
 		<Stack gap="md" data-testid="image-generation-form">

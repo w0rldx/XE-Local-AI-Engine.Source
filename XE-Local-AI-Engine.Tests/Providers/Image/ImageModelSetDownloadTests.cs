@@ -237,7 +237,7 @@ public sealed class ImageModelSetDownloadTests
     // Writes a part exactly where the store expects it, as a completed (not .part) file.
     private static async Task SeedPartAsync(string modelsDirectory, string fileName, byte[] content)
     {
-        var directory = Path.Combine(modelsDirectory, ModelName);
+        var directory = Path.Combine(modelsDirectory, HuggingFaceImageModelStore.SafeModelDirectorySegment(ModelName));
         _ = Directory.CreateDirectory(directory);
         await File.WriteAllBytesAsync(Path.Combine(directory, fileName), content).ConfigureAwait(false);
     }

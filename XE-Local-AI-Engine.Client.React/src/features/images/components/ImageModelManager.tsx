@@ -22,6 +22,7 @@ import {
 	useCancelImageModelDownload,
 	useDeleteImageModel,
 	useImageModelCatalog,
+	useRefreshInstalledImageModels,
 	useStartImageModelDownload,
 } from "@/features/images/queries/useImageQueries";
 import { useDownloadRateEstimates } from "@/features/models/hooks/useDownloadRateEstimates";
@@ -120,6 +121,7 @@ export function ImageModelManager({ models, isLoading, onPendingDownloadChange }
 	const cancelMutation = useCancelImageModelDownload();
 	const deleteMutation = useDeleteImageModel();
 	const { statuses, inFlight, track, untrack } = useActiveImageModelDownloads();
+	const refreshInstalledModels = useRefreshInstalledImageModels();
 	// Poll the catalog while anything is transferring: its installed flag only becomes true once the download actually
 	// finishes, long after the 202 that invalidated it.
 	const catalogQuery = useImageModelCatalog(inFlight.length > 0);
@@ -159,10 +161,16 @@ export function ImageModelManager({ models, isLoading, onPendingDownloadChange }
 				const reason = status.sanitizedError ?? t("pages.images.models.download.failed", "The model download failed.");
 				setDownloadErrors((current) => ({ ...current, [status.modelName]: reason }));
 				toast.error(reason);
+			} else if (status.phase === "Completed") {
+				// Refresh BEFORE untracking. Untracking empties `inFlight`, which switches the installed-model and
+				// catalog queries back off — and the 2s status poll routinely sees Completed before the 5s model poll
+				// has fired at all. Relying on those polls alone therefore loses the race often enough to matter: the
+				// model that just finished installing stays invisible until some unrelated refetch happens along.
+				refreshInstalledModels();
 			}
 			untrack(status.modelName);
 		}
-	}, [statuses, untrack, t]);
+	}, [statuses, untrack, t, refreshInstalledModels]);
 
 	// Belt-and-braces: stop tracking once the downloaded model surfaces in the polled list, even if the status registry
 	// was lost (a node restart drops it) and the terminal phase above never arrives.

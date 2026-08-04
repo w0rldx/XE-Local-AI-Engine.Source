@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
 
 using System.Collections.Concurrent;
+using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
@@ -233,14 +234,24 @@ internal sealed class HuggingFaceImageModelStore : IImageModelStore
         var entry = await _registry.FindAsync(modelName, ct).ConfigureAwait(false);
         if (entry is not null)
         {
-            var paths = entry.Parts.SelectMany(part => new[]
+            // Only the weights decide whether the delete succeeded. A leftover .part is a resumable temp file: failing
+            // to remove it wastes disk but does not make the model still-installed, so it never blocks the removal.
+            var undeleted = entry.Parts.Count(part => !TryDeleteFile(part.LocalPath));
+            foreach (var part in entry.Parts)
             {
-                part.LocalPath,
-                part.LocalPath + ".part"
-            });
-            foreach (var path in paths)
+                _ = TryDeleteFile(part.LocalPath + ".part");
+            }
+
+            if (undeleted > 0)
             {
-                TryDeleteFile(path);
+                // Dropping the registry entry here would be the worst outcome available: the model vanishes from the UI
+                // while tens of gigabytes stay on disk, with no remaining way to retry the delete. The commonest cause
+                // is the running sd-server still holding the file (a sharing violation on Windows), which is fixed by
+                // ejecting the runtime and retrying — so keep the entry and say so.
+                _logger.LogWarning("Could not delete {UndeletedCount} weight file(s) for image model {ModelName}; keeping the registry entry.",
+                    undeleted,
+                    modelName);
+                throw new ImageModelInUseException("The model weights are still in use and could not be deleted. Eject the image runtime and try again.");
             }
         }
 
@@ -286,7 +297,13 @@ internal sealed class HuggingFaceImageModelStore : IImageModelStore
 
     // Derives a file-safe, single-segment subdirectory name from the (possibly repo-qualified) model name so each
     // model's parts are isolated and two models can never collide on a shared part file name.
-    private static string SafeModelDirectorySegment(string modelName)
+    //
+    // The readable half of the name is a LOSSY sanitization — every unsafe character collapses to '_', so "owner/model"
+    // and "owner_model" both reduce to "owner_model". Two distinct models sharing a directory is not cosmetic: if their
+    // file-sets contain the same leaf name (they usually do — "model.safetensors", "vae.safetensors"), the second
+    // install silently overwrites the first's weights, and deleting either removes the file the other still points at.
+    // The suffix is a hash of the ORIGINAL name, which restores the uniqueness the sanitizer throws away.
+    internal static string SafeModelDirectorySegment(string modelName)
     {
         var builder = new StringBuilder(modelName.Length);
         foreach (var ch in modelName)
@@ -294,8 +311,27 @@ internal sealed class HuggingFaceImageModelStore : IImageModelStore
             builder.Append(char.IsAsciiLetterOrDigit(ch) || ch is '.' or '-' or '_' ? ch : '_');
         }
 
-        var segment = builder.ToString().Trim('.');
-        return string.IsNullOrEmpty(segment) ? "model" : segment;
+        // Collapse runs of dots before trimming so no ".." survives anywhere in the segment. It could not traverse
+        // anyway — this is a single segment with no separator, and ResolveContainedPath is the real guard — but a
+        // directory literally named "..-_etc_passwd" is a trap for the next reader, and the collapse is free.
+        var readable = builder.ToString().Replace("..", ".", StringComparison.Ordinal).Trim('.');
+        while (readable.Contains("..", StringComparison.Ordinal))
+        {
+            readable = readable.Replace("..", ".", StringComparison.Ordinal);
+        }
+
+        readable = readable.Trim('.');
+        if (readable.Length == 0)
+        {
+            readable = "model";
+        }
+
+        // Truncated to keep the path short; collision resistance here only has to separate the handful of models one
+        // node installs, not resist an adversary — and the name is operator-supplied, not attacker-supplied.
+        // Left as the uppercase hex Convert.ToHexString returns: lowercasing it is purely cosmetic and CA1308 rejects
+        // ToLowerInvariant for normalization.
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(modelName)).AsSpan(start: 0, length: 4));
+        return $"{readable}-{hash}";
     }
 
     // Removes the model's own subdirectory when a failed download left it empty. Non-recursive by construction: an empty
@@ -317,7 +353,11 @@ internal sealed class HuggingFaceImageModelStore : IImageModelStore
         }
     }
 
-    private static void TryDeleteFile(string path)
+    /// <summary>
+    ///     Deletes <paramref name="path" /> if present, reporting whether the file is gone afterwards. An absent file
+    ///     counts as deleted (the caller's goal is its absence, not the act); a locked or unreadable one does not.
+    /// </summary>
+    private static bool TryDeleteFile(string path)
     {
         try
         {
@@ -325,10 +365,12 @@ internal sealed class HuggingFaceImageModelStore : IImageModelStore
             {
                 File.Delete(path);
             }
+
+            return true;
         }
-        catch (IOException)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            // Best-effort delete; the registry entry is removed regardless so the model is no longer offered.
+            return false;
         }
     }
 
