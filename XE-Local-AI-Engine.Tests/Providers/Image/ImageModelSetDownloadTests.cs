@@ -171,6 +171,44 @@ public sealed class ImageModelSetDownloadTests
         AssertEx.Equal(expected: 2, handle.Parts.Count);
     }
 
+    [Test]
+    public async Task EnsureModel_WhenAPartNamesItsOwnRepo_FetchesThatPartFromThatRepo()
+    {
+        // A file-set is not always published in one place. Qwen-Image is the case that forced this: the quantized
+        // diffusion transformer and the VAE ship in one repo while the Qwen2.5-VL text encoder ships in another, so with
+        // one set-level repo id the model cannot be installed at all. Each part therefore resolves its own source.
+        using var models = new GgufStoreTestInfrastructure.TempModelsDir();
+        var requestedUrls = new List<string>();
+        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((request, _) =>
+        {
+            var url = request.RequestUri?.AbsoluteUri ?? string.Empty;
+            lock (requestedUrls)
+            {
+                requestedUrls.Add(url);
+            }
+
+            var body = url.Contains(SecondFile, StringComparison.Ordinal) ? SecondBytes : FirstBytes;
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(body) };
+        });
+        using var http = new HttpClient(handler, disposeHandler: false);
+        using var registry = new ImageModelRegistry(ImageOptions(models.Path), NullLogger<ImageModelRegistry>.Instance);
+        var store = Store(http, models.Path, registry);
+
+        const string otherRepo = "mradermacher/Qwen2.5-VL-7B-Instruct-GGUF";
+        var request = Request(
+            Part(FirstFile, sizeBytes: 10),
+            new ImageModelPartRequest { Role = ImageModelPartRole.Llm, FileName = SecondFile, SizeBytes = 6, RepoId = otherRepo });
+
+        var handle = await store.EnsureModelAsync(request, progress: null, CancellationToken.None).ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 2, handle.Parts.Count);
+        var diffusionUrl = requestedUrls.Single(url => url.Contains(FirstFile, StringComparison.Ordinal));
+        var encoderUrl = requestedUrls.Single(url => url.Contains(SecondFile, StringComparison.Ordinal));
+        AssertEx.Contains(diffusionUrl, RepoId, StringComparison.Ordinal, "The un-overridden part must come from the set's repo.");
+        AssertEx.Contains(encoderUrl, otherRepo, StringComparison.Ordinal, "The overriding part must come from the repo it named.");
+        AssertEx.False(encoderUrl.Contains(RepoId, StringComparison.Ordinal), "A part's own repo must replace the set's, not be appended to it.");
+    }
+
     // Serves each part's bytes by file name so a test can assert exactly which parts were fetched.
     private static GgufStoreTestInfrastructure.ScriptedHandler FileServingHandler()
     {

@@ -12,9 +12,17 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Options;
 /// </summary>
 /// <remarks>
 ///     Model selection follows the resolved file-set shape: a single <see cref="ImageModelPartRole.Diffusion" /> part
-///     (SD1.5, the step-1 target) uses the single-file <c>-m</c> flag; a multi-part set (FLUX/SD3) uses
-///     <c>--diffusion-model</c> + <c>--vae</c> + <c>--clip_l</c> [+ <c>--clip_g</c>] + <c>--t5xxl</c>. Verified against
-///     stable-diffusion.cpp @ <c>master-742-1a13107</c>.
+///     (SD1.5, the step-1 target) uses the single-file <c>-m</c> flag; a multi-part set (FLUX/SD3/Qwen-Image) uses
+///     <c>--diffusion-model</c> + <c>--vae</c> + <c>--clip_l</c> [+ <c>--clip_g</c>] + <c>--t5xxl</c> [+ <c>--llm</c>
+///     + <c>--llm_vision</c>]. Verified against stable-diffusion.cpp @ <c>master-742-1a13107</c>, whose <c>--help</c>
+///     carries all of those flags.
+///     <para>
+///         Two Qwen-adjacent flags the pinned binary offers are deliberately NOT emitted:
+///         <c>--flow-shift</c> documents itself as <c>default: auto</c>, so passing a hand-picked value would replace a
+///         model-aware default with a guess; and <c>--qwen-image-zero-cond-t</c> is an <em>edit</em>-model conditioning
+///         switch (Qwen-Image-Edit) that would change conditioning for the text-to-image sets this install path ships.
+///         Both stay off until there is a measurement that says otherwise.
+///     </para>
 /// </remarks>
 internal static class ImageServerArgumentBuilder
 {
@@ -80,7 +88,7 @@ internal static class ImageServerArgumentBuilder
             return;
         }
 
-        // Multi-part file-set (FLUX/SD3): the diffusion transformer plus each external component by role.
+        // Multi-part file-set (FLUX/SD3/Qwen-Image): the diffusion transformer plus each external component by role.
         args.Add("--diffusion-model");
         args.Add(diffusion.LocalPath);
 
@@ -102,6 +110,15 @@ internal static class ImageServerArgumentBuilder
                     break;
                 case ImageModelPartRole.T5:
                     args.Add("--t5xxl");
+                    args.Add(part.LocalPath);
+                    break;
+                case ImageModelPartRole.Llm:
+                    // Qwen-Image's text encoder is a full language model (Qwen2.5-VL), not a CLIP/T5 encoder.
+                    args.Add("--llm");
+                    args.Add(part.LocalPath);
+                    break;
+                case ImageModelPartRole.LlmVision:
+                    args.Add("--llm_vision");
                     args.Add(part.LocalPath);
                     break;
                 case ImageModelPartRole.Diffusion:

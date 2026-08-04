@@ -1,5 +1,5 @@
-import { ActionIcon, Alert, Badge, Button, Card, Group, Loader, Progress, Select, Stack, Text, TextInput, Tooltip } from "@mantine/core";
-import { IconDownload, IconTrash, IconX } from "@tabler/icons-react";
+import { ActionIcon, Alert, Badge, Button, Card, Group, Loader, Progress, Select, Stack, Switch, Text, TextInput, Tooltip } from "@mantine/core";
+import { IconDownload, IconPlus, IconTrash, IconX } from "@tabler/icons-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -17,19 +17,67 @@ import { useDownloadRateEstimates } from "@/features/models/hooks/useDownloadRat
 import { formatDownloadEta, humanizeBytes } from "@/features/models/models/DownloadRateEstimate";
 
 // Diffusion families the download form offers. Must match the backend ImageModelFamily enum names (parsed
-// case-insensitively). Step 1 targets SD1.5 (single-file); the others are admitted but need extra parts — the minimal
-// form here sends a single Diffusion part, which is complete for SD1.5 and the seed for a later multi-part UI.
-const families = ["Sd15", "Sdxl", "Sd3", "Flux"] as const;
+// case-insensitively). Sd15 is single-file; every other family is a file SET and needs the advanced form below.
+const families = ["Sd15", "Sdxl", "Sd3", "Flux", "QwenImage"] as const;
 type ImageModelFamily = (typeof families)[number];
+
+// Part roles the backend ImageModelPartRole enum accepts, in the order a file-set is normally listed. Llm/LlmVision
+// are the Qwen-Image text encoder (a full Qwen2.5-VL language model) and its vision tower.
+const partRoles = ["Diffusion", "Vae", "ClipL", "ClipG", "T5", "Llm", "LlmVision"] as const;
+type ImageModelPartRole = (typeof partRoles)[number];
+
+interface PartDraft {
+	// Stable identity for the row, so removing a middle row does not remount the ones after it.
+	id: string;
+	role: ImageModelPartRole;
+	fileName: string;
+	// Blank = the set's repo. A file-set is not always published in one place: a Qwen-Image install takes its diffusion
+	// weights and VAE from one repo and the Qwen2.5-VL text encoder from another.
+	repoId: string;
+	// Blank = unknown. A declared size is what makes the free-disk pre-flight run at all and what lets the backend
+	// compute one aggregate percentage instead of a bar that restarts per part — on an 18 GB set that is the difference
+	// between a usable progress display and a mystery.
+	sizeBytes: string;
+	sha256: string;
+}
 
 interface DownloadDraft {
 	repoId: string;
 	fileName: string;
 	modelName: string;
 	family: ImageModelFamily;
+	// The simple form sends a single Diffusion part (correct and sufficient for SD1.5); the advanced one sends the
+	// whole declared file-set.
+	isAdvanced: boolean;
+	parts: readonly PartDraft[];
 }
 
-const emptyDraft: DownloadDraft = { repoId: "", fileName: "", modelName: "", family: "Sd15" };
+let nextPartId = 0;
+
+function newPart(role: ImageModelPartRole): PartDraft {
+	nextPartId += 1;
+	return { id: `part-${nextPartId}`, role, fileName: "", repoId: "", sizeBytes: "", sha256: "" };
+}
+
+const emptyDraft: DownloadDraft = {
+	repoId: "",
+	fileName: "",
+	modelName: "",
+	family: "Sd15",
+	isAdvanced: false,
+	parts: [newPart("Diffusion"), newPart("Vae")],
+};
+
+// Parses an optional byte count. Anything that is not a positive integer is reported as "not declared" rather than
+// coerced to 0 — a zero would look like a declared size and silently disable the disk pre-flight it was meant to feed.
+function parseOptionalSize(raw: string): number | undefined {
+	const trimmed = raw.trim();
+	if (trimmed === "") {
+		return undefined;
+	}
+	const parsed = Number(trimmed);
+	return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined;
+}
 
 interface ImageModelManagerProps {
 	models: readonly ImageModelView[];
@@ -63,7 +111,14 @@ export function ImageModelManager({ models, isLoading, onPendingDownloadChange }
 	// polls. On an 18 GB file-set this is the number that tells the operator whether to wait or walk away.
 	const rateEstimates = useDownloadRateEstimates(statuses);
 
-	const canSubmit = draft.repoId.trim().length > 0 && draft.fileName.trim().length > 0 && draft.modelName.trim().length > 0;
+	// The advanced form's file-set is valid once the diffusion part names a file — every other role is optional, and
+	// which ones a family actually needs is the model author's business, not something to hard-code per family here.
+	const advancedParts = draft.parts.filter((part) => part.fileName.trim().length > 0);
+	const hasDiffusionPart = advancedParts.some((part) => part.role === "Diffusion");
+	const canSubmit =
+		draft.repoId.trim().length > 0 &&
+		draft.modelName.trim().length > 0 &&
+		(draft.isAdvanced ? hasDiffusionPart : draft.fileName.trim().length > 0);
 	const isDraftInFlight = inFlight.includes(draft.modelName.trim());
 
 	// Resolve each tracked download the moment the backend reports a terminal phase. A failure raises a toast AND leaves
@@ -112,18 +167,35 @@ export function ImageModelManager({ models, isLoading, onPendingDownloadChange }
 		// A retry of the same name must be able to report its OWN terminal phase; without this the second attempt's
 		// failure would be swallowed by the first attempt's entry.
 		handledTerminals.current.delete(modelName);
+		const parts = draft.isAdvanced
+			? advancedParts.map((part) => ({
+					role: part.role,
+					fileName: part.fileName.trim(),
+					repoId: part.repoId.trim() === "" ? undefined : part.repoId.trim(),
+					sizeBytes: parseOptionalSize(part.sizeBytes),
+					sha256: part.sha256.trim() === "" ? undefined : part.sha256.trim(),
+				}))
+			: [{ role: "Diffusion", fileName: draft.fileName.trim() }];
+
 		downloadMutation.mutate(
 			{
 				modelName,
 				repoId: draft.repoId.trim(),
 				family: draft.family,
-				parts: [{ role: "Diffusion", fileName: draft.fileName.trim() }],
+				parts,
 			},
 			{
 				onSuccess: () => {
 					track(modelName);
 					toast.success(t("pages.images.models.download.started", "Download started. The model will appear once ready."));
-					setDraft(emptyDraft);
+					// Clear the entered values but stay in the mode and family the operator chose — a second multi-part
+					// install almost always follows the first, and silently dropping back to the simple form loses it.
+					setDraft((current) => ({
+						...emptyDraft,
+						isAdvanced: current.isAdvanced,
+						family: current.family,
+						parts: [newPart("Diffusion"), newPart("Vae")],
+					}));
 				},
 				onError: (error) => {
 					const message =
@@ -134,7 +206,22 @@ export function ImageModelManager({ models, isLoading, onPendingDownloadChange }
 				},
 			},
 		);
-	}, [canSubmit, downloadMutation, draft, t, track]);
+	}, [advancedParts, canSubmit, downloadMutation, draft, t, track]);
+
+	const updatePart = useCallback((id: string, patch: Partial<PartDraft>) => {
+		setDraft((current) => ({
+			...current,
+			parts: current.parts.map((part) => (part.id === id ? { ...part, ...patch } : part)),
+		}));
+	}, []);
+
+	const addPart = useCallback(() => {
+		setDraft((current) => ({ ...current, parts: [...current.parts, newPart("Llm")] }));
+	}, []);
+
+	const removePart = useCallback((id: string) => {
+		setDraft((current) => ({ ...current, parts: current.parts.filter((part) => part.id !== id) }));
+	}, []);
 
 	const handleCancel = useCallback(
 		(modelName: string) => {
@@ -244,16 +331,18 @@ export function ImageModelManager({ models, isLoading, onPendingDownloadChange }
 					}}
 					data-testid="image-model-download-repo"
 				/>
-				<TextInput
-					label={t("pages.images.models.download.fileName.label", "Weight file")}
-					placeholder="sd-v1-5.q8_0.gguf"
-					value={draft.fileName}
-					onChange={(event) => {
-						const value = event.currentTarget.value;
-						setDraft((current) => ({ ...current, fileName: value }));
-					}}
-					data-testid="image-model-download-file"
-				/>
+				{draft.isAdvanced ? null : (
+					<TextInput
+						label={t("pages.images.models.download.fileName.label", "Weight file")}
+						placeholder="sd-v1-5.q8_0.gguf"
+						value={draft.fileName}
+						onChange={(event) => {
+							const value = event.currentTarget.value;
+							setDraft((current) => ({ ...current, fileName: value }));
+						}}
+						data-testid="image-model-download-file"
+					/>
+				)}
 				<TextInput
 					label={t("pages.images.models.download.modelName.label", "Model name")}
 					placeholder="sd-1.5"
@@ -272,9 +361,62 @@ export function ImageModelManager({ models, isLoading, onPendingDownloadChange }
 					onChange={(value) => setDraft((current) => ({ ...current, family: (value ?? current.family) as ImageModelFamily }))}
 					data-testid="image-model-download-family"
 				/>
-				<Alert variant="light" color="gray" data-testid="image-model-download-hint">
-					{t("pages.images.models.download.hint", "Single-file (SD1.5-style) weights only. Multi-part models are a follow-up.")}
-				</Alert>
+				<Switch
+					label={t("pages.images.models.download.advanced.toggle", "Advanced: multi-part file set")}
+					description={t(
+						"pages.images.models.download.advanced.toggleDescription",
+						"SDXL, SD3, FLUX and Qwen-Image ship as several files (diffusion weights, VAE, text encoders) instead of one.",
+					)}
+					checked={draft.isAdvanced}
+					onChange={(event) => {
+						const checked = event.currentTarget.checked;
+						setDraft((current) => ({ ...current, isAdvanced: checked }));
+					}}
+					data-testid="image-model-download-advanced-toggle"
+				/>
+				{draft.isAdvanced ? (
+					<Stack gap="sm" data-testid="image-model-download-parts">
+						{draft.parts.map((part, index) => (
+							<PartRow
+								key={part.id}
+								part={part}
+								index={index}
+								canRemove={draft.parts.length > 1}
+								onChange={updatePart}
+								onRemove={removePart}
+							/>
+						))}
+						<Group justify="space-between">
+							<Button
+								size="xs"
+								variant="light"
+								leftSection={<IconPlus size={14} />}
+								onClick={addPart}
+								data-testid="image-model-download-add-part"
+							>
+								{t("pages.images.models.download.advanced.addPart", "Add file")}
+							</Button>
+							{hasDiffusionPart ? null : (
+								<Text size="xs" c="red" data-testid="image-model-download-parts-warning">
+									{t("pages.images.models.download.advanced.diffusionRequired", "A file set needs one Diffusion file.")}
+								</Text>
+							)}
+						</Group>
+						<Alert variant="light" color="gray" data-testid="image-model-download-hint">
+							{t(
+								"pages.images.models.download.advanced.hint",
+								"Leave a file's repository blank to use the one above — a set can span repositories. Sizes are optional but enable the free-space check and one combined progress bar.",
+							)}
+						</Alert>
+					</Stack>
+				) : (
+					<Alert variant="light" color="gray" data-testid="image-model-download-hint">
+						{t(
+							"pages.images.models.download.hint",
+							"One weight file, for single-file models like SD1.5. Turn on Advanced for a multi-part model.",
+						)}
+					</Alert>
+				)}
 				{Object.entries(downloadErrors).map(([modelName, reason]) => (
 					<Alert
 						key={modelName}
@@ -321,6 +463,82 @@ export function ImageModelManager({ models, isLoading, onPendingDownloadChange }
 				</Group>
 			</Stack>
 		</Stack>
+	);
+}
+
+interface PartRowProps {
+	part: PartDraft;
+	index: number;
+	canRemove: boolean;
+	onChange: (id: string, patch: Partial<PartDraft>) => void;
+	onRemove: (id: string) => void;
+}
+
+// One declared file of a multi-part set. Only the role and file name are required; the repository override, size and
+// digest are the fields that make a real cross-repo install work and its progress honest, so they are visible rather
+// than hidden behind another disclosure.
+function PartRow({ part, index, canRemove, onChange, onRemove }: PartRowProps) {
+	const { t } = useTranslation();
+
+	return (
+		<Card withBorder={true} padding="sm" radius="sm" data-testid={`image-model-download-part-${index}`}>
+			<Stack gap="xs">
+				<Group align="flex-end" wrap="nowrap" gap="xs">
+					<Select
+						label={t("pages.images.models.download.advanced.role.label", "Role")}
+						data={partRoles.map((role) => ({ value: role, label: t(`pages.images.models.partRoles.${role}`, role) }))}
+						value={part.role}
+						allowDeselect={false}
+						w={150}
+						onChange={(value) => onChange(part.id, { role: (value ?? part.role) as ImageModelPartRole })}
+						data-testid={`image-model-download-part-role-${index}`}
+					/>
+					<TextInput
+						label={t("pages.images.models.download.advanced.fileName.label", "File")}
+						placeholder="Qwen_Image-Q4_K_M.gguf"
+						value={part.fileName}
+						style={{ flex: 1 }}
+						onChange={(event) => onChange(part.id, { fileName: event.currentTarget.value })}
+						data-testid={`image-model-download-part-file-${index}`}
+					/>
+					<Tooltip label={t("pages.images.models.download.advanced.removePart", "Remove file")}>
+						<ActionIcon
+							variant="light"
+							color="red"
+							aria-label={t("pages.images.models.download.advanced.removePart", "Remove file")}
+							disabled={!canRemove}
+							onClick={() => onRemove(part.id)}
+							data-testid={`image-model-download-part-remove-${index}`}
+						>
+							<IconX size={16} />
+						</ActionIcon>
+					</Tooltip>
+				</Group>
+				<Group grow={true} align="flex-start">
+					<TextInput
+						label={t("pages.images.models.download.advanced.repoId.label", "Repository (optional)")}
+						placeholder={t("pages.images.models.download.advanced.repoId.placeholder", "Same as above")}
+						value={part.repoId}
+						onChange={(event) => onChange(part.id, { repoId: event.currentTarget.value })}
+						data-testid={`image-model-download-part-repo-${index}`}
+					/>
+					<TextInput
+						label={t("pages.images.models.download.advanced.sizeBytes.label", "Size in bytes (optional)")}
+						placeholder="13065746976"
+						inputMode="numeric"
+						value={part.sizeBytes}
+						onChange={(event) => onChange(part.id, { sizeBytes: event.currentTarget.value })}
+						data-testid={`image-model-download-part-size-${index}`}
+					/>
+					<TextInput
+						label={t("pages.images.models.download.advanced.sha256.label", "SHA-256 (optional)")}
+						value={part.sha256}
+						onChange={(event) => onChange(part.id, { sha256: event.currentTarget.value })}
+						data-testid={`image-model-download-part-sha-${index}`}
+					/>
+				</Group>
+			</Stack>
+		</Card>
 	);
 }
 

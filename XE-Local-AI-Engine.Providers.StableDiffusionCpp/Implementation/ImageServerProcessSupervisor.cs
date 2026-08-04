@@ -365,8 +365,11 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
             _logger.LogInformation("sd-server spawned for model {ModelName} (pid {ProcessId}, port {Port}).",
                 modelName, handle.ProcessId, port);
 
+            // The readiness wait IS the model-load wait (sd-server binds only once loading completes), so the budget is
+            // sized against the file-set rather than being flat — see ImageServerReadinessBudget.
+            var readinessBudget = ImageServerReadinessBudget.For(parts, _options);
             var readyStartedUtc = _timeProvider.GetUtcNow();
-            await WaitForReadyOrExitAsync(handle, spec.BaseAddress, spawnCt).ConfigureAwait(false);
+            await WaitForReadyOrExitAsync(handle, spec.BaseAddress, readinessBudget, spawnCt).ConfigureAwait(false);
             _logger.LogInformation("sd-server ready for model {ModelName} (pid {ProcessId}) after {ElapsedMs:F0} ms.",
                 modelName, handle.ProcessId, (_timeProvider.GetUtcNow() - readyStartedUtc).TotalMilliseconds);
 
@@ -410,11 +413,11 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
     ///     exiting. sd-server binds its socket only after a successful model load, so an exit-before-ready is a
     ///     deterministic load failure: surface it immediately instead of polling a dead endpoint for the full budget.
     /// </summary>
-    private async Task WaitForReadyOrExitAsync(IImageServerProcessHandle handle, Uri baseAddress, CancellationToken ct)
+    private async Task WaitForReadyOrExitAsync(IImageServerProcessHandle handle, Uri baseAddress, TimeSpan budget, CancellationToken ct)
     {
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
 
-        var readyTask = _readinessProbe.WaitForReadyAsync(baseAddress, _options.ReadinessTimeout, linkedCts.Token);
+        var readyTask = _readinessProbe.WaitForReadyAsync(baseAddress, budget, linkedCts.Token);
         var exitTask = WatchForExitAsync(handle, linkedCts.Token);
 
         var winner = await Task.WhenAny(readyTask, exitTask).ConfigureAwait(false);
@@ -535,12 +538,25 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         }
     }
 
-    /// <summary>Evicts the least-recently-used daemon that is currently idle (caller holds the admission gate).</summary>
+    /// <summary>
+    ///     Frees a slot for a new admission by evicting the least-recently-used daemon that is not mid-generation
+    ///     (caller holds the admission gate).
+    ///     <para>
+    ///         A daemon past its idle TTL is always preferred. When none is, an in-window but <b>unleased</b> daemon is
+    ///         evicted anyway. That fallback exists because the image cap is <c>1</c>: without it the TTL — a reaper
+    ///         threshold, not an admission rule — becomes a fifteen-minute lockout in which switching image models fails
+    ///         outright with "the maximum number of local image models are already loaded", and the app offers no way
+    ///         out. An unleased daemon has no request in flight, so evicting it costs a reload and nothing else, whereas
+    ///         refusing costs the operator the feature. A leased daemon is still never a victim.
+    ///     </para>
+    /// </summary>
     private bool TryEvictIdleLeastRecentlyUsed()
     {
         var now = _timeProvider.GetUtcNow();
         string? victimKey = null;
         RunningServer? victim = null;
+        var victimIsIdlePastTtl = false;
+
         foreach (var (key, running) in _processes)
         {
             // In-flight generation disqualifies a live daemon as a cap-eviction victim for the same reason the idle
@@ -551,16 +567,19 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
                 continue;
             }
 
-            if (now - running.LastUsedUtc < _options.IdleTimeToLive && !running.Handle.HasExited)
+            var isIdlePastTtl = running.Handle.HasExited || now - running.LastUsedUtc >= _options.IdleTimeToLive;
+
+            // A past-TTL candidate always outranks an in-window one; within the same rank, least-recently-used wins.
+            if (victim is not null && (victimIsIdlePastTtl != isIdlePastTtl
+                    ? !isIdlePastTtl
+                    : running.LastUsedUtc >= victim.LastUsedUtc))
             {
-                continue; // Not idle — never evict an in-window daemon to admit a new one.
+                continue;
             }
 
-            if (victim is null || running.LastUsedUtc < victim.LastUsedUtc)
-            {
-                victimKey = key;
-                victim = running;
-            }
+            victimKey = key;
+            victim = running;
+            victimIsIdlePastTtl = isIdlePastTtl;
         }
 
         if (victimKey is null || victim is null)
@@ -577,8 +596,8 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
             return false;
         }
 
-        _logger.LogWarning("Loaded-model cap ({Cap}) reached; evicting idle sd-server for model {ModelName} to admit a new one.",
-            _options.MaxLoadedProcesses, victimKey);
+        _logger.LogWarning("Loaded-model cap ({Cap}) reached; evicting {Idleness} sd-server for model {ModelName} to admit a new one.",
+            _options.MaxLoadedProcesses, victimIsIdlePastTtl ? "idle" : "in-window but unleased", victimKey);
 
         // Synchronous teardown under the admission gate: free the slot/port before the new admission proceeds.
         TeardownProcess(victimKey, victim);

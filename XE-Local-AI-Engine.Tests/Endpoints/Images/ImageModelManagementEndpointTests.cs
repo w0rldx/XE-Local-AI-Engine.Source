@@ -153,6 +153,78 @@ public sealed class ImageModelManagementEndpointTests
         AssertEx.Equal(expected: 0, store.DeleteCallCount, "A whitespace-only route segment must be rejected before the store is touched.");
     }
 
+    [Test]
+    public async Task StartDownload_QwenImageFileSet_ReachesTheCoordinatorWithEveryPartFieldIntact()
+    {
+        // The whole Qwen-Image install rides on three things surviving the boundary: the QwenImage family and the Llm
+        // role (both added after the original SD-only contract), the per-part repo override (a real Qwen set is split
+        // across two repositories), and the declared sizes (without them the free-disk pre-flight silently no-ops and
+        // no aggregate percentage can be computed for an 18 GB transfer).
+        var coordinator = new RecordingImageModelDownloadCoordinator();
+        await using var factory = FactoryWith(coordinator);
+        using var client = factory.CreateClient();
+
+        using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/images/models/downloads", new
+        {
+            modelName = "qwen-image",
+            repoId = "QuantStack/Qwen-Image-GGUF",
+            family = "QwenImage",
+            parts = new object[]
+            {
+                new { role = "Diffusion", fileName = "Qwen_Image-Q4_K_M.gguf", sizeBytes = 13_065_746_976L },
+                new { role = "Vae", fileName = "VAE/Qwen_Image-VAE.safetensors", sizeBytes = 253_806_246L },
+                new
+                {
+                    role = "Llm",
+                    fileName = "Qwen2.5-VL-7B-Instruct.Q4_K_M.gguf",
+                    repoId = "mradermacher/Qwen2.5-VL-7B-Instruct-GGUF",
+                    sizeBytes = 4_683_072_512L
+                }
+            }
+        });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.Accepted, response.StatusCode);
+
+        var started = coordinator.LastRequest;
+        AssertEx.NotNull(started);
+        AssertEx.Equal(ImageModelFamily.QwenImage, started!.Family);
+        AssertEx.Equal(expected: 3, started.Parts.Count);
+
+        var encoder = started.Parts.Single(part => part.Role == ImageModelPartRole.Llm);
+        AssertEx.Equal("mradermacher/Qwen2.5-VL-7B-Instruct-GGUF", encoder.RepoId);
+        AssertEx.Equal(expected: 4_683_072_512L, encoder.SizeBytes ?? 0);
+
+        var vae = started.Parts.Single(part => part.Role == ImageModelPartRole.Vae);
+        AssertEx.Null(vae.RepoId, "A part that named no repo must inherit the set's, not carry a copy of it.");
+        AssertEx.Equal("VAE/Qwen_Image-VAE.safetensors", vae.FileName);
+    }
+
+    [Test]
+    public async Task StartDownload_WithANonPositiveSize_TreatsItAsUndeclaredRatherThanZero()
+    {
+        // A zero would read as a declared size: it would disable the disk pre-flight it was meant to feed and poison the
+        // set total, producing a bar that runs past 100%.
+        var coordinator = new RecordingImageModelDownloadCoordinator();
+        await using var factory = FactoryWith(coordinator);
+        using var client = factory.CreateClient();
+
+        using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/images/models/downloads", new
+        {
+            modelName = "sd-1.5",
+            repoId = "second-state/stable-diffusion-v1-5-GGUF",
+            family = "Sd15",
+            parts = new object[]
+            {
+                new { role = "Diffusion", fileName = "weights.gguf", sizeBytes = 0L }
+            }
+        });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        AssertEx.Null(coordinator.LastRequest?.Parts[0].SizeBytes);
+    }
+
     private static TestingWebAppFactory FactoryWith(IImageModelDownloadCoordinator coordinator)
     {
         return new TestingWebAppFactory
@@ -205,6 +277,33 @@ public sealed class ImageModelManagementEndpointTests
         {
             LastCancelledModelName = modelName;
             return CancelResult;
+        }
+
+        public ImageModelDownloadStatus? GetStatus(string modelName)
+        {
+            return null;
+        }
+
+        public IReadOnlyList<ImageModelDownloadStatus> ListStatuses()
+        {
+            return [];
+        }
+    }
+
+    // Captures the request the start endpoint built, so the DTO-to-contract mapping can be asserted field by field.
+    private sealed class RecordingImageModelDownloadCoordinator : IImageModelDownloadCoordinator
+    {
+        public ImageModelRequest? LastRequest { get; private set; }
+
+        public ImageModelDownloadTicket Start(ImageModelRequest request)
+        {
+            LastRequest = request;
+            return new ImageModelDownloadTicket(request.ModelName, AlreadyInFlight: false);
+        }
+
+        public bool Cancel(string modelName)
+        {
+            return false;
         }
 
         public ImageModelDownloadStatus? GetStatus(string modelName)

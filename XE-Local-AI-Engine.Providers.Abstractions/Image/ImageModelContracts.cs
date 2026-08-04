@@ -19,7 +19,14 @@ public enum ImageModelFamily
     Sd3 = 3,
 
     /// <summary>FLUX.1 — diffusion + VAE + CLIP-L + T5 file-set.</summary>
-    Flux = 4
+    Flux = 4,
+
+    /// <summary>
+    ///     Qwen-Image — diffusion + VAE + an <b>LLM</b> text encoder (Qwen2.5-VL) file-set, optionally with the encoder's
+    ///     vision tower. Unlike FLUX/SD3 the text encoder is a full 7B language model rather than CLIP/T5, which is why it
+    ///     rides <see cref="ImageModelPartRole.Llm" /> and not <see cref="ImageModelPartRole.T5" />.
+    /// </summary>
+    QwenImage = 5
 }
 
 /// <summary>
@@ -54,7 +61,20 @@ public enum ImageModelPartRole
     ClipG = 3,
 
     /// <summary>The T5-XXL text encoder (FLUX/SD3).</summary>
-    T5 = 4
+    T5 = 4,
+
+    /// <summary>
+    ///     An LLM text encoder — the Qwen2.5-VL weights Qwen-Image conditions on (<c>--llm</c>). Distinct from
+    ///     <see cref="T5" /> because it is a general-purpose language model, so it is quantized, sized and placed
+    ///     differently from a CLIP/T5 encoder.
+    /// </summary>
+    Llm = 5,
+
+    /// <summary>
+    ///     The vision tower belonging to the <see cref="Llm" /> encoder (<c>--llm_vision</c>). Optional for
+    ///     text-to-image; needed by the image-edit variants that condition on a reference image.
+    /// </summary>
+    LlmVision = 6
 }
 
 /// <summary>
@@ -71,6 +91,21 @@ public sealed record ImageModelPartRequest
 
     /// <summary>Expected sha256 (hash-pin) when the source exposed it; otherwise <see langword="null" />.</summary>
     public string? Sha256 { get; init; }
+
+    /// <summary>
+    ///     Hugging Face repository this part is pulled from when it differs from the set's
+    ///     <see cref="ImageModelRequest.RepoId" />; <see langword="null" /> uses the set's repo.
+    ///     <para>
+    ///         A real file-set is not always published in one place. Qwen-Image is the case that forced this: the
+    ///         quantized diffusion transformer and the VAE ship in one repo while the Qwen2.5-VL text encoder ships in
+    ///         another, so a single set-level repo id makes the model impossible to install rather than merely awkward.
+    ///     </para>
+    ///     <para>
+    ///         A part that overrides the repo cannot honour <see cref="ImageModelRequest.Revision" /> — a commit SHA
+    ///         pinning one repo is meaningless in another — so it resolves its own repo's default branch instead.
+    ///     </para>
+    /// </summary>
+    public string? RepoId { get; init; }
 
     /// <summary>
     ///     Known size of this part when the source exposed one (catalog entry / repo listing), otherwise

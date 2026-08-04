@@ -113,6 +113,11 @@ export interface ImageModelView {
 	kind: string;
 	sizeBytes: number;
 	downloadedAtUtc: number;
+	// Per-family starting parameters (backend ImageFamilyDefaults). They exist because the wrong ones do not fail —
+	// FLUX-schnell run at SD1.5's 20 steps / CFG 7 just produces a burnt image, five times slower.
+	defaultSteps: number;
+	defaultCfgScale: number;
+	defaultSampler: string;
 }
 
 export function toImageModelView(dto: ImageModelResponse): ImageModelView {
@@ -123,7 +128,24 @@ export function toImageModelView(dto: ImageModelResponse): ImageModelView {
 		kind: dto.kind,
 		sizeBytes: dto.sizeBytes,
 		downloadedAtUtc: dto.downloadedAtUtc,
+		defaultSteps: dto.defaultSteps,
+		defaultCfgScale: dto.defaultCfgScale,
+		defaultSampler: dto.defaultSampler,
 	};
+}
+
+/**
+ * The form values a freshly-selected model should start from: the shared defaults with the model's family-specific
+ * sampling parameters applied over them. The sampler is only adopted when the backend names one this form can actually
+ * offer, so an unknown method name leaves the picker on a valid value instead of blanking it.
+ */
+export function imageFormDefaultsForModel(model: ImageModelView | undefined): ImageGenerationFormValues {
+	const base: ImageGenerationFormValues = { ...imageFormDefaults, modelName: model?.modelName ?? "" };
+	if (model === undefined) {
+		return base;
+	}
+	const sampler = (imageSamplers as readonly string[]).includes(model.defaultSampler) ? (model.defaultSampler as ImageSampler) : base.sampler;
+	return { ...base, steps: model.defaultSteps, cfgScale: model.defaultCfgScale, sampler };
 }
 
 // Coarse lifecycle of an image-model weight download, mirroring the backend ImageModelDownloadPhase enum. A download

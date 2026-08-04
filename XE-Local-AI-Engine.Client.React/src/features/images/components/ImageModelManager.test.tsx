@@ -78,6 +78,9 @@ function model(overrides: Partial<ImageModelView> = {}): ImageModelView {
 		kind: "Txt2Img",
 		sizeBytes: 1_900_000_000,
 		downloadedAtUtc: 0,
+		defaultSteps: 20,
+		defaultCfgScale: 7,
+		defaultSampler: "euler_a",
 		...overrides,
 	};
 }
@@ -301,6 +304,69 @@ describe("ImageModelManager", () => {
 
 			await waitFor(() => expect(confirmSpy).toHaveBeenCalledTimes(1));
 			expect(deleteMutate).not.toHaveBeenCalled();
+		});
+	});
+
+	// A model like Qwen-Image is not one file: it is a diffusion transformer, a VAE and a 7B LLM text encoder, and the
+	// encoder is published in a DIFFERENT repository from the other two. The simple single-file form cannot express any
+	// of that, which is why installing such a model was impossible before this form existed.
+	describe("advanced multi-part file set", () => {
+		function enableAdvanced() {
+			fireEvent.click(screen.getByTestId("image-model-download-advanced-toggle"));
+		}
+
+		it("swaps the single weight-file input for a per-role file list", () => {
+			renderWithProviders(<ImageModelManager models={[]} isLoading={false} />);
+			expect(screen.getByTestId("image-model-download-file")).toBeTruthy();
+
+			enableAdvanced();
+
+			expect(screen.queryByTestId("image-model-download-file")).toBeNull();
+			expect(screen.getByTestId("image-model-download-part-0")).toBeTruthy();
+			expect(screen.getByTestId("image-model-download-part-1")).toBeTruthy();
+		});
+
+		it("sends every declared part with its own repository and size", () => {
+			renderWithProviders(<ImageModelManager models={[]} isLoading={false} />);
+			enableAdvanced();
+
+			setValue(screen.getByTestId("image-model-download-repo") as HTMLInputElement, "QuantStack/Qwen-Image-GGUF");
+			setValue(screen.getByTestId("image-model-download-name") as HTMLInputElement, "qwen-image");
+			setValue(screen.getByTestId("image-model-download-part-file-0") as HTMLInputElement, "Qwen_Image-Q4_K_M.gguf");
+			setValue(screen.getByTestId("image-model-download-part-size-0") as HTMLInputElement, "13065746976");
+			setValue(screen.getByTestId("image-model-download-part-file-1") as HTMLInputElement, "VAE/Qwen_Image-VAE.safetensors");
+
+			fireEvent.click(screen.getByTestId("image-model-download-add-part"));
+			setValue(screen.getByTestId("image-model-download-part-file-2") as HTMLInputElement, "Qwen2.5-VL-7B-Instruct.Q4_K_M.gguf");
+			setValue(screen.getByTestId("image-model-download-part-repo-2") as HTMLInputElement, "mradermacher/Qwen2.5-VL-7B-Instruct-GGUF");
+
+			fireEvent.click(screen.getByTestId("image-model-download-submit"));
+
+			const body = startMutate.mock.calls.at(-1)?.[0] as {
+				parts: { role: string; fileName: string; repoId?: string; sizeBytes?: number }[];
+			};
+			expect(body.parts).toHaveLength(3);
+			const [diffusion, vae, encoder] = body.parts;
+			expect(diffusion).toMatchObject({ role: "Diffusion", fileName: "Qwen_Image-Q4_K_M.gguf", sizeBytes: 13_065_746_976 });
+			// An un-overridden part must send no repo at all, so the backend applies the set's. A blank size likewise
+			// stays undefined rather than becoming 0 — a zero would read as "declared" and silently disable the
+			// free-space pre-flight it was meant to feed.
+			expect(vae?.repoId).toBeUndefined();
+			expect(vae?.sizeBytes).toBeUndefined();
+			expect(encoder).toMatchObject({ fileName: "Qwen2.5-VL-7B-Instruct.Q4_K_M.gguf", repoId: "mradermacher/Qwen2.5-VL-7B-Instruct-GGUF" });
+		});
+
+		it("refuses to submit a file set with no diffusion file", () => {
+			renderWithProviders(<ImageModelManager models={[]} isLoading={false} />);
+			enableAdvanced();
+
+			setValue(screen.getByTestId("image-model-download-repo") as HTMLInputElement, "QuantStack/Qwen-Image-GGUF");
+			setValue(screen.getByTestId("image-model-download-name") as HTMLInputElement, "qwen-image");
+			// Only the VAE row is filled — the diffusion row stays empty, so no diffusion part is declared.
+			setValue(screen.getByTestId("image-model-download-part-file-1") as HTMLInputElement, "VAE/Qwen_Image-VAE.safetensors");
+
+			expect((screen.getByTestId("image-model-download-submit") as HTMLButtonElement).disabled).toBe(true);
+			expect(screen.getByTestId("image-model-download-parts-warning")).toBeTruthy();
 		});
 	});
 });

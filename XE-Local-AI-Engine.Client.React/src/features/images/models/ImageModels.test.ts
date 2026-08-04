@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
 	type ImageJobProgressView,
 	imageFormDefaults,
+	imageFormDefaultsForModel,
 	imageGenerationFormSchema,
+	type ImageModelView,
 	isTerminalStatus,
 	keepLatestImageJobProgress,
 	toImageJobStatus,
@@ -177,5 +179,50 @@ describe("keepLatestImageJobProgress", () => {
 	it("takes the first push as the baseline", () => {
 		const first = progress({ seq: 0 });
 		expect(keepLatestImageJobProgress(null, first)).toBe(first);
+	});
+});
+
+// A family's sampling parameters are not interchangeable, and getting them wrong does not fail: FLUX-schnell is
+// distilled for ~4 steps at CFG 1.0, and running it at SD1.5's 20/7.0 is five times slower AND visibly worse. So the
+// form has to start from the SELECTED model's family, not from one global default.
+describe("imageFormDefaultsForModel", () => {
+	function imageModel(overrides: Partial<ImageModelView> = {}): ImageModelView {
+		return {
+			modelName: "qwen-image",
+			repoId: "QuantStack/Qwen-Image-GGUF",
+			family: "QwenImage",
+			kind: "Txt2Img",
+			sizeBytes: 18_002_625_734,
+			downloadedAtUtc: 0,
+			defaultSteps: 20,
+			defaultCfgScale: 2.5,
+			defaultSampler: "euler",
+			...overrides,
+		};
+	}
+
+	it("adopts the model's family parameters and selects it", () => {
+		const values = imageFormDefaultsForModel(imageModel());
+
+		expect(values.modelName).toBe("qwen-image");
+		expect(values.steps).toBe(20);
+		expect(values.cfgScale).toBe(2.5);
+		expect(values.sampler).toBe("euler");
+	});
+
+	it("keeps a valid sampler when the backend names one the picker cannot offer", () => {
+		// An unknown method name must leave the picker on a value it can render; blanking it would make the form
+		// unsubmittable for a reason the operator cannot see.
+		const values = imageFormDefaultsForModel(imageModel({ defaultSampler: "some_future_sampler" }));
+
+		expect(values.sampler).toBe(imageFormDefaults.sampler);
+	});
+
+	it("falls back to the shared defaults with no model selected", () => {
+		const values = imageFormDefaultsForModel(undefined);
+
+		expect(values.modelName).toBe("");
+		expect(values.steps).toBe(imageFormDefaults.steps);
+		expect(values.cfgScale).toBe(imageFormDefaults.cfgScale);
 	});
 });

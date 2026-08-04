@@ -83,7 +83,11 @@ public sealed class StartImageModelDownloadEndpoint(IImageModelDownloadCoordinat
             {
                 Role = role,
                 FileName = part.FileName.Trim(),
-                Sha256 = string.IsNullOrWhiteSpace(part.Sha256) ? null : part.Sha256.Trim()
+                Sha256 = string.IsNullOrWhiteSpace(part.Sha256) ? null : part.Sha256.Trim(),
+                RepoId = string.IsNullOrWhiteSpace(part.RepoId) ? null : part.RepoId.Trim(),
+                // A non-positive size is treated as "unknown" rather than accepted: it would poison the set total and
+                // leave the disk pre-flight computing a smaller requirement than the transfer actually needs.
+                SizeBytes = part.SizeBytes is > 0 ? part.SizeBytes : null
             });
         }
 

@@ -135,7 +135,7 @@ public sealed class ImageModelResponse
 
     public required string RepoId { get; init; }
 
-    /// <summary>String name of the <c>ImageModelFamily</c> enum (<c>Sd15</c>/<c>Sdxl</c>/<c>Sd3</c>/<c>Flux</c>/<c>Unknown</c>).</summary>
+    /// <summary>String name of the <c>ImageModelFamily</c> enum (<c>Sd15</c>/<c>Sdxl</c>/<c>Sd3</c>/<c>Flux</c>/<c>QwenImage</c>/<c>Unknown</c>).</summary>
     public required string Family { get; init; }
 
     /// <summary>String name of the <c>ImageModelKind</c> enum (<c>Txt2Img</c>/<c>Edit</c>).</summary>
@@ -149,6 +149,19 @@ public sealed class ImageModelResponse
 
     /// <summary>Unix-ms instant the file-set completed downloading.</summary>
     public required long DownloadedAtUtc { get; init; }
+
+    /// <summary>
+    ///     Recommended starting number of sampling steps for this model's family (see <c>ImageFamilyDefaults</c>). The
+    ///     generation form pre-fills from these rather than from one set of SD1.5-era numbers, because the wrong ones do
+    ///     not fail — they silently produce a bad image (FLUX-schnell at 20 steps / CFG 7 instead of 4 / 1.0).
+    /// </summary>
+    public required int DefaultSteps { get; init; }
+
+    /// <summary>Recommended starting classifier-free-guidance scale for this model's family.</summary>
+    public required double DefaultCfgScale { get; init; }
+
+    /// <summary>Recommended starting sampling-method name for this model's family.</summary>
+    public required string DefaultSampler { get; init; }
 }
 
 /// <summary>Response envelope for <c>GET images/models</c>.</summary>
@@ -173,6 +186,21 @@ public sealed class ImageModelPartDownloadRequest
     public required string FileName { get; init; }
 
     public string? Sha256 { get; init; }
+
+    /// <summary>
+    ///     Repository this part is pulled from when it is not the set's <c>RepoId</c>; <c>null</c> uses the set's repo.
+    ///     Needed because a real file-set can span repos — a Qwen-Image install takes its diffusion weights and VAE from
+    ///     one repo and its Qwen2.5-VL text encoder from another.
+    /// </summary>
+    public string? RepoId { get; init; }
+
+    /// <summary>
+    ///     Known size of this part in bytes when the caller has one, otherwise <c>null</c>. Two behaviours depend on it:
+    ///     the pre-flight free-disk check is a no-op without a size (so a set that does not fit fails part-way through an
+    ///     18 GB transfer instead of before it starts), and the aggregate set percentage is only computed when EVERY
+    ///     part declares a size.
+    /// </summary>
+    public long? SizeBytes { get; init; }
 }
 
 /// <summary>

@@ -3124,7 +3124,8 @@
 					"Sd15": "Stable Diffusion 1.5",
 					"Sdxl": "Stable Diffusion XL",
 					"Sd3": "Stable Diffusion 3",
-					"Flux": "FLUX.1"
+					"Flux": "FLUX.1",
+					"QwenImage": "Qwen-Image"
 				},
 				"download": {
 					"title": "Download a model",
@@ -3132,7 +3133,7 @@
 					"failed": "The model download failed.",
 					"progress": "Downloading… {{percent}}%",
 					"error": "Could not start the model download.",
-					"hint": "Single-file (SD1.5-style) weights only. Multi-part models are a follow-up.",
+					"hint": "One weight file, for single-file models like SD1.5. Turn on Advanced for a multi-part model.",
 					"submit": "Download",
 					"repoId": {
 						"label": "Hugging Face repo"
@@ -3155,7 +3156,31 @@
 					"transferred": "{{completed}} transferred",
 					"starting": "Starting…",
 					"bytesOf": "{{completed}} / {{total}}",
-					"progressAriaLabel": "Download progress"
+					"progressAriaLabel": "Download progress",
+					"advanced": {
+						"toggle": "Advanced: multi-part file set",
+						"toggleDescription": "SDXL, SD3, FLUX and Qwen-Image ship as several files (diffusion weights, VAE, text encoders) instead of one.",
+						"addPart": "Add file",
+						"removePart": "Remove file",
+						"diffusionRequired": "A file set needs one Diffusion file.",
+						"hint": "Leave a file's repository blank to use the one above — a set can span repositories. Sizes are optional but enable the free-space check and one combined progress bar.",
+						"role": {
+							"label": "Role"
+						},
+						"fileName": {
+							"label": "File"
+						},
+						"repoId": {
+							"label": "Repository (optional)",
+							"placeholder": "Same as above"
+						},
+						"sizeBytes": {
+							"label": "Size in bytes (optional)"
+						},
+						"sha256": {
+							"label": "SHA-256 (optional)"
+						}
+					}
 				},
 				"delete": {
 					"action": "Delete model",
@@ -3165,6 +3190,15 @@
 					"cancel": "Cancel",
 					"deleted": "Model deleted.",
 					"error": "Could not delete the model."
+				},
+				"partRoles": {
+					"Diffusion": "Diffusion weights",
+					"Vae": "VAE",
+					"ClipL": "CLIP-L text encoder",
+					"ClipG": "CLIP-G text encoder",
+					"T5": "T5-XXL text encoder",
+					"Llm": "LLM text encoder",
+					"LlmVision": "LLM vision tower"
 				}
 			},
 			"viewer": {

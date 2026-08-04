@@ -2103,6 +2103,12 @@ export const zXeLocalAiEngineClientEndpointsImagesV1ImageModelResponse = z.objec
 	sizeBytes: z.int(),
 	parts: z.array(zXeLocalAiEngineClientEndpointsImagesV1ImageModelPartResponse),
 	downloadedAtUtc: z.int(),
+	defaultSteps: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	defaultCfgScale: z.number(),
+	defaultSampler: z.string(),
 });
 
 export const zXeLocalAiEngineClientEndpointsImagesV1ListImageModelsResponse = z.object({
@@ -2121,6 +2127,8 @@ export const zXeLocalAiEngineClientEndpointsImagesV1ImageModelPartDownloadReques
 	role: z.string(),
 	fileName: z.string(),
 	sha256: z.string().nullish(),
+	repoId: z.string().nullish(),
+	sizeBytes: z.int().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsImagesV1StartImageModelDownloadRequest = z.object({
