@@ -174,7 +174,7 @@ public sealed class ImageJobStartupReconcilerTests : IDisposable
                 break;
             case ImageJobStatus.Succeeded:
                 await store.MarkGeneratingAsync(jobId, startedAtUtc: 2, CancellationToken.None).ConfigureAwait(false);
-                await store.MarkSucceededAsync(jobId, Guid.NewGuid(), completedAtUtc: 3, durationMs: 1, outputWidth: 512, outputHeight: 512, CancellationToken.None)
+                await store.MarkSucceededAsync(jobId, Guid.NewGuid(), completedAtUtc: 3, durationMs: 1, outputWidth: 512, outputHeight: 512, resolvedSeed: 42, CancellationToken.None)
                            .ConfigureAwait(false);
                 break;
             case ImageJobStatus.Failed:
