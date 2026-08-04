@@ -131,6 +131,10 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
     private CancellationTokenSource? _invocationCancellationTokenSource;
 
+    // The active turn's whole-turn budget, retained so the deadline can be RE-ARMED around a human round-trip
+    // (see SetInvocationDeadline). Written and read only under _syncRoot, alongside the source it arms.
+    private TimeSpan _invocationTimeout;
+
     // Why the active invocation was DELIBERATELY cancelled, recorded synchronously under _syncRoot by the requester
     // itself (Cancel / CancelAll). Unknown means nobody asked: the cancellation then came from the invocation's own
     // CancelAfter watchdog or from the linked caller token, and both are read off observable state at mapping time.
@@ -1285,7 +1289,17 @@ public sealed partial class InvocationRunner : IInvocationRunner
             using var approvalTimeoutCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             approvalTimeoutCancellationTokenSource.CancelAfter(_maxPendingToolCallAge);
 
-            var approved = await approvalCompletion.Task.WaitAsync(approvalTimeoutCancellationTokenSource.Token).ConfigureAwait(false);
+            bool approved;
+            SetInvocationDeadline(parkedOnHuman: true);
+            try
+            {
+                approved = await approvalCompletion.Task.WaitAsync(approvalTimeoutCancellationTokenSource.Token).ConfigureAwait(false);
+            }
+            finally
+            {
+                SetInvocationDeadline(parkedOnHuman: false);
+            }
+
             await RecordApprovalDecisionAuditAsync(package,
                 approvalToolName,
                 approved ? ApprovalDecisions.Approve : ApprovalDecisions.Deny,
@@ -1308,6 +1322,39 @@ public sealed partial class InvocationRunner : IInvocationRunner
         finally
         {
             _pendingToolCalls.TryRemove(requestId, out _);
+        }
+    }
+
+    /// <summary>
+    ///     Re-points the whole-turn watchdog — the <c>CancelAfter</c> armed in <see cref="RegisterActiveInvocation" /> —
+    ///     at a deadline measured from NOW, so a human round-trip is not charged to the model's turn budget (decision
+    ///     D5).
+    ///     <para>
+    ///         Before parking on a human the deadline is pushed past the longest permitted wait; once the human has
+    ///         answered it is re-armed to a full, fresh <c>InvocationTimeout</c>. This does NOT make any wait unbounded:
+    ///         each wait keeps its own linked <c>CancelAfter(_maxPendingToolCallAge)</c>, which was previously dead code
+    ///         because the shorter invocation deadline always fired first. The net effect is that
+    ///         <c>MaxPendingToolCallAge</c> (operator-configurable, 10 min by default) becomes the real cap on operator
+    ///         thinking time, instead of "whatever the model left over from its 300 s".
+    ///     </para>
+    ///     <para>
+    ///         Re-arming under <see cref="_syncRoot" /> is what makes it safe against a concurrent teardown:
+    ///         <see cref="ClearActiveInvocation" /> nulls the field under the same lock BEFORE disposing the source, so a
+    ///         non-null source observed here cannot already be disposed.
+    ///     </para>
+    /// </summary>
+    private void SetInvocationDeadline(bool parkedOnHuman)
+    {
+        lock (_syncRoot)
+        {
+            if (_invocationCancellationTokenSource is not { } invocationCancellationTokenSource)
+            {
+                return;
+            }
+
+            // The parked deadline keeps the model's own budget on top of the human cap purely as a backstop: if the
+            // re-arm below were ever skipped, the turn still gets its normal InvocationTimeout rather than none.
+            invocationCancellationTokenSource.CancelAfter(parkedOnHuman ? _maxPendingToolCallAge + _invocationTimeout : _invocationTimeout);
         }
     }
 
@@ -1564,6 +1611,9 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 _requestedCancellationOrigin = CancellationOrigin.Unknown;
                 _hostCancellationToken = cancellationToken;
                 _invocationCancellationTokenSource = invocationCancellationTokenSource;
+
+                // Retained so a human round-trip can re-arm this same deadline (see SetInvocationDeadline).
+                _invocationTimeout = invocationTimeout;
                 invocationCancellationTokenSource = null;
             }
         }
@@ -1607,6 +1657,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
             invocationCancellationTokenSource = _invocationCancellationTokenSource;
             _invocationCancellationTokenSource = null;
+            _invocationTimeout = TimeSpan.Zero;
             _currentInvocationId = null;
             _requestedCancellationOrigin = CancellationOrigin.Unknown;
             _hostCancellationToken = CancellationToken.None;
