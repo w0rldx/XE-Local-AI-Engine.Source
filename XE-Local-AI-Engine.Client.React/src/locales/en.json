@@ -3555,7 +3555,7 @@
 					"description": "Lowercase identifier (e.g. invoice-review).",
 					"placeholder": "invoice-review",
 					"required": "Name is required.",
-					"invalid": "Use lowercase letters, digits and dashes only (no leading or trailing dash)."
+					"invalid": "Use lowercase letters and digits separated by single dashes (no leading, trailing or doubled dash)."
 				},
 				"description": {
 					"label": "Description",

@@ -1,9 +1,11 @@
 import { z } from "zod";
 
-// MAF-safe skill name: lowercase letters/digits with internal single-or-multi dashes; no leading/trailing dash.
-// Mirrors the backend AgentSkillService guard. Doubled internal dashes ARE valid — only a leading or
-// trailing dash is rejected. Anchored so the whole name must match.
-export const SKILL_NAME_PATTERN = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
+// Agent Skills specification name: lowercase letters/digits separated by SINGLE hyphens; no leading, trailing or
+// consecutive hyphens. This is a client-side convenience only — the backend delegates to MAF's own
+// AgentSkillFrontmatter.ValidateName and stays authoritative. The earlier pattern
+// /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/ accepted consecutive hyphens, which MAF rejects, so a name like `foo--bar`
+// passed both this check and the backend and then threw when the skill was built into an agent.
+export const SKILL_NAME_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
 // Length caps mirror the backend: Name ≤64, Description ≤1024, Body ≤20000 (matches the instructions cap).
 export const SKILL_NAME_MAX = 64;

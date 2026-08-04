@@ -1,6 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 
-using System.Text.RegularExpressions;
+using Microsoft.Agents.AI;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
@@ -9,14 +9,19 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     rule; this service never touches versioning. A validation failure throws <see cref="AgentSkillValidationException" />
 ///     whose message is safe to surface (it never echoes the skill Description or Body).
 /// </summary>
-internal sealed partial class AgentSkillService : IAgentSkillService
+/// <remarks>
+///     Name and Description are validated by <see cref="AgentSkillFrontmatter" /> itself — the same code MAF runs when
+///     the resolved skill is built into an <c>AgentInlineSkill</c> — rather than by a local regex. A local regex had
+///     drifted from the Agent Skills specification: <c>^[a-z0-9]([a-z0-9-]*[a-z0-9])?$</c> accepted consecutive hyphens,
+///     which MAF rejects, so a name like <c>foo--bar</c> validated and persisted here and then threw
+///     <see cref="ArgumentException" /> at agent-construction time in both the invocation factory and the sub-agent
+///     spawn path — breaking every agent the skill was assigned to. Delegating makes divergence impossible and keeps
+///     the caps (name 64, description 1024) tracking the spec upstream.
+/// </remarks>
+internal sealed class AgentSkillService : IAgentSkillService
 {
-    // MAF skill-name shape: lowercase letters/digits and internal dashes, never starting or ending with a dash. This
-    // matches the kebab-case AgentInlineSkill name requirement so a stored skill always builds into a valid MAF skill.
-    private const int MaxNameLength = 64;
-    private const int MaxDescriptionLength = 1024;
-
     // Matches the AgentDefinition.Instructions cap so a skill body cannot exceed the per-agent instruction budget.
+    // MAF has no body cap of its own, so this one stays local.
     private const int MaxBodyLength = 20000;
 
     private readonly IAgentSkillStore _store;
@@ -69,25 +74,28 @@ internal sealed partial class AgentSkillService : IAgentSkillService
             throw new AgentSkillValidationException("Name is required.");
         }
 
-        if (name.Length > MaxNameLength)
+        // MAAI001: Agent Skills shipped [Experimental] in Microsoft.Agents.AI 1.8.0 and the scoped suppression remains
+        // at the pinned 1.15.0. AgentSkillFrontmatter's validators are the same ones the AgentInlineSkill constructor
+        // runs, so anything accepted here is guaranteed to build into a MAF skill. Their messages describe the rule
+        // and echo no caller content, so they are safe to surface verbatim.
+#pragma warning disable MAAI001
+        if (!AgentSkillFrontmatter.ValidateName(name, out var nameError))
         {
-            throw new AgentSkillValidationException($"Name must be at most {MaxNameLength} characters.");
+            throw new AgentSkillValidationException(nameError);
         }
-
-        if (!SkillNameRegex().IsMatch(name))
-        {
-            throw new AgentSkillValidationException("Name must be lowercase letters, digits, and dashes, and may not start or end with a dash.");
-        }
+#pragma warning restore MAAI001
 
         if (string.IsNullOrWhiteSpace(input.Description))
         {
             throw new AgentSkillValidationException("Description is required.");
         }
 
-        if (input.Description.Length > MaxDescriptionLength)
+#pragma warning disable MAAI001
+        if (!AgentSkillFrontmatter.ValidateDescription(input.Description, out var descriptionError))
         {
-            throw new AgentSkillValidationException($"Description must be at most {MaxDescriptionLength} characters.");
+            throw new AgentSkillValidationException(descriptionError);
         }
+#pragma warning restore MAAI001
 
         if (string.IsNullOrWhiteSpace(input.Body))
         {
@@ -116,7 +124,4 @@ internal sealed partial class AgentSkillService : IAgentSkillService
             throw new AgentSkillValidationException($"A skill named '{name}' already exists.");
         }
     }
-
-    [GeneratedRegex("^[a-z0-9]([a-z0-9-]*[a-z0-9])?$", RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture, matchTimeoutMilliseconds: 2000)]
-    private static partial Regex SkillNameRegex();
 }
