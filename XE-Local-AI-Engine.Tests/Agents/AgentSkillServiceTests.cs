@@ -91,6 +91,47 @@ public sealed class AgentSkillServiceTests
         }
     }
 
+    // MAF validates only Name and Description, so the four optional frontmatter fields would otherwise reach the store
+    // unbounded — and they arrive from imported SKILL.md files, not only from the editor. Each case is the smallest
+    // value over its limit.
+    [Test]
+    public async Task AgentSkillService_Create_RejectsOverLongFrontmatter()
+    {
+        var store = CreateEmptyStore();
+        var service = new AgentSkillService(store);
+
+        await AssertEx.ThrowsAsync<AgentSkillValidationException>(() =>
+            service.CreateAsync(new AgentSkillInput("good-name", "desc", "body", License: new string(c: 'a', count: 201)))).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<AgentSkillValidationException>(() =>
+            service.CreateAsync(new AgentSkillInput("good-name", "desc", "body", Compatibility: new string(c: 'a', count: 501)))).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<AgentSkillValidationException>(() =>
+            service.CreateAsync(new AgentSkillInput("good-name", "desc", "body", AllowedTools: new string(c: 'a', count: 1025)))).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<AgentSkillValidationException>(() =>
+            service.CreateAsync(new AgentSkillInput("good-name", "desc", "body",
+                Metadata: Enumerable.Range(start: 0, count: 33).ToDictionary(index => $"k{index}", _ => "v")))).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<AgentSkillValidationException>(() =>
+            service.CreateAsync(new AgentSkillInput("good-name", "desc", "body",
+                Metadata: new Dictionary<string, string> { [new string(c: 'k', count: 65)] = "v" }))).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<AgentSkillValidationException>(() =>
+            service.CreateAsync(new AgentSkillInput("good-name", "desc", "body",
+                Metadata: new Dictionary<string, string> { ["k"] = new string(c: 'v', count: 513) }))).ConfigureAwait(false);
+
+        await store.DidNotReceive().CreateAsync(Arg.Any<AgentSkillInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+    }
+
+    // Compatibility is capped at MAF's own MaxCompatibilityLength, so anything we accept must survive construction of
+    // the frontmatter MAF builds from it. A cap of ours that exceeded MAF's would persist a value that later throws.
+    [Test]
+    public void AgentSkillService_CompatibilityCap_DoesNotExceedWhatMafAccepts()
+    {
+#pragma warning disable MAAI001
+        AssertEx.True(AgentSkillFrontmatter.ValidateCompatibility(new string(c: 'a', count: 500), out _),
+            "A compatibility value at our cap must still satisfy MAF's own validator.");
+        AssertEx.False(AgentSkillFrontmatter.ValidateCompatibility(new string(c: 'a', count: 501), out _),
+            "One character past our cap must be where MAF's own limit starts; if this passes, MAF's limit moved and ours should follow.");
+#pragma warning restore MAAI001
+    }
+
     [Test]
     public async Task AgentSkillService_Create_RejectsOverLongFields()
     {

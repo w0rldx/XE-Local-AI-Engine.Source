@@ -24,6 +24,18 @@ internal sealed class AgentSkillService : IAgentSkillService
     // MAF has no body cap of its own, so this one stays local.
     private const int MaxBodyLength = 20000;
 
+    // Optional frontmatter caps. MAF validates only Name and Description, so without these the remaining four fields
+    // reach the store unbounded — and they arrive from imported, untrusted SKILL.md files, not just the editor.
+    // Compatibility mirrors AgentSkillFrontmatter.MaxCompatibilityLength (500) so a value we accept always survives
+    // the round trip into MAF. The others are sized to their documented purpose: a licence is a short name or file
+    // reference, allowed-tools is a space-delimited list, and metadata is client extension data, not a payload.
+    private const int MaxLicenseLength = 200;
+    private const int MaxCompatibilityLength = 500;
+    private const int MaxAllowedToolsLength = 1024;
+    private const int MaxMetadataEntries = 32;
+    private const int MaxMetadataKeyLength = 64;
+    private const int MaxMetadataValueLength = 512;
+
     private readonly IAgentSkillStore _store;
 
     public AgentSkillService(IAgentSkillStore store)
@@ -107,7 +119,56 @@ internal sealed class AgentSkillService : IAgentSkillService
             throw new AgentSkillValidationException($"Body must be at most {MaxBodyLength} characters.");
         }
 
+        ValidateFrontmatter(input);
+
         await EnsureNameIsUniqueAsync(name, existingId, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     Bounds the optional Agent Skills frontmatter. These four fields are not validated by MAF and reach this
+    ///     service from imported SKILL.md files as well as from the editor, so an unbounded value would otherwise be
+    ///     encrypted and persisted verbatim. Messages name the field and the limit only — never the rejected value,
+    ///     which for an imported skill is attacker-authored text that must not be reflected back into a response.
+    /// </summary>
+    private static void ValidateFrontmatter(AgentSkillInput input)
+    {
+        if (input.License is { Length: > MaxLicenseLength })
+        {
+            throw new AgentSkillValidationException($"License must be at most {MaxLicenseLength} characters.");
+        }
+
+        if (input.Compatibility is { Length: > MaxCompatibilityLength })
+        {
+            throw new AgentSkillValidationException($"Compatibility must be at most {MaxCompatibilityLength} characters.");
+        }
+
+        if (input.AllowedTools is { Length: > MaxAllowedToolsLength })
+        {
+            throw new AgentSkillValidationException($"Allowed tools must be at most {MaxAllowedToolsLength} characters.");
+        }
+
+        if (input.Metadata is not { Count: > 0 } metadata)
+        {
+            return;
+        }
+
+        if (metadata.Count > MaxMetadataEntries)
+        {
+            throw new AgentSkillValidationException($"Metadata must contain at most {MaxMetadataEntries} entries.");
+        }
+
+        foreach (var pair in metadata)
+        {
+            if (string.IsNullOrWhiteSpace(pair.Key) || pair.Key.Length > MaxMetadataKeyLength)
+            {
+                throw new AgentSkillValidationException($"Each metadata key must be non-blank and at most {MaxMetadataKeyLength} characters.");
+            }
+
+            if (pair.Value is { Length: > MaxMetadataValueLength })
+            {
+                throw new AgentSkillValidationException($"Each metadata value must be at most {MaxMetadataValueLength} characters.");
+            }
+        }
     }
 
     private async Task EnsureNameIsUniqueAsync(string name, Guid? existingId, CancellationToken cancellationToken)
