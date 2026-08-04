@@ -61,12 +61,14 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         var knowledgeDescriptors = KnowledgeToolCatalog.Descriptors;
 
         // ask_user is a worker-owned IClientLocalToolHandler too, so it needs the same OFFER-seam merge (the handler
-        // registration surfaces it only in the RESOLUTION seam). It differs from the coder/knowledge tools in three ways,
-        // each deliberate:
-        //   * NOT capability-gated and NOT locality-gated (it is absent from capableOnlyNames and localDataToolNames
-        //     below), because the decision is that an interactive turn can ALWAYS ask its operator a question. It sends
-        //     the model's own question to the local UI — no node-local document, file or workspace content leaves the
-        //     node through it — so the cloud-egress gate has nothing to withhold.
+        // registration surfaces it only in the RESOLUTION seam). It is capability-gated exactly like the coder/knowledge
+        // tools (it is in capableOnlyNames below) — a model that cannot call tools cannot call this one either, and an
+        // offered schema is not free: llama.cpp compiles the whole offered tools array into ONE GBNF grammar with a hard
+        // repetition ceiling, and this is the most deeply nested schema in the catalog. It still differs from the
+        // coder/knowledge tools in three ways, each deliberate:
+        //   * NOT locality-gated (it is absent from localDataToolNames below), so a tool-capable CLOUD model is still
+        //     offered it. It sends the model's own question to the local UI — no node-local document, file or workspace
+        //     content leaves the node through it — so the cloud-egress gate has nothing to withhold.
         //   * RequiresApproval is STRUCTURAL, not a risk judgement: it is what routes the call through the runner's
         //     out-of-stream approval round-trip, where the human wait happens outside the stream-idle watchdog. A tool
         //     handler cannot simply block for a human — it would trip StreamIdleTimeout. It also means the three
@@ -112,12 +114,13 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         // from an unattended plain chat turn is exactly what we are preventing.
         _spawnOfferDto = ToOfferDto(SpawnSubAgentToolDefinition.ToolName, SpawnSubAgentToolDefinition.ParameterSchema, requiresApproval: false, ToolCategory.Orchestration);
 
-        // Precompute the capability-gated variant once: the built-ins minus run_in_agent_home and the coder tools,
-        // returned when the active model is not tool-capable. Those high-risk tools are offered only to a tool-capable
-        // model. The encrypted path stays server-gated and never reaches this provider. (spawn_subagent is not in
-        // _builtinAllTools at all, so it never appears in either capability variant of the whole offer.)
+        // Precompute the capability-gated variant once: the built-ins minus run_in_agent_home, the coder/knowledge tools
+        // and ask_user, returned when the active model is not tool-capable. Those tools are offered only to a
+        // tool-capable model. The encrypted path stays server-gated and never reaches this provider. (spawn_subagent is
+        // not in _builtinAllTools at all, so it never appears in either capability variant of the whole offer.)
         var capableOnlyNames = coderDescriptors.Select(static descriptor => descriptor.Name)
                                                .Concat(knowledgeDescriptors.Select(static descriptor => descriptor.Name))
+                                               .Append(askUserDescriptor.Name)
                                                .ToHashSet(StringComparer.Ordinal);
         _builtinWithoutAgentHome =
         [
