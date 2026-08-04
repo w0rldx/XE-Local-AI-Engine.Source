@@ -23,5 +23,12 @@ public interface IInvocationRunner
 
     void ResolveApprovalResult(ApprovalResolvedEvent evt);
 
+    /// <summary>
+    ///     Releases a turn parked on an <c>ask_user</c> question by handing it the operator's answers. Mirrors
+    ///     <see cref="ResolveApprovalResult" />: keyed on the opaque question request id, and a no-op when no question
+    ///     is pending for that id, so a duplicate or stale answer can never fault the turn.
+    /// </summary>
+    void ResolveUserQuestionResult(UserQuestionAnsweredEvent evt);
+
     void ResolveToolCallResult(ToolCallResultEvent evt);
 }

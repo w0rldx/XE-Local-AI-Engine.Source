@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Chat;
 
+using XE_Local_AI_Engine.AI.Contracts.Events;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
@@ -211,6 +212,93 @@ public sealed class ChatStreamEventMapperTests
             RequiresApproval = requiresApproval,
             Result = result,
             IsError = isError
+        };
+    }
+
+    [Test]
+    public void QuestionRequestedEvent_CarriesCorrelationToolCallAndSerializedQuestions()
+    {
+        var conversationId = Guid.NewGuid();
+        var messageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var payload = NewQuestionPayload("call-9", "ask_user", "question-abc");
+
+        var mapped = ChatStreamEventMapper.QuestionRequestedEvent(conversationId, messageId, requestId, payload, Timestamp, sequence: 11);
+
+        AssertEx.Equal(ChatStreamEventTypes.QuestionRequested, mapped.Type);
+        // Status stays streaming: the turn is parked on the operator, not finished.
+        AssertEx.Equal(NodeChatMessageStatusValues.Streaming, mapped.Status);
+        AssertEx.Equal(conversationId, mapped.ConversationId);
+        AssertEx.Equal(messageId, mapped.MessageId);
+        AssertEx.Equal(requestId, mapped.RequestId);
+        AssertEx.Equal(expected: 11L, mapped.Sequence);
+        AssertEx.Equal(Timestamp, mapped.OccurredAtUtc);
+        // The tool-call id is what the client attaches the question card to; the question request id is what it
+        // echoes back to the resolve endpoint. They are distinct fields and must not be conflated.
+        AssertEx.Equal("call-9", mapped.ToolCallId);
+        AssertEx.Equal("ask_user", mapped.ToolName);
+        AssertEx.Equal("question-abc", mapped.QuestionRequestId);
+        // No content rides a question event.
+        AssertEx.Null(mapped.Delta);
+        AssertEx.Null(mapped.Content);
+        AssertEx.Null(mapped.ApprovalRequestId);
+    }
+
+    [Test]
+    public void QuestionRequestedEvent_SerializesQuestionsAsCamelCaseJson()
+    {
+        // The client parses this string to render the form, so the property names are a wire contract.
+        var payload = NewQuestionPayload("call-1", "ask_user", "question-1");
+
+        var mapped = ChatStreamEventMapper.QuestionRequestedEvent(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), payload, Timestamp, sequence: 1);
+
+        var questions = AssertEx.NotNull(mapped.Questions);
+        AssertEx.Equal("[{\u0022header\u0022:\u0022Auth\u0022,\u0022question\u0022:\u0022Which auth method?\u0022,\u0022multiSelect\u0022:false,"
+                       + "\u0022options\u0022:[{\u0022label\u0022:\u0022OAuth\u0022,\u0022description\u0022:\u0022Device flow\u0022,\u0022recommended\u0022:true},"
+                       + "{\u0022label\u0022:\u0022API key\u0022,\u0022description\u0022:null,\u0022recommended\u0022:false}]}]",
+            questions);
+    }
+
+    [Test]
+    public void ApprovalRequestedEvent_WhenCallIdAndToolNameAreBlank_MapsThemToNull()
+    {
+        // The reconnect replay rebuilds this payload from InvocationApprovalState, whose CallId/ToolName are optional
+        // (a platform-hub approval carries neither). A null tells the client "no card to attach this to"; an empty
+        // string would look like a real id it could never match.
+        var payload = new ApprovalLifecyclePayload
+        {
+            InvocationId = Guid.NewGuid(),
+            RequestId = "approval-1",
+            CallId = string.Empty,
+            ToolName = string.Empty,
+            Description = "Run a command"
+        };
+
+        var mapped = ChatStreamEventMapper.ApprovalRequestedEvent(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), payload, Timestamp, sequence: 2);
+
+        AssertEx.Null(mapped.ToolCallId);
+        AssertEx.Null(mapped.ToolName);
+        AssertEx.Equal("approval-1", mapped.ApprovalRequestId);
+    }
+
+    private static UserQuestionLifecyclePayload NewQuestionPayload(string callId, string toolName, string requestId)
+    {
+        return new UserQuestionLifecyclePayload
+        {
+            InvocationId = Guid.NewGuid(),
+            RequestId = requestId,
+            CallId = callId,
+            ToolName = toolName,
+            Questions =
+            [
+                new UserQuestionSpec("Auth",
+                    "Which auth method?",
+                    MultiSelect: false,
+                    [
+                        new UserQuestionOption("OAuth", "Device flow", Recommended: true),
+                        new UserQuestionOption("API key", Description: null, Recommended: false)
+                    ])
+            ]
         };
     }
 

@@ -45,6 +45,19 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
             : null;
     }
 
+    public Guid? TryGetLiveInvocationIdForConversation(Guid conversationId)
+    {
+        foreach (var state in _live.Values.Select(live => live.LatestState))
+        {
+            if (state.ConversationId == conversationId && IsNonTerminal(state.Status))
+            {
+                return state.InvocationId;
+            }
+        }
+
+        return null;
+    }
+
     public IAsyncEnumerable<ChatStreamEvent> ResumeAsync(Guid invocationId,
         CancellationToken cancellationToken = default)
     {
@@ -65,6 +78,12 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
         var lastReasoning = snapshot.StreamedThinkingContent;
         var sequence = 0L;
 
+        // The request ids of the pending prompts (question / tool approval) this resume stream has already emitted.
+        // Every state publish carries the still-pending slot, so without this the prompt would be re-emitted on every
+        // delta; a request id is minted once per prompt, so first-seen-wins is exact. Scoped to this consumer, so two
+        // concurrently reconnected browsers each get the prompt exactly once.
+        var replayedPrompts = new HashSet<string>(StringComparer.Ordinal);
+
         // Replay the tool-call timeline, then the notice timeline, accumulated so far, then the content accumulated
         // so far, so the reconnecting client renders the in-flight assistant message (tool cards and notices
         // included) immediately before live items continue in order. The content replay is a pure SNAPSHOT event
@@ -78,6 +97,15 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
         foreach (var notice in noticeHistory)
         {
             yield return ToNoticeEvent(snapshot, notice, sequence++);
+        }
+
+        // Then any prompt the turn is currently PARKED on, after the tool timeline that carries the card it attaches
+        // to. Without this a mid-turn reload permanently loses the controls and the run stays blocked until it times
+        // out — fatal for a question, which the turn cannot proceed without.
+        foreach (var promptEvent in BuildPendingPromptEvents(snapshot, replayedPrompts, sequence))
+        {
+            yield return promptEvent;
+            sequence++;
         }
 
         yield return ToEvent(ChatStreamEventTypes.AssistantDelta, snapshot, sequence++);
@@ -133,6 +161,15 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
                     lastReasoning = state.StreamedThinkingContent;
 
                     yield return ToEvent(ChatStreamEventTypes.AssistantDelta, state, sequence++, contentDelta, reasoningDelta);
+                }
+
+                // A prompt raised while this resume stream is attached arrives as a state publish (the dispatcher
+                // records the pending slot BEFORE fanning the live event out), so the same dedupe covers both the
+                // snapshot replay above and the live case here — a prompt is emitted exactly once per consumer.
+                foreach (var promptEvent in BuildPendingPromptEvents(state, replayedPrompts, sequence))
+                {
+                    yield return promptEvent;
+                    sequence++;
                 }
 
                 if (TryMapTerminal(state.Status, out var terminalType, out var terminalStatus))
@@ -246,6 +283,70 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
             sequence);
     }
 
+    /// <summary>
+    ///     Builds the replay events for whatever human prompt the invocation is currently parked on — a pending
+    ///     <c>ask_user</c> question and/or a pending tool approval — skipping any this consumer already received.
+    ///     Returns an empty list on the overwhelmingly common no-prompt path.
+    ///     <para>
+    ///         The pending slots are the ONLY outward surface a reconnecting browser has for these prompts: neither
+    ///         event is accumulated into the persisted <c>parts[]</c> (both are transient live state), and the live
+    ///         <c>ApprovalRequestedChanged</c>/<c>UserQuestionRequestedChanged</c> fan-out reached only the original
+    ///         stream, which the reload tore down. Both events route through the same
+    ///         <see cref="ChatStreamEventMapper" /> the live paths use, so a replayed prompt is wire-identical to a
+    ///         live one; a resume stream stamps the invocation id as both the message id and the request id, as it
+    ///         does for tool-call and notice replay.
+    ///     </para>
+    /// </summary>
+    private List<ChatStreamEvent> BuildPendingPromptEvents(InvocationState state, HashSet<string> replayedPrompts, long sequence)
+    {
+        if (state.PendingQuestion is null && state.PendingApproval is null)
+        {
+            return [];
+        }
+
+        var events = new List<ChatStreamEvent>(capacity: 2);
+        var timestampMs = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
+
+        if (state.PendingQuestion is { } question && replayedPrompts.Add(question.RequestId))
+        {
+            events.Add(ChatStreamEventMapper.QuestionRequestedEvent(state.ConversationId,
+                state.InvocationId,
+                state.InvocationId,
+                new UserQuestionLifecyclePayload
+                {
+                    InvocationId = state.InvocationId,
+                    RequestId = question.RequestId,
+                    CallId = question.CallId,
+                    ToolName = question.ToolName,
+                    Questions = question.Questions
+                },
+                timestampMs,
+                sequence + events.Count));
+        }
+
+        // The approval slot's CallId/ToolName are optional (a platform-hub approval carries neither). The mapper maps a
+        // blank to a null wire field, so the client can still render the prompt — it just cannot attach it to a
+        // specific tool-call card. Populating them for a locally-raised approval is the runner's job.
+        if (state.PendingApproval is { } approval && replayedPrompts.Add(approval.RequestId))
+        {
+            events.Add(ChatStreamEventMapper.ApprovalRequestedEvent(state.ConversationId,
+                state.InvocationId,
+                state.InvocationId,
+                new ApprovalLifecyclePayload
+                {
+                    InvocationId = state.InvocationId,
+                    RequestId = approval.RequestId,
+                    CallId = approval.CallId ?? string.Empty,
+                    ToolName = approval.ToolName ?? string.Empty,
+                    Description = approval.Description
+                },
+                timestampMs,
+                sequence + events.Count));
+        }
+
+        return events;
+    }
+
     private ChatStreamEvent ToNoticeEvent(InvocationState state,
         TurnNoticePayload payload,
         long sequence)
@@ -333,6 +434,9 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
             ReasoningTokens = state.ReasoningTokens,
             GenerationDurationMs = state.GenerationDurationMs,
             PendingApproval = state.PendingApproval,
+            // Immutable record, so a reference copy is snapshot-safe. Mirrored in WorkerEventDispatcher.Clone —
+            // both must stay in sync or a pending question travels as null on one of the two paths.
+            PendingQuestion = state.PendingQuestion,
             LastApprovalResolution = state.LastApprovalResolution,
             // Reference copy is snapshot-safe: every writer REPLACES the list wholesale (never mutates it in place)
             // and the elements are immutable records. Mirrors WorkerEventDispatcher.Clone — both must stay in sync.

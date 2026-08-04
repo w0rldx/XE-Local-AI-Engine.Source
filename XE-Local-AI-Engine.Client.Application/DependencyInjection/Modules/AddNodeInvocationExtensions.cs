@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Cryptography;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
@@ -14,6 +15,8 @@ using XE_Local_AI_Engine.Client.Services.DeadLetter;
 using XE_Local_AI_Engine.Client.Services.DeadLetter.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Events.Implementation;
+using XE_Local_AI_Engine.Client.Services.Interaction;
+using XE_Local_AI_Engine.Client.Services.Interaction.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Client.Services.Invocation.Envelope;
@@ -70,6 +73,13 @@ internal static class AddNodeInvocationExtensions
         builder.Services.AddSingleton<ITokenEstimator, HeuristicTokenEstimator>();
         builder.Services.AddSingleton<IConversationContextBudgeter, ConversationContextBudgeter>();
         builder.Services.AddSingleton<IToolApprovalAuditRecorder, ToolApprovalAuditRecorder>();
+
+        // The ask_user hand-off: the runner writes the operator's answer here after its out-of-stream round-trip and
+        // AskUserToolHandler pops it when the framework executes the (now approved) call. Both sides must see the SAME
+        // instance, so it is a singleton — and the handler is one too, because ClientLocalToolRegistry captures the
+        // IClientLocalToolHandler enumerable once at construction.
+        builder.Services.AddSingleton<UserQuestionAnswerStash>();
+        builder.Services.AddSingleton<IClientLocalToolHandler, AskUserToolHandler>();
         builder.Services.AddSingleton<IInvocationRunner, InvocationRunner>();
         builder.Services.AddSingleton<IInvocationHistory, InvocationHistory>();
         builder.Services.AddSingleton<IWorkerEventDispatcher, WorkerEventDispatcher>();

@@ -23,6 +23,9 @@ export interface InvocationCurrentDto {
 	streamedThinkingChunkCount: number;
 	pendingToolCallCount: number;
 	hasPendingApproval: boolean;
+	// True while the turn is parked on an `ask_user` question. Content-free by design — the question text never
+	// travels on this ops endpoint, only the fact that the run is waiting on a person.
+	hasPendingQuestion: boolean;
 	// W3C trace id of the run (AUD4-19), for correlating a failed row's "See local logs" line with exported traces.
 	// Null when no activity was in scope. Rendered as copyable text.
 	traceId: string | null;
@@ -111,7 +114,7 @@ export function sortInvocationHistory(history: InvocationHistoryDto[]): Invocati
 
 // UX-12: the fields a plain-language summary needs. Both InvocationCurrentDto (active runs) and InvocationHistoryDto
 // (terminal runs) are assignable to this shape — the fields that only exist on the current run (pendingToolCallCount,
-// hasPendingApproval) are optional here so a history row can be summarized too.
+// hasPendingApproval, hasPendingQuestion) are optional here so a history row can be summarized too.
 export interface InvocationSummaryInput {
 	readonly status: InvocationStatusDto;
 	readonly modelUsed: string | null;
@@ -120,15 +123,19 @@ export interface InvocationSummaryInput {
 	readonly streamedThinkingChunkCount: number;
 	readonly pendingToolCallCount?: number;
 	readonly hasPendingApproval?: boolean;
+	readonly hasPendingQuestion?: boolean;
 	readonly error?: string | null;
 	readonly failureCategory?: InvocationFailureCategoryDto;
 }
 
-// Builds the tool/approval clause: a pending approval takes precedence (it blocks the run), otherwise the count of
+// Builds the tool/approval clause: a pending prompt takes precedence (it blocks the run), otherwise the count of
 // outstanding tool calls, otherwise a plain "no tool calls" note.
 function toolActivityNote(run: InvocationSummaryInput, t: TFunction): string {
 	if (run.hasPendingApproval) {
 		return t("pages.invocations.monitor.summary.toolApproval", "awaiting tool approval");
+	}
+	if (run.hasPendingQuestion) {
+		return t("pages.invocations.monitor.summary.toolQuestion", "awaiting an answer to a question");
 	}
 	const pending = run.pendingToolCallCount ?? 0;
 	if (pending > 0) {

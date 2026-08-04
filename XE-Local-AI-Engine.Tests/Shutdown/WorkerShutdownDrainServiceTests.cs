@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.AI.Contracts.Events;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
 using XE_Local_AI_Engine.Client.Models.Enums;
@@ -269,6 +270,12 @@ public sealed class WorkerShutdownDrainServiceTests
             remove => _ = value;
         }
 
+        event EventHandler<UserQuestionRequestedChangedEventArgs>? IWorkerEventDispatcher.UserQuestionRequestedChanged
+        {
+            add => _ = value;
+            remove => _ = value;
+        }
+
         public void StopAcceptingRemoteInvocations()
         {
             IsAcceptingRemoteInvocations = false;
@@ -361,6 +368,16 @@ public sealed class WorkerShutdownDrainServiceTests
             return Task.CompletedTask;
         }
 
+        public Task ReportUserQuestionAsync(UserQuestionLifecyclePayload payload)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task DispatchUserQuestionAnsweredAsync(UserQuestionAnsweredEvent evt)
+        {
+            return Task.CompletedTask;
+        }
+
         private sealed class NoopLease : IAsyncDisposable
         {
             public static readonly NoopLease Instance = new();
@@ -421,6 +438,10 @@ public sealed class WorkerShutdownDrainServiceTests
         }
 
         public void ResolveApprovalResult(ApprovalResolvedEvent evt)
+        {
+        }
+
+        public void ResolveUserQuestionResult(UserQuestionAnsweredEvent evt)
         {
         }
 

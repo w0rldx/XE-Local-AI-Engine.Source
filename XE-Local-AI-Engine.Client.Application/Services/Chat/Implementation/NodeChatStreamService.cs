@@ -173,10 +173,11 @@ public sealed class NodeChatStreamService(
         var eventChannel = Channel.CreateUnbounded<ChatStreamEvent>(new UnboundedChannelOptions
         {
             SingleReader = true,
-            // Five producers write this channel concurrently: the delta/terminal emits in the invocation-state pump,
+            // Six producers write this channel concurrently: the delta/terminal emits in the invocation-state pump,
             // the streaming-transition emit in RunInvocationAsync (the run-transition), the tool-call lifecycle emits
-            // in OnToolCallLifecycleChanged, the turn-notice emits in OnTurnNoticeChanged, and the pending-approval
-            // emits in OnApprovalRequestedChanged. SingleWriter must be false.
+            // in OnToolCallLifecycleChanged, the turn-notice emits in OnTurnNoticeChanged, the pending-approval
+            // emits in OnApprovalRequestedChanged, and the pending-question emits in OnUserQuestionRequestedChanged.
+            // SingleWriter must be false.
             SingleWriter = false
         });
 
@@ -227,10 +228,24 @@ public sealed class NodeChatStreamService(
             }
         }
 
+        // A pending ask_user question. Same transient-live-state rule as the approval above: never accumulated into
+        // parts[], because the resolve endpoint clears it and the reloaded terminal turn shows the tool result (the
+        // answer, or the not-answered sentinel) instead of a lingering form. A question that is STILL pending when the
+        // browser reconnects is replayed from InvocationState.PendingQuestion by the resume registry.
+        void OnUserQuestionRequestedChanged(object? _, UserQuestionRequestedChangedEventArgs args)
+        {
+            if (args.Payload.InvocationId == requestId)
+            {
+                eventChannel.Writer.TryWrite(ChatStreamEventMapper.QuestionRequestedEvent(correlation.ConversationId, correlation.MessageId, correlation.RequestId, args.Payload,
+                    NowUnixMilliseconds(), sequence.Next()));
+            }
+        }
+
         eventDispatcher.InvocationStateChanged += OnInvocationStateChanged;
         eventDispatcher.ToolCallLifecycleChanged += OnToolCallLifecycleChanged;
         eventDispatcher.TurnNoticeChanged += OnTurnNoticeChanged;
         eventDispatcher.ApprovalRequestedChanged += OnApprovalRequestedChanged;
+        eventDispatcher.UserQuestionRequestedChanged += OnUserQuestionRequestedChanged;
 
         // The active-model precedence, the effective-agent resolution, and the orchestration spec were all computed up
         // front (ResolveTurnAsync) so the placeholder could be stamped with the resolved agent's attribution; reuse
@@ -463,6 +478,7 @@ public sealed class NodeChatStreamService(
                 eventDispatcher.ToolCallLifecycleChanged -= OnToolCallLifecycleChanged;
                 eventDispatcher.TurnNoticeChanged -= OnTurnNoticeChanged;
                 eventDispatcher.ApprovalRequestedChanged -= OnApprovalRequestedChanged;
+                eventDispatcher.UserQuestionRequestedChanged -= OnUserQuestionRequestedChanged;
             }
         }
     }

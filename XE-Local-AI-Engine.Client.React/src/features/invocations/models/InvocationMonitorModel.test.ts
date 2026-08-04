@@ -28,6 +28,7 @@ function summaryInput(overrides: Partial<InvocationSummaryInput> = {}): Invocati
 		streamedThinkingChunkCount: 40,
 		pendingToolCallCount: 0,
 		hasPendingApproval: false,
+		hasPendingQuestion: false,
 		error: null,
 		failureCategory: null,
 		...overrides,
@@ -87,6 +88,13 @@ describe("buildInvocationSummary", () => {
 	it("notes a pending approval on an active run", () => {
 		expect(buildInvocationSummary(summaryInput({ status: "Running", hasPendingApproval: true }), t)).toContain(
 			"awaiting tool approval",
+		);
+	});
+
+	// A turn parked on an ask_user question otherwise reads as an ordinary running run with nothing pending.
+	it("notes a pending question on an active run", () => {
+		expect(buildInvocationSummary(summaryInput({ status: "Running", hasPendingQuestion: true }), t)).toContain(
+			"awaiting an answer to a question",
 		);
 	});
 

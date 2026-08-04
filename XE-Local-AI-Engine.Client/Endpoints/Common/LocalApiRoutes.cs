@@ -62,6 +62,12 @@ public static class LocalApiRoutes
         // in-process invocation runner to release the waiting turn. The literal "approvals/resolve" segments keep it
         // distinct from the other chat action routes; the body carries the approval request id + decision (no route param).
         public const string ResolveApproval = "chat/approvals/resolve";
+
+        // Loopback ask_user responder, the question analogue of ResolveApproval: the browser posts the operator's
+        // answers here and the handler feeds them into the in-process runner to release the parked turn. The literal
+        // "questions/resolve" segments keep it distinct from the other chat action routes; the body carries the
+        // question request id + the answers (no route param).
+        public const string ResolveUserQuestion = "chat/questions/resolve";
     }
 
     /// <summary>

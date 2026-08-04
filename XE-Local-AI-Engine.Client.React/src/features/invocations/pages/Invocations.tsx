@@ -157,6 +157,13 @@ function CurrentInvocation({ current }: { readonly current: InvocationCurrentDto
 								: t("pages.invocations.monitor.current.no", "No"),
 						})}
 					</Text>
+					<Text>
+						{t("pages.invocations.monitor.current.pendingQuestion", "Pending question: {{value}}", {
+							value: current.hasPendingQuestion
+								? t("pages.invocations.monitor.current.yes", "Yes")
+								: t("pages.invocations.monitor.current.no", "No"),
+						})}
+					</Text>
 				</SimpleGrid>
 				{current.error ? (
 					<Alert color="red" icon={<IconAlertTriangle size={16} />}>

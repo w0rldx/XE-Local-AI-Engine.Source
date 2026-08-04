@@ -39,6 +39,15 @@ public static class ChatStreamEventTypes
     ///     browser echoes back to the loopback resolve endpoint. Status stays <c>streaming</c>; no content rides it.
     /// </summary>
     public const string ApprovalRequested = "approval-requested";
+
+    /// <summary>
+    ///     An <c>ask_user</c> question the in-flight turn is paused on. Carries the tool-call id (correlating it to the
+    ///     waiting tool-call card), the tool name, the <see cref="ChatStreamEvent.QuestionRequestId" /> the browser echoes
+    ///     back to the loopback resolve endpoint, and — unlike an approval — the
+    ///     <see cref="ChatStreamEvent.Questions" /> themselves, because a client cannot render an answerable prompt from a
+    ///     correlation id alone. Status stays <c>streaming</c>; no content rides it.
+    /// </summary>
+    public const string QuestionRequested = "question-requested";
 }
 
 public sealed record NodeChatStreamRequest(
@@ -107,4 +116,15 @@ public sealed record ChatStreamEvent(
     // loopback resolve endpoint to release the waiting run. Distinct from the top-level RequestId (the turn
     // correlation guid). The tool-call id rides ToolCallId and the tool name rides ToolName. Trailing optional so
     // every existing event type's wire shape is unchanged.
-    string? ApprovalRequestId = null);
+    string? ApprovalRequestId = null,
+    // Question request id (QuestionRequested events only): the durable key the browser echoes back to the loopback
+    // resolve endpoint to release the waiting run. Distinct from the top-level RequestId (the turn correlation guid).
+    // The tool-call id rides ToolCallId and the tool name rides ToolName. Trailing optional so every existing event
+    // type's wire shape is unchanged.
+    string? QuestionRequestId = null,
+    // The ask_user questions (QuestionRequested events only), as a JSON array of
+    // {header, question, multiSelect, options:[{label, description, recommended}]} — the serialized
+    // UserQuestionSpec[]. Rides as a JSON STRING for the same reason Arguments does: the event record stays a flat
+    // wire shape and the client parses the payload it renders. Trailing optional so every existing event type's wire
+    // shape is unchanged.
+    string? Questions = null);

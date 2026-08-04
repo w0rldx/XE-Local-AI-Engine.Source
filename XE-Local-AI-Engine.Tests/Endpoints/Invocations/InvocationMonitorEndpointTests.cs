@@ -6,6 +6,7 @@ using System.Text.Json.Serialization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using NSubstitute;
+using XE_Local_AI_Engine.AI.Contracts.Events;
 using XE_Local_AI_Engine.Client.Endpoints.Invocations.V1;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Events;
@@ -69,6 +70,7 @@ public sealed class InvocationMonitorEndpointTests
         AssertEx.Equal(currentInvocationId, current.InvocationId);
         AssertEx.Equal(InvocationStatus.Running, current.Status);
         AssertEx.True(current.HasPendingApproval);
+        AssertEx.False(current.HasPendingQuestion);
         AssertEx.ContainsSingle(monitor.History, entry => entry.InvocationId == historyInvocationId
                                                           && entry.Status == InvocationStatus.Failed
                                                           && entry.Error == "Invocation ended with a failure. See local logs for details."
@@ -76,6 +78,49 @@ public sealed class InvocationMonitorEndpointTests
         AssertEx.False(body.Contains("super-secret-token", StringComparison.OrdinalIgnoreCase));
         AssertEx.False(body.Contains("api_key", StringComparison.OrdinalIgnoreCase));
         AssertEx.False(body.Contains("secret", StringComparison.OrdinalIgnoreCase));
+    }
+
+    // A turn parked on an ask_user question is otherwise indistinguishable from an ordinary running one on this page —
+    // no output chunks, no pending approval, nothing to explain the silence. The flag is content-free by design: the
+    // question text is operator/model content and must not reach an ops endpoint, so only the boolean is asserted here.
+    [Test]
+    public async Task GetInvocations_WhenParkedOnQuestion_ReportsPendingQuestionWithoutItsContent()
+    {
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        dispatcher.CurrentInvocation.Returns(new InvocationState
+        {
+            InvocationId = Guid.Parse("11111111-1111-1111-1111-111111111111"),
+            ConversationId = Guid.Parse("33333333-3333-3333-3333-333333333333"),
+            Status = InvocationStatus.Running,
+            StartedAt = FrozenNow.AddSeconds(-10),
+            LastUpdatedAt = FrozenNow,
+            PendingQuestion = new InvocationUserQuestionState("question-1",
+                "call-1",
+                "ask_user",
+                [
+                    new UserQuestionSpec("Auth", "Which auth method?", MultiSelect: false, [
+                        new UserQuestionOption("OAuth device flow", Description: null, Recommended: true),
+                        new UserQuestionOption("Personal access token", Description: null, Recommended: false)
+                    ])
+                ],
+                FrozenNow)
+        });
+        var history = Substitute.For<IInvocationHistory>();
+        history.Capacity.Returns(50);
+        history.Snapshot().Returns([]);
+        await using var factory = CreateFactory(dispatcher, history);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Get, "/api/local/v1/invocations");
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var monitor = Deserialize<InvocationMonitorResponse>(body);
+
+        var current = AssertEx.NotNull(monitor.Current);
+        AssertEx.True(current.HasPendingQuestion);
+        AssertEx.False(current.HasPendingApproval);
+        AssertEx.False(body.Contains("Which auth method?", StringComparison.OrdinalIgnoreCase));
+        AssertEx.False(body.Contains("OAuth device flow", StringComparison.OrdinalIgnoreCase));
     }
 
     [Test]
