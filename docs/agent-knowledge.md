@@ -56,6 +56,14 @@ dotnet build XE-Local-AI-Engine.slnx --configuration Release --no-restore
 
 Skip it and you hand off code that compiles for you and fails for the packaging script. `TreatWarningsAsErrors` still applies in Debug, so genuine *compiler* warnings still stop you — it is the analyzer diagnostics that go quiet. Set `XE_FULL_ANALYSIS=1` to force the full pass in Debug while iterating on something analyzer-sensitive.
 
+**An *incremental* Release build that returns `0 Warning(s) / 0 Error(s)` in ~1 second is a hollow gate.** MSBuild skips projects whose inputs are unchanged, and analyzer diagnostics are **not replayed for a skipped project** — so the zeros describe the last build that actually compiled, not this one. That matters most in exactly the situation you want the number for: several agents or lanes editing one tree, where you are trying to prove *the current* state is clean. If the elapsed time is implausibly short, the run proved nothing. Force a real compile before you claim a number:
+
+```bash
+dotnet build XE-Local-AI-Engine.slnx --configuration Release --no-incremental
+```
+
+Same failure shape as the CI "zero tests enrolled" hollow gate below: a green result that was never actually evaluated.
+
 Two mechanics worth not re-deriving:
 
 - **The gate must live in `Directory.Build.targets`, not `Directory.Build.props`.** `Microsoft.Common.props` imports the `.props` file **before** it defaults `$(Configuration)`, so a Configuration condition evaluated there sees an empty string and misfires in both directions. Verify any change with `dotnet msbuild <proj> -getProperty:RunAnalyzers -p:Configuration=…` rather than by reading the XML.

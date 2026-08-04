@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 
+using Microsoft.Extensions.Caching.Memory;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
@@ -79,6 +80,30 @@ internal static class AddNodeWorkspaceAndAgentsExtensions
         // persistence/versioning to the store. The resolver resolves an agent's assigned skills into the runtime package
         // for MAF progressive disclosure.
         builder.Services.AddScoped<IAgentSkillService, AgentSkillService>();
+        // Third-party skill import. Its named HttpClient disables automatic redirects so the github.com → codeload
+        // hop can be re-validated against the host allowlist by hand; following redirects blindly would let a
+        // compromised response choose the host. The in-memory cache holds the short-lived, single-use preview payload
+        // that phase 2 persists verbatim — phase 2 must never re-fetch, or the operator approves one payload and the
+        // node stores another. AddMemoryCache is idempotent (TryAdd), so registering it here keeps this module
+        // self-contained regardless of module order.
+        builder.Services.AddMemoryCache();
+        builder.Services.AddHttpClient(GitHubSkillArchiveDownloader.HttpClientName)
+               .ConfigurePrimaryHttpMessageHandler(static () => new HttpClientHandler
+               {
+                   AllowAutoRedirect = false
+               });
+
+        // Guard limits are bound from configuration so an operator can tighten them without a rebuild. The defaults
+        // admit a real collection repository; see SkillImportOptions for which of them actually bound memory.
+        var skillImportOptions = new SkillImportOptions();
+        configuration.GetSection(SkillImportOptions.SectionName).Bind(skillImportOptions);
+        builder.Services.AddSingleton(skillImportOptions);
+
+        builder.Services.AddScoped<ISkillImportService>(static sp => new SkillImportService(sp.GetRequiredService<IAgentSkillStore>(),
+            sp.GetRequiredService<IMemoryCache>(),
+            sp.GetRequiredService<TimeProvider>(),
+            sp.GetRequiredService<IHttpClientFactory>().CreateClient(GitHubSkillArchiveDownloader.HttpClientName),
+            sp.GetRequiredService<SkillImportOptions>()));
         // Feedback-insights service: shapes raw aggregates into the operator read model, including derived down-rate,
         // single-sample guard flags, and privacy-capped exemplars.
         builder.Services.AddScoped<IFeedbackInsightsService, FeedbackInsightsService>();
