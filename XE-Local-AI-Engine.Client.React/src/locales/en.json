@@ -3108,7 +3108,8 @@
 				"error": "Could not start generation."
 			},
 			"result": {
-				"error": "Could not load the generated image."
+				"error": "Could not load the generated image.",
+				"viewFullSize": "View full size"
 			},
 			"models": {
 				"installedTitle": "Installed image models",
@@ -3141,6 +3142,17 @@
 						"label": "Family"
 					}
 				}
+			},
+			"viewer": {
+				"title": "Generated image",
+				"download": "Download PNG",
+				"seed": "Seed",
+				"seedRandom": "Random — not reported by the runtime",
+				"copySeed": "Copy seed",
+				"seedCopied": "Seed copied",
+				"settings": "Settings",
+				"settingsValue": "{{model}} · {{width}}×{{height}} · {{steps}} steps · {{sampler}} · CFG {{cfgScale}}",
+				"duration": "Duration"
 			}
 		},
 		"preview": {

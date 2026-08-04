@@ -65,6 +65,7 @@ export interface ImageJobView {
 	id: string;
 	modelName: string;
 	prompt: string;
+	negativePrompt: string | null;
 	status: ImageJobStatus;
 	seed: number;
 	width: number;
@@ -85,6 +86,7 @@ export function toImageJobView(dto: ImageJobResponse): ImageJobView {
 		id: dto.id,
 		modelName: dto.modelName,
 		prompt: dto.prompt,
+		negativePrompt: dto.negativePrompt ?? null,
 		status: toImageJobStatus(dto.status),
 		// The wire seed is a precision-safe string; image seeds are bounded to uint32 (see the form schema), so parsing
 		// back to a number for display never loses precision.

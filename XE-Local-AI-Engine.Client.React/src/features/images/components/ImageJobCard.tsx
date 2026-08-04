@@ -103,7 +103,7 @@ export function ImageJobCard({ job, isCancelling, onCancel }: ImageJobCardProps)
 				) : null}
 
 				{job.status === "Succeeded" && job.imageId ? (
-					<ImageResultView imageId={job.imageId} alt={job.prompt} />
+					<ImageResultView job={job} imageId={job.imageId} />
 				) : null}
 			</Stack>
 		</Card>

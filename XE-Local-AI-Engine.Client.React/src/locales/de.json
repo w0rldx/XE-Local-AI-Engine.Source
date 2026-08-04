@@ -3108,7 +3108,8 @@
 				"error": "Die Generierung konnte nicht gestartet werden."
 			},
 			"result": {
-				"error": "Das erzeugte Bild konnte nicht geladen werden."
+				"error": "Das erzeugte Bild konnte nicht geladen werden.",
+				"viewFullSize": "In voller Größe anzeigen"
 			},
 			"models": {
 				"installedTitle": "Installierte Bildmodelle",
@@ -3141,6 +3142,17 @@
 						"label": "Familie"
 					}
 				}
+			},
+			"viewer": {
+				"title": "Erzeugtes Bild",
+				"download": "PNG herunterladen",
+				"seed": "Seed",
+				"seedRandom": "Zufällig — von der Laufzeit nicht gemeldet",
+				"copySeed": "Seed kopieren",
+				"seedCopied": "Seed kopiert",
+				"settings": "Einstellungen",
+				"settingsValue": "{{model}} · {{width}}×{{height}} · {{steps}} Schritte · {{sampler}} · CFG {{cfgScale}}",
+				"duration": "Dauer"
 			}
 		},
 		"preview": {
