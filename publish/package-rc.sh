@@ -186,6 +186,64 @@ assert_no_runtime_state() {
   fi
 }
 
+# Fail the build if the publish output carries runtime state the app wrote beside its own executable. Ported from
+# publish/package-tester-win.ps1 (@43b5bb08), which grew both this tripwire and the publish-dir wipe in package_rid
+# after 0.1.0-rc.5.0 shipped a maintainer log full of source paths plus a dead-letter-queue directory. That release
+# was packed by the PowerShell path, but nothing about the mechanism is Windows-specific:
+#   - logs/               ResolveLogFileDirectory (LoggerExtensions.cs) reads NodeData:Directory, which ONLY desktop
+#                         mode layers in; any other run falls back to ContentRootPath — the executable's own folder.
+#   - dead-letter-queue/  FileDeadLetterStore roots on AppContext.BaseDirectory UNCONDITIONALLY and calls
+#                         Directory.CreateDirectory in its constructor, so EVERY launch recreates it, desktop or not.
+# The same ContentRootPath fallback governs dp-keys/ and, behind the desktop flag, node.sqlite / node.key — so a stray
+# in-place run can leak real secrets, not just host paths.
+#
+# The wipe removes the accumulation mechanism; this catches whatever is created DURING a run (a smoke test between
+# publish and zip, or a new code path that writes beside the executable). It fails loudly rather than scrubbing
+# quietly: a silent scrub is how the original leak stayed invisible, and a maintainer who sees this throw learns the
+# publish directory was executed in.
+#
+# Complements assert_no_runtime_state, which scans the STAGE for node-settings.json / *.enc / *.pin. This one scans the
+# publish output for the state and secret classes, and names why each is disqualifying.
+assert_publish_output_clean() {
+  local pub="$1" entry pattern reason match
+  local leaks=""
+  # Same patterns and reasons as $forbiddenPublishArtifacts in publish/package-tester-win.ps1 — keep the two lists in
+  # step, so a class caught on one platform is not silently shippable on the other.
+  local forbidden=(
+    "logs|log output from running the app in the publish directory (leaks host paths)"
+    "dead-letter-queue|dead-letter queue created beside the executable on every launch"
+    "dp-keys|Data Protection key ring"
+    "*.sqlite|node database"
+    "*.sqlite-wal|node database write-ahead log"
+    "*.sqlite-shm|node database shared memory"
+    "node.key|node encryption key"
+    "*.enc|encrypted secret store (HF token, GitHub token, provider credentials)"
+    "desktop-port.txt|persisted desktop loopback port"
+    "*.log|log file"
+  )
+
+  for entry in "${forbidden[@]}"; do
+    pattern="${entry%%|*}"
+    reason="${entry#*|}"
+    # -name matches directories as well as files, which is the point: logs/, dead-letter-queue/ and dp-keys/ are
+    # directories, and an EMPTY one still proves the executable ran here.
+    while IFS= read -r match; do
+      [[ -n "${match}" ]] || continue
+      leaks+="  ${match#./} — ${reason}"$'\n'
+    done < <(cd "${pub}" && find . -name "${pattern}" -print)
+  done
+
+  if [[ -n "${leaks}" ]]; then
+    echo "Error: runtime state found in the publish output. Zipping would ship it to testers:" >&2
+    printf '%s' "${leaks}" >&2
+    echo "This means the application was executed from '${pub}'. Never run the published binary in place — it writes" >&2
+    echo "logs, queues and (in desktop mode) its database and keys next to itself. Re-run this script; it wipes the" >&2
+    echo "publish directory first. Smoke-test the zip instead, which is what a tester actually receives." >&2
+    exit 1
+  fi
+  echo ">> Publish output carries no runtime state (no logs, queues, keys or databases)."
+}
+
 # Refuse to ship configuration that reads as live but is really placeholder text — the counterpart of the
 # published-config guard in publish/package-tester-win.ps1 (which proves the TESTER config IS configured).
 # Here the required outcome is the inverse: the bundle is a portable zip, so its in-app updater must be
@@ -269,12 +327,21 @@ package_rid() {
     *) echo "Error: unsupported RID '${rid}' (expected win-x64 | linux-x64)." >&2; exit 2 ;;
   esac
 
+  # Wipe the publish leaf BEFORE publishing. `dotnet publish` never removes stale files from its output directory, and
+  # the app writes runtime state beside its own executable, so anything a previous in-place run left behind is copied
+  # straight into the stage by the `cp -r` below — that is the 0.1.0-rc.5.0 leak mechanism (assert_publish_output_clean
+  # documents it in full). Only the publish leaf goes: incremental state lives in obj/ and bin/<config>/<tfm>/<rid>/,
+  # so this forces a fresh output copy, not a full rebuild.
+  pub="${CLIENT_PROJECT}/bin/Release/net10.0/${rid}/publish"
+  rm -rf "${pub}"
+
   echo ">> Publishing ${rid} (single-file self-contained)…"
   dotnet publish "${CLIENT_PROJECT}" -c Release -r "${rid}" -p:PublishProfile="${rid}" \
     -p:UpdateChannel="${UPDATE_CHANNEL}" --nologo
 
-  pub="${CLIENT_PROJECT}/bin/Release/net10.0/${rid}/publish"
   [[ -f "${pub}/${exe}" ]] || { echo "Error: expected published binary not found at ${pub}/${exe}." >&2; exit 1; }
+  # Tripwire for anything the app wrote here during THIS run (the wipe above only removes what earlier runs left).
+  assert_publish_output_clean "${pub}"
 
   # Two names, deliberately different.
   #
