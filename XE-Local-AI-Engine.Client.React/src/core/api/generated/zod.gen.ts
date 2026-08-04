@@ -2073,6 +2073,16 @@ export const zXeLocalAiEngineClientEndpointsImagesV1ImageModelDownloadStatusResp
 	completedBytes: z.int().nullish(),
 	totalBytes: z.int().nullish(),
 	sanitizedError: z.string().nullish(),
+	partIndex: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	partCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsImagesV1ListImageModelDownloadsResponse = z.object({
@@ -2093,6 +2103,12 @@ export const zXeLocalAiEngineClientEndpointsImagesV1ImageModelResponse = z.objec
 	sizeBytes: z.int(),
 	parts: z.array(zXeLocalAiEngineClientEndpointsImagesV1ImageModelPartResponse),
 	downloadedAtUtc: z.int(),
+	defaultSteps: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	defaultCfgScale: z.number(),
+	defaultSampler: z.string(),
 });
 
 export const zXeLocalAiEngineClientEndpointsImagesV1ListImageModelsResponse = z.object({
@@ -2111,6 +2127,8 @@ export const zXeLocalAiEngineClientEndpointsImagesV1ImageModelPartDownloadReques
 	role: z.string(),
 	fileName: z.string(),
 	sha256: z.string().nullish(),
+	repoId: z.string().nullish(),
+	sizeBytes: z.int().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsImagesV1StartImageModelDownloadRequest = z.object({
@@ -3145,6 +3163,79 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActio
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1CancelImageModelDownloadResponse = z.object({
+	modelName: z.string(),
+	cancelled: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1CancelImageModelDownloadRequest = z.object({
+	modelName: z.string(),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1DeleteImageModelRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsImagesV1ImageModelCatalogPartResponse = z.object({
+	role: z.string(),
+	fileName: z.string(),
+	repoId: z.string().nullish(),
+	sizeBytes: z.int(),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1ImageModelCatalogEntryResponse = z.object({
+	id: z.string(),
+	displayName: z.string(),
+	publisher: z.string(),
+	repoId: z.string(),
+	family: z.string(),
+	license: z.string(),
+	recommended: z.boolean(),
+	notes: z.string().nullish(),
+	parts: z.array(zXeLocalAiEngineClientEndpointsImagesV1ImageModelCatalogPartResponse),
+	totalSizeBytes: z.int(),
+	isInstalled: z.boolean(),
+	fitVerdict: z.string(),
+	residentBytes: z.int(),
+	fitBudgetBytes: z.int(),
+	fitsOnDisk: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1GetImageModelCatalogResponse = z.object({
+	catalogVersion: z.string(),
+	items: z.array(zXeLocalAiEngineClientEndpointsImagesV1ImageModelCatalogEntryResponse),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1ImageRepositoryFileResponse = z.object({
+	fileName: z.string(),
+	format: z.string(),
+	sizeBytes: z.int(),
+	suggestedRole: z.string(),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1ImageRepositoryResponse = z.object({
+	repoId: z.string(),
+	isGated: z.boolean(),
+	downloads: z.int(),
+	likes: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	lastModifiedAtUtc: z.int(),
+	license: z.string().nullish(),
+	hasUsableWeights: z.boolean(),
+	isTrustedPublisher: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1BrowseImageRepositoriesResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsImagesV1ImageRepositoryResponse),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1InspectImageRepositoryResponse = z.object({
+	repoId: z.string(),
+	isGated: z.boolean(),
+	license: z.string().nullish(),
+	files: z.array(zXeLocalAiEngineClientEndpointsImagesV1ImageRepositoryFileResponse),
 });
 
 /**
@@ -4805,3 +4896,49 @@ export const zUpdateSuggestedPlaybookActionPath = z.object({
  * Success
  */
 export const zUpdateSuggestedPlaybookActionResponse = zXeLocalAiEngineClientEndpointsAgentsV1PlaybookActionResponse;
+
+export const zCancelImageModelDownloadBody = zXeLocalAiEngineClientEndpointsImagesV1CancelImageModelDownloadRequest;
+
+/**
+ * Success
+ */
+export const zCancelImageModelDownloadResponse = zXeLocalAiEngineClientEndpointsImagesV1CancelImageModelDownloadResponse;
+
+export const zDeleteImageModelPath = z.object({
+	modelName: z.string(),
+});
+
+/**
+ * No Content
+ */
+export const zDeleteImageModelResponse = z.void();
+
+/**
+ * Success
+ */
+export const zGetImageModelCatalogResponse = zXeLocalAiEngineClientEndpointsImagesV1GetImageModelCatalogResponse;
+
+export const zBrowseImageRepositoriesQuery = z.object({
+	query: z.string().nullish(),
+	limit: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	sort: z.string().nullish(),
+	ggufOnly: z.boolean().nullish(),
+});
+
+/**
+ * Success
+ */
+export const zBrowseImageRepositoriesResponse = zXeLocalAiEngineClientEndpointsImagesV1BrowseImageRepositoriesResponse;
+
+export const zInspectImageRepositoryQuery = z.object({
+	repoId: z.string().nullish(),
+});
+
+/**
+ * Success
+ */
+export const zInspectImageRepositoryResponse = zXeLocalAiEngineClientEndpointsImagesV1InspectImageRepositoryResponse;

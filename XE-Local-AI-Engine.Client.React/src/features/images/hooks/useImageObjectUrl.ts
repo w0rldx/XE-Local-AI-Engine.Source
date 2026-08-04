@@ -21,8 +21,18 @@ async function fetchImageBlob(imageId: string, signal: AbortSignal): Promise<Blo
 	return response.data;
 }
 
-/** Returns a blob object URL for the decrypted PNG of `imageId`, or undefined until it resolves / when no id. */
-export function useImageObjectUrl(imageId: string | null | undefined): { url: string | undefined; isLoading: boolean; isError: boolean } {
+/**
+ * Returns a blob object URL for the decrypted PNG of `imageId`, or undefined until it resolves / when no id.
+ *
+ * The underlying `blob` is returned alongside the URL so a "save to disk" action can reuse the bytes already in memory
+ * instead of re-fetching them; the object URL alone cannot be handed to an anchor download with a chosen file name.
+ */
+export function useImageObjectUrl(imageId: string | null | undefined): {
+	url: string | undefined;
+	blob: Blob | undefined;
+	isLoading: boolean;
+	isError: boolean;
+} {
 	const { data: blob, isLoading, isError } = useQuery({
 		queryKey: [IMAGE_BLOB_QUERY_KEY, imageId],
 		queryFn: ({ signal }) => fetchImageBlob(imageId as string, signal),
@@ -44,5 +54,5 @@ export function useImageObjectUrl(imageId: string | null | undefined): { url: st
 		};
 	}, [blob]);
 
-	return { url, isLoading: Boolean(imageId) && isLoading, isError };
+	return { url, blob, isLoading: Boolean(imageId) && isLoading, isError };
 }

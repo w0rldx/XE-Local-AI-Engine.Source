@@ -545,6 +545,7 @@ public sealed class ImageJobCoordinatorTests
             long durationMs,
             int outputWidth,
             int outputHeight,
+            long resolvedSeed,
             CancellationToken cancellationToken)
         {
             Update(jobId, view => view with
@@ -554,7 +555,8 @@ public sealed class ImageJobCoordinatorTests
                 CompletedAtUtc = completedAtUtc,
                 DurationMs = durationMs,
                 Width = outputWidth > 0 ? outputWidth : view.Width,
-                Height = outputHeight > 0 ? outputHeight : view.Height
+                Height = outputHeight > 0 ? outputHeight : view.Height,
+                Seed = resolvedSeed >= 0 ? resolvedSeed : view.Seed
             });
             return Task.CompletedTask;
         }

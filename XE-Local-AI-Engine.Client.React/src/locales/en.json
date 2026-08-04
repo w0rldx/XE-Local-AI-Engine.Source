@@ -3053,7 +3053,13 @@
 			"job": {
 				"elapsed": "{{seconds}}s",
 				"duration": "{{seconds}}s",
-				"meta": "{{model}} · {{width}}×{{height}} · {{steps}} steps · {{sampler}}"
+				"meta": "{{model}} · {{width}}×{{height}} · {{steps}} steps · {{sampler}}",
+				"queuePosition": "Waiting — position {{position}} in the queue",
+				"preparing": "Preparing model…",
+				"finishing": "Finishing (decoding image)…",
+				"steps": "Step {{step}} of {{totalSteps}}",
+				"stepProgressLabel": "Generation progress",
+				"eta": "~{{seconds}}s left"
 			},
 			"status": {
 				"Queued": "Queued",
@@ -3108,7 +3114,8 @@
 				"error": "Could not start generation."
 			},
 			"result": {
-				"error": "Could not load the generated image."
+				"error": "Could not load the generated image.",
+				"viewFullSize": "View full size"
 			},
 			"models": {
 				"installedTitle": "Installed image models",
@@ -3117,16 +3124,16 @@
 					"Sd15": "Stable Diffusion 1.5",
 					"Sdxl": "Stable Diffusion XL",
 					"Sd3": "Stable Diffusion 3",
-					"Flux": "FLUX.1"
+					"Flux": "FLUX.1",
+					"QwenImage": "Qwen-Image"
 				},
 				"download": {
 					"title": "Download a model",
 					"started": "Download started. The model will appear once ready.",
-					"inFlight": "Download runs in the background; the model appears when ready. Large files can take several minutes.",
 					"failed": "The model download failed.",
 					"progress": "Downloading… {{percent}}%",
 					"error": "Could not start the model download.",
-					"hint": "Single-file (SD1.5-style) weights only. Multi-part models are a follow-up.",
+					"hint": "One weight file, for single-file models like SD1.5. Turn on Advanced for a multi-part model.",
 					"submit": "Download",
 					"repoId": {
 						"label": "Hugging Face repo"
@@ -3139,8 +3146,148 @@
 					},
 					"family": {
 						"label": "Family"
+					},
+					"cancel": "Cancel",
+					"cancelError": "Could not cancel the download.",
+					"dismissError": "Dismiss",
+					"part": "Part {{index}} of {{count}}",
+					"speed": "{{value}}/s",
+					"eta": "~{{duration}} left",
+					"transferred": "{{completed}} transferred",
+					"starting": "Starting…",
+					"bytesOf": "{{completed}} / {{total}}",
+					"progressAriaLabel": "Download progress",
+					"advanced": {
+						"toggle": "Advanced: multi-part file set",
+						"toggleDescription": "SDXL, SD3, FLUX and Qwen-Image ship as several files (diffusion weights, VAE, text encoders) instead of one.",
+						"addPart": "Add file",
+						"removePart": "Remove file",
+						"diffusionRequired": "A file set needs one Diffusion file.",
+						"hint": "Leave a file's repository blank to use the one above — a set can span repositories. Sizes are optional but enable the free-space check and one combined progress bar.",
+						"role": {
+							"label": "Role"
+						},
+						"fileName": {
+							"label": "File"
+						},
+						"repoId": {
+							"label": "Repository (optional)",
+							"placeholder": "Same as above"
+						},
+						"sizeBytes": {
+							"label": "Size in bytes (optional)"
+						},
+						"sha256": {
+							"label": "SHA-256 (optional)"
+						}
 					}
+				},
+				"delete": {
+					"action": "Delete model",
+					"title": "Delete image model",
+					"description": "Delete '{{modelName}}' and its weight files? This cannot be undone.",
+					"confirm": "Delete",
+					"cancel": "Cancel",
+					"deleted": "Model deleted.",
+					"error": "Could not delete the model."
+				},
+				"partRoles": {
+					"Diffusion": "Diffusion weights",
+					"Vae": "VAE",
+					"ClipL": "CLIP-L text encoder",
+					"ClipG": "CLIP-G text encoder",
+					"T5": "T5-XXL text encoder",
+					"Llm": "LLM text encoder",
+					"LlmVision": "LLM vision tower"
+				},
+				"tabs": {
+					"catalog": "Recommended",
+					"browse": "Hugging Face",
+					"manual": "Advanced"
+				},
+				"catalog": {
+					"title": "Recommended image models",
+					"description": "Verified model sets you can install with one click. Sizes and hardware fit are for this machine.",
+					"empty": "No catalog entries are available in this build.",
+					"error": "Could not load the model catalog.",
+					"recommended": "Recommended",
+					"installed": "Installed",
+					"install": "Install",
+					"parts_one": "{{count}} file",
+					"parts_other": "{{count}} files",
+					"multiRepo": "Spans {{count}} repositories",
+					"diskWarning": "Not enough free disk space for this download.",
+					"fit": {
+						"Fits": "Fits",
+						"Tight": "Tight fit",
+						"WontFit": "Too large",
+						"Unknown": "Fit unknown",
+						"FitsHint": "The weights that must stay resident ({{resident}}) fit inside the measured budget ({{budget}}).",
+						"TightHint": "The resident weights ({{resident}}) only just fit inside the measured budget ({{budget}}). Expect it to be slow.",
+						"WontFitHint": "The resident weights ({{resident}}) exceed the measured budget ({{budget}}).",
+						"UnknownHint": "This machine's memory budget could not be measured, so no claim is made about whether this model runs."
+					}
+				},
+				"browse": {
+					"title": "Browse Hugging Face",
+					"description": "Search text-to-image repositories, then pick the weight files that make up the model.",
+					"searchLabel": "Search repositories",
+					"searchPlaceholder": "e.g. flux schnell",
+					"search": "Search",
+					"searching": "Searching…",
+					"empty": "No image repositories matched that search.",
+					"error": "Could not search repositories.",
+					"gated": "Gated",
+					"gatedHint": "This repository requires an accepted licence and a Hugging Face token — a one-click install will fail with 401 until you add one.",
+					"untrustedPublisher": "Unverified publisher",
+					"untrustedPublisherHint": "This publisher is not a known packager — review the repository before downloading.",
+					"noWeights": "No weights",
+					"select": "Open",
+					"back": "Back to results",
+					"columns": {
+						"repo": "Repository",
+						"downloads": "Downloads",
+						"likes": "Likes",
+						"updated": "Updated",
+						"license": "License",
+						"action": "Action"
+					},
+					"files": {
+						"title": "Weight files in {{repoId}}",
+						"loading": "Loading files…",
+						"empty": "This repository exposes no installable weight files.",
+						"error": "Could not read this repository's files.",
+						"hint": "Tick each file the model needs and check its role. Sharded files (…-00001-of-00003) are not listed: a part is a single file.",
+						"columns": {
+							"select": "Use",
+							"file": "File",
+							"role": "Role",
+							"size": "Size"
+						}
+					},
+					"modelName": {
+						"label": "Install as",
+						"placeholder": "flux.1-schnell"
+					},
+					"family": {
+						"label": "Family"
+					},
+					"nameTaken": "A model with that name is already installed.",
+					"diffusionRequired": "Select one diffusion file before installing.",
+					"duplicateRole": "Each role can only be filled by one file.",
+					"install": "Install selected files"
 				}
+			},
+			"viewer": {
+				"title": "Generated image",
+				"download": "Download PNG",
+				"seed": "Seed",
+				"seedRandom": "Random — not reported by the runtime",
+				"copySeed": "Copy seed",
+				"seedCopied": "Seed copied",
+				"settings": "Settings",
+				"settingsValue": "{{model}} · {{width}}×{{height}} · {{steps}} steps · {{sampler}} · CFG {{cfgScale}}",
+				"duration": "Duration"
 			}
 		},
 		"preview": {

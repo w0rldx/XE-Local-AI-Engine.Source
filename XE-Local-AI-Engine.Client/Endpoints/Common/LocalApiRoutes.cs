@@ -481,6 +481,24 @@ public static class LocalApiRoutes
         // (Running/Completed/Cancelled/Failed) so a failure is observable instead of silent.
         public const string ModelDownloads = "images/models/downloads";
 
+        // Cancels an in-flight file-set pull. An image model can be tens of gigabytes, so a mis-started download that
+        // could not be stopped would hold the node's bandwidth and disk until it finished.
+        public const string ModelDownloadCancel = "images/models/downloads/cancel";
+
+        // Curated image-model catalog: the one-click install list, annotated with this box's hardware fit and whether
+        // each entry is already installed. The literal "catalog" segment precedes nothing, so it cannot be captured by
+        // ModelByName's {modelName} route (that one is DELETE-only in any case).
+        public const string ModelCatalog = "images/models/catalog";
+
+        // Hugging Face image-model repo discovery (IImageModelDiscovery search) and per-repo weight-file inspection —
+        // the browse → inspect → pick pipeline that replaces hand-typing a repo id and a file name.
+        public const string ModelBrowse = "images/models/browse";
+        public const string ModelInspect = "images/models/inspect";
+
+        // Removes an installed model's weights and registry entry. Without it a node that has installed several
+        // multi-gigabyte file-sets has no in-app way to reclaim the disk.
+        public const string ModelByName = "images/models/{modelName}";
+
         // Managed stable-diffusion.cpp runtime and Linux source-build orchestration.
         public const string Runtime = "images/runtime";
         public const string RuntimeEject = "images/runtime/eject";

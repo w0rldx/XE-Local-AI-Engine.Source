@@ -1,0 +1,109 @@
+{
+  "schemaVersion": 1,
+  "catalogVersion": "2026.08.04",
+  "updatedAt": "2026-08-04",
+  "models": [
+    {
+      "id": "sd-1.5",
+      "displayName": "Stable Diffusion 1.5",
+      "publisher": "second-state",
+      "repoId": "second-state/stable-diffusion-v1-5-GGUF",
+      "family": "Sd15",
+      "license": "creativeml-openrail-m",
+      "recommended": true,
+      "notes": "Single 1.8 GB file, runs on CPU. The fastest way to confirm image generation works end to end.",
+      "parts": [
+        {
+          "role": "Diffusion",
+          "fileName": "stable-diffusion-v1-5-pruned-emaonly-Q8_0.gguf",
+          "repoId": null,
+          "sizeBytes": 1763578176
+        }
+      ]
+    },
+    {
+      "id": "sdxl-1.0",
+      "displayName": "Stable Diffusion XL 1.0",
+      "publisher": "gpustack",
+      "repoId": "gpustack/stable-diffusion-xl-base-1.0-GGUF",
+      "family": "Sdxl",
+      "license": "openrail++",
+      "recommended": false,
+      "notes": "Single-file SDXL base at Q4_0. Higher resolution than SD 1.5 at roughly twice the weights.",
+      "parts": [
+        {
+          "role": "Diffusion",
+          "fileName": "stable-diffusion-xl-base-1.0-Q4_0.gguf",
+          "repoId": null,
+          "sizeBytes": 3940010720
+        }
+      ]
+    },
+    {
+      "id": "flux.1-schnell",
+      "displayName": "FLUX.1 schnell",
+      "publisher": "second-state",
+      "repoId": "second-state/FLUX.1-schnell-GGUF",
+      "family": "Flux",
+      "license": "apache-2.0",
+      "recommended": true,
+      "notes": "Four-file set (diffusion, VAE, CLIP-L, T5-XXL) from one repository. Designed for very few sampling steps.",
+      "parts": [
+        {
+          "role": "Diffusion",
+          "fileName": "flux1-schnell-Q4_0.gguf",
+          "repoId": null,
+          "sizeBytes": 6688845536
+        },
+        {
+          "role": "Vae",
+          "fileName": "ae.safetensors",
+          "repoId": null,
+          "sizeBytes": 335304388
+        },
+        {
+          "role": "ClipL",
+          "fileName": "clip_l.safetensors",
+          "repoId": null,
+          "sizeBytes": 246144152
+        },
+        {
+          "role": "T5",
+          "fileName": "t5xxl-Q4_K.gguf",
+          "repoId": null,
+          "sizeBytes": 2752844256
+        }
+      ]
+    },
+    {
+      "id": "qwen-image",
+      "displayName": "Qwen-Image",
+      "publisher": "QuantStack",
+      "repoId": "QuantStack/Qwen-Image-GGUF",
+      "family": "QwenImage",
+      "license": "apache-2.0",
+      "recommended": false,
+      "notes": "Spans two repositories: the diffusion transformer and VAE ship from QuantStack, the Qwen2.5-VL text encoder from mradermacher. About 18 GB in total.",
+      "parts": [
+        {
+          "role": "Diffusion",
+          "fileName": "Qwen_Image-Q4_K_M.gguf",
+          "repoId": null,
+          "sizeBytes": 13065746976
+        },
+        {
+          "role": "Vae",
+          "fileName": "VAE/Qwen_Image-VAE.safetensors",
+          "repoId": null,
+          "sizeBytes": 253806246
+        },
+        {
+          "role": "Llm",
+          "fileName": "Qwen2.5-VL-7B-Instruct.Q4_K_M.gguf",
+          "repoId": "mradermacher/Qwen2.5-VL-7B-Instruct-GGUF",
+          "sizeBytes": 4683072512
+        }
+      ]
+    }
+  ]
+}

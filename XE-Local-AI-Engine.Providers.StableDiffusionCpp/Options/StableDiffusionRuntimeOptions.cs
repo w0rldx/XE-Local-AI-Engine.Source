@@ -54,8 +54,26 @@ public sealed class StableDiffusionRuntimeOptions
     public TimeSpan ReuseLivenessProbeTimeout { get; set; } = TimeSpan.FromSeconds(2);
 
     /// <summary>
-    ///     Readiness budget: the maximum time the supervisor waits for a freshly-spawned daemon's socket to open (the
-    ///     daemon binds only after synchronous model load completes). Exceeding it is a load failure.
+    ///     Readiness budget <b>floor</b>: the minimum time the supervisor waits for a freshly-spawned daemon's socket to
+    ///     open (the daemon binds only after synchronous model load completes). A file-set large enough to need longer
+    ///     than this gets a proportionally larger budget — see <see cref="ReadinessLoadBytesPerSecond" />.
     /// </summary>
     public TimeSpan ReadinessTimeout { get; set; } = TimeSpan.FromMinutes(2);
+
+    /// <summary>
+    ///     Assumed worst-case load throughput, in bytes per second, used to scale the readiness budget to the size of the
+    ///     file-set being loaded. A flat budget is only safe for the family it was measured on: SD1.5 is ~2 GB and loads
+    ///     in seconds, while a Qwen-Image set is a diffusion transformer plus a 7B LLM text encoder plus a VAE — around
+    ///     18 GB, with the text encoder pinned to CPU — and a flat two minutes would fail it on first launch with a
+    ///     readiness timeout that looks like a broken model rather than an impatient budget. Deliberately pessimistic:
+    ///     over-waiting costs nothing on the happy path (readiness is signalled the moment the socket opens), whereas
+    ///     under-waiting kills a load that was going to succeed.
+    /// </summary>
+    public long ReadinessLoadBytesPerSecond { get; set; } = 40L * 1024 * 1024;
+
+    /// <summary>
+    ///     Absolute ceiling on the size-scaled readiness budget, so a corrupt or absurd registry size can never make a
+    ///     failed spawn hang effectively forever.
+    /// </summary>
+    public TimeSpan MaxReadinessTimeout { get; set; } = TimeSpan.FromMinutes(30);
 }

@@ -50,6 +50,10 @@ public static class StableDiffusionCppRuntimeServiceCollectionExtensions
                 .Configure(static options => options.Retry.DisableForUnsafeHttpMethods());
 #pragma warning restore EXTEXP0001
 
+        // Carries the fine sampling progress the launcher parses out of the daemon's stdout to whichever generation is
+        // listening. Singleton and registered before the launcher that publishes into it.
+        services.TryAddSingleton<IImageServerProgressBroker, ImageServerProgressBroker>();
+
         // OS-aware process launcher (Windows Job Object / Linux setsid tree-kill).
         services.TryAddSingleton<IImageServerProcessLauncher, ImageServerProcessLauncher>();
 
@@ -80,7 +84,8 @@ public static class StableDiffusionCppRuntimeServiceCollectionExtensions
         // The public image-generation facade. Singleton — it holds no per-request state.
         services.TryAddSingleton<IImageRuntime>(static sp =>
             new StableDiffusionCppRuntime(sp.GetRequiredService<IImageServerSupervisor>(),
-                sp.GetRequiredService<SdServerJobClient>()));
+                sp.GetRequiredService<SdServerJobClient>(),
+                sp.GetRequiredService<IImageServerProgressBroker>()));
 
         // Startup orphan reaper: kills stale sd-server processes THIS app left behind on a previous run. A hard host kill
         // (e.g. `aspire stop`) skips the supervisor's graceful DisposeAsync teardown, orphaning the daemon while it still

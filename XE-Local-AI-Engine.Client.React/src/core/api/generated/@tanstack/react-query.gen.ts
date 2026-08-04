@@ -19,11 +19,13 @@ import {
 	benchmarkInferenceProfile,
 	branchNodeChatConversation,
 	browseGgufRepositories,
+	browseImageRepositories,
 	cancelAllPreviewRuns,
 	cancelCudaBuild,
 	cancelDevelopmentAttempt,
 	cancelGgufDownload,
 	cancelImageJob,
+	cancelImageModelDownload,
 	cancelLlamaCppSourceBuild,
 	cancelNodeBinding,
 	cancelNodeChatMessage,
@@ -52,6 +54,7 @@ import {
 	deleteAgentDefinition,
 	deleteConversationFile,
 	deleteGoldenConversation,
+	deleteImageModel,
 	deleteKnowledgeDocument,
 	deleteLocalModel,
 	deleteMcpServer,
@@ -100,6 +103,7 @@ import {
 	getHardwareProfile,
 	getHfTokenStatus,
 	getImageJob,
+	getImageModelCatalog,
 	getImageRuntimeStatus,
 	getInvocationMonitor,
 	getKnowledgeDocument,
@@ -131,6 +135,7 @@ import {
 	harvestGoldenConversations,
 	importAgentTemplates,
 	inspectGgufRepository,
+	inspectImageRepository,
 	invalidateInferenceProfile,
 	listAgentDefinitions,
 	listAgentExecutionLogs,
@@ -242,6 +247,8 @@ import type {
 	BranchNodeChatConversationResponse,
 	BrowseGgufRepositoriesData,
 	BrowseGgufRepositoriesResponse,
+	BrowseImageRepositoriesData,
+	BrowseImageRepositoriesResponse,
 	CancelAllPreviewRunsData,
 	CancelAllPreviewRunsResponse,
 	CancelCudaBuildData,
@@ -252,6 +259,8 @@ import type {
 	CancelGgufDownloadResponse,
 	CancelImageJobData,
 	CancelImageJobResponse,
+	CancelImageModelDownloadData,
+	CancelImageModelDownloadResponse,
 	CancelLlamaCppSourceBuildData,
 	CancelLlamaCppSourceBuildResponse,
 	CancelNodeBindingData,
@@ -311,6 +320,8 @@ import type {
 	DeleteConversationFileResponse,
 	DeleteGoldenConversationData,
 	DeleteGoldenConversationResponse,
+	DeleteImageModelData,
+	DeleteImageModelResponse,
 	DeleteKnowledgeDocumentData,
 	DeleteKnowledgeDocumentResponse,
 	DeleteLocalModelData,
@@ -411,6 +422,8 @@ import type {
 	GetHfTokenStatusResponse,
 	GetImageJobData,
 	GetImageJobResponse,
+	GetImageModelCatalogData,
+	GetImageModelCatalogResponse,
 	GetImageRuntimeStatusData,
 	GetImageRuntimeStatusResponse,
 	GetInvocationMonitorData,
@@ -477,6 +490,8 @@ import type {
 	ImportAgentTemplatesResponse,
 	InspectGgufRepositoryData,
 	InspectGgufRepositoryResponse,
+	InspectImageRepositoryData,
+	InspectImageRepositoryResponse,
 	InvalidateInferenceProfileData,
 	InvalidateInferenceProfileResponse,
 	ListAgentDefinitionsData,
@@ -5158,3 +5173,105 @@ export const updateSuggestedPlaybookActionMutation = (
 	};
 	return mutationOptions;
 };
+
+export const cancelImageModelDownloadMutation = (
+	options?: Partial<Options<CancelImageModelDownloadData>>,
+): UseMutationOptions<CancelImageModelDownloadResponse, AxiosError<DefaultError>, Options<CancelImageModelDownloadData>> => {
+	const mutationOptions: UseMutationOptions<
+		CancelImageModelDownloadResponse,
+		AxiosError<DefaultError>,
+		Options<CancelImageModelDownloadData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await cancelImageModelDownload({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const deleteImageModelMutation = (
+	options?: Partial<Options<DeleteImageModelData>>,
+): UseMutationOptions<DeleteImageModelResponse, AxiosError<DefaultError>, Options<DeleteImageModelData>> => {
+	const mutationOptions: UseMutationOptions<DeleteImageModelResponse, AxiosError<DefaultError>, Options<DeleteImageModelData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await deleteImageModel({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getImageModelCatalogQueryKey = (options?: Options<GetImageModelCatalogData>) =>
+	createQueryKey("getImageModelCatalog", options);
+
+export const getImageModelCatalogOptions = (options?: Options<GetImageModelCatalogData>) =>
+	queryOptions<
+		GetImageModelCatalogResponse,
+		AxiosError<DefaultError>,
+		GetImageModelCatalogResponse,
+		ReturnType<typeof getImageModelCatalogQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getImageModelCatalog({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getImageModelCatalogQueryKey(options),
+	});
+
+export const browseImageRepositoriesQueryKey = (options?: Options<BrowseImageRepositoriesData>) =>
+	createQueryKey("browseImageRepositories", options);
+
+export const browseImageRepositoriesOptions = (options?: Options<BrowseImageRepositoriesData>) =>
+	queryOptions<
+		BrowseImageRepositoriesResponse,
+		AxiosError<DefaultError>,
+		BrowseImageRepositoriesResponse,
+		ReturnType<typeof browseImageRepositoriesQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await browseImageRepositories({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: browseImageRepositoriesQueryKey(options),
+	});
+
+export const inspectImageRepositoryQueryKey = (options?: Options<InspectImageRepositoryData>) =>
+	createQueryKey("inspectImageRepository", options);
+
+export const inspectImageRepositoryOptions = (options?: Options<InspectImageRepositoryData>) =>
+	queryOptions<
+		InspectImageRepositoryResponse,
+		AxiosError<DefaultError>,
+		InspectImageRepositoryResponse,
+		ReturnType<typeof inspectImageRepositoryQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await inspectImageRepository({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: inspectImageRepositoryQueryKey(options),
+	});

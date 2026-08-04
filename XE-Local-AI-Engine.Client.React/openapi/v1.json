@@ -9482,6 +9482,237 @@
           }
         ]
       }
+    },
+    "/api/local/v1/images/models/downloads/cancel": {
+      "post": {
+        "tags": [
+          "Images"
+        ],
+        "operationId": "cancelImageModelDownload",
+        "requestBody": {
+          "x-name": "CancelImageModelDownloadRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1CancelImageModelDownloadRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1CancelImageModelDownloadResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/images/models/{modelName}": {
+      "delete": {
+        "tags": [
+          "Images"
+        ],
+        "operationId": "deleteImageModel",
+        "parameters": [
+          {
+            "name": "modelName",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/images/models/catalog": {
+      "get": {
+        "tags": [
+          "Images"
+        ],
+        "operationId": "getImageModelCatalog",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1GetImageModelCatalogResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/images/models/browse": {
+      "get": {
+        "tags": [
+          "Images"
+        ],
+        "operationId": "browseImageRepositories",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            }
+          },
+          {
+            "name": "ggufOnly",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1BrowseImageRepositoriesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/images/models/inspect": {
+      "get": {
+        "tags": [
+          "Images"
+        ],
+        "operationId": "inspectImageRepository",
+        "parameters": [
+          {
+            "name": "repoId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1InspectImageRepositoryResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -15339,6 +15570,16 @@
           "sanitizedError": {
             "type": "string",
             "nullable": true
+          },
+          "partIndex": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "partCount": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
           }
         }
       },
@@ -15367,7 +15608,10 @@
           "kind",
           "sizeBytes",
           "parts",
-          "downloadedAtUtc"
+          "downloadedAtUtc",
+          "defaultSteps",
+          "defaultCfgScale",
+          "defaultSampler"
         ],
         "properties": {
           "modelName": {
@@ -15393,6 +15637,17 @@
           },
           "downloadedAtUtc": {
             "type": "integer"
+          },
+          "defaultSteps": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "defaultCfgScale": {
+            "type": "number",
+            "format": "double"
+          },
+          "defaultSampler": {
+            "type": "string"
           }
         }
       },
@@ -15491,6 +15746,14 @@
           },
           "sha256": {
             "type": "string",
+            "nullable": true
+          },
+          "repoId": {
+            "type": "string",
+            "nullable": true
+          },
+          "sizeBytes": {
+            "type": "integer",
             "nullable": true
           }
         }
@@ -18427,6 +18690,259 @@
           "priority": {
             "type": "integer",
             "format": "int32"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsImagesV1CancelImageModelDownloadResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "modelName",
+          "cancelled"
+        ],
+        "properties": {
+          "modelName": {
+            "type": "string"
+          },
+          "cancelled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsImagesV1CancelImageModelDownloadRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "modelName"
+        ],
+        "properties": {
+          "modelName": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsImagesV1DeleteImageModelRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsImagesV1BrowseImageRepositoriesResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1ImageRepositoryResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsImagesV1GetImageModelCatalogResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "catalogVersion",
+          "items"
+        ],
+        "properties": {
+          "catalogVersion": {
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1ImageModelCatalogEntryResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsImagesV1ImageModelCatalogEntryResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "displayName",
+          "publisher",
+          "repoId",
+          "family",
+          "license",
+          "recommended",
+          "parts",
+          "totalSizeBytes",
+          "isInstalled",
+          "fitVerdict",
+          "residentBytes",
+          "fitBudgetBytes",
+          "fitsOnDisk"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "publisher": {
+            "type": "string"
+          },
+          "repoId": {
+            "type": "string"
+          },
+          "family": {
+            "type": "string"
+          },
+          "license": {
+            "type": "string"
+          },
+          "recommended": {
+            "type": "boolean"
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          },
+          "parts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1ImageModelCatalogPartResponse"
+            }
+          },
+          "totalSizeBytes": {
+            "type": "integer"
+          },
+          "isInstalled": {
+            "type": "boolean"
+          },
+          "fitVerdict": {
+            "type": "string"
+          },
+          "residentBytes": {
+            "type": "integer"
+          },
+          "fitBudgetBytes": {
+            "type": "integer"
+          },
+          "fitsOnDisk": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsImagesV1ImageModelCatalogPartResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "role",
+          "fileName",
+          "sizeBytes"
+        ],
+        "properties": {
+          "role": {
+            "type": "string"
+          },
+          "fileName": {
+            "type": "string"
+          },
+          "repoId": {
+            "type": "string",
+            "nullable": true
+          },
+          "sizeBytes": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsImagesV1ImageRepositoryFileResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fileName",
+          "format",
+          "sizeBytes",
+          "suggestedRole"
+        ],
+        "properties": {
+          "fileName": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "type": "integer"
+          },
+          "suggestedRole": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsImagesV1ImageRepositoryResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "repoId",
+          "isGated",
+          "downloads",
+          "likes",
+          "lastModifiedAtUtc",
+          "hasUsableWeights",
+          "isTrustedPublisher"
+        ],
+        "properties": {
+          "repoId": {
+            "type": "string"
+          },
+          "isGated": {
+            "type": "boolean"
+          },
+          "downloads": {
+            "type": "integer"
+          },
+          "likes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "lastModifiedAtUtc": {
+            "type": "integer"
+          },
+          "license": {
+            "type": "string",
+            "nullable": true
+          },
+          "hasUsableWeights": {
+            "type": "boolean"
+          },
+          "isTrustedPublisher": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsImagesV1InspectImageRepositoryResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "repoId",
+          "isGated",
+          "files"
+        ],
+        "properties": {
+          "repoId": {
+            "type": "string"
+          },
+          "isGated": {
+            "type": "boolean"
+          },
+          "license": {
+            "type": "string",
+            "nullable": true
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1ImageRepositoryFileResponse"
+            }
           }
         }
       }
