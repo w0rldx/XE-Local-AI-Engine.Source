@@ -12,19 +12,38 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 ///     <c>kill(-pgid)</c> reaps every descendant. Mirrors <c>LlamaServerProcessLauncher</c>.
 /// </summary>
 /// <remarks>
-///     The child's stdout/stderr are drained (so a chatty server never stalls on a full pipe) and forwarded to the app
-///     logger at <b>Debug</b> level — NOT Information. sd-server can echo the request prompt in its own logs, and prompts
-///     are privacy-sensitive: keeping the forward at Debug ensures a normal Information-level deployment never
-///     persists a prompt, while a developer can still opt into the backend/device banner at Debug.
+///     <para>
+///         The child's stdout/stderr are drained (so a chatty server never stalls on a full pipe) and forwarded to the
+///         app logger at <b>Debug</b> level — NOT Information. sd-server can echo the request prompt in its own logs,
+///         and prompts are privacy-sensitive: keeping the forward at Debug ensures a normal Information-level deployment
+///         never persists a prompt, while a developer can still opt into the backend/device banner at Debug.
+///     </para>
+///     <para>
+///         The same drained output is the ONLY place sd-server reports sampling progress — its HTTP job contract has no
+///         step or percent field at all. Each frame is therefore offered to <see cref="SdProgressLineParser" /> and only
+///         the PARSED result (phase plus step counters, never the text) is published to
+///         <see cref="IImageServerProgressBroker" />, so the prompt that may sit in a log line cannot ride the progress
+///         path out to the status hub.
+///     </para>
+///     <para>
+///         Framing is delegated to <see cref="SdOutputFrameSplitter" /> rather than <c>BeginOutputReadLine</c>, which
+///         cannot surface sd.cpp's leading-carriage-return progress bar in time — see that type's remarks.
+///     </para>
 /// </remarks>
 internal sealed class ImageServerProcessLauncher : IImageServerProcessLauncher
 {
-    private readonly ILogger<ImageServerProcessLauncher> _logger;
+    /// <summary>Drain read size. Bounds one read only; the splitter reassembles frames across reads.</summary>
+    private const int DrainBufferLength = 4096;
 
-    public ImageServerProcessLauncher(ILogger<ImageServerProcessLauncher> logger)
+    private readonly ILogger<ImageServerProcessLauncher> _logger;
+    private readonly IImageServerProgressBroker _progressBroker;
+
+    public ImageServerProcessLauncher(ILogger<ImageServerProcessLauncher> logger, IImageServerProgressBroker progressBroker)
     {
         ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(progressBroker);
         _logger = logger;
+        _progressBroker = progressBroker;
     }
 
     /// <inheritdoc />
@@ -104,10 +123,6 @@ internal sealed class ImageServerProcessLauncher : IImageServerProcessLauncher
             StartInfo = startInfo
         };
 
-        // Drain both streams so the pipes never fill and stall the child; forward at Debug (see remarks — prompt privacy).
-        process.OutputDataReceived += (_, e) => ForwardLine(label, e.Data);
-        process.ErrorDataReceived += (_, e) => ForwardLine(label, e.Data);
-
         try
         {
             if (!process.Start())
@@ -115,8 +130,9 @@ internal sealed class ImageServerProcessLauncher : IImageServerProcessLauncher
                 throw new StableDiffusionRuntimeException("The image runtime process did not start.");
             }
 
-            process.BeginOutputReadLine();
-            process.BeginErrorReadLine();
+            // Drain both streams so the pipes never fill and stall the child.
+            StartDrain(process.StandardOutput, label);
+            StartDrain(process.StandardError, label);
         }
         catch (StableDiffusionRuntimeException)
         {
@@ -132,6 +148,49 @@ internal sealed class ImageServerProcessLauncher : IImageServerProcessLauncher
         return process;
     }
 
+    /// <summary>
+    ///     Starts the detached drain loop for one of the child's streams. Detached on purpose: the handle owns the
+    ///     process lifetime, and the loop ends by itself at EOF when the process exits or is tree-killed.
+    /// </summary>
+    private void StartDrain(StreamReader reader, string label)
+    {
+        _ = Task.Run(() => DrainAsync(reader, label));
+    }
+
+    /// <summary>
+    ///     Reads one stream to EOF, feeding it through the frame splitter. Reads into a char buffer rather than calling
+    ///     <c>ReadLineAsync</c>, whose carriage-return handling waits to see whether a line feed follows — the exact
+    ///     one-frame stall the splitter exists to avoid.
+    /// </summary>
+    private async Task DrainAsync(StreamReader reader, string label)
+    {
+        var buffer = new char[DrainBufferLength];
+        var splitter = new SdOutputFrameSplitter(frame => ForwardLine(label, frame));
+
+        try
+        {
+            while (true)
+            {
+                var read = await reader.ReadAsync(buffer).ConfigureAwait(false);
+                if (read == 0)
+                {
+                    break;
+                }
+
+                splitter.Append(buffer.AsSpan(start: 0, read));
+            }
+        }
+        catch (Exception exception)
+        {
+            // The stream dies with the process (a tree-kill closes the pipe mid-read). Losing the tail of the log is
+            // expected there and must never surface as an unobserved task exception.
+            _logger.LogDebug(exception, "sd-server[{Label}] output drain ended.", label);
+        }
+
+        // Whatever the child wrote without a trailing terminator before EOF is still worth forwarding.
+        splitter.Flush();
+    }
+
     private void ForwardLine(string label, string? line)
     {
         if (string.IsNullOrWhiteSpace(line))
@@ -141,5 +200,11 @@ internal sealed class ImageServerProcessLauncher : IImageServerProcessLauncher
 
         // Debug, not Information: sd-server may echo the prompt; keep it out of the default app log.
         _logger.LogDebug("sd-server[{Label}] {Line}", label, line);
+
+        // Only the PARSED observation crosses the progress seam — never the line itself.
+        if (SdProgressLineParser.TryParse(line, out var observation))
+        {
+            _progressBroker.Publish(label, observation);
+        }
     }
 }

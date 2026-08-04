@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { resetSharedHubConnectionsForTest } from "@/core/api/signalr/SharedHubConnection";
 import { IMAGE_JOB_STATUS_CHANGED } from "@/features/images/models/ImageModels";
-import { useImageJobHub } from "@/features/images/hooks/useImageJobHub";
+import { imageJobProgressKey, useImageJobHub } from "@/features/images/hooks/useImageJobHub";
 
 // Captured event handlers registered via connection.on, so a test can drive a server push by name.
 const registeredHandlers = new Map<string, (payload: unknown) => void>();
@@ -71,7 +71,7 @@ function renderHub(jobIds: readonly string[]) {
 	function Wrapper({ children }: { children: ReactNode }) {
 		return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
 	}
-	return { ...renderHook(({ ids }) => useImageJobHub(ids), { wrapper: Wrapper, initialProps: { ids: jobIds } }), invalidateSpy };
+	return { ...renderHook(({ ids }) => useImageJobHub(ids), { wrapper: Wrapper, initialProps: { ids: jobIds } }), invalidateSpy, queryClient };
 }
 
 describe("useImageJobHub", () => {
@@ -94,7 +94,7 @@ describe("useImageJobHub", () => {
 		expect(invokeSpy).toHaveBeenCalledWith("Subscribe", "job-2");
 	});
 
-	it("invalidates the jobs cache on a status push", async () => {
+	it("invalidates the jobs cache when the coarse status moves", async () => {
 		const { invalidateSpy } = renderHub(["job-1"]);
 		await waitFor(() => expect(registeredHandlers.has(IMAGE_JOB_STATUS_CHANGED)).toBe(true));
 
@@ -102,17 +102,62 @@ describe("useImageJobHub", () => {
 		expect(invalidateSpy).toHaveBeenCalledTimes(1);
 	});
 
-	it("dedupes a replayed push with a non-increasing seq", async () => {
+	// A step tick changes nothing the list endpoint serves, and a running job emits one about every second. Refetching
+	// the whole job list on each would be pure churn — the live detail is already in the push.
+	it("does not refetch the job list for a step tick within the same status", async () => {
 		const { invalidateSpy } = renderHub(["job-1"]);
 		await waitFor(() => expect(registeredHandlers.has(IMAGE_JOB_STATUS_CHANGED)).toBe(true));
 
-		push(basePush("job-1", 2));
-		push(basePush("job-1", 2)); // duplicate seq — must be ignored
-		push(basePush("job-1", 1)); // stale replay (lower seq) — must be ignored
-		expect(invalidateSpy).toHaveBeenCalledTimes(1);
+		push({ ...basePush("job-1", 1), generationPhase: "Sampling", step: 4, totalSteps: 20 });
+		push({ ...basePush("job-1", 2), generationPhase: "Sampling", step: 5, totalSteps: 20 });
+		push({ ...basePush("job-1", 3), generationPhase: "Sampling", step: 6, totalSteps: 20 });
 
-		push(basePush("job-1", 3)); // newer seq — must invalidate again
+		expect(invalidateSpy).toHaveBeenCalledTimes(1);
+	});
+
+	it("refetches again on the terminal transition", async () => {
+		const { invalidateSpy } = renderHub(["job-1"]);
+		await waitFor(() => expect(registeredHandlers.has(IMAGE_JOB_STATUS_CHANGED)).toBe(true));
+
+		push(basePush("job-1", 1));
+		push({ ...basePush("job-1", 2), phase: "Succeeded" });
+
 		expect(invalidateSpy).toHaveBeenCalledTimes(2);
+	});
+
+	// The load-bearing regression: the hook used to parse the push, dedupe on seq, then throw every other field away.
+	// The generation timeline exists ONLY in the push (the runtime reads it off the daemon's stdout), so a discarded
+	// payload means no amount of refetching can ever produce it.
+	it("writes the generation timeline from the push into the cache", async () => {
+		const { queryClient } = renderHub(["job-1"]);
+		await waitFor(() => expect(registeredHandlers.has(IMAGE_JOB_STATUS_CHANGED)).toBe(true));
+
+		push({
+			...basePush("job-1", 1),
+			generationPhase: "Sampling",
+			step: 12,
+			totalSteps: 20,
+			secondsPerIteration: 2,
+			estimatedRemainingMs: 16_000,
+		});
+
+		expect(queryClient.getQueryData(imageJobProgressKey("job-1"))).toMatchObject({
+			generationPhase: "Sampling",
+			step: 12,
+			totalSteps: 20,
+			estimatedRemainingMs: 16_000,
+		});
+	});
+
+	it("dedupes a replayed push with a non-increasing seq", async () => {
+		const { queryClient } = renderHub(["job-1"]);
+		await waitFor(() => expect(registeredHandlers.has(IMAGE_JOB_STATUS_CHANGED)).toBe(true));
+
+		push({ ...basePush("job-1", 2), generationPhase: "Sampling", step: 8, totalSteps: 20 });
+		push({ ...basePush("job-1", 2), generationPhase: "Sampling", step: 3, totalSteps: 20 }); // duplicate seq — ignored
+		push({ ...basePush("job-1", 1), generationPhase: "Sampling", step: 2, totalSteps: 20 }); // stale replay — ignored
+
+		expect(queryClient.getQueryData(imageJobProgressKey("job-1"))).toMatchObject({ step: 8 });
 	});
 
 	it("tracks seq independently per job", async () => {

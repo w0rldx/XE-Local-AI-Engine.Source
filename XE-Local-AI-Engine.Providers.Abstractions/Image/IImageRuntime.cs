@@ -9,11 +9,15 @@ namespace XE_Local_AI_Engine.Providers.Abstractions.Image;
 public interface IImageRuntime
 {
     /// <summary>
-    ///     Generates an image for <paramref name="request" />, pushing coarse phase transitions
+    ///     Generates an image for <paramref name="request" />, pushing phase transitions
     ///     (queued → generating → completed/failed) to <paramref name="progress" />, and returns the decoded result.
     /// </summary>
     /// <param name="request">The generation parameters (prompt, size, steps, sampler, seed, model).</param>
-    /// <param name="progress">Receives coarse <see cref="ImageGenProgress" /> transitions; NO step/percent detail.</param>
+    /// <param name="progress">
+    ///     Receives <see cref="ImageGenProgress" /> transitions. An implementation that can observe the fine phases
+    ///     (load / encode / sample / decode) also reports a sampling step count and an estimate; one that cannot reports
+    ///     only the coarse transitions, leaving every optional field <see langword="null" />.
+    /// </param>
     /// <param name="ct">
     ///     Cancels the generation. A still-queued job is cancelled cleanly over HTTP; a job already generating is aborted
     ///     by tree-killing and restarting the runtime daemon (sd-server cannot interrupt an in-flight generation).
