@@ -67,7 +67,7 @@ This one value propagates everywhere — there is no second place to edit:
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **About dialog** (in-app) | Vite injects `VITE_APP_VERSION` at build time via `XE-Local-AI-Engine.Client.React/vite.config.ts` → `resolveAppVersion()`, which reads `Directory.Build.props`. |
 | **Windows tester RC**     | `publish/package-tester-win.ps1` reads the two props, validates an optional `-Version` assertion, and passes the composed value to Velopack.                   |
-| **Manual portable zip**   | `publish/package-rc.sh` → `read_version()` reads the two props → `xe-local-ai-engine-<version>-<rid>.zip`.                                                       |
+| **Manual portable zip**   | `publish/package-rc.sh` → `read_version()` reads the two props → the versioned folder *inside* the zip, `xe-local-ai-engine-<version>-<rid>/`.                   |
 | **Velopack package**      | `publish/package-tester-win.ps1` passes the composed value as `--packVersion`. (`.github/workflows/release.yml` does the same, but is disabled — see below.)     |
 | **Source git tag**        | Convention `vX.Y.Z[-suffix]`, e.g. `v0.1.0-rc.4.2` — must match the composed version. Created on HEAD of `w0rldx/XE-Local-AI-Engine`.                            |
 | **Tester release tag**    | Created on `w0rldx/XE-Local-AI-Engine.Tester-App` by `vpk upload github --tag v<version>`. Releases up to `0.1.0-rc.4.1` are **bare**-tagged; see above.        |
@@ -240,7 +240,7 @@ normal shippable artifact and no marker.
 `publish/package-rc.sh` builds a self-contained manual zip an external tester unzips and
 runs. It is a **bash script — you run it on Linux/WSL** — but it produces zips for
 **both** `linux-x64` and `win-x64` by default, cross-building the Windows one. The version
-is read from `Directory.Build.props` and baked into the filename.
+is read from `Directory.Build.props` and baked into the folder inside each zip.
 
 ```sh
 publish/package-rc.sh                            # BOTH rids: linux-x64 and win-x64
@@ -254,8 +254,31 @@ publish/package-rc.sh --rid linux-x64 --skip-web # reuse the existing React dist
 > exists and why it is the path for anything a tester will actually receive. Note that a
 > bare `--skip-web` still builds **both** RIDs — pass `--rid` too if you only wanted one.
 
-Output (git-ignored): `publish/dist/xe-local-ai-engine-<version>-<rid>.zip` plus a
-`.sha256` sidecar. The script builds the React SPA, publishes the single-file
+Output (git-ignored), in `publish/dist/`, each with a `.sha256` sidecar:
+
+| RID | Download name | Unzips to |
+| --- | --- | --- |
+| `linux-x64` | `XE-Local-AI-Engine-<version>-linux-Portable.zip` | `xe-local-ai-engine-<version>-linux-x64/` |
+| `win-x64` | `xe-local-ai-engine-<version>-win-x64.zip` | `xe-local-ai-engine-<version>-win-x64/` |
+
+**The Linux name follows Path A's Velopack asset on purpose** — a release page then lists
+`XE-Local-AI-Engine-win-Portable.zip` beside `XE-Local-AI-Engine-<version>-linux-Portable.zip`,
+one naming scheme for testers instead of two. It keeps the version rather than matching the
+Windows asset character-for-character: a download that names its own version is worth more than
+an exact match, and a tester holding both files can still tell them apart. `linux` is the
+Velopack *channel* token, not the RID — matching `win` on the other side, and
+forward-compatible with a future `vpk pack --channel linux`.
+
+**`win-x64` deliberately keeps its own lowercase shape.** This script's Windows zip is
+cross-built and never smoke-tested on Windows; dressing it in the naming scheme of the artifact
+the tester docs teach people to verify by invites confusing the two on a release page. That
+scheme belongs to `package-tester-win.ps1` alone.
+
+The **folder inside** each zip stays versioned in both cases: these bundles never self-update,
+so "unzip the new one, delete the old folder" is only checkable if the extracted folder says
+which version it is.
+
+The script builds the React SPA, publishes the single-file
 self-contained binary, stages it with the launcher + uninstaller + `READ-ME-FIRST.txt` +
 `LICENSE` and `NOTICE`, refuses to ship if any per-node runtime/state file leaked in, then
 zips and checksums it.

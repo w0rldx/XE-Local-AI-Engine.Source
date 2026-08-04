@@ -19,7 +19,10 @@
 #   publish/package-rc.sh --rid win-x64   # one RID
 #   publish/package-rc.sh --skip-web      # reuse the existing React dist (skip pnpm build)
 #
-# Output: publish/dist/xe-local-ai-engine-<version>-<rid>.zip (+ .sha256)
+# Output (in publish/dist/, each with a .sha256 sidecar):
+#   linux-x64  XE-Local-AI-Engine-<version>-linux-Portable.zip  — Velopack-style, matching the Windows asset
+#   win-x64    xe-local-ai-engine-<version>-win-x64.zip         — NOT the shipped Velopack naming scheme
+# Both unzip to a versioned folder: xe-local-ai-engine-<version>-<rid>/
 
 set -euo pipefail
 
@@ -53,7 +56,7 @@ while [[ $# -gt 0 ]]; do
       [[ $# -ge 2 ]] || { echo "Error: --rid needs a value (win-x64 | linux-x64)." >&2; exit 2; }
       RIDS=("$2"); shift 2 ;;
     --skip-web) SKIP_WEB=1; shift ;;
-    -h|--help) sed -n '2,22p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    -h|--help) sed -n '2,25p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *) echo "Error: unknown argument '$1'." >&2; exit 2 ;;
   esac
 done
@@ -259,7 +262,7 @@ make_zip() {
 }
 
 package_rid() {
-  local rid="$1" version="$2" exe os base stage pub zip_path
+  local rid="$1" version="$2" exe os base artifact stage pub zip_path
   case "${rid}" in
     win-x64)   os="windows"; exe="XE-Local-AI-Engine.Client.exe" ;;
     linux-x64) os="linux";   exe="XE-Local-AI-Engine.Client" ;;
@@ -273,7 +276,30 @@ package_rid() {
   pub="${CLIENT_PROJECT}/bin/Release/net10.0/${rid}/publish"
   [[ -f "${pub}/${exe}" ]] || { echo "Error: expected published binary not found at ${pub}/${exe}." >&2; exit 1; }
 
+  # Two names, deliberately different.
+  #
+  # `base` names the folder INSIDE the zip and stays versioned. These bundles never self-update, so the
+  # documented upgrade path is "unzip the new one, delete the old folder" — which a tester can only carry out
+  # correctly if the extracted folder states which version it is. Velopack has no equivalent need: it manages
+  # its own install layout.
+  #
+  # `artifact` is the download name on the release page. linux-x64 follows the shape of the Velopack portable
+  # asset that publish/package-tester-win.ps1 uploads (XE-Local-AI-Engine-win-Portable.zip) so a tester reads
+  # one naming scheme across both platforms, but keeps the version: a downloaded file that names its own
+  # version is worth more than an exact character match with the Windows asset, and a tester who has both
+  # sitting in ~/Downloads can still tell them apart. The token is `linux` (the Velopack CHANNEL) rather than
+  # the `linux-x64` RID for the same reason `win` is not `win-x64` over there — and it is what a future
+  # `vpk pack --channel linux` would emit, so the name survives the Linux side moving onto the update feed.
+  #
+  # win-x64 keeps its own lowercase shape. What this script cross-builds on Linux is a non-self-updating
+  # bundle that no one has smoke-tested on Windows; dressing it in the naming scheme of the artifact the
+  # tester docs teach people to verify by (Tester-App docs/download-from-github.md, docs/install-windows.md)
+  # invites confusing the two on a release page. That scheme belongs to publish/package-tester-win.ps1 alone.
   base="xe-local-ai-engine-${version}-${rid}"
+  case "${rid}" in
+    linux-x64) artifact="XE-Local-AI-Engine-${version}-linux-Portable" ;;
+    *)         artifact="${base}" ;;
+  esac
   stage="${DIST_DIR}/stage/${base}"
   rm -rf "${stage}"; mkdir -p "${stage}"
   cp -r "${pub}/." "${stage}/"
@@ -293,12 +319,14 @@ package_rid() {
   # Refuse to ship placeholder configuration, or an updater this bundle could never honour.
   assert_app_config_sane "${stage}"
 
-  zip_path="${DIST_DIR}/${base}.zip"
+  # make_zip already separates the archived folder (${base}) from the archive path (${zip_path}), so the
+  # versioned inner folder and the Velopack-shaped download name coexist without special-casing anything.
+  zip_path="${DIST_DIR}/${artifact}.zip"
   make_zip "${DIST_DIR}/stage" "${base}" "${zip_path}"
-  ( cd "${DIST_DIR}" && sha256sum "${base}.zip" >"${base}.zip.sha256" )
+  ( cd "${DIST_DIR}" && sha256sum "${artifact}.zip" >"${artifact}.zip.sha256" )
   rm -rf "${stage}"
-  echo ">> Built ${zip_path}"
-  ( cd "${DIST_DIR}" && du -h "${base}.zip" | cut -f1 | xargs -I{} echo "   size {}  sha256 $(cut -d' ' -f1 "${base}.zip.sha256")" )
+  echo ">> Built ${zip_path} (unzips to ${base}/)"
+  ( cd "${DIST_DIR}" && du -h "${artifact}.zip" | cut -f1 | xargs -I{} echo "   size {}  sha256 $(cut -d' ' -f1 "${artifact}.zip.sha256")" )
 }
 
 main() {
