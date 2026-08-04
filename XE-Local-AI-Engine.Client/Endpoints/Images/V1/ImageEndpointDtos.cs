@@ -239,10 +239,46 @@ public sealed class ImageModelDownloadStatusResponse
 
     /// <summary>Operator-safe failure reason; non-<c>null</c> only when <see cref="Phase" /> is <c>Failed</c>.</summary>
     public string? SanitizedError { get; init; }
+
+    /// <summary>
+    ///     1-based index of the weight file currently transferring within the set; <c>null</c> until the first progress
+    ///     event. An image model is a file <b>set</b>, so this is what lets the UI say "part 2 of 3".
+    /// </summary>
+    public int? PartIndex { get; init; }
+
+    /// <summary>Number of weight files in the set; <c>null</c> until the first progress event.</summary>
+    public int? PartCount { get; init; }
 }
 
 /// <summary>Response envelope for <c>GET images/models/downloads</c>.</summary>
 public sealed class ListImageModelDownloadsResponse
 {
     public required IReadOnlyList<ImageModelDownloadStatusResponse> Items { get; init; }
+}
+
+/// <summary>Request body for <c>POST images/models/downloads/cancel</c>.</summary>
+public sealed class CancelImageModelDownloadRequest
+{
+    /// <summary>The model name whose in-flight download should be stopped.</summary>
+    public required string ModelName { get; init; }
+}
+
+/// <summary>Response for <c>POST images/models/downloads/cancel</c>.</summary>
+public sealed class CancelImageModelDownloadResponse
+{
+    /// <summary>Echo of the requested model name, so the caller can match the reply to the row it clicked.</summary>
+    public required string ModelName { get; init; }
+
+    /// <summary>
+    ///     <c>true</c> when a running download was signalled to stop; <c>false</c> when nothing was in flight (the
+    ///     download had already finished, or never started). Both are success — cancelling is idempotent.
+    /// </summary>
+    public required bool Cancelled { get; init; }
+}
+
+/// <summary>Route request for <c>DELETE images/models/{modelName}</c>.</summary>
+public sealed class DeleteImageModelRequest
+{
+    /// <summary>The installed model to remove, from the route.</summary>
+    public required string ModelName { get; init; }
 }

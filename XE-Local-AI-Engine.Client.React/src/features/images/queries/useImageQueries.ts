@@ -2,7 +2,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
 	cancelImageJobMutation,
+	cancelImageModelDownloadMutation,
 	createImageJobMutation,
+	deleteImageModelMutation,
 	listImageJobsOptions,
 	listImageModelDownloadsOptions,
 	listImageModelsOptions,
@@ -119,5 +121,34 @@ export function useStartImageModelDownload() {
 			await invalidate(queryClient, imageQueryIds.models);
 			await invalidate(queryClient, imageQueryIds.downloads);
 		},
+	});
+}
+
+// Cancels an in-flight file-set pull. Idempotent by contract — a 200 with `cancelled: false` means the download had
+// already finished, which is a race on a stale row rather than an error. Invalidates the downloads list so the row
+// reflects the terminal phase without waiting for the next poll tick.
+export function useCancelImageModelDownload() {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: async (modelName: string) => {
+			const options = withResponseValidation(cancelImageModelDownloadMutation());
+			return await options.mutationFn?.({ body: { modelName } }, undefined as never);
+		},
+		onSuccess: () => invalidate(queryClient, imageQueryIds.downloads),
+	});
+}
+
+// Removes an installed model's weights and registry entry. Without it a node that has installed several multi-gigabyte
+// file-sets has no in-app way to reclaim the disk. Invalidates the installed-models list so the row disappears.
+export function useDeleteImageModel() {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: async (modelName: string) => {
+			const options = withResponseValidation(deleteImageModelMutation());
+			return await options.mutationFn?.({ path: { modelName } }, undefined as never);
+		},
+		onSuccess: () => invalidate(queryClient, imageQueryIds.models),
 	});
 }

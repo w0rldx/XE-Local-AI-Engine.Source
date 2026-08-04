@@ -111,24 +111,62 @@ internal sealed class HuggingFaceImageModelStore : IImageModelStore
             var resolvedRevision = revision;
             long totalBytes = 0;
 
+            var partCount = request.Parts.Count;
+            // A set total is only honest when EVERY part declares a size: summing the known ones would report a total
+            // the transfer will overshoot, and a progress bar that passes 100% is worse than one that admits it cannot
+            // compute a percentage.
+            long? knownSetTotal = request.Parts.All(part => part.SizeBytes is > 0)
+                ? request.Parts.Sum(part => part.SizeBytes!.Value)
+                : null;
+            var partIndex = 0;
+
             try
             {
                 foreach (var partRequest in request.Parts)
                 {
+                    partIndex++;
                     EnsureSafeFileName(partRequest.FileName);
 
                     // Hard containment guard: every part lands under {ModelsDirectory}/{safe-model-dir}/, never outside it.
                     var relativePath = $"{modelDirectory}/{partRequest.FileName}";
                     var destinationPath = GgufFilePath.ResolveContainedPath(_options.ModelsDirectory, relativePath);
 
+                    // Reuse a part this model already has. The registry entry is only written once the WHOLE set
+                    // succeeds, so without this a set that failed on its last part re-downloads every earlier part from
+                    // scratch on the next attempt — tens of gigabytes of pointless transfer for a multi-part model.
+                    if (TryReuseCompletedPart(destinationPath, partRequest, out var reusedSize))
+                    {
+                        totalBytes += reusedSize;
+                        parts.Add(new ImageModelPart
+                        {
+                            Role = partRequest.Role,
+                            FileName = partRequest.FileName,
+                            LocalPath = destinationPath,
+                            SizeBytes = reusedSize,
+                            Sha256 = partRequest.Sha256
+                        });
+                        continue;
+                    }
+
+                    // Report set-relative bytes so a multi-part download shows one advancing bar instead of a bar that
+                    // fills and snaps back to zero once per part.
+                    var partProgress = progress is null
+                        ? null
+                        // totalBytes is the running sum of every part already finished, i.e. exactly the set-relative
+                        // offset this part's byte counts must be added to.
+                        : new SetProgressAdapter(progress, request.ModelName, totalBytes, knownSetTotal, partIndex, partCount);
+
                     var result = await _downloadClient.DownloadAsync(request.RepoId,
                         partRequest.FileName,
                         revision,
                         request.ModelName,
                         destinationPath,
-                        expectedSizeBytes: 0,
+                        // A real size makes the pre-flight disk check actually run (it early-returns on 0). Checking per
+                        // part is enough for the whole set: each check reads CURRENT free space, and earlier parts have
+                        // already been written by the time a later one is checked.
+                        partRequest.SizeBytes ?? 0,
                         partRequest.Sha256,
-                        progress,
+                        partProgress,
                         ct).ConfigureAwait(false);
 
                     if (!string.IsNullOrEmpty(result.ResolvedRevision))
@@ -282,6 +320,92 @@ internal sealed class HuggingFaceImageModelStore : IImageModelStore
         catch (IOException)
         {
             // Best-effort delete; the registry entry is removed regardless so the model is no longer offered.
+        }
+    }
+
+    /// <summary>
+    ///     Decides whether a part already on disk can be kept instead of re-downloaded, returning its size when it can.
+    /// </summary>
+    /// <remarks>
+    ///     Reuse requires a <b>declared</b> size that matches the file exactly. Without a declared size there is nothing
+    ///     to check the file against — a truncated leftover would be indistinguishable from a complete one — so the part
+    ///     is re-downloaded, which is the previous behaviour. Length is deliberately the only check: hashing a 13 GB
+    ///     diffusion weight to save re-downloading it would cost a large fraction of the transfer it avoids, and the
+    ///     download path still verifies the sha of anything it actually fetches.
+    /// </remarks>
+    private static bool TryReuseCompletedPart(string destinationPath, ImageModelPartRequest partRequest, out long sizeBytes)
+    {
+        sizeBytes = 0;
+        if (partRequest.SizeBytes is not > 0)
+        {
+            return false;
+        }
+
+        try
+        {
+            var info = new FileInfo(destinationPath);
+            if (!info.Exists || info.Length != partRequest.SizeBytes.Value)
+            {
+                return false;
+            }
+
+            sizeBytes = info.Length;
+            return true;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // Unreadable for any reason: fall through to a normal download rather than guessing.
+            return false;
+        }
+    }
+
+    /// <summary>
+    ///     Re-frames one part's byte counts as progress through the whole file-set.
+    /// </summary>
+    /// <remarks>
+    ///     The underlying download client reports bytes for the single file it is transferring. Forwarding that
+    ///     unchanged makes a three-part model fill its bar and snap back to zero twice, which reads as a failure and a
+    ///     restart. Offsetting by the bytes already finished — and reporting the set total when every part declared a
+    ///     size — turns it into one monotonic bar. <see cref="PullProgress.PartIndex" />/<see cref="PullProgress.PartCount" />
+    ///     let the UI name the file being fetched.
+    /// </remarks>
+    private sealed class SetProgressAdapter : IProgress<PullProgress>
+    {
+        private readonly long _completedInPriorParts;
+        private readonly IProgress<PullProgress> _inner;
+        private readonly string _modelName;
+        private readonly int _partCount;
+        private readonly int _partIndex;
+        private readonly long? _setTotalBytes;
+
+        public SetProgressAdapter(IProgress<PullProgress> inner,
+            string modelName,
+            long completedInPriorParts,
+            long? setTotalBytes,
+            int partIndex,
+            int partCount)
+        {
+            _inner = inner;
+            _modelName = modelName;
+            _completedInPriorParts = completedInPriorParts;
+            _setTotalBytes = setTotalBytes;
+            _partIndex = partIndex;
+            _partCount = partCount;
+        }
+
+        public void Report(PullProgress value)
+        {
+            _inner.Report(new PullProgress
+            {
+                ModelName = _modelName,
+                Status = value.Status,
+                // Fall back to this part's own total only when the set total is unknown, so the bar is either
+                // set-relative throughout or part-relative throughout — never a silent mix of the two.
+                TotalBytes = _setTotalBytes ?? value.TotalBytes,
+                CompletedBytes = _completedInPriorParts + (value.CompletedBytes ?? 0),
+                PartIndex = _partIndex,
+                PartCount = _partCount
+            });
         }
     }
 }

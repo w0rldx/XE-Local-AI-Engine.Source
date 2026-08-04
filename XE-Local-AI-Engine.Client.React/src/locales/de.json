@@ -3123,7 +3123,6 @@
 				"download": {
 					"title": "Modell herunterladen",
 					"started": "Download gestartet. Das Modell erscheint, sobald es bereit ist.",
-					"inFlight": "Der Download läuft im Hintergrund; das Modell erscheint, sobald es bereit ist. Große Dateien können mehrere Minuten dauern.",
 					"failed": "Der Modell-Download ist fehlgeschlagen.",
 					"progress": "Wird heruntergeladen… {{percent}} %",
 					"error": "Der Modell-Download konnte nicht gestartet werden.",
@@ -3140,7 +3139,26 @@
 					},
 					"family": {
 						"label": "Familie"
-					}
+					},
+					"cancel": "Abbrechen",
+					"cancelError": "Der Download konnte nicht abgebrochen werden.",
+					"dismissError": "Schließen",
+					"part": "Teil {{index}} von {{count}}",
+					"speed": "{{value}}/s",
+					"eta": "noch ca. {{duration}}",
+					"transferred": "{{completed}} übertragen",
+					"starting": "Wird gestartet…",
+					"bytesOf": "{{completed}} / {{total}}",
+					"progressAriaLabel": "Download-Fortschritt"
+				},
+				"delete": {
+					"action": "Modell löschen",
+					"title": "Bildmodell löschen",
+					"description": "'{{modelName}}' samt Gewichtsdateien löschen? Das kann nicht rückgängig gemacht werden.",
+					"confirm": "Löschen",
+					"cancel": "Abbrechen",
+					"deleted": "Modell gelöscht.",
+					"error": "Das Modell konnte nicht gelöscht werden."
 				}
 			},
 			"viewer": {

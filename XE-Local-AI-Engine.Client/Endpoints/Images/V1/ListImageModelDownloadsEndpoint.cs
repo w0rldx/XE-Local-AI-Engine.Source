@@ -31,7 +31,9 @@ public sealed class ListImageModelDownloadsEndpoint(IImageModelDownloadCoordinat
                                             Phase = status.Phase.ToString(),
                                             CompletedBytes = status.CompletedBytes,
                                             TotalBytes = status.TotalBytes,
-                                            SanitizedError = status.SanitizedError
+                                            SanitizedError = status.SanitizedError,
+                                            PartIndex = status.PartIndex,
+                                            PartCount = status.PartCount
                                         })
                                         .ToList();
 

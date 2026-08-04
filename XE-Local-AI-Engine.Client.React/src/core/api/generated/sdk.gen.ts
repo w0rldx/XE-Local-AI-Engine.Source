@@ -44,6 +44,9 @@ import type {
 	CancelImageJobData,
 	CancelImageJobErrors,
 	CancelImageJobResponses,
+	CancelImageModelDownloadData,
+	CancelImageModelDownloadErrors,
+	CancelImageModelDownloadResponses,
 	CancelLlamaCppSourceBuildData,
 	CancelLlamaCppSourceBuildErrors,
 	CancelLlamaCppSourceBuildResponses,
@@ -128,6 +131,9 @@ import type {
 	DeleteGoldenConversationData,
 	DeleteGoldenConversationErrors,
 	DeleteGoldenConversationResponses,
+	DeleteImageModelData,
+	DeleteImageModelErrors,
+	DeleteImageModelResponses,
 	DeleteKnowledgeDocumentData,
 	DeleteKnowledgeDocumentErrors,
 	DeleteKnowledgeDocumentResponses,
@@ -667,6 +673,8 @@ import {
 	zCancelGgufDownloadResponse,
 	zCancelImageJobPath,
 	zCancelImageJobResponse,
+	zCancelImageModelDownloadBody,
+	zCancelImageModelDownloadResponse,
 	zCancelLlamaCppSourceBuildResponse,
 	zCancelNodeBindingResponse,
 	zCancelNodeChatMessageBody,
@@ -718,6 +726,8 @@ import {
 	zDeleteConversationFileResponse,
 	zDeleteGoldenConversationPath,
 	zDeleteGoldenConversationResponse,
+	zDeleteImageModelPath,
+	zDeleteImageModelResponse,
 	zDeleteKnowledgeDocumentPath,
 	zDeleteKnowledgeDocumentResponse,
 	zDeleteLocalModelPath,
@@ -5839,4 +5849,49 @@ export const updateSuggestedPlaybookAction = <ThrowOnError extends boolean = fal
 			"Content-Type": "application/json",
 			...options.headers,
 		},
+	});
+
+export const cancelImageModelDownload = <ThrowOnError extends boolean = false>(
+	options: Options<CancelImageModelDownloadData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<CancelImageModelDownloadResponses, CancelImageModelDownloadErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zCancelImageModelDownloadBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zCancelImageModelDownloadResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/images/models/downloads/cancel",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const deleteImageModel = <ThrowOnError extends boolean = false>(options: Options<DeleteImageModelData, ThrowOnError>) =>
+	(options.client ?? client).delete<DeleteImageModelResponses, DeleteImageModelErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zDeleteImageModelPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseValidator: async (data) => await zDeleteImageModelResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/images/models/{modelName}",
+		...options,
 	});

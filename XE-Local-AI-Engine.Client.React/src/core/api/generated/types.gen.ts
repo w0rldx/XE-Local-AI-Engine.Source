@@ -1714,6 +1714,8 @@ export type XeLocalAiEngineClientEndpointsImagesV1ImageModelDownloadStatusRespon
 	completedBytes?: number | null;
 	totalBytes?: number | null;
 	sanitizedError?: string | null;
+	partIndex?: number | null;
+	partCount?: number | null;
 };
 
 export type XeLocalAiEngineClientEndpointsImagesV1ListImageModelsResponse = {
@@ -2642,6 +2644,19 @@ export type XeLocalAiEngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActionR
 	triggerCondition?: string | null;
 	scope?: string | null;
 	priority?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1CancelImageModelDownloadResponse = {
+	modelName: string;
+	cancelled: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1CancelImageModelDownloadRequest = {
+	modelName: string;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1DeleteImageModelRequest = {
+	[key: string]: never;
 };
 
 export type GetVoiceManifestData = {
@@ -8744,3 +8759,59 @@ export type UpdateSuggestedPlaybookActionResponses = {
 
 export type UpdateSuggestedPlaybookActionResponse =
 	UpdateSuggestedPlaybookActionResponses[keyof UpdateSuggestedPlaybookActionResponses];
+
+export type CancelImageModelDownloadData = {
+	body: XeLocalAiEngineClientEndpointsImagesV1CancelImageModelDownloadRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/images/models/downloads/cancel";
+};
+
+export type CancelImageModelDownloadErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type CancelImageModelDownloadResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsImagesV1CancelImageModelDownloadResponse;
+};
+
+export type CancelImageModelDownloadResponse = CancelImageModelDownloadResponses[keyof CancelImageModelDownloadResponses];
+
+export type DeleteImageModelData = {
+	body?: never;
+	path: {
+		modelName: string;
+	};
+	query?: never;
+	url: "/api/local/v1/images/models/{modelName}";
+};
+
+export type DeleteImageModelErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type DeleteImageModelResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type DeleteImageModelResponse = DeleteImageModelResponses[keyof DeleteImageModelResponses];

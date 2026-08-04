@@ -2073,6 +2073,16 @@ export const zXeLocalAiEngineClientEndpointsImagesV1ImageModelDownloadStatusResp
 	completedBytes: z.int().nullish(),
 	totalBytes: z.int().nullish(),
 	sanitizedError: z.string().nullish(),
+	partIndex: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	partCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsImagesV1ListImageModelDownloadsResponse = z.object({
@@ -3146,6 +3156,17 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActio
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.optional(),
 });
+
+export const zXeLocalAiEngineClientEndpointsImagesV1CancelImageModelDownloadResponse = z.object({
+	modelName: z.string(),
+	cancelled: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1CancelImageModelDownloadRequest = z.object({
+	modelName: z.string(),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1DeleteImageModelRequest = z.record(z.string(), z.never());
 
 /**
  * Success
@@ -4805,3 +4826,19 @@ export const zUpdateSuggestedPlaybookActionPath = z.object({
  * Success
  */
 export const zUpdateSuggestedPlaybookActionResponse = zXeLocalAiEngineClientEndpointsAgentsV1PlaybookActionResponse;
+
+export const zCancelImageModelDownloadBody = zXeLocalAiEngineClientEndpointsImagesV1CancelImageModelDownloadRequest;
+
+/**
+ * Success
+ */
+export const zCancelImageModelDownloadResponse = zXeLocalAiEngineClientEndpointsImagesV1CancelImageModelDownloadResponse;
+
+export const zDeleteImageModelPath = z.object({
+	modelName: z.string(),
+});
+
+/**
+ * No Content
+ */
+export const zDeleteImageModelResponse = z.void();
