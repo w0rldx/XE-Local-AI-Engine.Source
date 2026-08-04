@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Invocation;
 
+using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Models.Events;
 
 /// <summary>
@@ -21,7 +22,13 @@ public interface IInvocationRunner
 
     void CleanupStaleToolCalls(TimeSpan maxAge);
 
-    void ResolveApprovalResult(ApprovalResolvedEvent evt);
+    /// <summary>
+    ///     Releases a turn parked on a tool-approval request with the operator's decision. <paramref name="scope" /> is
+    ///     how long an APPROVE lasts and defaults to <see cref="ApprovalScope.Once" />, so the platform-hub path — which
+    ///     has no notion of session scope, and whose wire event deliberately does not carry one — keeps its exact
+    ///     previous behaviour. A deny is never remembered whatever the scope.
+    /// </summary>
+    void ResolveApprovalResult(ApprovalResolvedEvent evt, ApprovalScope scope = ApprovalScope.Once);
 
     /// <summary>
     ///     Releases a turn parked on an <c>ask_user</c> question by handing it the operator's answers. Mirrors

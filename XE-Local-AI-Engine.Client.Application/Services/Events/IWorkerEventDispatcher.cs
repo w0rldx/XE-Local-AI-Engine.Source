@@ -65,7 +65,14 @@ public interface IWorkerEventDispatcher
 
     Task DispatchDisconnectRequestedAsync(DisconnectRequestedEvent evt);
 
-    Task DispatchApprovalResolvedAsync(ApprovalResolvedEvent evt);
+    /// <summary>
+    ///     Carries an operator's approval decision to the runner. <paramref name="scope" /> is Application-internal and
+    ///     defaults to <see cref="ApprovalScope.Once" />: the platform hub path passes the wire
+    ///     <see cref="ApprovalResolvedEvent" /> unchanged (session scope is a loopback-only concept and deliberately
+    ///     absent from that cross-repo contract), while the loopback resolve endpoint can ask for a decision that lasts
+    ///     the rest of the conversation.
+    /// </summary>
+    Task DispatchApprovalResolvedAsync(ApprovalResolvedEvent evt, ApprovalScope scope = ApprovalScope.Once);
 
     Task DispatchInvocationCancelledAsync(InvocationCancelledEvent evt);
 

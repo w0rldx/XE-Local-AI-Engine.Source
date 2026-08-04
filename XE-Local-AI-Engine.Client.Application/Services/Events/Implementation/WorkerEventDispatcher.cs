@@ -352,17 +352,18 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
         return Task.CompletedTask;
     }
 
-    public Task DispatchApprovalResolvedAsync(ApprovalResolvedEvent evt)
+    public Task DispatchApprovalResolvedAsync(ApprovalResolvedEvent evt, ApprovalScope scope = ApprovalScope.Once)
     {
         ArgumentNullException.ThrowIfNull(evt);
 
         var currentInvocation = GetCurrentInvocationSnapshot();
 
-        _logger.LogInformation("Received approval resolution for request {RequestId}. Approved: {Approved}",
+        _logger.LogInformation("Received approval resolution for request {RequestId}. Approved: {Approved} Scope: {Scope}",
             evt.RequestId,
-            evt.Approved);
+            evt.Approved,
+            scope);
 
-        _invocationRunner.ResolveApprovalResult(evt);
+        _invocationRunner.ResolveApprovalResult(evt, scope);
 
         if (currentInvocation is null)
         {

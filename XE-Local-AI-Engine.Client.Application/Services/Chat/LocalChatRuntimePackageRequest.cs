@@ -18,4 +18,5 @@ public sealed record LocalChatRuntimePackageRequest(
     OrchestrationSpec? OrchestrationSpec = null,
     bool SupportsThinking = true,
     SamplingOptions? SamplingOptions = null,
-    IReadOnlyList<ResolvedSkill>? Skills = null);
+    IReadOnlyList<ResolvedSkill>? Skills = null,
+    bool IsUnattended = false);

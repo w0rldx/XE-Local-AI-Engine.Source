@@ -20,11 +20,23 @@ internal sealed class NodeToolApprovalPolicy : IToolApprovalPolicy
     private readonly IReadOnlyDictionary<string, bool> _toolOverrides;
 
     public NodeToolApprovalPolicy(IReadOnlyDictionary<ToolCategory, bool> categoryPolicy,
-        IReadOnlyDictionary<string, bool> toolOverrides)
+        IReadOnlyDictionary<string, bool> toolOverrides,
+        bool skillSessionScopeDisabled = false)
     {
         _categoryPolicy = categoryPolicy ?? throw new ArgumentNullException(nameof(categoryPolicy));
         _toolOverrides = toolOverrides ?? throw new ArgumentNullException(nameof(toolOverrides));
+        SkillSessionScopeDisabled = skillSessionScopeDisabled;
     }
+
+    /// <summary>
+    ///     The operator's "skill tools always prompt" switch: when <see langword="true" />, the invocation runner never
+    ///     remembers a session-scoped approval, so every skill-tool call raises its own approval card. It lives here
+    ///     rather than on <see cref="IToolApprovalPolicy" /> because that interface is the cross-project AI.Agent
+    ///     contract for a single yes/no verdict on ONE call — a node-only, duration-of-a-conversation knob has no place
+    ///     in it — and rather than on <c>INodeRuntimeSettings</c> because it belongs with the rest of the approval
+    ///     policy an operator edits in one block of <c>node-settings.json</c>.
+    /// </summary>
+    public bool SkillSessionScopeDisabled { get; }
 
     /// <inheritdoc />
     public bool RequiresApproval(string toolName, ToolCategory category, bool catalogDefault)
@@ -76,6 +88,6 @@ internal sealed class NodeToolApprovalPolicy : IToolApprovalPolicy
             }
         }
 
-        return new NodeToolApprovalPolicy(categoryPolicy, toolOverrides);
+        return new NodeToolApprovalPolicy(categoryPolicy, toolOverrides, settings?.DisableSkillSessionScope ?? false);
     }
 }

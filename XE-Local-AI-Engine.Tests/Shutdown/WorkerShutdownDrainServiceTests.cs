@@ -302,7 +302,7 @@ public sealed class WorkerShutdownDrainServiceTests
             return Task.CompletedTask;
         }
 
-        public Task DispatchApprovalResolvedAsync(ApprovalResolvedEvent evt)
+        public Task DispatchApprovalResolvedAsync(ApprovalResolvedEvent evt, ApprovalScope scope = ApprovalScope.Once)
         {
             return Task.CompletedTask;
         }
@@ -437,7 +437,7 @@ public sealed class WorkerShutdownDrainServiceTests
         {
         }
 
-        public void ResolveApprovalResult(ApprovalResolvedEvent evt)
+        public void ResolveApprovalResult(ApprovalResolvedEvent evt, ApprovalScope scope = ApprovalScope.Once)
         {
         }
 

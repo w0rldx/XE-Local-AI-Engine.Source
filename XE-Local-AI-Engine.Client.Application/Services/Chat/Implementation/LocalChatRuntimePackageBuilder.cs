@@ -46,6 +46,10 @@ public sealed class LocalChatRuntimePackageBuilder : ILocalChatRuntimePackageBui
             // Deliberately NOT fed into the config hash below (mirrors SupportsThinking): sampling is a loopback-only
             // per-send knob, so the no-override path keeps a byte-identical hash and the cross-repo digest stays stable.
             SamplingOptions = request.SamplingOptions,
+            // Deliberately NOT fed into the config hash below (mirrors SupportsThinking/SamplingOptions above): the
+            // unattended flag is an execution-context bit, not agent configuration, so the SAME agent run on a schedule
+            // and run interactively keep a byte-identical hash and the cross-repo digest stays stable.
+            IsUnattended = request.IsUnattended,
             RequestedCapabilities = request.RequestedCapabilities is null ? null : [.. request.RequestedCapabilities],
             Timeouts = timeouts,
             OrchestrationSpec = request.OrchestrationSpec,
