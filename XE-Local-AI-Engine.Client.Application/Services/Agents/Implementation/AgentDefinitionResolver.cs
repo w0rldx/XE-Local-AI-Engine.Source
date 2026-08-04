@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 
+using Microsoft.Agents.AI;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Instructions;
 using XE_Local_AI_Engine.AI.Agent.Tools;
@@ -105,6 +106,15 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
     ///     or description (privacy: dropped-skill warnings carry no encrypted content). An empty/null picklist short-
     ///     circuits with no store call so the no-skills path stays byte-identical to the pre-skills resolve.
     /// </summary>
+    /// <remarks>
+    ///     A skill whose stored Name no longer satisfies the Agent Skills specification is dropped here rather than
+    ///     carried forward. Rows predating the switch to <see cref="AgentSkillFrontmatter" /> validation may hold a
+    ///     name with consecutive hyphens, which the local regex once accepted; constructing an <c>AgentInlineSkill</c>
+    ///     from one throws <see cref="ArgumentException" /> and takes down the whole turn at agent-construction time —
+    ///     in both the invocation factory and the sub-agent spawn path. Dropping degrades one skill instead of failing
+    ///     the agent, matching the dropped-tool posture in <see cref="ProjectAllowedTools" />: degrade, log, never
+    ///     fabricate. This is the single choke point every skills consumer routes through, so the guard covers them all.
+    /// </remarks>
     private async Task<IReadOnlyList<ResolvedSkill>> ResolveSkillsAsync(AgentDefinitionRecord definition, CancellationToken cancellationToken)
     {
         var assignedIds = definition.AllowedSkillIds;
@@ -125,10 +135,34 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
                 string.Join(", ", droppedIds));
         }
 
-        return
-        [
-            .. enabled.Select(static skill => new ResolvedSkill(skill.Id, skill.Name, skill.Description, skill.Body, skill.Version))
-        ];
+        var resolved = new List<ResolvedSkill>(enabled.Count);
+        List<Guid>? unbuildableIds = null;
+        foreach (var skill in enabled)
+        {
+            // MAAI001: scoped suppression, same rationale as AgentSkillService — the frontmatter validator is the code
+            // AgentInlineSkill's constructor runs, so this predicts construction exactly.
+#pragma warning disable MAAI001
+            if (!AgentSkillFrontmatter.ValidateName(skill.Name, out _))
+#pragma warning restore MAAI001
+            {
+                (unbuildableIds ??= []).Add(skill.Id);
+                continue;
+            }
+
+            resolved.Add(new ResolvedSkill(skill.Id, skill.Name, skill.Description, skill.Body, skill.Version));
+        }
+
+        if (unbuildableIds is not null)
+        {
+            // Ids only — a dropped-skill warning never carries the encrypted Description/Body, and the Name is omitted
+            // too so a crafted name cannot shape a log line.
+            _logger.LogWarning("Agent definition {AgentDefinitionId} assigns {UnbuildableCount} skill(s) whose stored name is not a valid Agent Skills name ({UnbuildableSkillIds}); they were dropped so the agent can still be built. Rename them to restore the skill.",
+                definition.Id,
+                unbuildableIds.Count,
+                string.Join(", ", unbuildableIds));
+        }
+
+        return resolved;
     }
 
     /// <summary>

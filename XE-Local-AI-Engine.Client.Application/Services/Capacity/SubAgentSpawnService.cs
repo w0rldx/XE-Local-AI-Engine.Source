@@ -230,7 +230,7 @@ internal sealed class SubAgentSpawnService : ISubAgentSpawnService
         // Attach the resolved skills as a MAF progressive-disclosure provider, mirroring InvocationAgentFactory's skills
         // path so a saved sub-agent offers its own skills on demand. Empty/null leaves the construction byte-identical to
         // a no-skills child (no context provider attached).
-        AttachSkillsProvider(agentOptions, binding.Skills);
+        AttachSkillsProvider(agentOptions, binding.Skills, _logger);
 
         var agent = new ChatClientAgent(_chatClient, agentOptions, _loggerFactory);
 
@@ -358,7 +358,17 @@ internal sealed class SubAgentSpawnService : ISubAgentSpawnService
     // Builds a MAF AgentSkillsProvider from the resolved node skills and attaches it to the child agent's options,
     // mirroring InvocationAgentFactory.BuildAgent's skills path (name + description + body-as-instructions; no
     // scripts/resources in v1). Empty/null is a no-op so a no-skills child stays byte-identical.
-    private static void AttachSkillsProvider(ChatClientAgentOptions agentOptions, IReadOnlyList<ResolvedSkill>? skills)
+    //
+    // Skill-tool approval is waived for children, and only for children. MAF gates load_skill, read_skill_resource and
+    // run_skill_script behind approval by default, but these tools arrive through AIContextProviders and so bypass
+    // CurateChildTools, which strips approval-required tools precisely because a spawned child has no human-in-the-loop
+    // route. Left at the default a child would be handed a load_skill it can never get approved: every call fails
+    // silently and an assigned skill is simply unreachable. The parent's approval of the spawn is the consent, and the
+    // child's skill set is the parent's resolved set — no wider. run_skill_script keeps its gate: inline skills cannot
+    // carry scripts (AddScript takes only a delegate), so the tool always fails closed and must never be pre-approved.
+    private static void AttachSkillsProvider(ChatClientAgentOptions agentOptions,
+        IReadOnlyList<ResolvedSkill>? skills,
+        ILogger<SubAgentSpawnService> logger)
     {
         if (skills is not { Count: > 0 } resolvedSkills)
         {
@@ -378,9 +388,22 @@ internal sealed class SubAgentSpawnService : ISubAgentSpawnService
         }
 
 #pragma warning disable CA2000 // Ownership transfers to the ChatClientAgent via AIContextProviders; the agent disposes its context providers with itself.
-        agentOptions.AIContextProviders = [new AgentSkillsProvider(inlineSkills)];
+        agentOptions.AIContextProviders =
+        [
+            new AgentSkillsProvider(inlineSkills,
+                new AgentSkillsProviderOptions
+                {
+                    DisableLoadSkillApproval = true,
+                    DisableReadSkillResourceApproval = true
+                })
+        ];
 #pragma warning restore CA2000
 #pragma warning restore MAAI001
+
+        // Ids only: the waiver is auditable without a crafted skill name shaping a log line.
+        logger.LogInformation("Attached {SkillCount} skill(s) to a spawned sub-agent child with skill-read approval waived ({SkillIds}); the child has no human-in-the-loop approval route and the parent's spawn approval is the consent.",
+            resolvedSkills.Count,
+            string.Join(", ", resolvedSkills.Select(static skill => skill.Id)));
     }
 
     // Converts the profile's offer DTOs into the placeholder AITools InvocationToolResolver matches by name (mirrors the

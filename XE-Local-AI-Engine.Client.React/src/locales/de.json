@@ -3555,7 +3555,7 @@
 					"description": "Kleingeschriebener Bezeichner (z. B. invoice-review).",
 					"placeholder": "invoice-review",
 					"required": "Name ist erforderlich.",
-					"invalid": "Nur Kleinbuchstaben, Ziffern und Bindestriche verwenden (kein führender oder abschließender Bindestrich)."
+					"invalid": "Nur Kleinbuchstaben und Ziffern, getrennt durch einzelne Bindestriche (kein führender, abschließender oder doppelter Bindestrich)."
 				},
 				"description": {
 					"label": "Beschreibung",

@@ -112,7 +112,7 @@ export function SkillForm({
 		}
 		return values.name.trim().length === 0
 			? t("pages.skills.form.name.required", "Name is required.")
-			: t("pages.skills.form.name.invalid", "Use lowercase letters, digits and dashes only (no leading or trailing dash).");
+			: t("pages.skills.form.name.invalid", "Use lowercase letters and digits separated by single dashes (no leading, trailing or doubled dash).");
 	}, [nameIssue, values.name, t]);
 
 	return (

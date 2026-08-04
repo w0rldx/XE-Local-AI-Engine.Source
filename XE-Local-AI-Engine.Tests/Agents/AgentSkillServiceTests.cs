@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Agents;
 
+using Microsoft.Agents.AI;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
@@ -18,12 +19,15 @@ public sealed class AgentSkillServiceTests
         await AssertEx.ThrowsAsync<AgentSkillValidationException>(() =>
             service.CreateAsync(new AgentSkillInput("Bad Name", "desc", "body"))).ConfigureAwait(false);
 
-        // Leading and trailing dashes are rejected by the name regex (a doubled internal dash is permitted by the
-        // ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ shape — only the edge anchors forbid leading/trailing dashes).
+        // Leading, trailing AND consecutive dashes are all rejected. The consecutive case is the regression: the
+        // superseded ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ regex accepted "foo--bar", which MAF rejects, so the skill
+        // persisted here and then threw ArgumentException when built into an AgentInlineSkill.
         await AssertEx.ThrowsAsync<AgentSkillValidationException>(() =>
             service.CreateAsync(new AgentSkillInput("-leading", "desc", "body"))).ConfigureAwait(false);
         await AssertEx.ThrowsAsync<AgentSkillValidationException>(() =>
             service.CreateAsync(new AgentSkillInput("trailing-", "desc", "body"))).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<AgentSkillValidationException>(() =>
+            service.CreateAsync(new AgentSkillInput("foo--bar", "desc", "body"))).ConfigureAwait(false);
         await AssertEx.ThrowsAsync<AgentSkillValidationException>(() =>
             service.CreateAsync(new AgentSkillInput("UPPER", "desc", "body"))).ConfigureAwait(false);
 
@@ -37,6 +41,54 @@ public sealed class AgentSkillServiceTests
 
         // None of the rejected inputs reached the store.
         await store.DidNotReceive().CreateAsync(Arg.Any<AgentSkillInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+    }
+
+    // The defect this guards was a silent divergence: our validator and MAF's disagreed, so a name could pass here and
+    // then throw at agent-construction time. Asserting "we accept exactly what MAF accepts" — rather than re-stating
+    // the rule in a second regex — is the only form of this test that cannot drift back out of sync when the
+    // specification moves. Every rejection additionally proves the accompanying AgentInlineSkill construction claim.
+    [Test]
+    [Arguments("good-name")]
+    [Arguments("a")]
+    [Arguments("skill1")]
+    [Arguments("a-b-c")]
+    [Arguments("foo--bar")]
+    [Arguments("-leading")]
+    [Arguments("trailing-")]
+    [Arguments("UPPER")]
+    [Arguments("under_score")]
+    [Arguments("has space")]
+    [Arguments("dot.name")]
+    public async Task AgentSkillService_NameVerdict_MatchesMafFrontmatterExactly(string candidate)
+    {
+        var store = CreateEmptyStore();
+        var service = new AgentSkillService(store);
+
+#pragma warning disable MAAI001 // Scoped: the shipped validator is the authority under test.
+        var mafAccepts = AgentSkillFrontmatter.ValidateName(candidate, out _);
+#pragma warning restore MAAI001
+
+        var serviceAccepted = true;
+        try
+        {
+            await service.CreateAsync(new AgentSkillInput(candidate, "desc", "body")).ConfigureAwait(false);
+        }
+        catch (AgentSkillValidationException)
+        {
+            serviceAccepted = false;
+        }
+
+        AssertEx.Equal(mafAccepts, serviceAccepted,
+            $"The service and MAF must agree on the name '{candidate}'; a disagreement is the D1 defect class.");
+
+        // A name we accept must actually build into a MAF skill — the construction the invocation factory and the
+        // sub-agent spawn path both perform. Anything else is the same defect wearing a different hat.
+        if (serviceAccepted)
+        {
+#pragma warning disable MAAI001
+            _ = new AgentInlineSkill(candidate, "desc", "body");
+#pragma warning restore MAAI001
+        }
     }
 
     [Test]

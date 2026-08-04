@@ -130,7 +130,7 @@ describe("SkillForm", () => {
 		fireEvent.click(screen.getByTestId("harness-save"));
 
 		expect(onSubmit).not.toHaveBeenCalled();
-		expect(screen.getByText(/lowercase letters, digits and dashes/i)).toBeTruthy();
+		expect(screen.getByText(/lowercase letters and digits separated by single dashes/i)).toBeTruthy();
 	});
 
 	it("rejects a name with uppercase letters", () => {
@@ -139,19 +139,19 @@ describe("SkillForm", () => {
 		fireEvent.click(screen.getByTestId("harness-save"));
 
 		expect(onSubmit).not.toHaveBeenCalled();
-		expect(screen.getByText(/lowercase letters, digits and dashes/i)).toBeTruthy();
+		expect(screen.getByText(/lowercase letters and digits separated by single dashes/i)).toBeTruthy();
 	});
 
-	it("submits trimmed values when name (with internal dashes), description and body are valid", () => {
+	it("submits trimmed values when name (with single internal dashes), description and body are valid", () => {
 		const { onSubmit } = renderForm({
-			initialValues: { name: "invoice--review", description: "  How to review  ", body: "  # Body  " },
+			initialValues: { name: "invoice-review", description: "  How to review  ", body: "  # Body  " },
 		});
 
 		fireEvent.click(screen.getByTestId("harness-save"));
 
 		expect(onSubmit).toHaveBeenCalledTimes(1);
 		expect(onSubmit).toHaveBeenCalledWith(
-			expect.objectContaining({ name: "invoice--review", description: "How to review", body: "# Body" }),
+			expect.objectContaining({ name: "invoice-review", description: "How to review", body: "# Body" }),
 		);
 	});
 
