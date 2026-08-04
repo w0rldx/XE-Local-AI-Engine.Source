@@ -99,6 +99,42 @@ public sealed class ResolveToolApprovalResponse
     public required bool Approved { get; init; }
 }
 
+/// <summary>
+///     The operator's answers to a pending <c>ask_user</c> question. <see cref="RequestId" /> is the question request id
+///     the <c>question-requested</c> stream event carried (a plain string, not a Guid — the runner mints it as an opaque
+///     key), which the runner uses to release the exact parked tool call. One entry per question in the call.
+/// </summary>
+public sealed class ResolveUserQuestionRequest
+{
+    public required string RequestId { get; init; }
+
+    public required IReadOnlyList<ResolveUserQuestionAnswerDto> Answers { get; init; }
+}
+
+/// <summary>
+///     One answered question. <see cref="Selected" /> carries the chosen option labels and <see cref="Other" /> the free
+///     text from the client-appended "Other" row; both may be populated, but an answer with neither is rejected.
+/// </summary>
+public sealed class ResolveUserQuestionAnswerDto
+{
+    public required string Question { get; init; }
+
+    public IReadOnlyList<string>? Selected { get; init; }
+
+    public string? Other { get; init; }
+}
+
+/// <summary>
+///     Deliberately echoes only the request id and how many answers were accepted — never the answers themselves, which
+///     are the operator's words and stay out of both the response and the logs.
+/// </summary>
+public sealed class ResolveUserQuestionResponse
+{
+    public required string RequestId { get; init; }
+
+    public required int AnswerCount { get; init; }
+}
+
 public sealed class BranchNodeChatConversationRequest
 {
     public Guid ConversationId { get; init; }

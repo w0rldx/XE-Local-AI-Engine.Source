@@ -1,3 +1,4 @@
+import { parsePendingUserQuestion } from "@/features/chat/api/AskUserQuestionWire";
 import { mapToolCallEvent } from "@/features/chat/api/NodeChatMapper";
 import type {
 	ChatConversationModel,
@@ -37,6 +38,9 @@ export const nodeChatStreamEventTypes = {
 	// A pending tool-approval request: flips the matching tool card into a waiting-for-approval state without
 	// mutating content/status — the turn stays live while the operator decides.
 	approvalRequested: nodeChatToolStreamEventTypes.approvalRequested,
+	// A pending `ask_user` question: flips the matching tool card into a waiting state carrying the question payload
+	// the inline answer card renders. Same contract as approvalRequested — the turn stays live while the user answers.
+	questionRequested: nodeChatToolStreamEventTypes.questionRequested,
 	// A non-fatal "turn notice" (model substitution, tool disabled, history truncated). Never mutates
 	// content/status — it only appends a notice part to the current assistant turn and keeps the turn live.
 	assistantNotice: "assistant-notice",
@@ -149,6 +153,7 @@ function decomposeParts(parts: readonly ChatMessagePart[] | undefined): {
 				result: part.result,
 				requiresApproval: part.requiresApproval,
 				pendingApprovalRequestId: part.pendingApprovalRequestId,
+				pendingQuestion: part.pendingQuestion,
 			});
 		} else if (part.kind === "text") {
 			textSegments.push({ id: part.id, sequence: part.sequence, text: part.text });
@@ -247,22 +252,28 @@ function mergeToolEntry(toolEntries: readonly ToolEntryInput[], toolCall: ChatTo
 					// requested/completed event never sets it — only the approval-requested event does).
 					pendingApprovalRequestId:
 						toolCall.state === "received" || toolCall.state === "failed" ? undefined : entry.pendingApprovalRequestId,
+					// Same rule for an `ask_user` question: once the tool call resolves, the answer has been consumed
+					// (or the wait timed out), so the inline question card must not survive on the resolved card.
+					pendingQuestion:
+						toolCall.state === "received" || toolCall.state === "failed" ? undefined : entry.pendingQuestion,
 				}
 			: entry,
 	);
 }
 
 /**
- * Folds a pending tool-approval into the ordered tool entries: the matching tool card (by tool-call id) flips
- * to `waiting` and carries the approval request id the Approve/Deny controls post back. When the approval-gated tool
- * has not yet surfaced its own tool-call-requested card, a fresh waiting entry is created so the prompt still renders.
+ * Folds a pending human prompt (a tool approval, or an `ask_user` question) into the ordered tool entries: the
+ * matching tool card (by tool-call id) flips to `waiting` and carries the prompt payload the inline controls post
+ * back. When the gated tool has not yet surfaced its own tool-call-requested card, a fresh waiting entry is created
+ * so the prompt still renders. Both prompts share this path because they are the same state transition on the wire —
+ * only the carried payload differs (`pendingApprovalRequestId` vs `pendingQuestion`).
  */
-function mergeApprovalIntoToolEntries(
+function mergePendingPromptIntoToolEntries(
 	toolEntries: readonly ToolEntryInput[],
 	callId: string,
 	toolName: string,
 	sequence: number,
-	approvalRequestId: string | undefined,
+	prompt: Pick<ToolEntryInput, "pendingApprovalRequestId" | "pendingQuestion">,
 ): ToolEntryInput[] {
 	const existingIndex = toolEntries.findIndex((entry) => entry.id === callId);
 	if (existingIndex < 0) {
@@ -274,7 +285,7 @@ function mergeApprovalIntoToolEntries(
 				name: toolName,
 				state: "waiting",
 				requiresApproval: true,
-				pendingApprovalRequestId: approvalRequestId,
+				...prompt,
 			},
 		];
 	}
@@ -284,11 +295,11 @@ function mergeApprovalIntoToolEntries(
 			? {
 					...entry,
 					// Preserve the original slot's sequence so the card never reorders; flip it into the waiting state
-					// and attach the approval request id + flag.
+					// and attach the prompt payload + approval flag.
 					name: toolName || entry.name,
 					state: "waiting",
 					requiresApproval: true,
-					pendingApprovalRequestId: approvalRequestId,
+					...prompt,
 				}
 			: entry,
 	);
@@ -336,23 +347,28 @@ function nextReasoningParts(
 }
 
 /**
- * Terminalizes any lingering pending-approval waiting tool card on a terminal turn. An API-tool DENY never
- * emits a tool-call-completed event — the deny short-circuits before the tool ever runs — so its requestId-keyed
- * waiting card would otherwise linger with live Approve/Deny controls until the post-stream refetch scrubs it. Once
- * the turn is terminal the approval can no longer be answered, so a still-`waiting` tool card that still carries a
- * pending approval request id is flipped to `failed` and its prompt is cleared. Returns the same array reference when
- * nothing changed so unaffected turns keep referential stability.
+ * Terminalizes any lingering waiting tool card that still carries an unanswered human prompt (a tool approval or an
+ * `ask_user` question) on a terminal turn. An API-tool DENY never emits a tool-call-completed event — the deny
+ * short-circuits before the tool ever runs — so its requestId-keyed waiting card would otherwise linger with live
+ * Approve/Deny controls until the post-stream refetch scrubs it; a question whose turn was cancelled or timed out is
+ * the same shape. Once the turn is terminal the prompt can no longer be answered, so the card is flipped to `failed`
+ * and its prompt cleared. Returns the same array reference when nothing changed so unaffected turns keep referential
+ * stability.
  */
-function clearPendingApprovalWaitingCards(parts: ChatMessagePart[] | undefined): ChatMessagePart[] | undefined {
+function clearPendingPromptWaitingCards(parts: ChatMessagePart[] | undefined): ChatMessagePart[] | undefined {
 	if (!parts) {
 		return parts;
 	}
 
 	let changed = false;
 	const next = parts.map((part) => {
-		if (part.kind === "tool" && part.state === "waiting" && typeof part.pendingApprovalRequestId === "string") {
+		if (
+			part.kind === "tool" &&
+			part.state === "waiting" &&
+			(typeof part.pendingApprovalRequestId === "string" || part.pendingQuestion !== undefined)
+		) {
 			changed = true;
-			return { ...part, state: "failed" as const, pendingApprovalRequestId: undefined };
+			return { ...part, state: "failed" as const, pendingApprovalRequestId: undefined, pendingQuestion: undefined };
 		}
 
 		return part;
@@ -487,19 +503,22 @@ export function applyNodeChatStreamEvent(
 		};
 	}
 
-	// A pending tool-approval request: flip the matching tool card into a waiting-for-approval state carrying
-	// the approval request id the Approve/Deny controls post back. Like tool-lifecycle events it never mutates
-	// assistant content/status — the turn stays live while the operator decides. No timeline entry is returned.
-	if (event.type === nodeChatStreamEventTypes.approvalRequested) {
+	// A pending human prompt — a tool-approval request, or an `ask_user` question: flip the matching tool card into a
+	// waiting state carrying the payload the inline controls post back (the approval request id, or the parsed
+	// questions). Like tool-lifecycle events neither ever mutates assistant content/status — the turn stays live while
+	// the operator decides/answers. No timeline entry is returned.
+	if (event.type === nodeChatStreamEventTypes.approvalRequested || event.type === nodeChatStreamEventTypes.questionRequested) {
 		const current = conversation.messages.find((message) => message.id === event.messageId && message.role === "assistant");
 		const callId = event.toolCallId ?? `${event.messageId}:${event.sequence}`;
 		const { reasoningSegments, toolEntries, textSegments, noticeEntries } = decomposeParts(current?.parts);
-		const nextToolEntries = mergeApprovalIntoToolEntries(
+		const nextToolEntries = mergePendingPromptIntoToolEntries(
 			toolEntries,
 			callId,
 			event.toolName ?? "tool",
 			event.sequence,
-			event.approvalRequestId ?? undefined,
+			event.type === nodeChatStreamEventTypes.questionRequested
+				? { pendingQuestion: parsePendingUserQuestion(event) }
+				: { pendingApprovalRequestId: event.approvalRequestId ?? undefined },
 		);
 		const nextParts = buildMessageParts(reasoningSegments, nextToolEntries, textSegments, noticeEntries);
 		const nextConversation = current
@@ -625,7 +644,7 @@ export function applyNodeChatStreamEvent(
 	const rebuiltParts = nextReasoningParts(existing, event, reasoning ?? undefined);
 	// On a terminal turn, clear any lingering pending-approval waiting card: an API-tool DENY leaves a waiting card
 	// with no completing tool-call event, and it must not survive the terminal into a dead "awaiting decision" prompt.
-	const parts = isTerminal ? clearPendingApprovalWaitingCards(rebuiltParts) : rebuiltParts;
+	const parts = isTerminal ? clearPendingPromptWaitingCards(rebuiltParts) : rebuiltParts;
 	const assistantMessage: ChatMessageModel = {
 		id: event.messageId,
 		conversationId: event.conversationId,
@@ -698,7 +717,7 @@ export function markNodeChatStreamTerminated(
 		// This is always a terminal (cancelled/failed/interrupted) transition, so clear any lingering pending-approval
 		// waiting card here too — the client-driven terminal path preserves parts verbatim and would otherwise keep a
 		// dead Approve/Deny prompt alive until the refetch.
-		parts: clearPendingApprovalWaitingCards(existing?.parts),
+		parts: clearPendingPromptWaitingCards(existing?.parts),
 		status,
 		createdAt: existing?.createdAt ?? nowIso,
 		updatedAt: nowIso,

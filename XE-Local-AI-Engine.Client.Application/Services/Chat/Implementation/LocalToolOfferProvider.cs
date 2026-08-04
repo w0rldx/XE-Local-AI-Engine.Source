@@ -60,6 +60,25 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         // worker-owned IClientLocalToolHandlers, merged the same way as the coder tools so they appear in the OFFER seam.
         var knowledgeDescriptors = KnowledgeToolCatalog.Descriptors;
 
+        // ask_user is a worker-owned IClientLocalToolHandler too, so it needs the same OFFER-seam merge (the handler
+        // registration surfaces it only in the RESOLUTION seam). It differs from the coder/knowledge tools in three ways,
+        // each deliberate:
+        //   * NOT capability-gated and NOT locality-gated (it is absent from capableOnlyNames and localDataToolNames
+        //     below), because the decision is that an interactive turn can ALWAYS ask its operator a question. It sends
+        //     the model's own question to the local UI — no node-local document, file or workspace content leaves the
+        //     node through it — so the cloud-egress gate has nothing to withhold.
+        //   * RequiresApproval is STRUCTURAL, not a risk judgement: it is what routes the call through the runner's
+        //     out-of-stream approval round-trip, where the human wait happens outside the stream-idle watchdog. A tool
+        //     handler cannot simply block for a human — it would trip StreamIdleTimeout. It also means the three
+        //     unattended paths (sub-agent, scheduler, inbound MCP), which already strip every approval-required tool,
+        //     strip this one for free — correct, since none of them has a person to answer.
+        //   * ToolCategory.ReadLocal: it reads an answer from the node-local operator and has no side effect of its own.
+        var askUserDescriptor = new LocalChatToolDescriptor(AskUserTool.ToolName,
+            AskUserTool.Description,
+            AskUserTool.ParameterSchema,
+            RequiresApproval: true,
+            ToolCategory.ReadLocal);
+
         // Each tool's Id is derived deterministically from its name so the offer list is byte-identical across sends
         // (the config hash ignores the Id, but a stable Id keeps client-side rendering and equality predictable).
         // The coder and knowledge-base tools are worker-owned IClientLocalToolHandlers merged here so they appear in the
@@ -70,7 +89,8 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         [
             .. builtinDescriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.ParameterSchema, descriptor.RequiresApproval, descriptor.Category)),
             .. coderDescriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.ParameterSchema, descriptor.RequiresApproval, descriptor.Category)),
-            .. knowledgeDescriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.ParameterSchema, descriptor.RequiresApproval, descriptor.Category))
+            .. knowledgeDescriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.ParameterSchema, descriptor.RequiresApproval, descriptor.Category)),
+            ToOfferDto(askUserDescriptor.Name, askUserDescriptor.ParameterSchema, askUserDescriptor.RequiresApproval, askUserDescriptor.Category)
         ];
 
         // The provider-locality-gated variant of the whole capable offer: BOTH the knowledge-base read tools AND the
@@ -133,6 +153,14 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
             }),
             new LocalToolCatalogEntry
             {
+                Name = askUserDescriptor.Name,
+                Description = askUserDescriptor.Description,
+                RequiresApproval = askUserDescriptor.RequiresApproval,
+                Source = BuiltinSource,
+                Category = askUserDescriptor.Category
+            },
+            new LocalToolCatalogEntry
+            {
                 Name = SpawnSubAgentToolDefinition.ToolName,
                 Description = SpawnSubAgentToolDefinition.Description,
                 RequiresApproval = false,
@@ -147,6 +175,7 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
             .. builtinDescriptors.Select(static descriptor => descriptor.Name),
             .. coderDescriptors.Select(static descriptor => descriptor.Name),
             .. knowledgeDescriptors.Select(static descriptor => descriptor.Name),
+            askUserDescriptor.Name,
             SpawnSubAgentToolDefinition.ToolName
         ];
     }

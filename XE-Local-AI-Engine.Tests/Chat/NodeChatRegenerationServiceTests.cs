@@ -7,6 +7,7 @@ using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Tools;
+using XE_Local_AI_Engine.AI.Contracts.Events;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
 using XE_Local_AI_Engine.Client.Models.Enums;
@@ -1612,6 +1613,10 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         {
         }
 
+        public void ResolveUserQuestionResult(UserQuestionAnsweredEvent evt)
+        {
+        }
+
         public void ResolveToolCallResult(ToolCallResultEvent evt)
         {
         }
@@ -1680,6 +1685,10 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         {
         }
 
+        public void ResolveUserQuestionResult(UserQuestionAnsweredEvent evt)
+        {
+        }
+
         public void ResolveToolCallResult(ToolCallResultEvent evt)
         {
         }
@@ -1736,6 +1745,10 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         }
 
         public void ResolveApprovalResult(ApprovalResolvedEvent evt)
+        {
+        }
+
+        public void ResolveUserQuestionResult(UserQuestionAnsweredEvent evt)
         {
         }
 
@@ -1799,6 +1812,10 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         {
         }
 
+        public void ResolveUserQuestionResult(UserQuestionAnsweredEvent evt)
+        {
+        }
+
         public void ResolveToolCallResult(ToolCallResultEvent evt)
         {
         }
@@ -1813,6 +1830,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         public event EventHandler<TurnNoticeChangedEventArgs>? TurnNoticeChanged;
 
         public event EventHandler<ApprovalRequestedChangedEventArgs>? ApprovalRequestedChanged;
+
+        public event EventHandler<UserQuestionRequestedChangedEventArgs>? UserQuestionRequestedChanged;
 
         public InvocationState? CurrentInvocation { get; private set; }
 
@@ -1963,6 +1982,17 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         public Task ReportApprovalLifecycleAsync(ApprovalLifecyclePayload payload)
         {
             ApprovalRequestedChanged?.Invoke(this, new ApprovalRequestedChangedEventArgs(payload));
+            return Task.CompletedTask;
+        }
+
+        public Task ReportUserQuestionAsync(UserQuestionLifecyclePayload payload)
+        {
+            UserQuestionRequestedChanged?.Invoke(this, new UserQuestionRequestedChangedEventArgs(payload));
+            return Task.CompletedTask;
+        }
+
+        public Task DispatchUserQuestionAnsweredAsync(UserQuestionAnsweredEvent evt)
+        {
             return Task.CompletedTask;
         }
 

@@ -582,6 +582,119 @@ public sealed class AgentDefinitionResolverTests
             "An honored non-tool-capable pin must gate out the capability-gated tool.");
     }
 
+    // ---- ask_user: available on every interactive turn, NOT gated on AllowedToolNames ----
+
+    [Test]
+    public async Task ResolveAsync_WhenBoundAgentAllowsNoTools_StillResolvesAskUser()
+    {
+        // THE seam test for the bound-agent path. An agent whose AllowedToolNames is empty intersects the offer to
+        // nothing, yet must still be able to ask its operator a question — so ask_user is unioned in after the
+        // intersection. An empty allowed set is the strongest form of the case (nothing else survives to mask it).
+        var resolver = CreateResolver(out var store, OfferTool("GetCurrentTime"), AskUserOffer());
+        var definition = CreateDefinition(allowedTools: []);
+        store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
+
+        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel).ConfigureAwait(false);
+
+        AssertEx.NotNull(resolved);
+        AssertEx.Equal(expected: 1, resolved!.AllowedTools.Count);
+        AssertEx.Equal(AskUserTool.ToolName, resolved.AllowedTools[0].Name);
+        AssertEx.True(resolved.AllowedTools[0].RequiresApproval,
+            "ask_user must stay approval-gated: that flag is what routes the call to the out-of-stream human round-trip.");
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenBoundAgentAllowsAskUserExplicitly_DoesNotDuplicateIt()
+    {
+        // An operator MAY list ask_user in AllowedToolNames (it appears in the tool catalog). The intersection already
+        // yields it, so the union must be idempotent rather than offering the same tool twice.
+        var resolver = CreateResolver(out var store, OfferTool("GetCurrentTime"), AskUserOffer());
+        var definition = CreateDefinition(allowedTools: [AskUserTool.ToolName]);
+        store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
+
+        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel).ConfigureAwait(false);
+
+        AssertEx.NotNull(resolved);
+        AssertEx.Equal(expected: 1, resolved!.AllowedTools.Count(tool => tool.Name == AskUserTool.ToolName));
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenPerAgentApprovalWaivesAskUser_KeepsItApprovalGated()
+    {
+        // The tighten-only compose is unchanged by the union: a per-agent `false` is a NO-OP (it can never waive a
+        // catalog default of true), and the node policy may only ADD approval. If this ever went false the tool would be
+        // executed inline by the function-invoking client and its handler would block a stream that has no human wait.
+        var resolver = CreateResolver(out var store, OfferTool("GetCurrentTime"), AskUserOffer());
+        var definition = CreateDefinition(allowedTools: ["GetCurrentTime"],
+            toolApprovals: new Dictionary<string, bool>(StringComparer.Ordinal)
+            {
+                [AskUserTool.ToolName] = false
+            });
+        store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
+
+        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel).ConfigureAwait(false);
+
+        AssertEx.NotNull(resolved);
+        AssertEx.True(resolved!.AllowedTools.Single(tool => tool.Name == AskUserTool.ToolName).RequiresApproval,
+            "a per-agent approval override can only ADD approval, so it must not waive ask_user's catalog default");
+        // The rest of the projection is untouched: the intersected tool keeps its own composed flag.
+        AssertEx.False(resolved.AllowedTools.Single(tool => tool.Name == "GetCurrentTime").RequiresApproval,
+            "unioning ask_user must not disturb any other tool's composed approval flag");
+    }
+
+    [Test]
+    public async Task ResolveAsync_DefaultAssistant_WithNoAllowedTools_StillGetsAskUser()
+    {
+        // The mode-off Default Assistant ships with ZERO AllowedToolNames and takes the whole offer, so ask_user has to
+        // reach it through the offer rather than through an allowed set. This pins the mode-off seam separately from the
+        // bound-agent one — they are different code paths with different tool sources.
+        var resolver = CreateResolver(out var store, OfferTool("GetCurrentTime"), AskUserOffer());
+        var defaultAssistant = CreateDefinition(AgentDefaults.DefaultAgentName, allowedTools: []) with
+        {
+            Source = AgentDefinitionSource.Seeded,
+            SeedSlug = AgentDefaults.DefaultAgentSeedSlug
+        };
+        store.GetByIdAsync(defaultAssistant.Id, Arg.Any<CancellationToken>()).Returns(defaultAssistant);
+
+        var resolved = await resolver.ResolveAsync(defaultAssistant.Id, ToolCapableModel).ConfigureAwait(false);
+
+        AssertEx.NotNull(resolved);
+        AssertEx.Contains(resolved!.AllowedTools, tool => tool.Name == AskUserTool.ToolName);
+        AssertEx.True(resolved.AllowedTools.Single(tool => tool.Name == AskUserTool.ToolName).RequiresApproval);
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenOfferOmitsAskUser_DoesNotFabricateIt()
+    {
+        // The union lifts the descriptor from the offer and never invents one, so a node whose offer does not carry
+        // ask_user (no handler registered) hands the model nothing it cannot execute — the same contract as the
+        // dropped-names path above.
+        var resolver = CreateResolver(out var store, OfferTool("GetCurrentTime"));
+        var definition = CreateDefinition(allowedTools: ["GetCurrentTime"]);
+        store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
+
+        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel).ConfigureAwait(false);
+
+        AssertEx.NotNull(resolved);
+        AssertEx.False(resolved!.AllowedTools.Any(tool => tool.Name == AskUserTool.ToolName),
+            "a tool absent from the offer must never be fabricated into a projection");
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenModelDoesNotSupportTools_WithholdsAskUserToo()
+    {
+        // ask_user is available whenever TOOLS are, not unconditionally: a model that cannot drive any tool call gets
+        // the empty set, ask_user included. Offering it there would guarantee a question that never arrives.
+        var resolver = CreateResolver(out var store, OfferTool("GetCurrentTime"), AskUserOffer());
+        var definition = CreateDefinition(allowedTools: []);
+        store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
+
+        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel, retrievalQuery: null, supportsTools: false).ConfigureAwait(false);
+
+        AssertEx.NotNull(resolved);
+        AssertEx.Equal(expected: 0, resolved!.AllowedTools.Count);
+    }
+
     [Test]
     public async Task ResolveAsync_BoundProjection_ProducesSameConfigHashAsHandBuiltEquivalent()
     {
@@ -1227,6 +1340,13 @@ public sealed class AgentDefinitionResolverTests
             Substitute.For<IModelCapabilityResolver>(),
             new PermissiveToolApprovalPolicy(),
             NullLogger<AgentDefinitionResolver>.Instance);
+    }
+
+    // The ask_user offer descriptor as the real LocalToolOfferProvider merges it: approval-required (structural — it is
+    // what routes the call to the out-of-stream human round-trip) and ReadLocal.
+    private static AllowedToolDto AskUserOffer()
+    {
+        return OfferTool(AskUserTool.ToolName, requiresApproval: true, ToolCategory.ReadLocal);
     }
 
     private static AgentDefinitionRecord CreateDefinition(string name = "Agent",

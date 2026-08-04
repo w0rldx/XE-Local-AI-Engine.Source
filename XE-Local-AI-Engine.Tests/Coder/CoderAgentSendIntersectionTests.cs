@@ -45,14 +45,19 @@ public sealed class CoderAgentSendIntersectionTests
         var resolved = await resolver.ResolveAsync(coder.Id, CapableModel).ConfigureAwait(false);
 
         AssertEx.NotNull(resolved);
-        AssertEx.Equal(expected: 3, resolved!.AllowedTools.Count);
+        // The three coder tools plus ask_user, which is unioned into EVERY tool-enabled projection regardless of
+        // AllowedToolNames (the Coder seed does not list it).
+        AssertEx.Equal(expected: 4, resolved!.AllowedTools.Count);
         foreach (var toolName in CoderToolNames)
         {
             AssertEx.Contains(resolved.AllowedTools, tool => tool.Name == toolName);
         }
 
+        AssertEx.Contains(resolved.AllowedTools, tool => tool.Name == AskUserTool.ToolName);
+
         // Decision 7: the resolved coder tools carry the seed's ToolApprovals (all false), so none is approval-gated.
-        AssertEx.True(resolved.AllowedTools.All(tool => !tool.RequiresApproval),
+        // (ask_user is excluded: its approval flag is structural — it is what routes the call to the human round-trip.)
+        AssertEx.True(resolved.AllowedTools.Where(tool => tool.Name != AskUserTool.ToolName).All(tool => !tool.RequiresApproval),
             "the seeded coder tools must resolve as auto-execute (ToolApprovals all false)");
     }
 
@@ -66,7 +71,16 @@ public sealed class CoderAgentSendIntersectionTests
         var resolved = await resolver.ResolveAsync(coder.Id, IncapableModel).ConfigureAwait(false);
 
         AssertEx.NotNull(resolved);
-        AssertEx.Empty(resolved!.AllowedTools);
+        // The coder tools are capability-gated, so the intersection collapses. ask_user is NOT capability-gated (this
+        // model still drives tool calls, it is just outside the high-risk allow-list), so it is all that survives.
+        foreach (var toolName in CoderToolNames)
+        {
+            AssertEx.False(resolved!.AllowedTools.Any(tool => tool.Name == toolName),
+                $"'{toolName}' is capability-gated and must be withheld from a model outside ToolCapableModels");
+        }
+
+        AssertEx.Equal(expected: 1, resolved!.AllowedTools.Count);
+        AssertEx.Equal(AskUserTool.ToolName, resolved.AllowedTools[0].Name);
     }
 
     private static AgentDefinitionRecord SeededCoderDefinition()

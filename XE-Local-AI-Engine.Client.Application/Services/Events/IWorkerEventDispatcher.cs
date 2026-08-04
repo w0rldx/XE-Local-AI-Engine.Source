@@ -47,6 +47,14 @@ public interface IWorkerEventDispatcher
     /// </summary>
     event EventHandler<ApprovalRequestedChangedEventArgs>? ApprovalRequestedChanged;
 
+    /// <summary>
+    ///     Raised once per <c>ask_user</c> question the in-flight invocation is paused on. The local chat stream
+    ///     subscribes to surface these as <c>question-requested</c> stream events so the browser can render the
+    ///     question card. Unlike an approval, the payload carries the QUESTIONS themselves — a client cannot render an
+    ///     answerable prompt from a correlation id alone, which is also what makes the reconnect replay possible.
+    /// </summary>
+    event EventHandler<UserQuestionRequestedChangedEventArgs>? UserQuestionRequestedChanged;
+
     void StopAcceptingRemoteInvocations();
 
     Task DispatchInvocationAssignedAsync(EncryptedRuntimePackageDto package);
@@ -107,4 +115,17 @@ public interface IWorkerEventDispatcher
     ///     request out to the local browser so the operator can resolve it.
     /// </summary>
     Task ReportApprovalLifecycleAsync(ApprovalLifecyclePayload payload);
+
+    /// <summary>
+    ///     Reports a pending <c>ask_user</c> question for the in-flight invocation: records it on the invocation state
+    ///     (so a reconnecting browser can be replayed the still-unanswered prompt) and raises
+    ///     <see cref="UserQuestionRequestedChanged" /> for the local chat stream.
+    /// </summary>
+    Task ReportUserQuestionAsync(UserQuestionLifecyclePayload payload);
+
+    /// <summary>
+    ///     Feeds the operator's answers into the waiting turn and clears the pending-question slot. Idempotent: an
+    ///     unknown or already-resolved request id logs and no-ops, so a duplicate or stale post never faults the turn.
+    /// </summary>
+    Task DispatchUserQuestionAnsweredAsync(UserQuestionAnsweredEvent evt);
 }

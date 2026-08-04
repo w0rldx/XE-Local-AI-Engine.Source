@@ -96,6 +96,14 @@
 			"approve": "Freigeben",
 			"deny": "Ablehnen"
 		},
+		"askUser": {
+			"title": "Der Assistent braucht deine Eingabe",
+			"recommended": "Empfohlen",
+			"otherOption": "Andere…",
+			"otherPlaceholder": "Eigene Antwort eingeben",
+			"submit": "Antwort senden",
+			"answerAllHint": "Beantworte jede Frage, um fortzufahren."
+		},
 		"notices": {
 			"modelSubstituted": "Modell ersetzt",
 			"toolDisabled": "Tool deaktiviert",

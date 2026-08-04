@@ -33,6 +33,9 @@ public sealed partial class WorkerEventDispatcher
             ReasoningTokens = state.ReasoningTokens,
             GenerationDurationMs = state.GenerationDurationMs,
             PendingApproval = state.PendingApproval,
+            // Immutable record, so a reference copy is snapshot-safe. Mirrored in InvocationResumeRegistry.Clone —
+            // both must stay in sync or a pending question travels as null on one of the two paths.
+            PendingQuestion = state.PendingQuestion,
             LastApprovalResolution = state.LastApprovalResolution,
             // Reference copy is snapshot-safe: every writer REPLACES the list wholesale (never mutates it in place)
             // and the elements are immutable records — materializing a copy here churned one throwaway array per

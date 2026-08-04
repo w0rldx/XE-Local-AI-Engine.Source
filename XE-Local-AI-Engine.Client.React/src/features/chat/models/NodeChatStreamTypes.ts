@@ -83,6 +83,13 @@ export interface NodeChatStreamEventDto {
 	// back to the loopback resolve endpoint to release the waiting tool call. `toolCallId` carries the tool-call id the
 	// approval belongs to (so the Approve/Deny controls attach to the matching card) and `toolName` the tool name.
 	approvalRequestId?: string | null;
+	// Question request id: present on the `question-requested` event only. The durable key the browser echoes back to
+	// the loopback resolve endpoint to release the turn parked on an `ask_user` call. `toolCallId` carries the tool-call
+	// id the question belongs to (so the card attaches to the right slot) and `toolName` the tool name — same as the
+	// approval event. `questions` is the raw question JSON the model emitted; parsed by `parsePendingUserQuestion`,
+	// the ONE place this wire shape is read.
+	questionRequestId?: string | null;
+	questions?: string | null;
 }
 
 export const nodeChatToolStreamEventTypes = {
@@ -91,4 +98,7 @@ export const nodeChatToolStreamEventTypes = {
 	// A pending tool-approval request: flips the matching tool card into a waiting-for-approval state carrying
 	// the approvalRequestId the Approve/Deny controls post back. Distinct from a plain tool-call-requested.
 	approvalRequested: "approval-requested",
+	// A pending `ask_user` question: flips the matching tool card into a waiting state carrying the question payload
+	// the inline answer card renders and posts back. Structurally identical to approval-requested, richer payload.
+	questionRequested: "question-requested",
 } as const;

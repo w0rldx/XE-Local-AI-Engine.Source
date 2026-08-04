@@ -357,6 +357,57 @@ public sealed class LocalToolOfferProviderTests
             "the profile-intersection pool applies the same knowledge-tool locality gate");
     }
 
+    // ---- ask_user: merged into the built-in offer, ungated ----
+
+    [Test]
+    public void GetOfferedTools_AlwaysOffersAskUser_WhateverTheModel()
+    {
+        // ask_user is deliberately outside BOTH offer gates. The capability gate exists to withhold high-risk tools from
+        // a model that cannot drive them; the locality gate exists to keep node-local CONTENT off a cloud provider.
+        // Neither applies to a tool whose whole payload is the model's own question, and the decision is that any turn
+        // that can call tools at all can ask its operator a question. So it must survive every offer variant.
+        var provider = CreateProvider("qwen3:8b");
+
+        AssertEx.Contains(provider.GetOfferedTools("qwen3:8b"), tool => tool.Name == AskUserTool.ToolName,
+            "the capable offer must carry ask_user");
+        AssertEx.Contains(provider.GetOfferedTools("some-other-model"), tool => tool.Name == AskUserTool.ToolName,
+            "the NON-capable offer must carry ask_user too — it is not a high-risk tool");
+        AssertEx.Contains(provider.GetOfferedTools("qwen3:8b", isCloudModel: true), tool => tool.Name == AskUserTool.ToolName,
+            "the cloud-gated offer must carry ask_user — no node-local content travels through it");
+        AssertEx.Contains(provider.GetOfferedToolsForProfile("qwen3:8b"), tool => tool.Name == AskUserTool.ToolName,
+            "the profile-intersection pool must carry ask_user so a bound agent's projection can union it in");
+    }
+
+    [Test]
+    public void GetOfferedTools_AskUser_IsApprovalGatedReadLocalAndCarriesTheSharedSchema()
+    {
+        // RequiresApproval is STRUCTURAL here, not a risk judgement: it is what makes the runner surface the call as an
+        // approval request and do the human wait OUTSIDE the stream-idle watchdog. A handler that simply blocked would
+        // trip StreamIdleTimeout. The schema/description come from the single AskUserTool source, so the offered
+        // contract cannot drift from what the handler validates.
+        var provider = CreateProvider("qwen3:8b");
+
+        var askUser = provider.GetOfferedTools("qwen3:8b").Single(tool => tool.Name == AskUserTool.ToolName);
+
+        AssertEx.True(askUser.RequiresApproval, "ask_user must be approval-gated — that is what routes it to the human round-trip");
+        AssertEx.Equal(ToolCategory.ReadLocal, askUser.Category);
+        AssertEx.Equal(AskUserTool.ParameterSchema, askUser.ParameterSchema);
+    }
+
+    [Test]
+    public void GetKnownTools_IncludesAskUserWithItsSharedDescription()
+    {
+        // The catalog surface (agent form + CRUD name validation) must know ask_user, so an operator who lists it in an
+        // agent's AllowedToolNames is not warned about an unknown tool.
+        var provider = CreateProvider("qwen3:8b");
+
+        AssertEx.Contains(provider.GetKnownToolNames(), AskUserTool.ToolName);
+        var entry = provider.GetKnownTools().Single(candidate => candidate.Name == AskUserTool.ToolName);
+        AssertEx.Equal("builtin", entry.Source);
+        AssertEx.Equal(AskUserTool.Description, entry.Description);
+        AssertEx.True(entry.RequiresApproval);
+    }
+
     private static McpRegisteredTool BuildMcpTool(string qualifiedName)
     {
         var executable = AIFunctionFactory.Create((string input) => input, qualifiedName);
@@ -385,6 +436,8 @@ public sealed class LocalToolOfferProviderTests
         AssertEx.Equal(ToolCategory.Orchestration, offered.Single(tool => tool.Name == "spawn_subagent").Category);
         AssertEx.Equal(ToolCategory.ReadLocal, offered.Single(tool => tool.Name == "list_files").Category);
         AssertEx.Equal(ToolCategory.ReadLocal, offered.Single(tool => tool.Name == "search_knowledge_base").Category);
+        // ask_user reads an answer from the node-local operator and has no side effect of its own.
+        AssertEx.Equal(ToolCategory.ReadLocal, offered.Single(tool => tool.Name == AskUserTool.ToolName).Category);
     }
 
     private static LocalToolOfferProvider CreateProvider(params string[] toolCapableModels)

@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
+using System.Text.Json;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Events;
 
@@ -14,6 +15,10 @@ using XE_Local_AI_Engine.Client.Services.Events;
 /// </summary>
 internal static class ChatStreamEventMapper
 {
+    // Web defaults => camelCase property names, matching every other JSON payload the chat stream carries (tool
+    // Arguments, the persisted parts[]), so the client parses one convention.
+    private static readonly JsonSerializerOptions QuestionsJsonOptions = new(JsonSerializerDefaults.Web);
+
     /// <summary>
     ///     Maps a persisted terminal message status to its stream event type. Used when a lifecycle mark (queued /
     ///     streaming) is rejected because the row already reached a terminal status (a cancel raced ahead of the run):
@@ -159,6 +164,12 @@ internal static class ChatStreamEventMapper
     ///     <see cref="ChatStreamEvent.ApprovalRequestId" /> for the resolve round-trip. Deliberately NOT accumulated into
     ///     the persisted <c>parts[]</c>: the pending approval is transient live state, and a reloaded terminal turn shows
     ///     the executed/rejected tool result, never a lingering approval prompt.
+    ///     <para>
+    ///         A blank call id / tool name maps to a null wire field rather than an empty string. The live path always
+    ///         populates both; the reconnect replay rebuilds the payload from <c>InvocationApprovalState</c>, whose
+    ///         CallId/ToolName are optional (a platform-hub approval carries only an id and a description). A null tells
+    ///         the client "no card to attach this to" — an empty string would look like a real, unmatchable id.
+    ///     </para>
     /// </summary>
     public static ChatStreamEvent ApprovalRequestedEvent(Guid conversationId,
         Guid messageId,
@@ -167,6 +178,8 @@ internal static class ChatStreamEventMapper
         long timestampMs,
         long sequence)
     {
+        ArgumentNullException.ThrowIfNull(payload);
+
         return new ChatStreamEvent(ChatStreamEventTypes.ApprovalRequested,
             conversationId,
             messageId,
@@ -174,8 +187,50 @@ internal static class ChatStreamEventMapper
             NodeChatMessageStatusValues.Streaming,
             sequence,
             timestampMs,
-            ToolCallId: payload.CallId,
-            ToolName: payload.ToolName,
+            ToolCallId: NullIfBlank(payload.CallId),
+            ToolName: NullIfBlank(payload.ToolName),
             ApprovalRequestId: payload.RequestId);
+    }
+
+    /// <summary>
+    ///     Maps a pending <c>ask_user</c> question to a <see cref="ChatStreamEventTypes.QuestionRequested" /> stream
+    ///     event. Shaped exactly like <see cref="ApprovalRequestedEvent" /> — the tool-call id rides
+    ///     <see cref="ChatStreamEvent.ToolCallId" /> so the client attaches the question card to the matching tool-call
+    ///     card, and the request id rides <see cref="ChatStreamEvent.QuestionRequestId" /> for the resolve round-trip —
+    ///     with the questions themselves serialized into <see cref="ChatStreamEvent.Questions" />, because a client
+    ///     cannot render an answerable prompt from a correlation id alone.
+    ///     <para>
+    ///         Deliberately NOT accumulated into the persisted <c>parts[]</c>, for the same reason the approval event is
+    ///         not: the prompt is transient live state that the resolve endpoint clears, and a reloaded terminal turn
+    ///         shows the tool result (the operator's answer, or the not-answered sentinel) rather than a lingering form.
+    ///         A still-PENDING question survives a reconnect through <c>InvocationState.PendingQuestion</c> instead —
+    ///         see <see cref="InvocationResumeRegistry" />.
+    ///     </para>
+    /// </summary>
+    public static ChatStreamEvent QuestionRequestedEvent(Guid conversationId,
+        Guid messageId,
+        Guid requestId,
+        UserQuestionLifecyclePayload payload,
+        long timestampMs,
+        long sequence)
+    {
+        ArgumentNullException.ThrowIfNull(payload);
+
+        return new ChatStreamEvent(ChatStreamEventTypes.QuestionRequested,
+            conversationId,
+            messageId,
+            requestId,
+            NodeChatMessageStatusValues.Streaming,
+            sequence,
+            timestampMs,
+            ToolCallId: NullIfBlank(payload.CallId),
+            ToolName: NullIfBlank(payload.ToolName),
+            QuestionRequestId: payload.RequestId,
+            Questions: JsonSerializer.Serialize(payload.Questions, QuestionsJsonOptions));
+    }
+
+    private static string? NullIfBlank(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : value;
     }
 }
