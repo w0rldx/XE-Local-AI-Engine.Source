@@ -108,8 +108,13 @@ public sealed class ImageServerSupervisorTests
     }
 
     [Test]
-    public async Task EnsureRunning_CapFullOfActiveDaemons_NewDistinctModel_Rejects()
+    public async Task EnsureRunning_CapFullOfUnleasedDaemon_NewDistinctModel_EvictsAndAdmits()
     {
+        // Switching image models must work immediately. With MaxLoadedProcesses = 1 the cap is reached the moment ANY
+        // daemon is resident, so gating admission on the idle TTL would turn that TTL into a fifteen-minute window in
+        // which a second model simply cannot be loaded — and the app exposes no unload path out of it. The resident
+        // daemon here is fresh and well inside the TTL, but it holds no job lease, so nothing is in flight and it is
+        // evicted to admit the new model.
         var launcher = new FakeImageProcessLauncher();
         var time = new AdvanceableClock();
         var options = new StableDiffusionRuntimeOptions
@@ -119,14 +124,43 @@ public sealed class ImageServerSupervisorTests
         };
         await using var supervisor = ImageSupervisorFactory.Create(launcher, options: options, timeProvider: time);
 
-        await supervisor.EnsureRunningAsync("sd15", CancellationToken.None); // fills the cap of 1 (fresh, in-use)
+        await supervisor.EnsureRunningAsync("sd15", CancellationToken.None); // fills the cap of 1 (fresh, unleased)
+        var firstHandle = launcher.Handles.Single();
 
-        // A second distinct model has no idle victim to evict → reject at start.
-        var ex = await AssertEx.ThrowsAsync<StableDiffusionRuntimeException>(() =>
-            supervisor.EnsureRunningAsync("flux", CancellationToken.None));
+        await supervisor.EnsureRunningAsync("flux", CancellationToken.None);
 
-        AssertEx.Contains(ex.Message, "maximum number of local image models", StringComparison.OrdinalIgnoreCase);
-        AssertEx.Equal(expected: 1, launcher.LaunchCount); // flux never launched.
+        AssertEx.Equal(expected: 2, launcher.LaunchCount);
+        AssertEx.True(firstHandle.WasTreeKilled, "an unleased in-window daemon should be evicted to admit a switch.");
+    }
+
+    [Test]
+    public async Task EnsureRunning_CapFull_PrefersThePastTtlVictimOverAnInWindowOne()
+    {
+        // With room for two daemons and both unleased, the one past its idle TTL is the victim — the in-window fallback
+        // is a last resort, not the first choice, so a warm daemon is only sacrificed when there is nothing colder.
+        var launcher = new FakeImageProcessLauncher();
+        var time = new AdvanceableClock();
+        var ttl = TimeSpan.FromMinutes(15);
+        var options = new StableDiffusionRuntimeOptions
+        {
+            IdleTimeToLive = ttl,
+            MaxLoadedProcesses = 2
+        };
+        await using var supervisor = ImageSupervisorFactory.Create(launcher, options: options, timeProvider: time);
+
+        await supervisor.EnsureRunningAsync("sd15", CancellationToken.None);
+        var coldHandle = launcher.Handles.Single();
+
+        // sd15 ages past the TTL; sdxl is then loaded fresh, so it is the more-recently-used but in-window daemon.
+        time.Advance(ttl + TimeSpan.FromMinutes(1));
+        await supervisor.EnsureRunningAsync("sdxl", CancellationToken.None);
+        var warmHandle = launcher.Handles.Single(handle => !ReferenceEquals(handle, coldHandle));
+
+        await supervisor.EnsureRunningAsync("flux", CancellationToken.None);
+
+        AssertEx.Equal(expected: 3, launcher.LaunchCount);
+        AssertEx.True(coldHandle.WasTreeKilled, "the past-TTL daemon is the preferred cap-eviction victim.");
+        AssertEx.False(warmHandle.WasTreeKilled, "an in-window daemon must not be evicted while a colder one exists.");
     }
 
     [Test]

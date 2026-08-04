@@ -1,11 +1,11 @@
 import { Alert, Button, Group, NumberInput, Select, Stack, Textarea } from "@mantine/core";
 import { IconSparkles } from "@tabler/icons-react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
+	imageFormDefaultsForModel,
 	type ImageGenerationFormValues,
-	imageFormDefaults,
 	imageGenerationFormSchema,
 	type ImageModelView,
 	imageSamplers,
@@ -34,11 +34,27 @@ interface ImageGenerationFormProps {
 // sourced from the installed image models; with none installed the form disables so a job can't be enqueued modelless.
 export function ImageGenerationForm({ models, isSubmitting, submitError, onSubmit }: ImageGenerationFormProps) {
 	const { t } = useTranslation();
-	const [values, setValues] = useState<ImageGenerationFormValues>(() => ({
-		...imageFormDefaults,
-		modelName: models[0]?.modelName ?? "",
-	}));
+	const [values, setValues] = useState<ImageGenerationFormValues>(() => imageFormDefaultsForModel(models[0]));
 	const [errors, setErrors] = useState<Record<string, string>>({});
+
+	// Picking a different model re-seeds the sampling parameters from ITS family, keeping the prompts. The families
+	// disagree sharply — FLUX-schnell wants ~4 steps at CFG 1.0 where SD1.5 wants 20 at 7.0 — and carrying one family's
+	// numbers into another produces a bad image rather than an error, which is far harder to diagnose than a failure.
+	const handleModelChange = useCallback(
+		(modelName: string) => {
+			const model = models.find((candidate) => candidate.modelName === modelName);
+			setValues((current) => ({
+				...imageFormDefaultsForModel(model),
+				modelName,
+				prompt: current.prompt,
+				negativePrompt: current.negativePrompt,
+				width: current.width,
+				height: current.height,
+				seed: current.seed,
+			}));
+		},
+		[models],
+	);
 
 	const modelData = useMemo(() => models.map((model) => ({ value: model.modelName, label: model.modelName })), [models]);
 	const samplerData = useMemo(
@@ -68,7 +84,25 @@ export function ImageGenerationForm({ models, isSubmitting, submitError, onSubmi
 		onSubmit(result.data);
 	}, [models, onSubmit, values]);
 
-	const selectedModel = values.modelName || models[0]?.modelName || null;
+	// Reconcile the selection against the models that actually exist.
+	//
+	// Two cases, and the second used to be missed. The list arrives after the first render, so an empty selection has to
+	// adopt the first model (and its family defaults, or the pick would silently run on the generic fallback numbers).
+	// But a selection can also go stale *while* it is non-empty — deleting the selected model leaves the Select pointing
+	// at a value no longer in its options, and Generate happily submits the deleted name and creates a job that fails.
+	// Keying on "is the current name still present" covers both; the prompt fields are untouched either way.
+	useEffect(() => {
+		const first = models[0];
+		if (first === undefined) {
+			return;
+		}
+		const stillInstalled = models.some((model) => model.modelName === values.modelName);
+		if (!stillInstalled) {
+			handleModelChange(first.modelName);
+		}
+	}, [handleModelChange, models, values.modelName]);
+
+	const selectedModel = models.some((model) => model.modelName === values.modelName) ? values.modelName : (models[0]?.modelName ?? null);
 
 	return (
 		<Stack gap="md" data-testid="image-generation-form">
@@ -80,7 +114,7 @@ export function ImageGenerationForm({ models, isSubmitting, submitError, onSubmi
 				disabled={!hasModels}
 				allowDeselect={false}
 				error={fieldError(errors, "modelName")}
-				onChange={(value) => setValues((current) => ({ ...current, modelName: value ?? "" }))}
+				onChange={(value) => handleModelChange(value ?? "")}
 				data-testid="image-form-model"
 			/>
 

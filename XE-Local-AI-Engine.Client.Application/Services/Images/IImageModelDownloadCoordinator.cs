@@ -28,6 +28,19 @@ public interface IImageModelDownloadCoordinator
 
     /// <summary>Returns a snapshot of all tracked download statuses (in-flight and recently finished).</summary>
     IReadOnlyList<ImageModelDownloadStatus> ListStatuses();
+
+    /// <summary>
+    ///     Requests cancellation of an in-flight download. Returns <see langword="true" /> when a running download was
+    ///     signalled, <see langword="false" /> when nothing was in flight for that name (idempotent — cancelling an
+    ///     already-finished download is not an error).
+    /// </summary>
+    /// <remarks>
+    ///     Cancellation is cooperative: the transfer stops at its next checkpoint and the partial <c>.part</c> file is
+    ///     deliberately left on disk so a later attempt resumes from it rather than restarting. An image file-set can be
+    ///     tens of gigabytes, so a mis-started download that could not be stopped would occupy the node's bandwidth and
+    ///     disk until it finished.
+    /// </remarks>
+    bool Cancel(string modelName);
 }
 
 /// <summary>The accepted-download identity returned by <see cref="IImageModelDownloadCoordinator.Start" />.</summary>
@@ -62,4 +75,15 @@ public sealed record ImageModelDownloadStatus(
     ImageModelDownloadPhase Phase,
     long? CompletedBytes,
     long? TotalBytes,
-    string? SanitizedError);
+    string? SanitizedError)
+{
+    /// <summary>
+    ///     1-based index of the file currently transferring within the set, or <see langword="null" /> when the download
+    ///     has not reported a part yet. Lets the UI say "part 2 of 3" instead of leaving the operator to guess why a
+    ///     multi-gigabyte download is taking three passes.
+    /// </summary>
+    public int? PartIndex { get; init; }
+
+    /// <summary>Number of files in the set, or <see langword="null" /> when not yet known.</summary>
+    public int? PartCount { get; init; }
+}

@@ -6,6 +6,7 @@ using XE_Local_AI_Engine.Client.Common.Extensions;
 using XE_Local_AI_Engine.Client.Common.ProblemDetailModels;
 using XE_Local_AI_Engine.Client.Common.ProblemDetailModels.Enums;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Providers.Abstractions.Image;
 
 /// <summary>
 ///     Represents conflict exception handler.
@@ -17,7 +18,14 @@ public class ConflictExceptionHandler(ILogger<ConflictExceptionHandler> logger) 
         ArgumentNullException.ThrowIfNull(httpContext);
         ArgumentNullException.ThrowIfNull(exception);
 
-        if (exception is not NodeChatReadOnlyConversationException)
+        var conflictType = exception switch
+        {
+            NodeChatReadOnlyConversationException => NodeConflictProblemType.ReadOnlyConversation,
+            ImageModelInUseException => NodeConflictProblemType.ImageModelInUse,
+            _ => (NodeConflictProblemType?)null
+        };
+
+        if (conflictType is null)
         {
             return false;
         }
@@ -39,7 +47,7 @@ public class ConflictExceptionHandler(ILogger<ConflictExceptionHandler> logger) 
             Status = StatusCodes.Status409Conflict,
             Type = "https://tools.ietf.org/html/rfc7231#section-6.5.8",
             Title = "Conflict",
-            ConflictType = NodeConflictProblemType.ReadOnlyConversation.ToString(),
+            ConflictType = conflictType.Value.ToString(),
             Detail = exception.Message ?? "Conflict"
         }.WithTraceId(httpContext), cancellationToken).ConfigureAwait(false);
 

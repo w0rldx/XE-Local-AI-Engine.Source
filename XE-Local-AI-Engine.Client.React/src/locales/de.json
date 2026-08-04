@@ -3053,7 +3053,13 @@
 			"job": {
 				"elapsed": "{{seconds}} s",
 				"duration": "{{seconds}} s",
-				"meta": "{{model}} · {{width}}×{{height}} · {{steps}} Schritte · {{sampler}}"
+				"meta": "{{model}} · {{width}}×{{height}} · {{steps}} Schritte · {{sampler}}",
+				"queuePosition": "Wartet — Position {{position}} in der Warteschlange",
+				"preparing": "Modell wird vorbereitet…",
+				"finishing": "Abschluss (Bild wird dekodiert)…",
+				"steps": "Schritt {{step}} von {{totalSteps}}",
+				"stepProgressLabel": "Fortschritt der Generierung",
+				"eta": "noch ca. {{seconds}} s"
 			},
 			"status": {
 				"Queued": "In Warteschlange",
@@ -3108,7 +3114,8 @@
 				"error": "Die Generierung konnte nicht gestartet werden."
 			},
 			"result": {
-				"error": "Das erzeugte Bild konnte nicht geladen werden."
+				"error": "Das erzeugte Bild konnte nicht geladen werden.",
+				"viewFullSize": "In voller Größe anzeigen"
 			},
 			"models": {
 				"installedTitle": "Installierte Bildmodelle",
@@ -3117,16 +3124,16 @@
 					"Sd15": "Stable Diffusion 1.5",
 					"Sdxl": "Stable Diffusion XL",
 					"Sd3": "Stable Diffusion 3",
-					"Flux": "FLUX.1"
+					"Flux": "FLUX.1",
+					"QwenImage": "Qwen-Image"
 				},
 				"download": {
 					"title": "Modell herunterladen",
 					"started": "Download gestartet. Das Modell erscheint, sobald es bereit ist.",
-					"inFlight": "Der Download läuft im Hintergrund; das Modell erscheint, sobald es bereit ist. Große Dateien können mehrere Minuten dauern.",
 					"failed": "Der Modell-Download ist fehlgeschlagen.",
 					"progress": "Wird heruntergeladen… {{percent}} %",
 					"error": "Der Modell-Download konnte nicht gestartet werden.",
-					"hint": "Nur Einzeldatei-Gewichte (SD1.5-Stil). Mehrteilige Modelle folgen später.",
+					"hint": "Eine Gewichtsdatei, für Einzeldatei-Modelle wie SD1.5. Für mehrteilige Modelle „Erweitert“ einschalten.",
 					"submit": "Herunterladen",
 					"repoId": {
 						"label": "Hugging-Face-Repository"
@@ -3139,8 +3146,148 @@
 					},
 					"family": {
 						"label": "Familie"
+					},
+					"cancel": "Abbrechen",
+					"cancelError": "Der Download konnte nicht abgebrochen werden.",
+					"dismissError": "Schließen",
+					"part": "Teil {{index}} von {{count}}",
+					"speed": "{{value}}/s",
+					"eta": "noch ca. {{duration}}",
+					"transferred": "{{completed}} übertragen",
+					"starting": "Wird gestartet…",
+					"bytesOf": "{{completed}} / {{total}}",
+					"progressAriaLabel": "Download-Fortschritt",
+					"advanced": {
+						"toggle": "Erweitert: mehrteiliger Dateisatz",
+						"toggleDescription": "SDXL, SD3, FLUX und Qwen-Image bestehen aus mehreren Dateien (Diffusionsgewichte, VAE, Textencoder) statt aus einer.",
+						"addPart": "Datei hinzufügen",
+						"removePart": "Datei entfernen",
+						"diffusionRequired": "Ein Dateisatz braucht eine Diffusionsdatei.",
+						"hint": "Repository einer Datei leer lassen, um das obige zu verwenden — ein Satz kann sich über mehrere Repositories erstrecken. Größen sind optional, aktivieren aber die Speicherplatzprüfung und einen gemeinsamen Fortschrittsbalken.",
+						"role": {
+							"label": "Rolle"
+						},
+						"fileName": {
+							"label": "Datei"
+						},
+						"repoId": {
+							"label": "Repository (optional)",
+							"placeholder": "Wie oben"
+						},
+						"sizeBytes": {
+							"label": "Größe in Bytes (optional)"
+						},
+						"sha256": {
+							"label": "SHA-256 (optional)"
+						}
 					}
+				},
+				"delete": {
+					"action": "Modell löschen",
+					"title": "Bildmodell löschen",
+					"description": "'{{modelName}}' samt Gewichtsdateien löschen? Das kann nicht rückgängig gemacht werden.",
+					"confirm": "Löschen",
+					"cancel": "Abbrechen",
+					"deleted": "Modell gelöscht.",
+					"error": "Das Modell konnte nicht gelöscht werden."
+				},
+				"partRoles": {
+					"Diffusion": "Diffusionsgewichte",
+					"Vae": "VAE",
+					"ClipL": "CLIP-L-Textencoder",
+					"ClipG": "CLIP-G-Textencoder",
+					"T5": "T5-XXL-Textencoder",
+					"Llm": "LLM-Textencoder",
+					"LlmVision": "LLM-Vision-Turm"
+				},
+				"tabs": {
+					"catalog": "Empfohlen",
+					"browse": "Hugging Face",
+					"manual": "Erweitert"
+				},
+				"catalog": {
+					"title": "Empfohlene Bildmodelle",
+					"description": "Geprüfte Modellsätze, die sich mit einem Klick installieren lassen. Größen und Hardware-Eignung gelten für diesen Rechner.",
+					"empty": "In diesem Build sind keine Katalogeinträge verfügbar.",
+					"error": "Der Modellkatalog konnte nicht geladen werden.",
+					"recommended": "Empfohlen",
+					"installed": "Installiert",
+					"install": "Installieren",
+					"parts_one": "{{count}} Datei",
+					"parts_other": "{{count}} Dateien",
+					"multiRepo": "Erstreckt sich über {{count}} Repositories",
+					"diskWarning": "Nicht genug freier Speicherplatz für diesen Download.",
+					"fit": {
+						"Fits": "Passt",
+						"Tight": "Knapp",
+						"WontFit": "Zu groß",
+						"Unknown": "Eignung unbekannt",
+						"FitsHint": "Die dauerhaft benötigten Gewichte ({{resident}}) passen in das gemessene Budget ({{budget}}).",
+						"TightHint": "Die dauerhaft benötigten Gewichte ({{resident}}) passen nur knapp in das gemessene Budget ({{budget}}). Es wird langsam laufen.",
+						"WontFitHint": "Die dauerhaft benötigten Gewichte ({{resident}}) überschreiten das gemessene Budget ({{budget}}).",
+						"UnknownHint": "Das Speicherbudget dieses Rechners konnte nicht gemessen werden — daher wird keine Aussage getroffen, ob dieses Modell läuft."
+					}
+				},
+				"browse": {
+					"title": "Hugging Face durchsuchen",
+					"description": "Text-zu-Bild-Repositories durchsuchen und anschließend die Gewichtsdateien des Modells auswählen.",
+					"searchLabel": "Repositories suchen",
+					"searchPlaceholder": "z. B. flux schnell",
+					"search": "Suchen",
+					"searching": "Wird gesucht…",
+					"empty": "Keine Bild-Repositories für diese Suche gefunden.",
+					"error": "Die Repositories konnten nicht durchsucht werden.",
+					"gated": "Zugangsbeschränkt",
+					"gatedHint": "Dieses Repository erfordert eine akzeptierte Lizenz und ein Hugging-Face-Token — eine Ein-Klick-Installation schlägt sonst mit 401 fehl.",
+					"untrustedPublisher": "Unbestätigter Anbieter",
+					"untrustedPublisherHint": "Dieser Anbieter ist kein bekannter Packager — prüfen Sie das Repository vor dem Download.",
+					"noWeights": "Keine Gewichte",
+					"select": "Öffnen",
+					"back": "Zurück zu den Ergebnissen",
+					"columns": {
+						"repo": "Repository",
+						"downloads": "Downloads",
+						"likes": "Likes",
+						"updated": "Aktualisiert",
+						"license": "Lizenz",
+						"action": "Aktion"
+					},
+					"files": {
+						"title": "Gewichtsdateien in {{repoId}}",
+						"loading": "Dateien werden geladen…",
+						"empty": "Dieses Repository enthält keine installierbaren Gewichtsdateien.",
+						"error": "Die Dateien dieses Repositories konnten nicht gelesen werden.",
+						"hint": "Jede benötigte Datei ankreuzen und ihre Rolle prüfen. Aufgeteilte Dateien (…-00001-of-00003) werden nicht aufgeführt: ein Teil ist genau eine Datei.",
+						"columns": {
+							"select": "Nutzen",
+							"file": "Datei",
+							"role": "Rolle",
+							"size": "Größe"
+						}
+					},
+					"modelName": {
+						"label": "Installieren als",
+						"placeholder": "flux.1-schnell"
+					},
+					"family": {
+						"label": "Familie"
+					},
+					"nameTaken": "Ein Modell mit diesem Namen ist bereits installiert.",
+					"diffusionRequired": "Vor der Installation eine Diffusionsdatei auswählen.",
+					"duplicateRole": "Jede Rolle kann nur von einer Datei belegt werden.",
+					"install": "Ausgewählte Dateien installieren"
 				}
+			},
+			"viewer": {
+				"title": "Erzeugtes Bild",
+				"download": "PNG herunterladen",
+				"seed": "Seed",
+				"seedRandom": "Zufällig — von der Laufzeit nicht gemeldet",
+				"copySeed": "Seed kopieren",
+				"seedCopied": "Seed kopiert",
+				"settings": "Einstellungen",
+				"settingsValue": "{{model}} · {{width}}×{{height}} · {{steps}} Schritte · {{sampler}} · CFG {{cfgScale}}",
+				"duration": "Dauer"
 			}
 		},
 		"preview": {

@@ -81,6 +81,7 @@ public sealed class ImageJobStore(NodeChatDbContext dbContext) : IImageJobStore
         long durationMs,
         int outputWidth,
         int outputHeight,
+        long resolvedSeed,
         CancellationToken cancellationToken)
     {
         var entity = await LoadTrackedAsync(jobId, cancellationToken).ConfigureAwait(false);
@@ -100,6 +101,14 @@ public sealed class ImageJobStore(NodeChatDbContext dbContext) : IImageJobStore
         {
             entity.Width = outputWidth;
             entity.Height = outputHeight;
+        }
+
+        // Same reasoning for the seed: a request carrying the random sentinel -1 must record the seed the runtime
+        // actually drew, or the image can never be reproduced. Guarded so a runtime that reported no seed (negative)
+        // leaves the requested value alone rather than overwriting it with another sentinel.
+        if (resolvedSeed >= 0)
+        {
+            entity.Seed = resolvedSeed;
         }
 
         _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);

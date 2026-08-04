@@ -83,13 +83,29 @@ public sealed class StartImageModelDownloadEndpoint(IImageModelDownloadCoordinat
             {
                 Role = role,
                 FileName = part.FileName.Trim(),
-                Sha256 = string.IsNullOrWhiteSpace(part.Sha256) ? null : part.Sha256.Trim()
+                Sha256 = string.IsNullOrWhiteSpace(part.Sha256) ? null : part.Sha256.Trim(),
+                RepoId = string.IsNullOrWhiteSpace(part.RepoId) ? null : part.RepoId.Trim(),
+                // A non-positive size is treated as "unknown" rather than accepted: it would poison the set total and
+                // leave the disk pre-flight computing a smaller requirement than the transfer actually needs.
+                SizeBytes = part.SizeBytes is > 0 ? part.SizeBytes : null
             });
         }
 
         if (parts.TrueForAll(static p => p.Role != ImageModelPartRole.Diffusion))
         {
             AddError("The file-set must include a diffusion part.");
+            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            return;
+        }
+
+        // One file per role. The launch argument builder emits one flag per role and iterates the whole set, so a
+        // second VAE would pass --vae twice and a second diffusion file would be downloaded and then never referenced.
+        // Cheap to type by hand and easy to click twice in the repo file picker, so it is rejected at the boundary
+        // rather than surfacing as a multi-gigabyte download that produces a model the runtime cannot start.
+        var duplicateRole = parts.GroupBy(static p => p.Role).FirstOrDefault(static group => group.Count() > 1);
+        if (duplicateRole is not null)
+        {
+            AddError($"The file-set declares the '{duplicateRole.Key}' part more than once.");
             await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
             return;
         }

@@ -30,6 +30,11 @@ public interface IImageJobStore
     ///     dimensions of the image that was actually produced. The runtime rounds a requested size up to a multiple of
     ///     64, so the requested numbers are frequently wrong about the output; a succeeded job must describe the PNG the
     ///     operator can see, not the request that produced it.
+    ///     <para>
+    ///         <paramref name="resolvedSeed" /> is written back for the same reason: a job submitted with the random
+    ///         sentinel <c>-1</c> otherwise keeps <c>-1</c> forever and the seed that actually produced the image is
+    ///         lost, making the result impossible to reproduce.
+    ///     </para>
     /// </summary>
     Task MarkSucceededAsync(Guid jobId,
         Guid imageId,
@@ -37,6 +42,7 @@ public interface IImageJobStore
         long durationMs,
         int outputWidth,
         int outputHeight,
+        long resolvedSeed,
         CancellationToken cancellationToken);
 
     /// <summary>Marks a job <see cref="ImageJobStatus.Failed" /> with a display-safe (already sanitized) error.</summary>

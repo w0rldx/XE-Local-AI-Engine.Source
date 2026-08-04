@@ -3,6 +3,8 @@ namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Images;
+using XE_Local_AI_Engine.Client.Services.Images.Catalog;
+using XE_Local_AI_Engine.Client.Services.Images.Catalog.Implementation;
 using XE_Local_AI_Engine.Client.Services.Images.Implementation;
 using XE_Local_AI_Engine.Providers.HuggingFace;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp;
@@ -24,6 +26,10 @@ internal static class AddNodeImagesExtensions
         builder.Services.AddHuggingFaceImageModelStore(configuration);
         builder.Services.AddStableDiffusionCppImageProvider();
         builder.Services.AddStableDiffusionCppImageRuntime();
+
+        // Curated image-model catalog (embedded seed). Singleton: the document is immutable and loading it means
+        // reading + validating an assembly resource, which should happen once rather than per catalog request.
+        builder.Services.AddSingleton<IImageModelCatalog, ImageModelCatalog>();
 
         // Persistence boundary for the job registry. Scoped: it owns a NodeChatDbContext per operation (the prompt is
         // encrypted at rest by the node encryption interceptor on save).
