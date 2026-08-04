@@ -247,6 +247,16 @@ public static class LocalApiRoutes
         // body, PUT, DELETE).
         public const string Definitions = "skills";
         public const string DefinitionById = "skills/{skillId}";
+
+        // Two-phase third-party import. The literal "import" segment sits under the collection, not the {skillId}
+        // param, so it can never be parsed as an id. Preview writes nothing; the commit replays the previewed payload.
+        public const string ImportPreview = "skills/import/preview";
+        public const string Import = "skills/import";
+
+        // Bundled skill files. {resourceName} is a skill-root-relative path, so it can carry slashes: the client
+        // percent-escapes it and the endpoint decodes + validates before the lookup (see SkillResourceRouteName).
+        public const string Resources = "skills/{skillId}/resources";
+        public const string ResourceByName = "skills/{skillId}/resources/{resourceName}";
     }
 
     /// <summary>

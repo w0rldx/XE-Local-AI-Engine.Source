@@ -53,6 +53,29 @@ export const zXeLocalAiEngineClientEndpointsTutorialStateV1SaveTutorialStateRequ
 	status: z.string().optional(),
 });
 
+export const zXeLocalAiEngineClientServicesAgentsSkillImportStatus = z.enum(["Imported", "Replaced", "Skipped"]);
+
+export const zXeLocalAiEngineClientEndpointsSkillsV1SkillImportOutcomeResponse = z.object({
+	name: z.string(),
+	status: zXeLocalAiEngineClientServicesAgentsSkillImportStatus,
+	reason: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsSkillsV1SkillImportCommitResponse = z.object({
+	outcomes: z.array(zXeLocalAiEngineClientEndpointsSkillsV1SkillImportOutcomeResponse),
+});
+
+export const zXeLocalAiEngineClientServicesAgentsSkillImportConflictResolution = z.enum(["Skip", "Replace"]);
+
+export const zXeLocalAiEngineClientEndpointsSkillsV1SkillImportCommitEndpointRequest = z.object({
+	token: z.guid().optional(),
+	skillNames: z.array(z.string()).nullish(),
+	conflictResolution: zXeLocalAiEngineClientServicesAgentsSkillImportConflictResolution.optional(),
+	acknowledged: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientPersistenceAgentSkillOrigin = z.enum(["Local", "Imported"]);
+
 export const zXeLocalAiEngineClientEndpointsSkillsV1SkillResponse = z.object({
 	id: z.guid(),
 	name: z.string(),
@@ -65,17 +88,61 @@ export const zXeLocalAiEngineClientEndpointsSkillsV1SkillResponse = z.object({
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 	createdAtUtc: z.int(),
 	updatedAtUtc: z.int(),
+	license: z.string().nullish(),
+	compatibility: z.string().nullish(),
+	allowedTools: z.string().nullish(),
+	metadata: z.record(z.string(), z.string()).nullish(),
+	origin: zXeLocalAiEngineClientPersistenceAgentSkillOrigin,
+	sourceUri: z.string().nullish(),
+	importedAtUtc: z.int().nullish(),
+	resourceCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 });
 
 export const zXeLocalAiEngineClientEndpointsSkillsV1CreateSkillRequest = z.object({
 	name: z.string().nullish(),
 	description: z.string().nullish(),
 	body: z.string().nullish(),
+	license: z.string().nullish(),
+	compatibility: z.string().nullish(),
+	allowedTools: z.string().nullish(),
+	metadata: z.record(z.string(), z.string()).nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsSkillsV1DeleteSkillRequest = z.record(z.string(), z.never());
 
 export const zXeLocalAiEngineClientEndpointsSkillsV1GetSkillRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsSkillsV1SkillResourceResponse = z.object({
+	name: z.string(),
+	description: z.string(),
+	mediaType: z.string(),
+	sizeBytes: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	content: z.string(),
+});
+
+export const zXeLocalAiEngineClientEndpointsSkillsV1GetSkillResourceRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsSkillsV1SkillResourceSummaryResponse = z.object({
+	name: z.string(),
+	description: z.string(),
+	mediaType: z.string(),
+	sizeBytes: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+});
+
+export const zXeLocalAiEngineClientEndpointsSkillsV1ListSkillResourcesResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsSkillsV1SkillResourceSummaryResponse),
+});
+
+export const zXeLocalAiEngineClientEndpointsSkillsV1ListSkillResourcesRequest = z.record(z.string(), z.never());
 
 export const zXeLocalAiEngineClientEndpointsSkillsV1SkillSummaryResponse = z.object({
 	id: z.guid(),
@@ -88,10 +155,57 @@ export const zXeLocalAiEngineClientEndpointsSkillsV1SkillSummaryResponse = z.obj
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 	createdAtUtc: z.int(),
 	updatedAtUtc: z.int(),
+	license: z.string().nullish(),
+	compatibility: z.string().nullish(),
+	allowedTools: z.string().nullish(),
+	metadata: z.record(z.string(), z.string()).nullish(),
+	origin: zXeLocalAiEngineClientPersistenceAgentSkillOrigin,
+	sourceUri: z.string().nullish(),
+	importedAtUtc: z.int().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsSkillsV1ListSkillsResponse = z.object({
 	items: z.array(zXeLocalAiEngineClientEndpointsSkillsV1SkillSummaryResponse),
+});
+
+export const zXeLocalAiEngineClientEndpointsSkillsV1SkillImportCandidateResponse = z.object({
+	name: z.string(),
+	description: z.string(),
+	body: z.string(),
+	license: z.string().nullish(),
+	compatibility: z.string().nullish(),
+	allowedTools: z.string().nullish(),
+	metadata: z.record(z.string(), z.string()).nullish(),
+	bodySizeBytes: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	bodyLineCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	resources: z.array(zXeLocalAiEngineClientEndpointsSkillsV1SkillResourceSummaryResponse),
+	refusedScripts: z.array(z.string()),
+	conflictsWithExistingSkill: z.boolean(),
+	problems: z.array(z.string()),
+	canImport: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsSkillsV1SkillImportPreviewResponse = z.object({
+	token: z.guid(),
+	sourceUri: z.string(),
+	skills: z.array(zXeLocalAiEngineClientEndpointsSkillsV1SkillImportCandidateResponse),
+	warnings: z.array(z.string()),
+});
+
+export const zXeLocalAiEngineClientEndpointsSkillsV1SkillImportSourceKind = z.enum(["Upload", "Paste", "GitHub"]);
+
+export const zXeLocalAiEngineClientEndpointsSkillsV1SkillImportPreviewRequest = z.object({
+	source: zXeLocalAiEngineClientEndpointsSkillsV1SkillImportSourceKind.optional(),
+	file: z.string().nullish(),
+	markdown: z.string().nullish(),
+	owner: z.string().nullish(),
+	repository: z.string().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsSkillsV1UpdateSkillRequest = z.object({
@@ -99,6 +213,10 @@ export const zXeLocalAiEngineClientEndpointsSkillsV1UpdateSkillRequest = z.objec
 	description: z.string().nullish(),
 	body: z.string().nullish(),
 	enabled: z.boolean().optional(),
+	license: z.string().nullish(),
+	compatibility: z.string().nullish(),
+	allowedTools: z.string().nullish(),
+	metadata: z.record(z.string(), z.string()).nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobRunCancelResponse = z.object({
@@ -1702,9 +1820,12 @@ export const zXeLocalAiEngineClientEndpointsLocalChatV1ResolveToolApprovalRespon
 	approved: z.boolean(),
 });
 
+export const zXeLocalAiEngineClientModelsEnumsApprovalScope = z.enum(["Once", "Session"]);
+
 export const zXeLocalAiEngineClientEndpointsLocalChatV1ResolveToolApprovalRequest = z.object({
 	requestId: z.string().min(1),
 	approved: z.boolean(),
+	scope: zXeLocalAiEngineClientModelsEnumsApprovalScope.nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsLocalChatV1ResolveUserQuestionResponse = z.object({
@@ -3279,6 +3400,13 @@ export const zSaveTutorialStateBody = zXeLocalAiEngineClientEndpointsTutorialSta
  */
 export const zSaveTutorialStateResponse = z.void();
 
+export const zCommitSkillImportBody = zXeLocalAiEngineClientEndpointsSkillsV1SkillImportCommitEndpointRequest;
+
+/**
+ * Success
+ */
+export const zCommitSkillImportResponse = zXeLocalAiEngineClientEndpointsSkillsV1SkillImportCommitResponse;
+
 /**
  * Success
  */
@@ -3319,6 +3447,32 @@ export const zUpdateSkillPath = z.object({
  * Success
  */
 export const zUpdateSkillResponse = zXeLocalAiEngineClientEndpointsSkillsV1SkillResponse;
+
+export const zGetSkillResourcePath = z.object({
+	skillId: z.guid(),
+	resourceName: z.string(),
+});
+
+/**
+ * Success
+ */
+export const zGetSkillResourceResponse = zXeLocalAiEngineClientEndpointsSkillsV1SkillResourceResponse;
+
+export const zListSkillResourcesPath = z.object({
+	skillId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zListSkillResourcesResponse = zXeLocalAiEngineClientEndpointsSkillsV1ListSkillResourcesResponse;
+
+export const zPreviewSkillImportBody = zXeLocalAiEngineClientEndpointsSkillsV1SkillImportPreviewRequest;
+
+/**
+ * Success
+ */
+export const zPreviewSkillImportResponse = zXeLocalAiEngineClientEndpointsSkillsV1SkillImportPreviewResponse;
 
 export const zCancelScheduledJobRunPath = z.object({
 	runId: z.guid(),

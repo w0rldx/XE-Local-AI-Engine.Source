@@ -112,6 +112,53 @@
         ]
       }
     },
+    "/api/local/v1/skills/import": {
+      "post": {
+        "tags": [
+          "Skills"
+        ],
+        "operationId": "commitSkillImport",
+        "requestBody": {
+          "x-name": "SkillImportCommitEndpointRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsSkillsV1SkillImportCommitEndpointRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsSkillsV1SkillImportCommitResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/skills": {
       "post": {
         "tags": [
@@ -307,6 +354,151 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsSkillsV1SkillResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/skills/{skillId}/resources/{resourceName}": {
+      "get": {
+        "tags": [
+          "Skills"
+        ],
+        "operationId": "getSkillResource",
+        "parameters": [
+          {
+            "name": "skillId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          {
+            "name": "resourceName",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsSkillsV1SkillResourceResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/skills/{skillId}/resources": {
+      "get": {
+        "tags": [
+          "Skills"
+        ],
+        "operationId": "listSkillResources",
+        "parameters": [
+          {
+            "name": "skillId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsSkillsV1ListSkillResourcesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/skills/import/preview": {
+      "post": {
+        "tags": [
+          "Skills"
+        ],
+        "operationId": "previewSkillImport",
+        "requestBody": {
+          "x-name": "SkillImportPreviewRequest",
+          "description": "",
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsSkillsV1SkillImportPreviewRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsSkillsV1SkillImportPreviewResponse"
                 }
               }
             }
@@ -9959,6 +10151,90 @@
           }
         }
       },
+      "XE_Local_AI_EngineClientEndpointsSkillsV1SkillImportCommitResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "outcomes"
+        ],
+        "properties": {
+          "outcomes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsSkillsV1SkillImportOutcomeResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsSkillsV1SkillImportOutcomeResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "status"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesAgentsSkillImportStatus"
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesAgentsSkillImportStatus": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Imported",
+          "Replaced",
+          "Skipped"
+        ],
+        "enum": [
+          "Imported",
+          "Replaced",
+          "Skipped"
+        ]
+      },
+      "XE_Local_AI_EngineClientEndpointsSkillsV1SkillImportCommitEndpointRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "token": {
+            "type": "string",
+            "format": "guid"
+          },
+          "skillNames": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "conflictResolution": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesAgentsSkillImportConflictResolution"
+          },
+          "acknowledged": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesAgentsSkillImportConflictResolution": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Skip",
+          "Replace"
+        ],
+        "enum": [
+          "Skip",
+          "Replace"
+        ]
+      },
       "XE_Local_AI_EngineClientEndpointsSkillsV1SkillResponse": {
         "type": "object",
         "additionalProperties": false,
@@ -9970,7 +10246,9 @@
           "enabled",
           "version",
           "createdAtUtc",
-          "updatedAtUtc"
+          "updatedAtUtc",
+          "origin",
+          "resourceCount"
         ],
         "properties": {
           "id": {
@@ -9998,8 +10276,54 @@
           },
           "updatedAtUtc": {
             "type": "integer"
+          },
+          "license": {
+            "type": "string",
+            "nullable": true
+          },
+          "compatibility": {
+            "type": "string",
+            "nullable": true
+          },
+          "allowedTools": {
+            "type": "string",
+            "nullable": true
+          },
+          "metadata": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "origin": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceAgentSkillOrigin"
+          },
+          "sourceUri": {
+            "type": "string",
+            "nullable": true
+          },
+          "importedAtUtc": {
+            "type": "integer",
+            "nullable": true
+          },
+          "resourceCount": {
+            "type": "integer",
+            "format": "int32"
           }
         }
+      },
+      "XE_Local_AI_EngineClientPersistenceAgentSkillOrigin": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Local",
+          "Imported"
+        ],
+        "enum": [
+          "Local",
+          "Imported"
+        ]
       },
       "XE_Local_AI_EngineClientEndpointsSkillsV1CreateSkillRequest": {
         "type": "object",
@@ -10016,6 +10340,25 @@
           "body": {
             "type": "string",
             "nullable": true
+          },
+          "license": {
+            "type": "string",
+            "nullable": true
+          },
+          "compatibility": {
+            "type": "string",
+            "nullable": true
+          },
+          "allowedTools": {
+            "type": "string",
+            "nullable": true
+          },
+          "metadata": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": {
+              "type": "string"
+            }
           }
         }
       },
@@ -10024,6 +10367,83 @@
         "additionalProperties": false
       },
       "XE_Local_AI_EngineClientEndpointsSkillsV1GetSkillRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsSkillsV1SkillResourceResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "description",
+          "mediaType",
+          "sizeBytes",
+          "content"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "mediaType": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "content": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsSkillsV1GetSkillResourceRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsSkillsV1ListSkillResourcesResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsSkillsV1SkillResourceSummaryResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsSkillsV1SkillResourceSummaryResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "description",
+          "mediaType",
+          "sizeBytes"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "mediaType": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsSkillsV1ListSkillResourcesRequest": {
         "type": "object",
         "additionalProperties": false
       },
@@ -10052,7 +10472,8 @@
           "enabled",
           "version",
           "createdAtUtc",
-          "updatedAtUtc"
+          "updatedAtUtc",
+          "origin"
         ],
         "properties": {
           "id": {
@@ -10077,8 +10498,187 @@
           },
           "updatedAtUtc": {
             "type": "integer"
+          },
+          "license": {
+            "type": "string",
+            "nullable": true
+          },
+          "compatibility": {
+            "type": "string",
+            "nullable": true
+          },
+          "allowedTools": {
+            "type": "string",
+            "nullable": true
+          },
+          "metadata": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "origin": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceAgentSkillOrigin"
+          },
+          "sourceUri": {
+            "type": "string",
+            "nullable": true
+          },
+          "importedAtUtc": {
+            "type": "integer",
+            "nullable": true
           }
         }
+      },
+      "XE_Local_AI_EngineClientEndpointsSkillsV1SkillImportPreviewResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "token",
+          "sourceUri",
+          "skills",
+          "warnings"
+        ],
+        "properties": {
+          "token": {
+            "type": "string",
+            "format": "guid"
+          },
+          "sourceUri": {
+            "type": "string"
+          },
+          "skills": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsSkillsV1SkillImportCandidateResponse"
+            }
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsSkillsV1SkillImportCandidateResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "description",
+          "body",
+          "bodySizeBytes",
+          "bodyLineCount",
+          "resources",
+          "refusedScripts",
+          "conflictsWithExistingSkill",
+          "problems",
+          "canImport"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "license": {
+            "type": "string",
+            "nullable": true
+          },
+          "compatibility": {
+            "type": "string",
+            "nullable": true
+          },
+          "allowedTools": {
+            "type": "string",
+            "nullable": true
+          },
+          "metadata": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "bodySizeBytes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "bodyLineCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "resources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsSkillsV1SkillResourceSummaryResponse"
+            }
+          },
+          "refusedScripts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "conflictsWithExistingSkill": {
+            "type": "boolean"
+          },
+          "problems": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "canImport": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsSkillsV1SkillImportPreviewRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "source": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsSkillsV1SkillImportSourceKind"
+          },
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "nullable": true
+          },
+          "markdown": {
+            "type": "string",
+            "nullable": true
+          },
+          "owner": {
+            "type": "string",
+            "nullable": true
+          },
+          "repository": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsSkillsV1SkillImportSourceKind": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Upload",
+          "Paste",
+          "GitHub"
+        ],
+        "enum": [
+          "Upload",
+          "Paste",
+          "GitHub"
+        ]
       },
       "XE_Local_AI_EngineClientEndpointsSkillsV1UpdateSkillRequest": {
         "type": "object",
@@ -10098,6 +10698,25 @@
           },
           "enabled": {
             "type": "boolean"
+          },
+          "license": {
+            "type": "string",
+            "nullable": true
+          },
+          "compatibility": {
+            "type": "string",
+            "nullable": true
+          },
+          "allowedTools": {
+            "type": "string",
+            "nullable": true
+          },
+          "metadata": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": {
+              "type": "string"
+            }
           }
         }
       },
@@ -14530,8 +15149,28 @@
           },
           "approved": {
             "type": "boolean"
+          },
+          "scope": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientModelsEnumsApprovalScope"
+              }
+            ]
           }
         }
+      },
+      "XE_Local_AI_EngineClientModelsEnumsApprovalScope": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Once",
+          "Session"
+        ],
+        "enum": [
+          "Once",
+          "Session"
+        ]
       },
       "XE_Local_AI_EngineClientEndpointsLocalChatV1ResolveUserQuestionResponse": {
         "type": "object",
