@@ -357,25 +357,47 @@ public sealed class LocalToolOfferProviderTests
             "the profile-intersection pool applies the same knowledge-tool locality gate");
     }
 
-    // ---- ask_user: merged into the built-in offer, ungated ----
+    // ---- ask_user: capability-gated, locality-ungated ----
 
     [Test]
-    public void GetOfferedTools_AlwaysOffersAskUser_WhateverTheModel()
+    public void GetOfferedTools_OffersAskUserToACapableModel_LocalOrCloud_AndWithholdsItFromANonCapableOne()
     {
-        // ask_user is deliberately outside BOTH offer gates. The capability gate exists to withhold high-risk tools from
-        // a model that cannot drive them; the locality gate exists to keep node-local CONTENT off a cloud provider.
-        // Neither applies to a tool whose whole payload is the model's own question, and the decision is that any turn
-        // that can call tools at all can ask its operator a question. So it must survive every offer variant.
+        // ask_user sits on exactly ONE of the two offer gates.
+        //   * Capability gate: ON. A model that is not tool-capable cannot call it, and an offered schema is not free —
+        //     llama.cpp compiles the whole offered tools array into one GBNF grammar with a hard repetition ceiling, and
+        //     this is the most deeply nested schema in the catalog (docs/agent-knowledge.md §3).
+        //   * Locality gate: OFF. A tool-capable CLOUD model is still offered it: the payload is the model's own
+        //     question, so the cloud-egress gate has nothing to withhold.
         var provider = CreateProvider("qwen3:8b");
 
         AssertEx.Contains(provider.GetOfferedTools("qwen3:8b"), tool => tool.Name == AskUserTool.ToolName,
-            "the capable offer must carry ask_user");
-        AssertEx.Contains(provider.GetOfferedTools("some-other-model"), tool => tool.Name == AskUserTool.ToolName,
-            "the NON-capable offer must carry ask_user too — it is not a high-risk tool");
+            "a tool-capable LOCAL model must be offered ask_user");
         AssertEx.Contains(provider.GetOfferedTools("qwen3:8b", isCloudModel: true), tool => tool.Name == AskUserTool.ToolName,
-            "the cloud-gated offer must carry ask_user — no node-local content travels through it");
+            "a tool-capable CLOUD model must still be offered ask_user — no node-local content travels through it");
+        AssertEx.False(provider.GetOfferedTools("some-other-model").Any(tool => tool.Name == AskUserTool.ToolName),
+            "a model that is not tool-capable must NOT be offered ask_user");
         AssertEx.Contains(provider.GetOfferedToolsForProfile("qwen3:8b"), tool => tool.Name == AskUserTool.ToolName,
             "the profile-intersection pool must carry ask_user so a bound agent's projection can union it in");
+        AssertEx.False(provider.GetOfferedToolsForProfile("some-other-model").Any(tool => tool.Name == AskUserTool.ToolName),
+            "the profile pool applies the same capability gate, so an opt-in cannot bypass it");
+    }
+
+    [Test]
+    public void ProductionCatalog_WhenModelIsNotToolCapable_OffersNothingBeyondTheUngatedArithmeticBuiltins()
+    {
+        // The point of gating ask_user: a non-tool-capable model must not be handed a schema it cannot drive. Against the
+        // REAL catalog the non-capable offer collapses to the two ungated LocalAgentToolRegistry builtins (the clock and
+        // arithmetic tools docs/agent-knowledge.md §3 records as the partial-failure residue) — every gated tool,
+        // ask_user included, is withheld.
+        var provider = new LocalToolOfferProvider(new LocalAgentToolRegistry(),
+            new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
+            StubNodeRuntimeSettings.Create().WithToolCapableModels("qwen3:8b").Build(),
+            allowCloudKnowledgeAccess: false);
+
+        var offered = provider.GetOfferedTools("some-other-model");
+
+        AssertEx.Equal("Calculate,GetCurrentTime",
+            string.Join(',', offered.Select(tool => tool.Name).OrderBy(name => name, StringComparer.Ordinal)));
     }
 
     [Test]

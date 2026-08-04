@@ -71,16 +71,16 @@ public sealed class CoderAgentSendIntersectionTests
         var resolved = await resolver.ResolveAsync(coder.Id, IncapableModel).ConfigureAwait(false);
 
         AssertEx.NotNull(resolved);
-        // The coder tools are capability-gated, so the intersection collapses. ask_user is NOT capability-gated (this
-        // model still drives tool calls, it is just outside the high-risk allow-list), so it is all that survives.
+        // The coder tools are capability-gated, so the intersection collapses to ∅. ask_user is capability-gated too, so
+        // it does not survive either: AskUserToolOffer.EnsureOffered lifts the descriptor from the OFFER rather than
+        // fabricating one, and this model was never offered it.
         foreach (var toolName in CoderToolNames)
         {
             AssertEx.False(resolved!.AllowedTools.Any(tool => tool.Name == toolName),
                 $"'{toolName}' is capability-gated and must be withheld from a model outside ToolCapableModels");
         }
 
-        AssertEx.Equal(expected: 1, resolved!.AllowedTools.Count);
-        AssertEx.Equal(AskUserTool.ToolName, resolved.AllowedTools[0].Name);
+        AssertEx.Equal(expected: 0, resolved!.AllowedTools.Count);
     }
 
     private static AgentDefinitionRecord SeededCoderDefinition()
