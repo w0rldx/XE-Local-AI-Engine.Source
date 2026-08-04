@@ -20,6 +20,7 @@ using XE_Local_AI_Engine.Client.Models.Events;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.Agents.Approval;
+using XE_Local_AI_Engine.Client.Services.Agents.Approval.Implementation;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
@@ -51,6 +52,41 @@ public sealed partial class InvocationRunner : IInvocationRunner
     private const string ModelDoesNotSupportThinkingMessage = "This model does not support reasoning.";
 
     private const string ModelDoesNotSupportToolsMessage = "This model does not support tool calling.";
+
+    // Approval-decision audit labels for the two outcomes the runner reaches WITHOUT an operator round-trip. They
+    // extend the ApprovalDecisions vocabulary (approve/deny/timeout) and read the same way in the audit trail; a
+    // memo-suppressed approval is still audited precisely so session scope cannot thin the trail invisibly.
+    // follow-up: fold both into ApprovalDecisions once the concurrent skills-import work on Client.Persistence lands.
+    private const string SessionScopeApprovalDecision = "session-scope auto-approve";
+
+    private const string UnattendedApprovalDecision = "unattended-unavailable";
+
+    // Upper bound on remembered session approvals. Each entry is a conversation + tool + skill + version + resource
+    // tuple, so reaching this needs hundreds of distinct deliberate approvals; the cap exists so a long-lived node
+    // cannot grow the memo without limit. Overflow FAILS CLOSED — the memo simply stops accepting new entries and the
+    // operator is prompted again — so the cap can only ever add prompts, never remove one.
+    private const int MaxSessionApprovals = 256;
+
+    // MAF's own parameter names on load_skill / read_skill_resource. The package exposes the TOOL names as constants but
+    // not the argument names, so these are pinned by hand. A rename in a future package bump degrades fail-closed: the
+    // memo stops matching, every skill call prompts again, and nothing is auto-approved that should not be.
+    private const string SkillNameArgument = "skillName";
+
+    private const string ResourceNameArgument = "resourceName";
+
+    // The audited risk category of the three MAF skill tools. They reach the model through AIContextProviders
+    // (progressive disclosure), never through the package's tool OFFER, so the offer lookup in
+    // ResolveApprovalToolCategory cannot see them and every skill approval was auditing as Unknown. Registering them in
+    // the tool catalog instead would move the config hash for every skill-bearing agent (and needs an executable that
+    // does not exist), so the audit is fixed here, where the only thing missing was a name.
+    private static readonly Dictionary<string, ToolCategory> SkillToolCategories = new(StringComparer.Ordinal)
+    {
+#pragma warning disable MAAI001 // Agent Skills is [Experimental] in Microsoft.Agents.AI; the same scoped suppression the provider call sites use.
+        [AgentSkillsProvider.LoadSkillToolName] = ToolCategory.ReadLocal,
+        [AgentSkillsProvider.ReadSkillResourceToolName] = ToolCategory.ReadLocal,
+        [AgentSkillsProvider.RunSkillScriptToolName] = ToolCategory.WriteExecute
+#pragma warning restore MAAI001
+    };
 
     // llama-server failed to COMPILE the constrained-decoding grammar for the offered tool schemas ("Failed to
     // initialize samplers: failed to parse grammar"). The model is tool-capable — the schema set is what it could not
@@ -107,11 +143,31 @@ public sealed partial class InvocationRunner : IInvocationRunner
     private readonly ConcurrentDictionary<string, TaskCompletionSource<IReadOnlyList<UserQuestionAnswer>>> _pendingQuestions = new(StringComparer.Ordinal);
 
     private readonly ConcurrentDictionary<string, PendingToolCall> _pendingToolCalls = new(StringComparer.Ordinal);
+
+    // Session-scoped approvals the operator explicitly granted (ApprovalScope.Session), used as a SET — the byte value
+    // is ignored. Lives on the singleton runner, next to _pendingToolCalls/_pendingQuestions, because the memo has to
+    // outlive the turn that created it: an approval agent is scoped to one invocation and could never span the
+    // conversation. Never persisted, so a node restart forgets everything in here.
+    private readonly ConcurrentDictionary<ApprovalMemoKey, byte> _sessionApprovals = new();
+
+    // The memo key a currently-pending approval WOULD be remembered under, keyed by the approval request id. It is
+    // written just before the request is broadcast, while the skill context is still in hand, and removed again by the
+    // waiter. An entry exists ONLY for a memo-eligible request, which is what makes the eligibility rules — the two
+    // read-only skill tools, a locally authored skill, session scope enabled — impossible to bypass from the resolve
+    // side.
+    private readonly ConcurrentDictionary<string, ApprovalMemoKey> _sessionApprovalCandidates = new(StringComparer.Ordinal);
     private readonly ProviderCallBudgetOptions _providerCallBudgetOptions;
     private readonly IProviderStreamResilience _providerStreamResilience;
     private readonly ILocalModelProviderResolver _providerResolver;
     private readonly ProviderResilienceOptions _resilienceOptions;
     private readonly IRuntimePackageValidator _runtimePackageValidator;
+
+    // The operator's "skill tools always prompt" switch, read once at singleton construction off the composed node
+    // approval policy (an operator edit applies on the next node restart, like the rest of that policy). Only the node
+    // policy carries it: any other IToolApprovalPolicy — the AI.Agent permissive floor, a test double — leaves session
+    // scope available, which is the pre-existing behaviour for every deployment that has not set the knob.
+    private readonly bool _skillSessionScopeDisabled;
+
     private readonly SpawnOptions _spawnOptions;
     private readonly Lock _syncRoot = new();
     private readonly AgentToolPipelineOptions _toolPipelineOptions;
@@ -167,6 +223,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         INodeRuntimeSettings runtimeSettings,
         IOptions<SpawnOptions> spawnOptions,
         IToolApprovalAuditRecorder approvalAuditRecorder,
+        IToolApprovalPolicy approvalPolicy,
         UserQuestionAnswerStash userQuestionAnswerStash,
         ILogger<InvocationRunner> logger)
     {
@@ -206,6 +263,12 @@ public sealed partial class InvocationRunner : IInvocationRunner
                         ?? runtimeSettings.GetDefaultModelName();
         _maxResponseSizeBytes = runtimeSettings.GetMaxResponseSizeMb() * 1024 * 1024;
         _maxPendingToolCallAge = TimeSpan.FromMinutes(runtimeSettings.GetMaxPendingToolCallAgeMinutes());
+
+        // A concrete-type test rather than a widened IToolApprovalPolicy: the interface is the cross-project AI.Agent
+        // contract for one call's yes/no verdict, and the node-only session-scope knob has no place on it. Any other
+        // implementation leaves session scope available (today's behaviour).
+        ArgumentNullException.ThrowIfNull(approvalPolicy);
+        _skillSessionScopeDisabled = approvalPolicy is NodeToolApprovalPolicy { SkillSessionScopeDisabled: true };
     }
 
     public int ActiveInvocationCount => _activeInvocationCompletions.Count;
@@ -533,14 +596,25 @@ public sealed partial class InvocationRunner : IInvocationRunner
         }
     }
 
-    public void ResolveApprovalResult(ApprovalResolvedEvent evt)
+    public void ResolveApprovalResult(ApprovalResolvedEvent evt, ApprovalScope scope = ApprovalScope.Once)
     {
         ArgumentNullException.ThrowIfNull(evt);
 
-        if (_pendingToolCalls.TryGetValue(evt.RequestId, out var pendingToolCall))
+        if (!_pendingToolCalls.TryGetValue(evt.RequestId, out var pendingToolCall))
         {
-            pendingToolCall.ApprovalCompletion.TrySetResult(evt.Approved);
+            return;
         }
+
+        // Remember the decision for the rest of the conversation only when ALL of it lines up: the operator asked for
+        // session scope, the decision is an APPROVE (a deny is never remembered — see ApprovalScope), and the request
+        // was registered as memo-eligible when it was raised. The eligibility rules live entirely on that registration
+        // side, so nothing posted to this endpoint can widen what gets remembered.
+        if (scope == ApprovalScope.Session && evt.Approved && _sessionApprovalCandidates.TryGetValue(evt.RequestId, out var memoKey))
+        {
+            RememberSessionApproval(memoKey);
+        }
+
+        pendingToolCall.ApprovalCompletion.TrySetResult(evt.Approved);
     }
 
     public void ResolveUserQuestionResult(UserQuestionAnsweredEvent evt)
@@ -1266,12 +1340,53 @@ public sealed partial class InvocationRunner : IInvocationRunner
     ///     transport and waits for the remote/local decision. Reuses the <see cref="_pendingToolCalls" /> approval
     ///     completion (resolved by <see cref="ResolveApprovalResult" />) and the pending-tool-call age as the wait
     ///     timeout. The result feeds the threadless resume in <see cref="RunAsync(InvocationExecutionContext, CancellationToken)" />.
+    ///     <para>
+    ///         Two guards run BEFORE anything is registered or broadcast, and their ORDER is security-critical. The
+    ///         unattended check comes first and is unconditional: a run with no human on the other end can never obtain
+    ///         an approval, so it fails immediately rather than parking on a card nobody will see. Only then is the
+    ///         session memo consulted. Inverting the two would let any future pre-authorisation feature that populates
+    ///         the memo become a way to satisfy approvals inside an unattended run — exactly the property the unattended
+    ///         guard exists to deny. Note the blast radius of the first guard honestly: it applies to EVERY
+    ///         approval-required tool an unattended run can reach, not only the skill tools, and that is intended.
+    ///     </para>
     /// </summary>
     private async Task<bool> RequestToolApprovalAsync(RuntimePackage package,
         ToolApprovalRequestContent approvalRequest,
         CancellationToken cancellationToken,
         string? descriptionOverride = null)
     {
+        // Approval-decision audit (OPP-03): the tool name (drives both the category lookup and the audit row) and the
+        // request→decision stopwatch are captured here so the resolved decision below can record a content-free audit row
+        // and metric. Both are needed in the guards and in the timeout catch as well, so they live outside the try.
+        var approvalToolName = (approvalRequest.ToolCall as FunctionCallContent)?.Name;
+        var approvalRequestedTimestamp = Stopwatch.GetTimestamp();
+
+        if (package.IsUnattended)
+        {
+            var reason = $"approval required in an unattended run: {approvalToolName ?? approvalRequest.ToolCall.CallId}";
+            _logger.LogWarning("Failing unattended invocation {InvocationId}: {Reason}", package.InvocationId, reason);
+            await RecordApprovalDecisionAuditAsync(package,
+                approvalToolName,
+                UnattendedApprovalDecision,
+                approvalRequestedTimestamp,
+                cancellationToken).ConfigureAwait(false);
+            throw new ApprovalUnavailableException(reason);
+        }
+
+        var sessionApprovalKey = TryResolveSessionApprovalKey(package, approvalRequest, approvalToolName);
+        if (sessionApprovalKey is { } memoKey && _sessionApprovals.ContainsKey(memoKey))
+        {
+            // The operator already approved this exact skill tool, on this skill at this content version, for this
+            // resource, in this conversation. The prompt is suppressed — but the audit row is NOT: an approval that
+            // leaves no trace is how a session scope quietly thins the record of what an agent was allowed to do.
+            await RecordApprovalDecisionAuditAsync(package,
+                approvalToolName,
+                SessionScopeApprovalDecision,
+                approvalRequestedTimestamp,
+                cancellationToken).ConfigureAwait(false);
+            return true;
+        }
+
         var requestId = Guid.NewGuid().ToString("N");
         var approvalCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var resultCompletion = new TaskCompletionSource<ToolCallResultEvent>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -1284,11 +1399,13 @@ public sealed partial class InvocationRunner : IInvocationRunner
             throw new InvalidOperationException("Failed to register pending tool approval.");
         }
 
-        // Approval-decision audit (OPP-03): the tool name (drives both the category lookup and the audit row) and the
-        // request→decision stopwatch are captured here so the resolved decision below can record a content-free audit row
-        // and metric. Both are needed in the timeout catch as well, so they live outside the try.
-        var approvalToolName = (approvalRequest.ToolCall as FunctionCallContent)?.Name;
-        var approvalRequestedTimestamp = Stopwatch.GetTimestamp();
+        // Only a memo-ELIGIBLE request gets a candidate key, so an "approve for this session" decision on anything else
+        // (run_skill_script, a non-skill tool, an imported skill, or any tool at all while the operator's
+        // always-prompt switch is on) resolves as a plain one-shot approval and is never remembered.
+        if (sessionApprovalKey is { } candidateKey)
+        {
+            _sessionApprovalCandidates[requestId] = candidateKey;
+        }
 
         try
         {
@@ -1355,7 +1472,119 @@ public sealed partial class InvocationRunner : IInvocationRunner
         finally
         {
             _pendingToolCalls.TryRemove(requestId, out _);
+            _sessionApprovalCandidates.TryRemove(requestId, out _);
         }
+    }
+
+    /// <summary>
+    ///     The <see cref="ApprovalMemoKey" /> this approval request may be remembered under, or <see langword="null" />
+    ///     when it is not eligible for a session-scoped approval at all. Everything about the memo's reach is decided
+    ///     here:
+    ///     <list type="bullet">
+    ///         <item>
+    ///             <description>
+    ///                 the operator's node-level always-prompt switch turns eligibility off entirely;
+    ///             </description>
+    ///         </item>
+    ///         <item>
+    ///             <description>
+    ///                 the tool must be one of MAF's two READ-ONLY skill tools. <c>run_skill_script</c> is excluded by
+    ///                 this allow-list and must stay excluded — a durable approval on script execution is the one
+    ///                 decision an operator should have to make every single time — and there is deliberately no
+    ///                 "remember everything" mode for any other tool;
+    ///             </description>
+    ///         </item>
+    ///         <item>
+    ///             <description>
+    ///                 the named skill must be in this package's resolved set, which is what supplies the VERSION the
+    ///                 approval is bound to. A skill the package does not carry cannot be remembered;
+    ///             </description>
+    ///         </item>
+    ///         <item>
+    ///             <description>
+    ///                 an IMPORTED skill is never eligible (see <see cref="ResolvedSkill" />);
+    ///             </description>
+    ///         </item>
+    ///         <item>
+    ///             <description>
+    ///                 <c>read_skill_resource</c> must name the resource it wants, so one approval covers one resource
+    ///                 rather than every resource the skill carries.
+    ///             </description>
+    ///         </item>
+    ///     </list>
+    ///     The skill and resource names are only reachable by reading the model's own call arguments — the framework's
+    ///     approval request carries the base <c>ToolCallContent</c>, and the concrete <see cref="FunctionCallContent" />
+    ///     is what holds them.
+    /// </summary>
+    private ApprovalMemoKey? TryResolveSessionApprovalKey(RuntimePackage package,
+        ToolApprovalRequestContent approvalRequest,
+        string? toolName)
+    {
+        if (_skillSessionScopeDisabled || string.IsNullOrEmpty(toolName) || package.Skills is not { Count: > 0 } skills)
+        {
+            return null;
+        }
+
+#pragma warning disable MAAI001 // Agent Skills is [Experimental] in Microsoft.Agents.AI; the same scoped suppression the provider call sites use.
+        var isResourceRead = string.Equals(toolName, AgentSkillsProvider.ReadSkillResourceToolName, StringComparison.Ordinal);
+        if (!isResourceRead && !string.Equals(toolName, AgentSkillsProvider.LoadSkillToolName, StringComparison.Ordinal))
+        {
+            return null;
+        }
+#pragma warning restore MAAI001
+
+        var call = approvalRequest.ToolCall as FunctionCallContent;
+        if (ReadStringArgument(call, SkillNameArgument) is not { } skillName)
+        {
+            return null;
+        }
+
+        var skill = skills.FirstOrDefault(candidate => string.Equals(candidate.Name, skillName, StringComparison.Ordinal));
+        if (skill is null || skill.IsImported)
+        {
+            return null;
+        }
+
+        string? resourceName = null;
+        if (isResourceRead && (resourceName = ReadStringArgument(call, ResourceNameArgument)) is null)
+        {
+            return null;
+        }
+
+        return new ApprovalMemoKey(package.ConversationId, toolName, skill.Name, skill.Version, resourceName);
+    }
+
+    // A non-empty string argument off a function call, tolerating both the deserialized-string and the raw JsonElement
+    // shapes providers hand the framework. Anything else (absent, null, a number, an object) yields null, which the
+    // caller treats as "not eligible" — the memo fails closed on an argument it cannot read.
+    private static string? ReadStringArgument(FunctionCallContent? call, string argumentName)
+    {
+        if (call?.Arguments is not { } arguments || !arguments.TryGetValue(argumentName, out var value))
+        {
+            return null;
+        }
+
+        var text = value switch
+        {
+            string stringValue => stringValue,
+            JsonElement { ValueKind: JsonValueKind.String } jsonValue => jsonValue.GetString(),
+            _ => null
+        };
+
+        return string.IsNullOrEmpty(text) ? null : text;
+    }
+
+    // Adds a granted session approval, refusing new entries once the cap is reached. Refusing is the fail-closed
+    // direction: the memo stops suppressing prompts and the operator is asked again.
+    private void RememberSessionApproval(ApprovalMemoKey memoKey)
+    {
+        if (_sessionApprovals.Count >= MaxSessionApprovals && !_sessionApprovals.ContainsKey(memoKey))
+        {
+            _logger.LogWarning("Session-scoped approval memo is at its {Cap}-entry cap; the approval was applied to this call only.", MaxSessionApprovals);
+            return;
+        }
+
+        _sessionApprovals[memoKey] = 0;
     }
 
     /// <summary>
@@ -1373,10 +1602,10 @@ public sealed partial class InvocationRunner : IInvocationRunner
     ///     <c>AskUserToolHandler</c> can return it the moment the framework executes the (always-approved) call. Returns
     ///     the short, content-free note that rides the approval response.
     ///     <para>
-    ///         NOTHING here fails the turn (decision D4). A timeout, a cancelled browser, or arguments the model got
-    ///         wrong all stash an explicit "not answered" result and still approve, so the model receives a clean,
-    ///         branchable answer instead of a dead turn. Only a cancellation of the invocation itself propagates —
-    ///         the turn is already ending.
+    ///         NOTHING here fails the turn (decision D4). A timeout, a cancelled browser, an unattended run, or
+    ///         arguments the model got wrong all stash an explicit "not answered" result and still approve, so the model
+    ///         receives a clean, branchable answer instead of a dead turn. Only a cancellation of the invocation itself
+    ///         propagates — the turn is already ending.
     ///     </para>
     /// </summary>
     private async Task<string> RequestUserAnswerAsync(RuntimePackage package,
@@ -1405,6 +1634,23 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 parseError);
             _userQuestionAnswerStash.Stash(stashKey, UserQuestionResults.Unanswered(UserQuestionResults.MalformedCallReason, parseError));
             return "The question was not shown: the call's arguments were invalid.";
+        }
+
+        // An UNATTENDED run has nobody to show the question to, so skip the park and hand the model the same
+        // "not answered" result the wait would have reached anyway — without the full MaxPendingToolCallAge idle that
+        // every scheduled run reaching ask_user would otherwise pay before getting there.
+        //
+        // This is deliberately NOT what the approval path does, and the asymmetry must survive future tidying: an
+        // unattended APPROVAL fails the turn immediately with a reason, because executing a tool nobody sanctioned is
+        // not a safe default. An unattended QUESTION continues (decision D4) — the model asked for input it can proceed
+        // without. Unifying the two would make every scheduled turn fail the moment its model happens to ask something.
+        if (package.IsUnattended)
+        {
+            _logger.LogInformation("Skipped the {ToolName} prompt for unattended invocation {InvocationId}; the turn continues without an answer.",
+                AskUserTool.ToolName,
+                package.InvocationId);
+            _userQuestionAnswerStash.Stash(stashKey, UserQuestionResults.Unanswered(UserQuestionResults.UnattendedReason));
+            return "The question was not shown: this run has no operator to answer it.";
         }
 
         var requestId = Guid.NewGuid().ToString("N");
@@ -1519,11 +1765,19 @@ public sealed partial class InvocationRunner : IInvocationRunner
     // The offered tool's declared risk category, matched by name against the package offer (AllowedToolDto.Category) —
     // the same categorized offer the policy layer evaluates, so no new plumbing is added just for the audit. Falls back to
     // Unknown when the tool is absent from the offer or unnamed, matching the fail-closed default the policy itself uses.
+    // The provider-injected skill tools are checked FIRST because they are never in the offer at all (see
+    // SkillToolCategories) and would otherwise audit as Unknown, making every skill approval indistinguishable in the
+    // trail from a genuinely uncategorized tool.
     private static ToolCategory ResolveApprovalToolCategory(RuntimePackage package, string? toolName)
     {
         if (string.IsNullOrEmpty(toolName))
         {
             return ToolCategory.Unknown;
+        }
+
+        if (SkillToolCategories.TryGetValue(toolName, out var skillToolCategory))
+        {
+            return skillToolCategory;
         }
 
         var offer = package.AllowedTools.FirstOrDefault(tool => string.Equals(tool.Name, toolName, StringComparison.Ordinal));

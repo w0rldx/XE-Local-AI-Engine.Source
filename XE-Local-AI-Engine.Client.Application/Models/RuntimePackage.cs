@@ -39,6 +39,18 @@ public sealed record RuntimePackage
     /// </summary>
     public bool SupportsThinking { get; init; } = true;
 
+    /// <summary>
+    ///     Whether this turn runs UNATTENDED — a scheduled/headless run with no operator on the other end of an approval
+    ///     round-trip. Set only by the scheduler's run-saved-agent path; the interactive chat and regeneration paths
+    ///     leave it <c>false</c>. Read by the runner's single approval choke point, which fails an unattended approval
+    ///     immediately instead of broadcasting a request nobody can answer and then burning the whole
+    ///     <c>MaxPendingToolCallAge</c> window before timing out. Deliberately excluded from the config hash (mirrors
+    ///     <see cref="SupportsThinking" /> / <see cref="SamplingOptions" />): it is a loopback-only execution-context
+    ///     flag, not part of the agent's configuration, so the cross-repo encrypted/server digest stays stable and a
+    ///     scheduled run hashes identically to the same agent run interactively.
+    /// </summary>
+    public bool IsUnattended { get; init; }
+
     public List<string>? RequestedCapabilities { get; init; }
 
     public required TimeoutSettings Timeouts { get; init; }

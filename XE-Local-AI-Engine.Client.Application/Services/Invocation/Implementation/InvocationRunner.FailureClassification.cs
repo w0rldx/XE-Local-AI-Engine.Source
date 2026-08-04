@@ -41,6 +41,13 @@ public sealed partial class InvocationRunner
             // token/window diagnostics it also holds are logged server-side, never surfaced. Matches before the generic
             // InvalidOperationException/agent-runtime arms below (it derives from InvalidOperationException).
             ProviderContextWindowExceededException providerContextWindowExceeded => (FailureCategory.ContextWindowExceeded, providerContextWindowExceeded.Message),
+            // An approval was required in a run that cannot obtain one (unattended). The exception's message is our own
+            // fixed-shape reason carrying nothing but a tool name, so it is surfaced verbatim (same treatment as
+            // StreamIdleTimeoutException) — that reason IS the value of this failure over the generic approval timeout
+            // it replaces. Classified as AgentRuntime rather than a new FailureCategory value, which would drift the
+            // generated OpenAPI/zod client. Matches before the generic InvalidOperationException arms below (it derives
+            // from InvalidOperationException).
+            ApprovalUnavailableException approvalUnavailable => (FailureCategory.AgentRuntime, approvalUnavailable.Message),
             // A tripped circuit breaker: surface a fixed, retry-soon message rather than the generic ProviderUnreachable
             // (the endpoint is likely recovering, not permanently down). Matches before the StreamIdle/TimeoutException
             // arm because it is not a TimeoutException.
