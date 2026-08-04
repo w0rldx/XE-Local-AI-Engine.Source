@@ -107,7 +107,11 @@ BeforeAll {
     . ([scriptblock]::Create((Get-ScriptFunctionText -Name 'Assert-RemoteSourceTagAtHead')))
     . ([scriptblock]::Create((Get-ScriptFunctionText -Name 'Get-ViteReleaseEnvironmentConflict')))
     . ([scriptblock]::Create((Get-ScriptFunctionText -Name 'Get-ExpectedVelopackAsset')))
+    # Assert-VelopackAssetHash reads $script:UploadRewrittenVelopackAssets, so the real assignment has to come
+    # across too — a hard-coded copy here would keep passing after someone edited the list in the script.
+    . ([scriptblock]::Create((Get-ScriptAssignmentText -VariableText '$script:UploadRewrittenVelopackAssets')))
     . ([scriptblock]::Create((Get-ScriptFunctionText -Name 'Assert-VelopackAssetHash')))
+    . ([scriptblock]::Create((Get-ScriptFunctionText -Name 'Assert-VelopackChannelIndex')))
     . ([scriptblock]::Create((Get-ScriptFunctionText -Name 'Assert-VelopackManifestSource')))
     . ([scriptblock]::Create((Get-ScriptFunctionText -Name 'Assert-VelopackPreviousReleaseSeed')))
 
@@ -134,6 +138,46 @@ $prefixLine$suffixLine  </PropertyGroup>
 </Project>
 "@ | Set-Content -Path (Join-Path $dir 'Directory.Build.props') -Encoding utf8
         return $dir
+    }
+
+    # Writes the two channel indexes so they DESCRIBE the named package files, the way `vpk upload` leaves them.
+    # Field names and shapes are taken from the real 0.1.0-rc.5.0 releases.win.json / RELEASES pulled off the
+    # tester repo, including the UTF-8 BOM vpk puts on RELEASES.
+    function New-VelopackIndexFile {
+        param(
+            [Parameter(Mandatory)][string]$Directory,
+            [Parameter(Mandatory)][string]$Version,
+            [Parameter(Mandatory)][string[]]$PackageNames,
+            [switch]$NoBom
+        )
+
+        $entries = @(
+            foreach ($name in $PackageNames) {
+                $path = Join-Path $Directory $name
+                [ordered]@{
+                    PackageId = 'XE-Local-AI-Engine'
+                    Version   = $Version
+                    Type      = if ($name -like '*-delta.nupkg') { 'Delta' } else { 'Full' }
+                    FileName  = $name
+                    SHA1      = (Get-FileHash $path -Algorithm SHA1).Hash
+                    SHA256    = (Get-FileHash $path -Algorithm SHA256).Hash
+                    Size      = (Get-Item $path).Length
+                }
+            }
+        )
+        [ordered]@{ Assets = $entries } | ConvertTo-Json -Depth 5 |
+            Set-Content -Path (Join-Path $Directory 'releases.win.json') -Encoding utf8
+
+        # RELEASES carries one '<SHA1> <filename> <size>' line per FULL package; deltas are not listed.
+        $lines = @(
+            foreach ($name in @($PackageNames | Where-Object { $_ -notlike '*-delta.nupkg' })) {
+                $path = Join-Path $Directory $name
+                "$((Get-FileHash $path -Algorithm SHA1).Hash) $name $((Get-Item $path).Length)"
+            }
+        )
+        $text = $lines -join "`n"
+        if (-not $NoBom) { $text = [string][char]0xFEFF + $text }
+        Set-Content -Path (Join-Path $Directory 'RELEASES') -Value $text -NoNewline
     }
 }
 
@@ -679,6 +723,194 @@ Describe 'Velopack draft asset set and digest verification' {
 
         { Assert-VelopackAssetHash -Files $files -ExpectedAssets $manifestAssets } |
             Should -Throw '*delta.nupkg*SHA-256*'
+    }
+
+    It 'rejects a digest mismatch in the portable package' {
+        # Alongside the delta case above and the full case below: proves all three content packages are still
+        # byte-compared after the channel indexes were taken out of the comparison.
+        $files = Get-ChildItem -Path $script:AssetDir -File
+        $manifestAssets = @(
+            $files | ForEach-Object {
+                [pscustomobject]@{ Name = $_.Name; Sha256 = (Get-FileHash $_.FullName -Algorithm SHA256).Hash }
+            }
+        )
+        ($manifestAssets | Where-Object Name -Like '*Portable*.zip').Sha256 = '0' * 64
+
+        { Assert-VelopackAssetHash -Files $files -ExpectedAssets $manifestAssets } |
+            Should -Throw '*Portable*SHA-256*'
+    }
+
+    It 'rejects a digest mismatch in the full package' {
+        $files = Get-ChildItem -Path $script:AssetDir -File
+        $manifestAssets = @(
+            $files | ForEach-Object {
+                [pscustomobject]@{ Name = $_.Name; Sha256 = (Get-FileHash $_.FullName -Algorithm SHA256).Hash }
+            }
+        )
+        ($manifestAssets | Where-Object Name -Like '*-full.nupkg').Sha256 = '0' * 64
+
+        { Assert-VelopackAssetHash -Files $files -ExpectedAssets $manifestAssets } |
+            Should -Throw '*full.nupkg*SHA-256*'
+    }
+
+    It 'does NOT byte-compare the channel indexes, which vpk upload rewrites' {
+        # 0.1.0-rc.5.0 was blocked here: all three content packages matched and releases.win.json did not,
+        # because `vpk upload --merge` re-serialises the feed after pack wrote the manifest. Semantic
+        # verification of those two files lives in 'Velopack channel index verification' below.
+        $files = Get-ChildItem -Path $script:AssetDir -File
+        $manifestAssets = @(
+            $files | ForEach-Object {
+                [pscustomobject]@{ Name = $_.Name; Sha256 = (Get-FileHash $_.FullName -Algorithm SHA256).Hash }
+            }
+        )
+        ($manifestAssets | Where-Object Name -EQ 'releases.win.json').Sha256 = '0' * 64
+        ($manifestAssets | Where-Object Name -EQ 'RELEASES').Sha256 = '0' * 64
+
+        { Assert-VelopackAssetHash -Files $files -ExpectedAssets $manifestAssets } |
+            Should -Not -Throw
+    }
+
+    It 'refuses to report success if the skip list ever covered a content package' {
+        $files = Get-ChildItem -Path $script:AssetDir -File
+        $manifestAssets = @(
+            $files | ForEach-Object {
+                [pscustomobject]@{ Name = $_.Name; Sha256 = (Get-FileHash $_.FullName -Algorithm SHA256).Hash }
+            }
+        )
+        $original = $script:UploadRewrittenVelopackAssets
+        try {
+            $script:UploadRewrittenVelopackAssets = $original + 'XE-Local-AI-Engine-win-Portable.zip'
+
+            { Assert-VelopackAssetHash -Files $files -ExpectedAssets $manifestAssets } |
+                Should -Throw '*never cover a content package*'
+        }
+        finally {
+            $script:UploadRewrittenVelopackAssets = $original
+        }
+    }
+}
+
+Describe 'Velopack channel index verification' {
+
+    BeforeEach {
+        $script:FeedDir = Join-Path ([IO.Path]::GetTempPath()) "xe-velopack-feed-$([guid]::NewGuid().ToString('N'))"
+        New-Item -ItemType Directory -Path $script:FeedDir | Out-Null
+        $script:FeedVersion = '1.2.3'
+        $script:FullPackage = "XE-Local-AI-Engine-$($script:FeedVersion)-full.nupkg"
+        $script:DeltaPackage = "XE-Local-AI-Engine-$($script:FeedVersion)-delta.nupkg"
+
+        Set-Content -Path (Join-Path $script:FeedDir 'XE-Local-AI-Engine-win-Portable.zip') -Value 'portable bytes' -NoNewline
+        Set-Content -Path (Join-Path $script:FeedDir $script:FullPackage) -Value 'full package bytes' -NoNewline
+        Set-Content -Path (Join-Path $script:FeedDir $script:DeltaPackage) -Value 'delta package bytes' -NoNewline
+        New-VelopackIndexFile -Directory $script:FeedDir -Version $script:FeedVersion `
+            -PackageNames @($script:FullPackage, $script:DeltaPackage)
+    }
+
+    AfterEach {
+        Remove-Item $script:FeedDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    # BeforeAll: in Pester 6 a function declared directly in a Describe body is not visible to It.
+    BeforeAll {
+        # Re-reads the feed, lets the caller mutate it, writes it back.
+        function Edit-Feed {
+            param([Parameter(Mandatory)][scriptblock]$Change)
+
+            $path = Join-Path $script:FeedDir 'releases.win.json'
+            $feed = Get-Content $path -Raw | ConvertFrom-Json
+            & $Change $feed
+            $feed | ConvertTo-Json -Depth 5 | Set-Content -Path $path -Encoding utf8
+        }
+    }
+
+    It 'accepts indexes that describe the attached packages' {
+        { Assert-VelopackChannelIndex -Files (Get-ChildItem $script:FeedDir -File) -ExpectedVersion $script:FeedVersion } |
+            Should -Not -Throw
+    }
+
+    It 'accepts the UTF-8 byte-order mark vpk writes onto RELEASES' {
+        # The real 0.1.0-rc.5.0 RELEASES starts with a BOM; without stripping it the first SHA-1 never parses.
+        $bytes = [IO.File]::ReadAllBytes((Join-Path $script:FeedDir 'RELEASES'))
+        $bytes[0..2] | Should -Be @(0xEF, 0xBB, 0xBF)
+
+        { Assert-VelopackChannelIndex -Files (Get-ChildItem $script:FeedDir -File) -ExpectedVersion $script:FeedVersion } |
+            Should -Not -Throw
+    }
+
+    It 'rejects a feed describing a different version' {
+        Edit-Feed { param($feed) $feed.Assets[0].Version = '9.9.9' }
+
+        { Assert-VelopackChannelIndex -Files (Get-ChildItem $script:FeedDir -File) -ExpectedVersion $script:FeedVersion } |
+            Should -Throw "*lists version '9.9.9'*"
+    }
+
+    It 'rejects a feed whose SHA-256 does not match the attached package' {
+        # The failure a byte-comparison against a stale local copy could never catch: a feed pointing at
+        # something other than the payload this run verified.
+        Edit-Feed { param($feed) $feed.Assets[0].SHA256 = '0' * 64 }
+
+        { Assert-VelopackChannelIndex -Files (Get-ChildItem $script:FeedDir -File) -ExpectedVersion $script:FeedVersion } |
+            Should -Throw '*claims SHA-256*'
+    }
+
+    It 'rejects a feed whose size does not match the attached package' {
+        Edit-Feed { param($feed) $feed.Assets[0].Size = 1 }
+
+        { Assert-VelopackChannelIndex -Files (Get-ChildItem $script:FeedDir -File) -ExpectedVersion $script:FeedVersion } |
+            Should -Throw '*claims size 1*'
+    }
+
+    It 'rejects a feed referencing a package that is not attached' {
+        Edit-Feed { param($feed) $feed.Assets[0].FileName = 'XE-Local-AI-Engine-9.9.9-full.nupkg' }
+
+        { Assert-VelopackChannelIndex -Files (Get-ChildItem $script:FeedDir -File) -ExpectedVersion $script:FeedVersion } |
+            Should -Throw '*not attached to this release*'
+    }
+
+    It 'rejects a feed that omits an attached package' {
+        # Reverse direction: every entry could be valid while the delta is simply missing, leaving testers
+        # on the previous build with no delta path.
+        Edit-Feed { param($feed) $feed.Assets = @($feed.Assets | Where-Object FileName -NotLike '*-delta.nupkg') }
+
+        { Assert-VelopackChannelIndex -Files (Get-ChildItem $script:FeedDir -File) -ExpectedVersion $script:FeedVersion } |
+            Should -Throw '*does not describe*delta.nupkg*'
+    }
+
+    It 'rejects a feed listing no assets at all' {
+        Edit-Feed { param($feed) $feed.Assets = @() }
+
+        { Assert-VelopackChannelIndex -Files (Get-ChildItem $script:FeedDir -File) -ExpectedVersion $script:FeedVersion } |
+            Should -Throw '*lists no assets*'
+    }
+
+    It 'rejects a legacy index whose SHA-1 does not match' {
+        $path = Join-Path $script:FeedDir 'RELEASES'
+        (Get-Content $path -Raw) -replace '^﻿?[0-9A-Fa-f]{40}', ('0' * 40) |
+            Set-Content -Path $path -NoNewline
+
+        { Assert-VelopackChannelIndex -Files (Get-ChildItem $script:FeedDir -File) -ExpectedVersion $script:FeedVersion } |
+            Should -Throw '*claims SHA-1*'
+    }
+
+    It 'rejects a legacy index line it cannot parse' {
+        Set-Content -Path (Join-Path $script:FeedDir 'RELEASES') -Value 'not a releases line' -NoNewline
+
+        { Assert-VelopackChannelIndex -Files (Get-ChildItem $script:FeedDir -File) -ExpectedVersion $script:FeedVersion } |
+            Should -Throw '*unparseable line*'
+    }
+
+    It 'rejects a missing channel feed' {
+        Remove-Item (Join-Path $script:FeedDir 'releases.win.json')
+
+        { Assert-VelopackChannelIndex -Files (Get-ChildItem $script:FeedDir -File) -ExpectedVersion $script:FeedVersion } |
+            Should -Throw "*'releases.win.json' is missing*"
+    }
+
+    It 'rejects a missing legacy index' {
+        Remove-Item (Join-Path $script:FeedDir 'RELEASES')
+
+        { Assert-VelopackChannelIndex -Files (Get-ChildItem $script:FeedDir -File) -ExpectedVersion $script:FeedVersion } |
+            Should -Throw "*'RELEASES' is missing*"
     }
 }
 

@@ -149,9 +149,24 @@ generated `Portable.zip`, retain the printed SHA-256, then publish that unchange
 
 The publication command first verifies that the matching source tag is pushed to the canonical
 source repository and resolves to the current HEAD. It then downloads all five Velopack assets
-attached to the GitHub draft, verifies each against the SHA-256 manifest from the original pack,
-checks that `-ExpectedPortableSha256` matches the manifest and downloaded Portable ZIP, and publishes
-the existing draft without rebuilding or re-uploading.
+attached to the GitHub draft and verifies them in two different ways, because they are not all
+the same kind of file:
+
+- **The three content packages** — `Portable.zip`, `full.nupkg`, `delta.nupkg` — are compared
+  byte-for-byte against the SHA-256 manifest from the original pack.
+- **The two channel indexes** — `releases.win.json` and `RELEASES` — are verified *semantically*:
+  each entry must name this version, and its stated SHA-256/SHA-1 and size must match the package
+  actually attached; conversely every attached package must be described. They cannot be
+  byte-compared, because **`vpk upload --merge` rewrites them on the way out** — it merges the local
+  feed with the channel's remote feed and re-serializes. `0.1.0-rc.5.0` was blocked by exactly that:
+  all three content packages matched and `releases.win.json` did not.
+
+It then checks that `-ExpectedPortableSha256` matches the manifest and downloaded Portable ZIP, and
+publishes the existing draft without rebuilding or re-uploading.
+
+> The semantic check is **stronger** than the byte comparison it replaced. Matching bytes only proved
+> the feed was the one this run packed; it said nothing about what the feed *points at*. This proves
+> the feed a tester's updater will read describes exactly the packages whose bytes were verified.
 
 `-PublishDraft` also requires the generated `RELEASE_NOTES.md` and
 `publish/dist/XE-Local-AI-Engine-<version>-win.sha256.json` in the checkout. Both are generated,
