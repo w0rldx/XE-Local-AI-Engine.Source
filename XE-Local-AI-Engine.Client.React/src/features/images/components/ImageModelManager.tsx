@@ -297,7 +297,7 @@ export function ImageModelManager({ models, isLoading, onPendingDownloadChange }
 										<Text size="xs" c="dimmed">
 											{humanizeBytes(model.sizeBytes)}
 										</Text>
-										<Badge variant="light">{model.family}</Badge>
+										<Badge variant="light">{t(`pages.images.models.families.${model.family}`, model.family)}</Badge>
 										<Tooltip label={t("pages.images.models.delete.action", "Delete model")}>
 											<ActionIcon
 												variant="light"
