@@ -50,4 +50,27 @@ public sealed class LocalChatHub(
     {
         return resumeRegistry.ResumeAsync(invocationId, cancellationToken);
     }
+
+    /// <summary>
+    ///     Re-attaches to whatever turn is still running in <paramref name="conversationId" />, for a client that has
+    ///     just RELOADED and therefore holds no invocation id. <see cref="ResumeMessage" /> serves the reconnect case
+    ///     (the page survived, so the id is still in memory); this serves the cold-load case, where the id is gone.
+    ///     <para>
+    ///         Without it a reload permanently loses an in-flight <c>ask_user</c> question or tool approval: the prompt
+    ///         is transient live state that is deliberately never written into the conversation's persisted parts, so
+    ///         re-fetching the conversation cannot bring it back, and the run stays parked until it times out.
+    ///     </para>
+    ///     <para>
+    ///         Returns an empty stream when nothing is live, so the caller can invoke it unconditionally on open and
+    ///         simply get nothing for an idle conversation.
+    ///     </para>
+    /// </summary>
+    public IAsyncEnumerable<ChatStreamEvent> ResumeConversation(Guid conversationId,
+        CancellationToken cancellationToken)
+    {
+        var invocationId = resumeRegistry.TryGetLiveInvocationIdForConversation(conversationId);
+        return invocationId is null
+            ? AsyncEnumerable.Empty<ChatStreamEvent>()
+            : resumeRegistry.ResumeAsync(invocationId.Value, cancellationToken);
+    }
 }
