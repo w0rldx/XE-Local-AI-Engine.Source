@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 
+using System.Globalization;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Instructions;
@@ -11,6 +12,10 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 
 internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
 {
+    // Rides inside the fence with every imported skill payload so the boundary the model sees states WHY the enclosed
+    // bytes are fenced, not merely that they are.
+    private const string ImportedSkillTrustStatement = "third-party skill, not validated by this node";
+
     private readonly IAgentSkillStore _agentSkillStore;
     private readonly IAgentInstructionProvider _instructionProvider;
     private readonly ILocalToolOfferProvider _localToolOfferProvider;
@@ -104,7 +109,10 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
     ///     disclosure will offer. The store's fast-path filters to Enabled==true and omits missing ids; any assigned id
     ///     absent from the result (the skill was deleted or disabled) is dropped and logged by id only — never the body
     ///     or description (privacy: dropped-skill warnings carry no encrypted content). An empty/null picklist short-
-    ///     circuits with no store call so the no-skills path stays byte-identical to the pre-skills resolve.
+    ///     circuits with no store call so the no-skills path stays byte-identical to the pre-skills resolve. Each
+    ///     surviving row is projected by <see cref="ProjectSkill" />, which is where an imported skill's content is
+    ///     fenced — this method is the one place every skills consumer routes through, so the trust decision is made
+    ///     once here rather than at each consumer.
     /// </summary>
     /// <remarks>
     ///     A skill whose stored Name no longer satisfies the Agent Skills specification is dropped here rather than
@@ -149,7 +157,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
                 continue;
             }
 
-            resolved.Add(new ResolvedSkill(skill.Id, skill.Name, skill.Description, skill.Body, skill.Version));
+            resolved.Add(ProjectSkill(skill));
         }
 
         if (unbuildableIds is not null)
@@ -163,6 +171,117 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
         }
 
         return resolved;
+    }
+
+    /// <summary>
+    ///     Projects one stored skill onto the runtime DTO, applying the trust decision that every skills consumer
+    ///     inherits. An operator-authored (<see cref="AgentSkillOrigin.Local" />) row passes through with its bytes
+    ///     EXACTLY as stored — anything else would move the body hash, and therefore the runtime config hash, of every
+    ///     locally authored skill in the library. An <see cref="AgentSkillOrigin.Imported" /> row is third-party text we
+    ///     did not write and cannot validate, so its body AND every bundled resource payload are wrapped in the
+    ///     untrusted-content fence before they can reach the model — the same boundary this repo already puts around
+    ///     knowledge-base hits, read documents, uploaded attachments and coder workspace reads. Without it, imported
+    ///     markdown would be the single most trusted text in the context: it is injected verbatim as instructions, and
+    ///     an indirect-prompt-injection payload inside it needs no approval to reach the tools that require none.
+    /// </summary>
+    /// <remarks>
+    ///     The DETERMINISTIC-nonce overload is mandatory here. A random nonce per resolve would change the fenced bytes
+    ///     on every turn, moving the folded body hash and flapping the runtime config hash — resume would never match
+    ///     twice. The seed is the skill's identity (id + version): stable across resolves, and unpredictable to whoever
+    ///     authored the content, because the id is a server-minted GUID assigned at import that never appears in the
+    ///     skill file. That is the property the fence needs (a body author who cannot derive the nonce cannot forge the
+    ///     closing marker). The node-key-derived seed used for chat attachments guards a different threat — there the
+    ///     salt is the conversation id, which IS handed back to clients — and buying it here would cost a node-key
+    ///     dependency on the resolver for no additional protection: anyone who can read a skill's id already has
+    ///     authenticated node-local access and could simply store the content as Local.
+    ///     <para>
+    ///         Known residual: MAF renders a skill's NAME and DESCRIPTION, and each resource's name and description,
+    ///         into the generated skill content outside any fence we control — they are lookup keys, not payload. They
+    ///         are length-capped by frontmatter validation, shown verbatim in the import preview the operator must
+    ///         approve, and are additionally carried INSIDE the fence as metadata so the boundary states what the
+    ///         surrounding text claims to be.
+    ///     </para>
+    /// </remarks>
+    private static ResolvedSkill ProjectSkill(AgentSkillRecord skill)
+    {
+        if (skill.Origin != AgentSkillOrigin.Imported)
+        {
+            return new ResolvedSkill(skill.Id,
+                skill.Name,
+                skill.Description,
+                skill.Body,
+                skill.Version,
+                License: skill.License,
+                Compatibility: skill.Compatibility,
+                AllowedTools: skill.AllowedTools,
+                Metadata: skill.Metadata,
+                Resources: ProjectResources(skill, fenceNonceSeed: null));
+        }
+
+        var nonceSeed = BuildFenceNonceSeed(skill);
+        return new ResolvedSkill(skill.Id,
+            skill.Name,
+            skill.Description,
+            UntrustedContentFraming.WrapDocument(skill.Body, BuildFenceMetadata(skill), nonceSeed),
+            skill.Version,
+            IsImported: true,
+            License: skill.License,
+            Compatibility: skill.Compatibility,
+            AllowedTools: skill.AllowedTools,
+            Metadata: skill.Metadata,
+            Resources: ProjectResources(skill, nonceSeed));
+    }
+
+    /// <summary>
+    ///     Projects the skill's bundled resources, fencing each payload when <paramref name="fenceNonceSeed" /> is
+    ///     supplied (the imported case). Returns <c>null</c> for a skill with no resources so the no-resource path stays
+    ///     byte-identical to the pre-resource resolve.
+    /// </summary>
+    private static IReadOnlyList<ResolvedSkillResource>? ProjectResources(AgentSkillRecord skill, string? fenceNonceSeed)
+    {
+        if (skill.Resources is not { Count: > 0 } resources)
+        {
+            return null;
+        }
+
+        var projected = new ResolvedSkillResource[resources.Count];
+        for (var index = 0; index < resources.Count; index++)
+        {
+            var resource = resources[index];
+
+            // One seed per skill, but the framing binds the marker to the payload as well (it HMACs the fenced content
+            // under the seed), so each resource — and the body — still gets a marker of its own. One resource's
+            // model-visible closing marker therefore cannot close another's fence.
+            var content = fenceNonceSeed is null
+                ? resource.Content
+                : UntrustedContentFraming.WrapDocument(resource.Content, BuildFenceMetadata(skill, resource), fenceNonceSeed);
+            projected[index] = new ResolvedSkillResource(resource.Name, resource.Description, resource.MediaType, content);
+        }
+
+        return projected;
+    }
+
+    /// <summary>
+    ///     The labels that ride INSIDE an imported skill's fence. Every attacker-controlled field the fence can carry
+    ///     goes in here (source, skill name, resource name and media type) rather than being emitted around the
+    ///     boundary, and the trust label states plainly what the enclosed bytes are. Blank values are dropped by the
+    ///     framing, so the body's metadata block is the resource block minus the two resource labels.
+    /// </summary>
+    private static KeyValuePair<string, string?>[] BuildFenceMetadata(AgentSkillRecord skill, AgentSkillResourceRecord? resource = null)
+    {
+        return
+        [
+            new("source", skill.SourceUri),
+            new("skill", skill.Name),
+            new("resource", resource?.Name),
+            new("media-type", resource?.MediaType),
+            new("trust", ImportedSkillTrustStatement)
+        ];
+    }
+
+    private static string BuildFenceNonceSeed(AgentSkillRecord skill)
+    {
+        return string.Create(CultureInfo.InvariantCulture, $"agent-skill:{skill.Id:N}:{skill.Version}");
     }
 
     /// <summary>
