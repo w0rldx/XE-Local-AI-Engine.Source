@@ -1986,6 +1986,7 @@
 					"cancelled": "Abgebrochen nach {{duration}} mit {{model}}.",
 					"unknown": "Aufrufstatus ist unbekannt.",
 					"toolApproval": "wartet auf Tool-Freigabe",
+					"toolQuestion": "wartet auf eine Antwort auf eine Frage",
 					"toolPending": "{{count}} ausstehende(r) Tool-Aufruf(e)",
 					"toolNone": "keine Tool-Aufrufe"
 				},
@@ -2000,6 +2001,7 @@
 					"thinkingChunks": "Denk-Chunks: {{value}}",
 					"pendingToolCalls": "Ausstehende Tool-Aufrufe: {{value}}",
 					"pendingApproval": "Genehmigung ausstehend: {{value}}",
+					"pendingQuestion": "Frage ausstehend: {{value}}",
 					"yes": "Ja",
 					"no": "Nein"
 				},

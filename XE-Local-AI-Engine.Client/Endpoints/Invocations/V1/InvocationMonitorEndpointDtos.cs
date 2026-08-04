@@ -41,6 +41,13 @@ public sealed class InvocationCurrentResponse
     public required bool HasPendingApproval { get; init; }
 
     /// <summary>
+    ///     True while the turn is parked on an <c>ask_user</c> question waiting on the operator. Without it a parked turn
+    ///     reads as an ordinary running invocation with nothing pending. Deliberately CONTENT-FREE: the question text is
+    ///     operator/model content and never travels on this ops endpoint.
+    /// </summary>
+    public required bool HasPendingQuestion { get; init; }
+
+    /// <summary>
     ///     The W3C trace id of the run, for cross-correlation with exported traces/logs. Null when no activity was in
     ///     scope. Rendered as copyable text in the monitor so a failed run's "See local logs" row links to its trace.
     /// </summary>
@@ -114,6 +121,7 @@ internal static class InvocationMonitorResponseMapper
             StreamedThinkingChunkCount = state.StreamedThinkingChunkCount,
             PendingToolCallCount = state.PendingToolCalls.Count,
             HasPendingApproval = state.PendingApproval is not null,
+            HasPendingQuestion = state.PendingQuestion is not null,
             TraceId = state.TraceId
         };
     }

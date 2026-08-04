@@ -1986,6 +1986,7 @@
 					"cancelled": "Cancelled after {{duration}} with {{model}}.",
 					"unknown": "Invocation status is unknown.",
 					"toolApproval": "awaiting tool approval",
+					"toolQuestion": "awaiting an answer to a question",
 					"toolPending": "{{count}} pending tool call(s)",
 					"toolNone": "no tool calls"
 				},
@@ -2000,6 +2001,7 @@
 					"thinkingChunks": "Thinking chunks: {{value}}",
 					"pendingToolCalls": "Pending tool calls: {{value}}",
 					"pendingApproval": "Pending approval: {{value}}",
+					"pendingQuestion": "Pending question: {{value}}",
 					"yes": "Yes",
 					"no": "No"
 				},
