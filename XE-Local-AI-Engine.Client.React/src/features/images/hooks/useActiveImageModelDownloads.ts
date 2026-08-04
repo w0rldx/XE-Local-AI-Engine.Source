@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { ImageModelDownloadView } from "@/features/images/models/ImageModels";
 import { useImageModelDownloads } from "@/features/images/queries/useImageQueries";
@@ -28,7 +28,23 @@ export interface ActiveImageModelDownloads {
  */
 export function useActiveImageModelDownloads(): ActiveImageModelDownloads {
 	const [tracked, setTracked] = useState<readonly string[]>([]);
-	const downloadsQuery = useImageModelDownloads(tracked.length > 0);
+	// A download is detached and outlives the page, but `tracked` is component state and starts empty on every reload.
+	// Gating the query on `tracked` alone therefore made a reload mid-transfer permanently blind: nothing was tracked,
+	// so nothing was fetched, so nothing could ever become tracked — the progress row and its Cancel button simply
+	// vanished for the rest of the download. Poll once regardless, and adopt whatever the coordinator says is running.
+	const hasBootstrapped = useRef(false);
+	const downloadsQuery = useImageModelDownloads(tracked.length > 0 || !hasBootstrapped.current);
+
+	useEffect(() => {
+		if (hasBootstrapped.current || downloadsQuery.data === undefined) {
+			return;
+		}
+		hasBootstrapped.current = true;
+		const running = downloadsQuery.data.filter((entry) => entry.phase === "Running").map((entry) => entry.modelName);
+		if (running.length > 0) {
+			setTracked((current) => [...current, ...running.filter((modelName) => !current.includes(modelName))]);
+		}
+	}, [downloadsQuery.data]);
 
 	const statuses = useMemo(() => {
 		const map = new Map<string, ImageModelDownloadView>();

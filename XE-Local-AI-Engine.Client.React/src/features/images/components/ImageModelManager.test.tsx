@@ -11,6 +11,7 @@ import type { ImageModelCatalogEntryView, ImageModelDownloadView, ImageModelView
 const startMutate = vi.fn();
 const cancelMutate = vi.fn();
 const deleteMutate = vi.fn();
+const refreshInstalledModels = vi.fn();
 let downloads: ImageModelDownloadView[] = [];
 let catalogEntries: ImageModelCatalogEntryView[] = [];
 
@@ -22,6 +23,7 @@ vi.mock("@/features/images/queries/useImageQueries", () => ({
 	useImageModelCatalog: () => ({ data: catalogEntries, isPending: false, error: null }),
 	useBrowseImageRepositories: () => ({ data: [], isFetching: false, error: null }),
 	useInspectImageRepository: () => ({ data: undefined, isPending: false, error: null }),
+	useRefreshInstalledImageModels: () => refreshInstalledModels,
 }));
 
 let confirmResult = true;
@@ -97,6 +99,7 @@ describe("ImageModelManager", () => {
 		startMutate.mockReset();
 		cancelMutate.mockReset();
 		deleteMutate.mockReset();
+		refreshInstalledModels.mockReset();
 		confirmSpy.mockReset();
 		toastError.mockReset();
 		Object.defineProperty(window, "matchMedia", {
@@ -194,6 +197,43 @@ describe("ImageModelManager", () => {
 			await waitFor(() => expect(screen.getByTestId("image-model-download-progress")).toBeTruthy());
 			expect(screen.queryByTestId("image-model-download-error")).toBeNull();
 			expect(toastError).not.toHaveBeenCalled();
+		});
+
+		// The installed-model and catalog queries only poll WHILE something is in flight, and untracking a finished
+		// download switches that polling off. Since the 2s status poll routinely observes Completed before the 5s model
+		// poll has fired even once, leaving the refresh to those polls loses the race often enough that a model can
+		// finish installing and stay invisible until an unrelated refetch happens along.
+		it("refreshes the installed models when a download completes", async () => {
+			renderWithProviders(<ImageModelManager models={[]} isLoading={false} />);
+
+			downloads = [download({ phase: "Running", completedBytes: 50, totalBytes: 100 })];
+			fillAndSubmit();
+			resolveLastStart();
+			await waitFor(() => expect(screen.getByTestId("image-model-download-progress")).toBeTruthy());
+
+			// The coordinator now reports the terminal success the poll picks up.
+			downloads = [download({ phase: "Completed", completedBytes: 100, totalBytes: 100 })];
+			fillAndSubmit();
+			resolveLastStart();
+
+			await waitFor(() => expect(refreshInstalledModels).toHaveBeenCalled());
+			expect(toastError).not.toHaveBeenCalled();
+		});
+
+		it("does not refresh the installed models when a download fails", async () => {
+			renderWithProviders(<ImageModelManager models={[]} isLoading={false} />);
+
+			downloads = [download({ phase: "Running" })];
+			fillAndSubmit();
+			resolveLastStart();
+			await waitFor(() => expect(screen.getByTestId("image-model-download-progress")).toBeTruthy());
+
+			downloads = [download({ phase: "Failed", sanitizedError: "nope" })];
+			fillAndSubmit();
+			resolveLastStart();
+
+			await waitFor(() => expect(toastError).toHaveBeenCalledWith("nope"));
+			expect(refreshInstalledModels).not.toHaveBeenCalled();
 		});
 	});
 
@@ -419,13 +459,30 @@ describe("ImageModelManager", () => {
 		it("keeps a row busy while its own download is still transferring", () => {
 			// The 202 lands in milliseconds; the transfer takes minutes. A row that went back to "Install" in between
 			// invites a second click on a download already running.
+			//
+			// Nothing is running at mount here on purpose: a download the coordinator ALREADY reports as running is
+			// adopted on load (see the reload-recovery test below), which disables the button before it can be clicked.
 			catalogEntries = [catalogEntry({ id: "sdxl-1.0" })];
-			downloads = [download({ modelName: "sdxl-1.0", phase: "Running", completedBytes: 10, totalBytes: 100 })];
 			renderWithProviders(<ImageModelManager models={[]} isLoading={false} />);
 
 			fireEvent.click(screen.getByTestId("image-model-catalog-install-sdxl-1.0"));
+			downloads = [download({ modelName: "sdxl-1.0", phase: "Running", completedBytes: 10, totalBytes: 100 })];
 			resolveLastStart();
 
+			expect((screen.getByTestId("image-model-catalog-install-sdxl-1.0") as HTMLButtonElement).disabled).toBe(true);
+		});
+
+		// A model download is detached and outlives the page, but the tracking set is component state that starts empty
+		// on every reload. Gating the status poll on it alone made a reload mid-transfer permanently blind: nothing was
+		// tracked, so nothing was fetched, so nothing could become tracked — the progress row and its Cancel button
+		// simply disappeared for the rest of the transfer, and the row offered Install again.
+		it("adopts a download the coordinator already reports as running", async () => {
+			catalogEntries = [catalogEntry({ id: "sdxl-1.0" })];
+			downloads = [download({ modelName: "sdxl-1.0", phase: "Running", completedBytes: 10, totalBytes: 100 })];
+
+			renderWithProviders(<ImageModelManager models={[]} isLoading={false} />);
+
+			await waitFor(() => expect(screen.getByTestId("image-model-download-progress")).toBeTruthy());
 			expect((screen.getByTestId("image-model-catalog-install-sdxl-1.0") as HTMLButtonElement).disabled).toBe(true);
 		});
 

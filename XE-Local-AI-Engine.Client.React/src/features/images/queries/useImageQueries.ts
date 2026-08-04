@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback } from "react";
 
 import {
 	browseImageRepositoriesOptions,
@@ -51,6 +52,24 @@ function imageInvalidationKey(operationId: string): readonly [{ _id: string }] {
 
 function invalidate(queryClient: ReturnType<typeof useQueryClient>, operationId: string): Promise<void> {
 	return queryClient.invalidateQueries({ queryKey: imageInvalidationKey(operationId) });
+}
+
+/**
+ * Returns a callback that refreshes the installed-model list and the catalog's installed flags.
+ *
+ * Needed at the moment a download reports Completed. Both lists only poll while something is in flight, so the caller
+ * stops polling the instant it stops tracking the finished download — and the 2s status poll can observe Completed
+ * before the 5s model poll has run even once. Without an explicit refresh here the model that just finished installing
+ * can stay invisible until some unrelated refetch happens to fire.
+ */
+export function useRefreshInstalledImageModels(): () => void {
+	const queryClient = useQueryClient();
+	return useCallback(() => {
+		// Fire-and-forget: this runs from a render effect, and a failed invalidation only means the next poll refreshes
+		// the list instead. Swallowing keeps it from surfacing as an unhandled rejection.
+		invalidate(queryClient, imageQueryIds.models).catch(() => undefined);
+		invalidate(queryClient, imageQueryIds.catalog).catch(() => undefined);
+	}, [queryClient]);
 }
 
 // Tracked image-model weight downloads (in flight + recently finished). This is the surface that makes a FAILED
