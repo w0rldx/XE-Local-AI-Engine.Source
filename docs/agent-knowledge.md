@@ -64,6 +64,8 @@ dotnet build XE-Local-AI-Engine.slnx --configuration Release --no-incremental
 
 Same failure shape as the CI "zero tests enrolled" hollow gate below: a green result that was never actually evaluated.
 
+**`dotnet run --no-build` defaults to Debug, so a targeted test run without `--configuration Release` executes a stale Debug assembly** — which may predate the tests you are trying to run, discover **zero** of them, and report "passed". Always pass `--configuration Release` to the run command, not only to the build, and read the `total:` line: **a zero-test run is not a pass.**
+
 Two mechanics worth not re-deriving:
 
 - **The gate must live in `Directory.Build.targets`, not `Directory.Build.props`.** `Microsoft.Common.props` imports the `.props` file **before** it defaults `$(Configuration)`, so a Configuration condition evaluated there sees an empty string and misfires in both directions. Verify any change with `dotnet msbuild <proj> -getProperty:RunAnalyzers -p:Configuration=…` rather than by reading the XML.

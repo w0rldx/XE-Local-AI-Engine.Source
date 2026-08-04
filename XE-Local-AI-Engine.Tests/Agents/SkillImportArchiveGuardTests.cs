@@ -120,20 +120,28 @@ public sealed class SkillImportArchiveGuardTests
     {
         var archive = SkillImportFixtures.Zip(zip =>
         {
-            zip.AddText("skill/SKILL.md", SkillImportFixtures.SkillMarkdown("skill"));
+            zip.AddText("greedy/SKILL.md", SkillImportFixtures.SkillMarkdown("greedy"));
             for (var index = 0; index < 65; index++)
             {
-                zip.AddText($"skill/references/file-{index}.md", "x");
+                zip.AddText($"greedy/references/file-{index}.md", "x");
             }
+
+            zip.AddText("innocent/SKILL.md", SkillImportFixtures.SkillMarkdown("innocent"));
+            zip.AddText("innocent/references/FAQ.md", "Frequently asked.");
         });
 
         using var harness = new SkillImportHarness();
         var preview = await harness.Service.PreviewArchiveAsync(archive).ConfigureAwait(false);
-        var skill = preview.Skills.Single();
 
-        AssertEx.False(skill.CanImport, "A skill over the per-skill resource cap must not be importable.");
-        AssertEx.Contains(skill.Problems, problem => problem.Contains("64 files", StringComparison.Ordinal));
-        AssertEx.Equal(expected: 64, skill.Resources.Count, "The excess must be dropped, not carried into the report.");
+        var greedy = preview.Skills.Single(skill => skill.Name == "greedy");
+        AssertEx.False(greedy.CanImport, "A skill over the per-skill resource cap must not be importable.");
+        AssertEx.Contains(greedy.Problems, problem => problem.Contains("64 files", StringComparison.Ordinal));
+        AssertEx.Equal(expected: 64, greedy.Resources.Count, "The excess must be dropped, not carried into the report.");
+
+        // Per-skill, not archive-wide: one greedy skill must not take a whole collection repository down with it.
+        var innocent = preview.Skills.Single(skill => skill.Name == "innocent");
+        AssertEx.True(innocent.CanImport);
+        AssertEx.Equal("references/FAQ.md", innocent.Resources.Single().Name);
     }
 
     // The tuned limits are the operator-visible contract, and the cap tests above deliberately tighten them to keep
