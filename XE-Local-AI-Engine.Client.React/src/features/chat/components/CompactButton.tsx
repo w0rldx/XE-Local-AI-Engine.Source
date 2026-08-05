@@ -7,6 +7,7 @@ import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { toast } from "@/core/ui/notifications/Toast";
 import { nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
 import type { ChatCompactionResult } from "@/features/chat/models/ChatModels";
+import { toNodeChatRequestModel } from "@/features/chat/models/NodeChatModelSelection";
 import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
 import { useNodeChatPreferencesStore } from "@/features/chat/stores/NodeChatPreferencesStore";
 
@@ -31,7 +32,9 @@ export function CompactButton({ percentUsed, disabled = false }: CompactButtonPr
 	const selectedModel = useNodeChatPreferencesStore((state) => state.selectedModel);
 
 	const compactMutation = useMutation({
-		mutationFn: (id: string) => nodeChatAdapter.compactConversation(id, selectedModel || undefined),
+		// Map through the same helper normal sends use so the "Local runtime default" sentinel becomes undefined (→ the
+		// node default on the backend) instead of being forwarded as a literal model id that never matches.
+		mutationFn: (id: string) => nodeChatAdapter.compactConversation(id, toNodeChatRequestModel(selectedModel)),
 		onSuccess: async (result, id) => {
 			// Refetch the conversation (now carrying the synopsis) and the lists so any preview/state stays in sync.
 			await queryClient.invalidateQueries({ queryKey: nodeChatQueryKeys.conversation(id), exact: true });

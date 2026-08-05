@@ -171,8 +171,12 @@ internal sealed class NodeChatConversationCommands(NodeChatPersistenceWriter wri
                 // Raw ADO.NET (not ExecuteSqlRawAsync): a cleared selection writes a NULL column, and EF's raw-SQL
                 // parameter builder has no store-type mapping for DBNull, so a typed DbParameter via AddParameter
                 // is required.
+                // Changing the selected variant path invalidates any compaction synopsis: the synopsis was built from the
+                // previously-selected path and covers messages up to a sequence, so a re-selection inside that covered
+                // range would otherwise be misrepresented by stale summary text. Clear it (literal NULLs) so the next send
+                // uses full history until the user re-compacts.
                 await using var command = dbContext.Database.GetDbConnection().CreateCommand();
-                command.CommandText = "UPDATE conversations SET selected_path_json = $selected_path_json, last_seen_utc = $last_seen_utc WHERE conversation_id = $conversation_id AND purged = 0;";
+                command.CommandText = "UPDATE conversations SET selected_path_json = $selected_path_json, last_seen_utc = $last_seen_utc, compaction_summary = NULL, compaction_summary_covers_to_sequence = NULL, compaction_summary_updated_at_utc = NULL WHERE conversation_id = $conversation_id AND purged = 0;";
                 AddParameter(command, "$selected_path_json", SerializeSelectedPath(selectedPath));
                 AddParameter(command, "$last_seen_utc", request.UpdatedAtUtc);
                 AddParameter(command, "$conversation_id", request.ConversationId);
