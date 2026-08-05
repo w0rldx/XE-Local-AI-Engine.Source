@@ -1,6 +1,6 @@
 # Updating to a new build
 
-New releases appear on the [Releases page](../../../releases/latest). There are two ways to get them.
+New releases appear on the [Releases page](https://github.com/w0rldx/XE-Local-AI-Engine.Source/releases/latest). There are two ways to get them.
 
 **Your data is never touched by an update.** Chats, models and settings live in a separate folder, so
 they carry across every version.
@@ -80,7 +80,7 @@ Always works, and it is the **only** way on Linux.
 
 1. **Stop the app** — close the console window.
 2. Download the new `XE-Local-AI-Engine-win-Portable.zip` from
-   [Releases](../../../releases/latest).
+   [Releases](https://github.com/w0rldx/XE-Local-AI-Engine.Source/releases/latest).
    → [Download walkthrough](download-from-github.md)
 3. **Right-click the ZIP → Properties → Unblock → OK** (avoids the Windows warning again).
 4. Extract it — either over the old folder, or to a new one and delete the old afterwards.
@@ -90,7 +90,7 @@ Always works, and it is the **only** way on Linux.
 
 1. **Stop the app** — close the terminal, or press `Ctrl+C` in it.
 2. Download the new `XE-Local-AI-Engine-<version>-linux-Portable.zip` from
-   [Releases](../../../releases/latest).
+   [Releases](https://github.com/w0rldx/XE-Local-AI-Engine.Source/releases/latest).
 3. Unzip it. It expands into its own **versioned folder**, so it lands beside the old one rather than
    over it.
 4. Run `./start-xe-local-ai-engine.sh` in the new folder.

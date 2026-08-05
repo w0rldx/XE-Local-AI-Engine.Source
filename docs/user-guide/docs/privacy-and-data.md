@@ -227,7 +227,7 @@ so it is not a free win.) **Assume the application-level protections above are a
 ## Questions
 
 If something here is unclear or you think it's wrong, please
-[ask](../../../issues/new/choose). I would much rather answer a privacy question twice than have
+[ask](https://github.com/w0rldx/XE-Local-AI-Engine.Source/issues/new/choose). I would much rather answer a privacy question twice than have
 someone assume something incorrect about their own data.
 
 ---

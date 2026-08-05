@@ -12,7 +12,7 @@ and the download you want is **not** the big green button — that is the single
 This repository is public — you don't need to sign in to GitHub or accept an invitation to see it or
 download from it.
 
-**[→ Click here for the latest release](../../../releases/latest)**
+**[→ Click here for the latest release](https://github.com/w0rldx/XE-Local-AI-Engine.Source/releases/latest)**
 
 You can also get there manually: on the repository's front page, look at the right-hand sidebar for
 **"Releases"** and click it.

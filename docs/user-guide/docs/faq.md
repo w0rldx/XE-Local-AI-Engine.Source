@@ -1,7 +1,7 @@
 # FAQ & troubleshooting
 
 Common problems and questions. If your issue isn't here,
-[open an issue](../../../issues/new/choose) — and please tell me, because a missing entry is worth
+[open an issue](https://github.com/w0rldx/XE-Local-AI-Engine.Source/issues/new/choose) — and please tell me, because a missing entry is worth
 fixing.
 
 **Jump to:** [Installing](#installing--starting) · [Windows warnings](#windows-security-warnings) ·
@@ -14,15 +14,15 @@ fixing.
 
 ### The releases page shows nothing / I get a 404
 This repository is public, so you don't need to sign in or be invited to see it. A 404 here usually
-means a bad or outdated link — double-check you're using [the Releases page](../../../releases/latest)
+means a bad or outdated link — double-check you're using [the Releases page](https://github.com/w0rldx/XE-Local-AI-Engine.Source/releases/latest)
 directly. If it's still not loading, it may be a temporary GitHub outage; try again shortly, or
-[open an issue](../../../issues/new/choose).
+[open an issue](https://github.com/w0rldx/XE-Local-AI-Engine.Source/issues/new/choose).
 
 ### I downloaded it but there's no `.exe` inside
 You almost certainly clicked the green **`<> Code`** button, which downloads this repository's
 **source code** rather than the packaged app.
 
-Go back to the [Releases page](../../../releases/latest), expand **Assets**, and take
+Go back to the [Releases page](https://github.com/w0rldx/XE-Local-AI-Engine.Source/releases/latest), expand **Assets**, and take
 `XE-Local-AI-Engine-win-Portable.zip`. → [Full walkthrough](download-from-github.md)
 
 ### Which file do I actually run?
@@ -389,7 +389,7 @@ makes it fast rather than possible.
 
 ## Reporting something not covered here
 
-→ [**How to send feedback**](feedback.md), or [open an issue](../../../issues/new/choose).
+→ [**How to send feedback**](feedback.md), or [open an issue](https://github.com/w0rldx/XE-Local-AI-Engine.Source/issues/new/choose).
 
 Useful to include: what you did, what happened, your Windows version, your CPU/GPU/RAM, and any red
 text from the console window. **"I got confused here" is a valid and valuable bug report.**

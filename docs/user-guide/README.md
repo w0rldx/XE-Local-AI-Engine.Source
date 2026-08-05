@@ -31,7 +31,7 @@ under Apache-2.0. This page is the user guide: how to download, install and use 
 | **Know what leaves my computer** | [Privacy & your data](docs/privacy-and-data.md) |
 | **Update to a newer build** | [Updating](docs/updating.md) |
 | **Send feedback or report a bug** | [Giving feedback](docs/feedback.md) |
-| **Download the latest build** | [Releases](../../releases/latest) |
+| **Download the latest build** | [Releases](https://github.com/w0rldx/XE-Local-AI-Engine.Source/releases/latest) |
 
 ---
 
@@ -83,7 +83,7 @@ A graphics card is **optional**. Without one the app still works; answers just a
 GitHub is built for programmers and the download page confuses almost everyone the first time. Here is
 exactly what to do.
 
-**1. Open the releases page:** [**→ Latest release**](../../releases/latest)
+**1. Open the releases page:** [**→ Latest release**](https://github.com/w0rldx/XE-Local-AI-Engine.Source/releases/latest)
 
 **2. ⚠️ Do NOT use the green `<> Code` button** if you just want to run the app. It downloads this
 repository's **source code**, not a ready-to-run build — there is nothing to double-click inside it.
@@ -229,7 +229,7 @@ read these before you start, so nothing comes as a surprise:
 Stuck? Nothing is too basic a question — being stuck is itself useful feedback.
 
 1. Check the [**FAQ & troubleshooting**](docs/faq.md) — it covers the common problems.
-2. Still stuck? [**Open an issue**](../../issues/new/choose) or message me on Reddit.
+2. Still stuck? [**Open an issue**](https://github.com/w0rldx/XE-Local-AI-Engine.Source/issues/new/choose) or message me on Reddit.
 
 When reporting a problem, the [feedback guide](docs/feedback.md) explains what to include. Even
 "I opened it and didn't understand what to do next" is a genuinely valuable report.
