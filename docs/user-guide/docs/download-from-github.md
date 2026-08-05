@@ -7,24 +7,10 @@ and the download you want is **not** the big green button — that is the single
 
 ---
 
-## First: sign in to GitHub
-
-The builds are in a **private repository**. You can only see them while signed in with the GitHub
-account I invited.
-
-1. Go to [github.com](https://github.com) and **sign in**.
-2. Check the invitation — GitHub sends it by email, and it also appears at
-   [github.com/notifications](https://github.com/notifications). **You must accept it**, or the page
-   will not open for you.
-
-> **Seeing "404 — page not found"?** That is what GitHub shows for a private repository you cannot
-> access. It does not mean the page is missing. Either you are signed out, signed in with a
-> *different* account than the one I invited, or the invitation is still unaccepted. Tell me which
-> GitHub username you are using and I'll check.
-
----
-
 ## Step 1 — Open the Releases page
+
+This repository is public — you don't need to sign in to GitHub or accept an invitation to see it or
+download from it.
 
 **[→ Click here for the latest release](../../../releases/latest)**
 
@@ -35,13 +21,13 @@ You can also get there manually: on the repository's front page, look at the rig
 
 ## Step 2 — Ignore the green "Code" button
 
-> ### ⚠️ The green **`<> Code`** button is NOT the app
+> ### ⚠️ The green **`<> Code`** button downloads source code, not the app
 >
-> That button downloads the *contents of this repository* — the instructions you are reading right
-> now. It does **not** contain the program, and there will be nothing to run inside it.
+> That button downloads this repository's **source code** — useful if you're a developer who wants to
+> build it yourself, but it is **not** the ready-to-run application, and there is no `.exe` inside it.
 >
 > **If you downloaded something and found no `.exe` inside, this is what happened.** Come back to the
-> Releases page.
+> Releases page and grab a release asset instead.
 
 ---
 
@@ -97,8 +83,9 @@ That starts the download. It is around 100 MB, so give it a minute.
 
 - **`.nupkg` files** — used by the app's built-in updater when it upgrades itself. You never open these.
 - **`releases.win.json` / `RELEASES`** — the list the updater reads to discover new versions.
-- **"Source code (zip / tar.gz)"** — added automatically by GitHub to every release. For this project
-  they contain **only these instruction pages**, not the application. There is nothing runnable inside.
+- **"Source code (zip / tar.gz)"** — added automatically by GitHub to every release. It contains the
+  project's **source code**, not the packaged application. There is nothing runnable inside unless you
+  build it yourself.
 
 Downloading the wrong one wastes time but does no harm.
 

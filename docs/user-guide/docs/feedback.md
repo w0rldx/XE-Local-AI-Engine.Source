@@ -83,7 +83,7 @@ I read everything. I'm one person doing this in my spare time alongside a full-t
 take a few days — but nothing gets ignored.
 
 Feedback directly shapes what I work on next. Limited time means the choice of *what* to fix is the
-most consequential decision I make, and testers are what informs it.
+most consequential decision I make, and user feedback is what informs it.
 
 ---
 

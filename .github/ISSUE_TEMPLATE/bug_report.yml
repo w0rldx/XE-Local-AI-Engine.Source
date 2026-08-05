@@ -102,7 +102,7 @@ body:
     attributes:
       label: Before submitting
       options:
-        - label: I had a quick look at the [FAQ](https://github.com/w0rldx/XE-Local-AI-Engine.Source/blob/develop/docs/tester-program/docs/faq.md)
+        - label: I had a quick look at the [FAQ](https://github.com/w0rldx/XE-Local-AI-Engine.Source/blob/develop/docs/user-guide/docs/faq.md)
           required: false
         - label: I've made sure this doesn't contain anything private
           required: false

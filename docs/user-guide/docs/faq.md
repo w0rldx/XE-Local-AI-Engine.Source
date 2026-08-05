@@ -13,15 +13,14 @@ fixing.
 ## Installing & starting
 
 ### The releases page shows nothing / I get a 404
-The builds are in a **private repository**. You need to be signed in to GitHub with the account I
-invited, and you must have **accepted the emailed invitation**.
-
-Check [github.com/notifications](https://github.com/notifications) for a pending invite. If it's
-accepted and still failing, tell me your GitHub username.
+This repository is public, so you don't need to sign in or be invited to see it. A 404 here usually
+means a bad or outdated link — double-check you're using [the Releases page](../../../releases/latest)
+directly. If it's still not loading, it may be a temporary GitHub outage; try again shortly, or
+[open an issue](../../../issues/new/choose).
 
 ### I downloaded it but there's no `.exe` inside
-You almost certainly clicked the green **`<> Code`** button, which downloads *this instruction
-repository* rather than the app.
+You almost certainly clicked the green **`<> Code`** button, which downloads this repository's
+**source code** rather than the packaged app.
 
 Go back to the [Releases page](../../../releases/latest), expand **Assets**, and take
 `XE-Local-AI-Engine-win-Portable.zip`. → [Full walkthrough](download-from-github.md)
@@ -92,7 +91,7 @@ This catches almost everyone. → [Step-by-step with screenshots](install-window
 
 ### Why does this happen at all?
 The build is **not code-signed**. A signing certificate costs several hundred euros a year and I
-haven't bought one for a private beta. Windows warns about any unfamiliar unsigned program — it is a
+haven't bought one yet. Windows warns about any unfamiliar unsigned program — it is a
 statement about the certificate, not about the file being harmful.
 
 ### How do I avoid the warning entirely?
@@ -138,10 +137,10 @@ opened to the internet or your network.
 > only needs loopback, which the firewall doesn't gate. If something then fails to start, tell me.
 
 ### Is it safe?
-Straight answer: **you are trusting me, and there is not a great deal else to check.** The build is
-unsigned, so Windows cannot tell you who made it. The source isn't public. What you have is a private
-GitHub invite, an account you can look at, GitHub's SHA-256 digest confirming your download wasn't
-tampered with in transit — and my word.
+Straight answer: **you are trusting an unsigned build from one developer, and you can check the source
+yourself.** The build is unsigned, so Windows cannot tell you who made it. What you do have is the
+public source code in this repository, GitHub's SHA-256 digest confirming your download wasn't
+tampered with in transit, and the option to build it yourself instead of trusting the binary.
 
 It's also worth being clear about what running it means, because this is true of **any** desktop app
 you install: it runs **as you**, with access to your files and your network.
@@ -151,8 +150,8 @@ network-reachable address) stops *other people* reaching it. It does **not** lim
 itself can do on your machine. Those are two different questions and I don't want to answer the second
 one with the first. → [Full detail](privacy-and-data.md)
 
-**If that's not enough, don't run it.** Waiting for a signed, open-source release is a completely
-sensible decision, and I would much rather you made it than felt pushed into anything.
+**If that's not enough, don't run it.** Waiting for a signed release is a completely sensible decision,
+and I would much rather you made it than felt pushed into anything.
 
 ---
 
@@ -334,16 +333,16 @@ Done — nothing is written to the registry or to Program Files.
 Two ways:
 
 - **In-app:** the app checks for updates and can install them itself. This requires a one-time GitHub
-  sign-in so it can reach the private release repository.
+  sign-in so the updater is authorised to check GitHub for new releases.
 - **Manually:** download the new ZIP from Releases and extract it fresh. Your data folder is separate,
   so chats and models carry over.
 
 → [Updating guide](updating.md)
 
 ### Why does it want me to sign in to GitHub?
-Because the builds live in a private repository, so the updater needs permission to read it. This is
-**separate** from your local app profile — one is your login to the app, the other only grants access
-to tester downloads. The token is stored on your machine.
+The in-app updater needs its own authorisation to check GitHub for new releases and download them. This
+is **separate** from your local app profile — one is your login to the app, the other only lets the
+updater check for releases. The token is stored on your machine.
 
 ### Can I go back to an older version?
 Yes — download an older release and run it. **But back up your data folder first:** the database
@@ -354,12 +353,11 @@ upgrades automatically to newer versions and isn't guaranteed to work with older
 ## General questions
 
 ### Is this open source? Can I see the code?
-Not yet. The intention is a public open-source release; the licence isn't chosen. This repository holds
-**builds and instructions only** — the source is private. Current builds are proprietary, all rights
-reserved; please don't redistribute them.
+Yes. This repository **is** the source code, licensed under **Apache-2.0**. You're free to read it,
+build it yourself, and redistribute it under that licence.
 
 ### Is it free? Will it stay free?
-Free for testers. No pricing decisions have been made.
+Free to use today. No pricing decisions have been made about the future.
 
 ### macOS? ARM? Linux?
 **Windows and Linux, x64 only.** No macOS or ARM build exists. Linux is my main development

@@ -148,8 +148,8 @@ Setup asks for an **email address and password**. This creates a login **on your
 - **There is no password recovery**, because there's nothing to recover it from —
   [reset instructions](faq.md#i-forgot-my-password)
 
-**The GitHub sign-in is a separate thing.** It exists only so the in-app updater can read the private
-release repository. The token is stored locally. One is your app login; the other is download
+**The GitHub sign-in is a separate thing.** It exists only so the in-app updater is authorised to check
+GitHub for new releases. The token is stored locally. One is your app login; the other is update
 permission.
 
 ---
@@ -200,9 +200,9 @@ On Linux several optional best-effort mechanisms exist. Neither platform denies 
 operations like package restore legitimately need it.
 
 A stronger, container-based execution mode exists in the code, but **it is not available to you in this
-build** — it needs hand-edited configuration and a correctly set-up Docker daemon, and I'm not asking
-testers to do that. (On Linux, Docker socket access is also effectively root-equivalent, so it is not a
-free win.) **Assume the application-level protections above are all you have.**
+build** — it needs hand-edited configuration and a correctly set-up Docker daemon, and that's not
+something I'm asking users to do. (On Linux, Docker socket access is also effectively root-equivalent,
+so it is not a free win.) **Assume the application-level protections above are all you have.**
 
 ### The right mental model
 

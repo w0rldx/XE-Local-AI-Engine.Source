@@ -1,7 +1,6 @@
 # Updating to a new build
 
-New tester builds appear on the [Releases page](../../../releases/latest). There are two ways to get
-them.
+New releases appear on the [Releases page](../../../releases/latest). There are two ways to get them.
 
 **Your data is never touched by an update.** Chats, models and settings live in a separate folder, so
 they carry across every version.
@@ -19,8 +18,8 @@ they carry across every version.
 
 ## Option A — Update inside the app *(recommended, Windows)*
 
-The app can update itself. It needs a **one-time GitHub sign-in** first, because the builds are in a
-private repository.
+The app can update itself. It needs a **one-time GitHub sign-in** first, so the updater is authorised
+to check GitHub for new releases.
 
 ### The one-time sign-in
 
@@ -49,10 +48,12 @@ installed on.
 >
 > You can do that any time; the app will simply ask you to sign in again if it needs to update.
 
-> **Why is this needed?** The releases are private, so the updater needs permission to read them.
+> **Why is this needed?** The updater checks GitHub for new releases and needs its own authorisation to
+> do that reliably.
 >
 > **This is not related to your app login.** Your local profile is a login to the app on your computer;
-> the GitHub authorisation only grants access to tester downloads. Two separate things.
+> the GitHub authorisation only lets the updater check for and download new releases. Two separate
+> things.
 
 ### After that
 
@@ -65,7 +66,7 @@ In-app updating only works for the **portable Velopack build downloaded from thi
 Releases page**. If you're running a build from somewhere else, updating is intentionally disabled and
 you should use Option B.
 
-Also check: you're signed in to GitHub with the account I invited, and you accepted the invitation.
+Also check that you completed the GitHub device-code sign-in when prompted — see above.
 
 </details>
 
