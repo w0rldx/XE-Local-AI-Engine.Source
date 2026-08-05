@@ -15,7 +15,11 @@ const { authApiMock, routerMock } = vi.hoisted(() => ({
 vi.mock("@/core/auth/api/NodeAuthApi", () => authApiMock);
 vi.mock("@/core/integrations/tanstack-router/Router", () => ({ router: routerMock }));
 
-import { addAuthRequestInterceptor, addUnauthorizedErrorInterceptor } from "@/core/api/axios/Interceptors";
+import {
+	addAuthRequestInterceptor,
+	addFormDataContentTypeInterceptor,
+	addUnauthorizedErrorInterceptor,
+} from "@/core/api/axios/Interceptors";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 
 function okResponse(config: InternalAxiosRequestConfig): AxiosResponse {
@@ -43,6 +47,46 @@ function unauthorizedError(config: InternalAxiosRequestConfig): AxiosError {
 		},
 	);
 }
+
+describe("form-data content-type interceptor", () => {
+	// Regression guard for the skill-import 415: the instance defaults Content-Type to application/json, and axios
+	// re-serialises a FormData body to JSON whenever that header is present — silently downgrading multipart uploads
+	// to a JSON body the multipart-only endpoints reject. The interceptor drops the header for FormData only.
+	it("drops the JSON default content-type for a FormData body", async () => {
+		let observed: unknown;
+		const instance = axios.create({
+			headers: { "Content-Type": "application/json" },
+			adapter: async (config) => {
+				observed = config.headers.get("Content-Type");
+				return okResponse(config);
+			},
+		});
+		addFormDataContentTypeInterceptor(instance);
+
+		const body = new FormData();
+		body.append("source", "GitHub");
+		body.append("owner", "anthropics");
+		await instance.post("/api/local/v1/skills/import/preview", body);
+
+		expect(String(observed ?? "")).not.toContain("application/json");
+	});
+
+	it("leaves the JSON content-type intact for a plain object body", async () => {
+		let observed: unknown;
+		const instance = axios.create({
+			headers: { "Content-Type": "application/json" },
+			adapter: async (config) => {
+				observed = config.headers.get("Content-Type");
+				return okResponse(config);
+			},
+		});
+		addFormDataContentTypeInterceptor(instance);
+
+		await instance.post("/api/local/v1/skills", { name: "x" });
+
+		expect(String(observed ?? "")).toContain("application/json");
+	});
+});
 
 describe("auth axios interceptors", () => {
 	beforeEach(() => {

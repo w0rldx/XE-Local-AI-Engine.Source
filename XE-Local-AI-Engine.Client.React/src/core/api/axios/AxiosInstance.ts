@@ -3,6 +3,7 @@ import axios from "axios";
 import {
 	addApiProblemDetailsInterceptor,
 	addAuthRequestInterceptor,
+	addFormDataContentTypeInterceptor,
 	addRateLimitingInterceptor,
 	addUnauthorizedErrorInterceptor,
 } from "@/core/api/axios/Interceptors";
@@ -24,6 +25,7 @@ const axiosInstance = axios.create({
 });
 
 // Request interceptors
+addFormDataContentTypeInterceptor(axiosInstance);
 addAuthRequestInterceptor(axiosInstance);
 
 // Response interceptors

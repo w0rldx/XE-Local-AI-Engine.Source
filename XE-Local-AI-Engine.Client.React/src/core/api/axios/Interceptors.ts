@@ -37,6 +37,21 @@ function redirectToLoginOnce(): void {
 		.catch(() => undefined);
 }
 
+export const addFormDataContentTypeInterceptor = (axiosInstance: AxiosInstance) => {
+	axiosInstance.interceptors.request.use((request) => {
+		// The instance defaults Content-Type to application/json. For a FormData body that default is not just
+		// wrong but actively harmful: axios' transformRequest re-serialises FormData to a JSON object whenever a
+		// JSON content-type is present, silently downgrading every multipart request (skill import, chat/KB file
+		// uploads) to a JSON body the multipart-only endpoints reject with 415. Drop the header for FormData so the
+		// browser sets multipart/form-data with its boundary; plain JSON requests never enter this branch.
+		if (typeof FormData !== "undefined" && request.data instanceof FormData) {
+			request.headers.delete("Content-Type");
+		}
+
+		return request;
+	});
+};
+
 export const addAuthRequestInterceptor = (axiosInstance: AxiosInstance) => {
 	axiosInstance.interceptors.request.use((request) => {
 		const accessToken = useNodeAuthStore.getState().accessToken;
