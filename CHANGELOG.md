@@ -10,7 +10,8 @@ stable releases. The section headings below use the bare version, matching the t
 **Two repositories, one version string.** Source and its `v<version>` tags live in `w0rldx/XE-Local-AI-Engine`; the
 built tester artifacts are published as releases on the separate `w0rldx/XE-Local-AI-Engine.Tester-App` repo. A tester
 release therefore has no tag in this repo, and vice versa. Tester releases through `0.1.0-rc.4.1` carry **bare** tags
-(`0.1.0-rc.4.1`) with `v`-prefixed release names; from `0.1.0-rc.4.2` onward both are `v`-prefixed.
+(`0.1.0-rc.4.1`) with `v`-prefixed release names; from `0.1.0-rc.5.0` onward both are `v`-prefixed (rc.4.2 was never
+cut, so rc.5.0 is the first such release).
 
 > **This file is hand-maintained.** `cliff.toml` drives git-cliff, which generates `RELEASE_NOTES.md` for the Velopack
 > package body — it does **not** generate this file. Update this file yourself when you cut a release; nothing will do
@@ -30,6 +31,12 @@ The tester repo is the authoritative record of what reached a tester. Reconciled
 | 0.1.0-rc.3.0 | `v0.1.0-rc.3.0` | 2026-07-02 |
 | 0.1.0-rc.4.0 | `v0.1.0-rc.4.0` | 2026-07-06 |
 | 0.1.0-rc.4.1 | **none** | 2026-07-07 |
+| 0.1.0-rc.5.0 | `v0.1.0-rc.5.0` | 2026-08-04 |
+
+**Update 2026-08-05:** `0.1.0-rc.4.2` was never released — the version target moved directly from the burned
+`0.1.0-rc.4.1` to `0.1.0-rc.5.0`, which is what `Directory.Build.props` now reads. `v0.1.0-rc.5.0` was tagged and
+published to the tester repo on 2026-08-04 (pre-release). The reconciliation counts in the paragraph below predate
+rc.5.0 and describe the run through rc.4.1.
 
 All seven shipped as GitHub **pre-releases**. Six local tags map 1:1 to a tester release, each published 5–90 minutes
 after its tagged commit. The section dates below are the **tester publish dates**, not the tag dates — they differ for
@@ -43,9 +50,14 @@ gates now prevent it. No local tag lacks a tester release.
 
 ## [Unreleased]
 
-Targeting `0.1.0-rc.4.2`, which `Directory.Build.props` already reads. **No `v0.1.0-rc.4.2` tag exists yet** —
-creating it on HEAD is the operator's release-time step, and the packager refuses to upload without it.
-`0.1.0-rc.4.1` is burned: it was published to the tester repo with no matching source tag.
+_No unreleased changes recorded yet._
+
+## [0.1.0-rc.5.0] — 2026-08-04
+
+Tagged `v0.1.0-rc.5.0` and published to the tester repo on 2026-08-04 (pre-release), which is the version
+`Directory.Build.props` reads. **`0.1.0-rc.4.2` was never cut** — the target moved straight from the burned
+`0.1.0-rc.4.1` to `0.1.0-rc.5.0`. `0.1.0-rc.4.1` remains burned: it was published to the tester repo with no matching
+source tag.
 
 ### Added
 
@@ -93,7 +105,7 @@ creating it on HEAD is the operator's release-time step, and the packager refuse
 - Token-usage and cost accounting: a usage ledger with a fine-grained provider dimension, an `agents/usage-summary`
   aggregate, server-computed `EstimatedCostUsd` per bucket/provider/total, an approximate default rate table, and
   operator-editable per-model rate overrides with a usage dashboard.
-- Node-wide **tool-approval policy** (OPP-03): a `ToolCategory` taxonomy on tool offers, `IToolApprovalPolicy` with a
+- Node-wide **tool-approval policy**: a `ToolCategory` taxonomy on tool offers, `IToolApprovalPolicy` with a
   permissive no-op floor, a `NodeToolApprovalPolicy` backed by node settings, tool risk-class surfaced on the agent
   tool catalog, and an audit row plus metric per approval decision. The compose is strictly tighten-only — a policy can
   add approval, never waive it — and an `Unknown` category fails closed.
@@ -122,6 +134,13 @@ creating it on HEAD is the operator's release-time step, and the packager refuse
   budgeting per turn, tool-argument validation with a model repair loop, and stream-idle/tool-call timeouts with a
   pre-first-token retry.
 - `node.sqlite` is snapshotted via `VACUUM INTO` before pending migrations are applied.
+- **Agent Skills**: a node-scoped skill library with a per-agent pick-list and a MAF `load_skill` tool, plus importing
+  external skills from an archive, a Git repository, or pasted text — the trust decision shown before import, imported
+  content fenced as untrusted, and Agent Skills spec frontmatter carried through.
+- **Non-destructive conversation compaction**: long conversations are summarized locally (user-selected model, with a
+  cloud→local fallback notice) without discarding the original turns, replacing the earlier truncation-only behaviour.
+- Runtime acquisition visibility: the runtime registry owns and surfaces publisher/acquisition state, so a download or
+  managed source build is observable rather than silent.
 
 ### Changed
 
