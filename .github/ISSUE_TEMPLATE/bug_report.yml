@@ -1,0 +1,108 @@
+name: 🐛 Something went wrong
+description: Report a bug, crash, or anything that didn't work
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. **Don't worry about filling in every field** — a partial report is much
+        better than no report.
+
+        ⚠️ **Please don't paste anything private.** Logs and screenshots can contain personal
+        information, and issues are visible to everyone with access to this repository.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe it however comes naturally — no particular format needed.
+      placeholder: I clicked X and instead of Y, it did Z.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: What did you do just before it happened?
+      description: Rough steps are fine. Helps me reproduce it.
+      placeholder: |
+        1. Opened the app
+        2. Went to Models
+        3. Clicked download on ...
+    validations:
+      required: false
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect instead?
+      description: Sometimes the mismatch is the real bug.
+    validations:
+      required: false
+
+  - type: input
+    id: version
+    attributes:
+      label: App version
+      description: From the release you downloaded, e.g. v0.1.0-rc.5.0
+      placeholder: v0.1.0-rc.5.0
+    validations:
+      required: false
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows 11
+        - Windows 10
+        - Linux
+        - Other
+    validations:
+      required: false
+
+  - type: input
+    id: browser
+    attributes:
+      label: Browser
+      description: The app's whole interface runs in your browser, so this matters for anything visual.
+      placeholder: Edge 128 / Chrome 129 / Firefox 130
+    validations:
+      required: false
+
+  - type: textarea
+    id: hardware
+    attributes:
+      label: Your hardware
+      description: |
+        Really useful — I can't test on your machine. Processor, graphics card and memory.
+      placeholder: |
+        CPU: Ryzen 5 5600
+        GPU: RTX 3060 12GB
+        RAM: 32GB
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Console output or error messages
+      description: |
+        Any red text from the black console window. To copy: right-click → Mark, drag to select,
+        press Enter.
+
+        Better still, attach an in-app diagnostics snapshot (**Diagnostics → Report a problem**) —
+        it redacts secrets automatically.
+      render: shell
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checked
+    attributes:
+      label: Before submitting
+      options:
+        - label: I had a quick look at the [FAQ](https://github.com/w0rldx/XE-Local-AI-Engine.Source/blob/develop/docs/tester-program/docs/faq.md)
+          required: false
+        - label: I've made sure this doesn't contain anything private
+          required: false
