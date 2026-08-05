@@ -963,6 +963,20 @@
 				"srUnknown": "Kontextfenster-Nutzung unbekannt, {{used}} von {{max}} Tokens.",
 				"srUsed": "Kontextfenster zu {{percent}} Prozent genutzt, {{used}} von {{max}} Tokens."
 			},
+			"compact": {
+				"tooltip": "Ältere Nachrichten zu einer Zusammenfassung verdichten, um Kontext freizugeben",
+				"aria": "Unterhaltung verdichten",
+				"confirmTitle": "Unterhaltung verdichten",
+				"confirmDescription": "Fasse die älteren Nachrichten zu einer kompakten Übersicht zusammen, um das Kontextfenster zu entlasten. Deine ursprünglichen Nachrichten bleiben erhalten und in der Unterhaltung sichtbar.",
+				"confirm": "Verdichten",
+				"compacted": "{{count}} ältere Nachricht(en) zu einer Zusammenfassung verdichtet. Deine Originale bleiben erhalten.",
+				"nothing": "Noch nichts zu verdichten — die aktuellen Nachrichten passen weiterhin ins Kontextfenster.",
+				"noModel": "Es ist kein lokales Chat-Modell zum Zusammenfassen installiert, daher kann die Verdichtung nicht on-node laufen.",
+				"noSummary": "Die Verdichtung hat keine Zusammenfassung erzeugt. Bitte versuche es erneut.",
+				"error": "Die Unterhaltung konnte nicht verdichtet werden. Bitte versuche es erneut.",
+				"compactedLocalFallback": "{{count}} ältere Nachricht(en) lokal mit {{model}} verdichtet, damit dein Chat auf dem Gerät bleibt. Deine Originale bleiben erhalten.",
+				"aLocalModel": "einem lokalen Modell"
+			},
 			"remoteImage": {
 				"load": "Externes Bild laden"
 			}

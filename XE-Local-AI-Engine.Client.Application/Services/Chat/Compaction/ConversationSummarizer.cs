@@ -1,0 +1,145 @@
+namespace XE_Local_AI_Engine.Client.Services.Chat.Compaction;
+
+using System.Text.Json;
+using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
+
+/// <summary>
+///     Default <see cref="IConversationSummarizer" />: runs a NODE-LOCAL model (resolved per-model via
+///     <see cref="ILocalModelProviderResolver" />, never the shared cloud-capable <see cref="IChatClient" /> singleton)
+///     at temperature 0 to fold an older conversation span into a compact synopsis. Conversation content reaches the
+///     model on-node only — it never crosses the node boundary. A span larger than
+///     <see cref="ConversationCompactionOptions.MaxInputCharsPerSummarizationCall" /> is folded in multiple passes
+///     (running summary + next batch) so no single provider request exceeds the model's context window — the
+///     oversized-conversation case this feature most needs to handle. Not unit-tested against a live model; tests
+///     substitute a fake <see cref="IConversationSummarizer" /> (mirroring the memory-extraction agent seam, so CI needs
+///     no runtime).
+/// </summary>
+internal sealed class ConversationSummarizer(
+    ILocalModelProviderResolver providerResolver,
+    IOptions<ConversationCompactionOptions> options,
+    ILogger<ConversationSummarizer> logger) : IConversationSummarizer
+{
+    private readonly ConversationCompactionOptions _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+    private const string SystemPrompt = """
+                                        You compress an ongoing chat conversation into a single compact synopsis so the assistant can keep going
+                                        after the older turns are dropped from its context window.
+
+                                        You are given a JSON object with an optional "priorSummary" (a synopsis of even older turns) and "messages"
+                                        (the newer turns to fold in, oldest first). Produce ONE updated synopsis that merges the prior summary with
+                                        the new messages.
+
+                                        Rules:
+                                        - Preserve everything the assistant must remember to continue: facts established, decisions made, the user's
+                                          stated goals and preferences, named entities/files/values, and any open questions or unfinished tasks.
+                                        - Write terse third-person notes, not a transcript. Drop pleasantries, restated questions, and filler.
+                                        - Do NOT answer or continue the conversation, and do NOT add information that is not in the input.
+                                        - Output ONLY the synopsis text — no preamble, no headings, no code fences.
+                                        """;
+
+    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private readonly ILogger<ConversationSummarizer> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly ILocalModelProviderResolver _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));
+
+    public async Task<string?> SummarizeAsync(ConversationSummarizerInput input, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        if (string.IsNullOrWhiteSpace(input.ModelName) || input.Messages.Count == 0)
+        {
+            return null;
+        }
+
+        // Route the model to the runtime that serves it (persisted map, else the configured default provider). Node-local
+        // only — never the cloud singleton. THIS resolution is the privacy invariant: conversation content only ever
+        // reaches a provider.CreateChatClient(...) client.
+        var provider = await _providerResolver.ResolveProviderForModelAsync(input.ModelName, cancellationToken).ConfigureAwait(false);
+        var selection = new LocalModelSelection
+        {
+            ModelName = input.ModelName,
+            ProviderName = provider.ProviderName
+        };
+
+        // IChatClient is IDisposable — dispose the per-run node-local client.
+        using var chatClient = provider.CreateChatClient(selection);
+
+        // Fold the span in batches bounded by the per-call char budget so no single request overruns the model's
+        // context window; each pass carries the running summary forward (prior summary + next batch -> new summary).
+        // If ANY pass yields nothing, abort the whole summarization (return null) — a partial summary that silently
+        // omits a failed batch would let the caller advance the covered-sequence past messages that were never
+        // summarized, dropping them from every later prompt. Failing whole leaves coverage unchanged; the user retries.
+        var budget = Math.Max(1, _options.MaxInputCharsPerSummarizationCall);
+        var running = string.IsNullOrWhiteSpace(input.PriorSummary) ? null : input.PriorSummary;
+        var batch = new List<ConversationSummarizerMessage>();
+        var batchChars = 0;
+
+        foreach (var message in input.Messages)
+        {
+            var messageChars = message.Content?.Length ?? 0;
+            // Flush before adding when the batch already holds something and this message would push it over budget —
+            // but always keep at least one message per batch, so an oversized single message still goes out alone.
+            if (batch.Count > 0 && batchChars + messageChars > budget)
+            {
+                running = await FoldAsync(chatClient, running, batch, cancellationToken).ConfigureAwait(false);
+                if (running is null)
+                {
+                    return null;
+                }
+
+                batch.Clear();
+                batchChars = 0;
+            }
+
+            batch.Add(message);
+            batchChars += messageChars;
+        }
+
+        if (batch.Count > 0)
+        {
+            running = await FoldAsync(chatClient, running, batch, cancellationToken).ConfigureAwait(false);
+        }
+
+        return string.IsNullOrWhiteSpace(running) ? null : running;
+    }
+
+    // One fold pass: (prior summary + one batch) -> updated summary. Returns null when the model yields nothing, so the
+    // caller aborts the whole summarization rather than advancing coverage over a batch that was never summarized.
+    private async Task<string?> FoldAsync(IChatClient chatClient, string? priorSummary, IReadOnlyList<ConversationSummarizerMessage> batch, CancellationToken cancellationToken)
+    {
+        List<ChatMessage> messages =
+        [
+            new(ChatRole.System, SystemPrompt),
+            new(ChatRole.User, JsonSerializer.Serialize(ToPromptModel(priorSummary, batch), SerializerOptions))
+        ];
+
+        var chatOptions = new ChatOptions
+        {
+            Temperature = 0f
+        };
+
+        var response = await chatClient.GetResponseAsync(messages, chatOptions, cancellationToken).ConfigureAwait(false);
+        var text = response.Text?.Trim();
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            _logger.LogWarning("Conversation summarizer returned no usable text for a fold pass; aborting so coverage is not advanced past un-summarized messages.");
+            return null;
+        }
+
+        return text;
+    }
+
+    private static object ToPromptModel(string? priorSummary, IReadOnlyList<ConversationSummarizerMessage> messages)
+    {
+        return new
+        {
+            PriorSummary = priorSummary,
+            Messages = messages.Select(static message => new
+            {
+                message.Role,
+                message.Content
+            }).ToArray()
+        };
+    }
+}

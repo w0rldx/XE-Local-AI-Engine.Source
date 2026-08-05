@@ -36,6 +36,7 @@ import {
 	codexLogin,
 	codexLogout,
 	codexStatus,
+	compactNodeChatConversation,
 	confirmDevelopmentContainerRuntime,
 	connectConnection,
 	continuePreviewRun,
@@ -283,6 +284,8 @@ import type {
 	CodexLogoutResponse,
 	CodexStatusData,
 	CodexStatusResponse,
+	CompactNodeChatConversationData,
+	CompactNodeChatConversationResponse,
 	ConfirmDevelopmentContainerRuntimeData,
 	ConfirmDevelopmentContainerRuntimeResponse,
 	ConnectConnectionData,
@@ -2553,6 +2556,30 @@ export const cancelNodeChatMessageMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await cancelNodeChatMessage({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const compactNodeChatConversationMutation = (
+	options?: Partial<Options<CompactNodeChatConversationData>>,
+): UseMutationOptions<
+	CompactNodeChatConversationResponse,
+	AxiosError<DefaultError>,
+	Options<CompactNodeChatConversationData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		CompactNodeChatConversationResponse,
+		AxiosError<DefaultError>,
+		Options<CompactNodeChatConversationData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await compactNodeChatConversation({
 				...options,
 				...fnOptions,
 				throwOnError: true,

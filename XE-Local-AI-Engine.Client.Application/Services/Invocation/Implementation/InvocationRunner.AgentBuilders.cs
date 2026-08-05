@@ -329,7 +329,7 @@ public sealed partial class InvocationRunner
     /// <summary>Sanitized, user-facing text for a <see cref="TurnNoticeKind.HistoryTruncated" /> notice — counts only, never content.</summary>
     private static string BuildHistoryTruncatedNoticeMessage(ConversationBudgetResult result)
     {
-        return $"Conversation history was trimmed to fit the model's context window ({result.MessagesDropped} older message(s) dropped, {result.ToolResultsTruncated} tool result(s) shortened).";
+        return $"Conversation history was trimmed to fit the model's context window ({result.MessagesDropped} older message(s) dropped, {result.ToolResultsTruncated} tool result(s) shortened). The originals are kept — use Compact to summarize older messages and preserve their context.";
     }
 
     /// <summary>

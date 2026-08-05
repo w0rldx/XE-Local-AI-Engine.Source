@@ -1485,6 +1485,28 @@ export const zXeLocalAiEngineClientEndpointsLocalChatV1CancelNodeChatMessageRequ
 	requestId: z.guid().min(1),
 });
 
+export const zXeLocalAiEngineClientEndpointsLocalChatV1CompactNodeChatConversationResponse = z.object({
+	outcome: z.string(),
+	summary: z.string().nullish(),
+	coversToSequence: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	messagesFolded: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	updatedAtUtc: z.int().nullish(),
+	modelUsed: z.string().nullish(),
+	usedFallbackModel: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalChatV1CompactNodeChatConversationRequest = z.object({
+	model: z.string().nullish(),
+});
+
 export const zXeLocalAiEngineClientServicesChatNodeChatMessagePart = z.object({
 	kind: z.string().optional(),
 	sequence: z
@@ -3930,6 +3952,17 @@ export const zCancelNodeChatMessageBody = zXeLocalAiEngineClientEndpointsLocalCh
  * Success
  */
 export const zCancelNodeChatMessageResponse = zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatCancelMessageResponse;
+
+export const zCompactNodeChatConversationBody = zXeLocalAiEngineClientEndpointsLocalChatV1CompactNodeChatConversationRequest;
+
+export const zCompactNodeChatConversationPath = z.object({
+	conversationId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zCompactNodeChatConversationResponse = zXeLocalAiEngineClientEndpointsLocalChatV1CompactNodeChatConversationResponse;
 
 export const zListNodeChatConversationsQuery = z.object({
 	includeArchived: z.boolean(),

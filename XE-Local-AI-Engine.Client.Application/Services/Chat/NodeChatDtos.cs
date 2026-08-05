@@ -105,7 +105,13 @@ public sealed record NodeChatConversationDto(
     Guid? BranchOfConversationId = null,
     IReadOnlyDictionary<Guid, Guid>? SelectedPath = null,
     Guid? AgentDefinitionId = null,
-    bool MemoryExcluded = false);
+    bool MemoryExcluded = false,
+    // Non-destructive compaction synopsis (decrypted) plus the highest message sequence it folds in. Null until the
+    // conversation has been compacted. The send path replaces messages at/below CompactionSummaryCoversToSequence with
+    // CompactionSummary; the originals stay in Messages.
+    string? CompactionSummary = null,
+    int? CompactionSummaryCoversToSequence = null,
+    long? CompactionSummaryUpdatedAtUtc = null);
 
 public sealed record NodeChatPersistUserMessageRequest(
     Guid ConversationId,
@@ -223,6 +229,17 @@ public sealed record NodeChatSetConversationArchivedRequest(
 public sealed record NodeChatSetConversationMemoryExcludedRequest(
     Guid ConversationId,
     bool MemoryExcluded,
+    long UpdatedAtUtc);
+
+/// <summary>
+///     Writes (or clears) the conversation's non-destructive compaction synopsis. The summary is encrypted at rest; the
+///     covered sequence and timestamp are plaintext. A null <paramref name="Summary" /> clears the synopsis (all three
+///     columns reset to NULL).
+/// </summary>
+public sealed record NodeChatSetCompactionSummaryRequest(
+    Guid ConversationId,
+    string? Summary,
+    int? CoversToSequence,
     long UpdatedAtUtc);
 
 /// <summary>

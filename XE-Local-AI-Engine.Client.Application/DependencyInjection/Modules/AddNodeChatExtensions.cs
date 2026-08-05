@@ -1,6 +1,8 @@
 namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 
+using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
 internal static class AddNodeChatExtensions
@@ -32,6 +34,16 @@ internal static class AddNodeChatExtensions
         builder.Services.AddScoped<INodeChatStreamService, NodeChatStreamService>();
         builder.Services.AddScoped<INodeChatRegenerationService, NodeChatRegenerationService>();
         builder.Services.AddSingleton<NodeChatRestartRecoveryService>();
+
+        // Non-destructive conversation compaction (manual, local-model summarization). The summarizer is stateless and
+        // reads the process-lifetime provider registry (Singleton, mirroring the memory-extraction agent); the
+        // orchestrating service depends on the Scoped local-default resolver, so it is Scoped.
+        builder.Services.AddOptions<ConversationCompactionOptions>()
+               .Bind(configuration.GetSection(ConversationCompactionOptions.SectionName))
+               .ValidateDataAnnotations()
+               .ValidateOnStart();
+        builder.Services.AddSingleton<IConversationSummarizer, ConversationSummarizer>();
+        builder.Services.AddScoped<IConversationCompactionService, ConversationCompactionService>();
 
         return builder;
     }
