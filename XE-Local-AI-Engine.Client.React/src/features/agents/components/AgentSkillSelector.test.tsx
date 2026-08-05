@@ -31,24 +31,34 @@ vi.mock("react-i18next", () => ({
 
 import { AgentSkillSelector } from "@/features/agents/components/AgentSkillSelector";
 
+const skillDefaults = {
+	allowedTools: null,
+	compatibility: null,
+	createdAtUtc: 0,
+	importedAtUtc: null,
+	license: null,
+	metadata: null,
+	origin: "Local",
+	sourceUri: null,
+	updatedAtUtc: 0,
+} as const satisfies Partial<SkillSummary>;
+
 const library: SkillSummary[] = [
 	{
+		...skillDefaults,
 		id: "skill-1",
 		name: "invoice-review",
 		description: "How to review supplier invoices.",
 		enabled: true,
 		version: 1,
-		createdAtUtc: 0,
-		updatedAtUtc: 0,
 	},
 	{
+		...skillDefaults,
 		id: "skill-2",
 		name: "legal-redline",
 		description: "How to redline a contract.",
 		enabled: false,
 		version: 2,
-		createdAtUtc: 0,
-		updatedAtUtc: 0,
 	},
 ];
 

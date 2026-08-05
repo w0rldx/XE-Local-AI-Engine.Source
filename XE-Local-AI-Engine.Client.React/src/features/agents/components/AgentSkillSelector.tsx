@@ -16,7 +16,23 @@ interface AgentSkillSelectorProps {
 // library (e.g. it was deleted). It is shown so the user can still see and deselect it; it is marked disabled and
 // carries the id as its name so the orphan stays recognizable.
 function orphanSkillEntry(id: string): SkillSummary {
-	return { id, name: id, description: "", enabled: false, version: 0, createdAtUtc: 0, updatedAtUtc: 0 };
+	return {
+		allowedTools: null,
+		compatibility: null,
+		createdAtUtc: 0,
+		description: "",
+		enabled: false,
+		id,
+		importedAtUtc: null,
+		license: null,
+		metadata: null,
+		name: id,
+		// An orphan's provenance is unknowable — it is Local so the placeholder never claims a source it does not have.
+		origin: "Local",
+		sourceUri: null,
+		updatedAtUtc: 0,
+		version: 0,
+	};
 }
 
 // Skill multi-select for the agent form. The node skill library is fetched live (useSkills) — the SAME source the
@@ -91,6 +107,15 @@ export function AgentSkillSelector({ selectedSkillIds, onToggleSkill }: AgentSki
 											{!skill.enabled ? (
 												<Badge size="xs" variant="light" color="gray">
 													{t("pages.agents.form.skills.disabledBadge", "disabled")}
+												</Badge>
+											) : null}
+											{/* Provenance follows the skill to every surface it is chosen on, not just the library
+											    page — assigning an imported skill is the moment the trust decision actually bites. */}
+											{skill.origin === "Imported" ? (
+												<Badge size="xs" variant="light" color="orange" data-testid={`agent-skill-imported-${skill.id}`}>
+													{t("pages.skills.list.importedBadge", "Imported · {{source}}", {
+														source: skill.sourceUri ?? t("pages.skills.list.importedUnknownSource", "an unknown source"),
+													})}
 												</Badge>
 											) : null}
 										</Group>
