@@ -258,6 +258,19 @@ jobs:
         with:
           name: release-notes
 
+      # Fetch the previous release for THIS channel so `vpk pack` can compute
+      # DELTA packages against it (much smaller incremental updates). This is the
+      # official Velopack CI pattern (download -> pack -> upload). It is a no-op
+      # on the first release, when there is nothing to download yet. Same default
+      # output dir (./Releases) as pack, so pack picks up what this fetches.
+      - name: Download previous release (for deltas)
+        shell: bash
+        run: |
+          vpk download github \
+            --repoUrl "https://github.com/${{ github.repository }}" \
+            --token "${{ secrets.GITHUB_TOKEN }}" \
+            --channel "${{ matrix.vpk-channel }}"
+
       - name: Pack (Velopack)
         shell: bash
         run: |
