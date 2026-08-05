@@ -9,8 +9,8 @@
 
 | | |
 |---|---|
-| **Bug or problem** | [Open an issue](../../../issues/new/choose) |
-| **Impressions, ideas, questions** | [Open an issue](../../../issues/new/choose) or message me on Reddit |
+| **Bug or problem** | [Open an issue](https://github.com/w0rldx/XE-Local-AI-Engine.Source/issues/new/choose) |
+| **Impressions, ideas, questions** | [Open an issue](https://github.com/w0rldx/XE-Local-AI-Engine.Source/issues/new/choose) or message me on Reddit |
 | **Something private** | Message me directly — don't post it in an issue |
 
 Never post logs, screenshots or documents containing personal or confidential information. Issues are

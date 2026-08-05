@@ -11,4 +11,4 @@ private-beta tester program and its download builds. That repo is being retired;
 - `README.md`, `docs/*.md` — the guide itself.
 - `media/` — screenshots and short clips the guide links to.
 
-App downloads are on this repository's [Releases](../../releases/latest) page.
+App downloads are on this repository's [Releases](https://github.com/w0rldx/XE-Local-AI-Engine.Source/releases/latest) page.

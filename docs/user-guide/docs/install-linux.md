@@ -19,7 +19,7 @@ folder. To remove it later you run the bundled uninstaller and delete the folder
 
 For people who have done this kind of thing before:
 
-1. Download `XE-Local-AI-Engine-<version>-linux-Portable.zip` from [Releases](../../../releases/latest).
+1. Download `XE-Local-AI-Engine-<version>-linux-Portable.zip` from [Releases](https://github.com/w0rldx/XE-Local-AI-Engine.Source/releases/latest).
 2. `unzip` it somewhere you own — it expands into a versioned folder.
 3. `./start-xe-local-ai-engine.sh`
 4. A terminal fills with logs and your browser opens on `http://127.0.0.1:<port>/`. Leave the terminal open.
@@ -41,7 +41,7 @@ Everything below is the same thing, explained slowly.
 
 ## Step 1 — Download the app
 
-1. Go to the [**Releases page**](../../../releases/latest).
+1. Go to the [**Releases page**](https://github.com/w0rldx/XE-Local-AI-Engine.Source/releases/latest).
 2. Under **Assets**, click **`XE-Local-AI-Engine-<version>-linux-Portable.zip`** (roughly 90 MB).
 
 For the current release that file is:
@@ -66,7 +66,7 @@ You will see several other files. **On Linux you need exactly one of them:**
 
 > **Don't see any files?** The Assets list may just be collapsed — click the word "Assets" (or the
 > small ► triangle) to expand it. If files are genuinely missing, it may be a temporary GitHub issue;
-> try again shortly or [open an issue](../../../issues/new/choose).
+> try again shortly or [open an issue](https://github.com/w0rldx/XE-Local-AI-Engine.Source/issues/new/choose).
 
 ### Checking your download *(optional)*
 
@@ -255,7 +255,7 @@ Neither exists — no macOS build, and no ARM build on any platform. Not current
 
 → [**FAQ & troubleshooting**](faq.md) covers the common failures.
 
-→ Or [open an issue](../../../issues/new/choose) — include your distribution and version, your GPU if
+→ Or [open an issue](https://github.com/w0rldx/XE-Local-AI-Engine.Source/issues/new/choose) — include your distribution and version, your GPU if
 relevant, and any red text from the terminal. See [Giving feedback](feedback.md).
 
 ---

@@ -309,7 +309,7 @@ is why it opens in a browser but is not reachable from your network or the inter
 
 ---
 
-Still met a word that isn't here? [Tell me](../../../issues/new/choose) — a missing entry is a
+Still met a word that isn't here? [Tell me](https://github.com/w0rldx/XE-Local-AI-Engine.Source/issues/new/choose) — a missing entry is a
 documentation bug and I'd like to fix it.
 
 ---
