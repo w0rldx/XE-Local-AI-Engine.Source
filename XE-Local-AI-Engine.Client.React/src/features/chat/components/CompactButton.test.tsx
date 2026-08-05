@@ -8,11 +8,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CompactButton } from "@/features/chat/components/CompactButton";
 
-// vi.mock factories are hoisted above the module, so the spies they close over must be created with vi.hoisted.
-const { compactSpy, confirmSpy, toastSpies } = vi.hoisted(() => ({
+// vi.mock factories are hoisted above the module, so the spies/state they close over must be created with vi.hoisted.
+const { compactSpy, confirmSpy, toastSpies, storeState } = vi.hoisted(() => ({
 	compactSpy: vi.fn(),
 	confirmSpy: vi.fn(),
 	toastSpies: { success: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+	storeState: { selectedConversationId: "conv-1", selectedModel: "user-model" },
 }));
 
 // The button drives the adapter's compactConversation; stub it so the click wiring is asserted without a backend.
@@ -24,10 +25,10 @@ vi.mock("@/features/chat/api/NodeChatAdapter", () => ({
 vi.mock("@/core/ui/hooks/useConfirm", () => ({ useConfirm: () => ({ confirm: confirmSpy }) }));
 vi.mock("@/core/ui/notifications/Toast", () => ({ toast: toastSpies }));
 
-// The active conversation comes from the preferences store; pin it so the mutation receives a stable id.
+// The active conversation + selected model come from the preferences store; drive them from mutable hoisted state so
+// individual tests can vary the selection (e.g. the local-default sentinel).
 vi.mock("@/features/chat/stores/NodeChatPreferencesStore", () => ({
-	useNodeChatPreferencesStore: (selector: (state: { selectedConversationId: string; selectedModel: string }) => unknown) =>
-		selector({ selectedConversationId: "conv-1", selectedModel: "user-model" }),
+	useNodeChatPreferencesStore: (selector: (state: { selectedConversationId: string; selectedModel: string }) => unknown) => selector(storeState),
 }));
 
 function renderWithProviders(ui: ReactElement) {
@@ -43,6 +44,8 @@ describe("CompactButton", () => {
 	beforeEach(() => {
 		compactSpy.mockReset();
 		confirmSpy.mockReset();
+		storeState.selectedConversationId = "conv-1";
+		storeState.selectedModel = "user-model";
 		for (const spy of Object.values(toastSpies)) {
 			spy.mockReset();
 		}
@@ -74,6 +77,17 @@ describe("CompactButton", () => {
 
 		await waitFor(() => expect(compactSpy).toHaveBeenCalledWith("conv-1", "user-model"));
 		await waitFor(() => expect(toastSpies.success).toHaveBeenCalledTimes(1));
+	});
+
+	it("maps the local-default sentinel to undefined so the backend uses the node default", async () => {
+		storeState.selectedModel = "local-default";
+		confirmSpy.mockResolvedValue(true);
+		compactSpy.mockResolvedValue({ outcome: "Compacted", messagesFolded: 3, usedFallbackModel: false });
+
+		renderWithProviders(<CompactButton />);
+		fireEvent.click(screen.getByTestId("compact-conversation-button"));
+
+		await waitFor(() => expect(compactSpy).toHaveBeenCalledWith("conv-1", undefined));
 	});
 
 	it("shows an on-device info toast (not success) when a cloud selection fell back to a local model", async () => {

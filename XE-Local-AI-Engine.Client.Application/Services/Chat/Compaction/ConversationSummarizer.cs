@@ -67,6 +67,9 @@ internal sealed class ConversationSummarizer(
 
         // Fold the span in batches bounded by the per-call char budget so no single request overruns the model's
         // context window; each pass carries the running summary forward (prior summary + next batch -> new summary).
+        // If ANY pass yields nothing, abort the whole summarization (return null) — a partial summary that silently
+        // omits a failed batch would let the caller advance the covered-sequence past messages that were never
+        // summarized, dropping them from every later prompt. Failing whole leaves coverage unchanged; the user retries.
         var budget = Math.Max(1, _options.MaxInputCharsPerSummarizationCall);
         var running = string.IsNullOrWhiteSpace(input.PriorSummary) ? null : input.PriorSummary;
         var batch = new List<ConversationSummarizerMessage>();
@@ -80,6 +83,11 @@ internal sealed class ConversationSummarizer(
             if (batch.Count > 0 && batchChars + messageChars > budget)
             {
                 running = await FoldAsync(chatClient, running, batch, cancellationToken).ConfigureAwait(false);
+                if (running is null)
+                {
+                    return null;
+                }
+
                 batch.Clear();
                 batchChars = 0;
             }
@@ -96,8 +104,8 @@ internal sealed class ConversationSummarizer(
         return string.IsNullOrWhiteSpace(running) ? null : running;
     }
 
-    // One fold pass: (prior summary + one batch) -> updated summary. Returns the prior summary unchanged when the model
-    // yields nothing, so a bad pass mid-fold never discards what earlier passes already captured.
+    // One fold pass: (prior summary + one batch) -> updated summary. Returns null when the model yields nothing, so the
+    // caller aborts the whole summarization rather than advancing coverage over a batch that was never summarized.
     private async Task<string?> FoldAsync(IChatClient chatClient, string? priorSummary, IReadOnlyList<ConversationSummarizerMessage> batch, CancellationToken cancellationToken)
     {
         List<ChatMessage> messages =
@@ -115,8 +123,8 @@ internal sealed class ConversationSummarizer(
         var text = response.Text?.Trim();
         if (string.IsNullOrWhiteSpace(text))
         {
-            _logger.LogWarning("Conversation summarizer returned no usable text for a fold pass; keeping the running synopsis.");
-            return priorSummary;
+            _logger.LogWarning("Conversation summarizer returned no usable text for a fold pass; aborting so coverage is not advanced past un-summarized messages.");
+            return null;
         }
 
         return text;
