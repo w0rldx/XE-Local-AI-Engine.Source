@@ -7,6 +7,12 @@ How a release is actually cut, what a tester actually downloads, and how in-app 
 the flag-by-flag packager reference, that lives in [`publish/README.md`](../publish/README.md); this page covers the
 distribution and update story around it.
 
+> **Consolidation in progress (2026-08-05).** Source now lives in `w0rldx/XE-Local-AI-Engine.Source` (public), which is
+> becoming the single home for source **and** releases; the separate tester repo is being retired. Both in-app update
+> channels already point at `.Source` (see "The update channel files" below). The packaging/upload path described here
+> (`package-tester-win.ps1`, `vpk upload github`) still targets `w0rldx/XE-Local-AI-Engine.Tester-App` — repointing it
+> is the remaining migration step, so the two-repo mechanics on this page still describe how a release is cut *today*.
+
 ---
 
 ## 1. The shape of a release, in one table
@@ -15,7 +21,7 @@ distribution and update story around it.
 |---|---|
 | **Who builds it** | a maintainer, by hand, on **Windows** |
 | **What builds it** | `publish/package-tester-win.ps1` — the canonical and only release path |
-| **Source repo** (code + `v` tags) | `w0rldx/XE-Local-AI-Engine` |
+| **Source repo** (code + `v` tags) | `w0rldx/XE-Local-AI-Engine.Source` |
 | **Artifact repo** (releases) | `w0rldx/XE-Local-AI-Engine.Tester-App` |
 | **Velopack channel** | `win` |
 | **What a tester downloads** | `XE-Local-AI-Engine-win-Portable.zip` |
@@ -163,20 +169,19 @@ at publish time by `-p:UpdateChannel=tester|main` (default `main`).
 | Raw `dotnet publish` output run directly | **no** — no client ID is injected, so the updater is unconfigured |
 | `-SkipUpload` rehearsal package with no client ID | **no** — deliberately inert, and stamped (below) |
 
-### The channel files are deliberately asymmetric
+### The update channel files
 
 | File | `GitHubRepositoryUrl` | `GitHubAppClientId` | Status |
 |---|---|---|---|
-| `appsettings.AppUpdate.tester.json` | `https://github.com/w0rldx/XE-Local-AI-Engine.Tester-App` — **real, intentional, non-secret** | **empty**, injected at packaging time | live |
-| `appsettings.AppUpdate.main.json` | `REPLACE_*` placeholder | `REPLACE_*` placeholder | **intentionally inert** |
+| `appsettings.AppUpdate.tester.json` | `https://github.com/w0rldx/XE-Local-AI-Engine.Source` — **real, intentional, non-secret** | **empty** (public repo needs no app auth) | live |
+| `appsettings.AppUpdate.main.json` | `https://github.com/w0rldx/XE-Local-AI-Engine.Source` — **real, intentional, non-secret** | **empty** | live |
 
-The `main` channel keeps its placeholders **on purpose**: distribution is tester-only today, and leaving `main`
-unwired is an owner decision, not an oversight. `AppUpdateChannelOptions.IsConfigured` stays false, so the in-app
-updater ships honestly disabled rather than placeholder-configured.
+Both channels now point at the public source repo `.Source` (the `main` channel was previously inert with `REPLACE_*`
+placeholders — it is now wired as part of the consolidation). Because `.Source` is public, `AppUpdateChannelOptions`
+resolves configured with no GitHub App client ID, and none is committed.
 
-> **Do not "redact" the tester repository URL back to a placeholder.** It is public configuration, not a leaked
-> secret, and blanking it silently breaks self-update for every installed tester build. Only the **client ID** is a
-> packaging-time injection, and none is committed here.
+> **Do not "redact" these repository URLs back to placeholders.** They are public configuration, not leaked secrets,
+> and blanking them silently breaks self-update for installed builds.
 
 ### `package-rc.sh` proves its own inertness
 

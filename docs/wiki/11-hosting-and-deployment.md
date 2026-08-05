@@ -222,10 +222,10 @@ The two channel files are deliberately **not** symmetric:
 
 | File | `GitHubRepositoryUrl` | `GitHubAppClientId` | Status |
 |---|---|---|---|
-| `appsettings.AppUpdate.tester.json` | `https://github.com/w0rldx/XE-Local-AI-Engine.Tester-App` — a **real, intentional, non-secret** value | **empty**, injected at packaging time | live |
-| `appsettings.AppUpdate.main.json` | `REPLACE_*` placeholder | `REPLACE_*` placeholder | **intentionally inert** |
+| `appsettings.AppUpdate.tester.json` | `https://github.com/w0rldx/XE-Local-AI-Engine.Source` — a **real, intentional, non-secret** value | **empty** (public repo needs no app auth) | live |
+| `appsettings.AppUpdate.main.json` | `https://github.com/w0rldx/XE-Local-AI-Engine.Source` — a **real, intentional, non-secret** value | **empty** | live |
 
-The `main` channel keeps its placeholders **on purpose**: distribution is tester-only today, and leaving `main` unwired is an owner decision, not an oversight. The tester repository URL is equally deliberate — it is public configuration, not a leaked secret, and **must not be "redacted" back to a placeholder**: doing so silently breaks self-update for every installed tester build. Only the client ID is supplied at packaging time (`-GitHubAppClientId` / `$env:XE_TESTER_GITHUB_APP_CLIENT_ID`), and no client ID is committed here. See [`docs/velopack-release-install-guide.md`](../velopack-release-install-guide.md).
+Both update channels now point at the public source repo `.Source`, consolidating distribution here. The `main` channel was previously inert (`REPLACE_*` placeholders, kept unwired as an owner decision while distribution was tester-only); it is now wired. Because `.Source` is public, no client ID is required and none is committed. These URLs are public configuration, not leaked secrets, and **must not be "redacted" back to placeholders** — doing so silently breaks self-update for installed builds. The packaging/upload tooling still targets the tester repo; repointing it is the remaining migration step. See [`docs/velopack-release-install-guide.md`](../velopack-release-install-guide.md).
 
 ---
 
