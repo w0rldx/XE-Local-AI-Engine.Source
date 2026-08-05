@@ -266,8 +266,9 @@ source tag.
   resolves to Vulkan; CUDA requires either the bring-your-own-binary override or the in-app build-from-source runtime.
   That source build now pins b10201 and compiles for `sm_120`, so Blackwell cards are covered — but it is still a
   build the user has to run, not a download.
-- The `main` update channel is intentionally inert (`appsettings.AppUpdate.main.json` keeps its `REPLACE_*`
-  placeholders). Distribution is tester-only by decision, not by oversight.
+- The `main` update channel now targets this repository (`appsettings.AppUpdate.main.json` →
+  `github.com/w0rldx/XE-Local-AI-Engine.Source`); release distribution consolidates here going forward.
+  Historical tester RCs remain in the separate tester repo.
 - **The agent process sandbox contains far more on Linux than on Windows, and says so only in a log line.**
   `ProcessSandboxRuntimeProvider` always enforces the working-directory jail, a scrubbed child environment, per-command
   timeouts and captured-output byte caps. Everything beyond that is *measured* per host at startup, never assumed: where
