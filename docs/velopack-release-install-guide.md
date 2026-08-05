@@ -7,33 +7,49 @@ How a release is actually cut, what a tester actually downloads, and how in-app 
 the flag-by-flag packager reference, that lives in [`publish/README.md`](../publish/README.md); this page covers the
 distribution and update story around it.
 
-> **Consolidation in progress (2026-08-05).** Source now lives in `w0rldx/XE-Local-AI-Engine.Source` (public), which is
-> becoming the single home for source **and** releases; the separate tester repo is being retired. Both in-app update
-> channels already point at `.Source` (see "The update channel files" below). The packaging/upload path described here
-> (`package-tester-win.ps1`, `vpk upload github`) still targets `w0rldx/XE-Local-AI-Engine.Tester-App` — repointing it
-> is the remaining migration step, so the two-repo mechanics on this page still describe how a release is cut *today*.
+> **Consolidated.** Source lives in `w0rldx/XE-Local-AI-Engine.Source` (public), the single home for source **and**
+> releases. Both in-app update channels point at `.Source` (see "The update channel files" below), and the intended
+> release path is the tag-triggered **[`.github/workflows/release.yml`](../.github/workflows/release.yml)** (§6):
+> pushing a `v*` tag builds win-x64 + linux-x64 Velopack packages and publishes them to **this repo's** GitHub
+> Releases using the built-in `GITHUB_TOKEN` — no separate artifact repo, no PAT. GitHub Actions must be enabled on
+> the repository for it to run; that is an owner-level setting this page does not track.
+>
+> Most of the rest of this page — `package-tester-win.ps1`, `package-rc.sh`, `vpk upload github` against the tester
+> repo, and the two-repo mechanics below — is now **deprecated, reference-only material**. Both manual packagers
+> carry deprecation headers and still target the retired `w0rldx/XE-Local-AI-Engine.Tester-App` repo; they are kept
+> here as the historical record of how tester RCs through `0.1.0-rc.5.0` were actually cut, and as a manual rehearsal
+> path, not as the release mechanism.
 
 ---
 
 ## 1. The shape of a release, in one table
 
+**This table describes the deprecated manual packager flow**, kept as historical/reference material. The intended
+release path is the tag-triggered `.github/workflows/release.yml` (§6), which builds win-x64 + linux-x64 and
+publishes to this repo's GitHub Releases.
+
 | | |
 |---|---|
-| **Who builds it** | a maintainer, by hand, on **Windows** |
-| **What builds it** | `publish/package-tester-win.ps1` — the canonical and only release path |
+| **Who built it (manual flow)** | a maintainer, by hand, on **Windows** |
+| **What built it (manual flow)** | `publish/package-tester-win.ps1` — **deprecated**, reference-only |
 | **Source repo** (code + `v` tags) | `w0rldx/XE-Local-AI-Engine.Source` |
-| **Artifact repo** (releases) | `w0rldx/XE-Local-AI-Engine.Tester-App` |
-| **Velopack channel** | `win` |
-| **What a tester downloads** | `XE-Local-AI-Engine-win-Portable.zip` |
+| **Artifact repo (manual flow)** | `w0rldx/XE-Local-AI-Engine.Tester-App` (retired) |
+| **Velopack channel (manual flow)** | `win` |
+| **What a tester downloaded (manual flow)** | `XE-Local-AI-Engine-win-Portable.zip` |
 | **Installer** | **none** — `vpk pack` runs with `--noInst` |
 
-> **GitHub Actions builds nothing.** `.github/workflows/release.yml` is `disabled_manually` and its only three runs
-> all failed on 2026-06-27. `build-and-test.yml` is likewise disabled; `e2e.yml` was never registered. Six runs, six
-> failures, zero successes, ever. Pushing a tag does **not** produce a release. See §6.
+> **`release.yml` is the intended release path.** It is a tag-triggered, channel-selectable Velopack workflow that
+> builds win-x64 **and** linux-x64 and publishes both to **this repo's** GitHub Releases with the built-in
+> `GITHUB_TOKEN`. GitHub Actions must be enabled on the repository for it to run — that is an owner-level repository
+> setting this page does not track. See §6 for the workflow's design and its validation binding to
+> `build-and-test.yml`.
 
-### The two-repo split
+### The two-repo split (historical — pre-consolidation)
 
-Source and artifacts live in different repositories that share only a version string:
+This subsection and the cautionary tale below describe how releases through `0.1.0-rc.5.0` were actually cut, back
+when the manual packager uploaded to a separate tester repo. `release.yml` (§6) publishes to this single repo, so a
+future CI-cut release has no tester-repo counterpart to reconcile against. Source and artifacts historically lived in
+different repositories that shared only a version string:
 
 - The **`v<version>` git tag goes on HEAD of the source repo** (`w0rldx/XE-Local-AI-Engine`). The packager refuses to
   upload unless HEAD carries that exact tag.
@@ -108,6 +124,10 @@ not self-update (§5).
 ---
 
 ## 3. First install (tester onboarding)
+
+**This section describes the historical, pre-consolidation flow** (manual packager uploading to the now-retired
+tester repo). Releases published via `release.yml` land on this repo's public GitHub Releases page instead, so a
+tester downloads from there directly with no collaborator access or device-flow needed for the download step itself.
 
 **Why device-flow does not gate the first install.** The in-app GitHub device-flow authenticates the user so the
 update checker can reach the private tester repo — but it only runs *after* the app is installed. The bundle itself
@@ -207,26 +227,40 @@ produces a normal shippable artifact and no marker.
 
 ---
 
-## 6. GitHub Actions: dormant, not the release mechanism
+## 6. GitHub Actions: the intended release path
 
-`.github/workflows/release.yml` describes a tag-triggered, channel-selectable Velopack release with per-repo
-least-privilege tokens, a runtime guard that stops a tester build reaching the main repo, and a protected `release`
-environment. **None of it has ever run successfully.**
+`.github/workflows/release.yml` is the intended, tag-triggered release mechanism. It publishes to **this repo**
+(`w0rldx/XE-Local-AI-Engine.Source`, `github.repository`) using the built-in `GITHUB_TOKEN` — no PAT, no separate
+per-repo tokens or artifact repo. Triggers: a pushed `v*` tag (the normal path), or `workflow_dispatch` as a manual
+fallback that lets you pick the tag/ref from the Actions UI.
 
-| Workflow | Registered state | Runs |
-|---|---|---|
-| `build-and-test.yml` | `disabled_manually` | 3, all failed, last 2026-04-20 |
-| `release.yml` | `disabled_manually` | 3, all failed, all 2026-06-27, each dead in ~40 s |
-| `e2e.yml` | not a registered workflow | never ran |
+**GitHub Actions must be enabled on the repository for this workflow to run.** Whether it currently is enabled is an
+owner-level repository setting, not something this documentation tracks or asserts.
 
-Verified 2026-07-24 with `gh workflow list --all` and `gh run list`. Read `release.yml` for design intent if the
-workflows are ever revived — the supply-chain controls in its header comment (tag protection, least-privilege tokens,
-environment reviewers) are the part worth keeping. Until then, the operator setup it describes (repo variables
-`GH_RELEASE_REPO_MAIN` / `GH_RELEASE_REPO_TESTER`, secrets `GH_RELEASE_TOKEN_MAIN` / `GH_RELEASE_TOKEN_TESTER`, the
-protected `release` environment) is **not** a prerequisite for shipping. The real credential set is two environment
-variables on the packaging machine: `VPK_TOKEN` and `XE_TESTER_GITHUB_APP_CLIENT_ID`.
+Job shape:
 
-> Builds are **unsigned**. Signing remains a hard gate before any non-tester rollout.
+- **`validate`** — calls `build-and-test.yml` as a local reusable workflow so the exact tagged commit re-runs the full
+  build + backend/frontend gates before anything is packed. `version` and `release` both `needs: validate`, so a
+  failing gate blocks the release (fail-closed).
+- **`version`** — composes the pack version from `Directory.Build.props`, asserts it is valid SemVer, and generates
+  the changelog once with a **checksum-pinned git-cliff** (shared across the RID matrix rather than regenerated per
+  leg).
+- **`release`** — a matrix with one leg per RID (`win-x64` on `windows-latest`, `linux-x64` on `ubuntu-latest`; the
+  Velopack channels are `win` and `linux`). Each leg builds the SPA, runs `dotnet publish` with
+  `-p:UpdateChannel=main`, downloads the previous release for that channel (for Velopack delta packages), `vpk pack`s
+  an installer-less portable + delta bundle, and `vpk upload github`s it to this repo's Releases — `--pre` is applied
+  only on the upload step when the composed version carries an `-rc`/`-alpha`/`-beta`/`-pre` suffix, never on `vpk
+  pack` (which has no `--pre` flag in 1.2.0).
+
+Every action in the workflow is pinned to a full commit SHA (with the version tag in a trailing comment), so a moved
+upstream tag cannot swap an action mid-release.
+
+> Builds are **unsigned**. A signing follow-up (win-x64 via `--signParams`, linux-x64 via `--signEntitlements`) is
+> deferred per "bind + pin now, sign later" — see the workflow's header comment. Signing remains a hard gate before
+> any non-tester rollout.
+
+The deprecated manual packagers (`publish/package-tester-win.ps1`, `publish/package-rc.sh`) remain useful as a local
+rehearsal or static-analysis target (`scripts/lint-release-scripts.sh`), but they are not the release mechanism.
 
 ---
 
@@ -242,7 +276,8 @@ immediately previous version's folder is normally still present after an update.
 check.
 
 **Option B — re-install an older release asset.** Download the older release's `XE-Local-AI-Engine-win-Portable.zip`
-from the tester repo and run it. Because the data dir is separate, chats and models carry over.
+— from this repo's GitHub Releases for a CI-cut release, or from the tester repo for a release published under the
+historical manual flow — and run it. Because the data dir is separate, chats and models carry over.
 
 **Option C — a `package-rc.sh` zip.** It has no self-update, so it will never pull itself forward; unzip and run it
 against the same data directory, subject to the schema caveat below.

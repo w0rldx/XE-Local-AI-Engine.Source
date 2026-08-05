@@ -170,9 +170,10 @@ unmatched ids, and duplicate responses.
 
 ### Native Windows gap
 
-The canonical tester release path is `publish/package-tester-win.ps1`; it requires a
-native Windows packaging machine and is not proven by a WSL/Linux run. Before an RC,
-run on Windows:
+The release path is the tag-triggered `.github/workflows/release.yml`, which builds and packages on
+GitHub-hosted `windows-latest`/`ubuntu-latest` runners. `publish/package-tester-win.ps1` is the deprecated,
+reference-only manual packager; it requires a native Windows packaging machine and is not proven by a WSL/Linux run.
+As a manual rehearsal before an RC, it can still be run on Windows:
 
 ```powershell
 pwsh ./publish/package-tester-win.ps1 -SkipUpload

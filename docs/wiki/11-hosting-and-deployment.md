@@ -198,7 +198,9 @@ Both scripts carry an explicit **single-instance caveat**: only one instance per
 
 ### RC bundle packaging
 
-`publish/package-tester-win.ps1` is the canonical Windows tester RC path, and requires **PowerShell 7+ (`pwsh`)** — it declares `#Requires -Version 7.0`, and Windows PowerShell 5.1 turns its native-stderr 404 detection into a terminating error. **When manually run** on a clean Windows checkout it validates the release version/tag; rejects local Vite environment overrides; runs frontend lint, OpenAPI drift, license, coverage, production-audit, and build gates; runs backend restore, transitive NuGet vulnerability audit, Release build, and serial solution tests (refusing to start unless the **machine time zone is non-UTC**, since .NET ignores `$env:TZ` on Windows); verifies the staged SPA, tester channel/repository, and caller-supplied GitHub App client ID; then generates release notes, packs the five Velopack assets plus a local SHA-256 manifest, uploads the draft, and updates the release body. `-PublishDraft` additionally proves the pushed canonical source tag resolves to HEAD and verifies all five downloaded draft assets against that manifest before publication. A supplied client ID is always validated — empty, placeholder, and malformed (non-`Iv…`) values are rejected — and no client ID is committed in this repository. `-SkipUpload` runs every build and test gate; it relaxes only the client-ID *requirement*, and an ID-less rehearsal is stamped `REHEARSAL-DO-NOT-SHIP.txt` with the updater inert.
+`publish/package-tester-win.ps1` was the Windows tester RC path from `0.1.0-rc.4.0` through `0.1.0-rc.5.0` and is now
+**deprecated, reference-only** — the tag-triggered `.github/workflows/release.yml` is the intended release path (§8).
+It still requires **PowerShell 7+ (`pwsh`)** — it declares `#Requires -Version 7.0`, and Windows PowerShell 5.1 turns its native-stderr 404 detection into a terminating error. **When manually run** on a clean Windows checkout it validates the release version/tag; rejects local Vite environment overrides; runs frontend lint, OpenAPI drift, license, coverage, production-audit, and build gates; runs backend restore, transitive NuGet vulnerability audit, Release build, and serial solution tests (refusing to start unless the **machine time zone is non-UTC**, since .NET ignores `$env:TZ` on Windows); verifies the staged SPA, tester channel/repository, and caller-supplied GitHub App client ID; then generates release notes, packs the five Velopack assets plus a local SHA-256 manifest, uploads the draft, and updates the release body. `-PublishDraft` additionally proves the pushed canonical source tag resolves to HEAD and verifies all five downloaded draft assets against that manifest before publication. A supplied client ID is always validated — empty, placeholder, and malformed (non-`Iv…`) values are rejected — and no client ID is committed in this repository. `-SkipUpload` runs every build and test gate; it relaxes only the client-ID *requirement*, and an ID-less rehearsal is stamped `REHEARSAL-DO-NOT-SHIP.txt` with the updater inert.
 
 `publish/package-rc.sh` remains the manual portable-zip path (a bash script; it builds **both** RIDs by default, cross-building `win-x64` on Linux — smoke-test that on real Windows). It stages the single-file binary, SPA, desktop launcher, uninstaller, `READ-ME-FIRST.txt`, and `LICENSE`/`NOTICE`, then emits a zip plus `.sha256` sidecar. It fails if the SPA is missing and scans the stage for leaked runtime/state files. Its output never self-updates for two independent reasons: no Velopack metadata exists, and it publishes with an explicit `-p:UpdateChannel=main` (the inert channel) that `assert_app_config_sane` hard-fails on if it ever reads as live.
 
@@ -209,7 +211,7 @@ Both scripts carry an explicit **single-instance caveat**: only one instance per
 Release notes are generated from conventional-commit history rather than hand-written:
 
 - `cliff.toml` (repo root) configures **git-cliff** to render an auto-grouped changelog from the commits between the previous release tag and HEAD. The output is a `RELEASE_NOTES.md`, fed to **`vpk pack --releaseNotes <file>`** to embed the notes into the Velopack package; `vpk upload github` then publishes them as the GitHub release body.
-- **Two producers of `RELEASE_NOTES.md`, and they are not the same code path.** `scripts/generate-release-notes.sh` is the standalone/manual helper. `publish/package-tester-win.ps1` — the canonical release path — **does not call that script**: it downloads a checksum-pinned git-cliff and invokes it directly. They also disagree on the empty-range case: the shell script falls back to writing a `## <version>` / "Maintenance release — no user-facing changelog entries." body (`scripts/generate-release-notes.sh:62-65`), while the packaging script **hard-throws** rather than shipping a release with no notes. Both share the one rule that matters: `--latest` when HEAD is already tagged, `--unreleased --tag` otherwise (a tagged HEAD makes `--unreleased` empty).
+- **Two producers of `RELEASE_NOTES.md`, and they are not the same code path.** `scripts/generate-release-notes.sh` is the standalone/manual helper. `publish/package-tester-win.ps1` — the deprecated manual packaging path — **does not call that script**: it downloads a checksum-pinned git-cliff and invokes it directly. They also disagree on the empty-range case: the shell script falls back to writing a `## <version>` / "Maintenance release — no user-facing changelog entries." body (`scripts/generate-release-notes.sh:62-65`), while the packaging script **hard-throws** rather than shipping a release with no notes. Both share the one rule that matters: `--latest` when HEAD is already tagged, `--unreleased --tag` otherwise (a tagged HEAD makes `--unreleased` empty).
 - The repo-root `CHANGELOG.md` is **not** generated. git-cliff writes `RELEASE_NOTES.md` only; `CHANGELOG.md` is hand-maintained in Keep-a-Changelog form, which is why it drifts from the tags if nobody updates it at release time.
 - **Tags are standardised on a `v` prefix.** All six source tags carry it (`v0.1.0-rc.1.0` … `v0.1.0-rc.4.0`) — there are **no unprefixed tags in this repository**. Bare tags exist only on the **tester artifact repo** (`0.1.0-rc.4.1` and earlier; see §8), which is a different repository. `cliff.toml`'s `tag_pattern = "v?[0-9]*"` therefore accepts either spelling defensively, but it only ever parses *this* repo's tags: git-cliff runs against the local working tree, `origin` is the source repo, and no tester ref is ever fetched here. The range is driven by `--latest`/`--unreleased` rather than by the pattern alone. **The code that genuinely must handle both spellings is `package-tester-win.ps1`'s `Find-GitHubRelease`**, which queries the tester repo over the GitHub API — not git-cliff.
 - **`vpk pack` (1.2.0) has no `--pre` flag** — passing it fails with `'--pre' was not matched`. Prerelease state rides on the **SemVer suffix in `--packVersion`** (`0.1.0-rc.1.0` *is* a prerelease); the GitHub-release prerelease marker is set with `--pre` only on `vpk upload github` (`.github/workflows/release.yml:363-371`).
@@ -225,7 +227,7 @@ The two channel files are deliberately **not** symmetric:
 | `appsettings.AppUpdate.tester.json` | `https://github.com/w0rldx/XE-Local-AI-Engine.Source` — a **real, intentional, non-secret** value | **empty** (public repo needs no app auth) | live |
 | `appsettings.AppUpdate.main.json` | `https://github.com/w0rldx/XE-Local-AI-Engine.Source` — a **real, intentional, non-secret** value | **empty** | live |
 
-Both update channels now point at the public source repo `.Source`, consolidating distribution here. The `main` channel was previously inert (`REPLACE_*` placeholders, kept unwired as an owner decision while distribution was tester-only); it is now wired. Because `.Source` is public, no client ID is required and none is committed. These URLs are public configuration, not leaked secrets, and **must not be "redacted" back to placeholders** — doing so silently breaks self-update for installed builds. The packaging/upload tooling still targets the tester repo; repointing it is the remaining migration step. See [`docs/velopack-release-install-guide.md`](../velopack-release-install-guide.md).
+Both update channels now point at the public source repo `.Source`, consolidating distribution here. The `main` channel was previously inert (`REPLACE_*` placeholders, kept unwired as an owner decision while distribution was tester-only); it is now wired. Because `.Source` is public, no client ID is required and none is committed. These URLs are public configuration, not leaked secrets, and **must not be "redacted" back to placeholders** — doing so silently breaks self-update for installed builds. The migration is done on the CI side: `.github/workflows/release.yml` builds and publishes to this repo. The manual packagers (`publish/package-tester-win.ps1`, `publish/package-rc.sh`) are deprecated, reference-only, and still target the retired tester repo — they are no longer the release path. See [`docs/velopack-release-install-guide.md`](../velopack-release-install-guide.md).
 
 ---
 
@@ -251,27 +253,42 @@ Both refuse to run elevated/as-root (a per-user data dir would resolve to the wr
 
 ---
 
-## 8. Release channels, the two-repo split, and CI status
+## 8. Release channels, consolidation, and CI status
 
-### Distribution is split across two GitHub repositories
+### Distribution was split across two GitHub repositories — now consolidated
 
 | Role | Repository | What lives there |
 |---|---|---|
-| **Source** | `w0rldx/XE-Local-AI-Engine` | the code, and the `v<version>` release tags |
-| **Tester artifacts** | `w0rldx/XE-Local-AI-Engine.Tester-App` | the published tester releases and their Velopack assets + update feed |
+| **Source** | `w0rldx/XE-Local-AI-Engine.Source` | the code, and the `v<version>` release tags |
+| **Tester artifacts (retired)** | `w0rldx/XE-Local-AI-Engine.Tester-App` | tester releases published under the historical manual flow, through `0.1.0-rc.5.0` |
 
-They share a version *string* but nothing else. Cutting a tester RC touches both: the `v<version>` git tag is created on **HEAD of the source repo**, and `vpk upload github --tag` then creates a same-named release on the **tester repo**, whose commits are unrelated. So a tester release's tag will never appear in this repo's `git tag -l`, and the source tag never appears on the tester repo. Both are expected.
+Historically these shared a version *string* but nothing else: the `v<version>` git tag was created on **HEAD of the
+source repo**, and `vpk upload github --tag` then created a same-named release on the **tester repo**, whose commits
+were unrelated. So a tester release's tag never appeared in this repo's `git tag -l`, and the source tag never
+appeared on the tester repo. That two-repo split is now retired — the tag-triggered `.github/workflows/release.yml`
+publishes both `win-x64` and `linux-x64` Velopack packages to **this repo's** GitHub Releases using the built-in
+`GITHUB_TOKEN`, so a CI-cut release has no separate tester-repo counterpart.
 
-**Tag-form convention changed mid-flight.** The seven tester releases published 2026-06-26 → 2026-07-07 carry **bare** tags (`0.1.0-rc.4.1`) with `v`-prefixed release *names*. The packaging script now passes `--tag v<version>`, so releases from `0.1.0-rc.4.2` onward are v-prefixed on both sides. Anything that looks up an existing tester release by tag must therefore accept **both** forms. (Source-repo tags were always v-prefixed; there are no bare tags here.)
+**Tag-form convention changed mid-flight (historical).** The seven tester releases published 2026-06-26 → 2026-07-07 carry **bare** tags (`0.1.0-rc.4.1`) with `v`-prefixed release *names*. The packaging script then started passing `--tag v<version>`, so releases from `0.1.0-rc.4.2` onward were v-prefixed on both sides. Source-repo tags were always v-prefixed; there are no bare tags here.
 
-### GitHub Actions is disabled
+### GitHub Actions and the release workflow
 
-`.github/workflows/release.yml` describes a tag-triggered, channel-selectable Velopack release. **It is `disabled_manually` and has never succeeded** — its only three runs all failed on 2026-06-27. `build-and-test.yml` is likewise disabled (3 runs, 3 failures, last 2026-04-20), and `e2e.yml` was never registered as a workflow at all. Six runs, six failures, zero successes were last observed with `gh workflow list --all` / `gh run list` on 2026-07-24; that external state was not recaptured for the 2026-07-28 documentation review.
+`.github/workflows/release.yml` is the **intended, tag-triggered release path**: pushing a `v*` tag builds win-x64 +
+linux-x64 Velopack packages, generates the changelog via a pinned `git-cliff`, and publishes them to this repo's
+GitHub Releases with the built-in `GITHUB_TOKEN`. `workflow_dispatch` is a manual fallback. Its `validate` job calls
+`build-and-test.yml` as a reusable workflow, so the exact tagged commit re-runs the full build + backend/frontend
+gate set before anything is packed or uploaded (fail-closed: `version` and `release` both `needs: validate`).
+**GitHub Actions must be enabled on the repository for this workflow to run** — that is an owner-level repository
+setting, and this documentation does not track or assert its current state.
 
-From `0.1.0-rc.4.0` onward, tester RCs use **`publish/package-tester-win.ps1`** run by hand on Windows; earlier RCs predate that script. Read `release.yml` for design intent — the channel guard, least-privilege per-repo tokens, and the protected `release` environment are all worth keeping — but do not describe it as the release mechanism, and do not expect a pushed tag to build anything. See [Testing & Validation](13-testing-and-validation.md) for where the quality gates actually run.
+The manual packagers are now deprecated, reference-only material: `publish/package-tester-win.ps1` was the RC path
+from `0.1.0-rc.4.0` through `0.1.0-rc.5.0`, run by hand on Windows against the tester repo; `publish/package-rc.sh`
+remains a manual portable-zip helper. Both still carry static analysis via `scripts/lint-release-scripts.sh`. See
+[Testing & Validation](13-testing-and-validation.md) for where the quality gates run, and
+[`docs/velopack-release-install-guide.md`](../velopack-release-install-guide.md) for the full release story.
 
-The presence and content of these scripts is repository design evidence, not evidence that a particular
-release ran them successfully. A release claim needs the matching retained transcript, hashes, tag,
+The presence and content of these workflow and scripts files is repository design evidence, not evidence that a
+particular release ran them successfully. A release claim needs the matching retained transcript, hashes, tag,
 and target-OS smoke evidence; this page does not assert those artifacts are available.
 
 ---

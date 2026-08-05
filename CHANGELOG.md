@@ -257,6 +257,11 @@ source tag.
   `disabled_manually`, `e2e.yml` was never registered as a workflow, and the repo has 6 runs, 6 failures and 0
   successes in its entire history. The only enforced quality gate is `publish/package-tester-win.ps1`, which runs the
   frontend and backend gate sets on the packaging machine at release time. Between releases, validation is manual.
+  **Follow-up (2026-08-06):** this was the state at the time of the `0.1.0-rc.5.0` release; it is not the current
+  state. A tag-triggered `.github/workflows/release.yml` has since been added as the intended release path, building
+  win-x64 + linux-x64 Velopack packages and publishing them to this repo's GitHub Releases with the built-in
+  `GITHUB_TOKEN`. GitHub Actions must be enabled on the repository for it to run. `publish/package-tester-win.ps1` and
+  `publish/package-rc.sh` are now deprecated, reference-only manual packagers rather than the release path.
 - No backend hard coverage gate (no baseline yet, so a real threshold would either block the RC or be hollow). The
   frontend coverage thresholds are enforced only by `test:coverage:check`, which the packaging script runs.
 - Local-only mode (no `CentralPlatform:BaseUrl`): cloud services remain registered and fail with a generic HTTP error

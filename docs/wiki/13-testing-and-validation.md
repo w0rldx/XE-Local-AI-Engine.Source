@@ -114,10 +114,10 @@ the coverage gate described below.
 
 ### The three standalone runners
 
-All three exist because GitHub Actions is disabled, so anything not reachable from a local command is not reachable at all.
+All three exist for local, CI-independent validation — the intended CI gate is `build-and-test.yml` (on `develop` PRs/pushes) and `release.yml` (on `v*` tags, which itself calls `build-and-test.yml` before packaging), but GitHub Actions must be enabled on the repository for either to run (see "Continuous integration" below). These standalone runners are how the same checks get exercised locally, before or independent of that.
 
 - **[`scripts/run-e2e-local.sh`](../../scripts/run-e2e-local.sh)** — opt-in local runner for the Playwright suite. Nothing invokes it automatically; run it by hand before cutting a tester RC. It performs a frozen frontend install plus `pnpm run lint` before the fixture's intentionally bare Vite `build:e2e`, installs Playwright browsers (via `playwright.ps1`, so it needs `pwsh`), and rejects zero-test or missing-summary runs. `--list` enumerates without running; `--filter` accepts a TUnit/MTP tree-node expression. Exit codes: `0` pass, `1` tests failed or the run was vacuous, `2` a prerequisite/usage error, `75` build contamination (**void; rerun**). No external services needed — FakeOllama plus the in-process host, so no `llama-server` and no `scripts/dev-stop.sh`.
-- **[`scripts/lint-release-scripts.sh`](../../scripts/lint-release-scripts.sh)** — shellcheck + PSScriptAnalyzer over the packaging scripts. With Actions disabled, `publish/package-tester-win.ps1` is the entire release path, so it gets static analysis and its [`publish/tests/package-tester-win.Tests.ps1`](../../publish/tests/package-tester-win.Tests.ps1) Pester suite on every default run. A **missing linter or test module exits 2** rather than passing silently.
+- **[`scripts/lint-release-scripts.sh`](../../scripts/lint-release-scripts.sh)** — shellcheck + PSScriptAnalyzer over the packaging scripts. `publish/package-tester-win.ps1` and `publish/package-rc.sh` are deprecated, reference-only manual packagers now (the release path is the tag-triggered `release.yml`), but this script still gives them static analysis and runs `package-tester-win.ps1`'s [`publish/tests/package-tester-win.Tests.ps1`](../../publish/tests/package-tester-win.Tests.ps1) Pester suite on every default run. A **missing linter or test module exits 2** rather than passing silently.
 - **[`scripts/run-gpu-smoke-local.sh`](../../scripts/run-gpu-smoke-local.sh)** — opt-in **live GPU smoke** against a real, locally started node. Nothing invokes it automatically; run it by hand before cutting a tester RC or after touching the inference/runtime path. It owns the AppHost lifecycle (`dev-start.sh` → `aspire wait app` → `dev-stop.sh`), discovers the port from `dev-status.sh --json` (it changes on every restart), and asserts in order: the installed llama.cpp identity, the `IRuntimeDeviceAudit` verdict, a real streamed chat turn, **that the GPU actually did the work** (nvidia-smi utilisation during generation plus a VRAM rise over a pre-host baseline), a real tool call, optionally image generation (`--images`), and that eject returns VRAM to baseline. Every step must record a verdict, so "nothing ran" can never read as green. **This is the only gate that proves the GPU did the work** — a correct reply proves nothing, because a CPU fallback answers correctly, just slowly (measured on the dev box: GPU 72% / +1199 MiB VRAM versus CPU-fallback 11% / +0 MiB, identical correct answer). Exit codes: `0` pass, `1` the product failed a judged step (always with a `=== Summary ===`), **`5` an infrastructure abort where nothing was judged and no summary prints** (AppHost never became healthy, base URL undiscoverable, auth failed) — so a wrapper can treat 1 as "product says no" and 5 as "fix the machine and re-run"; `3` an instance is already running, `4` could not tell, `2` a missing prerequisite (including "this box has no NVIDIA GPU"), `75` contamination (**void; rerun**), `130` interrupted. Its refuse-to-pass logic is itself tested without a GPU by `scripts/tests/gpu-smoke.test.sh`.
 
 > **A zero-test run is a failure, not a pass.** All three runners enforce this directly, and so does the E2E project itself: the GPU smoke's equivalent is that a step which records no verdict fails the run. The E2E project sets `IsTestProject=false`/`OutputType=Library` unless `-p:RunE2ETests=true` is passed, so without it `dotnet test` discovers nothing and exits **0**. Never read a green E2E run without checking that a non-zero number of tests actually ran.
@@ -126,42 +126,49 @@ All three exist because GitHub Actions is disabled, so anything not reachable fr
 > E2E because the fixture uses bare `pnpm run build:e2e`; do not infer type/lint correctness from a
 > green Vite build alone. Use `--list` for the current discovered-test count.
 
-## Continuous integration — dormant
+## Continuous integration
 
-> **GitHub Actions is disabled on this repository and has never produced a successful run.** Nothing in `.github/workflows/` gates a merge or a release at the baseline. External GitHub state was last checked 2026-07-24 via `gh workflow list --all` and `gh run list`; it was not recaptured for the 2026-07-28 documentation review.
+The intended CI gate is two workflows: **`build-and-test.yml`** (`pull_request`/`push` to `develop`, plus
+`workflow_dispatch` and `workflow_call`) and **`release.yml`** (a pushed `v*` tag, plus `workflow_dispatch`), which
+calls `build-and-test.yml` as a reusable workflow so the exact tagged commit re-runs the full gate set before
+packaging. **GitHub Actions must be enabled on the repository for either to run** — that is an owner-level repository
+setting, and this documentation does not track or assert its current state.
 
-| Workflow file | Registered state | Run history |
-|---|---|---|
-| `build-and-test.yml` | `disabled_manually` | 3 runs, **3 failures**, last attempt 2026-04-20 |
-| `release.yml` | `disabled_manually` | 3 runs, **3 failures**, all 2026-06-27, each dead in ~40 s |
-| `e2e.yml` | **not a registered workflow** | never run; its nightly cron has never fired |
+> **Historical note (checked 2026-07-24, not recaptured since).** At that point both `build-and-test.yml` and the
+> then-current `release.yml` were registered as `disabled_manually`, with a combined six runs and six failures across
+> the two, and `e2e.yml` was not a registered workflow. `release.yml` has since been rewritten to publish to this
+> repo's GitHub Releases directly (win-x64 + linux-x64, built-in `GITHUB_TOKEN`) and to gate packaging on
+> `build-and-test.yml` via its `validate` job. Whether Actions is currently enabled was not re-verified for this page.
 
-Six runs, six failures, zero successes, in the repository's whole history. Two further reasons `build-and-test.yml` could not have gated the current RC even if it were enabled: it triggers only on `pull_request`/`push` to `develop`/`main`, the RC branch is `feature/agent-mode-foundation`, and **`main` does not exist** in this repo.
+The RC branch is `feature/agent-mode-foundation`; `build-and-test.yml` only triggers on `develop`, so a PR/push gate
+on this branch still depends on `workflow_dispatch` or a future merge to `develop`.
 
-The workflow files are still tracked and are the design of record — read them for intent, and keep them accurate if you change the validation commands. But treat every gate below as **what would run if the workflows were re-enabled**, not as something protecting the branch you are on.
+The workflow files are tracked and are the design of record — read them for intent, and keep them accurate if you
+change the validation commands. Treat every gate below as **what runs on CI when Actions is enabled**, not as
+something necessarily protecting the branch you are on right now.
 
-**Where the release-time gates live:** when manually run,
-[`publish/package-tester-win.ps1`](../../publish/package-tester-win.ps1) is the canonical Windows
-tester packaging path. It runs the frontend gate set (frozen install, lint, OpenAPI drift check,
-third-party license check, coverage-gated tests, production dependency audit, production build) and
-the backend gate set (restore, transitive NuGet vulnerability audit, Release build, solution-wide
-serial tests with a hollow-gate guard) on the packaging machine. It became canonical in
-`0.1.0-rc.4.0`; earlier tester releases predate it and are not evidence that they passed today's gates.
-A gate added only to a disabled workflow enforces nothing; release-script lint remains a separate
-local gate. The script is a control definition, not evidence of a successful run.
+**Where the release-time gates live:** `release.yml`'s `validate` job runs the full backend + frontend gate set via
+`build-and-test.yml` against the exact tagged commit before anything is packed or uploaded — `version` and `release`
+both `needs: validate`, so a failing gate blocks the release. The deprecated manual packager,
+[`publish/package-tester-win.ps1`](../../publish/package-tester-win.ps1), ran the same shape of gate set (frontend:
+frozen install, lint, OpenAPI drift check, third-party license check, coverage-gated tests, production dependency
+audit, production build; backend: restore, transitive NuGet vulnerability audit, Release build, solution-wide serial
+tests with a hollow-gate guard) on the packaging machine by hand — it was the release path from `0.1.0-rc.4.0` through
+`0.1.0-rc.5.0` and is now reference-only. A gate belongs in `build-and-test.yml` (or the packaging scripts, for
+release-script lint) to be enforced; documentation describing a gate is not evidence it ran.
 
 Between releases, the enforcement is you: run the raw commands above (and the root [`AGENTS.md`](../../AGENTS.md#validation) Validation section) before you call a change done.
 
-### What the dormant workflows describe
+### What `build-and-test.yml` and `e2e.yml` describe
 
-**`build-and-test.yml`** — designed to run on `pull_request`/`push` to `develop`/`main` plus `workflow_dispatch`, and to be `workflow_call`-reusable (`release.yml` calls it so the exact tagged commit re-runs these gates before packaging). Two jobs:
+**`build-and-test.yml`** — runs on `pull_request`/`push` to `develop` plus `workflow_dispatch`, and is `workflow_call`-reusable (`release.yml` calls it so the exact tagged commit re-runs these gates before packaging). Two jobs:
 
-- **`build-and-test` (ubuntu-latest)** — SDK from `global.json`, restore + `build -c Release --no-restore`, then a single auto-enrolled solution-wide `dotnet test XE-Local-AI-Engine.slnx -c Release --no-build --max-parallel-test-modules 1`. Solution-level `dotnet test` runs every MTP test project (name ends `.Tests` / contains `.Tests.`), so a new suite needs no workflow edit; output is piped through `tee` and a **hollow-gate guard** greps for a `Passed!`/`Failed!` summary, failing if none is found (catching a silent green where zero suites enrolled). `package-tester-win.ps1` implements the same hollow-gate guard, which is why that one is load-bearing today.
-- **`client-react` (ubuntu-latest)** — pnpm + Node 22, `install --frozen-lockfile`, then in order `openapi:check`, `licenses:check`, `lint`, `test:coverage:check`, `build`, and `pnpm audit --prod --audit-level=high`. The same set now runs in the packaging script's frontend leg.
+- **`build-and-test` (ubuntu-latest)** — SDK from `global.json`, restore + `build -c Release --no-restore`, then a single auto-enrolled solution-wide `dotnet test XE-Local-AI-Engine.slnx -c Release --no-build --max-parallel-test-modules 1`. Solution-level `dotnet test` runs every MTP test project (name ends `.Tests` / contains `.Tests.`), so a new suite needs no workflow edit; output is piped through `tee` and a **hollow-gate guard** greps for a `Passed!`/`Failed!` summary, failing if none is found (catching a silent green where zero suites enrolled). The deprecated `package-tester-win.ps1` packager implements the same hollow-gate guard.
+- **`client-react` (ubuntu-latest)** — pnpm + Node 22, `install --frozen-lockfile`, then in order `openapi:check`, `licenses:check`, `lint`, `test:coverage:check`, `build`, and `pnpm audit --prod --audit-level=high`. The same set also runs in the deprecated packaging script's frontend leg.
 
-Two design choices worth preserving in the file: **`--max-parallel-test-modules 1`** (concurrent modules time out / exhaust the WSL `inotify` watch limit on shared runners) and **`TZ=Europe/Berlin`** on the test step (a non-UTC zone deliberately exposes time-zone bugs; the comment cites `CapabilityReporterTests`). Note that `TZ` is a **Unix-only** mechanism in .NET (`TimeZoneInfo.Unix.NonAndroid.cs` reads it; the Windows implementation resolves the zone from `kernel32!GetDynamicTimeZoneInformation` and reads no environment variable). It therefore cannot be reproduced on a Windows packaging machine by setting a variable — `package-tester-win.ps1` instead **requires** the machine's own time zone to be non-UTC, throwing before the test leg if the current offset is `+00:00` and pointing at `tzutil /s`, with `-AllowUtcTestTimeZone` to accept the reduced coverage.
+Two design choices worth preserving in the file: **`--max-parallel-test-modules 1`** (concurrent modules time out / exhaust the WSL `inotify` watch limit on shared runners) and **`TZ=Europe/Berlin`** on the test step (a non-UTC zone deliberately exposes time-zone bugs; the comment cites `CapabilityReporterTests`). Note that `TZ` is a **Unix-only** mechanism in .NET (`TimeZoneInfo.Unix.NonAndroid.cs` reads it; the Windows implementation resolves the zone from `kernel32!GetDynamicTimeZoneInformation` and reads no environment variable). It therefore cannot be reproduced on a Windows packaging machine by setting a variable — the deprecated `package-tester-win.ps1` instead **required** the machine's own time zone to be non-UTC, throwing before the test leg if the current offset is `+00:00` and pointing at `tzutil /s`, with `-AllowUtcTestTimeZone` to accept the reduced coverage.
 
-**`e2e.yml`** is written for a nightly cron, manual dispatch, and PRs labelled `run-e2e`, building the SPA and installing Playwright browsers. It has never executed. E2E is a manual lane only: [`scripts/run-e2e-local.sh`](../../scripts/run-e2e-local.sh), or the raw commands with `-p:RunE2ETests=true`.
+**`e2e.yml`** runs on manual dispatch, or on a `develop` PR opted in with the `run-e2e` label — it is deliberately not a blocking merge gate, since it builds the SPA in-fixture and needs Playwright browsers. E2E is otherwise a manual lane: [`scripts/run-e2e-local.sh`](../../scripts/run-e2e-local.sh), or the raw commands with `-p:RunE2ETests=true`.
 
 ### Release-path gates
 
@@ -179,7 +186,7 @@ Two gates ride the packaging path rather than any test suite:
 
 The README's "RC readiness status" section is the contract: **do not mark release or documentation work complete until matching validation evidence is available.** Required evidence:
 
-- the canonical packager's frontend, backend, vulnerability, and package-gate transcript,
+- the release workflow's (or, for a manual rehearsal, the deprecated packager's) frontend, backend, vulnerability, and package-gate transcript,
 - a clean default `scripts/lint-release-scripts.sh` result, including the mandatory Pester suite,
 - a non-vacuous `scripts/run-e2e-local.sh` result with no exit-75 contamination,
 - a passing `scripts/run-gpu-smoke-local.sh` run on a GPU box — the only evidence that the GPU actually
@@ -189,9 +196,9 @@ The README's "RC readiness status" section is the contract: **do not mark releas
 - pinned runtime binary and package checksums (llama.cpp release pins; see [Local Runtime & Providers](03-local-runtime-and-providers.md)),
 - the matching `v<version>` source tag on the exact packaged commit,
 - a real-Windows smoke transcript for the exact generated `Portable.zip`,
-- the generated five-asset SHA-256 manifest, printed Portable hash, pushed source-tag verification,
-  and successful verification of all five remote assets during `-PublishDraft`, and
-- confirmation that the unchanged draft was published in `w0rldx/XE-Local-AI-Engine.Tester-App`.
+- the generated release assets and their checksums, pushed source-tag verification, and
+- confirmation that the release was published to this repository's GitHub Releases (or, for a manual rehearsal,
+  the unchanged draft published in the retired `w0rldx/XE-Local-AI-Engine.Tester-App`).
 
 This baseline documentation review does not assert that those release artifacts or transcripts exist,
 were retained, or are available to the recipient.

@@ -189,12 +189,20 @@ Copy the matching launcher from [`publish/`](publish/) next to the published bin
 See [`publish/README.md`](publish/README.md) for the expected layout. **Run one instance at a time** against the same
 user-data directory — a second instance races on the SQLite database.
 
-For a Windows tester RC, use [`publish/package-tester-win.ps1`](publish/package-tester-win.ps1) — run on Windows, it is
-the canonical build, validation, packaging, and tester-upload path. It became canonical in `0.1.0-rc.4.0`;
-earlier tester releases predate the script and must not be treated as evidence that they passed its current gates.
-`publish/package-rc.sh` is a separate, much simpler manual portable-zip packager: a bash script you run on Linux/WSL,
-producing a plain self-contained zip with **no Velopack metadata and therefore no self-update**. It builds **both**
-`linux-x64` and `win-x64` by default (`--rid <rid>` for one).
+### Release
+
+The intended, tag-triggered release path is **[`.github/workflows/release.yml`](.github/workflows/release.yml)**:
+pushing a `v*` tag builds Velopack packages for **win-x64** and **linux-x64**, generates the changelog with a pinned
+`git-cliff`, and publishes them to **this repository's** GitHub Releases using the built-in `GITHUB_TOKEN` — no
+separate artifact repo and no PAT. `workflow_dispatch` is a manual fallback for picking a tag/ref from the Actions UI.
+GitHub Actions must be enabled on the repository for the workflow to run; whether it currently is enabled is a
+repository-owner setting this document does not track.
+
+`publish/package-tester-win.ps1` and `publish/package-rc.sh` are **deprecated, reference-only manual packagers** —
+both carry deprecation headers and still target the retired `w0rldx/XE-Local-AI-Engine.Tester-App` artifact repo. They
+are no longer the release path, but `scripts/lint-release-scripts.sh` still statically analyzes them so they don't
+bit-rot silently, and `package-rc.sh` remains a quick way to produce a local, self-contained portable zip with **no
+Velopack metadata and therefore no self-update** (`--rid <rid>` to build one platform instead of both).
 
 > **A `win-x64` zip from `package-rc.sh` is cross-built on Linux.** Smoke-test it on real Windows before handing it to
 > anyone — native-library self-extraction, console-close child cleanup, and browser auto-open cannot be verified
@@ -204,6 +212,9 @@ producing a plain self-contained zip with **no Velopack metadata and therefore n
 > real-desktop verification with a model loaded; they cannot be exercised in WSL2 or on a headless runner. This
 > baseline documentation review does not include or assert availability of the matching smoke-test transcript.
 
+See [`docs/velopack-release-install-guide.md`](docs/velopack-release-install-guide.md) for the full release and
+update-channel story.
+
 ## RC readiness status
 
 Do not mark release or documentation work complete until matching validation evidence is available.
@@ -212,7 +223,7 @@ evidence was produced, retained, or made available for the documentation baselin
 
 Required evidence includes:
 
-- the canonical packager's frontend, backend, vulnerability, and package-gate transcript,
+- the release workflow's (or, for a manual rehearsal, the deprecated packager's) frontend, backend, vulnerability, and package-gate transcript,
 - a clean default `scripts/lint-release-scripts.sh` result, including its mandatory Pester suite,
 - a non-vacuous Playwright E2E run (`scripts/run-e2e-local.sh`) with no exit-75 contamination,
 - a passing live GPU smoke run (`scripts/run-gpu-smoke-local.sh`) on a GPU box — the only gate that
@@ -222,9 +233,8 @@ Required evidence includes:
 - pinned runtime binary and package checksums,
 - the matching `v<version>` source tag on the exact packaged commit,
 - a real-Windows smoke-test transcript for the exact generated `Portable.zip`,
-- the generated five-asset SHA-256 manifest, printed Portable hash, pushed source-tag verification,
-  and successful verification of all five remote assets during `-PublishDraft`, and
-- confirmation that the unchanged draft was published in the tester repository.
+- the generated release assets and their checksums, pushed source-tag verification, and
+- confirmation that the release was published to this repository's GitHub Releases.
 
 Run `scripts/lint-release-scripts.sh`. **The Pester suite is part of that default run, not an add-on** —
 `--pester` only requests it explicitly, and a missing Pester module is a hard failure, never a silent skip
@@ -232,3 +242,7 @@ Run `scripts/lint-release-scripts.sh`. **The Pester suite is part of that defaul
 and [the release guide](publish/README.md) for the full sequence.
 
 Standalone OS-package distribution (MSI/deb/rpm) is deferred: under the runtime re-architecture the app self-provisions its llama.cpp runtime and GGUF models at first run, so there is no installer bundle to validate. A future packaging effort would be its own plan.
+
+## License
+
+XE Local AI Engine is licensed under **Apache-2.0**. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
