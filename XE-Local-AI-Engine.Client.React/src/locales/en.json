@@ -34,7 +34,8 @@
 			"showingRange": "Showing {{from}}–{{to}} of {{total}}"
 		},
 		"confirmation": "Confirmation",
-		"workerNode": "Worker Node"
+		"workerNode": "Worker Node",
+		"hide": "Hide"
 	},
 	"theme": {
 		"title": "Theme",
@@ -94,7 +95,8 @@
 			"noOutput": "(no output)",
 			"approvalPrompt": "This tool needs your approval to run.",
 			"approve": "Approve",
-			"deny": "Deny"
+			"deny": "Deny",
+			"approveSession": "Approve for this session"
 		},
 		"askUser": {
 			"title": "The assistant needs your input",
@@ -3541,7 +3543,11 @@
 					"enabled": "Enabled",
 					"version": "Version",
 					"actions": "Actions"
-				}
+				},
+				"importedBadge": "Imported · {{source}}",
+				"importedUnknownSource": "an unknown source",
+				"invalidNameBadge": "Name not usable",
+				"invalidNameTooltip": "This name is not valid for an agent, so the skill is skipped whenever an agent is built. Rename it to lowercase letters and digits separated by single dashes."
 			},
 			"editor": {
 				"createTitle": "New skill",
@@ -3567,11 +3573,29 @@
 					"label": "Body",
 					"description": "The full skill instructions, loaded on demand by the agent's model.",
 					"placeholder": "# How to review an invoice\n\n1. …",
-					"required": "Body is required."
+					"required": "Body is required.",
+					"budget": "{{lines}} lines · ~{{tokens}} tokens",
+					"overGuidance": "the specification suggests staying under {{lines}} lines and {{tokens}} tokens"
 				},
 				"enabled": {
 					"label": "Enabled",
 					"description": "Disabled skills are never loaded by an agent, even if still assigned."
+				},
+				"importedNote": "This skill was imported from {{source}}. Its instructions are third-party content this node never validated, and they run with your agent's tool access once enabled.",
+				"frontmatterSection": "Frontmatter",
+				"license": {
+					"label": "License"
+				},
+				"compatibility": {
+					"label": "Compatibility"
+				},
+				"allowedTools": {
+					"label": "Allowed tools",
+					"description": "Space-separated list declared by the skill's author. Shown for information only — this node neither grants nor restricts any tool based on it."
+				},
+				"metadata": {
+					"label": "Metadata",
+					"readOnly": "Carried through unchanged from the skill's frontmatter."
 				}
 			},
 			"delete": {
@@ -3582,6 +3606,72 @@
 				"load": "Could not load skills.",
 				"save": "Could not save the skill.",
 				"delete": "Could not delete the skill."
+			},
+			"importButton": "Import skills",
+			"resources": {
+				"title": "Bundled resources ({{count}})",
+				"error": "Could not load the bundled resources."
+			},
+			"import": {
+				"title": "Import skills",
+				"previewButton": "Preview",
+				"importButton": "Import {{count}} selected",
+				"back": "Choose another source",
+				"acknowledge": "I understand this content is untrusted and that I am responsible for reviewing it.",
+				"warning": {
+					"title": "Imported skills are untrusted content",
+					"untrusted": "Skills you import are third-party instructions. This node does not validate, scan or sandbox them. A skill's body is injected verbatim into your agent's context and can attempt to redirect the agent to do something other than what its description says.",
+					"consequence": "An enabled skill's instructions run with your agent's tool access — including reading your knowledge base and local workspace files without a further prompt.",
+					"posture": "Scripts are never imported. Everything else is shown to you exactly as it will be stored — read the full body and every resource below, then decide.",
+					"disabled": "Imported skills arrive disabled. Enabling one is a separate, deliberate step."
+				},
+				"tabs": {
+					"upload": "Upload",
+					"github": "GitHub",
+					"paste": "Paste"
+				},
+				"upload": {
+					"label": "Skill archive (.zip)",
+					"description": "A .zip containing one or more SKILL.md files with their bundled resources.",
+					"placeholder": "Choose a .zip file"
+				},
+				"github": {
+					"description": "Only github.com is reachable, and only by owner and repository — a pasted URL is never accepted.",
+					"owner": "Owner",
+					"repository": "Repository"
+				},
+				"paste": {
+					"label": "SKILL.md",
+					"description": "Paste a complete SKILL.md, including its YAML frontmatter."
+				},
+				"report": {
+					"summary": "Source {{source}} · {{found}} skills found · {{selected}} selected",
+					"empty": "This source contains no skills."
+				},
+				"conflict": {
+					"label": "A selected skill already exists on this node",
+					"skip": "Skip it and keep what is on this node",
+					"replace": "Replace it — this overwrites the existing skill and loses any local edits"
+				},
+				"candidate": {
+					"size": "{{bytes}} bytes · {{lines}} lines",
+					"overGuidance": "over the {{lines}}-line guidance",
+					"allowedTools": "Declared allowed-tools: {{tools}}",
+					"problemsTitle": "Cannot be imported",
+					"refusedTitle": "Refused — scripts are never imported",
+					"conflict": "A skill named '{{name}}' already exists on this node.",
+					"resources": "Bundled resources ({{count}})",
+					"showBody": "View full body",
+					"hideBody": "Hide full body"
+				},
+				"outcomes": {
+					"title": "Import result",
+					"disabledNote": "Imported skills are disabled. Open one to review it, then enable it deliberately."
+				},
+				"errors": {
+					"preview": "Could not read that source.",
+					"commit": "Could not import the selected skills."
+				}
 			}
 		},
 		"tools": {

@@ -89,27 +89,34 @@ export const ToolCallCard = memo(function ToolCallCard({ part }: ToolCallCardPro
 	};
 
 	// Local tool-approval responder. The pending approval request id rides the part; posting the decision to
-	// the loopback resolve endpoint releases the waiting run server-side. `decided` hides the controls the instant the
-	// operator clicks (optimistic) — the card then clears naturally when the tool completes/rejects (tool-call-completed
-	// clears pendingApprovalRequestId). No conversation context is needed: the request id is the global correlation key.
-	const [decided, setDecided] = useState(false);
+	// the loopback resolve endpoint releases the waiting run server-side. The decided REQUEST ID (not a boolean) is
+	// tracked so the controls hide the instant the operator clicks (optimistic) yet re-arm if the server prompts again
+	// with a NEW request id — which it will whenever session scope is withheld (imported skills) or the node policy
+	// disables session scope. A boolean here would leave a live prompt permanently unanswerable.
+	const [decidedRequestId, setDecidedRequestId] = useState<string | null>(null);
 	const resolveApproval = useMutation({ ...withResponseValidation(resolveToolApprovalMutation()) });
 	const pendingApprovalRequestId = part.pendingApprovalRequestId;
 	const awaitingApproval =
-		approvalControlsEnabled && part.state === "waiting" && !decided && typeof pendingApprovalRequestId === "string" && pendingApprovalRequestId.length > 0;
+		approvalControlsEnabled &&
+		part.state === "waiting" &&
+		typeof pendingApprovalRequestId === "string" &&
+		pendingApprovalRequestId.length > 0 &&
+		decidedRequestId !== pendingApprovalRequestId;
 
+	// `scope` is only meaningful on an approval: Session asks the node to remember the decision for the rest of THIS
+	// conversation, for the skill tools that allow it. A denial is never remembered, so Deny sends no scope at all.
 	const handleApprovalDecision = useCallback(
-		(approved: boolean) => {
+		(approved: boolean, scope?: "Once" | "Session") => {
 			if (!pendingApprovalRequestId) {
 				return;
 			}
-			setDecided(true);
+			setDecidedRequestId(pendingApprovalRequestId);
 			resolveApproval.mutate(
-				{ body: { requestId: pendingApprovalRequestId, approved } },
+				{ body: { approved, requestId: pendingApprovalRequestId, ...(scope ? { scope } : {}) } },
 				{
 					// Re-arm the controls if the post failed so the operator can retry rather than being stuck with a
 					// dismissed prompt on a still-waiting tool.
-					onError: () => setDecided(false),
+					onError: () => setDecidedRequestId(null),
 				},
 			);
 		},
@@ -199,10 +206,24 @@ export const ToolCallCard = memo(function ToolCallCard({ part }: ToolCallCardPro
 							variant="light"
 							leftSection={<IconCheck size={12} />}
 							loading={resolveApproval.isPending}
-							onClick={() => handleApprovalDecision(true)}
+							onClick={() => handleApprovalDecision(true, "Once")}
 							data-testid={`chat-tool-call-approve-${part.name}`}
 						>
 							{t("chat.toolCall.approve", "Approve")}
+						</Button>
+						{/* Session scope is a REQUEST, not a guarantee: the node withholds it for imported skills and an
+						    operator policy can disable it outright, in which case the same tool prompts again. That is
+						    expected, not a failure — the controls re-arm on the new request id. */}
+						<Button
+							size="compact-xs"
+							color="teal"
+							variant="subtle"
+							leftSection={<IconCheck size={12} />}
+							loading={resolveApproval.isPending}
+							onClick={() => handleApprovalDecision(true, "Session")}
+							data-testid={`chat-tool-call-approve-session-${part.name}`}
+						>
+							{t("chat.toolCall.approveSession", "Approve for this session")}
 						</Button>
 						<Button
 							size="compact-xs"

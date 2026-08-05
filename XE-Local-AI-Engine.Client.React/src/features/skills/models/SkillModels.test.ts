@@ -8,7 +8,16 @@ import {
 	skillFormSchema,
 } from "@/features/skills/models/SkillModels";
 
-const valid = { name: "invoice-review", description: "How to review", body: "# Body", enabled: true };
+const valid = {
+	name: "invoice-review",
+	description: "How to review",
+	body: "# Body",
+	enabled: true,
+	license: "MIT",
+	compatibility: "",
+	allowedTools: "",
+	metadata: null,
+};
 
 describe("SKILL_NAME_PATTERN", () => {
 	it.each(["a", "abc", "a1", "invoice-review", "ab-cd-ef", "x9z"])("accepts the specification-valid name %s", (name) => {
@@ -34,10 +43,10 @@ describe("skillFormSchema", () => {
 
 	it("trims name, description and body on parse", () => {
 		const result = skillFormSchema.safeParse({
+			...valid,
 			name: "  invoice-review  ",
 			description: "  desc  ",
 			body: "  body  ",
-			enabled: true,
 		});
 		expect(result.success).toBe(true);
 		if (result.success) {
