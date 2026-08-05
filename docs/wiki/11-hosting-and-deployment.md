@@ -202,7 +202,7 @@ Both scripts carry an explicit **single-instance caveat**: only one instance per
 
 `publish/package-rc.sh` remains the manual portable-zip path (a bash script; it builds **both** RIDs by default, cross-building `win-x64` on Linux — smoke-test that on real Windows). It stages the single-file binary, SPA, desktop launcher, uninstaller, `READ-ME-FIRST.txt`, and `LICENSE`/`NOTICE`, then emits a zip plus `.sha256` sidecar. It fails if the SPA is missing and scans the stage for leaked runtime/state files. Its output never self-updates for two independent reasons: no Velopack metadata exists, and it publishes with an explicit `-p:UpdateChannel=main` (the inert channel) that `assert_app_config_sane` hard-fails on if it ever reads as live.
 
-`LICENSE` and `NOTICE` are `Content` items in `XE-Local-AI-Engine.Client.csproj`, so they land in the publish directory both packaging paths stage from — the software is proprietary, all rights reserved.
+`LICENSE` and `NOTICE` are `Content` items in `XE-Local-AI-Engine.Client.csproj`, so they land in the publish directory both packaging paths stage from — the software is licensed under Apache-2.0.
 
 ### Changelog automation & release notes
 

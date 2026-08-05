@@ -446,3 +446,8 @@ XE-Local-AI-Engine.Client/backups/
 # Runtime state written next to the app during local runs (never product content).
 XE-Local-AI-Engine.Client/generated-images/
 XE-Local-AI-Engine.Client/development/
+
+# Internal agent tooling + planning archive — untracked pending migration to the
+# universal harness at .agent-harness. Kept locally, not shipped/open-sourced.
+/.opencode/
+/Plans/

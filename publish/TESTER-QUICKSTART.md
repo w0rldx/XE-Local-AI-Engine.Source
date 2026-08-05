@@ -75,7 +75,7 @@ Either way: a console/terminal opens with live logs and your default browser ope
 on a local loopback URL (`http://127.0.0.1:<port>/`). If the browser does not open, the URL
 is printed in the console — paste it manually.
 
-**This software is proprietary — all rights reserved**; `LICENSE` states the terms and
+**This software is licensed under Apache-2.0**; `LICENSE` states the terms and
 `NOTICE` carries the third-party attributions.
 
 - **Windows:** `LICENSE` and `NOTICE` ship inside the `current` folder, not alongside the

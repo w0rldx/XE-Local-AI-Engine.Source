@@ -66,7 +66,7 @@ The dormant GitHub workflows also pin third-party actions to full commit SHAs. T
 
 ## License inventory
 
-The repository includes a proprietary `LICENSE`, a `NOTICE`, and a generated third-party package manifest rendered in the application's About dialog.
+The repository includes an Apache-2.0 `LICENSE`, a `NOTICE`, and a generated third-party package manifest rendered in the application's About dialog.
 
 At the frozen baseline, the generated manifest contains 96 entries:
 

@@ -118,7 +118,7 @@
   </Target>
 
   <ItemGroup>
-    <!-- The product is proprietary and the artifact must carry its terms. Both packaging paths
+    <!-- The artifact must carry its license terms (Apache-2.0 requires shipping them). Both packaging paths
          (the Velopack pack step and publish/package-rc.sh) stage from this publish directory,
          so shipping them here covers every channel. Output stays clean for dev/test runs. -->
     <Content Include="$(MSBuildProjectDirectory)/../LICENSE"
