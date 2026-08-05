@@ -64,7 +64,9 @@ internal sealed class NodeChatReadModel(NodeChatPersistenceWriter writer)
                     conversationReader.GetBoolean(12),
                     // compaction_summary is an encrypted BLOB; decrypt via the same db-context gateway used for the title.
                     dbContext.DecryptConversationCompactionSummary(
-                        await conversationReader.IsDBNullAsync(ordinal: 13, token).ConfigureAwait(false) ? null : await conversationReader.GetFieldValueAsync<byte[]>(ordinal: 13, token).ConfigureAwait(false),
+                        await conversationReader.IsDBNullAsync(ordinal: 13, token).ConfigureAwait(false)
+                            ? null
+                            : await conversationReader.GetFieldValueAsync<byte[]>(ordinal: 13, token).ConfigureAwait(false),
                         conversationId),
                     await conversationReader.IsDBNullAsync(ordinal: 14, token).ConfigureAwait(false) ? null : conversationReader.GetInt32(14),
                     await conversationReader.IsDBNullAsync(ordinal: 15, token).ConfigureAwait(false) ? null : conversationReader.GetInt64(15));

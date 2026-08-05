@@ -37,7 +37,11 @@ internal sealed partial class GitHubSkillArchiveDownloader
     private static readonly TimeSpan ReadIdleTimeout = TimeSpan.FromSeconds(30);
 
     private static readonly HashSet<string> AllowedHosts =
-        new(StringComparer.OrdinalIgnoreCase) { "github.com", "codeload.github.com" };
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            "github.com",
+            "codeload.github.com"
+        };
 
     private readonly HttpClient _httpClient;
     private readonly SkillImportOptions _options;

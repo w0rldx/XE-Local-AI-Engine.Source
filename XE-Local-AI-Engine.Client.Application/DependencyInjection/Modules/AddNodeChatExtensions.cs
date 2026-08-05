@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 
-using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;

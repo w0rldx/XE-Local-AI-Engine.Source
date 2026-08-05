@@ -94,29 +94,35 @@ internal static class SkillMapper
             Token = preview.Token,
             SourceUri = preview.SourceUri,
             Warnings = preview.Warnings,
-            Skills = [.. preview.Skills.Select(static skill => new SkillImportCandidateResponse
-            {
-                Name = skill.Name,
-                Description = skill.Description,
-                Body = skill.Body,
-                License = skill.License,
-                Compatibility = skill.Compatibility,
-                AllowedTools = skill.AllowedTools,
-                Metadata = skill.Metadata,
-                BodySizeBytes = skill.BodySizeBytes,
-                BodyLineCount = skill.BodyLineCount,
-                Resources = [.. skill.Resources.Select(static resource => new SkillResourceSummaryResponse
+            Skills =
+            [
+                .. preview.Skills.Select(static skill => new SkillImportCandidateResponse
                 {
-                    Name = resource.Name,
-                    Description = resource.Description,
-                    MediaType = resource.MediaType,
-                    SizeBytes = resource.SizeBytes
-                })],
-                RefusedScripts = skill.RefusedScripts,
-                ConflictsWithExistingSkill = skill.ConflictsWithExistingSkill,
-                Problems = skill.Problems,
-                CanImport = skill.CanImport
-            })]
+                    Name = skill.Name,
+                    Description = skill.Description,
+                    Body = skill.Body,
+                    License = skill.License,
+                    Compatibility = skill.Compatibility,
+                    AllowedTools = skill.AllowedTools,
+                    Metadata = skill.Metadata,
+                    BodySizeBytes = skill.BodySizeBytes,
+                    BodyLineCount = skill.BodyLineCount,
+                    Resources =
+                    [
+                        .. skill.Resources.Select(static resource => new SkillResourceSummaryResponse
+                        {
+                            Name = resource.Name,
+                            Description = resource.Description,
+                            MediaType = resource.MediaType,
+                            SizeBytes = resource.SizeBytes
+                        })
+                    ],
+                    RefusedScripts = skill.RefusedScripts,
+                    ConflictsWithExistingSkill = skill.ConflictsWithExistingSkill,
+                    Problems = skill.Problems,
+                    CanImport = skill.CanImport
+                })
+            ]
         };
     }
 
@@ -126,12 +132,15 @@ internal static class SkillMapper
 
         return new SkillImportCommitResponse
         {
-            Outcomes = [.. result.Outcomes.Select(static outcome => new SkillImportOutcomeResponse
-            {
-                Name = outcome.Name,
-                Status = outcome.Status,
-                Reason = outcome.Reason
-            })]
+            Outcomes =
+            [
+                .. result.Outcomes.Select(static outcome => new SkillImportOutcomeResponse
+                {
+                    Name = outcome.Name,
+                    Status = outcome.Status,
+                    Reason = outcome.Reason
+                })
+            ]
         };
     }
 

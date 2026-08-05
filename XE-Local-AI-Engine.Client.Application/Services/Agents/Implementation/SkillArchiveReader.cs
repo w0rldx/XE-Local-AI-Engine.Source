@@ -33,11 +33,28 @@ internal static class SkillArchiveReader
 
     /// <summary>MAF's own default <c>AllowedResourceExtensions</c>. Anything else is silently ignored, not refused.</summary>
     private static readonly HashSet<string> ResourceExtensions =
-        new(StringComparer.OrdinalIgnoreCase) { ".md", ".json", ".yaml", ".yml", ".csv", ".xml", ".txt" };
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            ".md",
+            ".json",
+            ".yaml",
+            ".yml",
+            ".csv",
+            ".xml",
+            ".txt"
+        };
 
     /// <summary>MAF's own default <c>AllowedScriptExtensions</c>. Detected so the report can list them; never imported.</summary>
     private static readonly HashSet<string> ScriptExtensions =
-        new(StringComparer.OrdinalIgnoreCase) { ".py", ".js", ".sh", ".ps1", ".cs", ".csx" };
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            ".py",
+            ".js",
+            ".sh",
+            ".ps1",
+            ".cs",
+            ".csx"
+        };
 
     private static readonly Dictionary<string, string> MediaTypes = new(StringComparer.OrdinalIgnoreCase)
     {

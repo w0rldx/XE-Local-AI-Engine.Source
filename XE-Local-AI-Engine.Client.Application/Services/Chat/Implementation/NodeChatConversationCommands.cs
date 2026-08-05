@@ -176,7 +176,8 @@ internal sealed class NodeChatConversationCommands(NodeChatPersistenceWriter wri
                 // range would otherwise be misrepresented by stale summary text. Clear it (literal NULLs) so the next send
                 // uses full history until the user re-compacts.
                 await using var command = dbContext.Database.GetDbConnection().CreateCommand();
-                command.CommandText = "UPDATE conversations SET selected_path_json = $selected_path_json, last_seen_utc = $last_seen_utc, compaction_summary = NULL, compaction_summary_covers_to_sequence = NULL, compaction_summary_updated_at_utc = NULL WHERE conversation_id = $conversation_id AND purged = 0;";
+                command.CommandText =
+                    "UPDATE conversations SET selected_path_json = $selected_path_json, last_seen_utc = $last_seen_utc, compaction_summary = NULL, compaction_summary_covers_to_sequence = NULL, compaction_summary_updated_at_utc = NULL WHERE conversation_id = $conversation_id AND purged = 0;";
                 AddParameter(command, "$selected_path_json", SerializeSelectedPath(selectedPath));
                 AddParameter(command, "$last_seen_utc", request.UpdatedAtUtc);
                 AddParameter(command, "$conversation_id", request.ConversationId);
@@ -308,7 +309,8 @@ internal sealed class NodeChatConversationCommands(NodeChatPersistenceWriter wri
                 // write NULL when cleared, and EF's raw-SQL parameter builder has no store-type mapping for DBNull, so
                 // typed DbParameters via AddParameter are required. The summary is encrypted before writing; null stays null.
                 await using var command = dbContext.Database.GetDbConnection().CreateCommand();
-                command.CommandText = "UPDATE conversations SET compaction_summary = $summary, compaction_summary_covers_to_sequence = $covers_to, compaction_summary_updated_at_utc = $updated_at, last_seen_utc = $last_seen_utc WHERE conversation_id = $conversation_id AND purged = 0;";
+                command.CommandText =
+                    "UPDATE conversations SET compaction_summary = $summary, compaction_summary_covers_to_sequence = $covers_to, compaction_summary_updated_at_utc = $updated_at, last_seen_utc = $last_seen_utc WHERE conversation_id = $conversation_id AND purged = 0;";
                 AddParameter(command, "$summary", dbContext.EncryptConversationCompactionSummary(summary, request.ConversationId));
                 AddParameter(command, "$covers_to", summary is null ? null : request.CoversToSequence);
                 AddParameter(command, "$updated_at", summary is null ? null : request.UpdatedAtUtc);

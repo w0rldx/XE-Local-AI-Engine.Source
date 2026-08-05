@@ -269,7 +269,8 @@ internal sealed class NodeChatVariantBranchService(NodeChatPersistenceWriter wri
                         // covered-span hash would invalidate only when the covered messages actually change.
                         await using var clearSummaryCommand = dbContext.Database.GetDbConnection().CreateCommand();
                         clearSummaryCommand.Transaction = dbTransaction;
-                        clearSummaryCommand.CommandText = "UPDATE conversations SET compaction_summary = NULL, compaction_summary_covers_to_sequence = NULL, compaction_summary_updated_at_utc = NULL WHERE conversation_id = $conversation_id;";
+                        clearSummaryCommand.CommandText =
+                            "UPDATE conversations SET compaction_summary = NULL, compaction_summary_covers_to_sequence = NULL, compaction_summary_updated_at_utc = NULL WHERE conversation_id = $conversation_id;";
                         AddParameter(clearSummaryCommand, "$conversation_id", request.ConversationId);
                         await clearSummaryCommand.ExecuteNonQueryAsync(token).ConfigureAwait(false);
 

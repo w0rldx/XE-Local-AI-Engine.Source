@@ -161,8 +161,9 @@ internal sealed class SkillImportHarness : IDisposable
     {
         Store.ListAsync(Arg.Any<CancellationToken>())
              .Returns(Task.FromResult<IReadOnlyList<AgentSkillRecord>>(names
-                 .Select(static name => new AgentSkillRecord(Guid.NewGuid(), name, "old", "old body", Enabled: true, Version: 3, CreatedAtUtc: 1, UpdatedAtUtc: 1))
-                 .ToList()));
+                                                                       .Select(static name => new AgentSkillRecord(Guid.NewGuid(), name, "old", "old body", Enabled: true, Version: 3, CreatedAtUtc: 1,
+                                                                           UpdatedAtUtc: 1))
+                                                                       .ToList()));
     }
 
     /// <summary>The single <c>AgentSkillInput</c> handed to the store, whichever write path took it.</summary>
@@ -220,7 +221,13 @@ internal sealed class QueuedHttpMessageHandler : HttpMessageHandler
 
     public QueuedHttpMessageHandler EnqueueRedirect(string location)
     {
-        _responses.Enqueue(() => new HttpResponseMessage(HttpStatusCode.Found) { Headers = { Location = new Uri(location) } });
+        _responses.Enqueue(() => new HttpResponseMessage(HttpStatusCode.Found)
+        {
+            Headers =
+            {
+                Location = new Uri(location)
+            }
+        });
         return this;
     }
 
@@ -228,7 +235,13 @@ internal sealed class QueuedHttpMessageHandler : HttpMessageHandler
     {
         _responses.Enqueue(() => new HttpResponseMessage(HttpStatusCode.OK)
         {
-            Content = new ByteArrayContent(archive) { Headers = { ContentType = new MediaTypeHeaderValue("application/zip") } }
+            Content = new ByteArrayContent(archive)
+            {
+                Headers =
+                {
+                    ContentType = new MediaTypeHeaderValue("application/zip")
+                }
+            }
         });
         return this;
     }

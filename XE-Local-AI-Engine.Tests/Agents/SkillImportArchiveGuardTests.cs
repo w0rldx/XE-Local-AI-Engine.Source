@@ -92,7 +92,10 @@ public sealed class SkillImportArchiveGuardTests
             }
         });
 
-        await AssertRefusedAsync(archive, "32 entries", new SkillImportOptions { MaxEntries = 32 }).ConfigureAwait(false);
+        await AssertRefusedAsync(archive, "32 entries", new SkillImportOptions
+        {
+            MaxEntries = 32
+        }).ConfigureAwait(false);
     }
 
     [Test]
@@ -110,7 +113,10 @@ public sealed class SkillImportArchiveGuardTests
 
         // Tightened to 4 MiB so the fixture is 5 MiB rather than 33 MiB. The composition is what is under test:
         // per-entry-legal files must still trip the whole-archive budget.
-        await AssertRefusedAsync(archive, "inflates to more than", new SkillImportOptions { MaxTotalInflatedBytes = 4 * 1024 * 1024 }).ConfigureAwait(false);
+        await AssertRefusedAsync(archive, "inflates to more than", new SkillImportOptions
+        {
+            MaxTotalInflatedBytes = 4 * 1024 * 1024
+        }).ConfigureAwait(false);
     }
 
     // The whole-archive caps alone would let ONE skill carry hundreds of bundled files — every one of them a name and

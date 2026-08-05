@@ -164,7 +164,8 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
         {
             // Ids only — a dropped-skill warning never carries the encrypted Description/Body, and the Name is omitted
             // too so a crafted name cannot shape a log line.
-            _logger.LogWarning("Agent definition {AgentDefinitionId} assigns {UnbuildableCount} skill(s) whose stored name is not a valid Agent Skills name ({UnbuildableSkillIds}); they were dropped so the agent can still be built. Rename them to restore the skill.",
+            _logger.LogWarning(
+                "Agent definition {AgentDefinitionId} assigns {UnbuildableCount} skill(s) whose stored name is not a valid Agent Skills name ({UnbuildableSkillIds}); they were dropped so the agent can still be built. Rename them to restore the skill.",
                 definition.Id,
                 unbuildableIds.Count,
                 string.Join(", ", unbuildableIds));

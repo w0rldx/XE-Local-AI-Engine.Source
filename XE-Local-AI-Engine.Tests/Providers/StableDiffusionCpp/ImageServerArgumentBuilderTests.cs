@@ -34,8 +34,7 @@ public sealed class ImageServerArgumentBuilderTests
 
         var spec = ImageServerArgumentBuilder.Build("sd15", "/bin/sd-server", parts, SdGpuBackend.Cpu, 18200, Options, threads: 8);
 
-        AssertEx.Equal(
-            "--listen-ip 127.0.0.1 --listen-port 18200 -m /models/sd15/sd15.gguf --backend cpu -t 8 -v",
+        AssertEx.Equal("--listen-ip 127.0.0.1 --listen-port 18200 -m /models/sd15/sd15.gguf --backend cpu -t 8 -v",
             string.Join(' ', spec.Arguments));
     }
 
@@ -56,12 +55,11 @@ public sealed class ImageServerArgumentBuilderTests
 
         var spec = ImageServerArgumentBuilder.Build("qwen-image", "/bin/sd-server", parts, SdGpuBackend.Cuda, 18201, Options, threads: 16);
 
-        AssertEx.Equal(
-            "--listen-ip 127.0.0.1 --listen-port 18201 "
-            + "--diffusion-model /models/qwen/qwen-image-Q4_K_M.gguf "
-            + "--vae /models/qwen/qwen_image_vae.safetensors "
-            + "--llm /models/qwen/Qwen2.5-VL-7B-Instruct.Q4_K_M.gguf "
-            + "--backend diffusion=cuda0,te=cpu,vae=cpu -t 16 -v",
+        AssertEx.Equal("--listen-ip 127.0.0.1 --listen-port 18201 "
+                       + "--diffusion-model /models/qwen/qwen-image-Q4_K_M.gguf "
+                       + "--vae /models/qwen/qwen_image_vae.safetensors "
+                       + "--llm /models/qwen/Qwen2.5-VL-7B-Instruct.Q4_K_M.gguf "
+                       + "--backend diffusion=cuda0,te=cpu,vae=cpu -t 16 -v",
             string.Join(' ', spec.Arguments));
     }
 
@@ -79,13 +77,12 @@ public sealed class ImageServerArgumentBuilderTests
 
         var spec = ImageServerArgumentBuilder.Build("flux-schnell", "/bin/sd-server", parts, SdGpuBackend.Vulkan, 18202, Options, threads: 4);
 
-        AssertEx.Equal(
-            "--listen-ip 127.0.0.1 --listen-port 18202 "
-            + "--diffusion-model /models/flux/flux1-schnell.gguf "
-            + "--vae /models/flux/ae.safetensors "
-            + "--clip_l /models/flux/clip_l.safetensors "
-            + "--t5xxl /models/flux/t5xxl.safetensors "
-            + "--backend diffusion=vulkan0,te=cpu,vae=cpu -t 4 -v",
+        AssertEx.Equal("--listen-ip 127.0.0.1 --listen-port 18202 "
+                       + "--diffusion-model /models/flux/flux1-schnell.gguf "
+                       + "--vae /models/flux/ae.safetensors "
+                       + "--clip_l /models/flux/clip_l.safetensors "
+                       + "--t5xxl /models/flux/t5xxl.safetensors "
+                       + "--backend diffusion=vulkan0,te=cpu,vae=cpu -t 4 -v",
             string.Join(' ', spec.Arguments));
     }
 

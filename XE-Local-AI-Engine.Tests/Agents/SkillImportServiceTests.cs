@@ -212,7 +212,8 @@ public sealed class SkillImportServiceTests
             Acknowledged: true)).ConfigureAwait(false);
 
         AssertEx.Equal(SkillImportStatus.Replaced, replaced.Outcomes.Single().Status);
-        await harness.Store.Received(1).UpdateAsync(existingId, Arg.Is<AgentSkillInput>(input => !input.Enabled && input.Origin == AgentSkillOrigin.Imported), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await harness.Store.Received(1).UpdateAsync(existingId, Arg.Is<AgentSkillInput>(input => !input.Enabled && input.Origin == AgentSkillOrigin.Imported), Arg.Any<CancellationToken>())
+                     .ConfigureAwait(false);
     }
 
     [Test]
@@ -253,5 +254,4 @@ public sealed class SkillImportServiceTests
 
         await harness.Store.DidNotReceive().CreateAsync(Arg.Any<AgentSkillInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
-
 }

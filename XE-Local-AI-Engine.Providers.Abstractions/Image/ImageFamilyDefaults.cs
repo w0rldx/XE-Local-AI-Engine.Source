@@ -30,17 +30,37 @@ public static class ImageFamilyDefaults
         return family switch
         {
             // SDXL keeps the SD sampler but is normally run a little longer than SD1.5.
-            ImageModelFamily.Sdxl => new ImageGenerationDefaults { Steps = 25, CfgScale = 7.0, Sampler = "euler_a" },
+            ImageModelFamily.Sdxl => new ImageGenerationDefaults
+            {
+                Steps = 25,
+                CfgScale = 7.0,
+                Sampler = "euler_a"
+            },
 
             // Flow-matching families default to plain euler in sd.cpp and want markedly lower guidance than SD.
-            ImageModelFamily.Sd3 => new ImageGenerationDefaults { Steps = 28, CfgScale = 4.5, Sampler = "euler" },
+            ImageModelFamily.Sd3 => new ImageGenerationDefaults
+            {
+                Steps = 28,
+                CfgScale = 4.5,
+                Sampler = "euler"
+            },
 
             // FLUX.1-schnell is timestep-distilled: it is meant to run at ~4 steps with guidance effectively disabled
             // (CFG 1.0). Running it at 20/7.0 is both ~5x slower and visibly worse.
-            ImageModelFamily.Flux => new ImageGenerationDefaults { Steps = 4, CfgScale = 1.0, Sampler = "euler" },
+            ImageModelFamily.Flux => new ImageGenerationDefaults
+            {
+                Steps = 4,
+                CfgScale = 1.0,
+                Sampler = "euler"
+            },
 
             // Qwen-Image conditions on a 7B LLM encoder and is tuned for a low guidance scale; 7.0 over-saturates it.
-            ImageModelFamily.QwenImage => new ImageGenerationDefaults { Steps = 20, CfgScale = 2.5, Sampler = "euler" },
+            ImageModelFamily.QwenImage => new ImageGenerationDefaults
+            {
+                Steps = 20,
+                CfgScale = 2.5,
+                Sampler = "euler"
+            },
 
             _ => Fallback
         };

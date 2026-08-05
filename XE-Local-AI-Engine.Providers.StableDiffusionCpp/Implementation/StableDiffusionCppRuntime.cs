@@ -181,5 +181,4 @@ internal sealed class StableDiffusionCppRuntime : IImageRuntime
             Duration = Stopwatch.GetElapsedTime(startedTimestamp)
         };
     }
-
 }

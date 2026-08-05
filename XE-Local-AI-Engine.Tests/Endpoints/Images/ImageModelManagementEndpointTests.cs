@@ -171,8 +171,18 @@ public sealed class ImageModelManagementEndpointTests
             family = "QwenImage",
             parts = new object[]
             {
-                new { role = "Diffusion", fileName = "Qwen_Image-Q4_K_M.gguf", sizeBytes = 13_065_746_976L },
-                new { role = "Vae", fileName = "VAE/Qwen_Image-VAE.safetensors", sizeBytes = 253_806_246L },
+                new
+                {
+                    role = "Diffusion",
+                    fileName = "Qwen_Image-Q4_K_M.gguf",
+                    sizeBytes = 13_065_746_976L
+                },
+                new
+                {
+                    role = "Vae",
+                    fileName = "VAE/Qwen_Image-VAE.safetensors",
+                    sizeBytes = 253_806_246L
+                },
                 new
                 {
                     role = "Llm",
@@ -216,7 +226,12 @@ public sealed class ImageModelManagementEndpointTests
             family = "Sd15",
             parts = new object[]
             {
-                new { role = "Diffusion", fileName = "weights.gguf", sizeBytes = 0L }
+                new
+                {
+                    role = "Diffusion",
+                    fileName = "weights.gguf",
+                    sizeBytes = 0L
+                }
             }
         });
         using var response = await client.SendAsync(request).ConfigureAwait(false);
@@ -243,8 +258,18 @@ public sealed class ImageModelManagementEndpointTests
             family = "Flux",
             parts = new object[]
             {
-                new { role = "Diffusion", fileName = "flux1-schnell-Q4_0.gguf", sizeBytes = 6_688_845_536L },
-                new { role = "Diffusion", fileName = "flux1-schnell-Q8_0.gguf", sizeBytes = 12_634_000_000L }
+                new
+                {
+                    role = "Diffusion",
+                    fileName = "flux1-schnell-Q4_0.gguf",
+                    sizeBytes = 6_688_845_536L
+                },
+                new
+                {
+                    role = "Diffusion",
+                    fileName = "flux1-schnell-Q8_0.gguf",
+                    sizeBytes = 12_634_000_000L
+                }
             }
         });
         using var response = await client.SendAsync(request).ConfigureAwait(false);

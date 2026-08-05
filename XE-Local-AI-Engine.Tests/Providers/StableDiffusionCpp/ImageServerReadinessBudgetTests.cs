@@ -29,8 +29,7 @@ public sealed class ImageServerReadinessBudgetTests
         // The real case: 13 GB diffusion transformer + 4.7 GB LLM text encoder + 0.25 GB VAE.
         var options = new StableDiffusionRuntimeOptions();
 
-        var budget = ImageServerReadinessBudget.For(
-            [Part(13_065_746_976), Part(4_683_072_512), Part(253_806_246)],
+        var budget = ImageServerReadinessBudget.For([Part(13_065_746_976), Part(4_683_072_512), Part(253_806_246)],
             options);
 
         AssertEx.True(budget > options.ReadinessTimeout, "An 18 GB set must get more than the flat floor.");
@@ -64,7 +63,10 @@ public sealed class ImageServerReadinessBudgetTests
     [Test]
     public void For_ScalingDisabled_KeepsTheFlatFloor()
     {
-        var options = new StableDiffusionRuntimeOptions { ReadinessLoadBytesPerSecond = 0 };
+        var options = new StableDiffusionRuntimeOptions
+        {
+            ReadinessLoadBytesPerSecond = 0
+        };
 
         var budget = ImageServerReadinessBudget.For([Part(18_002_625_734)], options);
 

@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Tests.BackgroundServices;
 
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using XE_Local_AI_Engine.AI.Contracts.Events;
 using XE_Local_AI_Engine.Client.BackgroundServices;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Models.Enums;

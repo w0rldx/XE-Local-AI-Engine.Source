@@ -111,10 +111,16 @@ public sealed class AgentSkillServiceTests
                 Metadata: Enumerable.Range(start: 0, count: 33).ToDictionary(index => $"k{index}", _ => "v")))).ConfigureAwait(false);
         await AssertEx.ThrowsAsync<AgentSkillValidationException>(() =>
             service.CreateAsync(new AgentSkillInput("good-name", "desc", "body",
-                Metadata: new Dictionary<string, string> { [new string(c: 'k', count: 65)] = "v" }))).ConfigureAwait(false);
+                Metadata: new Dictionary<string, string>
+                {
+                    [new string(c: 'k', count: 65)] = "v"
+                }))).ConfigureAwait(false);
         await AssertEx.ThrowsAsync<AgentSkillValidationException>(() =>
             service.CreateAsync(new AgentSkillInput("good-name", "desc", "body",
-                Metadata: new Dictionary<string, string> { ["k"] = new string(c: 'v', count: 513) }))).ConfigureAwait(false);
+                Metadata: new Dictionary<string, string>
+                {
+                    ["k"] = new string(c: 'v', count: 513)
+                }))).ConfigureAwait(false);
 
         await store.DidNotReceive().CreateAsync(Arg.Any<AgentSkillInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }

@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Events;
 
-using XE_Local_AI_Engine.AI.Contracts.Events;
-
 /// <summary>
 ///     The live "a question is waiting on the operator" slot on <see cref="InvocationState" />. Mirrors
 ///     <see cref="InvocationApprovalState" />, with one deliberate difference: it carries the QUESTIONS as well as the

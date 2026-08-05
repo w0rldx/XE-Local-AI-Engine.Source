@@ -29,8 +29,12 @@ public sealed class SkillImportEndpointTests
         using var markdown = new StringContent(SkillImportFixtures.SkillMarkdown("pdf-tools"));
         using var content = new MultipartFormDataContent
         {
-            { source, "source" },
-            { markdown, "markdown" }
+            {
+                source, "source"
+            },
+            {
+                markdown, "markdown"
+            }
         };
         using var request = new HttpRequestMessage(HttpMethod.Post, PreviewRoute)
         {
@@ -52,7 +56,10 @@ public sealed class SkillImportEndpointTests
             Content = JsonContent.Create(new
             {
                 token = Guid.NewGuid(),
-                skillNames = new[] { "pdf-tools" },
+                skillNames = new[]
+                {
+                    "pdf-tools"
+                },
                 acknowledged = true
             })
         };
@@ -112,10 +119,10 @@ public sealed class SkillImportEndpointTests
         var preview = await PreviewArchiveAsync(factory, client).ConfigureAwait(false);
 
         using var response = await CommitAsync(factory,
-                                     client,
-                                     preview.GetProperty("token").GetGuid(),
-                                     acknowledged: false)
-                                 .ConfigureAwait(false);
+                client,
+                preview.GetProperty("token").GetGuid(),
+                acknowledged: false)
+            .ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         AssertEx.Equal(expected: 0, (await ListSkillsAsync(factory, client).ConfigureAwait(false)).GetArrayLength());
@@ -130,10 +137,10 @@ public sealed class SkillImportEndpointTests
         var preview = await PreviewArchiveAsync(factory, client).ConfigureAwait(false);
 
         using var commitResponse = await CommitAsync(factory,
-                                         client,
-                                         preview.GetProperty("token").GetGuid(),
-                                         acknowledged: true)
-                                     .ConfigureAwait(false);
+                client,
+                preview.GetProperty("token").GetGuid(),
+                acknowledged: true)
+            .ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.OK, commitResponse.StatusCode);
 
@@ -330,7 +337,9 @@ public sealed class SkillImportEndpointTests
         using var source = new StringContent("Paste");
         using var content = new MultipartFormDataContent
         {
-            { source, "source" }
+            {
+                source, "source"
+            }
         };
         using var request = new HttpRequestMessage(HttpMethod.Post, PreviewRoute)
         {
@@ -352,8 +361,12 @@ public sealed class SkillImportEndpointTests
         using var markdown = new StringContent(SkillImportFixtures.SkillMarkdown("pasted-skill"));
         using var content = new MultipartFormDataContent
         {
-            { source, "source" },
-            { markdown, "markdown" }
+            {
+                source, "source"
+            },
+            {
+                markdown, "markdown"
+            }
         };
         using var request = new HttpRequestMessage(HttpMethod.Post, PreviewRoute)
         {
@@ -391,8 +404,12 @@ public sealed class SkillImportEndpointTests
         using var source = new StringContent("Upload");
         using var content = new MultipartFormDataContent
         {
-            { source, "source" },
-            { file, "file", "skills.zip" }
+            {
+                source, "source"
+            },
+            {
+                file, "file", "skills.zip"
+            }
         };
         using var request = new HttpRequestMessage(HttpMethod.Post, PreviewRoute)
         {
@@ -417,7 +434,10 @@ public sealed class SkillImportEndpointTests
             Content = JsonContent.Create(new
             {
                 token,
-                skillNames = new[] { "pdf-tools" },
+                skillNames = new[]
+                {
+                    "pdf-tools"
+                },
                 acknowledged
             })
         };
@@ -430,7 +450,7 @@ public sealed class SkillImportEndpointTests
     {
         var preview = await PreviewArchiveAsync(factory, client).ConfigureAwait(false);
         using var response = await CommitAsync(factory, client, preview.GetProperty("token").GetGuid(), acknowledged: true)
-                                 .ConfigureAwait(false);
+            .ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 

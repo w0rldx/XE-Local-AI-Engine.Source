@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 

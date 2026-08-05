@@ -36,59 +36,59 @@ public static class AskUserTool
     ///     Model-visible JSON schema. Kept flat and bound-free on purpose — see the grammar note on the class.
     /// </summary>
     public const string ParameterSchema = """
-        {
-          "type": "object",
-          "properties": {
-            "questions": {
-              "type": "array",
-              "minItems": 1,
-              "maxItems": 4,
-              "description": "The questions to ask. Ask several at once only when they are genuinely independent.",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "header": {
-                    "type": "string",
-                    "description": "A very short label for the question, about 12 characters, e.g. 'Auth method'."
-                  },
-                  "question": {
-                    "type": "string",
-                    "description": "The question to ask, phrased as a complete sentence ending in a question mark."
-                  },
-                  "multiSelect": {
-                    "type": "boolean",
-                    "description": "True when the user may choose more than one option. Defaults to false (choose exactly one)."
-                  },
-                  "options": {
-                    "type": "array",
-                    "minItems": 2,
-                    "maxItems": 6,
-                    "description": "The choices offered. A free-text 'Other' choice is always added for the user automatically, so never add one yourself.",
-                    "items": {
-                      "type": "object",
-                      "properties": {
-                        "label": {
-                          "type": "string",
-                          "description": "The choice as the user sees it. Keep it to a few words."
-                        },
-                        "description": {
-                          "type": "string",
-                          "description": "One sentence on what this choice means or what follows from it."
-                        },
-                        "recommended": {
-                          "type": "boolean",
-                          "description": "True to mark this as your recommended choice. Mark at most one option per question."
-                        }
-                      },
-                      "required": ["label"]
-                    }
-                  }
-                },
-                "required": ["question", "options"]
-              }
-            }
-          },
-          "required": ["questions"]
-        }
-        """;
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "questions": {
+                                                "type": "array",
+                                                "minItems": 1,
+                                                "maxItems": 4,
+                                                "description": "The questions to ask. Ask several at once only when they are genuinely independent.",
+                                                "items": {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "header": {
+                                                      "type": "string",
+                                                      "description": "A very short label for the question, about 12 characters, e.g. 'Auth method'."
+                                                    },
+                                                    "question": {
+                                                      "type": "string",
+                                                      "description": "The question to ask, phrased as a complete sentence ending in a question mark."
+                                                    },
+                                                    "multiSelect": {
+                                                      "type": "boolean",
+                                                      "description": "True when the user may choose more than one option. Defaults to false (choose exactly one)."
+                                                    },
+                                                    "options": {
+                                                      "type": "array",
+                                                      "minItems": 2,
+                                                      "maxItems": 6,
+                                                      "description": "The choices offered. A free-text 'Other' choice is always added for the user automatically, so never add one yourself.",
+                                                      "items": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                          "label": {
+                                                            "type": "string",
+                                                            "description": "The choice as the user sees it. Keep it to a few words."
+                                                          },
+                                                          "description": {
+                                                            "type": "string",
+                                                            "description": "One sentence on what this choice means or what follows from it."
+                                                          },
+                                                          "recommended": {
+                                                            "type": "boolean",
+                                                            "description": "True to mark this as your recommended choice. Mark at most one option per question."
+                                                          }
+                                                        },
+                                                        "required": ["label"]
+                                                      }
+                                                    }
+                                                  },
+                                                  "required": ["question", "options"]
+                                                }
+                                              }
+                                            },
+                                            "required": ["questions"]
+                                          }
+                                          """;
 }

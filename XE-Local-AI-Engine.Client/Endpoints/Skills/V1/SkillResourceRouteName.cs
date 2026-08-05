@@ -44,8 +44,8 @@ internal static partial class SkillResourceRouteName
         return decoded.Length is > 0 and <= MaxLength
                && NamePattern().IsMatch(decoded)
                && !decoded.Split('/').Contains("..", StringComparer.Ordinal)
-                   ? decoded
-                   : null;
+            ? decoded
+            : null;
     }
 
     [GeneratedRegex("^(?:[A-Za-z0-9._-]+/)*[A-Za-z0-9._-]+$", RegexOptions.None, matchTimeoutMilliseconds: 2000)]

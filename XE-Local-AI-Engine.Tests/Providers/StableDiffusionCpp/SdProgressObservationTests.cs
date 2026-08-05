@@ -21,7 +21,7 @@ public sealed class SdProgressObservationTests
     /// </summary>
     private const string SamplerFrames =
         "\r  |======>                     | 1/8 - 6.34s/it" + Esc
-        + "\r  |============>               | 2/8 - 4.97s/it" + Esc;
+                                                            + "\r  |============>               | 2/8 - 4.97s/it" + Esc;
 
     [Test]
     public void Parse_SamplerStepLine_ReportsSamplingWithCounters()
