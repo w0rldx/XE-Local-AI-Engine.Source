@@ -1,0 +1,16 @@
+# Code owners. Requesting review from these owners is automatic on PRs that
+# touch the matching paths (enforced only if branch protection requires it).
+# Single-maintainer project: the maintainer owns everything by default, with
+# explicit lines for the security-sensitive surfaces.
+
+* @w0rldx
+
+# Release + CI plumbing and repository governance.
+/.github/            @w0rldx
+/.github/workflows/  @w0rldx
+/publish/            @w0rldx
+
+# Licensing / legal.
+/LICENSE             @w0rldx
+/NOTICE              @w0rldx
+/SECURITY.md         @w0rldx
