@@ -808,6 +808,29 @@ else {
     Write-Host ">> Rehearsal update config verified (canonical repo, no client ID baked, no placeholders) — updater is inert."
 }
 
+# Every OTHER appsettings*.json in the publish output must be placeholder-free too. appsettings.AppUpdate.json
+# is excluded because it was already fully validated above (both branches already reject a REPLACE_/CHANGE_ME/
+# TODO marker anywhere in that file) — checking it again here would duplicate, not extend, that guard.
+#
+# Mirrors the broader scan in publish/package-rc.sh's assert_app_config_sane (grep -rlE over every
+# appsettings*.json except AppUpdate's), which this script never had: only the app-update config was checked,
+# so a placeholder or committed secret in the base appsettings.json would ship to testers silently.
+$allAppSettingsFiles = @(Get-ChildItem -Path $publishDir -Recurse -File -Filter 'appsettings*.json')
+$otherAppSettingsFiles = @($allAppSettingsFiles | Where-Object Name -CNE 'appsettings.AppUpdate.json')
+Write-Host ">> Scanning $($otherAppSettingsFiles.Count) other appsettings*.json file(s) for placeholders ($($allAppSettingsFiles.Count) total in publish output)."
+$placeholderAppSettings = [System.Collections.Generic.List[string]]::new()
+foreach ($configFile in $otherAppSettingsFiles) {
+    $configText = Get-Content $configFile.FullName -Raw
+    if ($configText -match '(?i)(REPLACE_|CHANGE_ME|TODO)') {
+        $relativePath = $configFile.FullName.Substring((Resolve-Path $publishDir).Path.Length).TrimStart('\')
+        $placeholderAppSettings.Add($relativePath)
+    }
+}
+if ($placeholderAppSettings.Count -gt 0) {
+    throw "Placeholder configuration would ship to testers. These appsettings*.json files still contain a REPLACE_/CHANGE_ME/TODO marker:`n$($placeholderAppSettings -join "`n")"
+}
+Write-Host ">> All other appsettings*.json files in the publish output are placeholder-free."
+
 # Stamp/clear the non-shippable marker. `dotnet publish` does not clean stale files out of the publish
 # directory, so a marker left by an earlier rehearsal must be removed on a real run or it would ride along
 # into a shipped Portable.zip.
