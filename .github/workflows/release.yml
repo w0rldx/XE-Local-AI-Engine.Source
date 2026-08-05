@@ -1,71 +1,37 @@
 name: release
 
-# Triggered manually via workflow_dispatch only. The tag-push trigger was removed
-# deliberately: releases are cut locally with publish/package-tester-win.ps1
-# (draft -> smoke -> publish), and a tag push must never bypass that gate.
-# Produces Velopack installer + portable + delta packages for each RID and uploads
-# them to the target GitHub release repo for the chosen build flavor.
-on:
-  workflow_dispatch:
-    inputs:
-      update-channel:
-        description: "Build flavor: which release repo to target"
-        required: false
-        default: main
-        type: choice
-        options:
-          - main
-          - tester
-
-# ---------------------------------------------------------------------------
-# Supply-chain hardening (required during the unsigned window — see
-# Plans/2026-06-25-app-self-update-velopack-plan.md §11 "sec C1")
+# Cuts a Velopack release (installer-less portable + delta packages) for Windows
+# and Linux and publishes it — with an auto-generated changelog — to THIS repo's
+# GitHub Releases.
 #
-# Token posture:
-#   GH_RELEASE_TOKEN_MAIN   — fine-grained PAT, contents:write on the main
-#                             release repo ONLY, NOT org-wide, rotatable,
-#                             never exposed to fork PRs.
-#   GH_RELEASE_TOKEN_TESTER — fine-grained PAT, contents:write on the tester
-#                             repo ONLY, same constraints.
+# Triggers:
+#   - push of a `v*` tag (e.g. v0.1.0-rc.6.0) — the normal release path.
+#   - workflow_dispatch — manual fallback; pick the tag/ref in the Actions UI.
 #
-#   GH_RELEASE_REPO_MAIN    — repo variable (not secret), e.g.
-#                             https://github.com/org/xe-releases
-#   GH_RELEASE_REPO_TESTER  — repo variable (not secret), e.g.
-#                             https://github.com/org/xe-releases-tester
+# Auth & target: publishes to `github.repository` (w0rldx/XE-Local-AI-Engine.Source)
+# using the built-in GITHUB_TOKEN (contents: write below). No PAT or repo variables
+# are required — releases are consolidated into the source repo.
 #
-# Branch / tag protection required before any non-tester rollout:
-#   - Tag protection rule covering v* (restrict to release engineers).
-#   - Default branch: require PR review + passing build-and-test status check.
-#   - CODEOWNERS: /Plans/ and .github/workflows/ restricted to a senior
-#     reviewer so no workflow change ships without an explicit approval.
+# Validation binding (ENFORCED): the `validate` job calls build-and-test.yml as a
+# local reusable workflow, so its checkout runs against the exact tagged commit and
+# the full build + backend/frontend gates re-run on the released code. `version` and
+# `release` both `needs` it, so nothing is packed or uploaded unless it passes.
 #
-# The "release" environment below enables GitHub's environment protection
-# rules (required reviewers). Configure at:
-#   repo -> Settings -> Environments -> release -> Required reviewers
-# Add at least one required reviewer before any non-tester rollout.
+# Action pinning (ENFORCED): every action is pinned to a full commit SHA with the
+# tag in a trailing comment, so a moved tag cannot swap an action mid-release.
 #
-# Validation binding (ENFORCED): the `validate` job below calls the
-# build-and-test workflow via `uses: ./.github/workflows/build-and-test.yml`.
-# Because it is a local reusable workflow, its `actions/checkout` runs against
-# the exact commit this release was tagged at, so the full build + backend and
-# frontend test gates re-run on the released code — not on a possibly-stale
-# status check from an earlier commit. `version` and `release` both `needs`
-# it, so nothing is packed or uploaded unless the tagged commit passes.
-#
-# Action pinning (ENFORCED): every action in this workflow (and in
-# build-and-test.yml) is pinned to a full commit SHA with the tag in a trailing
-# comment, so a moved tag cannot swap the action out from under a release build.
-#
-# signing follow-up: DEFERRED per "bind + pin now, sign later" decision. This
-# is the remaining hard gate before non-tester rollout; artifacts ship unsigned
-# until it lands.
+# signing follow-up: DEFERRED per "bind + pin now, sign later". Artifacts ship
+# unsigned until this lands:
 #   win-x64:   codesign with an EV or OV cert; pass --signParams to vpk pack.
 #   linux-x64: sign with a GPG key; pass --signEntitlements to vpk pack.
-#   Until signing is wired, the unsigned window is mitigated by the validation
-#   binding, action pinning, environment protection rules, and token scoping.
-# ---------------------------------------------------------------------------
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
 permissions:
-  contents: write   # required: vpk upload github creates a GH release
+  contents: write   # required: vpk upload github creates a GitHub release on this repo
 
 env:
   DOTNET_NOLOGO: true
@@ -75,11 +41,10 @@ env:
 jobs:
   # ---------------------------------------------------------------------------
   # Gate: re-run the full build + test suite on the exact tagged commit before
-  # anything is packed or published. This is a local reusable
-  # workflow call, so build-and-test.yml runs from — and checks out — this same
-  # commit. It defines its own `permissions: contents: read` and needs no
-  # secrets, so no `secrets: inherit` is required here. If it fails, `version`
-  # and `release` never start (fail-closed).
+  # anything is packed or published. Local reusable workflow call, so
+  # build-and-test.yml checks out — and validates — this same commit. It defines
+  # its own `permissions: contents: read` and needs no secrets. If it fails,
+  # `version` and `release` never start (fail-closed).
   # ---------------------------------------------------------------------------
   validate:
     uses: ./.github/workflows/build-and-test.yml
@@ -87,9 +52,8 @@ jobs:
       contents: read
 
   # ---------------------------------------------------------------------------
-  # Compose the Velopack pack-version once and share it across all matrix legs.
-  # Source of truth: Directory.Build.props VersionPrefix + VersionSuffix.
-  # (version is read dynamically from Directory.Build.props at build time)
+  # Compose the pack version once and generate the changelog once; share both
+  # across the RID matrix. Source of truth: Directory.Build.props.
   # ---------------------------------------------------------------------------
   version:
     needs: validate
@@ -97,13 +61,11 @@ jobs:
     outputs:
       pack-version: ${{ steps.compose.outputs.pack-version }}
       is-prerelease: ${{ steps.compose.outputs.is-prerelease }}
-      update-channel: ${{ steps.channel.outputs.update-channel }}
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
-          # Full history + tags are required so git-cliff can compute the
-          # commit range since the previous release tag for the changelog.
+          # Full history + tags: git-cliff needs the commit range since the previous tag.
           fetch-depth: 0
 
       - name: Compose version from Directory.Build.props
@@ -136,29 +98,28 @@ jobs:
             exit 1
           fi
 
-      - name: Resolve update channel
-        id: channel
+      # Guard: a tag-triggered release must match the version baked into the source,
+      # so the git tag, the packaged binaries and the release body all agree.
+      - name: Assert tag matches composed version (tag-triggered runs)
+        if: startsWith(github.ref, 'refs/tags/')
         shell: bash
         run: |
-          # workflow_dispatch input takes priority; push-triggered runs default to 'main'.
-          CHAN="${{ github.event.inputs.update-channel }}"
-          if [[ -z "$CHAN" ]]; then
-            CHAN="main"
+          TAG="${GITHUB_REF#refs/tags/}"
+          EXPECTED="v${{ steps.compose.outputs.pack-version }}"
+          if [[ "$TAG" != "$EXPECTED" ]]; then
+            echo "ERROR: tag '$TAG' != Directory.Build.props version '$EXPECTED'." >&2
+            echo "Bump VersionPrefix/VersionSuffix to match the tag, or tag the correct commit." >&2
+            exit 1
           fi
-          echo "update-channel=${CHAN}" >> "$GITHUB_OUTPUT"
-          echo "Update channel: ${CHAN}"
+          echo "Tag matches composed version: $TAG"
 
       # ------------------------------------------------------------------
-      # Release notes: generate ONCE here (ubuntu) from the conventional
-      # commit history since the previous tag, then share the file with both
-      # RID legs as an artifact. Doing it once guarantees identical notes
-      # across RIDs and keeps git-cliff off the Windows leg. The generated
-      # RELEASE_NOTES.md is fed to `vpk pack --releaseNotes`, which embeds it
-      # so `vpk upload github` publishes it as the GitHub release body.
-      #
-      # git-cliff is pinned by version + SHA256 (same convention as the
-      # llama.cpp prebuilt binaries). The committed scripts/generate-release-notes.sh
-      # is the single generator shared with the manual publish runbook.
+      # Release notes: generate ONCE here (ubuntu) from conventional commits
+      # since the previous tag, then share with both RID legs as an artifact so
+      # notes are identical across RIDs and git-cliff stays off the Windows leg.
+      # git-cliff is pinned by version + SHA256 (same convention as the llama.cpp
+      # prebuilt binaries). scripts/generate-release-notes.sh is the single
+      # generator shared with the manual publish runbook.
       # ------------------------------------------------------------------
       - name: Install git-cliff (pinned)
         shell: bash
@@ -191,9 +152,9 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # Release matrix — one leg per RID.
-  # Each leg: dotnet publish -> vpk pack -> vpk upload github.
-  # Installer + portable + delta all share ONE feed (releases.{rid}.json)
-  # per repo; do not split by artifact type.
+  # Each leg: build SPA -> dotnet publish -> vpk pack -> vpk upload github.
+  # Installer + portable + delta share ONE feed (releases.{channel}.json) on this
+  # repo; do not split by artifact type.
   # ---------------------------------------------------------------------------
   release:
     needs: [validate, version]
@@ -217,10 +178,6 @@ jobs:
 
     runs-on: ${{ matrix.os }}
 
-    # Requires environment protection approval before the upload step.
-    # See supply-chain hardening note at the top of this file.
-    environment: release
-
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -231,18 +188,15 @@ jobs:
           global-json-file: global.json
 
       # ------------------------------------------------------------------
-      # Build the React SPA BEFORE dotnet publish. wwwroot/** is gitignored,
-      # so a fresh checkout has an empty wwwroot and the publish guard
+      # Build the React SPA BEFORE dotnet publish. wwwroot/** is gitignored, so a
+      # fresh checkout has an empty wwwroot and the publish guard
       # (GuardNodeReactBuildPresentOnPublish, Client.csproj) hard-fails unless
       # XE-Local-AI-Engine.Client.React/dist/index.html exists. Mirrors the
       # client-react job in build-and-test.yml (same pnpm/node versions + cache).
-      # Vite env: .env is gitignored, so the checkout has none — seed it from
-      # .env.template, exactly like the documented manual tester-build flow, so
-      # automated and manual builds ship identical values (VITE_APP_TITLE etc.).
-      # The Environment.ts schema also carries defaults as a safety net (the env
-      # check runs at app startup in the browser, not during `vite build` — a
-      # wrong/missing value used to surface only as a blank page).
-      # VITE_APP_VERSION is injected from Directory.Build.props by vite.config.ts.
+      # Vite env: .env is gitignored, so seed it from .env.template exactly like
+      # the documented manual build flow, so automated and manual builds ship
+      # identical values. VITE_APP_VERSION is injected from Directory.Build.props
+      # by vite.config.ts.
       # ------------------------------------------------------------------
       - name: Setup pnpm
         uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
@@ -282,60 +236,23 @@ jobs:
           fi
           echo "SPA build present: XE-Local-AI-Engine.Client.React/dist/index.html"
 
-      # ------------------------------------------------------------------
-      # Flavor -> repo + token mapping.
-      #
-      # main   flavor: GH_RELEASE_REPO_MAIN   + GH_RELEASE_TOKEN_MAIN
-      # tester flavor: GH_RELEASE_REPO_TESTER + GH_RELEASE_TOKEN_TESTER
-      #
-      # Repo URLs are repository variables (non-secret, public config).
-      # Tokens are repository secrets (fine-grained PATs, contents:write,
-      # single target repo only).
-      #
-      # A tester build MUST NOT upload to the main repo.  The guard step
-      # below enforces this at runtime.
-      # ------------------------------------------------------------------
-      - name: Resolve release repo and token for flavor
-        id: flavor
-        shell: bash
-        run: |
-          CHANNEL="${{ needs.version.outputs.update-channel }}"
-          if [[ "$CHANNEL" == "tester" ]]; then
-            echo "repo-url=${{ vars.GH_RELEASE_REPO_TESTER }}" >> "$GITHUB_OUTPUT"
-            echo "release-token=${{ secrets.GH_RELEASE_TOKEN_TESTER }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "repo-url=${{ vars.GH_RELEASE_REPO_MAIN }}" >> "$GITHUB_OUTPUT"
-            echo "release-token=${{ secrets.GH_RELEASE_TOKEN_MAIN }}" >> "$GITHUB_OUTPUT"
-          fi
-          echo "Flavor resolved: channel=${CHANNEL}"
-
-      # Cross-contamination guard: tester flavor must never point at main repo.
-      - name: Assert tester build never targets main repo
-        shell: bash
-        run: |
-          CHANNEL="${{ needs.version.outputs.update-channel }}"
-          REPO_URL="${{ steps.flavor.outputs.repo-url }}"
-          MAIN_URL="${{ vars.GH_RELEASE_REPO_MAIN }}"
-          if [[ "$CHANNEL" == "tester" && "$REPO_URL" == "$MAIN_URL" ]]; then
-            echo "ERROR: tester flavor resolved to main repo URL. Configuration error. Aborting." >&2
-            exit 1
-          fi
-
-      - name: Publish (${{ matrix.rid }}, channel=${{ needs.version.outputs.update-channel }})
+      # Build with the `main` update flavor: bakes appsettings.AppUpdate.main.json,
+      # which points the in-app updater at this repo (see the update-channel docs).
+      - name: Publish (${{ matrix.rid }})
         shell: bash
         run: |
           dotnet publish XE-Local-AI-Engine.Client/XE-Local-AI-Engine.Client.csproj \
             --configuration Release \
             -p:PublishProfile=${{ matrix.rid }} \
-            -p:UpdateChannel=${{ needs.version.outputs.update-channel }}
+            -p:UpdateChannel=main
 
       # vpk is a dotnet tool, not a project dependency; pin to match Velopack NuGet version.
       - name: Install vpk CLI
         shell: bash
         run: dotnet tool install -g vpk --version ${{ env.VPK_VERSION }}
 
-      # Auto-generated changelog from the version job; embedded into the package
-      # by vpk pack --releaseNotes and published as the GitHub release body.
+      # Auto-generated changelog from the version job; embedded into the package by
+      # vpk pack --releaseNotes and published as the GitHub release body.
       - name: Download release notes artifact
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
@@ -357,6 +274,7 @@ jobs:
             --channel "${{ matrix.vpk-channel }}" \
             --releaseNotes RELEASE_NOTES.md
 
+      # Publish to THIS repo's Releases using the built-in GITHUB_TOKEN.
       - name: Upload to GitHub releases
         shell: bash
         run: |
@@ -365,7 +283,7 @@ jobs:
             PRERELEASE_FLAG="--pre"
           fi
           vpk upload github \
-            --repoUrl "${{ steps.flavor.outputs.repo-url }}" \
-            --token "${{ steps.flavor.outputs.release-token }}" \
+            --repoUrl "https://github.com/${{ github.repository }}" \
+            --token "${{ secrets.GITHUB_TOKEN }}" \
             --channel "${{ matrix.vpk-channel }}" \
             $PRERELEASE_FLAG
