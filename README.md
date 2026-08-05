@@ -98,7 +98,7 @@ scripts/with-build-lock.sh -- scripts/assembly-guard.sh guard --test-bins -- \
 The lock prevents cooperating builds from rewriting test assemblies mid-run; the assembly guard
 detects an unwrapped concurrent build. Exit `69` means the lock was not acquired and nothing ran.
 Exit `75` means the result was **CONTAMINATED and void**—rerun it rather than treating it as red or
-green. Do not wrap `project-validate.sh` itself; it locks its own .NET trees.
+green.
 
 For the React client:
 
@@ -110,30 +110,15 @@ pnpm test
 pnpm run build
 ```
 
-The repository validation wrapper mirrors these commands:
-
-```bash
-bash .opencode/scripts/project-validate.sh --scope changed --base develop --serial
-```
-
-Use `--scope smoke` for the deliberately small Debug startup/API/frontend probe. It is not a
-substitute for the complete Release gates. Before merging or packaging, run `--scope full`; after
-the Release backend/frontend/script gates pass, it starts an isolated desktop backend and compares
-the live OpenAPI document with the committed generated frontend client.
-
-`--scope coverage` collects each backend test project into an isolated current-run Cobertura report,
-deduplicates source lines across the reports, and enforces the committed
-`scripts/backend-coverage-baseline.txt` ratchet before running the frontend coverage check. The
-90.50% floor was set from a guarded 91.00% measurement, leaving 0.50 percentage points of headroom.
-
-> **`--scope changed` diffs against `develop`.** It used to default to `main`, which this repository does not have, so
-> the script fell back to `git diff HEAD~1` and validated a *single commit* instead of your whole branch — reporting
-> green while never touching most of your changes. The default is now `develop`; pass `--base <branch>` to override it.
+After any backend contract change, run `pnpm openapi:check` from `XE-Local-AI-Engine.Client.React/` — it
+regenerates the hey-api client and fails on drift. See [AGENTS.md](AGENTS.md#validation) for the full
+validation command set, including analyzer requirements, build-lock/assembly-guard usage, and the
+backend/frontend test suites.
 
 E2E validation is ask-gated because it may require browser/runtime setup:
 
 ```bash
-bash .opencode/scripts/project-validate.sh --scope e2e --confirm-e2e --serial
+scripts/run-e2e-local.sh
 ```
 
 ## Aspire modes

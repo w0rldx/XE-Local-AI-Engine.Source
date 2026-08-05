@@ -2,7 +2,7 @@
 
 > Baseline: `7e64ed589e14eecc0e522e807d2e531a1095d19a` · Reviewed: 2026-07-28 · Code-grounded.
 
-This page is the contributor map of how XE Local AI Engine is tested and what counts as "validated". It covers the test-project topology (backend integration, AI/agent, persistence + migration, Playwright E2E, plus the FakeOllama and Client.Testing support libraries), the validation commands and the `project-validate.sh` scope runner, the state of the (disabled) GitHub Actions workflows and where the gates actually run instead, and the RC evidence bar a maintainer must clear before claiming release/doc work is done. For *what each suite asserts about a subsystem*, follow the per-subsystem links — this page owns the harness, not the features.
+This page is the contributor map of how XE Local AI Engine is tested and what counts as "validated". It covers the test-project topology (backend integration, AI/agent, persistence + migration, Playwright E2E, plus the FakeOllama and Client.Testing support libraries), the validation commands and standalone runners, the state of the (disabled) GitHub Actions workflows and where the gates actually run instead, and the RC evidence bar a maintainer must clear before claiming release/doc work is done. For *what each suite asserts about a subsystem*, follow the per-subsystem links — this page owns the harness, not the features.
 
 Repository tests and scripts are evidence that controls can be exercised; their presence is not proof
 that a particular deployment or release ran them, passed them, retained the output, or made that output
@@ -90,7 +90,6 @@ Never run a build concurrently with `dotnet test --no-build`: the build can rewr
 the test host reads them, producing a phantom red or phantom green. `with-build-lock.sh` prevents
 collisions between cooperating processes; `assembly-guard.sh` detects an unwrapped build. Exit `69`
 means the lock timed out and nothing ran. Exit `75` means **CONTAMINATED, result void, rerun required**.
-Do not wrap `project-validate.sh` itself; it locks its own .NET trees.
 
 ```bash
 # React client
@@ -103,50 +102,29 @@ pnpm run build    # lint chain + vite build
 
 Notable React scripts (from `package.json`): `test:coverage` / `test:coverage:check` (the latter sets `VITEST_COVERAGE_CHECK=true` to enforce thresholds), `openapi:check` (regenerate the hey-api client from the committed spec and fail on drift — see below), `validate` (lint + knip + depcruise), `knip`, `depcruise`, `spellCheck`. The lint chain is strict: type-check, a custom `currentTarget`-in-updaters guard, Biome, and Stylelint all run before the build.
 
-### `.opencode/scripts/project-validate.sh` — the scope runner
+### Internal RC tooling
 
-The wrapper mirrors the raw commands and parallelises independent trees. Invoke as `project-validate.sh --scope <scope> [--confirm-e2e] [--base <branch>] [--serial]`. Per-tree output is redirected to timestamped logs under `.tmp/validate-logs/`; on failure it prints the last 80 lines of the failing log. Backend and frontend run in parallel by default (`--serial` to debug); .NET work takes the build lock and runs tests under the assembly guard. E2E waits for both pre-gates to pass first.
-
-| Scope | What it runs |
-|---|---|
-| `backend` | restore + `build -c Release` + `test` on `XE-Local-AI-Engine.slnx` |
-| `frontend` | `pnpm install --frozen-lockfile` + `lint` + `test` + `build` |
-| `e2e` | **ask-gated**: pre-gate backend+frontend, then build + `dotnet test` the E2E project **with `-p:RunE2ETests=true`** (required — without it the csproj is a plain library and zero tests are discovered; the runner also fails the lane if zero tests run). Refuses to run without `--confirm-e2e` |
-| `smoke` | focused Debug backend startup/DevUI tests + three frontend contract tests; adds E2E only with `--confirm-e2e` |
-| `coverage` | per-test-project backend Cobertura collection + deduplicated committed ratchet; frontend `test:coverage:check` threshold gate |
-| `scripts` | shellcheck + PSScriptAnalyzer over the packaging scripts, plus a build-only compile check of the `#if P0_SPIKE` code. Runs in `full`; takes seconds. See below |
-| `changed` | auto-detects backend/frontend from `git diff` vs `--base` (default `develop`); `*.cs/*.csproj/*.slnx/Directory.*/global.json` → backend, frontend dir → frontend |
-| `full` | backend + frontend + release-script/Pester gates, then a live desktop-backend OpenAPI comparison; + E2E if `--confirm-e2e` |
-| `setup` | OpenCode meta-validation (`validate-no-legacy.sh`, `validate-opencode.ts`, JSON config sanity) — project-agnostic |
-
-The everyday loop is `--scope changed --serial`; E2E is deliberately behind `--confirm-e2e` because it builds the React client and launches browsers and so may need browser/runtime setup not present in every environment.
+Release readiness passes used to route through an internal `project-validate.sh` scope runner
+(`.opencode/scripts/`). That tooling was internal-only and is not part of this repository — it never
+shipped here and there is no in-repo replacement scope runner. Treat the raw commands above, plus the
+[root `AGENTS.md`](../../AGENTS.md#validation) and the standalone runners below, as the canonical
+validation path for a fresh clone. A successful pre-merge/pre-packaging pass also needs a live
+desktop-backend OpenAPI comparison (`pnpm openapi:check:live` against a running desktop backend) and
+the coverage gate described below.
 
 ### The three standalone runners
 
 All three exist because GitHub Actions is disabled, so anything not reachable from a local command is not reachable at all.
 
 - **[`scripts/run-e2e-local.sh`](../../scripts/run-e2e-local.sh)** — opt-in local runner for the Playwright suite. Nothing invokes it automatically; run it by hand before cutting a tester RC. It performs a frozen frontend install plus `pnpm run lint` before the fixture's intentionally bare Vite `build:e2e`, installs Playwright browsers (via `playwright.ps1`, so it needs `pwsh`), and rejects zero-test or missing-summary runs. `--list` enumerates without running; `--filter` accepts a TUnit/MTP tree-node expression. Exit codes: `0` pass, `1` tests failed or the run was vacuous, `2` a prerequisite/usage error, `75` build contamination (**void; rerun**). No external services needed — FakeOllama plus the in-process host, so no `llama-server` and no `scripts/dev-stop.sh`.
-- **[`scripts/lint-release-scripts.sh`](../../scripts/lint-release-scripts.sh)** — shellcheck + PSScriptAnalyzer over the packaging scripts, wired in as `--scope scripts`. With Actions disabled, `publish/package-tester-win.ps1` is the entire release path, so it gets static analysis and its [`publish/tests/package-tester-win.Tests.ps1`](../../publish/tests/package-tester-win.Tests.ps1) Pester suite on every default run. A **missing linter or test module exits 2** rather than passing silently.
+- **[`scripts/lint-release-scripts.sh`](../../scripts/lint-release-scripts.sh)** — shellcheck + PSScriptAnalyzer over the packaging scripts. With Actions disabled, `publish/package-tester-win.ps1` is the entire release path, so it gets static analysis and its [`publish/tests/package-tester-win.Tests.ps1`](../../publish/tests/package-tester-win.Tests.ps1) Pester suite on every default run. A **missing linter or test module exits 2** rather than passing silently.
 - **[`scripts/run-gpu-smoke-local.sh`](../../scripts/run-gpu-smoke-local.sh)** — opt-in **live GPU smoke** against a real, locally started node. Nothing invokes it automatically; run it by hand before cutting a tester RC or after touching the inference/runtime path. It owns the AppHost lifecycle (`dev-start.sh` → `aspire wait app` → `dev-stop.sh`), discovers the port from `dev-status.sh --json` (it changes on every restart), and asserts in order: the installed llama.cpp identity, the `IRuntimeDeviceAudit` verdict, a real streamed chat turn, **that the GPU actually did the work** (nvidia-smi utilisation during generation plus a VRAM rise over a pre-host baseline), a real tool call, optionally image generation (`--images`), and that eject returns VRAM to baseline. Every step must record a verdict, so "nothing ran" can never read as green. **This is the only gate that proves the GPU did the work** — a correct reply proves nothing, because a CPU fallback answers correctly, just slowly (measured on the dev box: GPU 72% / +1199 MiB VRAM versus CPU-fallback 11% / +0 MiB, identical correct answer). Exit codes: `0` pass, `1` the product failed a judged step (always with a `=== Summary ===`), **`5` an infrastructure abort where nothing was judged and no summary prints** (AppHost never became healthy, base URL undiscoverable, auth failed) — so a wrapper can treat 1 as "product says no" and 5 as "fix the machine and re-run"; `3` an instance is already running, `4` could not tell, `2` a missing prerequisite (including "this box has no NVIDIA GPU"), `75` contamination (**void; rerun**), `130` interrupted. Its refuse-to-pass logic is itself tested without a GPU by `scripts/tests/gpu-smoke.test.sh`.
 
-> **A zero-test run is a failure, not a pass.** All three runners enforce this, as does `--scope e2e` — the GPU smoke's equivalent is that a step which records no verdict fails the run. The E2E project sets `IsTestProject=false`/`OutputType=Library` unless `-p:RunE2ETests=true` is passed, so without it `dotnet test` discovers nothing and exits **0**. Never read a green E2E run without checking that a non-zero number of tests actually ran.
+> **A zero-test run is a failure, not a pass.** All three runners enforce this directly, and so does the E2E project itself: the GPU smoke's equivalent is that a step which records no verdict fails the run. The E2E project sets `IsTestProject=false`/`OutputType=Library` unless `-p:RunE2ETests=true` is passed, so without it `dotnet test` discovers nothing and exits **0**. Never read a green E2E run without checking that a non-zero number of tests actually ran.
 
 > **The frontend prerequisite is explicit.** The standalone runner executes `pnpm run lint` before
 > E2E because the fixture uses bare `pnpm run build:e2e`; do not infer type/lint correctness from a
 > green Vite build alone. Use `--list` for the current discovered-test count.
-
-`scope_smoke` is intentionally not a full gate: it targets the backend application-startup and
-Debug DevUI hosting classes plus three frontend localization/API/navigation tests. Use `backend` or
-`full` for the complete Release analyzer and test gates. A successful `full` run also launches a
-temporary desktop-mode backend, waits for `/health/ready`, runs `pnpm openapi:check:live`, and kills
-only the process group it started.
-
-`scope_coverage` creates a unique run directory, requires a nonzero MTP summary from each non-E2E
-test project, and writes each project to its own Cobertura subdirectory so reports cannot overwrite
-one another. `scripts/merge-cobertura.py` deduplicates `(filename, line)` entries across
-only those current-run reports and enforces `scripts/backend-coverage-baseline.txt`. The committed
-90.50% floor was measured at 91.00% (116,975/128,545 unique source lines), retaining 0.50 points of
-headroom. The frontend coverage threshold remains enforced by its existing command.
 
 ## Continuous integration — dormant
 
@@ -172,7 +150,7 @@ serial tests with a hollow-gate guard) on the packaging machine. It became canon
 A gate added only to a disabled workflow enforces nothing; release-script lint remains a separate
 local gate. The script is a control definition, not evidence of a successful run.
 
-Between releases, the enforcement is you: run [`.opencode/scripts/project-validate.sh`](../../.opencode/scripts/project-validate.sh) or the raw commands above before you call a change done.
+Between releases, the enforcement is you: run the raw commands above (and the root [`AGENTS.md`](../../AGENTS.md#validation) Validation section) before you call a change done.
 
 ### What the dormant workflows describe
 
@@ -183,7 +161,7 @@ Between releases, the enforcement is you: run [`.opencode/scripts/project-valida
 
 Two design choices worth preserving in the file: **`--max-parallel-test-modules 1`** (concurrent modules time out / exhaust the WSL `inotify` watch limit on shared runners) and **`TZ=Europe/Berlin`** on the test step (a non-UTC zone deliberately exposes time-zone bugs; the comment cites `CapabilityReporterTests`). Note that `TZ` is a **Unix-only** mechanism in .NET (`TimeZoneInfo.Unix.NonAndroid.cs` reads it; the Windows implementation resolves the zone from `kernel32!GetDynamicTimeZoneInformation` and reads no environment variable). It therefore cannot be reproduced on a Windows packaging machine by setting a variable — `package-tester-win.ps1` instead **requires** the machine's own time zone to be non-UTC, throwing before the test leg if the current offset is `+00:00` and pointing at `tzutil /s`, with `-AllowUtcTestTimeZone` to accept the reduced coverage.
 
-**`e2e.yml`** is written for a nightly cron, manual dispatch, and PRs labelled `run-e2e`, building the SPA and installing Playwright browsers. It has never executed. E2E is a manual lane only: `project-validate.sh --scope e2e --confirm-e2e`, or the raw commands with `-p:RunE2ETests=true`.
+**`e2e.yml`** is written for a nightly cron, manual dispatch, and PRs labelled `run-e2e`, building the SPA and installing Playwright browsers. It has never executed. E2E is a manual lane only: [`scripts/run-e2e-local.sh`](../../scripts/run-e2e-local.sh), or the raw commands with `-p:RunE2ETests=true`.
 
 ### Release-path gates
 

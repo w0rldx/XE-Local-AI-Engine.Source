@@ -28,8 +28,10 @@
 
 ## Validation
 
-Use the repository validation wrapper rather than ad-hoc commands:
+See the root [AGENTS.md](../AGENTS.md#validation) for the full validation command set. In short:
 
 ```bash
-bash .opencode/scripts/project-validate.sh --scope changed --serial
+dotnet restore XE-Local-AI-Engine.slnx
+dotnet build XE-Local-AI-Engine.slnx --configuration Release --no-restore
+dotnet test XE-Local-AI-Engine.slnx --configuration Release --no-build --max-parallel-test-modules 1
 ```
