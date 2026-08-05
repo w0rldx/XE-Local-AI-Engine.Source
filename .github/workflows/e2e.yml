@@ -1,13 +1,12 @@
 name: e2e
 
 # Non-blocking E2E suite. It is NOT a PR merge gate: it builds the SPA in-fixture and needs
-# Playwright browsers, so it runs nightly, on manual dispatch, or on a PR opted in with the
+# Playwright browsers, so it runs on manual dispatch, or on a PR to develop opted in with the
 # `run-e2e` label. The job-level guard skips it for any other pull_request event.
 on:
-  schedule:
-    - cron: "0 3 * * *"
   workflow_dispatch:
   pull_request:
+    branches: [develop]
     types: [labeled]
 
 permissions:

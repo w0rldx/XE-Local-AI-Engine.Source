@@ -2,9 +2,9 @@ name: build-and-test
 
 on:
   pull_request:
-    branches: [develop, main]
+    branches: [develop]
   push:
-    branches: [develop, main]
+    branches: [develop]
   workflow_dispatch:
   # Reusable entrypoint: the release workflow calls this file so the exact
   # tagged commit re-runs these gates before any package is published. No
