@@ -422,7 +422,8 @@ internal sealed class SubAgentSpawnService : ISubAgentSpawnService
 #pragma warning restore MAAI001
 
         // Ids only: the waiver is auditable without a crafted skill name shaping a log line.
-        logger.LogInformation("Attached {SkillCount} skill(s) to a spawned sub-agent child with skill-read approval waived ({SkillIds}); the child has no human-in-the-loop approval route and the parent's spawn approval is the consent.",
+        logger.LogInformation(
+            "Attached {SkillCount} skill(s) to a spawned sub-agent child with skill-read approval waived ({SkillIds}); the child has no human-in-the-loop approval route and the parent's spawn approval is the consent.",
             resolvedSkills.Count,
             string.Join(", ", resolvedSkills.Select(static skill => skill.Id)));
     }

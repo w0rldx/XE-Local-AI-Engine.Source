@@ -2012,11 +2012,13 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Compaction", "node", CreatedAtUtc: 10)).ConfigureAwait(false);
         var assistantMessageId = Guid.NewGuid();
         await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "hi", CreatedAtUtc: 11)).ConfigureAwait(false);
-        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, assistantMessageId, Guid.NewGuid(), CreatedAtUtc: 12, "llama")).ConfigureAwait(false);
+        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, assistantMessageId, Guid.NewGuid(), CreatedAtUtc: 12, "llama"))
+                     .ConfigureAwait(false);
 
         await service.SetCompactionSummaryAsync(new NodeChatSetCompactionSummaryRequest(conversation.ConversationId, "SYNOPSIS", CoversToSequence: 0, UpdatedAtUtc: 13)).ConfigureAwait(false);
 
-        await service.CreateMessageVariantAsync(new NodeChatCreateMessageVariantRequest(conversation.ConversationId, assistantMessageId, Guid.NewGuid(), Guid.NewGuid(), CreatedAtUtc: 14)).ConfigureAwait(false);
+        await service.CreateMessageVariantAsync(new NodeChatCreateMessageVariantRequest(conversation.ConversationId, assistantMessageId, Guid.NewGuid(), Guid.NewGuid(), CreatedAtUtc: 14))
+                     .ConfigureAwait(false);
 
         var afterVariant = AssertEx.NotNull(await service.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
         AssertEx.Null(afterVariant.CompactionSummary);

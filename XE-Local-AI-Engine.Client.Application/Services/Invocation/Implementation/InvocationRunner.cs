@@ -136,7 +136,9 @@ public sealed partial class InvocationRunner : IInvocationRunner
     private readonly ILogger<InvocationRunner> _logger;
     private readonly TimeSpan _maxPendingToolCallAge;
     private readonly int _maxResponseSizeBytes;
+
     private readonly IOrchestrationAgentFactory _orchestrationAgentFactory;
+
     // Questions parked on the operator, keyed by the opaque request id the browser echoes back. Deliberately separate
     // from _pendingToolCalls: an approval resolves to a bool, a question resolves to the operator's answers, and
     // conflating them would let an approve/deny post release a question with no answer at all.

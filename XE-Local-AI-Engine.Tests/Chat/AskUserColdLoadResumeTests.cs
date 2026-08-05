@@ -3,10 +3,9 @@ namespace XE_Local_AI_Engine.Tests.Chat;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Tools;
-using XE_Local_AI_Engine.AI.Contracts.Events;
+using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
-using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Events.Implementation;
@@ -95,7 +94,10 @@ public sealed class AskUserColdLoadResumeTests
         AssertEx.Contains(replayed.Questions, "OAuth device flow");
 
         // Answering from the re-attached client must release the run that is still parked server-side.
-        var answers = new[] { new UserQuestionAnswer("Which auth method?", ["OAuth device flow"], Other: null) };
+        var answers = new[]
+        {
+            new UserQuestionAnswer("Which auth method?", ["OAuth device flow"], Other: null)
+        };
         await dispatcher.DispatchUserQuestionAnsweredAsync(new UserQuestionAnsweredEvent("question-1", answers));
 
         runner.Received(1).ResolveUserQuestionResult(Arg.Is<UserQuestionAnsweredEvent>(evt =>

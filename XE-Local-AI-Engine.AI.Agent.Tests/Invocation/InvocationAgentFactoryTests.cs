@@ -836,7 +836,10 @@ public sealed class InvocationAgentFactoryTests
             License: "MIT",
             Compatibility: "any Agent Skills host",
             AllowedTools: "read_file search_knowledge_base",
-            Metadata: new Dictionary<string, string>(StringComparer.Ordinal) { ["author"] = "acme" },
+            Metadata: new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["author"] = "acme"
+            },
             Resources:
             [
                 new InvocationSkillResource("references/runbook.md", "Escalation runbook", "text/markdown", "step one"),

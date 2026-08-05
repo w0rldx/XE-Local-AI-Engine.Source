@@ -12,20 +12,20 @@ public sealed class UserQuestionParserTests
     public void TryParse_WithAWellFormedCall_ProjectsEveryField()
     {
         var parsed = UserQuestionParser.TryParse(Arguments("""
-            {
-              "questions": [
-                {
-                  "header": " Auth method ",
-                  "question": " Which auth method? ",
-                  "multiSelect": true,
-                  "options": [
-                    { "label": " OAuth device flow ", "description": " Works headless. ", "recommended": true },
-                    { "label": "API key" }
-                  ]
-                }
-              ]
-            }
-            """), out var questions, out var error);
+                                                           {
+                                                             "questions": [
+                                                               {
+                                                                 "header": " Auth method ",
+                                                                 "question": " Which auth method? ",
+                                                                 "multiSelect": true,
+                                                                 "options": [
+                                                                   { "label": " OAuth device flow ", "description": " Works headless. ", "recommended": true },
+                                                                   { "label": "API key" }
+                                                                 ]
+                                                               }
+                                                             ]
+                                                           }
+                                                           """), out var questions, out var error);
 
         AssertEx.True(parsed, error);
         var question = AssertEx.NotNull(questions).Single();
@@ -44,8 +44,8 @@ public sealed class UserQuestionParserTests
     public void TryParse_WithOmittedOptionalFields_AppliesTheSchemaDefaults()
     {
         var parsed = UserQuestionParser.TryParse(Arguments("""
-            {"questions":[{"question":"Ship it?","options":[{"label":"Yes"},{"label":"No"}]}]}
-            """), out var questions, out var error);
+                                                           {"questions":[{"question":"Ship it?","options":[{"label":"Yes"},{"label":"No"}]}]}
+                                                           """), out var questions, out var error);
 
         AssertEx.True(parsed, error);
         var question = AssertEx.NotNull(questions).Single();

@@ -73,8 +73,8 @@ public sealed class ImageModelCatalogTests
         // The catalog is in-repo content, but it feeds the same download path an untrusted repo listing feeds. It goes
         // through the same containment guard rather than being trusted for being ours.
         var result = ImageModelCatalogValidator.Validate(CatalogWithPart("""
-                                                                        { "role": "Diffusion", "fileName": "../../../etc/pwned.gguf", "sizeBytes": 10 }
-                                                                        """));
+                                                                         { "role": "Diffusion", "fileName": "../../../etc/pwned.gguf", "sizeBytes": 10 }
+                                                                         """));
 
         AssertEx.False(result.IsValid);
         AssertEx.True(result.Errors.Any(static error => error.Contains("safe repo-relative path", StringComparison.Ordinal)));
@@ -84,8 +84,8 @@ public sealed class ImageModelCatalogTests
     public void Validator_RejectsAPartWithNoDeclaredSize()
     {
         var result = ImageModelCatalogValidator.Validate(CatalogWithPart("""
-                                                                        { "role": "Diffusion", "fileName": "weights.gguf", "sizeBytes": 0 }
-                                                                        """));
+                                                                         { "role": "Diffusion", "fileName": "weights.gguf", "sizeBytes": 0 }
+                                                                         """));
 
         AssertEx.False(result.IsValid);
         AssertEx.True(result.Errors.Any(static error => error.Contains("sizeBytes must be positive", StringComparison.Ordinal)));
@@ -95,8 +95,8 @@ public sealed class ImageModelCatalogTests
     public void Validator_RejectsASetWithNoDiffusionPart()
     {
         var result = ImageModelCatalogValidator.Validate(CatalogWithPart("""
-                                                                        { "role": "Vae", "fileName": "vae.safetensors", "sizeBytes": 10 }
-                                                                        """));
+                                                                         { "role": "Vae", "fileName": "vae.safetensors", "sizeBytes": 10 }
+                                                                         """));
 
         AssertEx.False(result.IsValid);
         AssertEx.True(result.Errors.Any(static error => error.Contains("Diffusion part", StringComparison.Ordinal)));
@@ -108,10 +108,10 @@ public sealed class ImageModelCatalogTests
         // The launch argument builder emits one flag per role, so a second VAE would be silently dropped at run time —
         // the operator would pay for the download and never use the file.
         var result = ImageModelCatalogValidator.Validate(CatalogWithPart("""
-                                                                        { "role": "Diffusion", "fileName": "a.gguf", "sizeBytes": 10 },
-                                                                        { "role": "Vae", "fileName": "vae1.safetensors", "sizeBytes": 10 },
-                                                                        { "role": "Vae", "fileName": "vae2.safetensors", "sizeBytes": 10 }
-                                                                        """));
+                                                                         { "role": "Diffusion", "fileName": "a.gguf", "sizeBytes": 10 },
+                                                                         { "role": "Vae", "fileName": "vae1.safetensors", "sizeBytes": 10 },
+                                                                         { "role": "Vae", "fileName": "vae2.safetensors", "sizeBytes": 10 }
+                                                                         """));
 
         AssertEx.False(result.IsValid);
         AssertEx.True(result.Errors.Any(static error => error.Contains("more than once", StringComparison.Ordinal)));

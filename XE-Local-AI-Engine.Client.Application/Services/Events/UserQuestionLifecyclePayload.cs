@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Events;
 
-using XE_Local_AI_Engine.AI.Contracts.Events;
-
 /// <summary>
 ///     A pending <c>ask_user</c> question surfaced for the in-flight invocation. Deliberately shaped like
 ///     <see cref="ApprovalLifecyclePayload" /> — same fan-out, same correlation keys — so the local

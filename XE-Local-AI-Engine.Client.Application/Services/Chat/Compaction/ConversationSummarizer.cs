@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 
 using System.Text.Json;
 using Microsoft.Extensions.AI;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
@@ -24,6 +23,7 @@ internal sealed class ConversationSummarizer(
     ILogger<ConversationSummarizer> logger) : IConversationSummarizer
 {
     private readonly ConversationCompactionOptions _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+
     private const string SystemPrompt = """
                                         You compress an ongoing chat conversation into a single compact synopsis so the assistant can keep going
                                         after the older turns are dropped from its context window.

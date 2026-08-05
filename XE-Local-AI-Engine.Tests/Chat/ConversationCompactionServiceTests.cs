@@ -65,11 +65,11 @@ public sealed class ConversationCompactionServiceTests
         AssertEx.Equal(3, result.CoversToSequence);
 
         await persistence.Received(1)
-                          .SetCompactionSummaryAsync(Arg.Is<NodeChatSetCompactionSummaryRequest>(request => request.Summary == "SYNOPSIS" && request.CoversToSequence == 3),
-                              Arg.Any<CancellationToken>());
+                         .SetCompactionSummaryAsync(Arg.Is<NodeChatSetCompactionSummaryRequest>(request => request.Summary == "SYNOPSIS" && request.CoversToSequence == 3),
+                             Arg.Any<CancellationToken>());
 
         await summarizer.Received(1)
-                         .SummarizeAsync(Arg.Is<ConversationSummarizerInput>(input => input.PriorSummary == null && input.Messages.Count == 4), Arg.Any<CancellationToken>());
+                        .SummarizeAsync(Arg.Is<ConversationSummarizerInput>(input => input.PriorSummary == null && input.Messages.Count == 4), Arg.Any<CancellationToken>());
         var capturedInput = (ConversationSummarizerInput)summarizer.ReceivedCalls().Single().GetArguments()[0]!;
         AssertEx.Equal(4, capturedInput.Messages.Count);
         AssertEx.True(capturedInput.PriorSummary is null, "Expected no prior summary to be threaded through.");

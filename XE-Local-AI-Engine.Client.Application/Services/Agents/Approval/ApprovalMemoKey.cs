@@ -39,7 +39,8 @@ namespace XE_Local_AI_Engine.Client.Services.Agents.Approval;
 ///     Held in memory on the invocation runner for the process lifetime and never persisted, so a node restart forgets
 ///     every session approval.
 /// </summary>
-internal readonly record struct ApprovalMemoKey(Guid ConversationId,
+internal readonly record struct ApprovalMemoKey(
+    Guid ConversationId,
     string ToolName,
     string SkillName,
     int SkillVersion,

@@ -1470,7 +1470,12 @@ public sealed class InvocationRunnerTests
         var factory = CreateFactory(_ =>
         {
             segment++;
-            return segment == 1 ? AskUserRequestUpdates(new Dictionary<string, object?>(StringComparer.Ordinal) { ["questions"] = Array.Empty<object>() }) : CreateUpdates("done");
+            return segment == 1
+                ? AskUserRequestUpdates(new Dictionary<string, object?>(StringComparer.Ordinal)
+                {
+                    ["questions"] = Array.Empty<object>()
+                })
+                : CreateUpdates("done");
         });
         var runner = CreateRunner(sender, factory, eventDispatcher: dispatcher, userQuestionAnswerStash: stash);
         var package = RuntimePackageBuilder.Valid().WithAllowedTool(AskUserTool.ToolName).Build();
@@ -2502,19 +2507,19 @@ public sealed class InvocationRunnerTests
     private static Dictionary<string, object?> ValidAskUserArguments()
     {
         const string Json = """
-            {
-              "questions": [
-                {
-                  "header": "Auth method",
-                  "question": "Which auth method?",
-                  "options": [
-                    { "label": "OAuth device flow", "description": "Works headless.", "recommended": true },
-                    { "label": "API key" }
-                  ]
-                }
-              ]
-            }
-            """;
+                            {
+                              "questions": [
+                                {
+                                  "header": "Auth method",
+                                  "question": "Which auth method?",
+                                  "options": [
+                                    { "label": "OAuth device flow", "description": "Works headless.", "recommended": true },
+                                    { "label": "API key" }
+                                  ]
+                                }
+                              ]
+                            }
+                            """;
 
         return JsonSerializer.Deserialize<Dictionary<string, object?>>(Json, AskUserArgumentOptions)!;
     }

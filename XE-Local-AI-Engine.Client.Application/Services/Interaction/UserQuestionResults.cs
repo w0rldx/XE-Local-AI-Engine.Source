@@ -49,7 +49,12 @@ internal static class UserQuestionResults
         return JsonSerializer.Serialize(new
         {
             answered = true,
-            answers = answers.Select(static answer => new { question = answer.Question, selected = answer.Selected, other = answer.Other })
+            answers = answers.Select(static answer => new
+            {
+                question = answer.Question,
+                selected = answer.Selected,
+                other = answer.Other
+            })
         }, SerializerOptions);
     }
 
@@ -70,6 +75,11 @@ internal static class UserQuestionResults
             _ => $"No answer was collected, so the user was never asked. {ProceedInstruction}"
         };
 
-        return JsonSerializer.Serialize(new { answered = false, reason, message }, SerializerOptions);
+        return JsonSerializer.Serialize(new
+        {
+            answered = false,
+            reason,
+            message
+        }, SerializerOptions);
     }
 }

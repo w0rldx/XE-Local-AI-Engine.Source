@@ -5,7 +5,6 @@ using System.Net.Http.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using NSubstitute;
-using XE_Local_AI_Engine.AI.Contracts.Events;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -29,7 +28,10 @@ public sealed class ResolveUserQuestionEndpointTests
                 new
                 {
                     question = "Which auth method?",
-                    selected = new[] { "OAuth" },
+                    selected = new[]
+                    {
+                        "OAuth"
+                    },
                     other = (string?)null
                 }
             }
@@ -39,11 +41,11 @@ public sealed class ResolveUserQuestionEndpointTests
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         await dispatcher.Received(1)
                         .DispatchUserQuestionAnsweredAsync(Arg.Is<UserQuestionAnsweredEvent>(evt => evt.RequestId == "question-xyz"
-                                                                                                   && evt.Answers.Count == 1
-                                                                                                   && evt.Answers[0].Question == "Which auth method?"
-                                                                                                   && evt.Answers[0].Selected.Count == 1
-                                                                                                   && evt.Answers[0].Selected[0] == "OAuth"
-                                                                                                   && evt.Answers[0].Other == null))
+                                                                                                    && evt.Answers.Count == 1
+                                                                                                    && evt.Answers[0].Question == "Which auth method?"
+                                                                                                    && evt.Answers[0].Selected.Count == 1
+                                                                                                    && evt.Answers[0].Selected[0] == "OAuth"
+                                                                                                    && evt.Answers[0].Other == null))
                         .ConfigureAwait(false);
     }
 
@@ -73,7 +75,7 @@ public sealed class ResolveUserQuestionEndpointTests
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         await dispatcher.Received(1)
                         .DispatchUserQuestionAnsweredAsync(Arg.Is<UserQuestionAnsweredEvent>(evt => evt.Answers[0].Selected.Count == 0
-                                                                                                   && evt.Answers[0].Other == "mTLS"))
+                                                                                                    && evt.Answers[0].Other == "mTLS"))
                         .ConfigureAwait(false);
     }
 
@@ -184,7 +186,10 @@ public sealed class ResolveUserQuestionEndpointTests
                 new
                 {
                     question = "Which auth method?",
-                    selected = new[] { "OAuth" }
+                    selected = new[]
+                    {
+                        "OAuth"
+                    }
                 }
             }
         };

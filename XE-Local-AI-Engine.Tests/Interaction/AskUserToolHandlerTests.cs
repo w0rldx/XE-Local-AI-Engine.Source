@@ -110,7 +110,8 @@ public sealed class AskUserToolHandlerTests
         AssertEx.True(stash.TryPop("fresh", out _));
     }
 
-    private static AskUserToolHandler CreateHandler(UserQuestionAnswerStash stash) => new(stash);
+    private static AskUserToolHandler CreateHandler(UserQuestionAnswerStash stash) =>
+        new(stash);
 
     // Runs `action` with the framework's ambient per-call context pointing at `callId`, exactly as
     // FunctionInvokingChatClient establishes it around a real tool body, and always restores the prior value.
@@ -134,9 +135,11 @@ public sealed class AskUserToolHandlerTests
         }
     }
 
-    private static bool ReadBool(string json, string property) => JsonDocument.Parse(json).RootElement.GetProperty(property).GetBoolean();
+    private static bool ReadBool(string json, string property) =>
+        JsonDocument.Parse(json).RootElement.GetProperty(property).GetBoolean();
 
-    private static string? ReadString(string json, string property) => JsonDocument.Parse(json).RootElement.GetProperty(property).GetString();
+    private static string? ReadString(string json, string property) =>
+        JsonDocument.Parse(json).RootElement.GetProperty(property).GetString();
 
     // FunctionInvokingChatClient.CurrentContext is `protected static`, so only a derived client may assign it. This
     // type is never instantiated — it exists purely to make that setter reachable from the test assembly.
@@ -147,7 +150,8 @@ public sealed class AskUserToolHandlerTests
         {
         }
 
-        public static void Set(FunctionInvocationContext? context) => CurrentContext = context;
+        public static void Set(FunctionInvocationContext? context) =>
+            CurrentContext = context;
     }
 
     private sealed class FakeTimeProvider : TimeProvider
@@ -159,8 +163,10 @@ public sealed class AskUserToolHandlerTests
             _utcNow = utcNow;
         }
 
-        public override DateTimeOffset GetUtcNow() => _utcNow;
+        public override DateTimeOffset GetUtcNow() =>
+            _utcNow;
 
-        public void Advance(TimeSpan delta) => _utcNow += delta;
+        public void Advance(TimeSpan delta) =>
+            _utcNow += delta;
     }
 }

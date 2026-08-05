@@ -28,7 +28,9 @@ public sealed class ImageModelDiscoveryEndpointTests
 
         foreach (var route in new[]
                  {
-                     "images/models/catalog", "images/models/browse", "images/models/inspect?repoId=o/r"
+                     "images/models/catalog",
+                     "images/models/browse",
+                     "images/models/inspect?repoId=o/r"
                  })
         {
             using var response = await client.GetAsync(new Uri($"{ApiPrefix}/{route}", UriKind.Relative)).ConfigureAwait(false);

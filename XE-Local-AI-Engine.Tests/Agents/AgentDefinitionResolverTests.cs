@@ -286,8 +286,7 @@ public sealed class AgentDefinitionResolverTests
         var definition = CreateDefinition(allowedSkillIds: [skillId]);
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
         skillStore.ListEnabledByIdsAsync(Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>())
-                  .Returns(Task.FromResult<IReadOnlyList<AgentSkillRecord>>(
-                  [
+                  .Returns(Task.FromResult<IReadOnlyList<AgentSkillRecord>>([
                       SkillRecord(skillId,
                           "kubernetes-debug",
                           "Debug k8s issues",
@@ -325,8 +324,7 @@ public sealed class AgentDefinitionResolverTests
         var definition = CreateDefinition(allowedSkillIds: [skillId]);
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
         skillStore.ListEnabledByIdsAsync(Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>())
-                  .Returns(Task.FromResult<IReadOnlyList<AgentSkillRecord>>(
-                  [
+                  .Returns(Task.FromResult<IReadOnlyList<AgentSkillRecord>>([
                       SkillRecord(skillId,
                           "kubernetes-debug",
                           "Debug k8s issues",
@@ -357,8 +355,7 @@ public sealed class AgentDefinitionResolverTests
         var definition = CreateDefinition(allowedSkillIds: [skillId]);
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
         skillStore.ListEnabledByIdsAsync(Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>())
-                  .Returns(Task.FromResult<IReadOnlyList<AgentSkillRecord>>(
-                  [
+                  .Returns(Task.FromResult<IReadOnlyList<AgentSkillRecord>>([
                       SkillRecord(skillId,
                           "kubernetes-debug",
                           "Debug k8s issues",

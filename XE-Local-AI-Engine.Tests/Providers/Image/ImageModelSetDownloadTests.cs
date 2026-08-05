@@ -188,16 +188,24 @@ public sealed class ImageModelSetDownloadTests
             }
 
             var body = url.Contains(SecondFile, StringComparison.Ordinal) ? SecondBytes : FirstBytes;
-            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(body) };
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent(body)
+            };
         });
         using var http = new HttpClient(handler, disposeHandler: false);
         using var registry = new ImageModelRegistry(ImageOptions(models.Path), NullLogger<ImageModelRegistry>.Instance);
         var store = Store(http, models.Path, registry);
 
         const string otherRepo = "mradermacher/Qwen2.5-VL-7B-Instruct-GGUF";
-        var request = Request(
-            Part(FirstFile, sizeBytes: 10),
-            new ImageModelPartRequest { Role = ImageModelPartRole.Llm, FileName = SecondFile, SizeBytes = 6, RepoId = otherRepo });
+        var request = Request(Part(FirstFile, sizeBytes: 10),
+            new ImageModelPartRequest
+            {
+                Role = ImageModelPartRole.Llm,
+                FileName = SecondFile,
+                SizeBytes = 6,
+                RepoId = otherRepo
+            });
 
         var handle = await store.EnsureModelAsync(request, progress: null, CancellationToken.None).ConfigureAwait(false);
 

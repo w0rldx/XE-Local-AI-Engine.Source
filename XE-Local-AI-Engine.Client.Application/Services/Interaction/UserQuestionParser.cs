@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Client.Services.Interaction;
 
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
-using Microsoft.Extensions.AI;
 
 /// <summary>
 ///     Parses and validates the arguments of an <c>ask_user</c> tool call into the questions the chat card renders.
@@ -29,8 +28,10 @@ internal static class UserQuestionParser
     ///     the operator; the caller turns that into a "your call was malformed" tool result rather than a prompt.
     /// </summary>
     public static bool TryParse(IDictionary<string, object?>? arguments,
-        [NotNullWhen(true)] out IReadOnlyList<UserQuestionSpec>? questions,
-        [NotNullWhen(false)] out string? error)
+        [NotNullWhen(true)]
+        out IReadOnlyList<UserQuestionSpec>? questions,
+        [NotNullWhen(false)]
+        out string? error)
     {
         questions = null;
 
@@ -82,8 +83,10 @@ internal static class UserQuestionParser
     }
 
     private static bool TryProjectQuestion(AskUserQuestion question,
-        [NotNullWhen(true)] out UserQuestionSpec? spec,
-        [NotNullWhen(false)] out string? error)
+        [NotNullWhen(true)]
+        out UserQuestionSpec? spec,
+        [NotNullWhen(false)]
+        out string? error)
     {
         spec = null;
 

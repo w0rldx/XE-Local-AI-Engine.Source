@@ -147,7 +147,10 @@ public sealed class NodeToolApprovalPolicyTests
     {
         AssertEx.False(NodeToolApprovalPolicy.FromSettings(settings: null).SkillSessionScopeDisabled,
             "Session-scoped skill approvals stay available unless the operator turns them off.");
-        AssertEx.True(NodeToolApprovalPolicy.FromSettings(new NodeToolApprovalPolicySettings { DisableSkillSessionScope = true }).SkillSessionScopeDisabled,
+        AssertEx.True(NodeToolApprovalPolicy.FromSettings(new NodeToolApprovalPolicySettings
+            {
+                DisableSkillSessionScope = true
+            }).SkillSessionScopeDisabled,
             "The operator's always-prompt switch must reach the runner through the composed policy.");
     }
 }
