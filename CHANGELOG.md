@@ -7,11 +7,12 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 **Tag convention.** Source tags carry a `v` prefix: `vX.Y.Z-rc.N.M` for release candidates, `vX.Y.Z` for validated
 stable releases. The section headings below use the bare version, matching the tag without its `v`.
 
-**Two repositories, one version string.** Source and its `v<version>` tags live in `w0rldx/XE-Local-AI-Engine`; the
-built tester artifacts are published as releases on the separate `w0rldx/XE-Local-AI-Engine.Tester-App` repo. A tester
-release therefore has no tag in this repo, and vice versa. Tester releases through `0.1.0-rc.4.1` carry **bare** tags
-(`0.1.0-rc.4.1`) with `v`-prefixed release names; from `0.1.0-rc.5.0` onward both are `v`-prefixed (rc.4.2 was never
-cut, so rc.5.0 is the first such release).
+**Repository & release home.** Source and its `v<version>` tags live in `w0rldx/XE-Local-AI-Engine.Source`, which is
+also the release home going forward — the `main` update channel points here. Historically, built tester artifacts were
+published as pre-releases on the separate `w0rldx/XE-Local-AI-Engine.Tester-App` repo (now being retired), so a tester
+release through `0.1.0-rc.5.0` has no tag in this repo, and vice versa; the "What actually shipped" table below records
+them. Tester releases through `0.1.0-rc.4.1` carry **bare** tags (`0.1.0-rc.4.1`) with `v`-prefixed release names; from
+`0.1.0-rc.5.0` onward both are `v`-prefixed (rc.4.2 was never cut, so rc.5.0 is the first such release).
 
 > **This file is hand-maintained.** `cliff.toml` drives git-cliff, which generates `RELEASE_NOTES.md` for the Velopack
 > package body — it does **not** generate this file. Update this file yourself when you cut a release; nothing will do
