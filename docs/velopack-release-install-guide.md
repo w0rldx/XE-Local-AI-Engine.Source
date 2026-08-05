@@ -86,7 +86,7 @@ A published tester release carries exactly these assets:
 
 Inside the bundle, `LICENSE` and `NOTICE` ship inside the `current` folder — wired in as `Content`
 items in `XE-Local-AI-Engine.Client.csproj`, so they land in the publish directory that **both**
-packaging paths stage from. The software is **proprietary, all rights reserved**; `LICENSE` states
+packaging paths stage from. The software is licensed under **Apache-2.0**; `LICENSE` states
 the terms and `NOTICE` carries the third-party attributions. There is no `READ-ME-FIRST.txt` in this
 bundle — that file is generated only by the separate `publish/package-rc.sh` Linux/manual packaging
 path, not by the Velopack `vpk pack` path this guide describes.

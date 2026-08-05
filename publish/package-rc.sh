@@ -114,7 +114,7 @@ you confirm, deletes your data dir (%LOCALAPPDATA%\XE-Local-AI-Engine). Then
 delete this unzipped folder. To delete the data by hand instead, remove that
 folder yourself.
 
-This software is proprietary — all rights reserved. See the LICENSE file in this
+This software is licensed under Apache-2.0. See the LICENSE file in this
 folder before copying or passing it on; NOTICE lists third-party components.
 
 Found a problem? In the app, use "Report a problem" (Diagnostics) to export a
@@ -147,7 +147,7 @@ It stops the app + model engine and, after you confirm, deletes your data dir
 ($HOME/.local/share/XE-Local-AI-Engine). Then delete this unzipped folder. To
 delete the data by hand instead, remove that folder yourself.
 
-This software is proprietary — all rights reserved. See the LICENSE file in this
+This software is licensed under Apache-2.0. See the LICENSE file in this
 folder before copying or passing it on; NOTICE lists third-party components.
 
 Found a problem? In the app, use "Report a problem" (Diagnostics) to export a
@@ -168,7 +168,7 @@ TXT
 #   - *.runtimeconfig.json         (the .NET runtime host config)
 #   - *.deps.json                  (the .NET dependency manifest)
 #   - manifest.json                (AgentHome layout manifests are runtime-only; the app's own manifest.json is an asset)
-#   - LICENSE, NOTICE              (proprietary license + third-party notices; published via Content items in
+#   - LICENSE, NOTICE              (Apache-2.0 license + third-party notices; published via Content items in
 #                                   XE-Local-AI-Engine.Client.csproj, so both the Velopack path and this script
 #                                   pick them up from the publish dir. Neither guard below matches them.)
 #   - wwwroot/**                   (the React SPA build, incl. hashed node-settings-*.js chunks — NOT node-settings.json)

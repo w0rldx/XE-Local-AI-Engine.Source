@@ -1,9 +1,9 @@
 XE Local AI Engine
-Copyright (c) 2026 w0rldx. All rights reserved.
+Copyright 2026 w0rldx
 
-The product itself is proprietary — see LICENSE. This file records the
-third-party material the product depends on and points at where each one's terms
-are kept. It is deliberately a set of pointers rather than a copy: the
+Licensed under the Apache License, Version 2.0 (see LICENSE). This file records
+the third-party material the product depends on and points at where each one's
+terms are kept. It is deliberately a set of pointers rather than a copy: the
 package-level list is generated and drift-gated, so a hand-maintained duplicate
 here would go stale without anything catching it.
 
