@@ -362,6 +362,10 @@ ASALocalRun/
 # Protection key-ring KEK are all derived — committing it forges node JWTs and decrypts every .enc blob.
 node.key
 
+# AppHost runtime data dir — node.key, the node SQLite DB, and its migration lock are all runtime state,
+# never product content. A headless/Aspire run writes them here under the content root.
+/XE-Local-AI-Engine.AppHost/.data/
+
 # Runtime per-conversation uploaded-file blobs (INodeDataDirectory data root; created
 # under the content root in headless/dev mode)
 uploaded-files/
@@ -450,4 +454,5 @@ XE-Local-AI-Engine.Client/development/
 # Internal agent tooling + planning archive — untracked pending migration to the
 # universal harness at .agent-harness. Kept locally, not shipped/open-sourced.
 /.opencode/
+/opencode.jsonc
 /Plans/
