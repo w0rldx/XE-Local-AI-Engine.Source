@@ -10,6 +10,5 @@ private-beta tester program and its download builds. That repo is being retired;
 
 - `README.md`, `docs/*.md` — the guide itself.
 - `media/` — screenshots and short clips the guide links to.
-- `reddit-post-draft.md` — an old launch/marketing draft, kept for reference only (not part of the guide).
 
 App downloads are on this repository's [Releases](../../releases/latest) page.
