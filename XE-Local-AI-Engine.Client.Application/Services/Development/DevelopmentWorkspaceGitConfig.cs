@@ -20,7 +20,7 @@ using System.Text;
 ///         An in-tree <c>.gitattributes</c> naming an undefined driver is a no-op. So removing every definition closes
 ///         <c>filter.*.clean</c>, <c>core.fsmonitor</c> and any future exec-bearing key at once, without enumerating key
 ///         names — which is the same property the read-only <c>.git/config</c> bind mount gets on the container side.
-///         This half is provider-independent, and that matters: the standalone clone (S3.4) turned
+///         This half is provider-independent, and that matters: the standalone clone turned
 ///         <c>&lt;workspace&gt;/.git/config</c> into a real, agent-writable file inside the jail, on the process
 ///         provider that Development actually runs on today.
 ///     </para>
@@ -35,7 +35,7 @@ using System.Text;
 ///     <para>
 ///         <b>What is deliberately not preserved.</b> <c>origin</c>: the clone drops it on purpose (it points straight
 ///         back at the trusted source repository), and a test asserts the workspace has no remote — so restoring it here
-///         would quietly undo D8. And <c>extensions.worktreeConfig</c>, because it makes Git read a
+///         would quietly undo the standalone clone's isolation. And <c>extensions.worktreeConfig</c>, because it makes Git read a
 ///         <em>second</em> config file (<c>.git/config.worktree</c>) that this rewrite does not cover; that file is
 ///         removed alongside rather than sanitised, since a standalone clone has no linked worktrees to need it.
 ///     </para>

@@ -33,7 +33,7 @@ export function parseToolCatalogSource(raw: string): ToolCatalogSource {
 	return { kind: "builtin", serverSlug: null };
 }
 
-// A tool's risk class (OPP-03), mirroring the backend ToolCategory enum names. The node-default approval policy keys
+// A tool's risk class, mirroring the backend ToolCategory enum names. The node-default approval policy keys
 // off this to decide whether a whole class of tools must be approval-gated. "Unknown" is the fail-closed default: a
 // tool with no declared class is treated as approval-requiring.
 export type ToolCategory = "ReadLocal" | "WriteExecute" | "Orchestration" | "Network" | "Unknown";

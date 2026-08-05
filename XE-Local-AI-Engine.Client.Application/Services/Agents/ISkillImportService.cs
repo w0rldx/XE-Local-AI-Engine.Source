@@ -21,7 +21,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///         until an operator deliberately turns them on.
 ///     </para>
 ///     <para>
-///         Scripts are never imported (locked decision 1). They are detected, listed in the report as refused, and
+///         Scripts are never imported. They are detected, listed in the report as refused, and
 ///         dropped — the feature adds no execution surface.
 ///     </para>
 /// </summary>

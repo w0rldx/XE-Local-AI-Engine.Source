@@ -145,7 +145,7 @@ internal sealed class DevelopmentTemplateService(
     }
 
     /// <summary>
-    ///     The S2.1 sequence. Every step is a separate bounded process and a non-zero exit stops the sequence, so a
+    ///     The materialization sequence. Every step is a separate bounded process and a non-zero exit stops the sequence, so a
     ///     partially cloned tree never reaches <c>git init</c>.
     /// </summary>
     private async Task MaterializeAsync(string templateRoot,
@@ -159,7 +159,7 @@ internal sealed class DevelopmentTemplateService(
         var parent = Path.GetDirectoryName(destination)
                      ?? throw new DevelopmentWorkspaceSecurityException("The destination path has no parent directory.");
 
-        // The transport, the flag set and the standalone assertion are shared with the managed workspace (S3.4) via
+        // The transport, the flag set and the standalone assertion are shared with the managed workspace via
         // StandaloneGitClone — including the reason file:// is mandatory: given a plain local path git SILENTLY IGNORES
         // --depth ("warning: --depth is ignored in local clones; use file:// instead") and hardlinks the whole object
         // store instead, which is exactly the shared-objects coupling this design exists to avoid.
@@ -235,7 +235,7 @@ internal sealed class DevelopmentTemplateService(
             throw new DevelopmentWorkspaceSecurityException("The destination path is an existing file.");
         }
 
-        // S2.3: a project created by the user is a user artifact. Node data is where the engine's own managed
+        // A project created by the user is a user artifact. Node data is where the engine's own managed
         // worktrees and runtime state live, and it is deleted and rebuilt on the engine's terms.
         if (IsWithin(destination, Path.TrimEndingDirectorySeparator(Path.GetFullPath(_dataDirectory.Root))))
         {

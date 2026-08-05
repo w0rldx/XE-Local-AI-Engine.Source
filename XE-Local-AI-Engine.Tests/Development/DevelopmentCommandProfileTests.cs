@@ -205,7 +205,7 @@ public sealed class DevelopmentCommandProfileTests : IDisposable
     }
 
     /// <summary>
-    ///     The S1.6 reuse rule. A stored profile is the operator-confirmed agreement; if the code-owned definition
+    ///     The stored-profile reuse rule. A stored profile is the operator-confirmed agreement; if the code-owned definition
     ///     drifted underneath it without a <c>CurrentVersion</c> bump, every already-created project would silently
     ///     start running different commands under a version string claiming otherwise. Rejecting is the only safe
     ///     answer, so this asserts the tampered-content case explicitly rather than only the happy path.

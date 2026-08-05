@@ -547,7 +547,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         AssertEx.Equal(ExpectedDotnetValidationProfile, string.Join(',', commands.Select(static command => command.CommandId)));
         AssertEx.True(commands.All(static command => command.Completed && command.ExitCode == 0), DescribeValidation(commands, report));
 
-        // Slice 4: the gate no longer just knows the test command exited zero, it knows what the suite did. The
+        // The gate no longer just knows the test command exited zero, it knows what the suite did. The
         // fixture has exactly one test, and it ran.
         var outcome = TestOutcome(commands);
         AssertEx.True(outcome.Parsed);
@@ -620,7 +620,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         AssertCommandSucceeded(commands, DevelopmentCommandIds.DotnetBuildRelease);
         AssertEx.NotEqual(notExpected: 0, CommandExitCode(commands, DevelopmentCommandIds.DotnetTestRelease));
 
-        // Slice 4: the report now says WHAT failed, not merely that something did. One test ran and it failed.
+        // The report now says WHAT failed, not merely that something did. One test ran and it failed.
         var outcome = TestOutcome(commands);
         AssertEx.True(outcome.Parsed);
         AssertEx.Equal(expected: 1, outcome.Executed);
@@ -630,9 +630,9 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     }
 
     /// <summary>
-    ///     S4.4 — the policy for a registered repository that has no tests at all.
+    ///     The policy for a registered repository that has no tests at all.
     ///     <para>
-    ///         Its build target compiles perfectly well; there is simply nothing to run. Before Slice 4 the gate had
+    ///         Its build target compiles perfectly well; there is simply nothing to run. Before this policy existed, the gate had
     ///         no opinion about that beyond the test command's exit code, and a runner that answered zero would have
     ///         been accepted as a pass. The rule now is that a change cannot be validated by a suite that ran nothing,
     ///         and — because this is a state the operator can actually fix — it is reported with its own code rather

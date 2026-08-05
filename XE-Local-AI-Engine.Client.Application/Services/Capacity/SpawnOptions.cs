@@ -1,9 +1,9 @@
 namespace XE_Local_AI_Engine.Client.Services.Capacity;
 
 /// <summary>
-///     Bounds for sub-agent spawning, bound from the <c>Spawn</c> configuration section. Defaults match the locked
-///     plan decision (depth ≤ 2 structural; fan-out ≤ 3 concurrent per root invocation; cloud-spawn ≤ 3 per root
-///     invocation; a bounded same-model queue wait).
+///     Bounds for sub-agent spawning, bound from the <c>Spawn</c> configuration section. Defaults: depth ≤ 2
+///     structural; fan-out ≤ 3 concurrent per root invocation; cloud-spawn ≤ 3 per root invocation; a bounded
+///     same-model queue wait.
 /// </summary>
 public sealed class SpawnOptions
 {

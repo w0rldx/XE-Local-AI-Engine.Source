@@ -48,7 +48,7 @@ internal static class AddNodeAgentHomeExtensions
                .Bind(configuration.GetSection(SandboxOptions.SectionName))
                .ValidateOnStart();
         builder.Services.AddSingleton<IValidateOptions<SandboxOptions>, SandboxOptionsValidator>();
-        // Development Mode's own provider selection (D2). Bound HERE rather than in AddNodeDevelopment because that
+        // Development Mode's own provider selection. Bound HERE rather than in AddNodeDevelopment because that
         // module returns early when Development Mode is disabled, while the selector registered below must be able to
         // read this option unconditionally. Unset means "whatever the agent role resolved", so binding it changes
         // nothing on a node that does not set it.

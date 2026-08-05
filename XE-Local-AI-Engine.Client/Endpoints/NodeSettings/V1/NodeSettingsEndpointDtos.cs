@@ -345,7 +345,7 @@ internal static class NodeSettingsEndpointDtoMapper
             AgentHomeMaxPatchBytes = request.AgentHomeMaxPatchBytes ?? currentSettings.AgentHomeMaxPatchBytes,
             MaxPendingToolCallAgeMinutes = request.MaxPendingToolCallAgeMinutes ?? currentSettings.MaxPendingToolCallAgeMinutes,
             SamplingDefaults = request.SamplingDefaults ?? currentSettings.SamplingDefaults,
-            // OPP-03: the node-default tool-approval policy has no editable field on this request yet (the operator
+            // The node-default tool-approval policy has no editable field on this request yet (the operator
             // surface is planned but not yet built); preserve the currently stored value so an unrelated node-settings
             // save never wipes it.
             ToolApprovalPolicy = currentSettings.ToolApprovalPolicy,

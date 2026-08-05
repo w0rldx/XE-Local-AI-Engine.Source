@@ -11,7 +11,7 @@ public sealed record DevelopmentTemplateSnapshot(
     long CreatedAtUtc,
     long Version);
 
-/// <summary>Where a materialized repository came from (S2.2). <see cref="TemplatePath" /> is trusted-side only.</summary>
+/// <summary>Where a materialized repository came from. <see cref="TemplatePath" /> is trusted-side only.</summary>
 public sealed record DevelopmentTemplateMaterializationSnapshot(
     Guid SelectedFolderId,
     Guid TemplateId,

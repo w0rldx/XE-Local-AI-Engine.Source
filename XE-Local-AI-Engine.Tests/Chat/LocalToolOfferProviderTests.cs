@@ -440,7 +440,7 @@ public sealed class LocalToolOfferProviderTests
     [Test]
     public void ProductionCatalog_EveryOfferedTool_DeclaresANonUnknownCategory()
     {
-        // Fail-closed guard (OPP-03): every tool the REAL catalog offers must declare a concrete ToolCategory. An
+        // Fail-closed guard: every tool the REAL catalog offers must declare a concrete ToolCategory. An
         // accidental Unknown would make the node approval policy treat that tool as fail-closed (approval-requiring), so
         // catch a missing category here rather than in production. Uses the real LocalAgentToolRegistry (builtin clock /
         // arithmetic) plus the merged coder + knowledge tools and the profile-only spawn_subagent.

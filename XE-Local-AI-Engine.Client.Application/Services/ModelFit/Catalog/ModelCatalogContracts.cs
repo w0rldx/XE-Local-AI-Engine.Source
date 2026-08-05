@@ -4,7 +4,7 @@ namespace XE_Local_AI_Engine.Client.Services.ModelFit.Catalog;
 ///     The curated model catalog document (schema v1). Bundled as an embedded resource
 ///     (<c>model-catalog.seed.json</c>) and optionally replaced by a remote refresh
 ///     (<see cref="ModelCatalogOptions.RefreshUrl" />). Editorial: tiers, use-case tags and notes are hand-assigned —
-///     there is no external quality-score API (locked decision D4).
+///     there is no external quality-score API.
 /// </summary>
 public sealed record ModelCatalogDocument(
     int SchemaVersion,

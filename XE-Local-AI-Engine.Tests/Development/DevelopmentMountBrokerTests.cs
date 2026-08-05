@@ -15,7 +15,7 @@ using PersistenceDevelopmentAttemptStatus = XE_Local_AI_Engine.Client.Persistenc
 ///     What Development Mode asks the sandbox for, and what it does with the answer.
 ///     <para>
 ///         The load-bearing assertions here are about a path that is NOT mounted. <c>workspace.json</c> is the workspace
-///         control manifest and decision D9 requires it to be unreachable from inside any sandbox; mounting the four
+///         control manifest and must be unreachable from inside any sandbox; mounting the four
 ///         named runtime subdirectories rather than their parent is the whole of that exclusion, and it is invisible
 ///         unless a test says so.
 ///     </para>

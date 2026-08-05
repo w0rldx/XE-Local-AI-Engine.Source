@@ -6,9 +6,9 @@ using System.Diagnostics.CodeAnalysis;
 /// <summary>
 ///     Configuration for the Development Mode container sandbox (ADR 0004). Every value here is engine-owned: nothing
 ///     in this record may be supplied, influenced or overridden by a registered repository, because a repository is a
-///     tree the agent can write and decision D7 rejects repository-supplied container configuration wholesale.
+///     tree the agent can write and repository-supplied container configuration is rejected wholesale.
 ///     <para>
-///         The defaults are chosen so that a container created from them satisfies the §3.8 hardening contract. The
+///         The defaults are chosen so that a container created from them satisfies the Docker hardening contract. The
 ///         validator rejects any combination that could not, rather than letting a weakened container be created and
 ///         only fail at read-back — a preflight failure is a better diagnostic than a create-then-reject.
 ///     </para>
@@ -20,7 +20,7 @@ public sealed record ContainerSandboxOptions
     public const string SectionName = "Development:ContainerSandbox";
 
     /// <summary>
-    ///     Operator-approved, digest-pinned image reference (D7 permits nothing else). A tag-only reference is
+    ///     Operator-approved, digest-pinned image reference — nothing else is permitted. A tag-only reference is
     ///     rejected by the validator: a tag is mutable, so it names whatever the registry last pushed rather than the
     ///     bytes the operator approved. Note that a digest pins image bytes and nothing more — mounts, runtime state,
     ///     host kernel, platform and dependency resolution all remain variable, so this is not reproducibility.
@@ -54,7 +54,7 @@ public sealed record ContainerSandboxOptions
     public string WorkspaceMountTarget { get; init; } = "/workspace";
 
     /// <summary>
-    ///     Absolute in-container path of the bounded <c>tmpfs</c> scratch area. §3.8 requires a read-only root
+    ///     Absolute in-container path of the bounded <c>tmpfs</c> scratch area. The Docker hardening contract requires a read-only root
     ///     filesystem, so without a scratch mount nothing in the container can write anywhere at all.
     /// </summary>
     [Required]
@@ -120,7 +120,7 @@ public sealed record ContainerSandboxOptions
 
     /// <summary>
     ///     Minimum Docker Engine API version the preflight accepts, as <c>major.minor</c>. 1.41 is the floor at which
-    ///     every setting §3.8 requires is both settable and readable back from a container inspect.
+    ///     every setting the Docker hardening contract requires is both settable and readable back from a container inspect.
     /// </summary>
     [Required]
     [RegularExpression(@"^\d+\.\d+$")]
@@ -133,7 +133,7 @@ public sealed record ContainerSandboxOptions
     /// <summary>
     ///     Explicit daemon endpoint override. Null means "discover it" — <c>DOCKER_HOST</c> first, then the
     ///     platform defaults. Discovery order and the resolved source are reported to the operator by the preflight,
-    ///     because under D10 a discovered endpoint is not the same thing as an approved one.
+    ///     because a discovered endpoint is not the same thing as an approved one.
     /// </summary>
     public string? DaemonEndpoint { get; init; }
 }

@@ -73,7 +73,7 @@ public static class NodeSchedulerServiceCollectionExtensions
         // IServiceScopeFactory scope per fire.
         builder.Services.AddSingleton<IScheduledJobHandler, ModelRecommendationCheckHandler>();
 
-        // Run-a-saved-agent template handler (OPP-02). Also a Singleton (registry snapshot); it resolves its scoped
+        // Run-a-saved-agent template handler. Also a Singleton (registry snapshot); it resolves its scoped
         // collaborators (agent resolver, capacity gate, runtime-package builder, invocation runner) per fire through an
         // IServiceScopeFactory scope and runs a node-local agent headlessly on a schedule.
         builder.Services.AddSingleton<IScheduledJobHandler, RunSavedAgentHandler>();

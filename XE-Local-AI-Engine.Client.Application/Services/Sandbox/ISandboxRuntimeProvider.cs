@@ -12,8 +12,8 @@ using System.Text;
 ///     <para>
 ///         This interface is deliberately NOT registered in DI, and nothing injects it. Consumers take one of the two
 ///         role-scoped markers instead — <see cref="IAgentSandboxRuntimeProvider" /> or
-///         <see cref="IDevelopmentSandboxRuntimeProvider" /> — because provider selection is per feature (decision
-///         D2). This stays the shared contract those roles are expressed in, and the seam a future hardware-isolated
+///         <see cref="IDevelopmentSandboxRuntimeProvider" /> — because provider selection is per feature. This stays
+///         the shared contract those roles are expressed in, and the seam a future hardware-isolated
 ///         (MXC) provider slots into.
 ///     </para>
 /// </summary>

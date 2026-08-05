@@ -4,7 +4,7 @@ namespace XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 ///     The narrow slice of the Docker Engine API this product uses, expressed in this product's own types.
 ///     <para>
 ///         It exists so that <see cref="Implementation.DockerSandboxRuntimeProvider" /> can be tested against a client
-///         that <em>lies</em>. The §3.8 contract is fail-closed on read-back — the provider must reject a container
+///         that <em>lies</em>. The hardening contract is fail-closed on read-back — the provider must reject a container
 ///         whose settings did not take — and the only way to prove it rejects is to hand it an inspect result that
 ///         does not match what was asked for. A test cannot make a real daemon silently drop <c>--cap-drop ALL</c>, so
 ///         without this seam the fail-closed branch would be unreachable and therefore unverified.
@@ -25,7 +25,7 @@ public interface IDockerRuntimeClient : IAsyncDisposable
     Task StartContainerAsync(string containerId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Read back the settings the daemon actually applied. This is the evidence the §3.8 verification runs on;
+    ///     Read back the settings the daemon actually applied. This is the evidence hardening-contract verification runs on;
     ///     "we passed the flag" is not verification.
     /// </summary>
     Task<DockerContainerSettings> InspectContainerAsync(string containerId, CancellationToken cancellationToken = default);
@@ -39,7 +39,7 @@ public interface IDockerRuntimeClient : IAsyncDisposable
 
 /// <summary>
 ///     Everything the engine asks a container to be. Every field is engine-generated; none of it is derived from a
-///     registered repository (D7).
+///     registered repository.
 /// </summary>
 public sealed record DockerContainerSpecification
 {
@@ -61,22 +61,22 @@ public sealed record DockerContainerSpecification
     /// <summary>Arguments to <see cref="Entrypoint" />.</summary>
     public required IReadOnlyList<string> Command { get; init; }
 
-    /// <summary>Docker network mode. §3.8 requires this to be explicit, never defaulted.</summary>
+    /// <summary>Docker network mode. The hardening contract requires this to be explicit, never defaulted.</summary>
     public required string NetworkMode { get; init; }
 
-    /// <summary>Capabilities to drop. §3.8 requires <c>ALL</c>.</summary>
+    /// <summary>Capabilities to drop. The hardening contract requires <c>ALL</c>.</summary>
     public required IReadOnlyList<string> CapabilitiesToDrop { get; init; }
 
-    /// <summary>Security options. §3.8 requires <c>no-new-privileges:true</c>.</summary>
+    /// <summary>Security options. The hardening contract requires <c>no-new-privileges:true</c>.</summary>
     public required IReadOnlyList<string> SecurityOptions { get; init; }
 
-    /// <summary>Whether the root filesystem is read-only. §3.8 requires <see langword="true" />.</summary>
+    /// <summary>Whether the root filesystem is read-only. The hardening contract requires <see langword="true" />.</summary>
     public required bool ReadOnlyRootFilesystem { get; init; }
 
     /// <summary>Bounded <c>tmpfs</c> mounts, keyed by in-container path with the mount option string as the value.</summary>
     public required IReadOnlyDictionary<string, string> TemporaryFilesystems { get; init; }
 
-    /// <summary>Engine-generated bind mounts. Repository-supplied mounts do not exist at this layer (D7).</summary>
+    /// <summary>Engine-generated bind mounts. Repository-supplied mounts do not exist at this layer.</summary>
     public required IReadOnlyList<DockerBindMount> BindMounts { get; init; }
 
     /// <summary>Memory ceiling in bytes.</summary>
@@ -92,7 +92,7 @@ public sealed record DockerContainerSpecification
     public required IReadOnlyDictionary<string, string> Labels { get; init; }
 }
 
-/// <summary>One engine-generated bind mount. Mount propagation is explicit because §3.8 requires it to be private.</summary>
+/// <summary>One engine-generated bind mount. Mount propagation is explicit because the hardening contract requires it to be private.</summary>
 public sealed record DockerBindMount
 {
     /// <summary>Absolute host path.</summary>
@@ -109,7 +109,7 @@ public sealed record DockerBindMount
 }
 
 /// <summary>
-///     What the daemon says a container actually is, read back after creation. Shaped by what §3.8 needs to check
+///     What the daemon says a container actually is, read back after creation. Shaped by what the hardening contract needs to check
 ///     rather than by the inspect payload: a field is here because a verification depends on it.
 /// </summary>
 public sealed record DockerContainerSettings
@@ -132,7 +132,7 @@ public sealed record DockerContainerSettings
     /// <summary>The capabilities the daemon recorded as dropped.</summary>
     public required IReadOnlyList<string> CapabilitiesDropped { get; init; }
 
-    /// <summary>The capabilities the daemon recorded as added. §3.8 requires this to be empty.</summary>
+    /// <summary>The capabilities the daemon recorded as added. The hardening contract requires this to be empty.</summary>
     public required IReadOnlyList<string> CapabilitiesAdded { get; init; }
 
     /// <summary>The applied security options.</summary>
@@ -153,7 +153,7 @@ public sealed record DockerContainerSettings
     /// <summary>Applied process ceiling; 0 or absent means unlimited.</summary>
     public required long PidsLimit { get; init; }
 
-    /// <summary>Number of device mappings. §3.8 requires zero.</summary>
+    /// <summary>Number of device mappings. The hardening contract requires zero.</summary>
     public required int DeviceCount { get; init; }
 
     /// <summary>The PID namespace mode; <c>host</c> is forbidden.</summary>

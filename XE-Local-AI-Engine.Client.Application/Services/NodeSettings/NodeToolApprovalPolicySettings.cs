@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
-///     The persisted node-default tool-approval policy (OPP-03), stored as JSON inside <see cref="StoredNodeSettings" />.
+///     The persisted node-default tool-approval policy, stored as JSON inside <see cref="StoredNodeSettings" />.
 ///     It is TIGHTEN-ONLY: an entry can only ADD an approval requirement to a tool that would otherwise auto-execute; it
 ///     can never waive a tool's own catalog approval flag. <see langword="null" /> / absent (the default) means no node
 ///     tightening at all, so the resolver behaves byte-for-byte as it did before this feature.

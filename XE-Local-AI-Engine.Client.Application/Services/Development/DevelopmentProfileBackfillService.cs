@@ -17,7 +17,7 @@ public interface IDevelopmentProfileBackfillService
 }
 
 /// <summary>
-///     Fills the command profile on projects created before the profile existed (S1.7).
+///     Fills the command profile on projects created before the profile existed.
 ///     <para>
 ///         Detection is re-run against the project's own bound repository, so a repository that has a solution gets the
 ///         .NET profile it would have got at registration. It is deliberately <em>not</em> defaulted to

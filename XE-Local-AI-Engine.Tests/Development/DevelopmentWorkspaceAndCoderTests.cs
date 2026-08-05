@@ -649,7 +649,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     }
 
     /// <summary>
-    ///     S3.4 / decision D8: the managed workspace is an engine-owned standalone clone, not a linked worktree.
+    ///     The managed workspace is an engine-owned standalone clone, not a linked worktree.
     ///     Every assertion here is a property the container boundary depends on, and each one fails a different way of
     ///     getting the clone wrong.
     /// </summary>

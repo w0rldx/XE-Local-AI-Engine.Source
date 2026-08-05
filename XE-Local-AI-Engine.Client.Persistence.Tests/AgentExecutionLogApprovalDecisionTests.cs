@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     Round-trips for <see cref="AgentExecutionLogStore.AddApprovalDecisionAsync" /> (OPP-03): a resolved tool-approval
+///     Round-trips for <see cref="AgentExecutionLogStore.AddApprovalDecisionAsync" />: a resolved tool-approval
 ///     decision is persisted as a metadata-only row (kind 2) that REUSES existing columns without a schema change — tool
 ///     name → model_name, category → config_hash, decision → terminal_status, source → provider — and stays invisible to
 ///     every other read view (the diagnostics view, the run-envelope ledger, and the usage summary each filter their own

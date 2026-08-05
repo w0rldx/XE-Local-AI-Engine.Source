@@ -37,7 +37,7 @@ public sealed class DockerSandboxRuntimeProviderTests
         AssertEx.True(capabilities.HasFlag(SandboxProviderCapabilities.SupportsKill));
 
         // Served, but not through Docker's archive endpoint: that answers 400 "container rootfs is marked read-only"
-        // against a read-only-rootfs container regardless of destination, and §3.8 requires that rootfs. The write
+        // against a read-only-rootfs container regardless of destination, and hardening requires that rootfs. The write
         // goes to the host side of the workspace bind mount instead, which needs no archive endpoint at all.
         AssertEx.True(capabilities.HasFlag(SandboxProviderCapabilities.SupportsCopyInto));
     }
@@ -286,7 +286,7 @@ public sealed class DockerSandboxRuntimeProviderTests
     [Test]
     public void ResolveIdentity_AgainstARootlessDaemon_TakesUidZeroRatherThanTheEngineIdentifiers()
     {
-        // The inversion, and the reason §3.8's flat "non-root" rule could not stand. A rootless daemon maps container
+        // The inversion, and the reason the hardening contract's flat "non-root" rule could not stand. A rootless daemon maps container
         // uid 0 to the invoking user and container uid N>0 into the subordinate range, so the engine's own 1000 names
         // a host account (100999 with /etc/subuid = ...:100000:65536) that owns nothing of ours. Measured on Engine
         // 29.6.1 rootless: --user 1000:1000 could not touch a file in the engine-generated workspace mount at all.
@@ -604,7 +604,7 @@ public sealed class DockerSandboxRuntimeProviderTests
     [Test]
     public async Task CreateOrAttachAsync_WhenTheContainerCannotWriteThroughTheWorkspaceMount_RefusesAndRemovesTheContainer()
     {
-        // The failure inspect cannot see. Every §3.8 guarantee reads back perfectly here — the daemon applied exactly
+        // The failure inspect cannot see. Every hardening guarantee reads back perfectly here — the daemon applied exactly
         // what it was asked for — and the container still cannot put a byte in its own workspace, which is what a
         // wrong UID mapping looks like from the outside.
         var (provider, client, workspace) = CreateProvider();

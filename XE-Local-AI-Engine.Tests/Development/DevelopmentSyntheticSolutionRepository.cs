@@ -81,7 +81,7 @@ internal static class DevelopmentSyntheticSolutionRepository
     ///     When false, the solution contains the library alone and no test project at all. This is the shape of a
     ///     registered repository that simply has no tests, and it is a distinct case from a suite that ran and failed:
     ///     <c>dotnet test</c> answers <c>No test projects were found.</c> on stderr and exits 1, so the gate has no
-    ///     result to read rather than a bad one. Slice 4's policy for that case is a specific, actionable failure —
+    ///     result to read rather than a bad one. The policy for that case is a specific, actionable failure —
     ///     never a pass, and never indistinguishable from a build break.
     /// </param>
     /// <param name="cancellationToken">Cancellation.</param>

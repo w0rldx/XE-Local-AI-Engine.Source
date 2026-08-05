@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 
 /// <summary>
-///     Persistence for the pinned daemon attestation (D10).
+///     Persistence for the pinned daemon attestation.
 ///     <para>
 ///         This is host-machine state, not user data, which is why it is a file under the node data directory rather
 ///         than a row in the node database. Three reasons, in order of weight: the preflight must be able to answer

@@ -4,7 +4,7 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
-///     The node-configured <see cref="IToolApprovalPolicy" /> (OPP-03). Composes the node-default policy — a
+///     The node-configured <see cref="IToolApprovalPolicy" />. Composes the node-default policy — a
 ///     per-<see cref="ToolCategory" /> map plus optional per-tool-name overrides — ON TOP of each tool's catalog approval
 ///     flag, TIGHTEN-ONLY: it can only turn a non-approval tool into an approval-requiring one, never the reverse. It wins
 ///     over the <see cref="PermissiveToolApprovalPolicy" /> floor via the composition root's plain <c>AddSingleton</c>.

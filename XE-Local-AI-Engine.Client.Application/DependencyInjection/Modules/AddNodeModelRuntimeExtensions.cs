@@ -210,7 +210,7 @@ internal static class AddNodeModelRuntimeExtensions
 
         builder.Services.AddLocalAiAgentRuntime(builder.Configuration);
 
-        // OPP-03: the node-configured, TIGHTEN-ONLY tool-approval policy. A plain AddSingleton so it wins over the
+        // The node-configured, TIGHTEN-ONLY tool-approval policy. A plain AddSingleton so it wins over the
         // AI.Agent PermissiveToolApprovalPolicy floor (registered via TryAddSingleton inside AddLocalAiAgentRuntime
         // above; last registration wins). The node-default policy is JSON in node settings, read ONCE synchronously at
         // singleton construction (the sync INodeSettingsStore.Load twin, like the tool-capable allow-list seed) so the

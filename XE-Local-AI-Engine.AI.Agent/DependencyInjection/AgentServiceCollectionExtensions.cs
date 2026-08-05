@@ -92,7 +92,7 @@ public static class AgentServiceCollectionExtensions
         // Node-local MCP tools. This registry is MCP-agnostic (holds only AITool); the application layer's
         // connection manager owns the MCP client lifecycle and pushes an immutable snapshot into it as servers connect.
         _ = services.AddSingleton<IMcpToolRegistry, McpToolRegistry>();
-        // Tool-approval policy floor (OPP-03): the identity no-op, so a host that has not registered the real,
+        // Tool-approval policy floor: the identity no-op, so a host that has not registered the real,
         // node-configured NodeToolApprovalPolicy still resolves a policy and behaves exactly as before. TryAddSingleton
         // so the composition root's plain AddSingleton<IToolApprovalPolicy, NodeToolApprovalPolicy> wins (last-wins).
         services.TryAddSingleton<IToolApprovalPolicy, PermissiveToolApprovalPolicy>();

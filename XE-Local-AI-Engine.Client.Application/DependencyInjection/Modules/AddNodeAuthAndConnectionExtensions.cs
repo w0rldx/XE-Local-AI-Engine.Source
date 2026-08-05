@@ -78,7 +78,7 @@ internal static class AddNodeAuthAndConnectionExtensions
         // Keeps the live, already-authenticated device-code credential alive for the process lifetime — the sign-in
         // coordinator writes it on success, AzureFoundryChatClientFactory reads it on every send, so a chat send
         // never depends solely on OS-native encrypted persistence (which may be unavailable — e.g. no libsecret on
-        // Linux/WSL, forcing an in-memory fallback; see Plans/azure-ai-gateway-entra-provider-findings.md §9).
+        // Linux/WSL, forcing an in-memory fallback).
         builder.Services.AddSingleton<IEntraLiveCredentialCache, EntraLiveCredentialCache>();
 
         // Encrypted at-rest store for the authorization-code flow's MSAL home-account-id, read by

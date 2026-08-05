@@ -111,7 +111,7 @@ internal sealed class DockerDaemonPreflightService : IDockerDaemonPreflightServi
             };
         }
 
-        // D10, first use. Trust-on-first-use is the pin, not a check: there is nothing to compare a first daemon
+        // Trust-on-first-use is the pin, not a check: there is nothing to compare a first daemon
         // against. What it buys is that every subsequent run has something to compare against, which is where the
         // control actually bites.
         if (pinned is null)

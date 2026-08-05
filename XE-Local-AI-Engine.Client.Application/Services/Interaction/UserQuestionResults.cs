@@ -54,7 +54,7 @@ internal static class UserQuestionResults
     }
 
     /// <summary>
-    ///     The result for a round-trip that produced no answer (decision D4: the turn must continue, not fail). The
+    ///     The result for a round-trip that produced no answer — the turn must continue, not fail. The
     ///     sentence is deliberately directive — a bare "no answer" leaves a small model stalling or re-asking.
     /// </summary>
     public static string Unanswered(string reason, string? detail = null)

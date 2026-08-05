@@ -8,8 +8,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 /// </summary>
 public interface IModelFitBenchmarkStore
 {
-    // Deferred: the ModelFit Benchmark feature is scaffolding and not wired (see
-    // Plans/release-stability-cleanup-2026-06-29.md).
+    // Deferred: the ModelFit Benchmark feature is scaffolding and not wired.
     // This store has no live caller; it is kept so the deferred feature's persistence contract survives.
 
     /// <summary>

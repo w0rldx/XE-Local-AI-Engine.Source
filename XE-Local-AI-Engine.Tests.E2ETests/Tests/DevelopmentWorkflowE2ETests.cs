@@ -214,13 +214,13 @@ public sealed class DevelopmentWorkflowE2ETests : XEE2ETestBase
     }
 
     /// <summary>
-    ///     Slice 4's reachability criterion, exercised through the browser: the executed/passed/failed counts must be
+    ///     Verifies the reachability criterion through the browser: the executed/passed/failed counts must be
     ///     <em>visible to the operator in the attempt view</em>, not merely persisted.
     ///     <para>
     ///         The other test in this file drives a README-only repository, which detection resolves to
     ///         <c>generic-git</c> — a profile whose validation list is the whitespace check alone and which therefore
     ///         runs no test command and produces no counts to show. So it can never exercise this, and a criterion that
-    ///         no browser test reaches is exactly the shape of the defect Slice 1 shipped: a panel that never rendered.
+    ///         no browser test reaches is exactly the shape of the defect this test guards against — a panel that never rendered.
     ///     </para>
     ///     <para>
     ///         This one uses a real buildable .NET solution with a passing test, so detection resolves

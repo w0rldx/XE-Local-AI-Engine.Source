@@ -4,7 +4,7 @@ import type { NodeChatStreamEventDto } from "@/features/chat/models/NodeChatStre
 /**
  * THE single place the `ask_user` wire contract lives: the stream-event field names, the question JSON shape the
  * model emits, and the resolve POST. Nothing else in the client reads those field names — a backend rename is a
- * one-line fix here, not a sweep. See Plans/2026-08-04-ask-user-question-tool-plan.md §4.3/§4.4.
+ * one-line fix here, not a sweep.
  *
  * The resolve endpoint has no generated client yet (the OpenAPI regen happens at integration). {@link
  * resolveUserQuestionMutation} is deliberately shaped exactly like the generated `resolveToolApprovalMutation()` —

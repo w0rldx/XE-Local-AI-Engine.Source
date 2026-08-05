@@ -2,7 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 
 /// <summary>
 ///     Where a resolved Docker daemon endpoint came from. This is reported to the operator and persisted with the
-///     attestation because, under D10, "a socket was found" is not "the operator intended this daemon" — and the
+///     attestation because "a socket was found" is not "the operator intended this daemon" — and the
 ///     difference between the two is almost entirely which of these values produced the endpoint.
 /// </summary>
 public enum DockerDaemonEndpointSource
@@ -10,7 +10,7 @@ public enum DockerDaemonEndpointSource
     /// <summary>Explicit engine configuration (<c>Development:ContainerSandbox:DaemonEndpoint</c>). The strongest signal of intent.</summary>
     Configuration = 0,
 
-    /// <summary>The <c>DOCKER_HOST</c> environment variable — user-controllable, and the reason D10 exists.</summary>
+    /// <summary>The <c>DOCKER_HOST</c> environment variable — user-controllable, and the reason the daemon attestation exists.</summary>
     DockerHostEnvironmentVariable = 1,
 
     /// <summary>The conventional system-wide Unix socket at <c>/var/run/docker.sock</c>.</summary>

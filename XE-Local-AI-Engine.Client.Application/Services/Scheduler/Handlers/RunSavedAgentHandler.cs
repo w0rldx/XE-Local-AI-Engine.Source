@@ -15,7 +15,7 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>
-///     Quartz template handler for the <c>run-agent</c> template (OPP-02): runs a saved node-local agent on a schedule
+///     Quartz template handler for the <c>run-agent</c> template: runs a saved node-local agent on a schedule
 ///     with a fixed prompt. On each fire it loads the bound agent definition, resolves its COMPLETE
 ///     runtime (scaffold + persona + folded playbook memory, curated tools, skills, reasoning, version — never
 ///     the raw <c>Instructions</c>), builds a headless loopback <see cref="RuntimePackage" /> with the prompt as the seed
@@ -99,7 +99,7 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
         SchedulerMisfirePolicy.SkipMissed,
         DefaultMaxRuntimeSeconds: 600,
         AllowManualTrigger: true,
-        // This is the whole point of OPP-02: the AI agent is permitted to schedule saved-agent runs.
+        // This is the whole point of the run-agent template: the AI agent is permitted to schedule saved-agent runs.
         AllowAgentCreation: true,
         HistoryDetailLevel.Detailed);
 

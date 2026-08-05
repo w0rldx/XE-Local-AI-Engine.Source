@@ -268,8 +268,7 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
         return new AzureOpenAIClient(endpoint, new ApiKeyCredential(apiKey), options);
     }
 
-    // Attaches the bearer-token policy for Entra ID auth (frozen build contract, see
-    // Plans/azure-ai-gateway-entra-provider-findings.md §8) and constructs the client with a
+    // Attaches the bearer-token policy for Entra ID auth and constructs the client with a
     // placeholder ApiKeyCredential — the real Authorization header is set per-call by the policy.
     private AzureOpenAIClient BuildEntraIdClient(Uri endpoint, StoredAzureFoundryConnection connection, AzureOpenAIClientOptions options)
     {
@@ -393,8 +392,7 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
         // Reuse the live, already-authenticated credential the sign-in coordinator cached on success: its MSAL
         // token cache (in-memory always, plus OS-native encrypted disk when available) is what actually holds the
         // refresh token, whereas a credential rebuilt from only the persisted record has nothing to silently
-        // refresh from when encrypted persistence was unavailable on this platform (see
-        // Plans/azure-ai-gateway-entra-provider-findings.md §9).
+        // refresh from when encrypted persistence was unavailable on this platform.
         var cacheKey = EntraDeviceCodeCredentialCacheKey.Create(connection.EntraTenantId, connection.EntraClientId, connection.EntraTokenScope);
         var liveCredential = _entraLiveCredentialCache?.TryGet(cacheKey);
         if (liveCredential is not null)
@@ -424,8 +422,8 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
             _logger);
     }
 
-    // Interactive-browser mode is allowed to prompt live from Create() (see Plans/azure-ai-gateway-entra-provider-findings.md
-    // §9: the browser opens on the node machine, which is correct for desktop mode). First use for a connection
+    // Interactive-browser mode is allowed to prompt live from Create() (the browser opens on the node machine, which
+    // is correct for desktop mode). First use for a connection
     // authenticates eagerly so a bad tenant/client id fails fast rather than deferring to the first chat send, and
     // persists the resulting record so a future restart resumes silently.
     private TokenCredential BuildInteractiveBrowserCredential(StoredAzureFoundryConnection connection)

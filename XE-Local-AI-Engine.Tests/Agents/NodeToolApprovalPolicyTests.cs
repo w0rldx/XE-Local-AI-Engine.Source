@@ -6,7 +6,7 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Unit coverage for the OPP-03 tool-approval policy compose. Proves the tighten-only invariant end to end: the
+///     Unit coverage for the tool-approval policy compose. Proves the tighten-only invariant end to end: the
 ///     Permissive floor is identity on the catalog default; the node policy can only ADD approval (by category or by
 ///     tool name) and can never waive a default-on tool; unknown category names / false entries are no-ops; and a
 ///     null/empty settings object yields a policy equivalent to the floor.

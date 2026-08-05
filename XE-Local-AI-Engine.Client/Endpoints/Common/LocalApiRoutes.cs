@@ -298,7 +298,7 @@ public static class LocalApiRoutes
         public const string Root = "development";
         public const string Capability = "development/capability";
 
-        // Operator approval of the container runtime the capability preflight reports (decision D10). A POST because
+        // Operator approval of the container runtime the capability preflight reports. A POST because
         // it changes what this node has approved; separate from the capability GET so a read can never pin a daemon.
         public const string ContainerRuntimeConfirmation = "development/container-runtime/confirmation";
         public const string Repositories = "development/repositories";
@@ -307,7 +307,7 @@ public static class LocalApiRoutes
         // body-less POST would land on this repo's 415 trap.
         public const string RepositoryProfileDetection = "development/repositories/{selectedFolderId}/profile-detection";
 
-        // Slice 2. Templates are ordinary repositories the operator already has; the registry is list/add/remove, and
+        // Templates are ordinary repositories the operator already has; the registry is list/add/remove, and
         // materializing one produces a NEW registered repository, which is why the create route sits under
         // repositories rather than under templates.
         public const string Templates = "development/templates";
@@ -374,7 +374,7 @@ public static class LocalApiRoutes
         public const string Running = "model-fit/running";
         public const string RunningEject = "model-fit/running/eject";
 
-        // Curated model catalog (locked decision D1): read-only metadata (version/source/fetchedAt) and an operator
+        // Curated model catalog: read-only metadata (version/source/fetchedAt) and an operator
         // forced-refresh trigger. The catalog content itself rides the existing recommendations/latest response
         // (section/tier fields on each row) — these two routes are catalog-provenance only.
         public const string CatalogInfo = "model-fit/catalog";

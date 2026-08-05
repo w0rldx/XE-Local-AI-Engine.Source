@@ -12,7 +12,7 @@ using XE_Local_AI_Engine.Client.Services.Agents.Approval.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Behaviour of <see cref="ToolApprovalAuditRecorder" /> (OPP-03): each resolved decision increments the content-free
+///     Behaviour of <see cref="ToolApprovalAuditRecorder" />: each resolved decision increments the content-free
 ///     <c>tool_approval_decisions_total</c> counter tagged by category + decision, opens a scope to append the metadata-
 ///     only audit row, and swallows any store failure so the approval round-trip can never break. Serial because the
 ///     counter capture reads a process-global meter.

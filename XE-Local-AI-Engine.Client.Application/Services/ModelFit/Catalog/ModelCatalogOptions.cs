@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.ModelFit.Catalog;
 
 /// <summary>
-///     Operator-configurable remote-refresh settings for the curated model catalog (locked decision D1). Bound from the
+///     Operator-configurable remote-refresh settings for the curated model catalog. Bound from the
 ///     <see cref="SectionName" /> configuration section; every field has a safe default so the catalog works
 ///     bundled-only with zero configuration.
 /// </summary>

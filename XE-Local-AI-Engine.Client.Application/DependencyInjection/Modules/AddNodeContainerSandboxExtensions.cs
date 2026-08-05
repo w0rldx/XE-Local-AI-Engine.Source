@@ -6,12 +6,12 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Container.Implementation;
 
 /// <summary>
 ///     Registers the Development Mode container sandbox: options plus validation, the Docker daemon client factory,
-///     the D10 attestation store, and the preflight service the capability endpoint reads.
+///     the daemon-attestation store, and the preflight service the capability endpoint reads.
 ///     <para>
-///         A module of its own rather than an addition to <c>AddNodeAgentHome</c>, because under decision D2 provider
+///         A module of its own rather than an addition to <c>AddNodeAgentHome</c>, because provider
 ///         selection is per feature: Development Mode gets the container provider while AgentHome and Coder stay on
-///         the process provider. Registering the container pieces alongside AgentHome's would imply a coupling that
-///         decision explicitly rejects.
+///         the process provider. Registering the container pieces alongside AgentHome's would imply a coupling this
+///         design explicitly rejects.
 ///     </para>
 ///     <para>
 ///         Note what is NOT here: no binding of <c>DockerSandboxRuntimeProvider</c> to a role. The two role

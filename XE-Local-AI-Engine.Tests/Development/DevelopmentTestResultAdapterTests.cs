@@ -96,7 +96,7 @@ public sealed class DevelopmentTestResultAdapterTests
     }
 
     /// <summary>
-    ///     S4.2, asserted structurally rather than by reading the code: a profile carrying <c>IsCustom</c> resolves no
+    ///     Asserted structurally rather than by reading the code: a profile carrying <c>IsCustom</c> resolves no
     ///     adapter, so there is no path by which a repository-supplied profile could bring its own definition of what
     ///     counts as a passing test run. That is a reward-hacking control — a user-supplied success classifier is a
     ///     user-supplied definition of "green" — and it has to hold even if a custom profile ever becomes runnable.
@@ -165,7 +165,7 @@ public sealed class DevelopmentTestResultAdapterTests
 
     /// <summary>
     ///     Measured: this message is written to stderr with no summary block anywhere, and it is the shape a
-    ///     registered repository with no tests produces (S4.4). It gets its own code because "this repository has no
+    ///     registered repository with no tests produces. It gets its own code because "this repository has no
     ///     tests" is an actionable state an operator can fix, while "the output could not be parsed" is not.
     /// </summary>
     [Test]

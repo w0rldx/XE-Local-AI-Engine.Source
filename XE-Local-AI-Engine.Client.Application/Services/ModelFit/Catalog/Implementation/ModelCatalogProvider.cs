@@ -4,7 +4,7 @@ using Microsoft.Extensions.Options;
 
 /// <summary>
 ///     Default <see cref="IModelCatalogProvider" />: bundled at construction, optionally kept fresh from
-///     <see cref="ModelCatalogOptions.RefreshUrl" /> (locked decision D1). Singleton — an in-memory
+///     <see cref="ModelCatalogOptions.RefreshUrl" />. Singleton — an in-memory
 ///     <see cref="_current" /> snapshot is served on every read; a refresh (TTL-triggered or forced) is serialized
 ///     through <see cref="_refreshGate" /> so concurrent readers never trigger a fetch stampede.
 ///     <para>

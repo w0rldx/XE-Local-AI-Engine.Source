@@ -4,7 +4,7 @@ using System.Collections.Concurrent;
 
 /// <summary>
 ///     A deterministic in-memory <see cref="IDockerRuntimeClient" /> for unit coverage of everything above the wire:
-///     endpoint classification, D10 attestation, and — the reason it exists — the §3.8 fail-closed read-back.
+///     endpoint classification, daemon attestation, and — the reason it exists — the Docker hardening contract's fail-closed read-back.
 ///     <para>
 ///         Its defining feature is <see cref="SettingsMutator" />: a hook that rewrites the settings the fake reports
 ///         back from a "created" container. A real daemon cannot be asked to silently drop <c>--cap-drop ALL</c> or

@@ -57,7 +57,7 @@ public static class NodeMetrics
             description: "Number of MCP tool calls cancelled after exceeding their per-call timeout.");
 
     /// <summary>
-    ///     Incremented once per RESOLVED tool-approval decision (OPP-03). Tagged by <c>category</c> (the tool's
+    ///     Incremented once per RESOLVED tool-approval decision. Tagged by <c>category</c> (the tool's
     ///     <c>ToolCategory</c> name) and <c>decision</c> (approve | deny | timeout). Content-free — a count only; it
     ///     carries no tool arguments, message content, or ids. A rising deny/timeout rate flags a policy that is prompting
     ///     more than operators will accept.

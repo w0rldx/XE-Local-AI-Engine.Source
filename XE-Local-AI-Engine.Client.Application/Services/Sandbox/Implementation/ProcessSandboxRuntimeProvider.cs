@@ -23,8 +23,8 @@ using XE_Local_AI_Engine.Client.Services.Workspace;
 ///     apply loop is byte-behavior-identical.
 ///     <para>
 ///         It is NOT a predecessor of, nor superseded by, the Development Mode container provider added under
-///         ADR 0004. Those two are SIBLINGS behind one SPI, chosen per feature (plan decision D2): Development Mode
-///         gets the container provider at S3.12, while AgentHome (4 injection sites) and Coder (3 sites) stay here.
+///         ADR 0004. Those two are SIBLINGS behind one SPI, chosen per feature: Development Mode
+///         gets the container provider, while AgentHome (4 injection sites) and Coder (3 sites) stay here.
 ///         All soft-guard logic (working-dir jail, path canonicalization, no-follow open, byte budgets, timeout,
 ///         tree-kill) lives INSIDE this class; a future hardware-isolated (MXC) provider replaces the whole provider,
 ///         not the contract.
@@ -73,7 +73,7 @@ using XE_Local_AI_Engine.Client.Services.Workspace;
 ///         are deferred to MXC.
 ///     </para>
 /// </summary>
-// Serves BOTH per-feature roles (D2): AgentHome/Coder resolve it through IAgentSandboxRuntimeProvider, and Development
+// Serves BOTH per-feature roles: AgentHome/Coder resolve it through IAgentSandboxRuntimeProvider, and Development
 // Mode resolves it through IDevelopmentSandboxRuntimeProvider until an operator selects a container provider. When both
 // roles name this provider they resolve the SAME DI singleton — see the _jailRoot comment for why that matters.
 public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, IDevelopmentSandboxRuntimeProvider, IDisposable

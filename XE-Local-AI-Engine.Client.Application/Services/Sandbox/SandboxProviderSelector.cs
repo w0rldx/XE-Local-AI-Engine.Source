@@ -6,7 +6,7 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Fake;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 
 /// <summary>
-///     Configuration-bound resolvers for the two per-feature sandbox roles (plan decision D2). Each is registered once
+///     Configuration-bound resolvers for the two per-feature sandbox roles. Each is registered once
 ///     as a singleton factory, so a provider change requires a restart.
 ///     <para>
 ///         There is deliberately no resolver for a bare <see cref="ISandboxRuntimeProvider" />, and no DI registration

@@ -57,7 +57,7 @@ internal static class AddNodeModelFitExtensions
         // The request validator allowlists the recommend intent params (use-case + limit bounds). Stateless → singleton.
         builder.Services.AddSingleton<ModelFitRequestValidator>();
 
-        // Curated model catalog (locked decision D1): bundled JSON + optional operator-configured remote refresh.
+        // Curated model catalog: bundled JSON + optional operator-configured remote refresh.
         // The options section binds ModelCatalog:RefreshUrl/RefreshTtl/FetchTimeout (empty RefreshUrl = bundled-only,
         // never a network call). The named HttpClient is resolved via IHttpClientFactory, never injected as a bare
         // HttpClient — this keeps every FastEndpoints ctor (instantiated at startup) test-factory-safe by construction.
