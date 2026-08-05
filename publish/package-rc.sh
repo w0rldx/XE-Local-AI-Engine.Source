@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# DEPRECATED: releases are now cut by the CI workflow .github/workflows/release.yml (push a v* tag).
+# This manual packager predates the repo consolidation and is kept for reference only.
+#
 # package-rc.sh — build the distributable RC bundle(s) an external tester downloads.
 #
 # Produces, per target RID, a self-contained zip whose flat root holds:

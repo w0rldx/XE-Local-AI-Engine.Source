@@ -1,28 +1,24 @@
 # XE Local AI Engine — distribution & release guide
 
-This directory holds the desktop launcher and uninstaller scripts, the canonical
-Windows tester RC packager (`package-tester-win.ps1`), and the manual portable-zip
-packager (`package-rc.sh`, a bash script). This document explains **how the version
-is set** and **how a release is created**.
+> **Deprecated flow — read this first.** The canonical way to cut a release is now the CI workflow
+> **[`.github/workflows/release.yml`](../.github/workflows/release.yml)**: push a `v*` tag and it builds the
+> Windows + Linux Velopack packages, generates the changelog, and publishes them to **this repo's** Releases
+> using the built-in `GITHUB_TOKEN`. See [`docs/velopack-release-install-guide.md`](../docs/velopack-release-install-guide.md).
+>
+> The manual `package-tester-win.ps1` / `package-rc.sh` scripts and the detailed instructions further down are
+> **retained for reference only**. They predate the consolidation and still target the retired
+> `w0rldx/XE-Local-AI-Engine.Tester-App` repository — do **not** treat them as the release path.
+
+This directory also holds the desktop launcher and uninstaller scripts. The versioning section below
+(single source of truth in `Directory.Build.props`) applies to the CI flow too.
 
 ## Where releases go
 
-Source and artifacts live in **two different repositories** that share only a version string:
-
-| Role | Repository |
-| --- | --- |
-| **Source** — the code and its `v<version>` tags | `w0rldx/XE-Local-AI-Engine` |
-| **Tester artifacts** — published releases + Velopack update feed | `w0rldx/XE-Local-AI-Engine.Tester-App` |
-
-The `v<version>` git tag is created on **HEAD of the source repo**; `vpk upload github`
-then creates a same-named release on the **tester repo**, whose commits are unrelated.
-A tester release therefore has no tag in the source repo, and vice versa — both are expected.
-
-**Tag form changed mid-flight.** The seven releases published 2026-06-26 → 2026-07-07 carry
-a **bare** tag (`0.1.0-rc.4.1`) with a `v`-prefixed release *name*. `package-tester-win.ps1`
-now uploads with `--tag v<version>`, so releases from `0.1.0-rc.4.2` onward are v-prefixed on
-both. Its `Find-GitHubRelease` probes `v<version>`, then `<version>`, then the release name —
-so the already-published guard sees the live release regardless of how its tag was spelled.
+Releases are published to **this repository**, `w0rldx/XE-Local-AI-Engine.Source`, by the CI workflow.
+The `v<version>` git tag is created on HEAD and pushing it triggers the release. Historical pre-release
+builds through `0.1.0-rc.5.0` were published on the separate, now-retired
+`w0rldx/XE-Local-AI-Engine.Tester-App` repo; the reference instructions below describe that older
+two-repo flow and its bare-vs-`v` tag-spelling handling.
 
 ## Prerequisites on the packaging machine
 
@@ -99,21 +95,18 @@ For every release-specific version change:
 
 ## Creating a release
 
-There are **three** paths in this directory and the workflows folder, and only one of
-them ships anything:
+There are **three** paths; the CI workflow is now the one that ships:
 
 | Path | What it produces | Status |
 | --- | --- | --- |
-| **A — `publish/package-tester-win.ps1`** (Windows, manual) | Velopack portable bundle + delta/full packages + update feed, uploaded to the tester repo | **canonical from `0.1.0-rc.4.0` onward.** Earlier RCs predate this script |
-| **B — `publish/package-rc.sh`** (bash, manual) | plain self-contained portable zip, no Velopack metadata, **no self-update** | supported side path |
-| **C — `.github/workflows/release.yml`** (tag-triggered CI) | — | **disabled; has never produced an artifact** |
+| **C — `.github/workflows/release.yml`** (tag-triggered CI) | Windows + Linux Velopack packages + changelog, published to this repo's Releases | **canonical.** Push a `v*` tag |
+| **A — `publish/package-tester-win.ps1`** (Windows, manual) | Velopack portable bundle + delta/full packages + update feed, uploaded to the tester repo | **deprecated** — targets the retired tester repo; kept for reference |
+| **B — `publish/package-rc.sh`** (bash, manual) | plain self-contained portable zip, no Velopack metadata, **no self-update** | **deprecated** side path |
 
-> **Pushing a tag builds nothing.** `release.yml` is `disabled_manually` and its only
-> three runs all failed on 2026-06-27. `build-and-test.yml` is likewise disabled and
-> `e2e.yml` was never registered — 6 runs, 6 failures, 0 successes in the repository's
-> whole history (`gh workflow list --all`, `gh run list`, verified 2026-07-24). The tag
-> still matters, because Path A **requires** HEAD to carry it before uploading — but it
-> is an input to the manual script, not a trigger.
+> **Enabling CI is a repository setting.** The workflow is committed and tag-triggered, but GitHub Actions
+> must be enabled on the repo and workflow permissions set to read/write for `GITHUB_TOKEN` to publish the
+> release. The old repository had Actions disabled (6 runs, 6 failures historically); verify Actions is on
+> for this repo before relying on a tag push.
 
 ### Path A — Canonical tester RC: manual Velopack build on Windows
 
