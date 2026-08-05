@@ -1,8 +1,13 @@
-# XE Local AI Engine — tester quickstart
+# XE Local AI Engine — tester quickstart (superseded)
 
-A self-contained desktop build for external testers. No .NET runtime, Docker, Ollama, or installer is
-required—extract one portable folder and run it locally. Testers still need access to the private
-tester release repository and internet access for the initial runtime/model download and update checks.
+> **Superseded.** End-user install/run guidance now lives in the [User Guide](../docs/user-guide/README.md),
+> and app downloads are on this repo's
+> [Releases](https://github.com/w0rldx/XE-Local-AI-Engine.Source/releases/latest) page. This file describes
+> the retired private tester-repo flow and is kept for reference only.
+
+A self-contained desktop build. No .NET runtime, Docker, Ollama, or installer is required—extract one
+portable folder and run it locally. Internet access is needed for the initial runtime/model download and
+update checks.
 
 ## Get a Windows tester build
 

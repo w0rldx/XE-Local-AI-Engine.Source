@@ -1,5 +1,9 @@
 ﻿# package-tester-win.ps1 — build + pack + upload a Windows tester release (Velopack).
 #
+# DEPRECATED: releases are now cut by the CI workflow .github/workflows/release.yml (push a
+# v* tag -> Windows + Linux packages published to THIS repo's Releases). This script targets the
+# RETIRED w0rldx/XE-Local-AI-Engine.Tester-App repository and is kept for reference only.
+#
 # The versioned form of the manual tester-build flow: builds the SPA, publishes the
 # single-file self-contained win-x64 host (tester update flavor), generates release
 # notes with a pinned git-cliff, packs with vpk 1.2.0 and uploads to the tester repo.
