@@ -55,6 +55,27 @@ export type XeLocalAiEngineClientEndpointsTutorialStateV1SaveTutorialStateReques
 	status?: string;
 };
 
+export type XeLocalAiEngineClientEndpointsSkillsV1SkillImportCommitResponse = {
+	outcomes: Array<XeLocalAiEngineClientEndpointsSkillsV1SkillImportOutcomeResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsSkillsV1SkillImportOutcomeResponse = {
+	name: string;
+	status: XeLocalAiEngineClientServicesAgentsSkillImportStatus;
+	reason?: string | null;
+};
+
+export type XeLocalAiEngineClientServicesAgentsSkillImportStatus = "Imported" | "Replaced" | "Skipped";
+
+export type XeLocalAiEngineClientEndpointsSkillsV1SkillImportCommitEndpointRequest = {
+	token?: string;
+	skillNames?: Array<string> | null;
+	conflictResolution?: XeLocalAiEngineClientServicesAgentsSkillImportConflictResolution;
+	acknowledged?: boolean;
+};
+
+export type XeLocalAiEngineClientServicesAgentsSkillImportConflictResolution = "Skip" | "Replace";
+
 export type XeLocalAiEngineClientEndpointsSkillsV1SkillResponse = {
 	id: string;
 	name: string;
@@ -64,12 +85,30 @@ export type XeLocalAiEngineClientEndpointsSkillsV1SkillResponse = {
 	version: number;
 	createdAtUtc: number;
 	updatedAtUtc: number;
+	license?: string | null;
+	compatibility?: string | null;
+	allowedTools?: string | null;
+	metadata?: {
+		[key: string]: string;
+	} | null;
+	origin: XeLocalAiEngineClientPersistenceAgentSkillOrigin;
+	sourceUri?: string | null;
+	importedAtUtc?: number | null;
+	resourceCount: number;
 };
+
+export type XeLocalAiEngineClientPersistenceAgentSkillOrigin = "Local" | "Imported";
 
 export type XeLocalAiEngineClientEndpointsSkillsV1CreateSkillRequest = {
 	name?: string | null;
 	description?: string | null;
 	body?: string | null;
+	license?: string | null;
+	compatibility?: string | null;
+	allowedTools?: string | null;
+	metadata?: {
+		[key: string]: string;
+	} | null;
 };
 
 export type XeLocalAiEngineClientEndpointsSkillsV1DeleteSkillRequest = {
@@ -77,6 +116,33 @@ export type XeLocalAiEngineClientEndpointsSkillsV1DeleteSkillRequest = {
 };
 
 export type XeLocalAiEngineClientEndpointsSkillsV1GetSkillRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsSkillsV1SkillResourceResponse = {
+	name: string;
+	description: string;
+	mediaType: string;
+	sizeBytes: number;
+	content: string;
+};
+
+export type XeLocalAiEngineClientEndpointsSkillsV1GetSkillResourceRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsSkillsV1ListSkillResourcesResponse = {
+	items: Array<XeLocalAiEngineClientEndpointsSkillsV1SkillResourceSummaryResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsSkillsV1SkillResourceSummaryResponse = {
+	name: string;
+	description: string;
+	mediaType: string;
+	sizeBytes: number;
+};
+
+export type XeLocalAiEngineClientEndpointsSkillsV1ListSkillResourcesRequest = {
 	[key: string]: never;
 };
 
@@ -92,13 +158,64 @@ export type XeLocalAiEngineClientEndpointsSkillsV1SkillSummaryResponse = {
 	version: number;
 	createdAtUtc: number;
 	updatedAtUtc: number;
+	license?: string | null;
+	compatibility?: string | null;
+	allowedTools?: string | null;
+	metadata?: {
+		[key: string]: string;
+	} | null;
+	origin: XeLocalAiEngineClientPersistenceAgentSkillOrigin;
+	sourceUri?: string | null;
+	importedAtUtc?: number | null;
 };
+
+export type XeLocalAiEngineClientEndpointsSkillsV1SkillImportPreviewResponse = {
+	token: string;
+	sourceUri: string;
+	skills: Array<XeLocalAiEngineClientEndpointsSkillsV1SkillImportCandidateResponse>;
+	warnings: Array<string>;
+};
+
+export type XeLocalAiEngineClientEndpointsSkillsV1SkillImportCandidateResponse = {
+	name: string;
+	description: string;
+	body: string;
+	license?: string | null;
+	compatibility?: string | null;
+	allowedTools?: string | null;
+	metadata?: {
+		[key: string]: string;
+	} | null;
+	bodySizeBytes: number;
+	bodyLineCount: number;
+	resources: Array<XeLocalAiEngineClientEndpointsSkillsV1SkillResourceSummaryResponse>;
+	refusedScripts: Array<string>;
+	conflictsWithExistingSkill: boolean;
+	problems: Array<string>;
+	canImport: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsSkillsV1SkillImportPreviewRequest = {
+	source?: XeLocalAiEngineClientEndpointsSkillsV1SkillImportSourceKind;
+	file?: Blob | File | null;
+	markdown?: string | null;
+	owner?: string | null;
+	repository?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsSkillsV1SkillImportSourceKind = "Upload" | "Paste" | "GitHub";
 
 export type XeLocalAiEngineClientEndpointsSkillsV1UpdateSkillRequest = {
 	name?: string | null;
 	description?: string | null;
 	body?: string | null;
 	enabled?: boolean;
+	license?: string | null;
+	compatibility?: string | null;
+	allowedTools?: string | null;
+	metadata?: {
+		[key: string]: string;
+	} | null;
 };
 
 export type XeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobRunCancelResponse = {
@@ -1424,7 +1541,10 @@ export type XeLocalAiEngineClientEndpointsLocalChatV1ResolveToolApprovalResponse
 export type XeLocalAiEngineClientEndpointsLocalChatV1ResolveToolApprovalRequest = {
 	requestId: string;
 	approved: boolean;
+	scope?: XeLocalAiEngineClientModelsEnumsApprovalScope | null;
 };
+
+export type XeLocalAiEngineClientModelsEnumsApprovalScope = "Once" | "Session";
 
 export type XeLocalAiEngineClientEndpointsLocalChatV1ResolveUserQuestionResponse = {
 	requestId: string;
@@ -2843,6 +2963,33 @@ export type SaveTutorialStateResponses = {
 
 export type SaveTutorialStateResponse = SaveTutorialStateResponses[keyof SaveTutorialStateResponses];
 
+export type CommitSkillImportData = {
+	body: XeLocalAiEngineClientEndpointsSkillsV1SkillImportCommitEndpointRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/skills/import";
+};
+
+export type CommitSkillImportErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type CommitSkillImportResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsSkillsV1SkillImportCommitResponse;
+};
+
+export type CommitSkillImportResponse = CommitSkillImportResponses[keyof CommitSkillImportResponses];
+
 export type ListSkillsData = {
 	body?: never;
 	path?: never;
@@ -2983,6 +3130,92 @@ export type UpdateSkillResponses = {
 };
 
 export type UpdateSkillResponse = UpdateSkillResponses[keyof UpdateSkillResponses];
+
+export type GetSkillResourceData = {
+	body?: never;
+	path: {
+		skillId: string;
+		resourceName: string;
+	};
+	query?: never;
+	url: "/api/local/v1/skills/{skillId}/resources/{resourceName}";
+};
+
+export type GetSkillResourceErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetSkillResourceResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsSkillsV1SkillResourceResponse;
+};
+
+export type GetSkillResourceResponse = GetSkillResourceResponses[keyof GetSkillResourceResponses];
+
+export type ListSkillResourcesData = {
+	body?: never;
+	path: {
+		skillId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/skills/{skillId}/resources";
+};
+
+export type ListSkillResourcesErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListSkillResourcesResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsSkillsV1ListSkillResourcesResponse;
+};
+
+export type ListSkillResourcesResponse = ListSkillResourcesResponses[keyof ListSkillResourcesResponses];
+
+export type PreviewSkillImportData = {
+	body: XeLocalAiEngineClientEndpointsSkillsV1SkillImportPreviewRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/skills/import/preview";
+};
+
+export type PreviewSkillImportErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type PreviewSkillImportResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsSkillsV1SkillImportPreviewResponse;
+};
+
+export type PreviewSkillImportResponse = PreviewSkillImportResponses[keyof PreviewSkillImportResponses];
 
 export type CancelScheduledJobRunData = {
 	body?: never;

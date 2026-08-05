@@ -1,10 +1,17 @@
-import { Alert, Button, Group, Stack, Switch, Textarea, TextInput } from "@mantine/core";
+import { Alert, Button, Divider, Group, Stack, Switch, Table, Text, Textarea, TextInput } from "@mantine/core";
 import { IconDeviceFloppy, IconInfoCircle, IconX } from "@tabler/icons-react";
 import { type Ref, useCallback, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { MarkdownEditorField } from "@/core/ui/components/MarkdownEditorField/MarkdownEditorField";
-import { type SkillFormValues, skillFormSchema } from "@/features/skills/models/SkillModels";
+import { SkillResourcesPanel } from "@/features/skills/components/SkillResourcesPanel";
+import {
+	SKILL_BODY_GUIDANCE_LINES,
+	SKILL_BODY_GUIDANCE_TOKENS,
+	type SkillFormValues,
+	skillFormSchema,
+	type SkillProvenance,
+} from "@/features/skills/models/SkillModels";
 
 // Imperative handle so the host dialog can place Save in its sticky footer (outside the form body) yet still
 // trigger the form's own validate-then-submit. The footer button calls submit(); validation stays in the form.
@@ -27,6 +34,10 @@ interface SkillFormProps {
 	hideActions?: boolean;
 	/** Reports whether the current values differ from initialValues so the host can guard close/navigation. */
 	onDirtyChange?: (isDirty: boolean) => void;
+	/** Id of the skill being edited. Drives the bundled-resources panel; absent on create (nothing to list yet). */
+	skillId?: string;
+	/** Where this skill came from. Shown so the trust decision stays visible long after the import. */
+	provenance?: SkillProvenance;
 }
 
 // Per-field error map keyed by the form field. The skill schema is a flat object, so the first Zod issue path
@@ -46,6 +57,8 @@ export function SkillForm({
 	ref,
 	hideActions = false,
 	onDirtyChange,
+	skillId,
+	provenance,
 }: SkillFormProps) {
 	const { t } = useTranslation();
 	const [values, setValues] = useState<SkillFormValues>(initialValues);
@@ -112,8 +125,19 @@ export function SkillForm({
 		}
 		return values.name.trim().length === 0
 			? t("pages.skills.form.name.required", "Name is required.")
-			: t("pages.skills.form.name.invalid", "Use lowercase letters, digits and dashes only (no leading or trailing dash).");
+			: t("pages.skills.form.name.invalid", "Use lowercase letters and digits separated by single dashes (no leading, trailing or doubled dash).");
 	}, [nameIssue, values.name, t]);
+
+	// Body budget against the Agent Skills specification's authoring guidance (<500 lines / <5k tokens). Neither is a
+	// hard cap — the backend accepts up to SKILL_BODY_MAX — so this is a hint, not an error. The token figure is the
+	// usual ~4-chars-per-token approximation; it only has to be right enough to say "this is getting expensive".
+	const bodyBudget = useMemo(() => {
+		const lines = values.body.length === 0 ? 0 : values.body.split("\n").length;
+		const estimatedTokens = Math.ceil(values.body.length / 4);
+		return { estimatedTokens, isOverGuidance: lines > SKILL_BODY_GUIDANCE_LINES || estimatedTokens > SKILL_BODY_GUIDANCE_TOKENS, lines };
+	}, [values.body]);
+
+	const metadataEntries = Object.entries(values.metadata ?? {});
 
 	return (
 		<Stack gap="md" data-testid="skill-form">
@@ -123,6 +147,15 @@ export function SkillForm({
 					"Skills are sent to the agent's model when it loads them. If that model is a cloud provider, the skill content leaves this node.",
 				)}
 			</Alert>
+			{provenance?.origin === "Imported" ? (
+				<Alert color="red" variant="light" icon={<IconInfoCircle size={16} />} data-testid="skill-form-imported-note">
+					{t(
+						"pages.skills.form.importedNote",
+						"This skill was imported from {{source}}. Its instructions are third-party content this node never validated, and they run with your agent's tool access once enabled.",
+						{ source: provenance.sourceUri ?? t("pages.skills.list.importedUnknownSource", "an unknown source") },
+					)}
+				</Alert>
+			) : null}
 			<TextInput
 				label={t("pages.skills.form.name.label", "Name")}
 				description={t("pages.skills.form.name.description", "Lowercase identifier (e.g. invoice-review).")}
@@ -168,6 +201,90 @@ export function SkillForm({
 				onChange={handleBodyChange}
 				data-testid="skill-form-body"
 			/>
+			<Text size="xs" c={bodyBudget.isOverGuidance ? "orange" : "dimmed"} data-testid="skill-form-body-budget">
+				{t("pages.skills.form.body.budget", "{{lines}} lines · ~{{tokens}} tokens", {
+					lines: bodyBudget.lines.toLocaleString(),
+					tokens: bodyBudget.estimatedTokens.toLocaleString(),
+				})}
+				{bodyBudget.isOverGuidance
+					? ` · ${t("pages.skills.form.body.overGuidance", "the specification suggests staying under {{lines}} lines and {{tokens}} tokens", {
+							lines: SKILL_BODY_GUIDANCE_LINES,
+							tokens: SKILL_BODY_GUIDANCE_TOKENS,
+						})}`
+					: null}
+			</Text>
+
+			<Divider
+				label={t("pages.skills.form.frontmatterSection", "Frontmatter")}
+				labelPosition="left"
+				data-testid="skill-form-frontmatter-divider"
+			/>
+			<Group grow={true} align="flex-start">
+				<TextInput
+					label={t("pages.skills.form.license.label", "License")}
+					placeholder="MIT"
+					value={values.license}
+					onChange={(event) => {
+						const value = event.currentTarget.value;
+						updateValues((current) => ({ ...current, license: value }));
+					}}
+					data-testid="skill-form-license"
+				/>
+				<TextInput
+					label={t("pages.skills.form.compatibility.label", "Compatibility")}
+					placeholder="claude-code >=1.0"
+					value={values.compatibility}
+					onChange={(event) => {
+						const value = event.currentTarget.value;
+						updateValues((current) => ({ ...current, compatibility: value }));
+					}}
+					data-testid="skill-form-compatibility"
+				/>
+			</Group>
+			<TextInput
+				label={t("pages.skills.form.allowedTools.label", "Allowed tools")}
+				// Deliberately blunt: this node does not enforce the field. Wording it as a restriction would claim a
+				// control we do not have — the skill's instructions run with whatever tool access the agent already has.
+				description={t(
+					"pages.skills.form.allowedTools.description",
+					"Space-separated list declared by the skill's author. Shown for information only — this node neither grants nor restricts any tool based on it.",
+				)}
+				placeholder="read_file list_files"
+				value={values.allowedTools}
+				onChange={(event) => {
+					const value = event.currentTarget.value;
+					updateValues((current) => ({ ...current, allowedTools: value }));
+				}}
+				data-testid="skill-form-allowed-tools"
+			/>
+			{metadataEntries.length > 0 ? (
+				<Stack gap={4} data-testid="skill-form-metadata">
+					<Text size="sm" fw={600}>
+						{t("pages.skills.form.metadata.label", "Metadata")}
+					</Text>
+					<Table withTableBorder={true} verticalSpacing={4} horizontalSpacing="sm">
+						<Table.Tbody>
+							{metadataEntries.map(([key, value]) => (
+								<Table.Tr key={key}>
+									<Table.Td>
+										<Text size="xs" ff="monospace">
+											{key}
+										</Text>
+									</Table.Td>
+									<Table.Td>
+										<Text size="xs">{value}</Text>
+									</Table.Td>
+								</Table.Tr>
+							))}
+						</Table.Tbody>
+					</Table>
+					<Text size="xs" c="dimmed">
+						{t("pages.skills.form.metadata.readOnly", "Carried through unchanged from the skill's frontmatter.")}
+					</Text>
+				</Stack>
+			) : null}
+			{skillId ? <SkillResourcesPanel skillId={skillId} /> : null}
+
 			{showEnabledToggle ? (
 				<Switch
 					label={t("pages.skills.form.enabled.label", "Enabled")}

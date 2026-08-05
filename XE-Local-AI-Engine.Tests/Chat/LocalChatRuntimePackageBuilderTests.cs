@@ -216,6 +216,35 @@ public sealed class LocalChatRuntimePackageBuilderTests
         AssertEx.NotNull(withSampling.SamplingOptions);
     }
 
+    // Invariant guard (mirrors SupportsThinking/SamplingOptions above): the unattended flag is an execution-context bit,
+    // not agent configuration, so a scheduled run must hash byte-identically to the same agent run interactively.
+    [Test]
+    public void Build_WhenUnattended_LeavesConfigHashByteIdentical()
+    {
+        var builder = new LocalChatRuntimePackageBuilder();
+        var invocationId = Guid.NewGuid();
+        var conversationId = Guid.NewGuid();
+
+        var interactive = builder.Build(new LocalChatRuntimePackageRequest(invocationId,
+            conversationId,
+            "You are helpful.",
+            [CreateMessage(MessageRole.User, "hello", sortOrder: 0)],
+            "qwen3.5:0.8b",
+            AgentDefinitionVersion: 1));
+
+        var unattended = builder.Build(new LocalChatRuntimePackageRequest(invocationId,
+            conversationId,
+            "You are helpful.",
+            [CreateMessage(MessageRole.User, "hello", sortOrder: 0)],
+            "qwen3.5:0.8b",
+            AgentDefinitionVersion: 1,
+            IsUnattended: true));
+
+        AssertEx.Equal(interactive.ConfigHash, unattended.ConfigHash);
+        AssertEx.False(interactive.IsUnattended);
+        AssertEx.True(unattended.IsUnattended);
+    }
+
     private static ConversationMessageDto CreateMessage(MessageRole role, string content, int sortOrder)
     {
         return new ConversationMessageDto

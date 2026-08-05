@@ -253,7 +253,13 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
             RequestedCapabilities: [LocalChatLoopbackDefaults.RequestedCapability],
             ReasoningEffort: reasoningEffort,
             SupportsThinking: supportsThinking,
-            Skills: resolved.Skills));
+            Skills: resolved.Skills,
+            // The one place this flag is set. Stripping approval-required tools from the OFFER above cannot cover the
+            // skill tools: they arrive through MAF's AIContextProviders (progressive disclosure), never through the
+            // offer, so an assigned skill still surfaces an approval request here. The flag lets the runner fail that
+            // request immediately with an explicit reason instead of parking the scheduled run on the full
+            // MaxPendingToolCallAge window first.
+            IsUnattended: true));
     }
 
     /// <summary>

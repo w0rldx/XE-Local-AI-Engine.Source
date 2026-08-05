@@ -133,6 +133,18 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
         {
             EncryptRequiredProperty(entry, entry.Property(entity => entity.Description), Guid.Empty, entry.Entity.Id, "description", trackedProperties);
             EncryptRequiredProperty(entry, entry.Property(entity => entity.Body), Guid.Empty, entry.Entity.Id, "body", trackedProperties);
+            EncryptOptionalProperty(entry, entry.Property(entity => entity.FrontmatterJson), Guid.Empty, entry.Entity.Id, "frontmatter_json", trackedProperties);
+        }
+
+        // Skill resources are the one place in this schema where the row id alone is the wrong AAD binding. The threat
+        // is a database WRITER, not a reader (same reasoning as the MCP key hash below): with only the row id bound,
+        // anyone who could edit the file could point an existing resource row at another skill and have its content
+        // injected into a different agent's context, without forging a ciphertext or a tag. So the skill id takes the
+        // conversation slot and the resource name rides in the column name — moving a row, or renaming it underneath
+        // its ciphertext, now fails the tag check. Renames therefore go through delete-and-reinsert in the store.
+        foreach (var entry in nodeContext.ChangeTracker.Entries<AgentSkillResource>())
+        {
+            EncryptRequiredProperty(entry, entry.Property(entity => entity.Content), entry.Entity.SkillId, entry.Entity.Id, AgentSkillResource.ContentColumnName(entry.Entity.Name), trackedProperties);
         }
 
         // Playbook actions are node-scoped (no conversation/message), so the AAD binds the empty conversation id to the

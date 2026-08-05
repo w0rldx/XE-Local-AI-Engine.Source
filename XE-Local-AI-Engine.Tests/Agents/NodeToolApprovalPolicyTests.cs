@@ -141,4 +141,13 @@ public sealed class NodeToolApprovalPolicyTests
         AssertEx.True(policy.RequiresApproval("list_files", ToolCategory.ReadLocal, catalogDefault: false));
         AssertEx.False(policy.RequiresApproval("read_file", ToolCategory.ReadLocal, catalogDefault: false));
     }
+
+    [Test]
+    public void FromSettings_CarriesTheSkillSessionScopeSwitch()
+    {
+        AssertEx.False(NodeToolApprovalPolicy.FromSettings(settings: null).SkillSessionScopeDisabled,
+            "Session-scoped skill approvals stay available unless the operator turns them off.");
+        AssertEx.True(NodeToolApprovalPolicy.FromSettings(new NodeToolApprovalPolicySettings { DisableSkillSessionScope = true }).SkillSessionScopeDisabled,
+            "The operator's always-prompt switch must reach the runner through the composed policy.");
+    }
 }

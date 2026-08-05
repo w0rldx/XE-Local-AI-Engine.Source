@@ -26,6 +26,24 @@ internal sealed class AgentSkillConfiguration : IEntityTypeConfiguration<AgentSk
         builder.Property(entity => entity.Body)
                .HasColumnName("body");
 
+        builder.Property(entity => entity.FrontmatterJson)
+               .HasColumnName("frontmatter_json");
+
+        // Provenance columns — additive and structural (plaintext). origin defaults and backfills to 0 (Local) so every
+        // pre-import row reads as operator-authored; the rest stay null for a local skill.
+        builder.Property(entity => entity.Origin)
+               .HasColumnName("origin")
+               .HasDefaultValue(0);
+
+        builder.Property(entity => entity.SourceUri)
+               .HasColumnName("source_uri");
+
+        builder.Property(entity => entity.ImportedAtUtc)
+               .HasColumnName("imported_at_utc");
+
+        builder.Property(entity => entity.ContentSha256)
+               .HasColumnName("content_sha256");
+
         builder.Property(entity => entity.Enabled)
                .HasColumnName("enabled")
                .HasDefaultValue(true);

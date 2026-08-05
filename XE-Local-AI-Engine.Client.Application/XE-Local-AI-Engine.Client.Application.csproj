@@ -13,6 +13,11 @@
          fork rather than the 2023-era original. -->
     <PackageReference Include="Docker.DotNet.Enhanced"/>
     <PackageReference Include="DocumentFormat.OpenXml"/>
+    <!-- Direct, not transitive-through-AI.Agent: this project calls AgentSkillFrontmatter.ValidateName/ValidateDescription
+         as the authority for skill validation (AgentSkillService, AgentDefinitionResolver) and constructs
+         AgentSkillsProvider in SubAgentSpawnService. A validation authority must not ride a transitive flow that a
+         future ProjectReference prune would silently remove. Version comes from CPM, so this adds no version surface. -->
+    <PackageReference Include="Microsoft.Agents.AI"/>
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore"/>
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client"/>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite"/>

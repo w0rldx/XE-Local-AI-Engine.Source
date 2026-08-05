@@ -21,4 +21,13 @@ public sealed record NodeToolApprovalPolicySettings
 
     /// <summary>Per-tool-name approval requirement (<see langword="true" /> = require approval), overriding the category rule.</summary>
     public IReadOnlyDictionary<string, bool>? Tools { get; init; }
+
+    /// <summary>
+    ///     Turns OFF session-scoped approvals for the skill tools entirely (<see langword="false" />, the default, leaves
+    ///     them available). This is the operator's "skill tools always prompt" switch: with it set, an
+    ///     "approve for this session" decision is never remembered and every <c>load_skill</c> / <c>read_skill_resource</c>
+    ///     call raises its own approval card. Like the maps above it can only TIGHTEN — there is no setting that makes an
+    ///     approval last longer than the operator asked for.
+    /// </summary>
+    public bool DisableSkillSessionScope { get; init; }
 }

@@ -24,10 +24,14 @@ import { SkillForm, type SkillFormHandle } from "@/features/skills/components/Sk
 import type { SkillFormValues } from "@/features/skills/models/SkillModels";
 
 const baseValues: SkillFormValues = {
-	name: "",
-	description: "",
+	allowedTools: "",
 	body: "",
+	compatibility: "",
+	description: "",
 	enabled: true,
+	license: "",
+	metadata: null,
+	name: "",
 };
 
 function installJsdomEnvironmentMocks(): void {
@@ -130,7 +134,7 @@ describe("SkillForm", () => {
 		fireEvent.click(screen.getByTestId("harness-save"));
 
 		expect(onSubmit).not.toHaveBeenCalled();
-		expect(screen.getByText(/lowercase letters, digits and dashes/i)).toBeTruthy();
+		expect(screen.getByText(/lowercase letters and digits separated by single dashes/i)).toBeTruthy();
 	});
 
 	it("rejects a name with uppercase letters", () => {
@@ -139,19 +143,19 @@ describe("SkillForm", () => {
 		fireEvent.click(screen.getByTestId("harness-save"));
 
 		expect(onSubmit).not.toHaveBeenCalled();
-		expect(screen.getByText(/lowercase letters, digits and dashes/i)).toBeTruthy();
+		expect(screen.getByText(/lowercase letters and digits separated by single dashes/i)).toBeTruthy();
 	});
 
-	it("submits trimmed values when name (with internal dashes), description and body are valid", () => {
+	it("submits trimmed values when name (with single internal dashes), description and body are valid", () => {
 		const { onSubmit } = renderForm({
-			initialValues: { name: "invoice--review", description: "  How to review  ", body: "  # Body  " },
+			initialValues: { name: "invoice-review", description: "  How to review  ", body: "  # Body  " },
 		});
 
 		fireEvent.click(screen.getByTestId("harness-save"));
 
 		expect(onSubmit).toHaveBeenCalledTimes(1);
 		expect(onSubmit).toHaveBeenCalledWith(
-			expect.objectContaining({ name: "invoice--review", description: "How to review", body: "# Body" }),
+			expect.objectContaining({ name: "invoice-review", description: "How to review", body: "# Body" }),
 		);
 	});
 
@@ -162,6 +166,46 @@ describe("SkillForm", () => {
 		fireEvent.change(body, { target: { value: "fresh body" } });
 
 		expect(body.value).toBe("fresh body");
+	});
+
+	it("words allowed-tools as display-only, because this node enforces nothing from it", () => {
+		renderForm();
+
+		expect(screen.getByText(/neither grants nor restricts any tool/i)).toBeTruthy();
+	});
+
+	it("hints the body length against the specification's guidance once it is exceeded", () => {
+		renderForm({ initialValues: { body: "x\n".repeat(600) } });
+
+		const budget = screen.getByTestId("skill-form-body-budget");
+		expect(budget.textContent).toContain("601 lines");
+		expect(budget.textContent).toContain("staying under 500 lines");
+	});
+
+	it("keeps the body hint neutral while the body is within guidance", () => {
+		renderForm({ initialValues: { body: "short body" } });
+
+		expect(screen.getByTestId("skill-form-body-budget").textContent).not.toContain("staying under");
+	});
+
+	it("says an imported skill's instructions run with the agent's tool access", () => {
+		render(
+			<MantineProvider>
+				<SkillForm
+					initialValues={baseValues}
+					isSubmitting={false}
+					showEnabledToggle={true}
+					onSubmit={vi.fn()}
+					onCancel={vi.fn()}
+					hideActions={true}
+					provenance={{ importedAtUtc: 1, origin: "Imported", sourceUri: "github:microsoft/skills" }}
+				/>
+			</MantineProvider>,
+		);
+
+		const note = screen.getByTestId("skill-form-imported-note").textContent ?? "";
+		expect(note).toContain("github:microsoft/skills");
+		expect(note).toContain("tool access");
 	});
 
 	it("hides the enabled toggle on create and shows it on edit", () => {

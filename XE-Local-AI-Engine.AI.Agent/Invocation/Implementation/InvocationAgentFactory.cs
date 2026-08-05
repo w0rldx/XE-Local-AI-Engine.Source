@@ -233,16 +233,15 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
 
         // MAAI001: Agent Skills (AgentSkillsProvider/AgentInlineSkill) shipped as [Experimental] in Microsoft.Agents.AI
         // 1.8.0. The scoped MAAI001 suppression remains at the pinned 1.15.0 until explicit graduation evidence is
-        // available. The surface (3-arg
-        // AgentInlineSkill + AgentSkill[] provider ctor) is the documented progressive-disclosure path; the no-skills
-        // path above stays on the stable ctor, so the experimental surface is reached only when an agent has assigned
-        // skills. Suppress is scoped to this block.
+        // available. The surface (the full-frontmatter
+        // AgentInlineSkill ctor + AgentSkill[] provider ctor) is the documented progressive-disclosure path; the
+        // no-skills path above stays on the stable ctor, so the experimental surface is reached only when an agent has
+        // assigned skills. Suppress is scoped to this block.
 #pragma warning disable MAAI001
         var inlineSkills = new AgentInlineSkill[skills.Count];
         for (var index = 0; index < skills.Count; index++)
         {
-            var skill = skills[index];
-            inlineSkills[index] = new AgentInlineSkill(skill.Name, skill.Description, skill.Body);
+            inlineSkills[index] = BuildInlineSkill(skills[index]);
         }
 
 #pragma warning disable CA2000 // Ownership transfers to the ChatClientAgent below via AIContextProviders; the agent disposes its context providers with itself.
@@ -267,6 +266,61 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
             },
             _loggerFactory,
             _serviceProvider));
+    }
+
+    /// <summary>
+    ///     Builds one MAF <c>AgentInlineSkill</c> from a resolved skill: the full frontmatter constructor (name,
+    ///     description, instructions, license, compatibility, allowed-tools, metadata) plus one <c>AddResource</c> per
+    ///     bundled file. The 3-argument call this replaced was the same constructor taking its defaults, so a skill
+    ///     carrying no frontmatter and no resources builds byte-identically to before.
+    ///     <para>
+    ///         Resources MUST be registered here, before the <c>AgentSkillsProvider</c> is constructed: the provider
+    ///         resolves a skill's content once and the <c>&lt;available_resources&gt;</c> block is rendered from the
+    ///         resources present at that moment. A resource added afterwards would exist but never be advertised, so the
+    ///         model would have no way to learn it can be read.
+    ///     </para>
+    ///     <para>
+    ///         <c>allowedTools</c> is carried as frontmatter only. The Agent Skills standard defines it as pre-approval
+    ///         rather than restriction, so nothing here grants or withholds a tool on its account — the tool offer and
+    ///         the tighten-only approval policy remain the only authorities. Scripts are never registered: an inline
+    ///         skill's <c>AddScript</c> takes a delegate, and this node has no execution surface to bind one to.
+    ///     </para>
+    /// </summary>
+    // MAAI001: scoped to the experimental Agent Skills surface, same rationale as the block in BuildAgent that calls this.
+#pragma warning disable MAAI001
+    internal static AgentInlineSkill BuildInlineSkill(InvocationSkill skill)
+    {
+        ArgumentNullException.ThrowIfNull(skill);
+
+        var inlineSkill = new AgentInlineSkill(skill.Name,
+            skill.Description,
+            skill.Body,
+            license: skill.License,
+            compatibility: skill.Compatibility,
+            allowedTools: skill.AllowedTools,
+            metadata: ToFrontmatterMetadata(skill.Metadata));
+
+        if (skill.Resources is { Count: > 0 } resources)
+        {
+            foreach (var resource in resources)
+            {
+                inlineSkill.AddResource(resource.Name, resource.Content, resource.Description);
+            }
+        }
+
+        return inlineSkill;
+    }
+#pragma warning restore MAAI001
+
+    /// <summary>
+    ///     Converts the skill's string metadata map onto the loosely-typed dictionary MAF's frontmatter takes. Null for
+    ///     an absent or empty map so a skill without metadata keeps the constructor's own default.
+    /// </summary>
+    private static AdditionalPropertiesDictionary? ToFrontmatterMetadata(IReadOnlyDictionary<string, string>? metadata)
+    {
+        return metadata is { Count: > 0 }
+            ? new AdditionalPropertiesDictionary(metadata.Select(static entry => new KeyValuePair<string, object?>(entry.Key, entry.Value)))
+            : null;
     }
 
     /// <summary>

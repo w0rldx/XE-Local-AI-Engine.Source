@@ -36,6 +36,7 @@ import {
 	codexLogin,
 	codexLogout,
 	codexStatus,
+	commitSkillImport,
 	compactNodeChatConversation,
 	confirmDevelopmentContainerRuntime,
 	connectConnection,
@@ -127,6 +128,7 @@ import {
 	getScheduledJob,
 	getScheduledJobRun,
 	getSkill,
+	getSkillResource,
 	getStableDiffusionCppSourceBuildPrerequisites,
 	getStableDiffusionCppSourceBuildStatus,
 	getToolCapableModels,
@@ -165,6 +167,7 @@ import {
 	listScheduledJobRuns,
 	listScheduledJobs,
 	listScheduledJobTemplates,
+	listSkillResources,
 	listSkills,
 	nodeAuthStatus,
 	nodeChangePassword,
@@ -178,6 +181,7 @@ import {
 	pollGitHubAuth,
 	pollNodeBinding,
 	previewDevelopmentPatch,
+	previewSkillImport,
 	promoteSuggestedPlaybookAction,
 	putModelKind,
 	reconnectDevelopmentRepository,
@@ -284,6 +288,8 @@ import type {
 	CodexLogoutResponse,
 	CodexStatusData,
 	CodexStatusResponse,
+	CommitSkillImportData,
+	CommitSkillImportResponse,
 	CompactNodeChatConversationData,
 	CompactNodeChatConversationResponse,
 	ConfirmDevelopmentContainerRuntimeData,
@@ -474,6 +480,8 @@ import type {
 	GetScheduledJobRunData,
 	GetScheduledJobRunResponse,
 	GetSkillData,
+	GetSkillResourceData,
+	GetSkillResourceResponse,
 	GetSkillResponse,
 	GetStableDiffusionCppSourceBuildPrerequisitesData,
 	GetStableDiffusionCppSourceBuildPrerequisitesError,
@@ -553,6 +561,8 @@ import type {
 	ListScheduledJobsResponse,
 	ListScheduledJobTemplatesData,
 	ListScheduledJobTemplatesResponse,
+	ListSkillResourcesData,
+	ListSkillResourcesResponse,
 	ListSkillsData,
 	ListSkillsResponse,
 	NodeAuthStatusData,
@@ -580,6 +590,8 @@ import type {
 	PollNodeBindingResponse,
 	PreviewDevelopmentPatchData,
 	PreviewDevelopmentPatchResponse,
+	PreviewSkillImportData,
+	PreviewSkillImportResponse,
 	PromoteSuggestedPlaybookActionData,
 	PromoteSuggestedPlaybookActionResponse,
 	PutModelKindData,
@@ -802,6 +814,26 @@ export const saveTutorialStateMutation = (
 	return mutationOptions;
 };
 
+export const commitSkillImportMutation = (
+	options?: Partial<Options<CommitSkillImportData>>,
+): UseMutationOptions<CommitSkillImportResponse, AxiosError<DefaultError>, Options<CommitSkillImportData>> => {
+	const mutationOptions: UseMutationOptions<
+		CommitSkillImportResponse,
+		AxiosError<DefaultError>,
+		Options<CommitSkillImportData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await commitSkillImport({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
 export const listSkillsQueryKey = (options?: Options<ListSkillsData>) => createQueryKey("listSkills", options);
 
 export const listSkillsOptions = (options?: Options<ListSkillsData>) =>
@@ -872,6 +904,69 @@ export const updateSkillMutation = (
 	const mutationOptions: UseMutationOptions<UpdateSkillResponse, AxiosError<DefaultError>, Options<UpdateSkillData>> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await updateSkill({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getSkillResourceQueryKey = (options: Options<GetSkillResourceData>) => createQueryKey("getSkillResource", options);
+
+export const getSkillResourceOptions = (options: Options<GetSkillResourceData>) =>
+	queryOptions<
+		GetSkillResourceResponse,
+		AxiosError<DefaultError>,
+		GetSkillResourceResponse,
+		ReturnType<typeof getSkillResourceQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getSkillResource({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getSkillResourceQueryKey(options),
+	});
+
+export const listSkillResourcesQueryKey = (options: Options<ListSkillResourcesData>) =>
+	createQueryKey("listSkillResources", options);
+
+export const listSkillResourcesOptions = (options: Options<ListSkillResourcesData>) =>
+	queryOptions<
+		ListSkillResourcesResponse,
+		AxiosError<DefaultError>,
+		ListSkillResourcesResponse,
+		ReturnType<typeof listSkillResourcesQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listSkillResources({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listSkillResourcesQueryKey(options),
+	});
+
+export const previewSkillImportMutation = (
+	options?: Partial<Options<PreviewSkillImportData>>,
+): UseMutationOptions<PreviewSkillImportResponse, AxiosError<DefaultError>, Options<PreviewSkillImportData>> => {
+	const mutationOptions: UseMutationOptions<
+		PreviewSkillImportResponse,
+		AxiosError<DefaultError>,
+		Options<PreviewSkillImportData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await previewSkillImport({
 				...options,
 				...fnOptions,
 				throwOnError: true,

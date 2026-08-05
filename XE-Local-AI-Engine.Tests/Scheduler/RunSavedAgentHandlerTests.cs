@@ -211,6 +211,19 @@ public sealed class RunSavedAgentHandlerTests
         AssertEx.Equal("get_current_time", harness.CapturedPackage.AllowedTools[0].Name);
     }
 
+    // Stripping approval-required tools from the OFFER (above) cannot reach the skill tools: they arrive through MAF's
+    // context provider, never the offer. The flag is what lets the runner fail such an approval immediately instead of
+    // parking a scheduled run on the full pending-approval window.
+    [Test]
+    public async Task ExecuteAsync_MarksThePackageUnattended()
+    {
+        using var harness = new Harness();
+
+        await harness.Handler.ExecuteAsync(Context(ValidParams()), CancellationToken.None);
+
+        AssertEx.True(harness.CapturedPackage!.IsUnattended, "a scheduled run must be distinguishable from an interactive turn");
+    }
+
     [Test]
     public async Task ExecuteAsync_OnSuccess_RecordsContentSafeSummaryWithoutPromptText()
     {

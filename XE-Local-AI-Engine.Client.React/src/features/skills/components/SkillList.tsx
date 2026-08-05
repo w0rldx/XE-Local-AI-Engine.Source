@@ -1,8 +1,8 @@
-import { ActionIcon, Badge, Group, Table, Text } from "@mantine/core";
-import { IconPencil, IconTrash } from "@tabler/icons-react";
+import { ActionIcon, Badge, Group, Table, Text, Tooltip } from "@mantine/core";
+import { IconAlertTriangle, IconPencil, IconTrash } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
-import type { SkillSummary } from "@/features/skills/models/SkillModels";
+import { isSkillNameResolvable, type SkillSummary } from "@/features/skills/models/SkillModels";
 
 interface SkillListProps {
 	skills: readonly SkillSummary[];
@@ -14,6 +14,14 @@ interface SkillListProps {
 // Table of node skills with edit + delete row actions. Pure presentation — the parent owns the data and the action
 // handlers. Enabled state is shown as a badge (toggling enabled happens in the editor, mirroring the form contract);
 // the list endpoint omits the body, so only the name + description summary is shown here.
+//
+// Two provenance/health signals ride on the name cell. An `Imported` badge carries the source, so the trust decision
+// an operator made at import time stays visible long afterwards. A name the resolver would reject is flagged: such a
+// row is DROPPED when an agent is built (fail-soft, logged, never thrown), so the skill silently does nothing until
+// it is renamed — the flag is the only place that becomes visible.
+//
+// There is deliberately no resource-count column: the list projection cannot populate it, so it would read a constant
+// zero. Resource counts belong on the detail view, which fetches them.
 export function SkillList({ skills, isMutating, onEdit, onDelete }: SkillListProps) {
 	const { t } = useTranslation();
 
@@ -40,9 +48,38 @@ export function SkillList({ skills, isMutating, onEdit, onDelete }: SkillListPro
 					{skills.map((skill) => (
 						<Table.Tr key={skill.id} data-testid={`skill-row-${skill.id}`}>
 							<Table.Td>
-								<Text fw={600} ff="monospace">
-									{skill.name}
-								</Text>
+								<Group gap="xs" wrap="nowrap">
+									<Text fw={600} ff="monospace">
+										{skill.name}
+									</Text>
+									{skill.origin === "Imported" ? (
+										<Badge variant="light" color="orange" size="sm" data-testid={`skill-imported-badge-${skill.id}`}>
+											{t("pages.skills.list.importedBadge", "Imported · {{source}}", {
+												source: skill.sourceUri ?? t("pages.skills.list.importedUnknownSource", "an unknown source"),
+											})}
+										</Badge>
+									) : null}
+									{isSkillNameResolvable(skill.name) ? null : (
+										<Tooltip
+											multiline={true}
+											w={280}
+											label={t(
+												"pages.skills.list.invalidNameTooltip",
+												"This name is not valid for an agent, so the skill is skipped whenever an agent is built. Rename it to lowercase letters and digits separated by single dashes.",
+											)}
+										>
+											<Badge
+												variant="light"
+												color="red"
+												size="sm"
+												leftSection={<IconAlertTriangle size={11} />}
+												data-testid={`skill-invalid-name-${skill.id}`}
+											>
+												{t("pages.skills.list.invalidNameBadge", "Name not usable")}
+											</Badge>
+										</Tooltip>
+									)}
+								</Group>
 								{skill.description ? (
 									<Text size="xs" c="dimmed" lineClamp={1}>
 										{skill.description}

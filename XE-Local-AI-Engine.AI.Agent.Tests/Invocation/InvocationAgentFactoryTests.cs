@@ -823,6 +823,55 @@ public sealed class InvocationAgentFactoryTests
             "A skills agent must carry no instructions (delivered once via the seed system message).");
         AssertEx.Equal("XeInvocation-qwen3.5:0.8b", withSkillsAgent.Name);
     }
+
+    [Test]
+    public async Task BuildInlineSkill_AdvertisesEveryResource_AndCarriesTheFrontmatter()
+    {
+        // Behaviour, not registration order: MAF renders the <available_resources> block from the resources present when
+        // the skill's content is built, so a resource registered too late would be readable but never advertised — the
+        // model would have no way to learn it exists. Assert the generated content actually names them.
+        var skill = new InvocationSkill("kubernetes-debug",
+            "Debug k8s issues",
+            "## Body",
+            License: "MIT",
+            Compatibility: "any Agent Skills host",
+            AllowedTools: "read_file search_knowledge_base",
+            Metadata: new Dictionary<string, string>(StringComparer.Ordinal) { ["author"] = "acme" },
+            Resources:
+            [
+                new InvocationSkillResource("references/runbook.md", "Escalation runbook", "text/markdown", "step one"),
+                new InvocationSkillResource("references/faq.md", "Frequently asked questions", "text/markdown", "answer one")
+            ]);
+
+        var inlineSkill = InvocationAgentFactory.BuildInlineSkill(skill);
+        var content = await inlineSkill.GetContentAsync(CancellationToken.None);
+
+        AssertEx.Contains(content, "references/runbook.md", message: "the skill content must advertise its first resource.");
+        AssertEx.Contains(content, "references/faq.md", message: "the skill content must advertise its second resource.");
+        AssertEx.Contains(content, "## Body", message: "the skill body must still be the skill's instructions.");
+
+        // The frontmatter extras are carried, not dropped, by the full constructor. allowed-tools is metadata only —
+        // nothing here grants a tool on its account.
+        AssertEx.Equal("MIT", inlineSkill.Frontmatter.License);
+        AssertEx.Equal("any Agent Skills host", inlineSkill.Frontmatter.Compatibility);
+        AssertEx.Equal("read_file search_knowledge_base", inlineSkill.Frontmatter.AllowedTools);
+        AssertEx.NotNull(inlineSkill.Frontmatter.Metadata, "frontmatter metadata must survive the conversion to AdditionalPropertiesDictionary.");
+    }
+
+    [Test]
+    public async Task BuildInlineSkill_WithNoFrontmatterOrResources_MatchesThePreFrontmatterSkill()
+    {
+        // The 3-argument constructor this replaced IS the full constructor taking its defaults, so a skill carrying
+        // neither frontmatter nor resources must build exactly what it built before either existed.
+        var skill = new InvocationSkill("log-triage", "Triage logs", "## Logs");
+
+        var built = InvocationAgentFactory.BuildInlineSkill(skill);
+        var baseline = new AgentInlineSkill("log-triage", "Triage logs", "## Logs");
+
+        AssertEx.Equal(await baseline.GetContentAsync(CancellationToken.None), await built.GetContentAsync(CancellationToken.None));
+        AssertEx.Null(built.Frontmatter.License);
+        AssertEx.Null(built.Frontmatter.AllowedTools);
+    }
 #pragma warning restore MAAI001
 
     [Test]

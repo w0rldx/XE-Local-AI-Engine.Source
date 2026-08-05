@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Invocation;
 
 using System.Collections;
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Net;
 using System.Reflection;
@@ -25,6 +26,7 @@ using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Models.Events;
 using XE_Local_AI_Engine.Client.Persistence.Cryptography;
 using XE_Local_AI_Engine.Client.Services.Agents.Approval;
+using XE_Local_AI_Engine.Client.Services.Agents.Approval.Implementation;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
@@ -38,6 +40,7 @@ using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Client.Services.Invocation.Envelope.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Resilience;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
@@ -47,7 +50,21 @@ using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
 public sealed class InvocationRunnerTests
 {
+    private const string SkillName = "demo";
+
+    // MAF's skill-tool names, aliased once so the scoped MAAI001 suppression the [Experimental] Agent Skills surface
+    // needs is not repeated at every use site below.
+#pragma warning disable MAAI001
+    private const string LoadSkillToolName = AgentSkillsProvider.LoadSkillToolName;
+
+    private const string ReadSkillResourceToolName = AgentSkillsProvider.ReadSkillResourceToolName;
+
+    private const string RunSkillScriptToolName = AgentSkillsProvider.RunSkillScriptToolName;
+#pragma warning restore MAAI001
+
     private static readonly JsonSerializerOptions AskUserArgumentOptions = new(JsonSerializerDefaults.Web);
+
+    private static readonly Guid SkillId = Guid.Parse("2f2f9a3e-0d1a-4c9a-9d9c-6f6f0a2b7c11");
 
     [Test]
     public async Task RunAsync_ValidPackage_SendsAcceptance()
@@ -1170,6 +1187,234 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
+    public async Task RunAsync_WhenSkillApprovalIsGrantedForTheSession_SuppressesTheNextPromptAndStillAudits()
+    {
+        var sender = new MockHubMessageSender();
+        var auditRecorder = Substitute.For<IToolApprovalAuditRecorder>();
+        var conversationId = Guid.NewGuid();
+        var runner = CreateRunner(sender, SkillApprovalFactory(LoadSkillToolName, SkillName), approvalAuditRecorder: auditRecorder);
+
+        var firstTurn = RunAsync(runner, SkillPackage(conversationId).Build());
+        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals.Single().RequestId, Approved: true), ApprovalScope.Session);
+        await firstTurn;
+
+        // A SECOND turn in the SAME conversation, on the same skill at the same version: the memo answers it.
+        await RunAsync(runner, SkillPackage(conversationId).Build());
+
+        AssertEx.Equal(expected: 1, sender.SentApprovals.Count, "a session-scoped approval must not prompt again for the same skill in the same conversation");
+        await auditRecorder.Received(1)
+                           .RecordAsync(Arg.Any<Guid?>(),
+                               LoadSkillToolName,
+                               ToolCategory.ReadLocal,
+                               "session-scope auto-approve",
+                               Arg.Any<string>(),
+                               Arg.Any<long>(),
+                               Arg.Any<CancellationToken>())
+                           .ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenSkillApprovalIsDeniedForTheSession_PromptsAgain()
+    {
+        var sender = new MockHubMessageSender();
+        var conversationId = Guid.NewGuid();
+        var runner = CreateRunner(sender, SkillApprovalFactory(LoadSkillToolName, SkillName));
+
+        var firstTurn = RunAsync(runner, SkillPackage(conversationId).Build());
+        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals.Single().RequestId, Approved: false), ApprovalScope.Session);
+        await firstTurn;
+
+        var secondTurn = RunAsync(runner, SkillPackage(conversationId).Build());
+        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 2, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals[1].RequestId, Approved: false));
+        await secondTurn;
+
+        AssertEx.Equal(expected: 2, sender.SentApprovals.Count, "a DENY must never be remembered, whatever scope the operator sent");
+    }
+
+    [Test]
+    public async Task RunAsync_WhenTheSkillVersionChanges_TheSessionApprovalNoLongerApplies()
+    {
+        var sender = new MockHubMessageSender();
+        var conversationId = Guid.NewGuid();
+        var runner = CreateRunner(sender, SkillApprovalFactory(LoadSkillToolName, SkillName));
+
+        var firstTurn = RunAsync(runner, SkillPackage(conversationId).Build());
+        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals.Single().RequestId, Approved: true), ApprovalScope.Session);
+        await firstTurn;
+
+        // The operator edited the skill (or an import Replaced it) mid-conversation: same name, new content, new version.
+        var secondTurn = RunAsync(runner, SkillPackage(conversationId, version: 2).Build());
+        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 2, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals[1].RequestId, Approved: true));
+        await secondTurn;
+
+        AssertEx.Equal(expected: 2, sender.SentApprovals.Count, "a content change must invalidate the memo — the approval is bound to the version the operator saw");
+    }
+
+    [Test]
+    public async Task RunAsync_WhenADifferentSkillResourceIsRead_TheSessionApprovalNoLongerApplies()
+    {
+        var sender = new MockHubMessageSender();
+        var conversationId = Guid.NewGuid();
+        var segment = 0;
+        var factory = CreateFactory(_ =>
+        {
+            segment++;
+            return segment switch
+            {
+                1 => SkillApprovalRequestUpdates(ReadSkillResourceToolName, SkillName, "reference.md"),
+                3 => SkillApprovalRequestUpdates(ReadSkillResourceToolName, SkillName, "secrets.md"),
+                _ => CreateUpdates("done")
+            };
+        });
+        var runner = CreateRunner(sender, factory);
+
+        var firstTurn = RunAsync(runner, SkillPackage(conversationId).Build());
+        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals.Single().RequestId, Approved: true), ApprovalScope.Session);
+        await firstTurn;
+
+        var secondTurn = RunAsync(runner, SkillPackage(conversationId).Build());
+        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 2, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals[1].RequestId, Approved: true));
+        await secondTurn;
+
+        AssertEx.Equal(expected: 2, sender.SentApprovals.Count, "one approval must cover ONE resource, not every resource the skill carries");
+    }
+
+    [Test]
+    public async Task RunAsync_WhenRunSkillScriptIsApprovedForTheSession_PromptsAgain()
+    {
+        var sender = new MockHubMessageSender();
+        var auditRecorder = Substitute.For<IToolApprovalAuditRecorder>();
+        var conversationId = Guid.NewGuid();
+        var runner = CreateRunner(sender, SkillApprovalFactory(RunSkillScriptToolName, SkillName), approvalAuditRecorder: auditRecorder);
+
+        var firstTurn = RunAsync(runner, SkillPackage(conversationId).Build());
+        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals.Single().RequestId, Approved: true), ApprovalScope.Session);
+        await firstTurn;
+
+        var secondTurn = RunAsync(runner, SkillPackage(conversationId).Build());
+        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 2, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals[1].RequestId, Approved: true));
+        await secondTurn;
+
+        AssertEx.Equal(expected: 2, sender.SentApprovals.Count, "script execution is outside the memo allow-list and must be approved every single time");
+
+        // The other half of the audit fix: a provider-injected tool that is not in the package offer must still audit
+        // under its real risk category rather than the fail-closed Unknown.
+        await auditRecorder.Received(2)
+                           .RecordAsync(Arg.Any<Guid?>(),
+                               RunSkillScriptToolName,
+                               ToolCategory.WriteExecute,
+                               "approve",
+                               Arg.Any<string>(),
+                               Arg.Any<long>(),
+                               Arg.Any<CancellationToken>())
+                           .ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenTheSkillIsImported_TheSessionApprovalIsNotRemembered()
+    {
+        var sender = new MockHubMessageSender();
+        var conversationId = Guid.NewGuid();
+        var runner = CreateRunner(sender, SkillApprovalFactory(LoadSkillToolName, SkillName));
+
+        var firstTurn = RunAsync(runner, SkillPackage(conversationId, imported: true).Build());
+        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals.Single().RequestId, Approved: true), ApprovalScope.Session);
+        await firstTurn;
+
+        var secondTurn = RunAsync(runner, SkillPackage(conversationId, imported: true).Build());
+        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 2, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals[1].RequestId, Approved: true));
+        await secondTurn;
+
+        AssertEx.Equal(expected: 2, sender.SentApprovals.Count, "third-party skill names are attacker-chosen; a durable approval on one must not be available");
+    }
+
+    [Test]
+    public async Task RunAsync_WhenTheNodeDisablesSessionScope_TheSkillApprovalIsNotRemembered()
+    {
+        var sender = new MockHubMessageSender();
+        var conversationId = Guid.NewGuid();
+        var alwaysPrompt = NodeToolApprovalPolicy.FromSettings(new NodeToolApprovalPolicySettings
+        {
+            DisableSkillSessionScope = true
+        });
+        var runner = CreateRunner(sender, SkillApprovalFactory(LoadSkillToolName, SkillName), approvalPolicy: alwaysPrompt);
+
+        var firstTurn = RunAsync(runner, SkillPackage(conversationId).Build());
+        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals.Single().RequestId, Approved: true), ApprovalScope.Session);
+        await firstTurn;
+
+        var secondTurn = RunAsync(runner, SkillPackage(conversationId).Build());
+        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 2, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals[1].RequestId, Approved: true));
+        await secondTurn;
+
+        AssertEx.Equal(expected: 2, sender.SentApprovals.Count, "the operator's always-prompt switch must turn session scope off entirely");
+    }
+
+    [Test]
+    public async Task RunAsync_WhenAnUnattendedRunNeedsApproval_FailsImmediatelyWithTheReason()
+    {
+        var sender = new MockHubMessageSender();
+        var runner = CreateRunner(sender, SkillApprovalFactory(LoadSkillToolName, SkillName));
+
+        // The runner's pending-approval window is FIVE MINUTES in this fixture (see CreateRunner). Completing at all is
+        // the evidence that the unattended run never entered that wait; the elapsed assertion states the bound.
+        var elapsed = Stopwatch.StartNew();
+        await RunAsync(runner, SkillPackage(Guid.NewGuid()).AsUnattended().Build());
+        elapsed.Stop();
+
+        var failure = sender.SentEncryptedFailures.Single();
+        AssertEx.Equal(nameof(FailureCategory.AgentRuntime), failure.FailureCategory);
+        AssertEx.True(failure.Error.Contains($"approval required in an unattended run: {LoadSkillToolName}", StringComparison.Ordinal),
+            $"the failure must name the cause, not read as a generic timeout; got '{failure.Error}'");
+        AssertEx.Equal(expected: 0, sender.SentApprovals.Count, "an unattended run must not broadcast an approval request nobody can answer");
+        AssertEx.True(elapsed.Elapsed < TimeSpan.FromSeconds(30), $"the unattended guard must fail fast, not wait out the approval window; took {elapsed.Elapsed}");
+    }
+
+    [Test]
+    public async Task RunAsync_WhenUnattendedAskUserQuestionSurfaces_ContinuesImmediatelyWithoutAnAnswer()
+    {
+        // The asymmetry with the approval path, asserted: an unattended APPROVAL fails the turn fast, an unattended
+        // QUESTION continues with "not answered" (D4) — and neither one waits out the pending-approval window.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var stash = new UserQuestionAnswerStash(TimeProvider.System);
+        var segment = 0;
+        var factory = CreateFactory(_ =>
+        {
+            segment++;
+            return segment == 1 ? AskUserRequestUpdates(ValidAskUserArguments()) : CreateUpdates("done");
+        });
+        var runner = CreateRunner(sender, factory, eventDispatcher: dispatcher, userQuestionAnswerStash: stash);
+
+        var elapsed = Stopwatch.StartNew();
+        await RunAsync(runner, RuntimePackageBuilder.Valid().WithAllowedTool(AskUserTool.ToolName).AsUnattended().Build());
+        elapsed.Stop();
+
+        AssertEx.Equal(expected: 2, segment, "the turn must continue threadlessly, not fail — D4 holds for an unattended run too");
+        AssertEx.Equal(expected: 0, sender.SentEncryptedFailures.Count, "an unanswered question must never fail the turn, unlike an unattended approval");
+        await dispatcher.DidNotReceive().ReportUserQuestionAsync(Arg.Any<UserQuestionLifecyclePayload>()).ConfigureAwait(false);
+        AssertEx.True(elapsed.Elapsed < TimeSpan.FromSeconds(30),
+            $"the unattended run must skip the park, not wait out the 5-minute question cap; took {elapsed.Elapsed}");
+
+        AssertEx.True(stash.TryPop("call-ask-user", out var stashed), "the model still needs a branchable result under the tool call's CallId");
+        AssertEx.Contains(stashed, "\"answered\":false");
+        AssertEx.Contains(stashed, "\"reason\":\"unattended\"");
+    }
+
+    [Test]
     public async Task RunAsync_WhenAskUserQuestionSurfaces_PromptsTheOperatorAndResumesWithTheAnswer()
     {
         // ask_user rides the approval seam for its BLOCKING behaviour, not for a risk verdict: the runner must present
@@ -1993,7 +2238,9 @@ public sealed class InvocationRunnerTests
         ILocalModelProviderResolver? providerResolver = null,
         IProviderStreamResilience? providerStreamResilience = null,
         ConversationContextBudgetOptions? contextBudgetOptions = null,
-        UserQuestionAnswerStash? userQuestionAnswerStash = null)
+        UserQuestionAnswerStash? userQuestionAnswerStash = null,
+        IToolApprovalAuditRecorder? approvalAuditRecorder = null,
+        IToolApprovalPolicy? approvalPolicy = null)
     {
         var resolvedContextBudgetOptions = contextBudgetOptions ?? new ConversationContextBudgetOptions();
         var resolvedFactory = invocationAgentFactory ?? CreateFactory(agentUpdates ?? CreateUpdates("ok"));
@@ -2066,7 +2313,8 @@ public sealed class InvocationRunnerTests
             configuration,
             runtimeSettings,
             Options.Create(new SpawnOptions()),
-            Substitute.For<IToolApprovalAuditRecorder>(),
+            approvalAuditRecorder ?? Substitute.For<IToolApprovalAuditRecorder>(),
+            approvalPolicy ?? NodeToolApprovalPolicy.FromSettings(settings: null),
             userQuestionAnswerStash ?? new UserQuestionAnswerStash(TimeProvider.System),
             NullLogger<InvocationRunner>.Instance);
     }
@@ -2162,6 +2410,52 @@ public sealed class InvocationRunnerTests
         yield return new AgentResponseUpdate(ChatRole.Assistant, new List<AIContent>
         {
             approvalRequest
+        });
+        await Task.Yield();
+    }
+
+    // A package carrying ONE resolved skill, plus the offered tool the approval path needs (the runner only retains the
+    // segment updates it folds on resume when the offer list is non-empty — see approvalPossible). The skill tools
+    // themselves are never in the offer: they reach the model through MAF's context provider.
+    private static RuntimePackageBuilder SkillPackage(Guid conversationId, int version = 1, bool imported = false)
+    {
+        return RuntimePackageBuilder.Valid()
+                                    .WithConversationId(conversationId)
+                                    .WithAllowedTool("run_in_agent_home")
+                                    .WithSkills(new ResolvedSkill(SkillId, SkillName, "A skill.", "Skill body.", version, imported));
+    }
+
+    private static IInvocationAgentFactory SkillApprovalFactory(string toolName, string skillName)
+    {
+        // Segments 1 and 3 are the first segment of turn one and turn two; the even segments are the resumes that follow
+        // each approval decision. A suppressed prompt still resumes, so the segment count is the same either way.
+        var segment = 0;
+        return CreateFactory(_ =>
+        {
+            segment++;
+            return segment is 1 or 3 ? SkillApprovalRequestUpdates(toolName, skillName) : CreateUpdates("done");
+        });
+    }
+
+    // Stands in for MAF's AgentSkillsProvider surfacing an approval request for one of its ApprovalRequiredAIFunction
+    // skill tools. Unlike ApprovalRequestUpdates above, the tool call is a concrete FunctionCallContent carrying the
+    // model's arguments, because the skill and resource names the memo key is built from live nowhere else.
+    private static async IAsyncEnumerable<AgentResponseUpdate> SkillApprovalRequestUpdates(string toolName, string skillName, string? resourceName = null)
+    {
+        var arguments = new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            ["skillName"] = skillName
+        };
+
+        if (resourceName is not null)
+        {
+            arguments["resourceName"] = resourceName;
+        }
+
+        var toolCall = new FunctionCallContent($"call-{toolName}", toolName, arguments);
+        yield return new AgentResponseUpdate(ChatRole.Assistant, new List<AIContent>
+        {
+            new ToolApprovalRequestContent($"approval-{toolName}", toolCall)
         });
         await Task.Yield();
     }

@@ -100,6 +100,14 @@ describe("useSkills reads", () => {
 				version: 1,
 				createdAtUtc: 0,
 				updatedAtUtc: 0,
+				license: null,
+				compatibility: null,
+				allowedTools: null,
+				metadata: null,
+				// Provenance fails safe: a payload without an origin is treated as untrusted, never as locally authored.
+				origin: "Imported",
+				sourceUri: null,
+				importedAtUtc: null,
 			},
 		]);
 	});
@@ -127,6 +135,14 @@ describe("useSkills reads", () => {
 			version: 1,
 			createdAtUtc: 0,
 			updatedAtUtc: 0,
+			license: null,
+			compatibility: null,
+			allowedTools: null,
+			metadata: null,
+			origin: "Imported",
+			sourceUri: null,
+			importedAtUtc: null,
+			resourceCount: 0,
 		});
 	});
 });
