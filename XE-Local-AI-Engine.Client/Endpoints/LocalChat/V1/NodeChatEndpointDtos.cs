@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.LocalChat.V1;
 
+using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Chat;
 
 public sealed class CreateNodeChatConversationRequest
@@ -131,6 +132,15 @@ public sealed class ResolveToolApprovalRequest
     public required string RequestId { get; init; }
 
     public required bool Approved { get; init; }
+
+    /// <summary>
+    ///     How long an APPROVE lasts. Additive and defaulted: an omitted or null scope is
+    ///     <see cref="ApprovalScope.Once" />, today's behaviour, so existing callers keep working unchanged.
+    ///     <see cref="ApprovalScope.Session" /> is honoured only for the read-only skill tools on a locally authored
+    ///     skill — the runner decides, and silently falls back to <see cref="ApprovalScope.Once" /> for anything else.
+    ///     Ignored entirely on a deny.
+    /// </summary>
+    public ApprovalScope? Scope { get; init; }
 }
 
 public sealed class ResolveToolApprovalResponse

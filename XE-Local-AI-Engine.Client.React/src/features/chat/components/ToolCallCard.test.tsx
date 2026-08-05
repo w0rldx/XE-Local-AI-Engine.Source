@@ -146,6 +146,7 @@ describe("ToolCallCard", () => {
 		renderWithProviders(<ToolCallCard part={toolPart({ state: "waiting", requiresApproval: true, pendingApprovalRequestId: "approval-42" })} />);
 
 		expect(screen.getByTestId("chat-tool-call-approve-get_time")).toBeTruthy();
+		expect(screen.getByTestId("chat-tool-call-approve-session-get_time")).toBeTruthy();
 		expect(screen.getByTestId("chat-tool-call-deny-get_time")).toBeTruthy();
 	});
 
@@ -171,18 +172,47 @@ describe("ToolCallCard", () => {
 
 		await waitFor(() => expect(resolveApprovalSpy).toHaveBeenCalledTimes(1));
 		// TanStack passes (variables, context) to mutationFn — assert only the variables the card supplies.
-		expect(resolveApprovalSpy.mock.calls[0]?.[0]).toEqual({ body: { requestId: "approval-42", approved: true } });
+		expect(resolveApprovalSpy.mock.calls[0]?.[0]).toEqual({ body: { requestId: "approval-42", approved: true, scope: "Once" } });
 		// The decision is optimistic: the controls disappear as soon as the operator clicks.
 		await waitFor(() => expect(screen.queryByTestId("chat-tool-call-approve-get_time")).toBeNull());
 	});
 
-	it("posts the operator's deny decision with approved=false", async () => {
+	it("posts scope Session when the operator approves for the whole session", async () => {
+		renderWithProviders(<ToolCallCard part={toolPart({ state: "waiting", requiresApproval: true, pendingApprovalRequestId: "approval-42" })} />);
+
+		fireEvent.click(screen.getByTestId("chat-tool-call-approve-session-get_time"));
+
+		await waitFor(() => expect(resolveApprovalSpy).toHaveBeenCalledTimes(1));
+		expect(resolveApprovalSpy.mock.calls[0]?.[0]).toEqual({ body: { requestId: "approval-42", approved: true, scope: "Session" } });
+	});
+
+	it("posts the operator's deny decision with approved=false and never a scope (a denial is not remembered)", async () => {
 		renderWithProviders(<ToolCallCard part={toolPart({ state: "waiting", requiresApproval: true, pendingApprovalRequestId: "approval-77" })} />);
 
 		fireEvent.click(screen.getByTestId("chat-tool-call-deny-get_time"));
 
 		await waitFor(() => expect(resolveApprovalSpy).toHaveBeenCalledTimes(1));
 		expect(resolveApprovalSpy.mock.calls[0]?.[0]).toEqual({ body: { requestId: "approval-77", approved: false } });
+	});
+
+	it("re-arms the controls when the server prompts again with a new request id", async () => {
+		// Session scope is withheld for imported skills and can be disabled by node policy, so the same tool can prompt
+		// again right after a session approval. A per-card 'decided' boolean would leave that prompt unanswerable.
+		const part = toolPart({ state: "waiting", requiresApproval: true, pendingApprovalRequestId: "approval-1" });
+		const { rerender } = renderWithProviders(<ToolCallCard part={part} />);
+
+		fireEvent.click(screen.getByTestId("chat-tool-call-approve-session-get_time"));
+		await waitFor(() => expect(screen.queryByTestId("chat-tool-call-approve-get_time")).toBeNull());
+
+		rerender(
+			<QueryClientProvider client={new QueryClient({ defaultOptions: { mutations: { retry: false } } })}>
+				<MantineProvider>
+					<ToolCallCard part={{ ...part, pendingApprovalRequestId: "approval-2" }} />
+				</MantineProvider>
+			</QueryClientProvider>,
+		);
+
+		expect(screen.getByTestId("chat-tool-call-approve-get_time")).toBeTruthy();
 	});
 
 	it("renders the inline answer card instead of the generic waiting body when the part carries a question", () => {

@@ -25,6 +25,14 @@ internal static class UserQuestionResults
     /// <summary>The tool executed with no stashed answer — a defect or a torn-down turn, never a user action.</summary>
     public const string NotCollectedReason = "not_collected";
 
+    /// <summary>
+    ///     The run is unattended (scheduled/headless), so there is nobody to prompt and the question was never shown.
+    ///     Distinct from <see cref="TimeoutReason" />: no wait happened at all, and telling the model it timed out when
+    ///     the prompt was never displayed would be a lie it might act on by re-asking. Falls through to the generic
+    ///     proceed-on-your-own message below, which is exactly the guidance this case needs.
+    /// </summary>
+    public const string UnattendedReason = "unattended";
+
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
     private const string ProceedInstruction =

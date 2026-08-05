@@ -262,6 +262,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("BLOB")
                         .HasColumnName("body");
 
+                    b.Property<string>("ContentSha256")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("content_sha256");
+
                     b.Property<long>("CreatedAtUtc")
                         .HasColumnType("INTEGER")
                         .HasColumnName("created_at_utc");
@@ -277,11 +281,29 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasDefaultValue(true)
                         .HasColumnName("enabled");
 
+                    b.Property<byte[]>("FrontmatterJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("frontmatter_json");
+
+                    b.Property<long?>("ImportedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("imported_at_utc");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("TEXT")
                         .HasColumnName("name")
                         .UseCollation("NOCASE");
+
+                    b.Property<int>("Origin")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(0)
+                        .HasColumnName("origin");
+
+                    b.Property<string>("SourceUri")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("source_uri");
 
                     b.Property<long>("UpdatedAtUtc")
                         .HasColumnType("INTEGER")
@@ -297,6 +319,50 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .IsUnique();
 
                     b.ToTable("agent_skills", (string)null);
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.AgentSkillResource", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<byte[]>("Content")
+                        .IsRequired()
+                        .HasColumnType("BLOB")
+                        .HasColumnName("content");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("description");
+
+                    b.Property<string>("MediaType")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("media_type");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("name")
+                        .UseCollation("NOCASE");
+
+                    b.Property<int>("SizeBytes")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("size_bytes");
+
+                    b.Property<Guid>("SkillId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("skill_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SkillId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("agent_skill_resources", (string)null);
                 });
 
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.CanvasWorkflow", b =>
@@ -2562,6 +2628,15 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .IsUnique();
 
                     b.ToTable("scheduled_job_run_events", (string)null);
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.AgentSkillResource", b =>
+                {
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.AgentSkill", null)
+                        .WithMany()
+                        .HasForeignKey("SkillId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.ConversationUploadedFile", b =>

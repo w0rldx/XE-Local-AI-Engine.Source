@@ -1,5 +1,5 @@
 import { Alert, Button, Card, Container, Group, Loader, Stack, Text, Title } from "@mantine/core";
-import { IconAlertTriangle, IconDeviceFloppy, IconPlus, IconSchool, IconX } from "@tabler/icons-react";
+import { IconAlertTriangle, IconDeviceFloppy, IconDownload, IconPlus, IconSchool, IconX } from "@tabler/icons-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -9,6 +9,7 @@ import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { useUnsavedChangesGuard } from "@/core/ui/hooks/useUnsavedChangesGuard";
 import { toast } from "@/core/ui/notifications/Toast";
 import { SkillForm, type SkillFormHandle } from "@/features/skills/components/SkillForm";
+import { SkillImportDialog } from "@/features/skills/components/SkillImportDialog";
 import { SkillList } from "@/features/skills/components/SkillList";
 import { toCreateSkillRequest, toUpdateSkillRequest } from "@/features/skills/models/SkillMappers";
 import type { Skill, SkillFormValues, SkillSummary } from "@/features/skills/models/SkillModels";
@@ -18,18 +19,28 @@ import { useSkillManagementStore } from "@/features/skills/stores/SkillManagemen
 // A new skill always persists enabled by the store default; the create form has no enabled toggle, so the default
 // here is true to match what the backend stores.
 const emptyFormValues: SkillFormValues = {
-	name: "",
-	description: "",
+	allowedTools: "",
 	body: "",
+	compatibility: "",
+	description: "",
 	enabled: true,
+	license: "",
+	metadata: null,
+	name: "",
 };
 
+// Frontmatter is carried into the form (as "" when absent) so a save round-trips it: the update endpoint is a full
+// replace, so anything the form drops is stored as null.
 function toFormValues(skill: Skill): SkillFormValues {
 	return {
-		name: skill.name,
-		description: skill.description,
+		allowedTools: skill.allowedTools ?? "",
 		body: skill.body,
+		compatibility: skill.compatibility ?? "",
+		description: skill.description,
 		enabled: skill.enabled,
+		license: skill.license ?? "",
+		metadata: skill.metadata,
+		name: skill.name,
 	};
 }
 
@@ -45,6 +56,9 @@ export function SkillsPage() {
 	// Whether the editor form has unsaved edits. Reported up by the form; drives the dialog close-guard and the
 	// route/tab-close guard. Reset whenever the editor closes so a stale dirty flag never lingers.
 	const [isDirty, setIsDirty] = useState(false);
+	// Purely transient dialog visibility — no reason to put it in the Zustand store, which exists for the editor target
+	// that has to survive a cross-route open.
+	const [isImportOpen, setIsImportOpen] = useState(false);
 	const formRef = useRef<SkillFormHandle>(null);
 
 	// Block in-app navigation + tab close while the open editor has unsaved edits.
@@ -164,9 +178,19 @@ export function SkillsPage() {
 							)}
 						</Text>
 					</Stack>
-					<Button leftSection={<IconPlus size={16} />} onClick={openCreate} data-testid="skill-create-button">
-						{t("pages.skills.createButton", "New skill")}
-					</Button>
+					<Group gap="sm">
+						<Button
+							variant="default"
+							leftSection={<IconDownload size={16} />}
+							onClick={() => setIsImportOpen(true)}
+							data-testid="skill-import-button"
+						>
+							{t("pages.skills.importButton", "Import skills")}
+						</Button>
+						<Button leftSection={<IconPlus size={16} />} onClick={openCreate} data-testid="skill-create-button">
+							{t("pages.skills.createButton", "New skill")}
+						</Button>
+					</Group>
 				</Group>
 
 				<Card withBorder={true} radius="md" p="lg">
@@ -247,10 +271,14 @@ export function SkillsPage() {
 							onCancel={requestCloseEditor}
 							onDirtyChange={setIsDirty}
 							hideActions={true}
+							skillId={isEditing && skillQuery.data ? skillQuery.data.id : undefined}
+							provenance={isEditing && skillQuery.data ? skillQuery.data : undefined}
 						/>
 					)}
 				</Stack>
 			</DialogShell>
+
+			<SkillImportDialog opened={isImportOpen} onClose={() => setIsImportOpen(false)} />
 		</Container>
 	);
 }

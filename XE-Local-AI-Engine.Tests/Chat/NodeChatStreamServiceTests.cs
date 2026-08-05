@@ -3435,7 +3435,7 @@ public sealed class NodeChatStreamServiceTests
         {
         }
 
-        public void ResolveApprovalResult(ApprovalResolvedEvent evt)
+        public void ResolveApprovalResult(ApprovalResolvedEvent evt, ApprovalScope scope = ApprovalScope.Once)
         {
         }
 
@@ -3483,7 +3483,7 @@ public sealed class NodeChatStreamServiceTests
         {
         }
 
-        public void ResolveApprovalResult(ApprovalResolvedEvent evt)
+        public void ResolveApprovalResult(ApprovalResolvedEvent evt, ApprovalScope scope = ApprovalScope.Once)
         {
         }
 
@@ -3539,7 +3539,7 @@ public sealed class NodeChatStreamServiceTests
         {
         }
 
-        public void ResolveApprovalResult(ApprovalResolvedEvent evt)
+        public void ResolveApprovalResult(ApprovalResolvedEvent evt, ApprovalScope scope = ApprovalScope.Once)
         {
         }
 
@@ -3585,7 +3585,7 @@ public sealed class NodeChatStreamServiceTests
         {
         }
 
-        public void ResolveApprovalResult(ApprovalResolvedEvent evt)
+        public void ResolveApprovalResult(ApprovalResolvedEvent evt, ApprovalScope scope = ApprovalScope.Once)
         {
         }
 
@@ -3644,7 +3644,7 @@ public sealed class NodeChatStreamServiceTests
         {
         }
 
-        public void ResolveApprovalResult(ApprovalResolvedEvent evt)
+        public void ResolveApprovalResult(ApprovalResolvedEvent evt, ApprovalScope scope = ApprovalScope.Once)
         {
         }
 
@@ -3706,7 +3706,7 @@ public sealed class NodeChatStreamServiceTests
         {
         }
 
-        public void ResolveApprovalResult(ApprovalResolvedEvent evt)
+        public void ResolveApprovalResult(ApprovalResolvedEvent evt, ApprovalScope scope = ApprovalScope.Once)
         {
         }
 
@@ -3769,7 +3769,7 @@ public sealed class NodeChatStreamServiceTests
         {
         }
 
-        public void ResolveApprovalResult(ApprovalResolvedEvent evt)
+        public void ResolveApprovalResult(ApprovalResolvedEvent evt, ApprovalScope scope = ApprovalScope.Once)
         {
         }
 
@@ -3822,7 +3822,7 @@ public sealed class NodeChatStreamServiceTests
             return Task.CompletedTask;
         }
 
-        public Task DispatchApprovalResolvedAsync(ApprovalResolvedEvent evt)
+        public Task DispatchApprovalResolvedAsync(ApprovalResolvedEvent evt, ApprovalScope scope = ApprovalScope.Once)
         {
             return Task.CompletedTask;
         }

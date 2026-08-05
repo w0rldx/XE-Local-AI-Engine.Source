@@ -15,10 +15,12 @@ public sealed class RuntimePackageBuilder
     private Guid _conversationId = Guid.NewGuid();
 
     private Guid _invocationId = Guid.NewGuid();
+    private bool _isUnattended;
     private string? _modelProfile = "qwen3.5:0.8b";
     private OrchestrationSpec? _orchestrationSpec;
     private string _resolvedSystemPrompt = "You are helpful.";
     private SamplingOptions? _samplingOptions;
+    private IReadOnlyList<ResolvedSkill>? _skills;
     private TimeoutSettings _timeouts = new();
 
     private RuntimePackageBuilder()
@@ -177,10 +179,26 @@ public sealed class RuntimePackageBuilder
         return this;
     }
 
+    public RuntimePackageBuilder WithSkills(params ResolvedSkill[] skills)
+    {
+        ArgumentNullException.ThrowIfNull(skills);
+        _skills = [.. skills];
+        return this;
+    }
+
+    /// <summary>Marks the package as a scheduled/headless run, which has no operator to answer an approval.</summary>
+    public RuntimePackageBuilder AsUnattended()
+    {
+        _isUnattended = true;
+        return this;
+    }
+
     public RuntimePackage Build()
     {
         return new RuntimePackage
         {
+            IsUnattended = _isUnattended,
+            Skills = _skills,
             InvocationId = _invocationId,
             ConversationId = _conversationId,
             ClientNodeId = _clientNodeId,

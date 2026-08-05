@@ -8,16 +8,31 @@ import {
 	skillFormSchema,
 } from "@/features/skills/models/SkillModels";
 
-const valid = { name: "invoice-review", description: "How to review", body: "# Body", enabled: true };
+const valid = {
+	name: "invoice-review",
+	description: "How to review",
+	body: "# Body",
+	enabled: true,
+	license: "MIT",
+	compatibility: "",
+	allowedTools: "",
+	metadata: null,
+};
 
 describe("SKILL_NAME_PATTERN", () => {
-	it.each(["a", "abc", "a1", "invoice-review", "invoice--review", "ab-cd-ef", "x9z"])("accepts the MAF-safe name %s", (name) => {
+	it.each(["a", "abc", "a1", "invoice-review", "ab-cd-ef", "x9z"])("accepts the specification-valid name %s", (name) => {
 		expect(SKILL_NAME_PATTERN.test(name)).toBe(true);
 	});
 
-	it.each(["", "-bad", "bad-", "Bad", "with space", "under_score", "Über", "a/b"])("rejects the invalid name %s", (name) => {
-		expect(SKILL_NAME_PATTERN.test(name)).toBe(false);
-	});
+	// "invoice--review" moved here from the accepted list: the Agent Skills specification forbids consecutive
+	// hyphens and MAF's AgentSkillFrontmatter.ValidateName rejects them, so accepting it let an operator create a
+	// skill that threw when it was built into an agent.
+	it.each(["", "-bad", "bad-", "invoice--review", "a--b", "Bad", "with space", "under_score", "Über", "a/b"])(
+		"rejects the invalid name %s",
+		(name) => {
+			expect(SKILL_NAME_PATTERN.test(name)).toBe(false);
+		},
+	);
 });
 
 describe("skillFormSchema", () => {
@@ -28,10 +43,10 @@ describe("skillFormSchema", () => {
 
 	it("trims name, description and body on parse", () => {
 		const result = skillFormSchema.safeParse({
+			...valid,
 			name: "  invoice-review  ",
 			description: "  desc  ",
 			body: "  body  ",
-			enabled: true,
 		});
 		expect(result.success).toBe(true);
 		if (result.success) {

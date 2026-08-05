@@ -34,7 +34,8 @@
 			"showingRange": "{{from}}–{{to}} von {{total}}"
 		},
 		"confirmation": "Bestätigung",
-		"workerNode": "Worker-Node"
+		"workerNode": "Worker-Node",
+		"hide": "Ausblenden"
 	},
 	"theme": {
 		"title": "Design",
@@ -94,7 +95,8 @@
 			"noOutput": "(keine Ausgabe)",
 			"approvalPrompt": "Dieses Tool benötigt deine Freigabe zur Ausführung.",
 			"approve": "Freigeben",
-			"deny": "Ablehnen"
+			"deny": "Ablehnen",
+			"approveSession": "Für diese Sitzung freigeben"
 		},
 		"askUser": {
 			"title": "Der Assistent braucht deine Eingabe",
@@ -3555,7 +3557,11 @@
 					"enabled": "Aktiviert",
 					"version": "Version",
 					"actions": "Aktionen"
-				}
+				},
+				"importedBadge": "Importiert · {{source}}",
+				"importedUnknownSource": "unbekannte Quelle",
+				"invalidNameBadge": "Name unbrauchbar",
+				"invalidNameTooltip": "Dieser Name ist für einen Agenten ungültig, daher wird der Skill beim Aufbau eines Agenten übersprungen. Benennen Sie ihn in Kleinbuchstaben und Ziffern um, getrennt durch einzelne Bindestriche."
 			},
 			"editor": {
 				"createTitle": "Neuer Skill",
@@ -3569,7 +3575,7 @@
 					"description": "Kleingeschriebener Bezeichner (z. B. invoice-review).",
 					"placeholder": "invoice-review",
 					"required": "Name ist erforderlich.",
-					"invalid": "Nur Kleinbuchstaben, Ziffern und Bindestriche verwenden (kein führender oder abschließender Bindestrich)."
+					"invalid": "Nur Kleinbuchstaben und Ziffern, getrennt durch einzelne Bindestriche (kein führender, abschließender oder doppelter Bindestrich)."
 				},
 				"description": {
 					"label": "Beschreibung",
@@ -3581,11 +3587,29 @@
 					"label": "Inhalt",
 					"description": "Die vollständigen Skill-Anweisungen, vom Modell des Agenten bei Bedarf geladen.",
 					"placeholder": "# So prüfen Sie eine Rechnung\n\n1. …",
-					"required": "Inhalt ist erforderlich."
+					"required": "Inhalt ist erforderlich.",
+					"budget": "{{lines}} Zeilen · ~{{tokens}} Tokens",
+					"overGuidance": "die Spezifikation empfiehlt unter {{lines}} Zeilen und {{tokens}} Tokens zu bleiben"
 				},
 				"enabled": {
 					"label": "Aktiviert",
 					"description": "Deaktivierte Skills werden nie von einem Agenten geladen, auch wenn sie weiterhin zugewiesen sind."
+				},
+				"importedNote": "Dieser Skill wurde aus {{source}} importiert. Seine Anweisungen sind fremde Inhalte, die dieser Knoten nie geprüft hat, und laufen nach dem Aktivieren mit den Tool-Rechten Ihres Agenten.",
+				"frontmatterSection": "Frontmatter",
+				"license": {
+					"label": "Lizenz"
+				},
+				"compatibility": {
+					"label": "Kompatibilität"
+				},
+				"allowedTools": {
+					"label": "Erlaubte Tools",
+					"description": "Durch Leerzeichen getrennte Liste, die der Autor des Skills angegeben hat. Wird nur zur Information angezeigt — dieser Knoten gewährt oder beschränkt dadurch kein einziges Tool."
+				},
+				"metadata": {
+					"label": "Metadaten",
+					"readOnly": "Unverändert aus dem Frontmatter des Skills übernommen."
 				}
 			},
 			"delete": {
@@ -3596,6 +3620,72 @@
 				"load": "Skills konnten nicht geladen werden.",
 				"save": "Skill konnte nicht gespeichert werden.",
 				"delete": "Skill konnte nicht gelöscht werden."
+			},
+			"importButton": "Skills importieren",
+			"resources": {
+				"title": "Mitgelieferte Ressourcen ({{count}})",
+				"error": "Die mitgelieferten Ressourcen konnten nicht geladen werden."
+			},
+			"import": {
+				"title": "Skills importieren",
+				"previewButton": "Vorschau",
+				"importButton": "{{count}} ausgewählte importieren",
+				"back": "Andere Quelle wählen",
+				"acknowledge": "Ich verstehe, dass diese Inhalte nicht vertrauenswürdig sind und dass ich selbst für ihre Prüfung verantwortlich bin.",
+				"warning": {
+					"title": "Importierte Skills sind nicht vertrauenswürdige Inhalte",
+					"untrusted": "Skills, die Sie importieren, sind fremde Anweisungen. Dieser Knoten prüft, scannt und isoliert sie nicht. Der Inhalt eines Skills wird wortwörtlich in den Kontext Ihres Agenten eingefügt und kann versuchen, den Agenten zu etwas anderem zu bewegen als dem, was seine Beschreibung angibt.",
+					"consequence": "Die Anweisungen eines aktivierten Skills laufen mit den Tool-Rechten Ihres Agenten — er kann damit ohne weitere Rückfrage Ihre Wissensdatenbank und lokale Dateien in Ihrem Arbeitsverzeichnis lesen.",
+					"posture": "Skripte werden nie importiert. Alles andere wird Ihnen genau so angezeigt, wie es gespeichert wird — lesen Sie unten den vollständigen Inhalt und jede Ressource, und entscheiden Sie dann.",
+					"disabled": "Importierte Skills sind zunächst deaktiviert. Sie zu aktivieren ist ein eigener, bewusster Schritt."
+				},
+				"tabs": {
+					"upload": "Hochladen",
+					"github": "GitHub",
+					"paste": "Einfügen"
+				},
+				"upload": {
+					"label": "Skill-Archiv (.zip)",
+					"description": "Eine .zip mit einer oder mehreren SKILL.md-Dateien samt ihrer mitgelieferten Ressourcen.",
+					"placeholder": "Eine .zip-Datei auswählen"
+				},
+				"github": {
+					"description": "Erreichbar ist ausschließlich github.com, und nur über Eigentümer und Repository — eine eingefügte URL wird nie akzeptiert.",
+					"owner": "Eigentümer",
+					"repository": "Repository"
+				},
+				"paste": {
+					"label": "SKILL.md",
+					"description": "Fügen Sie eine vollständige SKILL.md ein, einschließlich ihres YAML-Frontmatters."
+				},
+				"report": {
+					"summary": "Quelle {{source}} · {{found}} Skills gefunden · {{selected}} ausgewählt",
+					"empty": "Diese Quelle enthält keine Skills."
+				},
+				"conflict": {
+					"label": "Ein ausgewählter Skill existiert auf diesem Knoten bereits",
+					"skip": "Überspringen und behalten, was auf diesem Knoten liegt",
+					"replace": "Ersetzen — dabei wird der vorhandene Skill überschrieben und alle lokalen Änderungen gehen verloren"
+				},
+				"candidate": {
+					"size": "{{bytes}} Bytes · {{lines}} Zeilen",
+					"overGuidance": "über der Empfehlung von {{lines}} Zeilen",
+					"allowedTools": "Angegebene erlaubte Tools: {{tools}}",
+					"problemsTitle": "Kann nicht importiert werden",
+					"refusedTitle": "Abgelehnt — Skripte werden nie importiert",
+					"conflict": "Ein Skill namens '{{name}}' existiert auf diesem Knoten bereits.",
+					"resources": "Mitgelieferte Ressourcen ({{count}})",
+					"showBody": "Vollständigen Inhalt anzeigen",
+					"hideBody": "Vollständigen Inhalt ausblenden"
+				},
+				"outcomes": {
+					"title": "Import-Ergebnis",
+					"disabledNote": "Importierte Skills sind deaktiviert. Öffnen Sie einen, um ihn zu prüfen, und aktivieren Sie ihn dann bewusst."
+				},
+				"errors": {
+					"preview": "Diese Quelle konnte nicht gelesen werden.",
+					"commit": "Die ausgewählten Skills konnten nicht importiert werden."
+				}
 			}
 		},
 		"tools": {

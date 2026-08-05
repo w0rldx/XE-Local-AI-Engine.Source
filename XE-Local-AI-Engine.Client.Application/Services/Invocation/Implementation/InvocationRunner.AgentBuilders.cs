@@ -348,7 +348,14 @@ public sealed partial class InvocationRunner
     ///     Maps the resolved client-side <see cref="ResolvedSkill" /> set onto the provider-agnostic
     ///     <see cref="InvocationSkill" /> records the factory builds into a MAF <c>AgentSkillsProvider</c> (.AI.Agent
     ///     cannot reference Client.Models). Returns null for a null/empty set so the no-skills path stays byte-identical
-    ///     (the factory keeps the existing positional constructor and attaches no context provider).
+    ///     (the factory keeps the existing positional constructor and attaches no context provider). The two records are
+    ///     deliberate duplicates rather than one shared type: the layer test freezes .AI.Agent as unable to reference
+    ///     Client.*, and a field-for-field copy is cheaper than the project it would otherwise take to share them.
+    ///     <para>
+    ///         This is a pure rename of fields — no trust decision is taken or reversed here. An imported skill's body
+    ///         and resource payloads were already fenced by the resolver, so what crosses this boundary is what reaches
+    ///         the model.
+    ///     </para>
     /// </summary>
     private static IReadOnlyList<InvocationSkill>? MapSkills(IReadOnlyList<ResolvedSkill>? skills)
     {
@@ -357,7 +364,31 @@ public sealed partial class InvocationRunner
             return null;
         }
 
-        return [.. skills.Select(static skill => new InvocationSkill(skill.Name, skill.Description, skill.Body))];
+        return
+        [
+            .. skills.Select(static skill => new InvocationSkill(skill.Name,
+                skill.Description,
+                skill.Body,
+                skill.License,
+                skill.Compatibility,
+                skill.AllowedTools,
+                skill.Metadata,
+                MapSkillResources(skill.Resources)))
+        ];
+    }
+
+    /// <summary>
+    ///     Maps one skill's bundled resources onto their provider-agnostic mirror. Null for a skill with no resources,
+    ///     so the instructions-only skill builds exactly the <c>AgentInlineSkill</c> it built before resources existed.
+    /// </summary>
+    private static IReadOnlyList<InvocationSkillResource>? MapSkillResources(IReadOnlyList<ResolvedSkillResource>? resources)
+    {
+        if (resources is not { Count: > 0 })
+        {
+            return null;
+        }
+
+        return [.. resources.Select(static resource => new InvocationSkillResource(resource.Name, resource.Description, resource.MediaType, resource.Content))];
     }
 
     /// <summary>

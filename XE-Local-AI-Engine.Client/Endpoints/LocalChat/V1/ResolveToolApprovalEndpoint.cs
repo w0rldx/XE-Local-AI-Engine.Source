@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.LocalChat.V1;
 
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
+using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Events;
 
@@ -26,8 +27,11 @@ public sealed class ResolveToolApprovalEndpoint(IWorkerEventDispatcher eventDisp
     public override async Task HandleAsync(ResolveToolApprovalRequest req, CancellationToken ct)
     {
         // DispatchApprovalResolvedAsync is idempotent/safe when no approval is pending for this id (it logs a warning and
-        // no-ops), so a duplicate or stale decision never faults the turn — it just does nothing.
-        await _eventDispatcher.DispatchApprovalResolvedAsync(new ApprovalResolvedEvent(req.RequestId, req.Approved)).ConfigureAwait(false);
+        // no-ops), so a duplicate or stale decision never faults the turn — it just does nothing. The scope rides the
+        // Application-internal dispatcher parameter rather than the ApprovalResolvedEvent, which is the cross-repo
+        // SignalR contract the platform hub produces and which must not learn about a loopback-only concept.
+        await _eventDispatcher.DispatchApprovalResolvedAsync(new ApprovalResolvedEvent(req.RequestId, req.Approved),
+            req.Scope ?? ApprovalScope.Once).ConfigureAwait(false);
 
         await Send.OkAsync(new ResolveToolApprovalResponse
         {
