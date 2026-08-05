@@ -40,8 +40,9 @@ You will see other files listed. **You do not need them:**
 | `...-full.nupkg`, `...-delta.nupkg` | used by the app's built-in updater |
 | `releases.win.json`, `RELEASES` | the update list the app reads |
 
-> **Don't see any files?** You may not have access yet, or you may be signed out of GitHub. These
-> builds are in a private repository — message me and I'll check your access.
+> **Don't see any files?** The Assets list may just be collapsed — click the word "Assets" (or the
+> small ► triangle) to expand it. If files are genuinely missing, it may be a temporary GitHub issue;
+> try again shortly or [open an issue](../../../issues/new/choose).
 
 ---
 
@@ -147,7 +148,7 @@ XE-Local-AI-Engine\
 
 Windows shows this warning for any program it has not seen many times before from a known publisher.
 Getting rid of it requires a code-signing certificate, which costs several hundred euros a year — I
-have not bought one for a private beta. That is the entire reason for the warning.
+have not bought one yet. That is the entire reason for the warning.
 
 ### ① What you'll see — and why it looks like a dead end
 
@@ -198,7 +199,7 @@ Some managed or hardened machines hide it. Options:
   ```
 - If your machine is managed by an employer or school, **SmartScreen may be enforced by policy and
   cannot be bypassed**. Use a personal machine instead — please do not fight your IT department over
-  a beta test.
+  it.
 
 </details>
 

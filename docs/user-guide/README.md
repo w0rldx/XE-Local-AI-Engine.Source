@@ -1,15 +1,14 @@
-# XE-Local-AI-Engine — tester hub
+# XE-Local-AI-Engine — user guide
 
 **An all-in-one AI application that runs on your own computer.** Chat with AI models, search your own
 documents, build agents, generate images — without sending any of it to a cloud service.
 
-This repository is where testers **download the app, read the instructions, and report problems**.
-It does not contain the source code.
+This repository is the public, open-source home of the app — it contains the source code, released
+under Apache-2.0. This page is the user guide: how to download, install and use the app itself.
 
-> **New here — invited from Reddit?** You are in the right place. Start with
-> [**Getting started**](#getting-started) below. You do not need to be a developer, and you do not need
-> to understand any of the technical terms on this page — every one of them is explained in plain
-> language in the [**Glossary**](docs/glossary.md).
+> **New here?** You are in the right place. Start with [**Getting started**](#getting-started) below.
+> You do not need to be a developer, and you do not need to understand any of the technical terms on
+> this page — every one of them is explained in plain language in the [**Glossary**](docs/glossary.md).
 >
 > **Already run local models?** Skip all of that →
 > [**the technical summary**](docs/for-experienced-users.md): pinned llama.cpp build, launch-flag
@@ -84,19 +83,14 @@ A graphics card is **optional**. Without one the app still works; answers just a
 GitHub is built for programmers and the download page confuses almost everyone the first time. Here is
 exactly what to do.
 
-**1. Sign in to GitHub first.** These builds are in a private repository — you can only see them while
-signed in with the account I invited, and you must **accept the emailed invitation**.
+**1. Open the releases page:** [**→ Latest release**](../../releases/latest)
 
-> **Getting "404 — page not found"?** That is what GitHub shows for a private repo you cannot access.
-> You are signed out, using a different account, or the invite is unaccepted. Tell me your GitHub
-> username and I'll check.
+**2. ⚠️ Do NOT use the green `<> Code` button** if you just want to run the app. It downloads this
+repository's **source code**, not a ready-to-run build — there is nothing to double-click inside it.
+That button is for developers who want to build the app themselves; everyone else wants the Releases
+page instead. This is the single most common mistake.
 
-**2. Open the releases page:** [**→ Latest release**](../../releases/latest)
-
-**3. ⚠️ Do NOT use the green `<> Code` button.** It downloads *this instruction repository*, not the
-app — there is no program inside it. This is the single most common mistake.
-
-**4. Scroll to "Assets" and click it to expand.** It is often collapsed behind a small ► triangle.
+**3. Scroll to "Assets" and click it to expand.** It is often collapsed behind a small ► triangle.
 You will see a list like this:
 
 ```
@@ -114,18 +108,18 @@ You will see a list like this:
    Source code (tar.gz)                                    ❌ ignore
 ```
 
-**5. Windows: click `XE-Local-AI-Engine-win-Portable.zip`** — about 100 MB. **Linux:** grab the
+**4. Windows: click `XE-Local-AI-Engine-win-Portable.zip`** — about 100 MB. **Linux:** grab the
 `...-linux-Portable.zip` instead and follow the [Linux guide](docs/install-linux.md). (`<version>` is a
 placeholder for the build number, e.g. `v0.1.0-rc.5.0`.) The other files are for the Windows app's own
 updater; you never open them.
 
-**6. If your browser blocks it** (Edge/Chrome: *"is not commonly downloaded"*), open your downloads
+**5. If your browser blocks it** (Edge/Chrome: *"is not commonly downloaded"*), open your downloads
 list with `Ctrl`+`J`, click the `⋯` next to the file and choose **Keep** → **Keep anyway**. Same cause
 as the Windows warning below: the build is unsigned.
 
 **Check you got the right file:** it should be named `XE-Local-AI-Engine-win-Portable.zip` and be
 **90–100 MB**. If it's only a few hundred KB, you downloaded the source code by mistake — go back to
-point 3.
+point 2.
 
 There is **no installer** and no `Setup.exe`. You unzip a folder and run it.
 
@@ -223,7 +217,7 @@ read these before you start, so nothing comes as a surprise:
   it will feel weak, and that is expected. Use the built-in advisor at **Models → Recommendations** to pick a real model
   for your hardware. [How to do that →](docs/first-run.md#step-4--get-a-model-that-is-actually-good)
 - **Windows will warn you on first launch**, because the build is unsigned. [What to click →](docs/install-windows.md#the-windows-smartscreen-warning)
-- **Things will break.** That is what this test is for.
+- **Expect rough edges.** This is early, actively-developed software.
 - **Your database is not fully encrypted.** Sensitive fields are individually encrypted, but extracted
   document text is not. [Details →](docs/privacy-and-data.md)
 - **Keep backups of anything you care about.** Do not make this app the only place important data lives.
@@ -242,13 +236,12 @@ When reporting a problem, the [feedback guide](docs/feedback.md) explains what t
 
 ---
 
-## About this test
+## About this project
 
-- Builds here are **private beta** releases for invited testers.
+- This is an **early beta**, built and maintained by **one person**.
 - There is **no required feedback report** and no obligation to review or promote anything.
-- The project is intended to become **open source** eventually; the licence is not chosen yet.
-- The app in this repository is **proprietary, all rights reserved** for now. Please do not
-  redistribute the builds.
+- The project is **open source**, licensed under **[Apache-2.0](../../LICENSE)** — you're free to use,
+  modify and redistribute it under that licence.
 
-Thank you for testing. Genuinely — honest impressions from people on hardware I do not own is the
+Thank you for trying it. Genuinely — honest impressions from people on hardware I do not own is the
 single most useful thing for this project right now.

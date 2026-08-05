@@ -5,6 +5,10 @@ XE Local AI Engine is the node-side runtime for running local AI workloads while
 
 The repository is being prepared for an RC release. Release documentation and validation evidence live in this repo and must stay current with runtime behavior.
 
+> **Just want to install and use the app?** Start with the **[User Guide](docs/user-guide/README.md)** — download,
+> install (Windows & Linux), first run, troubleshooting, and privacy, all in plain language. App downloads are on the
+> [Releases](../../releases/latest) page.
+
 ## What ships from this repo
 
 - **Node Web Server** (`XE-Local-AI-Engine.Client`) — serves the React UI, local APIs under `/api/local/v1`, local SignalR hubs, SQLite-backed chat state, and the existing platform `WorkerHub`
@@ -44,6 +48,9 @@ The repository is being prepared for an RC release. Release documentation and va
 - Any future installer or packaging effort must not create background autostart behavior unless a new approved plan changes that contract.
 
 ## Documentation map
+
+**Using the app (non-developers):** the **[User Guide](docs/user-guide/README.md)** covers download, install,
+first run, troubleshooting, privacy, and a plain-language glossary.
 
 The contributor deep-dive lives in the **[Developer Wiki](docs/wiki/Home.md)** — code-grounded
 pages covering architecture, every project, the local llama.cpp runtime and providers, agent mode,

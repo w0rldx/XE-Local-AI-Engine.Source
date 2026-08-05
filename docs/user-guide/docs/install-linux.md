@@ -64,8 +64,9 @@ You will see several other files. **On Linux you need exactly one of them:**
 | `...-full.nupkg`, `...-delta.nupkg` | used by the **Windows** app's built-in updater |
 | `releases.win.json`, `RELEASES` | the update list the **Windows** app reads |
 
-> **Don't see any files?** You may not have access yet, or you may be signed out of GitHub. These
-> builds are in a private repository — message me and I'll check your access.
+> **Don't see any files?** The Assets list may just be collapsed — click the word "Assets" (or the
+> small ► triangle) to expand it. If files are genuinely missing, it may be a temporary GitHub issue;
+> try again shortly or [open an issue](../../../issues/new/choose).
 
 ### Checking your download *(optional)*
 
@@ -174,10 +175,9 @@ downloaded source doesn't match.
   <img src="../media/screenshots/cuda-build-running@2x.png" alt="In-app CUDA runtime build" width="800">
 </p>
 
-**This is the single most valuable thing a Linux tester can try.** It needs to work across many
-distributions, drivers and CUDA versions, and it is the least-covered path in the whole project. If you
-have an NVIDIA machine and are willing to run it, that feedback is genuinely valuable — whether it
-works or not.
+**This is one of the most valuable things you can try if you have an NVIDIA Linux machine.** It needs to
+work across many distributions, drivers and CUDA versions, and it is the least-covered path in the whole
+project. If you're willing to run it, that feedback is genuinely valuable — whether it works or not.
 
 ---
 
@@ -247,7 +247,7 @@ Prefer to do it by hand? Stop the app, delete the app folder, and delete
 
 ## macOS and ARM
 
-Neither exists — no macOS build, and no ARM build on any platform. Not planned for this test phase.
+Neither exists — no macOS build, and no ARM build on any platform. Not currently planned.
 
 ---
 
