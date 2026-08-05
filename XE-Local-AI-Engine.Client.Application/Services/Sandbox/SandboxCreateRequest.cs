@@ -34,11 +34,11 @@ public sealed record SandboxCreateRequest
     ///     read-only.
     ///     <para>
     ///         Engine-generated <em>only</em>. Nothing here may be derived from a registered repository: a repository is
-    ///         a tree the agent can write, and decision D7 rejects repository-supplied mount configuration wholesale
+    ///         a tree the agent can write, and repository-supplied mount configuration is rejected wholesale
     ///         because a repository that could name a mount could name the daemon socket.
     ///     </para>
     ///     <para>
-    ///         What is NOT here is as load-bearing as what is. Decision D9 requires the workspace control manifest to be
+    ///         What is NOT here is as load-bearing as what is. The workspace control manifest must be
     ///         unreachable from inside any sandbox, and the cheapest way to satisfy it is to mount the named
     ///         subdirectories of a control-state root rather than the root itself — so a caller lists
     ///         <c>&lt;runtime&gt;/home</c> and its siblings, never <c>&lt;runtime&gt;</c>.

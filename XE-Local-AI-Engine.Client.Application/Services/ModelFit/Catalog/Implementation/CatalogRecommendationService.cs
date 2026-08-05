@@ -96,8 +96,7 @@ internal sealed class CatalogRecommendationService : ICatalogRecommendationServi
     }
 
     /// <summary>
-    ///     Recommended = fits at/above Q4_K_M quality with real headroom (resident or offload-labeled) — see
-    ///     Plans/2026-07-10-model-rec-catalog-and-harness-h1-plan.md §7.
+    ///     Recommended = fits at/above Q4_K_M quality with real headroom (resident or offload-labeled).
     /// </summary>
     private static bool IsRecommended(CatalogRecommendationCandidate candidate)
     {

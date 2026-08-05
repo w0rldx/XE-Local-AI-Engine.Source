@@ -7,7 +7,7 @@ public interface IDockerDaemonPreflightService
 {
     /// <summary>
     ///     Resolve the endpoint, probe the daemon, and compare what answered against this node's pinned attestation.
-    ///     Pins on first use (D10). Never throws for an unavailable daemon — an unavailable daemon is a result.
+    ///     Pins on first use. Never throws for an unavailable daemon — an unavailable daemon is a result.
     /// </summary>
     Task<DockerDaemonPreflight> InspectAsync(CancellationToken cancellationToken = default);
 

@@ -14,7 +14,7 @@ namespace XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 ///     </para>
 ///     <para>
 ///         Container paths are POSIX regardless of what the engine host is — the engine may be a native Windows
-///         process (D1) while the container is always Linux — so the container leg is normalised by this file rather
+///         process while the container is always Linux — so the container leg is normalised by this file rather
 ///         than by <see cref="Path" />, whose separator and rooting rules would answer for the wrong operating
 ///         system. Only the host leg uses <see cref="Path" />, and only after the container leg has proven
 ///         containment.

@@ -2,7 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.ModelFit.Catalog;
 
 /// <summary>
 ///     Serves the curated model catalog the recommendation ranking lane reads: bundled by default, optionally kept
-///     fresh from an operator-configured remote URL (locked decision D1). A remote-fetch failure never surfaces to the
+///     fresh from an operator-configured remote URL. A remote-fetch failure never surfaces to the
 ///     caller — it silently falls back to the last-good persisted remote catalog, else the bundled seed.
 /// </summary>
 public interface IModelCatalogProvider

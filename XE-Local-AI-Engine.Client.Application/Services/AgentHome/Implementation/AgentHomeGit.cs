@@ -32,7 +32,7 @@ internal static class AgentHomeGit
         // .git/config runs as a shell command on the first index refresh — status, reset, add and diff all trigger it —
         // under this exact hardened argument vector. That is reachable from the host, not just the sandbox, because
         // DevelopmentPatchEvidenceService runs `reset` and `add -A` with WorkingDirectory set to the workspace, and
-        // under D8 the workspace .git/config is writable from inside the container.
+        // the workspace .git/config is writable from inside the container.
         "-c", "core.fsmonitor=",
 
         // These three were measured as NOT reachable from the current command set — no network operation, and stdout is

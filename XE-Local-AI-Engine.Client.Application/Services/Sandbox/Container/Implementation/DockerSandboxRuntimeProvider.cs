@@ -9,7 +9,7 @@ using Microsoft.Extensions.Options;
 
 /// <summary>
 ///     The <c>docker</c> sandbox <see cref="ISandboxRuntimeProvider" />: a container per sandbox, created under the
-///     §3.8 hardening contract and <em>verified</em> against the daemon's own read-back before the handle is returned.
+///     Docker hardening contract and <em>verified</em> against the daemon's own read-back before the handle is returned.
 ///     Permitted for Development Mode build/test/lint execution only, per ADR 0004.
 ///     <para>
 ///         Security posture, stated per mechanism rather than as one claim. Unconditionally, and verified against the
@@ -18,7 +18,7 @@ using Microsoft.Extensions.Options;
 ///         <b>Egress is confined only when the caller asks for it.</b> <see cref="SandboxNetworkPolicy.None" /> gets an
 ///         empty network namespace; <see cref="SandboxNetworkPolicy.Unrestricted" /> gets Docker's default bridge —
 ///         still a private namespace with no host interface, but with NAT egress — and Development Mode requests that
-///         today because its <c>dotnet restore</c> needs the network until the D6 package-proxy machinery exists.
+///         today because its <c>dotnet restore</c> needs the network until package-proxy machinery exists.
 ///         <see cref="SandboxNetworkPolicy.Restricted" /> has no mechanism here and stays fail-closed rejected. So do
 ///         not read "container" as "offline": whichever policy is in force is the one the caller chose, and it is the
 ///         one verified.
@@ -29,23 +29,23 @@ using Microsoft.Extensions.Options;
 ///         this provider talks to is root-equivalent.
 ///     </para>
 ///     <para>
-///         Fail-closed everywhere. If any single §3.8 guarantee cannot be read back off the created container, the
+///         Fail-closed everywhere. If any single hardening-contract guarantee cannot be read back off the created container, the
 ///         container is removed and the create is rejected with <see cref="SandboxCapabilityNotSupportedException" />.
 ///         There is no path through this class that returns a handle to a container it could not verify.
 ///     </para>
 ///     <para>
 ///         Scope. This provider is registered but is still NOT wired into Development Mode execution — that switch is
-///         per-feature provider selection (D2), and <c>SandboxProviderSelector</c> remains untouched. What exists here
-///         now is the workspace bind mount PLUS the engine-generated mounts of the neutral mount broker (S3.5), which
+///         per-feature provider selection, and <c>SandboxProviderSelector</c> remains untouched. What exists here
+///         now is the workspace bind mount PLUS the engine-generated mounts of the neutral mount broker, which
 ///         is what makes a container able to serve a build at all: a read-only rootfs with no HOME, temp or package
-///         cache cannot run <c>dotnet restore</c>. The dependency-manifest rejection (D6), lifecycle ownership and the
+///         cache cannot run <c>dotnet restore</c>. The dependency-manifest rejection, lifecycle ownership and the
 ///         startup reaper are still later work.
 ///     </para>
 /// </summary>
 // Implements the Development role ONLY, and that omission is load-bearing rather than an oversight: ADR 0004 permits
 // Docker for Development Mode build/test/lint execution only, so this provider deliberately does NOT implement
 // IAgentSandboxRuntimeProvider. Registering it for AgentHome or Coder is therefore a COMPILE ERROR, not something a
-// reviewer has to notice — which is what keeps a container requirement from spreading to features D0 scopes it out of.
+// reviewer has to notice — which is what keeps a container requirement from spreading to features deliberately scoped out of it.
 public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimeProvider, IAsyncDisposable
 {
     /// <summary>The provider name this registers under for configuration-bound selection.</summary>
@@ -57,7 +57,7 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
     // misbehaving image from turning a create-time check into a multi-megabyte capture.
     private const int ProbeCapturedOutputBytes = 4 * 1024;
 
-    // On Windows the engine is a native Windows process while the container is Linux (D1), so the host's own account
+    // On Windows the engine is a native Windows process while the container is Linux, so the host's own account
     // identifiers do not name anything inside it. 1000 is the conventional first non-root Linux account and is only a
     // default: an operator whose image expects another id sets UserId/GroupId explicitly.
     private const int WindowsDefaultUserId = 1000;
@@ -99,7 +99,7 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
     ///         endpoint: Docker refuses <c>PUT /containers/{id}/archive</c> outright against a container with a
     ///         read-only root filesystem — measured against Engine 29.6.1, which answers
     ///         <c>400 container rootfs is marked read-only</c> regardless of the destination path, including a writable
-    ///         <c>tmpfs</c> — and §3.8 makes that root filesystem non-negotiable. The workspace bind mount is the same
+    ///         <c>tmpfs</c> — and the Docker hardening contract makes that root filesystem non-negotiable. The workspace bind mount is the same
     ///         bytes on both sides, so the write goes to the host path backing the destination, under the containment
     ///         and symlink guards <c>DockerWorkspaceHostFiles</c> applies. That the engine and the container can each
     ///         read what the other wrote is not assumed either: <see cref="CreateOrAttachAsync" /> proves it with a
@@ -589,7 +589,7 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
     }
 
     /// <summary>
-    ///     Container paths are POSIX whatever the engine host is (D1 allows a native Windows engine driving a Linux
+    ///     Container paths are POSIX whatever the engine host is (a native Windows engine may drive a Linux
     ///     container), so this validates the string rather than asking <see cref="Path" />, whose rooting and separator
     ///     rules would answer for the wrong operating system.
     /// </summary>
@@ -696,7 +696,7 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
     ///         The list this returns is the SAME list handed to <see cref="DockerSandboxHardening.BuildSpecification" />
     ///         and therefore the same one <c>DockerSandboxHardening.VerifyMounts</c> checks the daemon's read-back
     ///         against — both that every requested mount is present with the propagation and read-only flag it asked
-    ///         for, and that the container carries no mount the engine did NOT request, which is the D7 enforcement.
+    ///         for, and that the container carries no mount the engine did NOT request.
     ///         Composing a second list here would route these mounts around that check while leaving it looking intact.
     ///     </para>
     /// </summary>
@@ -760,7 +760,7 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
     ///     then reading it back from the host. Throws <see cref="SandboxCapabilityNotSupportedException" /> — leaving
     ///     the caller's <c>catch</c> to remove the container — when it is not.
     ///     <para>
-    ///         This is the half of the §3.8 user check that the daemon cannot perform for us. An inspect only echoes
+    ///         This is the half of the hardening contract's user check that the daemon cannot perform for us. An inspect only echoes
     ///         back the UID that was asked for; it has no way to say what that UID maps to, and under a rootless daemon
     ///         a perfectly conformant read-back is compatible with a container that cannot write a single byte into its
     ///         own workspace. One probe settles the mount's writability, the identity mapping and the engine's own

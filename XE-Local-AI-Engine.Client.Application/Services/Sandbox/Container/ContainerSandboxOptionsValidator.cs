@@ -5,7 +5,7 @@ using Microsoft.Extensions.Options;
 
 /// <summary>
 ///     Fail-closed startup validation for <see cref="ContainerSandboxOptions" />. It rejects, at startup, every
-///     configuration that could only produce a container weaker than the §3.8 hardening contract — a root UID, a
+///     configuration that could only produce a container weaker than the Docker hardening contract — a root UID, a
 ///     mutable image tag, a relative mount target, or a scratch area that overlaps the workspace mount.
 ///     <para>
 ///         Deliberately NOT gated on "is the container provider selected". A stripped or mistyped configuration must
@@ -112,7 +112,7 @@ internal sealed class ContainerSandboxOptionsValidator : IValidateOptions<Contai
         }
 
         // Container paths are POSIX regardless of what the engine host is: the engine may be a native Windows process
-        // (D1) while the container is always Linux, so Path.IsPathRooted would answer for the wrong operating system.
+        // while the container is always Linux, so Path.IsPathRooted would answer for the wrong operating system.
         if (!value.StartsWith('/'))
         {
             failures.Add($"'{propertyName}' must be an absolute in-container path starting with '/', not '{value}'.");

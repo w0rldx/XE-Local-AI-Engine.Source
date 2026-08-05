@@ -1,8 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 
 /// <summary>
-///     The one Git step Development Mode's template materialization (S2.1) and its managed workspace (S3.4 / decision
-///     D8) genuinely share: producing a <em>standalone</em> clone of a host repository — one whose <c>.git</c> is a real
+///     The one Git step Development Mode's template materialization and its managed workspace genuinely share:
+///     producing a <em>standalone</em> clone of a host repository — one whose <c>.git</c> is a real
 ///     directory with its own object store, so the source repository is not reachable from the result.
 ///     <para>
 ///         Deliberately not a "materialize a repository" abstraction. The two callers diverge immediately after this

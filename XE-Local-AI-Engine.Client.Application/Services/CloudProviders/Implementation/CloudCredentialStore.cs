@@ -307,8 +307,8 @@ public sealed class CloudCredentialStore : ICloudCredentialStore, IDisposable
         ValidateHeaders(connection, nameof(config));
     }
 
-    // Entra ID requires a tenant, client id, and token scope regardless of sign-in shape (frozen build contract, see
-    // Plans/azure-ai-gateway-entra-provider-findings.md §8) — the client secret is optional, and its absence selects
+    // Entra ID requires a tenant, client id, and token scope regardless of sign-in shape — the client secret is
+    // optional, and its absence selects
     // interactive user sign-in. Defense-in-depth against an
     // out-of-range sign-in-method value slipping in via a partial or hand-edited JSON blob.
     private static void ValidateEntraId(StoredAzureFoundryConnection connection, string paramName)

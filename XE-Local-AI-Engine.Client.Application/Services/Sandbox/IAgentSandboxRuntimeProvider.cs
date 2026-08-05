@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Sandbox;
 /// <summary>
 ///     The sandbox an <b>AgentHome</b> run executes in — and, by attachment, the one Coder reads through.
 ///     <para>
-///         Adds no members. It exists to make provider selection <em>per feature</em> (plan decision D2) a property of
+///         Adds no members. It exists to make provider selection <em>per feature</em> a property of
 ///         the type system rather than of a registration someone has to keep correct: a feature that asks for this
 ///         interface is structurally unable to receive the Development Mode role's provider, and vice versa. The bare
 ///         <see cref="ISandboxRuntimeProvider" /> is deliberately NOT registered in DI, so there is no "whichever

@@ -268,8 +268,8 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
     }
 
     /// <summary>
-    ///     Builds the merged recommendation set: the curated catalog lane (PRIMARY — "recommended" / "canRun" sections,
-    ///     locked decision D1/D2) followed by the existing live Hugging Face discovery lane, now demoted to a secondary
+    ///     Builds the merged recommendation set: the curated catalog lane (PRIMARY — "recommended" / "canRun" sections)
+    ///     followed by the existing live Hugging Face discovery lane, now demoted to a secondary
     ///     "explore" section. A catalog-lane failure never fails the whole refresh — the explore lane still succeeds on
     ///     its own (see <see cref="BuildCatalogRecommendationsAsync" />).
     /// </summary>
@@ -291,8 +291,8 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
     }
 
     /// <summary>
-    ///     Runs the catalog ranking lane and maps its "Recommended" / "Can run" sections (each already ordered per
-    ///     Plans/2026-07-10-model-rec-catalog-and-harness-h1-plan.md §7) to <see cref="AdvisorRecommendation" /> rows,
+    ///     Runs the catalog ranking lane and maps its "Recommended" / "Can run" sections (each already ordered tier →
+    ///     fit class → quant quality → recency → id) to <see cref="AdvisorRecommendation" /> rows,
     ///     each capped at the request limit. Any failure (catalog
     ///     provider / discovery / estimator) is caught and logged — the catalog lane degrading to empty must never fail
     ///     the run, since the explore lane alone is still a useful recommendation set.
@@ -352,7 +352,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
     /// <summary>
     ///     Discovers candidate GGUF repos, inspects their files, estimates each file's fit at the chosen quant, drops the
     ///     non-fitting / insufficient-metadata files, and ranks the survivors by descending headroom (best fit first),
-    ///     capped at the request limit. This is the secondary "explore" section (locked decision D2) — the catalog lane
+    ///     capped at the request limit. This is the secondary "explore" section — the catalog lane
     ///     is now the primary recommendation source.
     /// </summary>
     private async Task<IReadOnlyList<AdvisorRecommendation>> BuildExploreRecommendationsAsync(ModelFitRefreshRequest request,

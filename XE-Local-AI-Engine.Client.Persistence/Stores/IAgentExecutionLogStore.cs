@@ -15,7 +15,7 @@ public interface IAgentExecutionLogStore
 
     /// <summary>
     ///     Appends a single tool-approval DECISION audit row (<see cref="AgentExecutionLogRecordKind.ApprovalDecision" />),
-    ///     assigning <c>Id</c> and <c>CreatedAtUtc</c> (OPP-03). Metadata only — no message content, never encrypted: the
+    ///     assigning <c>Id</c> and <c>CreatedAtUtc</c>. Metadata only — no message content, never encrypted: the
     ///     tool name, the resolved decision (approve / deny / timeout), the decision source (local / hub), and the tool's
     ///     risk category are all non-sensitive category labels, reused across existing columns without a schema change.
     /// </summary>
@@ -90,8 +90,8 @@ public static class AgentUsageProviders
 }
 
 /// <summary>
-///     Canonical, lowercase values of the tool-approval DECISION dimension carried on approval-decision audit rows
-///     (OPP-03). Non-sensitive category labels (stored plaintext) — never message content. Also the metric-tag values for
+///     Canonical, lowercase values of the tool-approval DECISION dimension carried on approval-decision audit rows.
+///     Non-sensitive category labels (stored plaintext) — never message content. Also the metric-tag values for
 ///     the <c>decision</c> dimension so the row and the counter agree on one vocabulary.
 /// </summary>
 public static class ApprovalDecisions
@@ -107,7 +107,7 @@ public static class ApprovalDecisions
 }
 
 /// <summary>
-///     Canonical, lowercase values of the tool-approval SOURCE dimension carried on approval-decision audit rows (OPP-03):
+///     Canonical, lowercase values of the tool-approval SOURCE dimension carried on approval-decision audit rows:
 ///     where the decision was resolved. Non-sensitive category labels (stored plaintext) — never message content.
 /// </summary>
 public static class ApprovalDecisionSources
@@ -147,7 +147,7 @@ public enum AgentExecutionLogRecordKind
     ChatRunEnvelope = 1,
 
     /// <summary>
-    ///     Tool-approval decision audit (OPP-03): one content-free row per resolved approval decision (approve / deny /
+    ///     Tool-approval decision audit: one content-free row per resolved approval decision (approve / deny /
     ///     timeout). Reuses existing metadata columns — no message content, never encrypted. Excluded from the
     ///     diagnostics view (kind 0) and the run-envelope ledger (kind 1) since each read path filters to its own kind;
     ///     pruned by the same whole-table retention sweep.
@@ -156,7 +156,7 @@ public enum AgentExecutionLogRecordKind
 }
 
 /// <summary>
-///     Fields supplied when appending a tool-approval DECISION audit row (OPP-03). Metadata only — supply NO message
+///     Fields supplied when appending a tool-approval DECISION audit row. Metadata only — supply NO message
 ///     content and NO tool arguments. <see cref="Category" /> is a <c>ToolCategory</c> enum name, <see cref="Decision" />
 ///     one of <see cref="ApprovalDecisions" />, and <see cref="Source" /> one of <see cref="ApprovalDecisionSources" /> —
 ///     all non-sensitive category labels. <see cref="LatencyMs" /> is the request→decision wall-clock in milliseconds.

@@ -49,7 +49,7 @@ export function useDevelopmentCapability() {
 }
 
 /**
- * Records the operator's explicit approval of the container runtime currently reachable (decision D10).
+ * Records the operator's explicit approval of the container runtime currently reachable.
  *
  * Invalidates the capability query on settle so the panel re-reads the preflight rather than trusting the mutation's
  * own response — the daemon can change again between the confirmation and the next render, and the capability query is

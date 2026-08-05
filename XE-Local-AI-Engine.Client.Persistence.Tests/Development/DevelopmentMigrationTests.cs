@@ -55,7 +55,7 @@ public sealed class DevelopmentMigrationTests : IDisposable
                 "development_projects",
                 "development_tasks",
 
-                // Slice 2. The template registry and the provenance of repositories materialized from it are node-scoped
+                // The template registry and the provenance of repositories materialized from it are node-scoped
                 // configuration, not part of the project/task/attempt operation journal.
                 "development_templates",
                 "development_template_materializations"
@@ -150,7 +150,7 @@ public sealed class DevelopmentMigrationTests : IDisposable
     }
 
     /// <summary>
-    ///     Pins the attempt-profile migration alone (S1.5.3): its <c>Down</c> must remove only
+    ///     Pins the attempt-profile migration alone: its <c>Down</c> must remove only
     ///     <c>development_attempts.command_profile_json</c> and leave the Development tables, their rows, and the
     ///     project-level profile column from the preceding migration untouched. Same narrow assertion as
     ///     <see cref="CommandProfileMigration_RollsBackToPrecedingSchemaWithDevelopmentTablesAndRowsIntact" />, and

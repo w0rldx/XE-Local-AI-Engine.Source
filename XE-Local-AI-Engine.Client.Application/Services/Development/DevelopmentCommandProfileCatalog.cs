@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 
 /// <summary>
-///     The code-owned command-profile catalog. Slice 1 ships three .NET-family profiles and no user-defined ones:
+///     The code-owned command-profile catalog. It ships three .NET-family profiles and no user-defined ones:
 ///     a custom profile would let a repository describe its own build and test commands, which needs the container
 ///     isolation that is not built yet, and a <c>cargo</c> profile on a host without <c>cargo</c> would only upgrade
 ///     "missing solution" into "command not found".
@@ -52,7 +52,7 @@ internal static class DevelopmentCommandProfileCatalog
     ///         <c>**&#47;*.Tests&#47;**</c> alone would be a trap and is not used alone: no directory in
     ///         <c>XE-Framework</c> ends in <c>.Tests</c> (its projects are <c>XeFramework.Tests.UnitTests</c> and
     ///         siblings), and it also misses this repository's own <c>XE-Local-AI-Engine.Tests.E2ETests</c>. Matching
-    ///         only that pattern would protect zero tests on the very repository Slice 1 must prove against.
+    ///         only that pattern would protect zero tests on this very repository.
     ///     </para>
     ///     <para>
     ///         Not included, each for a measured reason: <c>*Spec.cs</c> has three false positives across the two
@@ -132,7 +132,7 @@ internal static class DevelopmentCommandProfileCatalog
     ///     Resolves a profile that was snapshotted into the database, and re-derives it from the code-owned catalog to
     ///     prove the definition has not changed underneath it.
     ///     <para>
-    ///         This is the S1.6 reuse rule. If someone edits a profile's commands without bumping
+    ///         This is the reuse rule. If someone edits a profile's commands without bumping
     ///         <see cref="CurrentVersion" />, every already-created project would silently start running different
     ///         commands under a version string that claims otherwise. Rejecting is the only safe answer: the stored
     ///         bytes are the operator-confirmed agreement, and the code no longer honours it.

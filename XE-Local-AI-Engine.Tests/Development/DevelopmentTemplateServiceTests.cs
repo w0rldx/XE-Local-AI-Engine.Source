@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Slice 2's acceptance evidence for the materialization itself, asserted against a real Git repository on disk
+///     Acceptance evidence for the materialization itself, asserted against a real Git repository on disk
 ///     rather than against a mock: every criterion here is a property of the produced directory, so a test that only
 ///     checked the service's return value would prove nothing about it.
 /// </summary>
@@ -86,7 +86,7 @@ public sealed class DevelopmentTemplateServiceTests : IDisposable
 
         _ = await service.CreateFromTemplateAsync(TemplateId, destination, "with-profile", "main").ConfigureAwait(false);
 
-        // The created repository carries the template's .xe-dev/profile.json, so the Slice 1 import path — which reads
+        // The created repository carries the template's .xe-dev/profile.json, so the project-creation import path — which reads
         // it from the registered repository root at project creation — resolves the template's declared profile.
         var import = DevelopmentCommandProfileImport.TryRead(destination);
         AssertEx.True(import.HasValue, "The template's .xe-dev/profile.json must survive into the created repository.");
@@ -108,7 +108,7 @@ public sealed class DevelopmentTemplateServiceTests : IDisposable
         var template = await CreateTemplateRepositoryAsync().ConfigureAwait(false);
         var service = CreateService(template, new RecordingRepositoryBindings());
 
-        // S2.3: node data is where the engine's managed worktrees and runtime state live. A user-created project is a
+        // Node data is where the engine's managed worktrees and runtime state live. A user-created project is a
         // user artifact and must not be inside it.
         var destination = Path.Combine(NodeDataRoot(), "development", "sneaky");
         var failure = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => service.CreateFromTemplateAsync(TemplateId, destination, "sneaky", "main")).ConfigureAwait(false);

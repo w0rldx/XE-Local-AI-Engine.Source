@@ -349,7 +349,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
             // The mode-off Default Assistant takes the WHOLE capability-gated offer (never the intersected allowed set),
             // but the node-default approval policy still applies (tighten-only) so a node-wide policy is not bypassable by
             // plain mode-off chat. With NO node policy configured the Permissive floor is identity, so the offer — and the
-            // runtime-package config hash — stay byte-identical to the pre-OPP-03 mode-off path. Per-agent ToolApprovals
+            // runtime-package config hash — stay byte-identical to the mode-off path from before this feature existed. Per-agent ToolApprovals
             // are intentionally NOT applied here: this path reproduces plain chat, which carries no per-agent overrides.
             var wholeOffer = _localToolOfferProvider.GetOfferedTools(effectiveModelId, effectiveModelIsCloud);
             AllowedToolDto[] composedWholeOffer =
@@ -380,7 +380,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
                         .Where(tool => allowedNames.Contains(tool.Name))
                         .Select(tool => tool with
                         {
-                            // TIGHTEN-ONLY 3-tier compose (OPP-03): the node policy (which already ORs the tool's catalog
+                            // TIGHTEN-ONLY 3-tier compose: the node policy (which already ORs the tool's catalog
                             // default with its category/per-tool node rule) first, THEN the per-agent override can only
                             // ADD approval. A per-agent true tightens a tool the node policy left auto-execute; a
                             // per-agent false is a NO-OP (it can no longer loosen a tool the node policy — or the catalog

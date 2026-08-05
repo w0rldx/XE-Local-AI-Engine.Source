@@ -324,7 +324,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
                         .Where(tool => allowedNames.Contains(tool.Name))
                         .Select(tool => tool with
                         {
-                            // TIGHTEN-ONLY 3-tier compose (OPP-03), identical to AgentDefinitionResolver.ProjectAllowedTools
+                            // TIGHTEN-ONLY 3-tier compose, identical to AgentDefinitionResolver.ProjectAllowedTools
                             // so a node approval policy cannot be bypassed by routing through an orchestration participant:
                             // the node policy (which already ORs the catalog default with its category/per-tool rule) first,
                             // then the participant's per-agent override can only ADD approval.

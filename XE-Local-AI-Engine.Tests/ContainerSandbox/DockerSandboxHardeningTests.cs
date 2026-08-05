@@ -5,7 +5,7 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The §3.8 hardening contract, guarantee by guarantee.
+///     The container hardening contract, guarantee by guarantee.
 ///     <para>
 ///         Each case weakens exactly one setting in the daemon's read-back and asserts that the verifier names that
 ///         setting. One-at-a-time matters: a verifier that rejected everything would pass a test that only ever
@@ -48,7 +48,7 @@ public sealed class DockerSandboxHardeningTests
     [Test]
     public void FindViolations_AgainstARootlessDaemon_AcceptsUidZeroBecauseItIsNotHostRoot()
     {
-        // The §3.8 rule as written is inverted under a rootless daemon: container uid 0 maps to the INVOKING USER's
+        // The hardening rule as written is inverted under a rootless daemon: container uid 0 maps to the INVOKING USER's
         // unprivileged host account, and it is the only identity that can use an engine-generated bind mount there
         // (measured on Engine 29.6.1 rootless: --user 1000:1000 could not create a file in the mount at all). It still
         // has every capability dropped, no-new-privileges set and a read-only rootfs.

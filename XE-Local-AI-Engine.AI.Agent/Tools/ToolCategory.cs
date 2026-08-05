@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.AI.Agent.Tools;
 
 /// <summary>
-///     The risk class an agent tool falls into, used by the node-default tool-approval policy (OPP-03) to decide whether
+///     The risk class an agent tool falls into, used by the node-default tool-approval policy to decide whether
 ///     a whole category of tools should require an approval round-trip before executing. Declared at each tool's own
 ///     definition site (mirroring how <c>RequiresApproval</c> is declared) and carried on the offer descriptors into
 ///     <c>AllowedToolDto.Category</c>, where the policy layer reads it.

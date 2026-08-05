@@ -21,7 +21,7 @@ const CATEGORY_COLOR: Record<ToolCategory, string> = {
 	Unknown: "red",
 };
 
-// Small badge that labels a tool's risk class (OPP-03) and surfaces whether the node policy gates it behind approval.
+// Small badge that labels a tool's risk class and surfaces whether the node policy gates it behind approval.
 // Shared by the agent tool selector and the chat tool card so a tool's class reads consistently wherever it appears.
 // Pure presentation; the WHY of the gating lives in the tooltip. An unrecognized category is parsed upstream to
 // "Unknown" (fail-closed), so this component only ever renders a known class.

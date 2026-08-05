@@ -21,7 +21,7 @@ public sealed record LocalToolCatalogEntry
     public required string Source { get; init; }
 
     /// <summary>
-    ///     The tool's risk class (OPP-03), carried from its definition-site <c>Category</c>. The UI badges it so an
+    ///     The tool's risk class, carried from its definition-site <c>Category</c>. The UI badges it so an
     ///     operator can see a tool's class, and the node-default approval policy reads it to compute the effective
     ///     approval. Defaults to <see cref="ToolCategory.Unknown" /> (fail-closed) for any entry that did not declare one.
     /// </summary>

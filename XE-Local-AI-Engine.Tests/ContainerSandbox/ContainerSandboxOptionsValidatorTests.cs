@@ -29,7 +29,7 @@ public sealed class ContainerSandboxOptionsValidatorTests
     [Test]
     public void Validate_UidAndGidZero_AreAcceptedHereBecauseOnlyTheDaemonCanSettleWhatTheyMean()
     {
-        // Not an oversight and not a relaxation of §3.8: under a rootless daemon 0 is the invoking user's own
+        // Not an oversight and not a relaxation of the hardening contract: under a rootless daemon 0 is the invoking user's own
         // unprivileged host account and is the ONLY id that can use an engine-generated bind mount. Against a rootful
         // daemon the same value is refused — by DockerSandboxRuntimeProvider.ResolveIdentity, which has probed the
         // daemon and can tell the two apart.

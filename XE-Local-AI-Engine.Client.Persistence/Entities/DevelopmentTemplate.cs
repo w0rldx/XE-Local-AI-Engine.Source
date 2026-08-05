@@ -29,7 +29,7 @@ internal sealed class DevelopmentTemplate
 }
 
 /// <summary>
-///     Provenance for a repository that was created from a template (S2.2).
+///     Provenance for a repository that was created from a template.
 ///     <para>
 ///         Keyed by the <em>selected folder</em> rather than by the project, because the materialization produces a
 ///         folder and the project is created from that folder afterwards — and because the fact "these files came from

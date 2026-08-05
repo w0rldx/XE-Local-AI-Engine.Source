@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Real-daemon integration coverage for the §3.8 hardening contract (plan decision D4).
+///     Real-daemon integration coverage for the container hardening contract.
 ///     <para>
 ///         The unit suite proves the provider <em>refuses</em> a container whose settings did not take. Only this
 ///         suite proves the settings take at all — that a real Docker Engine, asked for this exact specification,
@@ -379,7 +379,7 @@ public sealed class DockerSandboxRealDaemonTests
     [Test]
     public async Task RealDaemon_WhatTheContainerWritesIntoTheWorkspaceIsOwnedByThisEngine()
     {
-        // The invariant §3.8 got backwards, verified the only way it can be. `inspect` echoes back the uid that was
+        // The hardening invariant got backwards, verified the only way it can be. `inspect` echoes back the uid that was
         // ASKED for and can never say what that uid maps to, so this writes from inside the container and stats the
         // result host-side. Measured on this box (Engine 29.6.1 rootless, /etc/subuid w0rldx:100000:65536): container
         // uid 0 lands host-side as uid 1000 (the engine), while container uid 1000 would be host uid 100999 and could
@@ -403,9 +403,9 @@ public sealed class DockerSandboxRealDaemonTests
     [Test]
     public async Task RealDaemon_AnIdentityThatDoesNotMapToThisEngine_IsRefusedAndTheContainerRemoved()
     {
-        // The measurement that inverted the rule, as a regression pin. Under this box's rootless daemon the §3.8
+        // The measurement that inverted the rule, as a regression pin. Under this box's rootless daemon the hardening
         // mandate of `--user 1000:1000` produces a container that cannot write a byte into its own workspace — and
-        // every §3.8 read-back still passes, because the daemon applied exactly what it was told. Only the probe
+        // every hardening read-back still passes, because the daemon applied exactly what it was told. Only the probe
         // catches it. Skipped rather than inverted on a rootful daemon, where 1000 is the correct answer.
         var options = await RequireDaemonAsync();
         if (!await IsRootlessAsync(options))

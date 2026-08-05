@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 using System.Text.Json.Serialization;
 
 /// <summary>
-///     The pinned daemon this node has approved (decision D10). Written once on first use and thereafter only by an
+///     The pinned daemon this node has approved. Written once on first use and thereafter only by an
 ///     explicit operator confirmation.
 ///     <para>
 ///         The property this record exists to defend: <c>DOCKER_HOST</c> is an ordinary environment variable, so the

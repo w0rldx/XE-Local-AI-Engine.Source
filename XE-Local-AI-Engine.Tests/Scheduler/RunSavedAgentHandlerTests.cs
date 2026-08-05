@@ -21,7 +21,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     <see cref="RunSavedAgentHandler" /> (OPP-02) tests: parameter validation rejects a blank/invalid agent id or
+///     <see cref="RunSavedAgentHandler" /> tests: parameter validation rejects a blank/invalid agent id or
 ///     prompt WITHOUT invoking the runner, a valid node-local agent is run through the shared invocation runner with its
 ///     resolved system prompt and the effective model bound as <c>ModelProfile</c>, a cloud-effective agent is rejected
 ///     UP FRONT (no run), a missing agent throws a sanitized <see cref="ScheduledJobExecutionException" />, the capacity

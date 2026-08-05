@@ -3,10 +3,10 @@ namespace XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 using System.Globalization;
 
 /// <summary>
-///     The §3.8 minimum Docker hardening contract, in one place: it builds the container specification, and it
+///     The minimum Docker hardening contract, in one place: it builds the container specification, and it
 ///     verifies the settings the daemon read back against what was asked for.
 ///     <para>
-///         §3.8 is <em>fail-closed</em>. Passing a flag is not evidence the flag took — a daemon may ignore a setting
+///         The hardening contract is <em>fail-closed</em>. Passing a flag is not evidence the flag took — a daemon may ignore a setting
 ///         it does not understand, a newer API may rename one, and a socket an operator did not intend may be a
 ///         daemon configured to do neither. So every guarantee is checked against the daemon's own inspect output,
 ///         and any single unverified guarantee rejects the container. There is no "log a warning and continue" path
@@ -44,7 +44,7 @@ internal static class DockerSandboxHardening
     ///         <see cref="SandboxNetworkPolicy.None" /> is the network namespace with nothing in it.
     ///         <see cref="SandboxNetworkPolicy.Unrestricted" /> is the default bridge — still a private namespace with
     ///         no host interface, but with NAT egress, which is what Development Mode's <c>dotnet restore</c> needs
-    ///         until the D6 package-proxy machinery exists. <see cref="SandboxNetworkPolicy.Restricted" /> is an egress
+    ///         until package-proxy machinery exists. <see cref="SandboxNetworkPolicy.Restricted" /> is an egress
     ///         allow-list and stays fail-closed rejected: there is no mechanism for it here, and returning a bridge
     ///         while the caller believed it had an allow-list would be exactly the silent weakening this contract
     ///         exists to prevent.
@@ -85,7 +85,7 @@ internal static class DockerSandboxHardening
     }
 
     /// <summary>
-    ///     Build the §3.8-conformant specification for one sandbox container.
+    ///     Build the hardening-contract-conformant specification for one sandbox container.
     ///     <para>
     ///         <paramref name="requestedLimits" /> are the caller's ceilings and they WIN over the configured defaults,
     ///         field by field. This provider advertises
@@ -161,7 +161,7 @@ internal static class DockerSandboxHardening
     /// <param name="observed">What the daemon read back.</param>
     /// <param name="daemonIsRootless">
     ///     Whether the daemon is rootless. It moves exactly one rule: under a rootless daemon container UID 0 is the
-    ///     invoking user's unprivileged host account, not host root, so it is the identity §3.8's "not root" rule is
+    ///     invoking user's unprivileged host account, not host root, so it is the identity the hardening contract's "not root" rule is
     ///     actually about — and the conventional non-root UID is the one that maps to a host account owning nothing.
     ///     Note what inspect can and cannot settle: it echoes back the UID that was <em>asked</em> for and can never
     ///     say what that UID maps to, so this flag relaxes a check the caller must then close with a real probe.
@@ -327,7 +327,7 @@ internal static class DockerSandboxHardening
                 violations.Add($"tmpfs: '{target}' has no size bound (options '{appliedOptions}'), so it is host memory.");
             }
 
-            // Checked, not assumed. These options are the whole reason a writable tmpfs is acceptable under §3.8, and
+            // Checked, not assumed. These options are the whole reason a writable tmpfs is acceptable under the hardening contract, and
             // until now only the size bound was read back — a daemon that dropped `noexec` would have produced a
             // container that passed verification while carrying the one property the mount was justified by. Same
             // fail-closed rule as everything else here: asking for a flag is not evidence the flag took.
@@ -374,7 +374,7 @@ internal static class DockerSandboxHardening
 
         if (unexpected.Length > 0)
         {
-            // Not paranoia: the whole point of D7 is that only engine-generated mounts exist. A mount nobody asked for
+            // Not paranoia: the whole point of this check is that only engine-generated mounts exist. A mount nobody asked for
             // is either a daemon-side default this code has not accounted for or a mount somebody else injected, and
             // both are reasons to refuse rather than to guess.
             violations.Add("mounts: the created container carries mounts the engine did not request "

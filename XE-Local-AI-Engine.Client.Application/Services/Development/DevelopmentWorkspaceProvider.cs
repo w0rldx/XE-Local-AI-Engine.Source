@@ -31,10 +31,10 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
     private const int GitErrorExcerptLimit = 500;
 
     /// <summary>
-    ///     The per-task runtime subdirectories a build needs, and the reason D9 is satisfied at zero cost.
+    ///     The per-task runtime subdirectories a build needs, and the reason the control-manifest exclusion is satisfied at zero cost.
     ///     <para>
-    ///         <c>workspace.json</c> — the workspace CONTROL MANIFEST — sits directly in <c>RuntimePath</c>, and D9
-    ///         requires it to be unreachable from inside any sandbox. Mounting these four named subdirectories rather
+    ///         <c>workspace.json</c> — the workspace CONTROL MANIFEST — sits directly in <c>RuntimePath</c>, and it
+    ///         must be unreachable from inside any sandbox. Mounting these four named subdirectories rather
     ///         than their parent is what keeps it out. Nothing inside a sandbox needs it: every accessor is host-side in
     ///         <see cref="PrepareAsync" /> and runs before the sandbox exists.
     ///     </para>
@@ -232,13 +232,13 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
             AttachKey = attachKey,
             RuntimeProfile = RuntimeProfile,
             // DELIBERATELY Unrestricted — a recorded deferral, not an oversight, and not an inconsistency with
-            // AgentHome. AgentHome now requests default-deny egress (PLAN-sandbox-hardening S2) because everything it
+            // AgentHome. AgentHome now requests default-deny egress because everything it
             // runs in the sandbox is local. Development Mode is different: the dotnet-slnx / dotnet-csproj profiles run
             // `dotnet restore` into a per-task NUGET_PACKAGES root that starts COLD, so denying egress here today would
             // not harden Development Mode — it would break it outright, along with the validation gate that depends on
             // a real restore/build/test run.
             //
-            // Turning this off is S3.6, and it is only safe once D6's companion machinery exists: restore limited to
+            // Turning this off is future work, and it is only safe once dependency-manifest-rejection machinery exists: restore limited to
             // the base commit's manifests, plus a dependency-manifest change failing validation with its specific
             // reason. Until both halves land, "network off" here is an outage rather than a hardening win.
             NetworkPolicy = SandboxNetworkPolicy.Unrestricted,
@@ -263,7 +263,7 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
     ///     The engine-generated mounts this feature needs beyond the workspace itself.
     ///     <para>
     ///         The four runtime subdirectories are named individually rather than by mounting their parent, and that is
-    ///         the whole of D9's control-state exclusion: <c>workspace.json</c> lives in the parent and stays outside
+    ///         the whole of the control-state exclusion: <c>workspace.json</c> lives in the parent and stays outside
     ///         every sandbox because the parent is never mounted.
     ///     </para>
     ///     <para>
@@ -378,7 +378,7 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
     }
 
     /// <summary>
-    ///     Creates the managed workspace as an engine-owned standalone clone (decision D8), replacing
+    ///     Creates the managed workspace as an engine-owned standalone clone, replacing
     ///     <c>git worktree add --detach</c>.
     ///     <para>
     ///         A linked worktree's <c>.git</c> is a pointer <em>file</em> into the trusted source repository, so binding
@@ -393,7 +393,7 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
     ///         own <c>symbolic-ref</c> check and <c>DevelopmentWorkspaceTools.EnsureWorkspaceInvariantAsync</c> reject
     ///         it after the first catalog command; a clone <em>inherits</em> <c>origin</c> pointing at the trusted source
     ///         repository, which is a live named path straight back to the thing that is supposed to be unreachable
-    ///         (Slice 2 gets this for free by discarding <c>.git</c>, and this path deliberately cannot); and the result
+    ///         (discarding <c>.git</c> gets this for free, and this path deliberately cannot); and the result
     ///         must still be standing on the base commit that was resolved before the clone.
     ///     </para>
     /// </summary>
@@ -464,13 +464,13 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
     ///     Re-validates a workspace that survived a restart. ADR 0001 decision 3 requires the workspace and its diff to
     ///     be preserved, so this runs on the reuse path as well as immediately after creation.
     ///     <para>
-    ///         The <c>--git-common-dir</c> check <em>inverted</em> its meaning under D8. It used to assert the
+    ///         The <c>--git-common-dir</c> check <em>inverted</em> its meaning once the workspace became a standalone clone. It used to assert the
     ///         workspace's common directory <em>equals</em> the trusted source repository's, which is what proved the
     ///         workspace was a linked worktree of the bound repository. A standalone clone must assert the opposite: the
     ///         common directory resolves <em>inside</em> the workspace, and is explicitly <em>not</em> the trusted
     ///         source's. The negative is stated separately on purpose — a change that silently re-pointed the workspace
     ///         at the source repository would otherwise satisfy the first clause by accident on a host where the two
-    ///         paths coincide, and this is exactly the condition D8 exists to prevent.
+    ///         paths coincide, and this is exactly the condition this check exists to prevent.
     ///     </para>
     ///     <para>
     ///         <c>rev-parse --git-common-dir</c> prints a <em>relative</em> <c>.git</c> in a clone (it printed an

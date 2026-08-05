@@ -4,7 +4,7 @@ namespace XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 ///     Resolves the Docker daemon endpoint this node will talk to, in a fixed, reportable order. Discovery is
 ///     deliberately shallow — it does not read <c>~/.docker/config.json</c> contexts, and it does not probe: it names
 ///     one endpoint and says where that name came from, and the preflight then decides whether the operator has
-///     approved it (D10).
+///     approved it.
 ///     <para>
 ///         Order: explicit engine configuration, then <c>DOCKER_HOST</c>, then the platform default. The environment
 ///         variable outranks the default because that is what every Docker tool does and an operator who sets it means
@@ -49,7 +49,7 @@ internal static class DockerDaemonEndpointResolver
 
         // The per-user socket is only preferred when the system-wide one is genuinely absent. Preferring it whenever
         // it exists would silently move an operator who has both from the daemon they installed to the one their shell
-        // happens to run — exactly the substitution D10 is there to make visible rather than to perform.
+        // happens to run — exactly the substitution the daemon attestation exists to make visible rather than to perform.
         if (!fileExists(DefaultUnixSocketPath))
         {
             var runtimeDirectory = environmentReader(UserRuntimeDirectoryVariable);

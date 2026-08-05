@@ -6,7 +6,7 @@ using System.Text.Json;
 /// <summary>
 ///     The shape a repository may ship at <c>.xe-dev/profile.json</c> to declare which code-owned profile it wants.
 ///     <para>
-///         Deliberately minimal in Slice 1: a repository may name a profile and a build target, and nothing else. It
+///         Deliberately minimal: a repository may name a profile and a build target, and nothing else. It
 ///         may <em>not</em> supply commands, executables, arguments or timeouts. Accepting those would let a repository
 ///         the agent can write choose what the validation gate executes, which is the whole reason the profile lives in
 ///         the database rather than the worktree.

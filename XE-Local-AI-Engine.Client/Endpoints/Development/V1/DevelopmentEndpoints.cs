@@ -51,7 +51,7 @@ public sealed class GetDevelopmentCapabilityEndpoint
 }
 
 /// <summary>
-///     Records the operator's explicit approval of the container runtime currently reachable (decision D10).
+///     Records the operator's explicit approval of the container runtime currently reachable.
 ///     <para>
 ///         Its own endpoint rather than a flag on the capability GET, because pinning a daemon is a decision and a GET
 ///         must not make decisions: a page refresh, a prefetch or a health check would otherwise silently approve

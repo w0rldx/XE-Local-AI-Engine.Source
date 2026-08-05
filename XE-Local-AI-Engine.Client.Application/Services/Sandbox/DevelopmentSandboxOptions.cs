@@ -7,7 +7,7 @@ namespace XE_Local_AI_Engine.Client.Services.Sandbox;
 ///     <para>
 ///         Separate from <see cref="SandboxOptions" /> rather than a second key inside it, because the two select for
 ///         different features and only this one may name a container provider (ADR 0004). One shared key could not
-///         express "Development on docker, AgentHome on process", which is the whole point of decision D2.
+///         express "Development on docker, AgentHome on process" — that per-feature split is the whole point.
 ///     </para>
 /// </summary>
 public sealed class DevelopmentSandboxOptions

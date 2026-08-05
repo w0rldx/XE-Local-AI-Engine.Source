@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Behavioural pin on per-feature provider selection (plan decision D2). Two roles, two configuration keys, and a
+///     Behavioural pin on per-feature provider selection. Two roles, two configuration keys, and a
 ///     deliberate asymmetry: the agent role cannot reach a container provider at all, while the Development role can —
 ///     and falls back to the agent role's choice when it is not configured, which is what makes the seam a runtime
 ///     no-op on a node that has never set the new key.

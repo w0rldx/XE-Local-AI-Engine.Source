@@ -4,7 +4,7 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 
 /// <summary>
 ///     Records a single RESOLVED tool-approval decision (approve / deny / timeout) as a metadata-only audit row plus a
-///     content-free metric increment (OPP-03). The implementation is fire-and-forget-safe: a failed write is swallowed so
+///     content-free metric increment. The implementation is fire-and-forget-safe: a failed write is swallowed so
 ///     it can NEVER break or delay the approval round-trip. It never carries tool arguments or message content — only the
 ///     tool name, its risk category, the decision, the source, and the request→decision latency.
 /// </summary>

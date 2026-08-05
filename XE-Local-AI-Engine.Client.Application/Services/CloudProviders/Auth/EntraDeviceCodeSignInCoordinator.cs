@@ -174,8 +174,7 @@ public sealed class EntraDeviceCodeSignInCoordinator : IEntraDeviceCodeSignInCoo
             // Keep the live, already-authenticated credential alive for the chat-client factory to reuse: its MSAL
             // token cache (in-memory always, plus OS-native encrypted disk when available) is what actually holds
             // the refresh token — a credential rebuilt later from only the persisted record has nothing to silently
-            // refresh from when encrypted persistence is unavailable on this platform (see
-            // Plans/azure-ai-gateway-entra-provider-findings.md §9).
+            // refresh from when encrypted persistence is unavailable on this platform.
             _liveCredentialCache.Store(cacheKey, credential);
 
             // Persist with a fresh token: a superseded/cancelled attempt must not abort this save mid-flight.

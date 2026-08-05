@@ -1355,7 +1355,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         CancellationToken cancellationToken,
         string? descriptionOverride = null)
     {
-        // Approval-decision audit (OPP-03): the tool name (drives both the category lookup and the audit row) and the
+        // Approval-decision audit: the tool name (drives both the category lookup and the audit row) and the
         // request→decision stopwatch are captured here so the resolved decision below can record a content-free audit row
         // and metric. Both are needed in the guards and in the timeout catch as well, so they live outside the try.
         var approvalToolName = (approvalRequest.ToolCall as FunctionCallContent)?.Name;
@@ -1602,7 +1602,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
     ///     <c>AskUserToolHandler</c> can return it the moment the framework executes the (always-approved) call. Returns
     ///     the short, content-free note that rides the approval response.
     ///     <para>
-    ///         NOTHING here fails the turn (decision D4). A timeout, a cancelled browser, an unattended run, or
+    ///         NOTHING here fails the turn. A timeout, a cancelled browser, an unattended run, or
     ///         arguments the model got wrong all stash an explicit "not answered" result and still approve, so the model
     ///         receives a clean, branchable answer instead of a dead turn. Only a cancellation of the invocation itself
     ///         propagates — the turn is already ending.
@@ -1642,7 +1642,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         //
         // This is deliberately NOT what the approval path does, and the asymmetry must survive future tidying: an
         // unattended APPROVAL fails the turn immediately with a reason, because executing a tool nobody sanctioned is
-        // not a safe default. An unattended QUESTION continues (decision D4) — the model asked for input it can proceed
+        // not a safe default. An unattended QUESTION continues — the model asked for input it can proceed
         // without. Unifying the two would make every scheduled turn fail the moment its model happens to ask something.
         if (package.IsUnattended)
         {
@@ -1694,7 +1694,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             // The pending-question cap elapsed WITHOUT the invocation being cancelled: a genuine no-answer. Unlike the
-            // approval path — which rethrows and fails the turn — D4 requires the turn to continue, so this swallows the
+            // approval path — which rethrows and fails the turn — the turn must continue instead, so this swallows the
             // timeout and hands the model an explicit "not answered" result.
             _logger.LogInformation("No answer arrived for the pending {ToolName} question on invocation {InvocationId}; the turn continues without one.",
                 AskUserTool.ToolName,
@@ -1710,8 +1710,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
     /// <summary>
     ///     Re-points the whole-turn watchdog — the <c>CancelAfter</c> armed in <see cref="RegisterActiveInvocation" /> —
-    ///     at a deadline measured from NOW, so a human round-trip is not charged to the model's turn budget (decision
-    ///     D5).
+    ///     at a deadline measured from NOW, so a human round-trip is not charged to the model's turn budget.
     ///     <para>
     ///         Before parking on a human the deadline is pushed past the longest permitted wait; once the human has
     ///         answered it is re-armed to a full, fresh <c>InvocationTimeout</c>. This does NOT make any wait unbounded:

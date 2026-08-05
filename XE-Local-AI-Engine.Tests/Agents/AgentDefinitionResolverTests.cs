@@ -139,7 +139,7 @@ public sealed class AgentDefinitionResolverTests
     {
         // Identity floor: with the Permissive (no node policy) floor, the Default Assistant's whole offer is unchanged —
         // each tool keeps its own catalog RequiresApproval AND the runtime-package config hash matches a package built
-        // from the raw offer. Proves the mode-off path is byte-identical to the pre-OPP-03 path when unconfigured.
+        // from the raw offer. Proves the mode-off path is byte-identical to the unconfigured offer.
         var builder = new LocalChatRuntimePackageBuilder();
         var mcp = OfferTool("mcp__x__y", requiresApproval: true, ToolCategory.Network);
         var clock = OfferTool("GetCurrentTime", category: ToolCategory.ReadLocal);
@@ -499,10 +499,10 @@ public sealed class AgentDefinitionResolverTests
     [Test]
     public async Task ResolveAsync_ProjectsOfferedMcpTool_AndPerAgentAutoExecuteCannotLoosenApproval()
     {
-        // MCP tool projection under TIGHTEN-ONLY (OPP-03): an MCP tool is in the offer approval-ON by default (its
+        // MCP tool projection under TIGHTEN-ONLY compose: an MCP tool is in the offer approval-ON by default (its
         // catalog RequiresApproval=true). A per-agent ToolApprovals[mcpTool]=false can NO LONGER loosen it — the 3-tier
         // compose is `nodePolicy(catalogDefault) || (perAgent && perAgentValue)`, so a per-agent false is a no-op and the
-        // resolved offer flag stays true. (Before OPP-03 this test asserted the flag flipped to false. The MCP executable
+        // resolved offer flag stays true. (Before the tighten-only compose was introduced, this test asserted the flag flipped to false. The MCP executable
         // was ALWAYS wrapped in ApprovalRequiredAIFunction at McpServerConnectionManager regardless of this flag, so no
         // real execution loosening is lost; the flag now correctly matches that structural floor.)
         const string mcpTool = "mcp__weather__get_forecast";
@@ -527,7 +527,7 @@ public sealed class AgentDefinitionResolverTests
     [Test]
     public async Task ResolveAsync_AppliesThreeTierTightenOnlyApprovalCompose()
     {
-        // End-to-end seam D (OPP-03): the node policy tightens a whole category, then the per-agent override can only ADD
+        // End-to-end seam D: the node policy tightens a whole category, then the per-agent override can only ADD
         // approval on top of it. Node policy: require approval for the Network category. Definition: names three tools and
         // tightens GetCurrentTime while trying (and failing) to auto-execute the Network tool.
         var nodePolicy = new NodeToolApprovalPolicy(new Dictionary<ToolCategory, bool>

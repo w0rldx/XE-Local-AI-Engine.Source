@@ -4,8 +4,8 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Endpoint discovery order. This is not a formality: the resolved source is what decision D10 asks the operator
-///     to judge, so a resolver that silently preferred the wrong socket would make the attestation prompt describe an
+///     Endpoint discovery order. This is not a formality: the resolved source is what the operator is asked to judge
+///     before trusting the daemon, so a resolver that silently preferred the wrong socket would make the attestation prompt describe an
 ///     endpoint nobody chose.
 /// </summary>
 public sealed class DockerDaemonEndpointResolverTests

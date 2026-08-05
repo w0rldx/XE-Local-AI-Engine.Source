@@ -12,7 +12,7 @@ using System.Text.RegularExpressions;
 ///     cancellation and kill be exercised honestly. All timestamps come from the injected <see cref="TimeProvider" />
 ///     so behavior is reproducible. Mirrors the production-resident, config-selected <c>FakeDockerRuntimeClient</c>.
 /// </summary>
-// Serves BOTH per-feature roles (D2), so a test host — and the CI-mandatory default — can drive AgentHome, Coder and
+// Serves BOTH per-feature roles, so a test host — and the CI-mandatory default — can drive AgentHome, Coder and
 // Development Mode off one deterministic provider instance.
 public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, IDevelopmentSandboxRuntimeProvider
 {
@@ -49,9 +49,9 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
 
     public string ProviderName => Name;
 
-    // SupportsTrustedHostWorkspace is advertised per decision D4: the container work needs unit coverage of callers
+    // SupportsTrustedHostWorkspace is advertised because the container work needs unit coverage of callers
     // that bind an engine-managed workspace, and a fake that refused the flag would force every such test onto a real
-    // daemon — which is precisely the coverage D4 wants *in addition to* real-daemon tests, not instead of them. The
+    // daemon — which is precisely the coverage this fake exists to add *in addition to* real-daemon tests, not instead of them. The
     // fake honours it in the only way an in-memory sandbox can: CreateOrAttachAsync accepts the binding, and the
     // virtual filesystem is preserved across attach exactly as the contract requires of a real one.
     public SandboxProviderCapabilities Capabilities =>

@@ -155,7 +155,7 @@ public sealed class ToolCatalogEntryResponse
     public required string Source { get; init; }
 
     /// <summary>
-    ///     The tool's risk class (OPP-03) as the <c>ToolCategory</c> name ("ReadLocal" / "WriteExecute" /
+    ///     The tool's risk class as the <c>ToolCategory</c> name ("ReadLocal" / "WriteExecute" /
     ///     "Orchestration" / "Network" / "Unknown"). Serialized as a string (matching the <see cref="Source" /> idiom) so
     ///     the UI can label the tool's class; an unrecognized value degrades to fail-closed on the client.
     /// </summary>

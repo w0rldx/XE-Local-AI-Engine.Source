@@ -48,7 +48,7 @@ public sealed class DevelopmentPersistenceTests : IDisposable
     }
 
     /// <summary>
-    ///     S1.5.1. An attempt freezes the command profile it runs under, so editing the project's profile afterwards
+    ///     An attempt freezes the command profile it runs under, so editing the project's profile afterwards
     ///     cannot retroactively change what a historical attempt is judged against — and a reviewer attempt inherits
     ///     the coder attempt's profile rather than picking up the edit, which is what keeps one evidence chain under
     ///     one profile.
