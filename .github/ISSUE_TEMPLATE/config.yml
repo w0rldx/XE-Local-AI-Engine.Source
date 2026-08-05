@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 📖 FAQ & troubleshooting
+    url: https://github.com/w0rldx/XE-Local-AI-Engine.Source/blob/develop/docs/tester-program/docs/faq.md
+    about: Most common problems are answered here — worth a quick look first.
+  - name: 🪟 Windows security warning ("Windows protected your PC")
+    url: https://github.com/w0rldx/XE-Local-AI-Engine.Source/blob/develop/docs/tester-program/docs/install-windows.md#the-windows-smartscreen-warning
+    about: Expected on unsigned builds. Click "More info" first — "Run anyway" is hidden until you do.
+  - name: ⬇️ How to download the app
+    url: https://github.com/w0rldx/XE-Local-AI-Engine.Source/blob/develop/docs/tester-program/docs/download-from-github.md
+    about: The green "Code" button is not the app. Step-by-step download walkthrough.
