@@ -39,7 +39,7 @@ expected — do not "fix" one to match the other.
 
 **Tag-form convention changed mid-flight.** The seven tester releases published 2026-06-26 → 2026-07-07 carry a
 **bare** tag (`0.1.0-rc.4.1`) with a `v`-prefixed release *name*. The packager now uploads with `--tag v<version>`, so
-releases from `0.1.0-rc.4.2` onward are v-prefixed on both. Anything looking up an existing tester release must accept
+releases from `0.1.0-rc.5.0` onward are v-prefixed on both (rc.4.2 was never cut, so rc.5.0 is the first such release). Anything looking up an existing tester release must accept
 **both** forms — the script's `Find-GitHubRelease` probes `v<version>`, then `<version>`, then falls back to matching
 the release *name*. A lookup that probes one form only would make the already-published guard blind to the live
 release and let `vpk upload --merge` push untested assets into a shipped update feed.
@@ -55,8 +55,9 @@ release and let `vpk upload --merge` push untested assets into a shipped update 
 
 So there is no commit in this repository that identifies what shipped as rc.4.1. The version string is **burned** — it
 can never be reused, because the packager's already-published guard will refuse to upload over a live release (and
-correctly so: `vpk --merge` into a shipped feed would hand testers assets nobody smoke-tested). The next release is
-`0.1.0-rc.4.2`.
+correctly so: `vpk --merge` into a shipped feed would hand testers assets nobody smoke-tested). The release that
+followed was `0.1.0-rc.5.0` (tagged `v0.1.0-rc.5.0`, published to the tester repo on 2026-08-04); `0.1.0-rc.4.2` was
+never cut — the version target moved straight from the burned `0.1.0-rc.4.1` to `0.1.0-rc.5.0`.
 
 This is the exact failure mode the current gates exist to close, and it is worth understanding rather than just
 working around:
