@@ -45,6 +45,10 @@ public static class LocalApiRoutes
         // Per-conversation temporary-chat (memory-excluded) override (adaptive memory). Literal "memory-excluded"
         // segment keeps it distinct from the other conversation action routes.
         public const string MemoryExcludedConversation = "chat/conversations/{conversationId}/memory-excluded";
+
+        // Non-destructive compaction: summarize the older turns into a synopsis sent in their place. POST (an action that
+        // mutates derived state), distinct literal "compact" segment.
+        public const string CompactConversation = "chat/conversations/{conversationId}/compact";
         public const string BranchConversation = "chat/conversations/{conversationId}/branch/{messageId}";
         public const string MessageRevisions = "chat/conversations/{conversationId}/messages/{messageId}/revisions";
         public const string MessageFeedback = "chat/conversations/{conversationId}/messages/{messageId}/feedback";

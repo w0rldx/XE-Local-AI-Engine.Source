@@ -1902,7 +1902,7 @@ public sealed class InvocationRunnerTests
         await RunAsync(runner, package);
 
         await dispatcher.Received(1).ReportInvocationFailedAsync(package.InvocationId,
-            "Conversation exceeds the model's context window even after truncation — start a new chat or switch to a larger-context model.",
+            "Conversation exceeds the model's context window even after truncation — Compact the conversation to summarize older messages, start a new chat, or switch to a larger-context model.",
             FailureCategory.ContextWindowExceeded);
     }
 

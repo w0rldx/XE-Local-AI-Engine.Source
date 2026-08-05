@@ -131,6 +131,34 @@ public sealed class NodeChatDbContext : DbContext
     }
 
     /// <summary>
+    ///     Encrypts a conversation compaction synopsis for raw-SQL persistence. Returns null when the summary is null so
+    ///     the database column writes NULL. AAD mirrors <see cref="EncryptConversationTitle" /> but scopes the column name
+    ///     to <c>compaction_summary</c> so a title blob can never be substituted for a summary blob (or vice versa).
+    /// </summary>
+    public byte[]? EncryptConversationCompactionSummary(string? summary, Guid conversationId)
+    {
+        if (summary is null)
+        {
+            return null;
+        }
+
+        var plaintext = Encoding.UTF8.GetBytes(summary);
+        return NodePayloadProtector.Encrypt(plaintext, NodeEncryptionKey.Span, conversationId, conversationId, "compaction_summary");
+    }
+
+    /// <summary>Decrypts a raw compaction-synopsis blob back to a string. Returns null when the blob is null.</summary>
+    public string? DecryptConversationCompactionSummary(byte[]? encrypted, Guid conversationId)
+    {
+        if (encrypted is null)
+        {
+            return null;
+        }
+
+        var plaintext = NodePayloadProtector.Decrypt(encrypted, NodeEncryptionKey.Span, conversationId, conversationId, "compaction_summary");
+        return Encoding.UTF8.GetString(plaintext);
+    }
+
+    /// <summary>
     ///     Encrypts a message content string into the versioned at-rest envelope for the raw-ADO persistence path. AAD =
     ///     conversationId + messageId + "content", matching the interceptors and <see cref="DecryptMessageContent" />.
     /// </summary>

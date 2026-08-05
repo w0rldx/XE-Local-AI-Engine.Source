@@ -3948,6 +3948,64 @@
         ]
       }
     },
+    "/api/local/v1/chat/conversations/{conversationId}/compact": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "operationId": "compactNodeChatConversation",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "CompactNodeChatConversationRequest",
+          "description": "",
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1CompactNodeChatConversationRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1CompactNodeChatConversationResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/chat/conversations": {
       "post": {
         "tags": [
@@ -13841,6 +13899,52 @@
             "format": "guid",
             "minLength": 1,
             "nullable": false
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1CompactNodeChatConversationResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "outcome"
+        ],
+        "properties": {
+          "outcome": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string",
+            "nullable": true
+          },
+          "coversToSequence": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "messagesFolded": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "updatedAtUtc": {
+            "type": "integer",
+            "nullable": true
+          },
+          "modelUsed": {
+            "type": "string",
+            "nullable": true
+          },
+          "usedFallbackModel": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1CompactNodeChatConversationRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "model": {
+            "type": "string",
+            "nullable": true
           }
         }
       },

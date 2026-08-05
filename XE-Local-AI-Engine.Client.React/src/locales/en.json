@@ -963,6 +963,20 @@
 				"srUnknown": "Context window usage unknown, {{used}} of {{max}} tokens.",
 				"srUsed": "Context window {{percent}} percent used, {{used}} of {{max}} tokens."
 			},
+			"compact": {
+				"tooltip": "Compact older messages into a summary to free up context",
+				"aria": "Compact conversation",
+				"confirmTitle": "Compact conversation",
+				"confirmDescription": "Summarize the older messages into a compact synopsis to free up the context window. Your original messages are kept and stay visible in the conversation.",
+				"confirm": "Compact",
+				"compacted": "Compacted {{count}} older message(s) into a summary. Your originals are kept.",
+				"nothing": "Nothing to compact yet — the recent messages still fit the context window.",
+				"noModel": "No local chat model is installed to summarize with, so compaction can't run on-node.",
+				"noSummary": "Compaction didn't produce a summary. Please try again.",
+				"error": "Couldn't compact the conversation. Please try again.",
+				"compactedLocalFallback": "Compacted {{count}} older message(s) locally with {{model}} to keep your chat on-device. Your originals are kept.",
+				"aLocalModel": "a local model"
+			},
 			"remoteImage": {
 				"load": "Load remote image"
 			}

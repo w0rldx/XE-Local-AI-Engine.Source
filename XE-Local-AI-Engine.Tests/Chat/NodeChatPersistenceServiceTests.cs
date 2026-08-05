@@ -1984,6 +1984,44 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         AssertEx.Null(await service.GetSelectedPathAsync(Guid.NewGuid()).ConfigureAwait(false));
     }
 
+    [Test]
+    public async Task SetSelectedPathAsync_ClearsAnyCompactionSummary()
+    {
+        // Re-selecting a variant invalidates a synopsis built from the prior selection (it covers messages by sequence).
+        await using var provider = await BuildProviderAsync("compaction-clear-selectedpath.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Compaction", "node", CreatedAtUtc: 10)).ConfigureAwait(false);
+
+        await service.SetCompactionSummaryAsync(new NodeChatSetCompactionSummaryRequest(conversation.ConversationId, "SYNOPSIS", CoversToSequence: 3, UpdatedAtUtc: 11)).ConfigureAwait(false);
+        var withSummary = AssertEx.NotNull(await service.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
+        AssertEx.Equal("SYNOPSIS", withSummary.CompactionSummary);
+
+        await service.SetSelectedPathAsync(new NodeChatSetSelectedPathRequest(conversation.ConversationId, SelectedPath: null, UpdatedAtUtc: 12)).ConfigureAwait(false);
+
+        var afterReselect = AssertEx.NotNull(await service.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
+        AssertEx.Null(afterReselect.CompactionSummary);
+        AssertEx.Null(afterReselect.CompactionSummaryCoversToSequence);
+    }
+
+    [Test]
+    public async Task CreateMessageVariantAsync_ClearsAnyCompactionSummary()
+    {
+        // Minting a sibling shifts the default selected path, so any synopsis built from the prior selection is stale.
+        await using var provider = await BuildProviderAsync("compaction-clear-variant.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Compaction", "node", CreatedAtUtc: 10)).ConfigureAwait(false);
+        var assistantMessageId = Guid.NewGuid();
+        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "hi", CreatedAtUtc: 11)).ConfigureAwait(false);
+        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, assistantMessageId, Guid.NewGuid(), CreatedAtUtc: 12, "llama")).ConfigureAwait(false);
+
+        await service.SetCompactionSummaryAsync(new NodeChatSetCompactionSummaryRequest(conversation.ConversationId, "SYNOPSIS", CoversToSequence: 0, UpdatedAtUtc: 13)).ConfigureAwait(false);
+
+        await service.CreateMessageVariantAsync(new NodeChatCreateMessageVariantRequest(conversation.ConversationId, assistantMessageId, Guid.NewGuid(), Guid.NewGuid(), CreatedAtUtc: 14)).ConfigureAwait(false);
+
+        var afterVariant = AssertEx.NotNull(await service.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
+        AssertEx.Null(afterVariant.CompactionSummary);
+    }
+
     // resetDatabase:false reopens an existing DB file with fresh connections without wiping it — used to model a genuine
     // process restart against a database left behind by a previous provider/service instance.
     private async Task<ServiceProvider> BuildProviderAsync(string fileName, bool resetDatabase = true)

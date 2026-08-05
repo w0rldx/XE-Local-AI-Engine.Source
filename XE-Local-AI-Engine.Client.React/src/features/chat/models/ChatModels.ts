@@ -289,6 +289,21 @@ export interface ChatInputStatus {
 	sendDisabled?: boolean;
 }
 
+// Result of a manual, non-destructive compaction. `outcome` mirrors the backend ConversationCompactionOutcome names
+// ("Compacted", "NothingToCompact", "NoLocalModel", "SummarizerReturnedNothing", "ConversationNotFound"); the remaining
+// fields are populated only when a synopsis was produced.
+export interface ChatCompactionResult {
+	outcome: string;
+	summary?: string;
+	coversToSequence?: number;
+	messagesFolded: number;
+	updatedAtUtc?: number;
+	// The local model that produced the synopsis, and whether it differs from the user's selection (true only when a
+	// cloud/unknown selection was downgraded to a node-local model). Drives the "summarized on-device" notice.
+	modelUsed?: string;
+	usedFallbackModel: boolean;
+}
+
 // Shared agent option type used by Chat.tsx (derivation), ChatDisplayShellProps, ChatInputArea, and AgentSelectorCard.
 // The single derivation site is Chat.tsx; all downstream components receive it as a prop.
 export interface AgentOption {

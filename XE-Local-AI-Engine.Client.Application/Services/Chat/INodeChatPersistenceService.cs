@@ -67,6 +67,12 @@ public interface INodeChatPersistenceService
     Task<NodeChatConversationDto?> SetConversationMemoryExcludedAsync(NodeChatSetConversationMemoryExcludedRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>
+    ///     Writes (or clears with a null summary) the conversation's non-destructive compaction synopsis. Returns the
+    ///     updated conversation, or null if not found.
+    /// </summary>
+    Task<NodeChatConversationDto?> SetCompactionSummaryAsync(NodeChatSetCompactionSummaryRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
     ///     Branches a conversation: clones every message up to and including the target message into a
     ///     NEW Origin=Local conversation that records <c>branch_of_conversation_id</c> = source. Returns null when the
     ///     source conversation or target message does not exist.
