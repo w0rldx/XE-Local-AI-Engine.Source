@@ -3,8 +3,8 @@ import { IconAlertTriangle, IconCloudDownload, IconStar } from "@tabler/icons-re
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { formatBytesAsGb } from "@/core/formatting/BytesFormatting";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
-import { formatBytesAsGb } from "@/features/models/models/GgufFormatters";
 import type { GgufFitVerdict, GgufQuantTier, GgufRepository, GgufRepositoryFile } from "@/features/models/models/GgufModels";
 import { recommendedGgufFileName } from "@/features/models/models/GgufModels";
 import { useInspectGgufRepository } from "@/features/models/queries/useGgufDownload";
