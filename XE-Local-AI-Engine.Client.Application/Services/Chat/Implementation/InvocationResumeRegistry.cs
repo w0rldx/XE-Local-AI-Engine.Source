@@ -41,7 +41,7 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
     public InvocationState? TryGetLiveInvocation(Guid invocationId)
     {
         return _live.TryGetValue(invocationId, out var live) && IsNonTerminal(live.LatestState.Status)
-            ? Clone(live.LatestState)
+            ? live.LatestState.Clone()
             : null;
     }
 
@@ -407,44 +407,6 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
         return status is InvocationStatus.Completed or InvocationStatus.Cancelled or InvocationStatus.Failed;
     }
 
-    private static InvocationState Clone(InvocationState state)
-    {
-        return new InvocationState
-        {
-            InvocationId = state.InvocationId,
-            ConversationId = state.ConversationId,
-            TraceId = state.TraceId,
-            Status = state.Status,
-            RuntimePhase = state.RuntimePhase,
-            // Copy the immutable accumulators by REFERENCE (O(1)); reading state.StreamedContent here would materialize
-            // the whole response every published chunk. Mirrors WorkerEventDispatcher.Clone — both must stay in sync.
-            ContentAccumulator = state.ContentAccumulator,
-            StreamedChunkCount = state.StreamedChunkCount,
-            ThinkingAccumulator = state.ThinkingAccumulator,
-            StreamedThinkingChunkCount = state.StreamedThinkingChunkCount,
-            StartedAt = state.StartedAt,
-            LastUpdatedAt = state.LastUpdatedAt,
-            CompletedAt = state.CompletedAt,
-            Error = state.Error,
-            FailureCategory = state.FailureCategory,
-            ModelUsed = state.ModelUsed,
-            InputTokens = state.InputTokens,
-            OutputTokens = state.OutputTokens,
-            TotalTokens = state.TotalTokens,
-            ReasoningTokens = state.ReasoningTokens,
-            GenerationDurationMs = state.GenerationDurationMs,
-            PendingApproval = state.PendingApproval,
-            // Immutable record, so a reference copy is snapshot-safe. Mirrored in WorkerEventDispatcher.Clone —
-            // both must stay in sync or a pending question travels as null on one of the two paths.
-            PendingQuestion = state.PendingQuestion,
-            LastApprovalResolution = state.LastApprovalResolution,
-            // Reference copy is snapshot-safe: every writer REPLACES the list wholesale (never mutates it in place)
-            // and the elements are immutable records. Mirrors WorkerEventDispatcher.Clone — both must stay in sync.
-            PendingToolCalls = state.PendingToolCalls,
-            LastToolCallResult = state.LastToolCallResult
-        };
-    }
-
     /// <summary>
     ///     One item on a resume consumer's channel: exactly one of a state snapshot, a tool-call lifecycle
     ///     transition, or a turn notice, in dispatcher order.
@@ -561,7 +523,7 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
 
             lock (_syncRoot)
             {
-                snapshot = Clone(LatestState);
+                snapshot = LatestState.Clone();
                 toolHistory = [.. _toolHistory];
                 noticeHistory = [.. _noticeHistory];
 

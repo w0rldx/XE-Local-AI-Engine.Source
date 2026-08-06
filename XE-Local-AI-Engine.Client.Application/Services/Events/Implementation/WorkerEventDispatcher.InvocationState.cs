@@ -6,45 +6,6 @@ using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
 public sealed partial class WorkerEventDispatcher
 {
-    private static InvocationState Clone(InvocationState state)
-    {
-        return new InvocationState
-        {
-            InvocationId = state.InvocationId,
-            ConversationId = state.ConversationId,
-            TraceId = state.TraceId,
-            Status = state.Status,
-            RuntimePhase = state.RuntimePhase,
-            // Copy the immutable accumulators by REFERENCE (O(1)); reading state.StreamedContent here would materialize
-            // the whole response every chunk (the O(n^2) hot-path cost this snapshot design removes).
-            ContentAccumulator = state.ContentAccumulator,
-            StreamedChunkCount = state.StreamedChunkCount,
-            ThinkingAccumulator = state.ThinkingAccumulator,
-            StreamedThinkingChunkCount = state.StreamedThinkingChunkCount,
-            StartedAt = state.StartedAt,
-            LastUpdatedAt = state.LastUpdatedAt,
-            CompletedAt = state.CompletedAt,
-            Error = state.Error,
-            FailureCategory = state.FailureCategory,
-            ModelUsed = state.ModelUsed,
-            InputTokens = state.InputTokens,
-            OutputTokens = state.OutputTokens,
-            TotalTokens = state.TotalTokens,
-            ReasoningTokens = state.ReasoningTokens,
-            GenerationDurationMs = state.GenerationDurationMs,
-            PendingApproval = state.PendingApproval,
-            // Immutable record, so a reference copy is snapshot-safe. Mirrored in InvocationResumeRegistry.Clone —
-            // both must stay in sync or a pending question travels as null on one of the two paths.
-            PendingQuestion = state.PendingQuestion,
-            LastApprovalResolution = state.LastApprovalResolution,
-            // Reference copy is snapshot-safe: every writer REPLACES the list wholesale (never mutates it in place)
-            // and the elements are immutable records — materializing a copy here churned one throwaway array per
-            // streamed chunk. Mirrors InvocationResumeRegistry.Clone — both must stay in sync.
-            PendingToolCalls = state.PendingToolCalls,
-            LastToolCallResult = state.LastToolCallResult
-        };
-    }
-
     private static InvocationState CreateInvocationState(RuntimePackage runtimePackage)
     {
         ArgumentNullException.ThrowIfNull(runtimePackage);
@@ -76,7 +37,7 @@ public sealed partial class WorkerEventDispatcher
     {
         lock (_syncRoot)
         {
-            return CurrentInvocation is null ? null : Clone(CurrentInvocation);
+            return CurrentInvocation?.Clone();
         }
     }
 
@@ -95,7 +56,7 @@ public sealed partial class WorkerEventDispatcher
 
             update(CurrentInvocation);
             CurrentInvocation.LastUpdatedAt = DateTimeOffset.UtcNow;
-            snapshot = Clone(CurrentInvocation);
+            snapshot = CurrentInvocation.Clone();
         }
 
         if (snapshot is not null)
@@ -137,7 +98,7 @@ public sealed partial class WorkerEventDispatcher
 
             CurrentInvocation = update(CurrentInvocation);
             CurrentInvocation.LastUpdatedAt = DateTimeOffset.UtcNow;
-            snapshot = Clone(CurrentInvocation);
+            snapshot = CurrentInvocation.Clone();
         }
 
         if (snapshot is not null)
