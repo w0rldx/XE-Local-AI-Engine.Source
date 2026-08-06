@@ -43,7 +43,7 @@ public static class CodexResponseStoreDisabling
     /// <summary>
     ///     The AdditionalProperties key the agent factory uses to carry the RAW normalized reasoning effort
     ///     (minimal/low/medium/high/xhigh/none) for a thinking-capable model on the Codex boundary. Kept in sync with
-    ///     <c>InvocationAgentFactory.CodexReasoningEffortKey</c> by value — the provider is a dependency-free leaf and
+    ///     <c>ReasoningOptionsResolver.CodexReasoningEffortKey</c> by value — the provider is a dependency-free leaf and
     ///     deliberately does not reference the AI.Agent project, so the literal is duplicated, not shared.
     /// </summary>
     private const string CodexReasoningEffortKey = "codex_reasoning_effort";
