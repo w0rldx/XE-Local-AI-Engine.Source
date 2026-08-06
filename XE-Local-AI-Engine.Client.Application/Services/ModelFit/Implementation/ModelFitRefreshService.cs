@@ -6,6 +6,7 @@ using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Capacity;
+using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Catalog;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Fit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Validation;
@@ -573,7 +574,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
         var repoId = summary.RepoId;
         var detail = await _discovery.InspectRepoAsync(repoId, cancellationToken).ConfigureAwait(false);
 
-        var selected = SelectBestFittingFile(detail.Files, quant, ctxTarget, profile);
+        var selected = GgufFileSelector.SelectBestFit(_estimator, detail.Files, quant, ctxTarget, profile);
         if (selected is null)
         {
             return null;
@@ -591,67 +592,6 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
             summary.Downloads,
             summary.LastModified,
             Section: "explore");
-    }
-
-    /// <summary>
-    ///     Walks the repo's files against the <see cref="QuantLadder" />: estimates every file, keeps only the ones that
-    ///     fit the budget, have a computable weights term, and sit at or above the quality floor, then returns the highest
-    ///     quality one that does not exceed the requested <paramref name="quant" /> ceiling. When the only fitting files are
-    ///     higher quality than the ceiling (a roomy box with no file at/below the target quant) it returns the smallest
-    ///     fitting one so the repo still surfaces. Returns <see langword="null" /> when nothing at or above the floor fits.
-    /// </summary>
-    private (GgufRepoFile File, MemoryFitEstimate Estimate)? SelectBestFittingFile(IReadOnlyList<GgufRepoFile> files,
-        string quant,
-        int ctxTarget,
-        HardwareProfile profile)
-    {
-        var ceilingRank = QuantLadder.QualityRank(quant);
-        var floorRank = QuantLadder.FloorRank;
-
-        var fitting = files
-                      // A speculative-decoding drafter is not a candidate model: it is a companion loaded inside a chat
-                      // process, and its tiny size would let it out-fit every real quant in the repo.
-                      .Where(static file => !GgufDraftModel.IsDraftQuant(file.Quant))
-                      .Select(file => (file, estimate: _estimator.Estimate(file.Quant,
-                          file.ParamCount,
-                          file.SizeBytes,
-                          file.BlockCount ?? 0,
-                          file.AttentionHeadCountKV ?? 0,
-                          file.EmbeddingLength ?? 0,
-                          file.AttentionHeadCount ?? 0,
-                          ctxTarget,
-                          profile,
-                          kvCacheQuantized: false,
-                          // Explicit key/value lengths and interleaved sliding-window facts correct the KV term, and
-                          // native-format detection prices a native MXFP4 quant at its own density.
-                          attention: new GgufAttentionShape(file.AttentionKeyLength, file.AttentionValueLength, file.SlidingWindow, file.SlidingWindowPattern),
-                          nativeQuantFormat: QuantLadder.IsNativeFormat(file.Quant)), rank: QuantLadder.QualityRank(file.Quant)))
-                      // Drop insufficient-metadata files (no weights term), non-fitting files, and quants below the floor.
-                      .Where(candidate => candidate.estimate.EstimatedBytes > _estimator.OverheadBytes
-                                          && candidate.estimate.Fits
-                                          && candidate.rank <= floorRank)
-                      .ToList();
-
-        if (fitting.Count == 0)
-        {
-            return null;
-        }
-
-        // Native-format guard: when the repo ships a native, non-requantizable format (MXFP4), the advisor must never
-        // prefer a higher-nominal-quality requant of it — the native file caps the repo's recommendable quality.
-        var guarded = MemoryFitEstimator.FilterOutNativeFormatRequants(fitting, candidate => candidate.file.Quant, candidate => candidate.rank);
-
-        // Prefer the highest quality at or below the requested ceiling (rank >= ceilingRank == quality <= ceiling). If every
-        // fitting file is higher quality than the ceiling, fall back to the smallest fitting (highest rank) so the repo is
-        // still recommended at a runnable quant.
-        // Estimated footprint is an explicit tie-break when two files share a rank (e.g. two off-ladder labels both map to
-        // the unknown rank, or a repo lists a quant twice) so the pick is deterministic regardless of file order.
-        var atOrBelowCeiling = guarded.Where(candidate => candidate.rank >= ceilingRank).ToList();
-        var chosen = atOrBelowCeiling.Count > 0
-            ? atOrBelowCeiling.OrderBy(candidate => candidate.rank).ThenBy(candidate => candidate.estimate.EstimatedBytes).First()
-            : guarded.OrderByDescending(candidate => candidate.rank).ThenBy(candidate => candidate.estimate.EstimatedBytes).First();
-
-        return (chosen.file, chosen.estimate);
     }
 
     private async Task<HashSet<string>> ListInstalledKeysAsync(CancellationToken cancellationToken)
