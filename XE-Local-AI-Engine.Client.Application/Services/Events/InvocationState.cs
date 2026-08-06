@@ -21,8 +21,7 @@ public sealed class InvocationState
     ///     The W3C trace id of the ambient activity when the invocation was created, or null when no activity was in
     ///     scope (legacy/platform paths). Surfaced in the invocation monitor so a failed run's "See local logs" row
     ///     carries a copyable correlation id into the exported traces. Not a hot-path value — captured once at creation.
-    ///     Like every other field, BOTH hand-rolled clones (WorkerEventDispatcher.Clone AND InvocationResumeRegistry.Clone)
-    ///     must copy it.
+    ///     Like every other field, <see cref="Clone" /> must copy it.
     /// </summary>
     public string? TraceId { get; init; }
 
@@ -40,8 +39,7 @@ public sealed class InvocationState
     ///     The immutable streamed-content accumulator — the single source of truth for the response text. Cloning an
     ///     <see cref="InvocationState" /> copies THIS reference (O(1)) rather than the materialized
     ///     <see cref="StreamedContent" /> string, which is what removes the per-chunk materialization from the hot path.
-    ///     BOTH hand-rolled clones (WorkerEventDispatcher.Clone AND InvocationResumeRegistry.Clone) must copy this member,
-    ///     not <see cref="StreamedContent" />.
+    ///     <see cref="Clone" /> must copy this member, not <see cref="StreamedContent" />.
     /// </summary>
     internal StreamingText ContentAccumulator { get; set; } = StreamingText.Empty;
 
@@ -55,7 +53,7 @@ public sealed class InvocationState
 
     /// <summary>
     ///     The immutable streamed-reasoning accumulator. Cloned by reference exactly like <see cref="ContentAccumulator" />;
-    ///     both hand-rolled clones must copy this member, not <see cref="StreamedThinkingContent" />.
+    ///     <see cref="Clone" /> must copy this member, not <see cref="StreamedThinkingContent" />.
     /// </summary>
     internal StreamingText ThinkingAccumulator { get; set; } = StreamingText.Empty;
 
@@ -112,10 +110,9 @@ public sealed class InvocationState
     ///     The <c>ask_user</c> question currently waiting on the operator, or null. Carries the questions themselves (not
     ///     just a correlation id) so a reconnecting browser can be handed a still-answerable prompt.
     ///     <para>
-    ///         WARNING: <see cref="InvocationState" /> has TWO hand-rolled <c>Clone()</c> methods
-    ///         (<c>WorkerEventDispatcher.Clone</c> and <c>InvocationResumeRegistry.Clone</c>) and the CLONE — not the live
-    ///         mutated state — is what reaches the chat pump and persistence. Any field added here must be added to BOTH
-    ///         or it silently travels as null. This class of bug passes unit tests and only shows up live.
+    ///         WARNING: the CLONE produced by <see cref="Clone" /> — not the live mutated state — is what reaches the
+    ///         chat pump and persistence. Any field added here must also be added to <see cref="Clone" /> or it silently
+    ///         travels as null. This class of bug passes unit tests and only shows up live.
     ///     </para>
     /// </summary>
     public InvocationUserQuestionState? PendingQuestion { get; set; }
@@ -125,4 +122,45 @@ public sealed class InvocationState
     public IReadOnlyList<InvocationToolCallState> PendingToolCalls { get; set; } = [];
 
     public InvocationToolCallResultState? LastToolCallResult { get; set; }
+
+    /// <summary>
+    ///     Snapshot-clones this invocation state. The single clone routine both <c>WorkerEventDispatcher</c> and
+    ///     <c>InvocationResumeRegistry</c> call — previously each hand-rolled its own copy of this method, and a field
+    ///     added to one but not the other would silently travel as null on whichever path was missed (see
+    ///     <see cref="PendingQuestion" />). <see cref="ContentAccumulator" />, <see cref="ThinkingAccumulator" /> and
+    ///     <see cref="PendingToolCalls" /> are copied by REFERENCE (O(1)): the accumulators are immutable
+    ///     append-only buffers, and every writer replaces <see cref="PendingToolCalls" /> wholesale rather than
+    ///     mutating it in place, so a snapshot never observes a torn read.
+    /// </summary>
+    public InvocationState Clone()
+    {
+        return new InvocationState
+        {
+            InvocationId = InvocationId,
+            ConversationId = ConversationId,
+            TraceId = TraceId,
+            Status = Status,
+            RuntimePhase = RuntimePhase,
+            ContentAccumulator = ContentAccumulator,
+            StreamedChunkCount = StreamedChunkCount,
+            ThinkingAccumulator = ThinkingAccumulator,
+            StreamedThinkingChunkCount = StreamedThinkingChunkCount,
+            StartedAt = StartedAt,
+            LastUpdatedAt = LastUpdatedAt,
+            CompletedAt = CompletedAt,
+            Error = Error,
+            FailureCategory = FailureCategory,
+            ModelUsed = ModelUsed,
+            InputTokens = InputTokens,
+            OutputTokens = OutputTokens,
+            TotalTokens = TotalTokens,
+            ReasoningTokens = ReasoningTokens,
+            GenerationDurationMs = GenerationDurationMs,
+            PendingApproval = PendingApproval,
+            PendingQuestion = PendingQuestion,
+            LastApprovalResolution = LastApprovalResolution,
+            PendingToolCalls = PendingToolCalls,
+            LastToolCallResult = LastToolCallResult
+        };
+    }
 }
