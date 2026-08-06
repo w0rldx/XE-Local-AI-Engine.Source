@@ -1,7 +1,8 @@
 import { Card, SimpleGrid, Stack, Text, Title } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
-import { formatBytesAsGb, formatModelFitMetric } from "@/features/model-fit/components/ModelFitFormatters";
+import { formatBytesAsGb } from "@/core/formatting/BytesFormatting";
+import { formatModelFitMetric } from "@/features/model-fit/components/ModelFitFormatters";
 import type { InferenceBenchmarkMetrics } from "@/features/model-fit/models/InferenceProfileModels";
 
 interface ProfileMetricsCardProps {
