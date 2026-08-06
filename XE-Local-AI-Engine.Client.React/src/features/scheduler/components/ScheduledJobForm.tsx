@@ -1,5 +1,5 @@
 import { Alert, NumberInput, Select, Stack, Switch, Textarea, TextInput } from "@mantine/core";
-import { type Ref, useCallback, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { type Ref, useCallback, useEffect, useImperativeHandle, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ScheduledJobScheduleFields } from "@/features/scheduler/components/ScheduledJobScheduleFields";
@@ -75,28 +75,18 @@ export function ScheduledJobForm({
 	const [values, setValues] = useState<ScheduledJobFormValues>(initialValues);
 	const [errors, setErrors] = useState<Record<string, string>>({});
 
-	// Update values AND report the resulting dirty state to the parent in the same event-driven step. Driving the
-	// notification from the updater rather than a useEffect that watches state avoids the extra parent re-render the
-	// effect-sync pattern causes (the parent wires this to its close-guard and route-guard).
-	const updateValues = useCallback(
-		(updater: (current: ScheduledJobFormValues) => ScheduledJobFormValues) => {
-			setValues((current) => {
-				const next = updater(current);
-				onDirtyChange?.(computeIsDirty(next, initialValues));
-				return next;
-			});
-		},
-		[initialValues, onDirtyChange],
-	);
+	// Pure state update — no parent notification here. Calling onDirtyChange inside a setState updater runs during the
+	// render phase and triggers React's "cannot update a component while rendering a different component" error.
+	const updateValues = useCallback((updater: (current: ScheduledJobFormValues) => ScheduledJobFormValues) => {
+		setValues(updater);
+	}, []);
 
-	// Report the initial (clean) dirty state once on mount. The page keys this component per editor target, so a
-	// fresh mount always starts clean. Done as a one-shot render-time call (ref-guarded) rather than a useEffect that
-	// re-syncs on every change — the latter forces an extra parent re-render per keystroke.
-	const didReportInitialDirty = useRef(false);
-	if (!didReportInitialDirty.current) {
-		didReportInitialDirty.current = true;
+	// Report dirty state to the parent (which wires it to the close-guard / route-guard) from an effect, so the parent
+	// setter is only ever called after commit — never during render. Fires on mount (a fresh mount is clean) and after
+	// every edit.
+	useEffect(() => {
 		onDirtyChange?.(computeIsDirty(values, initialValues));
-	}
+	}, [values, initialValues, onDirtyChange]);
 
 	const templateData = useMemo(
 		() => templates.map((template) => ({ value: template.templateId, label: template.displayName })),
