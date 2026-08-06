@@ -257,7 +257,7 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
         lock (_syncRoot)
         {
             CurrentInvocation = CreateInvocationState(package);
-            snapshot = Clone(CurrentInvocation);
+            snapshot = CurrentInvocation.Clone();
         }
 
         PublishStateChanged(snapshot);
@@ -334,7 +334,7 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
                 CurrentInvocation.Error = evt.Reason;
                 CurrentInvocation.FailureCategory = FailureCategory.Cancelled;
                 CurrentInvocation.CompletedAt = DateTimeOffset.UtcNow;
-                snapshot = Clone(CurrentInvocation);
+                snapshot = CurrentInvocation.Clone();
             }
         }
 
@@ -428,7 +428,7 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
             CurrentInvocation.Error = evt.Reason;
             CurrentInvocation.FailureCategory = FailureCategory.Cancelled;
             CurrentInvocation.CompletedAt = DateTimeOffset.UtcNow;
-            snapshot = Clone(CurrentInvocation);
+            snapshot = CurrentInvocation.Clone();
         }
 
         _logger.LogInformation("Invocation {InvocationId} marked as cancelled.", evt.InvocationId);
@@ -688,7 +688,7 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
                 ModelUsed = runtimePackage.ModelProfile
             };
 
-            snapshot = Clone(CurrentInvocation);
+            snapshot = CurrentInvocation.Clone();
         }
 
         _logger.LogInformation("Dispatched invocation assignment for {InvocationId}.", runtimePackage.InvocationId);

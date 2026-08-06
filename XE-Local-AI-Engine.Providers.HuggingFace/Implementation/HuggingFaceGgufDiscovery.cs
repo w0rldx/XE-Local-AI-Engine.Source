@@ -16,7 +16,7 @@ using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 /// </summary>
 /// <remarks>
 ///     Considered-and-deferred perf idea (follow-up: revisit if inspection latency is still a problem after bounded
-///     concurrency + caching): the model-fit advisor's quant-ladder walk (<c>ModelFitRefreshService.SelectBestFittingFile</c>)
+///     concurrency + caching): the model-fit advisor's quant-ladder walk (<c>GgufFileSelector.SelectBestFit</c>)
 ///     only needs each file's name + size to rank candidates, and reads only the winner's full GGUF header — in principle
 ///     <see cref="InspectRepoAsync" /> could defer ALL header reads until after ranking. Not implemented: the KV-cache term
 ///     in <c>MemoryFitEstimator.Estimate</c> depends on header-only fields (block/head counts, embedding length), so a

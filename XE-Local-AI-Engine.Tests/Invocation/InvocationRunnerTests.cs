@@ -1838,7 +1838,7 @@ public sealed class InvocationRunnerTests
             Error = "approval timeout"
         });
 
-        var exception = await AssertEx.ThrowsAsync<InvocationRunner.WorkerToolCallException>(() => task);
+        var exception = await AssertEx.ThrowsAsync<WorkerToolCallException>(() => task);
         AssertEx.Contains(exception.Message, "approval timeout");
     }
 
@@ -1853,7 +1853,7 @@ public sealed class InvocationRunnerTests
 
         runner.CancelAll();
 
-        var exception = await AssertEx.ThrowsAsync<InvocationRunner.WorkerToolCallException>(() => pendingCall);
+        var exception = await AssertEx.ThrowsAsync<WorkerToolCallException>(() => pendingCall);
         AssertEx.Contains(exception.Message, "timed out waiting for a result", StringComparison.OrdinalIgnoreCase);
     }
 
@@ -1863,7 +1863,7 @@ public sealed class InvocationRunnerTests
         var sender = new MockHubMessageSender();
         var factory = Substitute.For<IInvocationAgentFactory>();
         factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
-               .Returns(_ => Task.FromException<InvocationAgentContext>(new InvocationRunner.WorkerToolCallException("approve-job", "approval timeout")));
+               .Returns(_ => Task.FromException<InvocationAgentContext>(new WorkerToolCallException("approve-job", "approval timeout")));
 
         var runner = CreateRunner(sender, factory);
 
@@ -1905,7 +1905,7 @@ public sealed class InvocationRunnerTests
         });
         SetMaxPendingToolCallAge(runner, TimeSpan.Zero);
 
-        var exception = await AssertEx.ThrowsAsync<InvocationRunner.WorkerToolCallException>(() => runner.ExecuteApiToolCallAsync(Guid.NewGuid(), "test-tool", "{}"));
+        var exception = await AssertEx.ThrowsAsync<WorkerToolCallException>(() => runner.ExecuteApiToolCallAsync(Guid.NewGuid(), "test-tool", "{}"));
         AssertEx.Contains(exception.Message, "timed out waiting for a result", StringComparison.OrdinalIgnoreCase);
     }
 
@@ -1925,7 +1925,7 @@ public sealed class InvocationRunnerTests
 
         // requiresApproval: false guarantees the Requested lifecycle fires before the result-wait timeout, so the
         // timeout path must emit a matching Completed (IsError=true) to clear the UI card.
-        await AssertEx.ThrowsAsync<InvocationRunner.WorkerToolCallException>(() =>
+        await AssertEx.ThrowsAsync<WorkerToolCallException>(() =>
             runner.ExecuteApiToolCallAsync(invocationId, "test-tool", "{}", requiresApproval: false));
 
         await dispatcher.Received(1).ReportToolCallLifecycleAsync(Arg.Is<ToolCallLifecyclePayload>(payload =>
@@ -2015,7 +2015,7 @@ public sealed class InvocationRunnerTests
         await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
         runner.CleanupStaleToolCalls(TimeSpan.Zero);
 
-        var exception = await AssertEx.ThrowsAsync<InvocationRunner.WorkerToolCallException>(() => task);
+        var exception = await AssertEx.ThrowsAsync<WorkerToolCallException>(() => task);
         AssertEx.Contains(exception.Message, "timed out during cleanup", StringComparison.OrdinalIgnoreCase);
     }
 
@@ -2034,7 +2034,7 @@ public sealed class InvocationRunnerTests
 
         await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
 
-        var exception = await AssertEx.ThrowsAsync<InvocationRunner.WorkerToolCallException>(() => pendingToolCall);
+        var exception = await AssertEx.ThrowsAsync<WorkerToolCallException>(() => pendingToolCall);
         AssertEx.Contains(exception.Message, "timed out during cleanup", StringComparison.OrdinalIgnoreCase);
     }
 
@@ -2055,7 +2055,7 @@ public sealed class InvocationRunnerTests
 
         await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
 
-        var exception = await AssertEx.ThrowsAsync<InvocationRunner.WorkerToolCallException>(() => pendingToolCall);
+        var exception = await AssertEx.ThrowsAsync<WorkerToolCallException>(() => pendingToolCall);
         AssertEx.Contains(exception.Message, "timed out during cleanup", StringComparison.OrdinalIgnoreCase);
     }
 
@@ -2125,7 +2125,7 @@ public sealed class InvocationRunnerTests
         // If the result wait honoured the 5-minute node age instead of the 1s package timeout, this would not fault
         // within 15s and the WaitAsync would surface a TimeoutException (failing the expected WorkerToolCallException).
         var toolCall = runner.ExecuteApiToolCallAsync(invocationId, "test-tool", "{}", requiresApproval: false);
-        var exception = await AssertEx.ThrowsAsync<InvocationRunner.WorkerToolCallException>(() => toolCall.WaitAsync(TimeSpan.FromSeconds(15)));
+        var exception = await AssertEx.ThrowsAsync<WorkerToolCallException>(() => toolCall.WaitAsync(TimeSpan.FromSeconds(15)));
         AssertEx.Contains(exception.Message, "timed out waiting for a result", StringComparison.OrdinalIgnoreCase);
 
         gate.TrySetResult();

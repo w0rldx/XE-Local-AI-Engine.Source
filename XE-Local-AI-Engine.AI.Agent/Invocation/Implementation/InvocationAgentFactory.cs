@@ -9,15 +9,6 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 
 internal sealed class InvocationAgentFactory : IInvocationAgentFactory
 {
-    /// <summary>
-    ///     The binary reasoning-"on" sentinel for a model that lacks the Ollama <c>thinking</c> capability but reasons
-    ///     by default. "on" — and any graded level (low/medium/high) carried onto such a model — makes the factory OMIT
-    ///     the think field so the model's built-in reasoning runs; only "none"/unspecified suppresses it via think:false
-    ///     (see <see cref="IsReasoningRequested" />). Thinking-capable models never take this path — they honor
-    ///     false/low/medium/high via <see cref="ResolveThinkOption" />.
-    /// </summary>
-    private const string BinaryReasoningOn = "on";
-
     // Ollama option keys read from ChatOptions.AdditionalProperties by OllamaSharp 5.4.25
     // (OllamaSharp.MicrosoftAi.AbstractionMapper → OllamaOption.*.Name; verified against the installed assembly
     // 2026-06-05). The natively-mapped knobs (temperature/top_p/top_k/num_predict/presence_penalty/frequency_penalty/
@@ -26,18 +17,6 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
     private const string OllamaRepeatPenaltyKey = "repeat_penalty";
     private const string OllamaRepeatLastNKey = "repeat_last_n";
     private const string OllamaNumCtxKey = "num_ctx";
-
-    /// <summary>
-    ///     Codex-only side channel carrying the RAW normalized reasoning-effort string
-    ///     (minimal/low/medium/high/xhigh) for a thinking-capable model, so the Codex Responses boundary can map
-    ///     it to <c>ResponseReasoningEffortLevel</c> with full fidelity. The Ollama <c>think</c> key cannot carry
-    ///     <c>minimal</c>/<c>xhigh</c> (Ollama 400s on an unknown think level), so those collapse to
-    ///     <c>think:true</c> there; this key preserves the distinction without affecting the Ollama wire — the
-    ///     OllamaSharp AbstractionMapper reads only its fixed option allowlist and ignores unknown keys. The key
-    ///     is added ONLY when a graded/explicit effort is present, so the no-effort path stays byte-identical
-    ///     (single <c>think</c> entry).
-    /// </summary>
-    internal const string CodexReasoningEffortKey = "codex_reasoning_effort";
 
     /// <summary>
     ///     In-process marker on <see cref="ChatOptions.AdditionalProperties" /> that tells the llama.cpp chat client to
@@ -108,7 +87,7 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
         {
             // Graded reasoning model: honor the requested effort (false / "low" / "medium" / "high"). minimal/xhigh
             // collapse to think:true here because Ollama 400s on an unknown think level (see ResolveThinkOption).
-            var think = ResolveThinkOption(definition.ReasoningEffort);
+            var think = ReasoningOptionsResolver.ResolveThinkOption(definition.ReasoningEffort);
             additionalProperties["think"] = think;
 
             // Reasoning explicitly OFF on a thinking-capable model (ResolveThinkOption returned the bool false, which only
@@ -127,13 +106,13 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
             // it would 400 Ollama). Added only for a recognized non-blank effort so the no-effort/blank/on path keeps
             // the single-think dictionary (byte-identical no-override guarantee). Inert on the Ollama wire: the
             // OllamaSharp AbstractionMapper reads only its fixed option allowlist and ignores this unknown key.
-            var codexEffort = ResolveCodexReasoningEffort(definition.ReasoningEffort);
+            var codexEffort = ReasoningOptionsResolver.ResolveCodexReasoningEffort(definition.ReasoningEffort);
             if (codexEffort is not null)
             {
-                additionalProperties[CodexReasoningEffortKey] = codexEffort;
+                additionalProperties[ReasoningOptionsResolver.CodexReasoningEffortKey] = codexEffort;
             }
         }
-        else if (IsReasoningRequested(definition.ReasoningEffort))
+        else if (ReasoningOptionsResolver.IsReasoningRequested(definition.ReasoningEffort))
         {
             // Non-thinking model, reasoning requested (binary "on" OR a graded low/medium/high carried onto a model
             // that cannot do graded thinking): OMIT the think field entirely so the model's default (chat-template-
@@ -432,95 +411,6 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
     private IList<AITool> ResolveExecutableTools(InvocationAgentDefinition definition)
     {
         return InvocationToolResolver.Resolve(definition.Tools, _toolRegistry, _clientLocalToolRegistry, _mcpToolRegistry, _logger);
-    }
-
-    private static object ResolveThinkOption(string? reasoningEffort)
-    {
-        if (string.IsNullOrWhiteSpace(reasoningEffort))
-        {
-            return true;
-        }
-
-        var normalized = reasoningEffort.Trim();
-        if (string.Equals(normalized, "low", StringComparison.OrdinalIgnoreCase))
-        {
-            return "low";
-        }
-
-        if (string.Equals(normalized, "none", StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        if (string.Equals(normalized, "medium", StringComparison.OrdinalIgnoreCase))
-        {
-            return "medium";
-        }
-
-        if (string.Equals(normalized, "high", StringComparison.OrdinalIgnoreCase))
-        {
-            return "high";
-        }
-
-        // minimal / xhigh are Codex (OpenAI Responses) reasoning levels that Ollama does NOT understand — sending
-        // think:"minimal"/"xhigh" returns HTTP 400 ("unknown think level"). They are only offered for Codex models in
-        // the composer, but should an agent definition pin one (or a stale composer selection carry one onto an Ollama
-        // thinking model) we map them to think:true (reason) so the Ollama path stays safe. The Codex boundary reads
-        // the un-collapsed level from the CodexReasoningEffortKey side channel instead.
-        // Default to think:true (reason). This also intentionally covers the "on" binary-reasoning sentinel
-        // (<see cref="BinaryReasoningOn" />): it is normally handled in the !SupportsThinking branch, and only reaches
-        // this graded path defensively (the React clamp keeps "on" off thinking-capable models) — where "reason" is the
-        // right meaning for a model that can think.
-        return true;
-    }
-
-    /// <summary>
-    ///     Returns the canonical reasoning effort to carry on the Codex-only <see cref="CodexReasoningEffortKey" />
-    ///     side channel, or <see langword="null" /> to omit it. Recognizes the OpenAI Responses graded levels
-    ///     (<c>minimal</c>/<c>low</c>/<c>medium</c>/<c>high</c>/<c>xhigh</c>) and explicit <c>none</c>; blank, the
-    ///     binary <c>on</c> sentinel, and any unrecognized value return <see langword="null" /> so the Codex boundary
-    ///     falls back to interpreting the Ollama <c>think</c> value (true → its default effort). The input is expected
-    ///     already normalized upstream by the Application layer's reasoning-effort normalizer.
-    /// </summary>
-    private static string? ResolveCodexReasoningEffort(string? reasoningEffort)
-    {
-        if (string.IsNullOrWhiteSpace(reasoningEffort))
-        {
-            return null;
-        }
-
-        return reasoningEffort.Trim().ToUpperInvariant() switch
-        {
-            "NONE" => "none",
-            "MINIMAL" => "minimal",
-            "LOW" => "low",
-            "MEDIUM" => "medium",
-            "HIGH" => "high",
-            "XHIGH" => "xhigh",
-            _ => null
-        };
-    }
-
-    /// <summary>
-    ///     True when the effort asks the model to reason: the binary <see cref="BinaryReasoningOn" /> sentinel or a
-    ///     graded level (low/medium/high). Used ONLY on the non-thinking-model branch — a graded level can be carried
-    ///     onto a model that lacks the Ollama <c>thinking</c> capability (an agent definition pins it, or the composer
-    ///     keeps a stale selection across a model switch). The model cannot honor the graded level (Ollama 400s on
-    ///     <c>think:&lt;level&gt;</c>), but the user still asked to reason, so the caller OMITS the think field and lets
-    ///     the model's built-in reasoning run. Only <c>none</c> (or unspecified/blank) returns false → think:false.
-    /// </summary>
-    private static bool IsReasoningRequested(string? reasoningEffort)
-    {
-        if (string.IsNullOrWhiteSpace(reasoningEffort))
-        {
-            return false;
-        }
-
-        var normalized = reasoningEffort.Trim();
-        return string.Equals(normalized, BinaryReasoningOn, StringComparison.OrdinalIgnoreCase)
-               || string.Equals(normalized, "low", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(normalized, "medium", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(normalized, "high", StringComparison.OrdinalIgnoreCase);
     }
 
     private static IReadOnlyList<ChatMessage> BuildSeedMessages(InvocationAgentDefinition definition)

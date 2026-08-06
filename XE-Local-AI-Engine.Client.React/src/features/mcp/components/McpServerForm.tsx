@@ -1,6 +1,6 @@
 import { ActionIcon, Alert, Button, Group, Select, Stack, Text, Textarea, TextInput } from "@mantine/core";
 import { IconDeviceFloppy, IconPlus, IconTrash, IconX } from "@tabler/icons-react";
-import { type Ref, useCallback, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { type Ref, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -93,9 +93,9 @@ export function McpServerForm({
 	const envRowsRef = useRef(envRows);
 	envRowsRef.current = envRows;
 
-	// Report the host's dirty state from the event-driven update path rather than a useEffect that watches state —
-	// the effect-sync pattern forces an extra parent re-render on every keystroke. Dirty = current values (with env
-	// projected back) differ from the initial snapshot; a JSON compare gives shallow/structural detection.
+	// Compute and report the host's dirty state. Dirty = current values (with env projected back) differ from the
+	// initial snapshot; a JSON compare gives shallow/structural detection. Called from an effect (below), never during
+	// render, so the parent setter is only ever invoked after commit.
 	const reportDirty = useCallback(
 		(nextValues: McpServerFormValues, nextEnvRows: readonly McpEnvRow[]) => {
 			const candidate: McpServerFormValues = { ...nextValues, env: toEnvEntries(nextEnvRows) };
@@ -104,34 +104,23 @@ export function McpServerForm({
 		[initialValues, onDirtyChange],
 	);
 
-	const updateValues = useCallback(
-		(updater: (current: McpServerFormValues) => McpServerFormValues) => {
-			const next = updater(valuesRef.current);
-			valuesRef.current = next;
-			setValues(next);
-			reportDirty(next, envRowsRef.current);
-		},
-		[reportDirty],
-	);
+	const updateValues = useCallback((updater: (current: McpServerFormValues) => McpServerFormValues) => {
+		const next = updater(valuesRef.current);
+		valuesRef.current = next;
+		setValues(next);
+	}, []);
 
-	const updateEnvRows = useCallback(
-		(updater: (current: McpEnvRow[]) => McpEnvRow[]) => {
-			const next = updater(envRowsRef.current);
-			envRowsRef.current = next;
-			setEnvRows(next);
-			reportDirty(valuesRef.current, next);
-		},
-		[reportDirty],
-	);
+	const updateEnvRows = useCallback((updater: (current: McpEnvRow[]) => McpEnvRow[]) => {
+		const next = updater(envRowsRef.current);
+		envRowsRef.current = next;
+		setEnvRows(next);
+	}, []);
 
-	// Report the initial (clean) dirty state once on mount. The page keys this component per editor target, so a
-	// fresh mount always starts clean. Done as a one-shot render-time call (ref-guarded) rather than a useEffect that
-	// re-syncs on every change — the latter forces an extra parent re-render per keystroke.
-	const didReportInitialDirty = useRef(false);
-	if (!didReportInitialDirty.current) {
-		didReportInitialDirty.current = true;
+	// Report dirty state to the host from an effect, so the parent setter is only ever called after commit — never
+	// during render. Fires on mount (a fresh mount is clean) and whenever the values or env rows change.
+	useEffect(() => {
 		reportDirty(values, envRows);
-	}
+	}, [values, envRows, reportDirty]);
 
 	const transportData = useMemo(
 		() =>

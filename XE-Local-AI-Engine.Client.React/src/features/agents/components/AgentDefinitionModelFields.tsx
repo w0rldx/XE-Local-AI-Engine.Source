@@ -2,13 +2,13 @@ import { Divider, Group, Select, Stack, Switch } from "@mantine/core";
 import { useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
+import type { ReasoningEffort } from "@/core/models/ReasoningEffort";
 import {
 	type AgentDefinitionFormValues,
 	type AgentDefinitionKind,
 	agentDefinitionKinds,
 	agentReasoningEfforts,
 } from "@/features/agents/models/AgentDefinitionModels";
-import type { ReasoningEffort } from "@/features/chat/models/ChatModels";
 
 import type { AgentModelOption } from "./AgentDefinitionForm.types";
 

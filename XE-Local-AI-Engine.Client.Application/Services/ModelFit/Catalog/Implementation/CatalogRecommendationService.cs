@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.ModelFit.Catalog.Implementation;
 
 using System.Text.Json;
+using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Fit;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
@@ -157,7 +158,7 @@ internal sealed class CatalogRecommendationService : ICatalogRecommendationServi
     {
         var detail = await _discovery.InspectRepoAsync(entry.GgufRepo, cancellationToken).ConfigureAwait(false);
 
-        var selected = SelectBestFittingFile(entry, detail.Files, quantCeiling, ctxTarget, profile);
+        var selected = GgufFileSelector.SelectBestFit(_estimator, detail.Files, quantCeiling, ctxTarget, profile, file => BuildMoeFacts(entry, file));
         if (selected is null)
         {
             return null;
@@ -208,62 +209,6 @@ internal sealed class CatalogRecommendationService : ICatalogRecommendationServi
             quantizedEstimate.HeadroomBytes,
             quantizedEstimate.Fits,
             RequiresFlashAttention: true);
-    }
-
-    /// <summary>
-    ///     Walks <paramref name="files" /> against the <see cref="QuantLadder" /> exactly like the explore lane's
-    ///     <c>ModelFitRefreshService.SelectBestFittingFile</c>, but passing <see cref="MoeFacts" /> built from the
-    ///     catalog entry so an MoE entry can resolve to <see cref="MoeFitVerdict.FitsWithExpertOffload" /> even when a
-    ///     given quantized file's header omits the expert-count keys.
-    /// </summary>
-    private (GgufRepoFile File, MemoryFitEstimate Estimate)? SelectBestFittingFile(ModelCatalogEntry entry,
-        IReadOnlyList<GgufRepoFile> files,
-        string quant,
-        int ctxTarget,
-        HardwareProfile profile)
-    {
-        var ceilingRank = QuantLadder.QualityRank(quant);
-        var floorRank = QuantLadder.FloorRank;
-
-        var fitting = files
-                      // A speculative-decoding drafter is not a candidate model: it is a companion loaded inside a chat
-                      // process, and its tiny size would let it out-fit every real quant in the repo.
-                      .Where(static file => !GgufDraftModel.IsDraftQuant(file.Quant))
-                      .Select(file => (file, estimate: _estimator.Estimate(file.Quant,
-                          file.ParamCount,
-                          file.SizeBytes,
-                          file.BlockCount ?? 0,
-                          file.AttentionHeadCountKV ?? 0,
-                          file.EmbeddingLength ?? 0,
-                          file.AttentionHeadCount ?? 0,
-                          ctxTarget,
-                          profile,
-                          kvCacheQuantized: false,
-                          BuildMoeFacts(entry, file),
-                          // Explicit key/value lengths and interleaved sliding-window facts correct the KV term, and
-                          // native-format detection prices a native MXFP4 quant at its own density.
-                          attention: BuildAttentionShape(file),
-                          nativeQuantFormat: QuantLadder.IsNativeFormat(file.Quant)), rank: QuantLadder.QualityRank(file.Quant)))
-                      .Where(candidate => candidate.estimate.EstimatedBytes > _estimator.OverheadBytes
-                                          && candidate.estimate.Fits
-                                          && candidate.rank <= floorRank)
-                      .ToList();
-
-        if (fitting.Count == 0)
-        {
-            return null;
-        }
-
-        // Native-format guard: a repo shipping a native, non-requantizable format (MXFP4) caps its recommendable quality
-        // at the native file — never a higher-nominal-quality requant of it.
-        var guarded = MemoryFitEstimator.FilterOutNativeFormatRequants(fitting, candidate => candidate.file.Quant, candidate => candidate.rank);
-
-        var atOrBelowCeiling = guarded.Where(candidate => candidate.rank >= ceilingRank).ToList();
-        var chosen = atOrBelowCeiling.Count > 0
-            ? atOrBelowCeiling.OrderBy(candidate => candidate.rank).ThenBy(candidate => candidate.estimate.EstimatedBytes).First()
-            : guarded.OrderByDescending(candidate => candidate.rank).ThenBy(candidate => candidate.estimate.EstimatedBytes).First();
-
-        return (chosen.file, chosen.estimate);
     }
 
     /// <summary>

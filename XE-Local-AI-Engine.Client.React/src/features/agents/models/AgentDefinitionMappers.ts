@@ -3,13 +3,13 @@ import type {
 	XeLocalAiEngineClientEndpointsAgentsV1CreateAgentDefinitionRequest,
 	XeLocalAiEngineClientEndpointsAgentsV1ListAgentDefinitionsResponse,
 } from "@/core/api/generated";
+import type { ReasoningEffort } from "@/core/models/ReasoningEffort";
 import type {
 	AgentDefinition,
 	AgentDefinitionFormValues,
 	AgentDefinitionKind,
 } from "@/features/agents/models/AgentDefinitionModels";
 import { serializeOrchestrationTopology } from "@/features/agents/models/OrchestrationTopologyModels";
-import type { ReasoningEffort } from "@/features/chat/models/ChatModels";
 
 // Maps the generated (OpenAPI) agent-definition responses to the stricter domain view-models the page depends on,
 // and projects the domain form values back onto the generated request body. The generated types are the single

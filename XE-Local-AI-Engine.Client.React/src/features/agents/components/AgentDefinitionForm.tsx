@@ -1,5 +1,5 @@
 import { Alert, Stack } from "@mantine/core";
-import { type Ref, useCallback, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { type Ref, useCallback, useEffect, useImperativeHandle, useMemo, useState } from "react";
 
 import { AgentDefinitionBasicFields } from "@/features/agents/components/AgentDefinitionBasicFields";
 import { AgentDefinitionModelFields } from "@/features/agents/components/AgentDefinitionModelFields";
@@ -66,25 +66,18 @@ export function AgentDefinitionForm({
 	// derived (current values vs. the mount snapshot, which the page keys stable per editor session), so reporting
 	// it from the updater — rather than a useEffect that watches state — avoids the extra parent re-render the
 	// effect-sync pattern causes. A JSON compare is sufficient: the value shape is plain data.
-	const updateValues = useCallback(
-		(updater: (current: AgentDefinitionFormValues) => AgentDefinitionFormValues) => {
-			setValues((current) => {
-				const next = updater(current);
-				onDirtyChange?.(JSON.stringify(next) !== JSON.stringify(initialValues));
-				return next;
-			});
-		},
-		[initialValues, onDirtyChange],
-	);
+	// Pure state update — no parent notification here. Calling onDirtyChange inside a setState updater runs during the
+	// render phase and triggers React's "cannot update a component while rendering a different component" error.
+	const updateValues = useCallback((updater: (current: AgentDefinitionFormValues) => AgentDefinitionFormValues) => {
+		setValues(updater);
+	}, []);
 
-	// Report the initial (clean) dirty state once on mount. The page keys this component per editor target, so a
-	// fresh mount always starts clean. Done as a one-shot render-time call (ref-guarded) rather than a useEffect that
-	// re-syncs on every change — the latter forces an extra parent re-render per keystroke.
-	const didReportInitialDirty = useRef(false);
-	if (!didReportInitialDirty.current) {
-		didReportInitialDirty.current = true;
+	// Report dirty state to the parent (which wires it to the close-guard / route-guard) from an effect, so the parent
+	// setter is only ever called after commit — never during render. Fires on mount (a fresh mount is clean) and after
+	// every edit. A JSON compare is sufficient: the value shape is plain data.
+	useEffect(() => {
 		onDirtyChange?.(JSON.stringify(values) !== JSON.stringify(initialValues));
-	}
+	}, [values, initialValues, onDirtyChange]);
 
 	const toolCapable = useMemo(
 		() => isModelToolCapable(values.modelProfile, toolCapableModels),

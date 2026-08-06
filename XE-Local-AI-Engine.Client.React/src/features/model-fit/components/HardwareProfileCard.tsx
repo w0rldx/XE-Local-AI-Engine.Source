@@ -3,7 +3,7 @@ import { IconAlertTriangle, IconCpu, IconHelpCircle, IconRefresh } from "@tabler
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
-import { formatBytesAsGb } from "@/features/model-fit/components/ModelFitFormatters";
+import { formatBytesAsGb } from "@/core/formatting/BytesFormatting";
 import type { HardwareProfile } from "@/features/model-fit/models/ModelFitModels";
 
 interface HardwareProfileCardProps {
