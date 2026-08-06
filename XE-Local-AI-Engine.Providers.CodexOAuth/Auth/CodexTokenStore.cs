@@ -10,21 +10,6 @@ using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
-///     Contract for persisting the encrypted Codex OAuth session.
-/// </summary>
-public interface ICodexTokenStore
-{
-    /// <summary>Loads the stored session, or <see langword="null" /> if none / undecryptable.</summary>
-    Task<CodexTokens?> LoadAsync(CancellationToken cancellationToken = default);
-
-    /// <summary>Encrypts and persists the session with user-only file permissions.</summary>
-    Task SaveAsync(CodexTokens tokens, CancellationToken cancellationToken = default);
-
-    /// <summary>Removes any stored session (logout).</summary>
-    Task ClearAsync(CancellationToken cancellationToken = default);
-}
-
-/// <summary>
 ///     Encrypted token store mirroring <c>CloudCredentialStore</c>: DataProtection at rest,
 ///     Windows user-only <see cref="FileSecurity" />, *nix <c>0600</c>. Uses a dedicated protector purpose and a
 ///     separate <c>.enc</c> file so it cannot collide with the API-key-shaped cloud credential store.
