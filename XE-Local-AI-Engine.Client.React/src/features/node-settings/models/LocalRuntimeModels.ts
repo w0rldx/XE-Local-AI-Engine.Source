@@ -43,38 +43,3 @@ export interface LlamaCppRuntimeStatus {
 	readonly isSourceBuild?: boolean;
 	readonly rebuildAvailable?: boolean;
 }
-
-// Domain view-model for a single CUDA build prerequisite (one host capability check: e.g. Linux, nvcc, cmake, NVIDIA
-// GPU). `satisfied` drives the ✓/✗ glyph; `detail` is an operator-facing reason/version string.
-export interface CudaBuildPrerequisiteItem {
-	readonly key: string;
-	readonly satisfied: boolean;
-	readonly detail: string;
-}
-
-// Domain view-model for the CUDA build prerequisite report. `canBuild` is the authoritative gate the UI keys off for the
-// "Build CUDA" button; `items` is the checklist. Linux is derived from the `os-is-linux` item (see CudaBuild helpers).
-export interface CudaBuildPrerequisites {
-	readonly items: readonly CudaBuildPrerequisiteItem[];
-	readonly canBuild: boolean;
-}
-
-// Domain view-model for the persisted CUDA build status (GET cuda-build/status). Survives a client reconnect: a page
-// reload mid-build re-reads `phase` + `logLines` here, and the live SignalR hub appends subsequent deltas on top.
-export interface CudaBuildStatus {
-	readonly phase: string;
-	readonly isRunning: boolean;
-	readonly terminal: boolean;
-	readonly logLines: readonly string[];
-	readonly sanitizedError: string | null;
-	readonly tag: string | null;
-}
-
-// The prerequisite key the backend reports for the OS gate. The card is Linux-gated off this item (Locked #9): the CUDA
-// build path is Linux-only, so a non-Linux host shows the card disabled with the unsatisfied reasons.
-export const cudaBuildOsLinuxKey = "os-is-linux";
-
-// Derives whether the host is Linux from the prerequisite report. True only when the `os-is-linux` item is satisfied.
-export function isLinuxHost(prerequisites: CudaBuildPrerequisites | undefined): boolean {
-	return prerequisites?.items.some((item) => item.key === cudaBuildOsLinuxKey && item.satisfied) ?? false;
-}
