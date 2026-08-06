@@ -1,5 +1,9 @@
 import type { ReactNode } from "react";
 
+// Re-exported so chat's own call sites keep importing from here; the type itself lives in core because `agents` also
+// depends on it (see ReasoningEffort.ts for the effort-level doc comment).
+import type { ReasoningEffort } from "@/core/models/ReasoningEffort";
+export type { ReasoningEffort };
 // Type-only import (erased at runtime, so no models→api cycle): the `ask_user` wire shape is owned by the wire
 // module so a backend field rename stays a one-line fix.
 import type { PendingUserQuestion } from "@/features/chat/api/AskUserQuestionWire";
@@ -10,14 +14,6 @@ export type ChatRole = "user" | "assistant" | "system" | "tool";
 export type MessageStatus = "pending" | "queued" | "streaming" | "completed" | "cancelled" | "failed" | "interrupted";
 
 export type ChatOrigin = "local" | "remote";
-
-// "none"/"low"/"medium"/"high" are the graded efforts for models with the Ollama `thinking` capability.
-// "on" is the binary-reasoning ON state for a model WITHOUT that capability that still reasons by default
-// (e.g. some GGUF chat templates): it maps to "omit the think field" so the model's built-in reasoning runs,
-// while "none" maps to think:false (suppress). Graded models never use "on"; binary models only use "on"/"none".
-// "minimal" and "xhigh" are Codex/cloud-only graded levels mapped to OpenAI Responses reasoning.effort — they
-// are NEVER offered for Ollama models and must not leak to the Ollama `think` wire.
-export type ReasoningEffort = "none" | "on" | "minimal" | "low" | "medium" | "high" | "xhigh";
 
 export type ToolCallState = "requesting" | "waiting" | "received" | "failed";
 
