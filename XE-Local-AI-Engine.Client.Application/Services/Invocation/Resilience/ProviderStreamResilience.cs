@@ -5,21 +5,6 @@ using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.Options;
 
-/// <summary>
-///     Raised when a provider endpoint's circuit breaker is open and a send is rejected fast. The message is a fixed,
-///     path-free constant; the endpoint identifier is kept internal for server-side logging only.
-/// </summary>
-public sealed class ProviderCircuitOpenException : Exception
-{
-    public ProviderCircuitOpenException(string endpointKey)
-        : base("Provider temporarily unavailable.")
-    {
-        EndpointKey = endpointKey;
-    }
-
-    public string EndpointKey { get; }
-}
-
 /// <inheritdoc cref="IProviderStreamResilience" />
 /// <remarks>
 ///     A minimal internal implementation rather than a Polly/HTTP-resilience pipeline: the "retry only before the first
