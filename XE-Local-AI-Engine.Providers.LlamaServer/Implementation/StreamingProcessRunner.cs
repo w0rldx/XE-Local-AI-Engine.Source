@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
 using System.Diagnostics;
 using System.Runtime.Versioning;
+using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
 ///     Run-to-completion streaming process runner for the in-app CUDA build (NEW code — the supervised
