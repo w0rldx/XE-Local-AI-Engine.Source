@@ -24,7 +24,7 @@ import {
 	IconLogout,
 	IconRefresh,
 } from "@tabler/icons-react";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useCodexLogin, useCodexLogout, useCodexStatus } from "@/features/cloud-settings/codex/queries/useCodexAuth";
@@ -76,14 +76,18 @@ export function CodexSignInCard({ onSignedInChange }: CodexSignInCardProps) {
 		}, []),
 	);
 
-	// Propagate signed-in state to the parent for provider-selector gating, and record the latest value for the
-	// polling-stop derivation above. Done during render via a ref-guarded compare (fires once per transition) rather
-	// than from a useEffect that watches state purely to push it up — the effect-sync would force an extra parent
-	// re-render on each change.
+	// Record the latest signed-in value during render so the polling-stop derivation above (which reads
+	// prevSignedIn.current in the same render) halts the poll without chaining an extra render.
 	if (prevSignedIn.current !== isSignedIn) {
 		prevSignedIn.current = isSignedIn;
-		onSignedInChange?.(isSignedIn);
 	}
+
+	// Propagate signed-in state to the parent for provider-selector gating from an effect rather than during render:
+	// calling a parent setter mid-render is the no-prop-callback-in-render violation. Fires on mount and whenever the
+	// signed-in value transitions; onSignedInChange is a stable useCallback in the parent, so it adds no extra fires.
+	useEffect(() => {
+		onSignedInChange?.(isSignedIn);
+	}, [isSignedIn, onSignedInChange]);
 
 	const isPending = loginFlowActive && !isSignedIn && !timedOut;
 
