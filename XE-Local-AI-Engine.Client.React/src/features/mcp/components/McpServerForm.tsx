@@ -93,9 +93,9 @@ export function McpServerForm({
 	const envRowsRef = useRef(envRows);
 	envRowsRef.current = envRows;
 
-	// Report the host's dirty state from the event-driven update path rather than a useEffect that watches state —
-	// the effect-sync pattern forces an extra parent re-render on every keystroke. Dirty = current values (with env
-	// projected back) differ from the initial snapshot; a JSON compare gives shallow/structural detection.
+	// Compute and report the host's dirty state. Dirty = current values (with env projected back) differ from the
+	// initial snapshot; a JSON compare gives shallow/structural detection. Called from an effect (below), never during
+	// render, so the parent setter is only ever invoked after commit.
 	const reportDirty = useCallback(
 		(nextValues: McpServerFormValues, nextEnvRows: readonly McpEnvRow[]) => {
 			const candidate: McpServerFormValues = { ...nextValues, env: toEnvEntries(nextEnvRows) };
