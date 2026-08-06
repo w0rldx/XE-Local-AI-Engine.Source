@@ -1,11 +1,11 @@
 import { z } from "zod";
 
+import type { ReasoningEffort } from "@/core/models/ReasoningEffort";
 import {
 	type OrchestrationTopology,
 	orchestrationTopologySchema,
 	orchestrationTopologyShapeSchema,
 } from "@/features/agents/models/OrchestrationTopologyModels";
-import type { ReasoningEffort } from "@/features/chat/models/ChatModels";
 
 // Mirrors the backend AgentDefinitionKind enum (Single=0, Orchestrator=1). The wire contract carries the
 // string form. Orchestrator is persisted but currently ignored by the runtime (such a definition runs as a
