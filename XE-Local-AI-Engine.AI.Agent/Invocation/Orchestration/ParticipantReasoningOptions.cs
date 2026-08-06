@@ -9,25 +9,17 @@ using Microsoft.Extensions.AI;
 ///     per-turn <c>RunOptions</c>, so their reasoning has to be baked into the agent when it is built — unlike the
 ///     single-agent path, where the same contract rides <c>RunOptions.ChatOptions</c>.
 ///     <para>
-///         This intentionally MIRRORS (does not reuse) the single-agent think contract implemented inline in
-///         <c>InvocationAgentFactory.CreateAsync</c>: that factory owns its own copy and this helper lives in the
-///         .AI.Agent assembly so the orchestration factory can honor per-participant reasoning without depending on it.
-///         The two must stay in lockstep — the capability/effort matrix, the Ollama-400 rationale for omitting the
-///         field on a non-thinking model, and the <c>minimal</c>/<c>xhigh</c> collapse are documented there. Any change
-///         to one must be applied to the other.
+///         The capability/effort matrix itself (the Ollama-400 rationale for omitting the field on a non-thinking
+///         model, the <c>minimal</c>/<c>xhigh</c> collapse) lives in the shared
+///         <see cref="ReasoningOptionsResolver" />, which this and the single-agent path
+///         (<c>InvocationAgentFactory.CreateAsync</c>) both call — so the two stay in lockstep by construction rather
+///         than by hand-applied edits.
 ///     </para>
 /// </summary>
 internal static class ParticipantReasoningOptions
 {
-    /// <summary>
-    ///     Codex-only side channel carrying the RAW normalized reasoning-effort string. Kept byte-identical to
-    ///     <c>InvocationAgentFactory.CodexReasoningEffortKey</c> (they intentionally duplicate the same wire key across
-    ///     the two assemblies); see that field for the full rationale.
-    /// </summary>
-    internal const string CodexReasoningEffortKey = "codex_reasoning_effort";
-
-    /// <summary>The binary reasoning-"on" sentinel; mirrors <c>InvocationAgentFactory.BinaryReasoningOn</c>.</summary>
-    private const string BinaryReasoningOn = "on";
+    /// <summary>Forwards to <see cref="ReasoningOptionsResolver.CodexReasoningEffortKey" />; kept for callers already using this name.</summary>
+    internal const string CodexReasoningEffortKey = ReasoningOptionsResolver.CodexReasoningEffortKey;
 
     /// <summary>
     ///     Produces the reasoning properties for a participant, gated on its resolved model's thinking capability:
@@ -47,15 +39,15 @@ internal static class ParticipantReasoningOptions
         {
             // Graded reasoning model: honor the requested effort (false / "low" / "medium" / "high"). minimal/xhigh
             // collapse to think:true here because Ollama 400s on an unknown think level (see ResolveThinkOption).
-            properties["think"] = ResolveThinkOption(reasoningEffort);
+            properties["think"] = ReasoningOptionsResolver.ResolveThinkOption(reasoningEffort);
 
-            var codexEffort = ResolveCodexReasoningEffort(reasoningEffort);
+            var codexEffort = ReasoningOptionsResolver.ResolveCodexReasoningEffort(reasoningEffort);
             if (codexEffort is not null)
             {
-                properties[CodexReasoningEffortKey] = codexEffort;
+                properties[ReasoningOptionsResolver.CodexReasoningEffortKey] = codexEffort;
             }
         }
-        else if (IsReasoningRequested(reasoningEffort))
+        else if (ReasoningOptionsResolver.IsReasoningRequested(reasoningEffort))
         {
             // Non-thinking model, reasoning requested: OMIT the think field so the model's default (chat-template-baked)
             // reasoning is allowed through. Sending think:true or a level returns HTTP 400 for a model without the
@@ -69,73 +61,5 @@ internal static class ParticipantReasoningOptions
         }
 
         return properties;
-    }
-
-    private static object ResolveThinkOption(string? reasoningEffort)
-    {
-        if (string.IsNullOrWhiteSpace(reasoningEffort))
-        {
-            return true;
-        }
-
-        var normalized = reasoningEffort.Trim();
-        if (string.Equals(normalized, "low", StringComparison.OrdinalIgnoreCase))
-        {
-            return "low";
-        }
-
-        if (string.Equals(normalized, "none", StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        if (string.Equals(normalized, "medium", StringComparison.OrdinalIgnoreCase))
-        {
-            return "medium";
-        }
-
-        if (string.Equals(normalized, "high", StringComparison.OrdinalIgnoreCase))
-        {
-            return "high";
-        }
-
-        // minimal / xhigh are Codex (OpenAI Responses) levels Ollama does NOT understand — Ollama rejects an unknown
-        // think level with HTTP 400 — so they collapse to a boolean true think value here, keeping the Ollama wire
-        // safe while the Codex boundary reads the un-collapsed level from the CodexReasoningEffortKey side channel.
-        // Also covers the "on" binary-reasoning sentinel defensively.
-        return true;
-    }
-
-    private static string? ResolveCodexReasoningEffort(string? reasoningEffort)
-    {
-        if (string.IsNullOrWhiteSpace(reasoningEffort))
-        {
-            return null;
-        }
-
-        return reasoningEffort.Trim().ToUpperInvariant() switch
-        {
-            "NONE" => "none",
-            "MINIMAL" => "minimal",
-            "LOW" => "low",
-            "MEDIUM" => "medium",
-            "HIGH" => "high",
-            "XHIGH" => "xhigh",
-            _ => null
-        };
-    }
-
-    private static bool IsReasoningRequested(string? reasoningEffort)
-    {
-        if (string.IsNullOrWhiteSpace(reasoningEffort))
-        {
-            return false;
-        }
-
-        var normalized = reasoningEffort.Trim();
-        return string.Equals(normalized, BinaryReasoningOn, StringComparison.OrdinalIgnoreCase)
-               || string.Equals(normalized, "low", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(normalized, "medium", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(normalized, "high", StringComparison.OrdinalIgnoreCase);
     }
 }

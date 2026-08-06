@@ -2070,15 +2070,4 @@ public sealed partial class InvocationRunner : IInvocationRunner
         Watchdog = 2,
         Shutdown = 3
     }
-
-    /// <summary>
-    ///     Exception raised for worker tool call failures.
-    /// </summary>
-    public sealed class WorkerToolCallException : Exception
-    {
-        public WorkerToolCallException(string toolName, string message, Exception? innerException = null)
-            : base($"Tool call '{toolName}' failed: {message}", innerException)
-        {
-        }
-    }
 }

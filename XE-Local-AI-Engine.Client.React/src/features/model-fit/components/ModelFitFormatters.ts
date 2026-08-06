@@ -77,12 +77,3 @@ export function formatContextTokens(tokens: number | null): string {
 	}
 	return tokens.toLocaleString();
 }
-
-// Formats a raw byte count as a compact GB string (one decimal), or a dash when absent. Used by the hardware-profile
-// card for RAM / VRAM / disk figures (the wire reports bytes).
-export function formatBytesAsGb(bytes: number | null): string {
-	if (bytes === null) {
-		return "—";
-	}
-	return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
-}

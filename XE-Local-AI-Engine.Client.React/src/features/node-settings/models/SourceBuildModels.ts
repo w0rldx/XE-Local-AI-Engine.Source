@@ -2,8 +2,6 @@ export type LlamaCppSourceBackend = "cpu" | "vulkan" | "cuda";
 export type LlamaCppSourceSelection = "official" | "custom";
 export type LlamaCppSourceRevisionMode = "enginePinned" | "defaultBranch" | "explicitCommit";
 
-export const sourceBuildBackends: readonly LlamaCppSourceBackend[] = ["cpu", "vulkan", "cuda"];
-
 export interface LlamaCppSourceBuildDescriptor {
 	readonly buildId: string;
 	readonly backend: LlamaCppSourceBackend;
