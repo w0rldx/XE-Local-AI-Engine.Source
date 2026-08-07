@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
+using SecurityOptions = XE_Local_AI_Engine.Client.Configuration.SecurityOptions;
 using XE_Local_AI_Engine.Client.Endpoints.LocalChat.V1;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -42,6 +43,25 @@ public sealed class NodeChatEndpointTests
         AssertEx.Contains(listed.Items.Select(static item => item.ConversationId), created.ConversationId);
         AssertEx.Equal(created.ConversationId, loaded.ConversationId);
         AssertEx.Empty(loaded.Messages);
+    }
+
+    [Test]
+    public async Task Conversations_WhenListed_ReportTheEffectiveMessageSizeCap()
+    {
+        // A non-default value proves the composer's pre-check limit tracks the operator's Security:MaxMessageSizeKb
+        // instead of a constant baked into the response.
+        await using var factory = new TestingWebAppFactory
+        {
+            ConfigureAdditionalTestServices = services => services.Configure<SecurityOptions>(options => options.MaxMessageSizeKb = 7)
+        };
+        using var client = factory.CreateClient();
+
+        using var listRequest = CreateRequest(factory, HttpMethod.Get, "/api/local/v1/chat/conversations");
+        using var listResponse = await client.SendAsync(listRequest).ConfigureAwait(false);
+        var listed = await ReadJsonAsync<ListNodeChatConversationsResponse>(listResponse).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, listResponse.StatusCode);
+        AssertEx.Equal(expected: 7, listed.MaxMessageSizeKb);
     }
 
     [Test]

@@ -917,6 +917,10 @@
 			},
 			"composer": {
 				"samplingOptions": "Advanced sampling options",
+				"size": {
+					"usage": "{{used}} KB / {{limit}} KB",
+					"overLimit": "This message is {{used}} KB — over the {{limit}} KB limit for a single message. Shorten it, or attach the text as a file."
+				},
 				"attach": "Attach file",
 				"dropToAttach": "Drop files to attach",
 				"image": "Attach image",

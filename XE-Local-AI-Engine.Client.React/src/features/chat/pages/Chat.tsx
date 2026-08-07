@@ -29,6 +29,7 @@ import { useStreamCommitScheduler } from "@/features/chat/hooks/useStreamCommitS
 import { buildChatUiCapabilities } from "@/features/chat/models/ChatCapabilityGates";
 import type {
 	AgentOption,
+	ChatConversationListModel,
 	ChatConversationModel,
 	ChatFeedbackRating,
 	ChatMessageFeedback,
@@ -82,6 +83,9 @@ const localDefaultModelOptionBase: ModelOption = {
 };
 
 const emptyConversations: ChatConversationModel[] = [];
+// Fallback for the cache updaters below when they run before the list query has landed: an empty list with no known
+// message-size limit (which simply means the composer runs no size pre-check until the real fetch arrives).
+const emptyConversationList: ChatConversationListModel = { conversations: emptyConversations };
 
 interface ActiveChatStream {
 	conversationId: string;
@@ -455,9 +459,9 @@ export function Chat() {
 	const createConversationMutation = useMutation({
 		mutationFn: () => nodeChatAdapter.createConversation({ title: "New conversation" }),
 		onSuccess: async (conversation) => {
-			queryClient.setQueryData<ChatConversationModel[]>(
+			queryClient.setQueryData<ChatConversationListModel>(
 				nodeChatQueryKeys.conversationList(showArchivedConversations),
-				(current = emptyConversations) => [conversation, ...current],
+				(current = emptyConversationList) => ({ ...current, conversations: [conversation, ...current.conversations] }),
 			);
 			queryClient.setQueryData(nodeChatQueryKeys.conversation(conversation.id), conversation);
 			setRequestedConversationId(conversation.id);
@@ -471,7 +475,10 @@ export function Chat() {
 		},
 	});
 
-	const conversations = conversationsData ?? emptyConversations;
+	const conversations = conversationsData?.conversations ?? emptyConversations;
+	// The node's effective Security:MaxMessageSizeKb, reported by the conversation-list endpoint. Undefined until that
+	// first fetch lands (or on a node that omits it) — the composer then skips its pre-check and the hub enforces.
+	const maxMessageSizeKb = conversationsData?.maxMessageSizeKb;
 	const requestedConversationExists = conversations.some((conversation) => conversation.id === requestedConversationId);
 	const selectedConversationId = requestedConversationExists ? requestedConversationId : (conversations[0]?.id ?? "");
 
@@ -621,9 +628,12 @@ export function Chat() {
 	const cacheConversation = useCallback(
 		(conversation: ChatConversationModel): void => {
 			cacheConversationDetail(conversation);
-			queryClient.setQueryData<ChatConversationModel[]>(
+			queryClient.setQueryData<ChatConversationListModel>(
 				nodeChatQueryKeys.conversationList(showArchivedConversations),
-				(current = emptyConversations) => mergeSelectedConversation(current, conversation),
+				(current = emptyConversationList) => ({
+					...current,
+					conversations: mergeSelectedConversation(current.conversations, conversation),
+				}),
 			);
 		},
 		[cacheConversationDetail, queryClient, showArchivedConversations],
@@ -1576,6 +1586,7 @@ export function Chat() {
 					modelLabel: contextModelLabel,
 					nodeLabel: t("pages.chat.contextUsage.localNode", "Local node"),
 				}}
+				maxMessageSizeKb={maxMessageSizeKb}
 				streamingMessage={streamingMessage}
 				timelineEntries={timelineEntries}
 				disabledNotice={notice}

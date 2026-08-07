@@ -33,6 +33,7 @@ export function ChatDisplayShell({
 	knowledgeBaseEnabled = false,
 	knowledgeBaseHasDocuments = true,
 	contextUsage,
+	maxMessageSizeKb,
 	streamingMessage,
 	timelineEntries = EMPTY_TIMELINE_ENTRIES,
 	capabilities = defaultChatUiCapabilities,
@@ -261,6 +262,7 @@ export function ChatDisplayShell({
 					availableReasoningEfforts={availableReasoningEfforts}
 					capabilities={capabilities}
 					contextUsage={contextUsage}
+					maxMessageSizeKb={maxMessageSizeKb}
 					disabled={inputStatus.chatInputDisabled}
 					isSending={inputStatus.isSending}
 					modelOptions={modelOptions}

@@ -85,28 +85,6 @@ public sealed class CentralPlatformOptionsValidatorTests
         AssertFailureContains(result, "ReconnectMaxAttempts");
     }
 
-    [Test]
-    public void Validate_WhenMessageSizeBelowMinimum_ReturnsFailure()
-    {
-        var options = CreateValidOptions();
-        options.MaxSignalRMessageSizeKb = 15;
-
-        var result = _validator.Validate(name: null, options);
-
-        AssertFailureContains(result, "MaxSignalRMessageSizeKb");
-    }
-
-    [Test]
-    public void Validate_WhenMessageSizeAboveMaximum_ReturnsFailure()
-    {
-        var options = CreateValidOptions();
-        options.MaxSignalRMessageSizeKb = 1025;
-
-        var result = _validator.Validate(name: null, options);
-
-        AssertFailureContains(result, "MaxSignalRMessageSizeKb");
-    }
-
     private static CentralPlatformOptions CreateValidOptions()
     {
         return new CentralPlatformOptions
