@@ -16,16 +16,20 @@ public sealed class McpAgentRunExecutorTests
         var execution = Substitute.For<IMcpAgentExecutionService>();
         SpawnContext? observedContext = null;
         execution.SpawnForMcpAsync(Arg.Any<McpExecutionBindingRequest>(),
-                Arg.Any<string>(),
-                Arg.Any<string?>(),
-                Arg.Any<CancellationToken>())
-            .Returns(callInfo =>
-            {
-                observedContext = SpawnContext.Current;
-                return Task.FromResult(SpawnOutcome.Success("complete"));
-            });
+                     Arg.Any<string>(),
+                     Arg.Any<string?>(),
+                     Arg.Any<CancellationToken>())
+                 .Returns(callInfo =>
+                 {
+                     observedContext = SpawnContext.Current;
+                     return Task.FromResult(SpawnOutcome.Success("complete"));
+                 });
         var executor = new McpAgentRunExecutor(execution,
-            Options.Create(new SpawnOptions { MaxConcurrentSpawns = 2, MaxCloudSpawns = 1 }));
+            Options.Create(new SpawnOptions
+            {
+                MaxConcurrentSpawns = 2,
+                MaxCloudSpawns = 1
+            }));
 
         _ = await executor.ExecuteAsync(CreateRun(), CancellationToken.None).ConfigureAwait(false);
 
@@ -39,10 +43,10 @@ public sealed class McpAgentRunExecutorTests
         var execution = Substitute.For<IMcpAgentExecutionService>();
         var expected = SpawnOutcome.Success("detached result");
         execution.SpawnForMcpAsync(Arg.Any<McpExecutionBindingRequest>(),
-                Arg.Any<string>(),
-                Arg.Any<string?>(),
-                Arg.Any<CancellationToken>())
-            .Returns(expected);
+                     Arg.Any<string>(),
+                     Arg.Any<string?>(),
+                     Arg.Any<CancellationToken>())
+                 .Returns(expected);
         var executor = new McpAgentRunExecutor(execution, Options.Create(new SpawnOptions()));
 
         var outcome = await executor.ExecuteAsync(CreateRun(), CancellationToken.None).ConfigureAwait(false);
@@ -59,15 +63,15 @@ public sealed class McpAgentRunExecutorTests
         McpExecutionBindingRequest? captured = null;
         string? fingerprint = null;
         execution.SpawnForMcpAsync(Arg.Any<McpExecutionBindingRequest>(),
-                Arg.Any<string>(),
-                Arg.Any<string?>(),
-                Arg.Any<CancellationToken>())
-            .Returns(callInfo =>
-            {
-                captured = callInfo.Arg<McpExecutionBindingRequest>();
-                fingerprint = callInfo.ArgAt<string?>(2);
-                return Task.FromResult(SpawnOutcome.Success("complete"));
-            });
+                     Arg.Any<string>(),
+                     Arg.Any<string?>(),
+                     Arg.Any<CancellationToken>())
+                 .Returns(callInfo =>
+                 {
+                     captured = callInfo.Arg<McpExecutionBindingRequest>();
+                     fingerprint = callInfo.ArgAt<string?>(2);
+                     return Task.FromResult(SpawnOutcome.Success("complete"));
+                 });
         var executor = new McpAgentRunExecutor(execution, Options.Create(new SpawnOptions()));
         var run = CreateRun() with
         {
@@ -110,19 +114,22 @@ public sealed class McpAgentRunExecutorTests
         var released = new TaskCompletionSource<SpawnOutcome>(TaskCreationOptions.RunContinuationsAsynchronously);
         Guid? capturedWorkspaceId = null;
         execution.SpawnForMcpAsync(Arg.Any<McpExecutionBindingRequest>(),
-                Arg.Any<string>(),
-                Arg.Any<string?>(),
-                Arg.Any<CancellationToken>(),
-                Arg.Any<Guid?>())
-            .Returns(callInfo =>
-            {
-                capturedWorkspaceId = callInfo.ArgAt<Guid?>(4);
-                return released.Task;
-            });
+                     Arg.Any<string>(),
+                     Arg.Any<string?>(),
+                     Arg.Any<CancellationToken>(),
+                     Arg.Any<Guid?>())
+                 .Returns(callInfo =>
+                 {
+                     capturedWorkspaceId = callInfo.ArgAt<Guid?>(4);
+                     return released.Task;
+                 });
         var executor = new McpAgentRunExecutor(execution, Options.Create(new SpawnOptions()));
         var workspaceId = Guid.NewGuid();
 
-        var pending = executor.ExecuteAsync(CreateRun() with { WorkspaceId = workspaceId }, CancellationToken.None);
+        var pending = executor.ExecuteAsync(CreateRun() with
+        {
+            WorkspaceId = workspaceId
+        }, CancellationToken.None);
 
         AssertEx.False(pending.IsCompleted, "durable execution must not return while the workspace execution service still owns its lease.");
         released.SetResult(SpawnOutcome.Success("released"));

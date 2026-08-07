@@ -36,12 +36,12 @@ public sealed class NodeAgentMcpToolsTests
     public void ToolSurface_AdvertisesExactlyTheEightReadOnlyDelegationTools()
     {
         var names = typeof(NodeAgentMcpTools).GetMethods(BindingFlags.Instance | BindingFlags.Public)
-                                               .Select(static method => (Method: method,
-                                                   Attribute: method.GetCustomAttribute<McpServerToolAttribute>()))
-                                               .Where(static item => item.Attribute is not null)
-                                               .Select(static item => item.Attribute!.Name ?? item.Method.Name)
-                                               .OrderBy(static name => name, StringComparer.Ordinal)
-                                               .ToArray();
+                                             .Select(static method => (Method: method,
+                                                 Attribute: method.GetCustomAttribute<McpServerToolAttribute>()))
+                                             .Where(static item => item.Attribute is not null)
+                                             .Select(static item => item.Attribute!.Name ?? item.Method.Name)
+                                             .OrderBy(static name => name, StringComparer.Ordinal)
+                                             .ToArray();
 
         AssertEx.Equal(string.Join('|', ExpectedToolNames), string.Join('|', names));
     }
@@ -50,17 +50,17 @@ public sealed class NodeAgentMcpToolsTests
     public void ToolSurface_DoesNotAdvertiseFilesystemMutationTools()
     {
         var names = typeof(NodeAgentMcpTools).GetMethods(BindingFlags.Instance | BindingFlags.Public)
-                                               .Select(static method => (Method: method,
-                                                   Attribute: method.GetCustomAttribute<McpServerToolAttribute>()))
-                                               .Where(static item => item.Attribute is not null)
-                                               .Select(static item => item.Attribute!.Name ?? item.Method.Name)
-                                               .ToArray();
+                                             .Select(static method => (Method: method,
+                                                 Attribute: method.GetCustomAttribute<McpServerToolAttribute>()))
+                                             .Where(static item => item.Attribute is not null)
+                                             .Select(static item => item.Attribute!.Name ?? item.Method.Name)
+                                             .ToArray();
 
         AssertEx.False(names.Any(static name => name.Contains("write", StringComparison.OrdinalIgnoreCase)
-                                                   || name.Contains("delete", StringComparison.OrdinalIgnoreCase)
-                                                   || name.Contains("execute", StringComparison.OrdinalIgnoreCase)
-                                                   || name.Contains("shell", StringComparison.OrdinalIgnoreCase)
-                                                   || name.Contains("terminal", StringComparison.OrdinalIgnoreCase)),
+                                                || name.Contains("delete", StringComparison.OrdinalIgnoreCase)
+                                                || name.Contains("execute", StringComparison.OrdinalIgnoreCase)
+                                                || name.Contains("shell", StringComparison.OrdinalIgnoreCase)
+                                                || name.Contains("terminal", StringComparison.OrdinalIgnoreCase)),
             "The inbound MCP surface must not advertise filesystem mutation or process execution tools.");
     }
 
@@ -180,7 +180,11 @@ public sealed class NodeAgentMcpToolsTests
         var workspaceId = Guid.NewGuid();
         using var source = new CancellationTokenSource();
         harness.RunCoordinator.StartResult = new McpAgentRunStartResult(McpAgentRunStartKind.Accepted,
-            CreateRunView(McpAgentRunStatus.Queued) with { RequestId = requestId, WorkspaceId = workspaceId },
+            CreateRunView(McpAgentRunStatus.Queued) with
+            {
+                RequestId = requestId,
+                WorkspaceId = workspaceId
+            },
             null,
             "Accepted.");
 
@@ -344,7 +348,10 @@ public sealed class NodeAgentMcpToolsTests
     public async Task GetAgentRunAsync_WhenResultEqualsLimit_ReturnsUnchangedResult()
     {
         var harness = new Harness(maxResultCharacters: 8);
-        harness.RunCoordinator.GetResult = CreateRunView(McpAgentRunStatus.Succeeded) with { Result = "12345678" };
+        harness.RunCoordinator.GetResult = CreateRunView(McpAgentRunStatus.Succeeded) with
+        {
+            Result = "12345678"
+        };
 
         var response = await harness.Tools.GetAgentRunAsync(harness.RunCoordinator.GetResult!.RequestId.ToString("D"), CancellationToken.None);
 
@@ -356,7 +363,10 @@ public sealed class NodeAgentMcpToolsTests
     public async Task GetAgentRunAsync_WhenResultExceedsLimit_ReturnsBoundedResultAndTruncationFlag()
     {
         var harness = new Harness(maxResultCharacters: 8);
-        harness.RunCoordinator.GetResult = CreateRunView(McpAgentRunStatus.Succeeded) with { Result = "123456789" };
+        harness.RunCoordinator.GetResult = CreateRunView(McpAgentRunStatus.Succeeded) with
+        {
+            Result = "123456789"
+        };
 
         var response = await harness.Tools.GetAgentRunAsync(harness.RunCoordinator.GetResult!.RequestId.ToString("D"), CancellationToken.None);
 
@@ -395,7 +405,12 @@ public sealed class NodeAgentMcpToolsTests
         var harness = new Harness();
         var requestId = Guid.NewGuid();
         harness.RunCoordinator.CancelResult = new McpAgentRunCancelResult(kind,
-            kind == McpAgentRunCancelKind.NotFound ? null : CreateRunView(McpAgentRunStatus.Running) with { RequestId = requestId },
+            kind == McpAgentRunCancelKind.NotFound
+                ? null
+                : CreateRunView(McpAgentRunStatus.Running) with
+                {
+                    RequestId = requestId
+                },
             "Stable cancellation response.");
 
         var response = await harness.Tools.CancelAgentRunAsync(requestId.ToString("D"), CancellationToken.None);
@@ -447,7 +462,13 @@ public sealed class NodeAgentMcpToolsTests
     public async Task ListAgentRunsAsync_WithoutLimit_UsesConfiguredDefaultAndOmitsResultContent()
     {
         var harness = new Harness(defaultListLimit: 7, maxListLimit: 10);
-        harness.RunCoordinator.ListResults = [CreateRunView(McpAgentRunStatus.Succeeded) with { Result = "/private/result" }];
+        harness.RunCoordinator.ListResults =
+        [
+            CreateRunView(McpAgentRunStatus.Succeeded) with
+            {
+                Result = "/private/result"
+            }
+        ];
 
         var response = await harness.Tools.ListAgentRunsAsync(CancellationToken.None);
         var json = JsonSerializer.Serialize(response);
@@ -636,12 +657,12 @@ public sealed class NodeAgentMcpToolsTests
     {
         var harness = new Harness();
         harness.McpService.SpawnForMcpAsync(Arg.Is<McpExecutionBindingRequest>(request => request.AgentKey == Agent),
-                Arg.Any<string>(),
-                Arg.Any<string?>(),
-                Arg.Any<CancellationToken>(),
-                Arg.Is<Guid?>(workspaceId => workspaceId == null))
-            .Returns(SpawnOutcome.Rejected(McpExecutionFailureCodes.WorkspaceNotAuthorized,
-                "Cannot run: the selected workspace is not authorized."));
+                   Arg.Any<string>(),
+                   Arg.Any<string?>(),
+                   Arg.Any<CancellationToken>(),
+                   Arg.Is<Guid?>(workspaceId => workspaceId == null))
+               .Returns(SpawnOutcome.Rejected(McpExecutionFailureCodes.WorkspaceNotAuthorized,
+                   "Cannot run: the selected workspace is not authorized."));
 
         var result = await harness.Tools.RunAgentAsync("find the parser",
             harness.Progress,
@@ -685,10 +706,10 @@ public sealed class NodeAgentMcpToolsTests
         AssertEx.True(properties.TryGetProperty("workspace_id", out var workspace), "run_agent must advertise workspace_id.");
         var workspaceType = workspace.GetProperty("type");
         AssertEx.True(workspaceType.ValueKind == JsonValueKind.String
-                          ? string.Equals(workspaceType.GetString(), "string", StringComparison.Ordinal)
-                          : workspaceType.ValueKind == JsonValueKind.Array
-                            && workspaceType.EnumerateArray()
-                                            .Any(static item => string.Equals(item.GetString(), "string", StringComparison.Ordinal)),
+                ? string.Equals(workspaceType.GetString(), "string", StringComparison.Ordinal)
+                : workspaceType.ValueKind == JsonValueKind.Array
+                  && workspaceType.EnumerateArray()
+                                  .Any(static item => string.Equals(item.GetString(), "string", StringComparison.Ordinal)),
             "workspace_id must be represented as a string, with nullable schema encoding allowed.");
         AssertEx.False(schema.RootElement.GetProperty("required").EnumerateArray()
                              .Any(static item => string.Equals(item.GetString(), "workspace_id", StringComparison.Ordinal)),
@@ -702,10 +723,10 @@ public sealed class NodeAgentMcpToolsTests
     {
         var harness = new Harness();
         harness.McpService.SpawnForMcpAsync(Arg.Any<McpExecutionBindingRequest>(),
-                           Arg.Any<string>(),
-                           Arg.Any<string?>(),
-                           Arg.Any<CancellationToken>())
-                       .Returns(SpawnOutcome.Rejected("capacity_declined", "Cannot run: the local model is busy."));
+                   Arg.Any<string>(),
+                   Arg.Any<string?>(),
+                   Arg.Any<CancellationToken>())
+               .Returns(SpawnOutcome.Rejected("capacity_declined", "Cannot run: the local model is busy."));
 
         var result = await harness.Tools.RunAgentAsync("inspect", harness.Progress, CancellationToken.None, model: Model);
 
@@ -837,11 +858,11 @@ public sealed class NodeAgentMcpToolsTests
             int maxListLimit = 50)
         {
             McpService.SpawnForMcpAsync(Arg.Any<McpExecutionBindingRequest>(),
-                            Arg.Any<string>(),
-                            Arg.Any<string?>(),
-                            Arg.Any<CancellationToken>(),
-                            Arg.Any<Guid?>())
-                        .Returns(SpawnOutcome.Success(spawnResult));
+                          Arg.Any<string>(),
+                          Arg.Any<string?>(),
+                          Arg.Any<CancellationToken>(),
+                          Arg.Any<Guid?>())
+                      .Returns(SpawnOutcome.Success(spawnResult));
             Tools = new NodeAgentMcpTools(McpService,
                 Substitute.For<IAgentDefinitionStore>(),
                 Substitute.For<IGgufModelStore>(),

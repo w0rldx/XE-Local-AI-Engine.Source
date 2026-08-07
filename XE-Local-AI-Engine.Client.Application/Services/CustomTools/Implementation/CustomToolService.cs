@@ -23,12 +23,20 @@ internal sealed partial class CustomToolService : ICustomToolService
 
     private static readonly HashSet<string> AllowedHttpMethods = new(StringComparer.OrdinalIgnoreCase)
     {
-        "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE",
+        "HEAD"
     };
 
     private static readonly HashSet<string> AllowedParameterTypes = new(StringComparer.OrdinalIgnoreCase)
     {
-        "string", "number", "integer", "boolean"
+        "string",
+        "number",
+        "integer",
+        "boolean"
     };
 
     private readonly ICustomToolStore _store;
@@ -154,8 +162,7 @@ internal sealed partial class CustomToolService : ICustomToolService
         await EnsureNameIsAvailableAsync(name, existingId, cancellationToken).ConfigureAwait(false);
 
         var parametersJson = JsonSerializer.Serialize(parameters, CustomToolJson.Options);
-        return new CustomToolInput(
-            name,
+        return new CustomToolInput(name,
             definition.Description,
             definition.Kind,
             definition.Mode,
@@ -191,8 +198,7 @@ internal sealed partial class CustomToolService : ICustomToolService
             var parameterName = (parameter.Name ?? string.Empty).Trim();
             if (parameterName.Length == 0 || parameterName.Length > MaxParameterNameLength || !IdentifierRegex().IsMatch(parameterName))
             {
-                throw new CustomToolValidationException(
-                    $"Each parameter name must be a [A-Za-z_][A-Za-z0-9_]* identifier of at most {MaxParameterNameLength} characters.");
+                throw new CustomToolValidationException($"Each parameter name must be a [A-Za-z_][A-Za-z0-9_]* identifier of at most {MaxParameterNameLength} characters.");
             }
 
             if (!seen.Add(parameterName))
@@ -473,9 +479,18 @@ internal sealed partial class CustomToolService : ICustomToolService
             }
 
             var headers = http.Headers
-                              .Select(header => header with { Value = ResolveMaskedValue(header.Name, header.Value, header.IsSecret, priorSecrets, hasExisting) })
+                              .Select(header => header with
+                              {
+                                  Value = ResolveMaskedValue(header.Name, header.Value, header.IsSecret, priorSecrets, hasExisting)
+                              })
                               .ToList();
-            return definition with { Http = http with { Headers = headers } };
+            return definition with
+            {
+                Http = http with
+                {
+                    Headers = headers
+                }
+            };
         }
 
         if (definition.Kind == CustomToolKind.Command && definition.Command is { } command)
@@ -490,9 +505,18 @@ internal sealed partial class CustomToolService : ICustomToolService
             }
 
             var env = command.Env
-                             .Select(variable => variable with { Value = ResolveMaskedValue(variable.Name, variable.Value, variable.IsSecret, priorSecrets, hasExisting) })
+                             .Select(variable => variable with
+                             {
+                                 Value = ResolveMaskedValue(variable.Name, variable.Value, variable.IsSecret, priorSecrets, hasExisting)
+                             })
                              .ToList();
-            return definition with { Command = command with { Env = env } };
+            return definition with
+            {
+                Command = command with
+                {
+                    Env = env
+                }
+            };
         }
 
         return definition;
@@ -540,12 +564,15 @@ internal sealed partial class CustomToolService : ICustomToolService
             {
                 Method = config.Method,
                 UrlTemplate = config.UrlTemplate,
-                Headers = [.. config.Headers.Select(static header => new CustomToolHeaderModel
-                {
-                    Name = header.Name,
-                    Value = MaskSecret(header.Value, header.IsSecret),
-                    IsSecret = header.IsSecret
-                })],
+                Headers =
+                [
+                    .. config.Headers.Select(static header => new CustomToolHeaderModel
+                    {
+                        Name = header.Name,
+                        Value = MaskSecret(header.Value, header.IsSecret),
+                        IsSecret = header.IsSecret
+                    })
+                ],
                 BodyTemplate = config.BodyTemplate,
                 AllowedHosts = config.AllowedHosts
             };
@@ -559,12 +586,15 @@ internal sealed partial class CustomToolService : ICustomToolService
                 ArgsTemplate = config.ArgsTemplate,
                 WorkingDirectory = config.WorkingDirectory,
                 TimeoutSeconds = config.TimeoutSeconds,
-                Env = [.. config.Env.Select(static variable => new CustomToolEnvironmentVariableModel
-                {
-                    Name = variable.Name,
-                    Value = MaskSecret(variable.Value, variable.IsSecret),
-                    IsSecret = variable.IsSecret
-                })]
+                Env =
+                [
+                    .. config.Env.Select(static variable => new CustomToolEnvironmentVariableModel
+                    {
+                        Name = variable.Name,
+                        Value = MaskSecret(variable.Value, variable.IsSecret),
+                        IsSecret = variable.IsSecret
+                    })
+                ]
             };
         }
 

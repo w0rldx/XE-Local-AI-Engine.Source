@@ -86,7 +86,8 @@ public sealed class AddSelectedFolderRevocationMigrationTests : IDisposable
             "Inserting a duplicate alias after rollback must fail with a SQLite constraint violation.");
     }
 
-    private NodeChatDbContext CreateContext(string databasePath) => AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
+    private NodeChatDbContext CreateContext(string databasePath) =>
+        AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
 
     private static async Task<SqliteConnection> OpenConnectionAsync(string databasePath)
     {
@@ -99,12 +100,17 @@ public sealed class AddSelectedFolderRevocationMigrationTests : IDisposable
     {
         await using var command = connection.CreateCommand();
         command.CommandText = """
-            INSERT INTO selected_folders (id, alias, host_path, mode, created_at_utc, revoked_at_utc)
-            VALUES ($id, $alias, $hostPath, 0, 100, $revokedAtUtc);
-            """;
+                              INSERT INTO selected_folders (id, alias, host_path, mode, created_at_utc, revoked_at_utc)
+                              VALUES ($id, $alias, $hostPath, 0, 100, $revokedAtUtc);
+                              """;
         command.Parameters.AddWithValue("$id", id.ToString());
         command.Parameters.AddWithValue("$alias", alias);
-        command.Parameters.AddWithValue("$hostPath", new byte[] { 1, 2, 3 });
+        command.Parameters.AddWithValue("$hostPath", new byte[]
+        {
+            1,
+            2,
+            3
+        });
         command.Parameters.AddWithValue("$revokedAtUtc", revokedAtUtc is null ? DBNull.Value : revokedAtUtc.Value);
         _ = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
     }
@@ -113,12 +119,17 @@ public sealed class AddSelectedFolderRevocationMigrationTests : IDisposable
     {
         await using var command = connection.CreateCommand();
         command.CommandText = """
-            INSERT INTO selected_folders (id, alias, host_path, mode, created_at_utc)
-            VALUES ($id, $alias, $hostPath, 0, 100);
-            """;
+                              INSERT INTO selected_folders (id, alias, host_path, mode, created_at_utc)
+                              VALUES ($id, $alias, $hostPath, 0, 100);
+                              """;
         command.Parameters.AddWithValue("$id", id.ToString());
         command.Parameters.AddWithValue("$alias", alias);
-        command.Parameters.AddWithValue("$hostPath", new byte[] { 4, 5, 6 });
+        command.Parameters.AddWithValue("$hostPath", new byte[]
+        {
+            4,
+            5,
+            6
+        });
         _ = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
     }
 

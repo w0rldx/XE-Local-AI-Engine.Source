@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.CloudSettings.V1.Mappers;
 
-using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 
 internal static class CloudSettingsEndpointDtoMapper

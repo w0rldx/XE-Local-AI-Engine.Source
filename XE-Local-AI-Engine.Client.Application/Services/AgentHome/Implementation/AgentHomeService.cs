@@ -132,12 +132,12 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
             attachKey = CreateAttachKey(identity, effectiveProfile);
             var prepared = await PrepareUnderLeaseAsync(prepareRequest, attachKey, effectiveProfile, cancellationToken).ConfigureAwait(false);
             var result = await RunAsync(new AgentHomeRunRequest
-            {
-                Prepared = prepared,
-                Goal = request.Goal,
-                AllowedActions = request.AllowedActions
-            },
-            cancellationToken).ConfigureAwait(false);
+                {
+                    Prepared = prepared,
+                    Goal = request.Goal,
+                    AllowedActions = request.AllowedActions
+                },
+                cancellationToken).ConfigureAwait(false);
             if (!result.Completed || result.TimedOut)
             {
                 _ = await _isolation.ClearAsync(prepared.Handle, key, CancellationToken.None).ConfigureAwait(false);
@@ -532,10 +532,10 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         }
 
         var collected = await _memoryProposalService.CollectAsync(new MemoryProposalCollectRequest
-        {
-            RunId = runId,
-            HostRunDirectory = runDirectory
-        },
+            {
+                RunId = runId,
+                HostRunDirectory = runDirectory
+            },
             cancellationToken).ConfigureAwait(false);
 
         await AppendEventSafelyAsync(runLogger, "memory_collected",
@@ -565,13 +565,13 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         try
         {
             await runLogger.OpenAsync(new AgentHomeRunLogContext
-            {
-                RunId = runId,
-                HostLogDirectory = logDirectory,
-                NodeId = identity.NodeId,
-                OwnerUserId = identity.OwnerUserId,
-                ProviderName = _provider.ProviderName
-            },
+                {
+                    RunId = runId,
+                    HostLogDirectory = logDirectory,
+                    NodeId = identity.NodeId,
+                    OwnerUserId = identity.OwnerUserId,
+                    ProviderName = _provider.ProviderName
+                },
                 cancellationToken).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
@@ -612,16 +612,16 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         try
         {
             await runLogger.AppendCommandAsync(new AgentHomeCommandLogRecord
-            {
-                TimestampUtc = _timeProvider.GetUtcNow(),
-                ExecutionId = runId,
-                Executable = descriptor.Executable,
-                Arguments = descriptor.Arguments,
-                Completed = completed,
-                ExitCode = exitCode,
-                DurationMs = (long)elapsed.TotalMilliseconds,
-                ErrorClass = errorClass
-            },
+                {
+                    TimestampUtc = _timeProvider.GetUtcNow(),
+                    ExecutionId = runId,
+                    Executable = descriptor.Executable,
+                    Arguments = descriptor.Arguments,
+                    Completed = completed,
+                    ExitCode = exitCode,
+                    DurationMs = (long)elapsed.TotalMilliseconds,
+                    ErrorClass = errorClass
+                },
                 cancellationToken).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)

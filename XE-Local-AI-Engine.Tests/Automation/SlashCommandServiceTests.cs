@@ -1,8 +1,8 @@
 namespace XE_Local_AI_Engine.Tests.Automation;
 
-using NSubstitute;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Automation;
 using XE_Local_AI_Engine.Client.Services.Automation.Implementation;

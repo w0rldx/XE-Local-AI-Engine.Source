@@ -156,10 +156,12 @@ public sealed record McpAgentRunLedgerCounters(
     long TombstoneLogicalBytes,
     long UpdatedAtUtc);
 
-public sealed record McpAgentRunLedgerVerification(bool IsConsistent,
+public sealed record McpAgentRunLedgerVerification(
+    bool IsConsistent,
     McpAgentRunLedgerCounters Persisted,
     McpAgentRunLedgerCounters Reconstructed);
 
-public sealed record McpAgentRunLedgerSnapshot(long QueueDepth,
+public sealed record McpAgentRunLedgerSnapshot(
+    long QueueDepth,
     long RunningCount,
     McpAgentRunLedgerCounters Counters);

@@ -466,11 +466,12 @@ public sealed class SupervisorLaunchSpecProfileTests
     }
 
     /// <summary>Options with the outer restart loop reduced to a single attempt, so every launch is an in-spawn candidate.</summary>
-    private static LlamaServerSupervisorOptions SingleAttemptOptions => new()
-    {
-        MaxRestartAttempts = 1,
-        IdleTimeToLive = TimeSpan.FromHours(1)
-    };
+    private static LlamaServerSupervisorOptions SingleAttemptOptions =>
+        new()
+        {
+            MaxRestartAttempts = 1,
+            IdleTimeToLive = TimeSpan.FromHours(1)
+        };
 
     private static LlamaServerLaunchSpec BuildGpuSpec(ResolvedLaunchArguments resolved,
         int chatCacheReuse = 256,

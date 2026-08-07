@@ -147,8 +147,7 @@ public sealed class LlamaServerRerankerClient : IRerankerClient
     // document text.
     private void LogDegrade(string reason, int documentCount, TimeSpan requestTimeout, string detail)
     {
-        _logger.LogWarning(
-            "Knowledge reranking degraded to fusion order. Reason: {Reason}. Documents: {DocumentCount}. Budget: {RerankTimeoutMs}ms. Detail: {Detail}.",
+        _logger.LogWarning("Knowledge reranking degraded to fusion order. Reason: {Reason}. Documents: {DocumentCount}. Budget: {RerankTimeoutMs}ms. Detail: {Detail}.",
             reason,
             documentCount,
             (long)requestTimeout.TotalMilliseconds,

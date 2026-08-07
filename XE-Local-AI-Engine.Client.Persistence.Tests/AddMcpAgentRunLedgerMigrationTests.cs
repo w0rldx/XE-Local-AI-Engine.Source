@@ -37,14 +37,34 @@ public sealed class AddMcpAgentRunLedgerMigrationTests : IDisposable
         AssertEx.True(await TableExistsAsync(connection, "mcp_agent_runs").ConfigureAwait(false));
         AssertEx.True(await TableExistsAsync(connection, "mcp_agent_run_ledger").ConfigureAwait(false));
         var ledgerColumns = await GetColumnsAsync(connection, "mcp_agent_run_ledger").ConfigureAwait(false);
-        AssertEx.True(ledgerColumns.IsSupersetOf(new[] { "queued_run_count", "running_run_count", "nonterminal_run_count" }));
+        AssertEx.True(ledgerColumns.IsSupersetOf(new[]
+        {
+            "queued_run_count",
+            "running_run_count",
+            "nonterminal_run_count"
+        }));
         var columns = await GetColumnsAsync(connection, "mcp_agent_runs").ConfigureAwait(false);
         AssertEx.True(columns.IsSupersetOf(new[]
         {
-            "request_id", "request_fingerprint", "accounting_version", "status", "version", "claim_token",
-            "stop_reason", "stop_requested_at_utc", "model_id", "model_override_id", "binding_fingerprint",
-            "task_payload", "instructions_payload", "result_payload", "display_payload", "active_payload_bytes",
-            "tombstone_logical_bytes", "payload_expires_at_utc", "compacted_at_utc"
+            "request_id",
+            "request_fingerprint",
+            "accounting_version",
+            "status",
+            "version",
+            "claim_token",
+            "stop_reason",
+            "stop_requested_at_utc",
+            "model_id",
+            "model_override_id",
+            "binding_fingerprint",
+            "task_payload",
+            "instructions_payload",
+            "result_payload",
+            "display_payload",
+            "active_payload_bytes",
+            "tombstone_logical_bytes",
+            "payload_expires_at_utc",
+            "compacted_at_utc"
         }), "The run table must contain the durable lifecycle, binding, encrypted payload, and accounting columns.");
         AssertEx.Equal(expected: 0L, await ForeignKeyCountAsync(connection).ConfigureAwait(false));
 
@@ -72,7 +92,8 @@ public sealed class AddMcpAgentRunLedgerMigrationTests : IDisposable
         AssertEx.False(await TableExistsAsync(connection, "mcp_agent_run_ledger").ConfigureAwait(false));
     }
 
-    private NodeChatDbContext CreateContext(string databasePath) => AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
+    private NodeChatDbContext CreateContext(string databasePath) =>
+        AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
 
     private static async Task<SqliteConnection> OpenConnectionAsync(string databasePath)
     {

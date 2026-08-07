@@ -85,4 +85,3 @@ public sealed class ListPreviewRunsResponse
 
 /// <summary>Response for <c>POST preview/runs/cancel-all</c> — how many live runs were cancelled.</summary>
 public sealed record CancelAllPreviewRunsResponse(int CancelledCount);
-

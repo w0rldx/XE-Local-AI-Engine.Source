@@ -96,14 +96,15 @@ public sealed class AgentHomeWorkspaceRevocationPreparationTests
             Options.Create(new AgentHomeOptions()));
     }
 
-    private static SandboxAttachKey AttachKey() => new()
-    {
-        OwnerUserId = "owner",
-        NodeId = "node",
-        ProviderName = FakeSandboxRuntimeProvider.Name,
-        RuntimeProfile = "dotnet-agent-home",
-        ManifestVersion = AgentHomeManifest.CurrentVersion
-    };
+    private static SandboxAttachKey AttachKey() =>
+        new()
+        {
+            OwnerUserId = "owner",
+            NodeId = "node",
+            ProviderName = FakeSandboxRuntimeProvider.Name,
+            RuntimeProfile = "dotnet-agent-home",
+            ManifestVersion = AgentHomeManifest.CurrentVersion
+        };
 
     private static ResolvedSelectedFolder Folder() =>
         new(Guid.NewGuid(), "project", "/opaque/not/read", SelectedFolderMode.Copy);

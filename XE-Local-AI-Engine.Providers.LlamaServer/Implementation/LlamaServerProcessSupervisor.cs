@@ -414,7 +414,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         return Volatile.Read(ref _runtimeMutationActivityCount) > 0;
     }
 
-    internal int CountInflightSpawns() => _inflightSpawns.Count;
+    internal int CountInflightSpawns() =>
+        _inflightSpawns.Count;
 
     private sealed class RuntimeMutationLease(AsyncSharedExclusiveGate gate, Action onDisposed) : ILlamaServerRuntimeMutationLease
     {
@@ -517,8 +518,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     ///     registered". On failure the spawn tears down its own half-started child and the in-flight entry is dropped so
     ///     the next ensure retries fresh.
     /// </summary>
-    private static InflightSpawn CreateDetachedSpawn(
-        ProcessLaunchAdmission? admission,
+    private static InflightSpawn CreateDetachedSpawn(ProcessLaunchAdmission? admission,
         IProcessLaunchTicket launchTicket)
     {
         var completion = new TaskCompletionSource<RunningProcess>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -581,7 +581,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     /// <summary>The outcome of <see cref="DecideEnsureAsync" />: a reused endpoint XOR the shared detached spawn task.</summary>
     private readonly record struct EnsureDecision(LlamaServerEndpoint? Reused, Task<RunningProcess>? SpawnTask);
 
-    private sealed record InflightSpawn(TaskCompletionSource<RunningProcess> Completion,
+    private sealed record InflightSpawn(
+        TaskCompletionSource<RunningProcess> Completion,
         ProcessLaunchAdmission? Admission,
         IProcessLaunchTicket LaunchTicket)
     {
@@ -1067,8 +1068,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                 DraftModelPath = null
             };
 
-            _logger.LogInformation(
-                "Speculative mode {Mode} drafts from the main model's own MTP heads; the configured draft model is ignored.",
+            _logger.LogInformation("Speculative mode {Mode} drafts from the main model's own MTP heads; the configured draft model is ignored.",
                 speculative.NormalizedMode);
         }
 

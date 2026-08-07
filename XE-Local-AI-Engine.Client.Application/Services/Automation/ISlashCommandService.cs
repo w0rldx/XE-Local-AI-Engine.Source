@@ -14,4 +14,5 @@ public interface ISlashCommandService
 public sealed record SlashCommandCatalogItem(Guid? Id, string Name, string? Description, string Source, SlashCommandActionType ActionType, string Prompt);
 
 public sealed class SlashCommandValidationException(string message) : Exception(message);
+
 public sealed class SlashCommandConflictException(string message, Exception? innerException = null) : Exception(message, innerException);

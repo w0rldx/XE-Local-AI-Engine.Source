@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Chat;
 
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -543,7 +544,7 @@ public sealed class NodeChatStreamServiceTests
     }
 
     [Test]
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
+    [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
         Justification = "The returned preparation transfers lease ownership to the chat service, whose disposal behavior this test asserts.")]
     public async Task SendMessageAsync_WhenAgentOffersAgentHomeTools_StagesConversationAttachments()
     {
@@ -605,7 +606,7 @@ public sealed class NodeChatStreamServiceTests
     }
 
     [Test]
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
+    [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
         Justification = "The preparation transfers its tracked owner lease to the chat service; the assertions verify lifecycle disposal.")]
     public async Task SendMessageAsync_AgentHomeInvocationAcrossAwait_CoderReadBorrowsUntilRunCompletes()
     {
@@ -675,8 +676,7 @@ public sealed class NodeChatStreamServiceTests
         AssertEx.False(afterCompletion!.IsBorrowed);
     }
 
-    private static async Task<IAgentHomeExecutionLease> AcquireLeaseAfterYieldAsync(
-        IAgentHomeExecutionLeaseManager leases,
+    private static async Task<IAgentHomeExecutionLease> AcquireLeaseAfterYieldAsync(IAgentHomeExecutionLeaseManager leases,
         AgentHomeExecutionLeaseKey key)
     {
         await Task.Yield();
@@ -739,7 +739,7 @@ public sealed class NodeChatStreamServiceTests
     }
 
     [Test]
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
+    [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
         Justification = "The returned preparation transfers ownership to the chat service for the duration of the turn.")]
     public async Task SendMessageAsync_WhenAgentHomeToolsAndStagedAttachments_InjectsPointerHint()
     {
@@ -802,7 +802,7 @@ public sealed class NodeChatStreamServiceTests
     }
 
     [Test]
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
+    [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
         Justification = "The returned preparation transfers lease ownership to the chat service, whose fail-closed disposal this test asserts.")]
     public async Task SendMessageAsync_WhenAgentHomePreparationIsBusy_FailsClosedAndReleasesPreparationOnce()
     {
@@ -872,7 +872,7 @@ public sealed class NodeChatStreamServiceTests
     }
 
     [Test]
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
+    [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
         Justification = "The returned preparation transfers lease ownership to the chat service, whose exceptional disposal this test asserts.")]
     public async Task SendMessageAsync_WhenPreOwnershipBuildFails_ReleasesPreparationExactlyOnce()
     {
@@ -911,7 +911,7 @@ public sealed class NodeChatStreamServiceTests
     }
 
     [Test]
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
+    [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
         Justification = "The returned preparation transfers lease ownership to the detached chat run, whose delayed disposal this test asserts.")]
     public async Task SendMessageAsync_WhenAgentHomeClientDisconnects_KeepsPreparationUntilDetachedRunDrains()
     {
@@ -2591,7 +2591,7 @@ public sealed class NodeChatStreamServiceTests
         var resolver = new AgentDefinitionResolver(store,
             CreateEmptyPlaybookStore(),
             CreateEmptySkillStore(),
-            Substitute.For<XE_Local_AI_Engine.Client.Persistence.Stores.ICustomToolStore>(),
+            Substitute.For<ICustomToolStore>(),
             offerProvider,
             new LexicalPlaybookRetrievalRanker(),
             Options.Create(new PlaybookRetrievalOptions()),
@@ -2702,7 +2702,7 @@ public sealed class NodeChatStreamServiceTests
         var resolver = new AgentDefinitionResolver(store,
             CreateEmptyPlaybookStore(),
             CreateEmptySkillStore(),
-            Substitute.For<XE_Local_AI_Engine.Client.Persistence.Stores.ICustomToolStore>(),
+            Substitute.For<ICustomToolStore>(),
             offerProvider,
             new LexicalPlaybookRetrievalRanker(),
             Options.Create(new PlaybookRetrievalOptions()),
@@ -4031,11 +4031,11 @@ public sealed class NodeChatStreamServiceTests
         {
             await Task.Yield();
             ReadResult = await reader.ReadFileAsync(new ReadFileToolRequest
-            {
-                Path = "src/a.txt"
-            },
-                cancellationToken)
-                .ConfigureAwait(false);
+                                         {
+                                             Path = "src/a.txt"
+                                         },
+                                         cancellationToken)
+                                     .ConfigureAwait(false);
             await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, ReadResult).ConfigureAwait(false);
             await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId).ConfigureAwait(false);
         }
@@ -4046,7 +4046,8 @@ public sealed class NodeChatStreamServiceTests
         public Task<string> ExecuteApiToolCallAsync(Guid invocationId,
             string toolName,
             string parameters,
-            CancellationToken cancellationToken = default) => Task.FromResult(string.Empty);
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(string.Empty);
 
         public void Cancel(Guid invocationId)
         {

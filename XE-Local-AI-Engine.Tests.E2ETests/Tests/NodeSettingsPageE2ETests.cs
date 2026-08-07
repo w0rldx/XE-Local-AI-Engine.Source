@@ -102,9 +102,9 @@ public sealed class NodeSettingsPageE2ETests : XEE2ETestBase
 
             await Expect(Page.GetByTestId("mcp-workspaces-card")).ToBeVisibleAsync();
             await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions
-            {
-                Name = "MCP workspace access"
-            }))
+                {
+                    Name = "MCP workspace access"
+                }))
                 .ToBeVisibleAsync();
             await Expect(Page.GetByText("Could not load workspace access.")).ToHaveCountAsync(0);
 

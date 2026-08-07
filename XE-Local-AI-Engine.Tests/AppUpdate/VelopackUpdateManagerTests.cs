@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.AppUpdate;
 
-using System.Reflection;
 using System.Net;
+using System.Reflection;
 using System.Security.Authentication;
 using Microsoft.Extensions.Options;
 using Velopack;

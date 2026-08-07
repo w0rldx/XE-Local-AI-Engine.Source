@@ -39,8 +39,7 @@ internal static partial class CustomToolTemplate
         Dictionary<string, JsonElement> supplied;
         try
         {
-            supplied = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(
-                           string.IsNullOrWhiteSpace(jsonArguments) ? "{}" : jsonArguments,
+            supplied = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(string.IsNullOrWhiteSpace(jsonArguments) ? "{}" : jsonArguments,
                            CustomToolJson.Options)
                        ?? new Dictionary<string, JsonElement>(StringComparer.Ordinal);
         }

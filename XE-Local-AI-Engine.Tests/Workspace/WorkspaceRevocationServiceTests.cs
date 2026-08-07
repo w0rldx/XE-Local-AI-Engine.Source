@@ -137,7 +137,8 @@ public sealed class WorkspaceRevocationServiceTests
         public Task<SelectedFolderRecord> AddAsync(string folderAlias,
             string hostPath,
             SelectedFolderMode mode,
-            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
 
         public Task<SelectedFolderRecord?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
             Task.FromResult<SelectedFolderRecord?>(record);

@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.TutorialState.V1;
 
-using XE_Local_AI_Engine.Client.Services.Tutorial;
-
 /// <summary>
 ///     Current user's recorded onboarding tour entries.
 /// </summary>
@@ -31,4 +29,3 @@ public sealed record SaveTutorialStateRequest
 
     public string Status { get; init; } = string.Empty;
 }
-

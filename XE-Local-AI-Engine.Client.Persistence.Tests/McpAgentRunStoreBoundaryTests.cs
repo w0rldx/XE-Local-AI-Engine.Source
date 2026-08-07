@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Data.Sqlite;
@@ -97,9 +98,9 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
         await using var fixture = CreateFixture(databasePath);
         var seed = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, Guid.NewGuid(), "seed")).ConfigureAwait(false);
         await SeedTerminalCountersAsync(databasePath,
-            seed.Run!.RequestId,
-            activePayloadBytes: McpAgentRunStore.MaxActivePayloadBytes - CalculateReservation(fixture.Protector, "boundary"),
-            tombstoneLogicalBytes: McpAgentRunStore.TombstoneReservationBytesV1)
+                seed.Run!.RequestId,
+                activePayloadBytes: McpAgentRunStore.MaxActivePayloadBytes - CalculateReservation(fixture.Protector, "boundary"),
+                tombstoneLogicalBytes: McpAgentRunStore.TombstoneReservationBytesV1)
             .ConfigureAwait(false);
 
         var result = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, Guid.NewGuid(), "boundary")).ConfigureAwait(false);
@@ -117,9 +118,9 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
         await using var fixture = CreateFixture(databasePath);
         var seed = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, Guid.NewGuid(), "seed")).ConfigureAwait(false);
         await SeedTerminalCountersAsync(databasePath,
-            seed.Run!.RequestId,
-            activePayloadBytes: McpAgentRunStore.MaxActivePayloadBytes - CalculateReservation(fixture.Protector, "over-boundary") + 1,
-            tombstoneLogicalBytes: McpAgentRunStore.TombstoneReservationBytesV1)
+                seed.Run!.RequestId,
+                activePayloadBytes: McpAgentRunStore.MaxActivePayloadBytes - CalculateReservation(fixture.Protector, "over-boundary") + 1,
+                tombstoneLogicalBytes: McpAgentRunStore.TombstoneReservationBytesV1)
             .ConfigureAwait(false);
 
         var result = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, Guid.NewGuid(), "over-boundary")).ConfigureAwait(false);
@@ -212,10 +213,10 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
         _ = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, Guid.NewGuid(), "second")).ConfigureAwait(false);
         var authoritative = (await fixture.Store.VerifyLedgerAsync().ConfigureAwait(false)).Reconstructed;
         await ExecuteAsync(databasePath, """
-            UPDATE mcp_agent_run_ledger
-            SET nonterminal_run_count = 0, queued_run_count = 0, running_run_count = 0,
-                identity_count = 0, active_payload_bytes = 0, tombstone_logical_bytes = 0;
-            """).ConfigureAwait(false);
+                                         UPDATE mcp_agent_run_ledger
+                                         SET nonterminal_run_count = 0, queued_run_count = 0, running_run_count = 0,
+                                             identity_count = 0, active_payload_bytes = 0, tombstone_logical_bytes = 0;
+                                         """).ConfigureAwait(false);
 
         var rebuilt = await fixture.Store.RebuildLedgerAsync(updatedAtUtc: 99).ConfigureAwait(false);
 
@@ -337,13 +338,13 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
         await connection.OpenAsync().ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandText = """
-            SELECT claim_token, stop_requested_at_utc, agent_definition_id, agent_definition_version,
-                model_id, model_override_id, workspace_id, binding_fingerprint, task_payload, instructions_payload,
-                result_payload, display_payload, claimed_at_utc, payload_expires_at_utc,
-                reserved_active_payload_bytes, active_payload_bytes, tombstone_logical_bytes, compacted_at_utc,
-                failure_code, stop_reason, status
-            FROM mcp_agent_runs WHERE request_id = $requestId;
-            """;
+                              SELECT claim_token, stop_requested_at_utc, agent_definition_id, agent_definition_version,
+                                  model_id, model_override_id, workspace_id, binding_fingerprint, task_payload, instructions_payload,
+                                  result_payload, display_payload, claimed_at_utc, payload_expires_at_utc,
+                                  reserved_active_payload_bytes, active_payload_bytes, tombstone_logical_bytes, compacted_at_utc,
+                                  failure_code, stop_reason, status
+                              FROM mcp_agent_runs WHERE request_id = $requestId;
+                              """;
         command.Parameters.AddWithValue("$requestId", requestId.ToString("D"));
         await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
         AssertEx.True(await reader.ReadAsync().ConfigureAwait(false));
@@ -383,13 +384,13 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
         var retainedBeforeFailure = AssertEx.NotNull(await fixture.Store.GetAsync(requestId).ConfigureAwait(false));
         var before = await fixture.Store.GetLedgerSnapshotAsync().ConfigureAwait(false);
         await ExecuteAsync(databasePath, """
-            CREATE TRIGGER abort_mcp_compaction_ledger_update
-            BEFORE UPDATE ON mcp_agent_run_ledger
-            WHEN NEW.active_payload_bytes < OLD.active_payload_bytes
-            BEGIN
-                SELECT RAISE(ABORT, 'forced ledger accounting abort after row compaction');
-            END;
-            """).ConfigureAwait(false);
+                                         CREATE TRIGGER abort_mcp_compaction_ledger_update
+                                         BEFORE UPDATE ON mcp_agent_run_ledger
+                                         WHEN NEW.active_payload_bytes < OLD.active_payload_bytes
+                                         BEGIN
+                                             SELECT RAISE(ABORT, 'forced ledger accounting abort after row compaction');
+                                         END;
+                                         """).ConfigureAwait(false);
 
         _ = await AssertEx.ThrowsAsync<SqliteException>(async () =>
         {
@@ -432,7 +433,12 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
             DisplayMessage: display,
             CompletedAtUtc: 3)).ConfigureAwait(false);
 
-        foreach (var path in new[] { databasePath, databasePath + "-wal", databasePath + "-shm" }.Where(File.Exists))
+        foreach (var path in new[]
+                 {
+                     databasePath,
+                     databasePath + "-wal",
+                     databasePath + "-shm"
+                 }.Where(File.Exists))
         {
             var bytes = await File.ReadAllBytesAsync(path).ConfigureAwait(false);
             AssertEx.False(bytes.AsSpan().IndexOf(Encoding.UTF8.GetBytes(task)) >= 0, $"Task plaintext leaked into {Path.GetFileName(path)}.");
@@ -466,12 +472,13 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
     private static async Task InitializeDatabaseAsync(string databasePath)
     {
         using var keyHolder = new FixedNodeSqliteKeyHolder();
-        await using var context = Testing.AgentDefinitionTestContextFactory.CreateForMigration(databasePath, keyHolder);
+        await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, keyHolder);
         await context.Database.EnsureDeletedAsync().ConfigureAwait(false);
         await context.Database.EnsureCreatedAsync().ConfigureAwait(false);
     }
 
-    private static StoreFixture CreateFixture(string databasePath) => new(databasePath);
+    private static StoreFixture CreateFixture(string databasePath) =>
+        new(databasePath);
 
     private static McpAgentRunAdmissionRequest CreateAdmission(McpAgentRunPayloadProtector protector, Guid requestId, string task) =>
         new(requestId,
@@ -506,11 +513,11 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
         {
             run.Transaction = transaction;
             run.CommandText = """
-                UPDATE mcp_agent_runs
-                SET status = $status, completed_at_utc = 2, active_payload_bytes = $activePayloadBytes,
-                    tombstone_logical_bytes = $tombstoneLogicalBytes
-                WHERE request_id = $requestId;
-                """;
+                              UPDATE mcp_agent_runs
+                              SET status = $status, completed_at_utc = 2, active_payload_bytes = $activePayloadBytes,
+                                  tombstone_logical_bytes = $tombstoneLogicalBytes
+                              WHERE request_id = $requestId;
+                              """;
             run.Parameters.AddWithValue("$status", (int)McpAgentRunStatus.Succeeded);
             run.Parameters.AddWithValue("$activePayloadBytes", activePayloadBytes);
             run.Parameters.AddWithValue("$tombstoneLogicalBytes", tombstoneLogicalBytes);
@@ -522,12 +529,12 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
         {
             ledger.Transaction = transaction;
             ledger.CommandText = """
-                UPDATE mcp_agent_run_ledger
-                SET nonterminal_run_count = 0, queued_run_count = 0, running_run_count = 0,
-                    active_payload_bytes = $activePayloadBytes,
-                    tombstone_logical_bytes = $tombstoneLogicalBytes
-                WHERE id = 1;
-                """;
+                                 UPDATE mcp_agent_run_ledger
+                                 SET nonterminal_run_count = 0, queued_run_count = 0, running_run_count = 0,
+                                     active_payload_bytes = $activePayloadBytes,
+                                     tombstone_logical_bytes = $tombstoneLogicalBytes
+                                 WHERE id = 1;
+                                 """;
             ledger.Parameters.AddWithValue("$activePayloadBytes", activePayloadBytes);
             ledger.Parameters.AddWithValue("$tombstoneLogicalBytes", tombstoneLogicalBytes);
             _ = await ledger.ExecuteNonQueryAsync().ConfigureAwait(false);
@@ -536,7 +543,7 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
         await transaction.CommitAsync().ConfigureAwait(false);
     }
 
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",
+    [SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",
         Justification = "Test-only fixed SQL text is supplied exclusively by this test class and never contains user input.")]
     private static async Task ExecuteAsync(string databasePath, string sql)
     {
@@ -560,7 +567,7 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
 
         public StoreFixture(string databasePath)
         {
-            _context = Testing.AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
+            _context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
             Protector = new McpAgentRunPayloadProtector(_keyHolder, new AesGcmNodeAeadCipher());
             Store = new McpAgentRunStore(_context, Protector);
         }

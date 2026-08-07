@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.AgentHome;
 
+using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -259,11 +260,11 @@ public sealed class AgentHomeServiceTests : IDisposable
 
         using var cancellation = new CancellationTokenSource();
         var runTask = harness.Service.RunAsync(new AgentHomeRunRequest
-        {
-            Prepared = prepared,
-            Goal = "g",
-            AllowedActions = ["run_commands"]
-        },
+            {
+                Prepared = prepared,
+                Goal = "g",
+                AllowedActions = ["run_commands"]
+            },
             cancellation.Token);
 
         await cancellation.CancelAsync();
@@ -404,7 +405,10 @@ public sealed class AgentHomeServiceTests : IDisposable
         var clock = new FixedClock(FixedNow);
         var inner = new FakeSandboxRuntimeProvider(clock);
         var stale = await SeedStaleSelectionAsync(inner);
-        var provider = new CancelRecordingProvider(inner) { FailCreateOrAttach = true };
+        var provider = new CancelRecordingProvider(inner)
+        {
+            FailCreateOrAttach = true
+        };
         using var harness = CreateHarness(clock, provider, new FakeSelectedFolderResolver());
 
         await AssertEx.ThrowsAsync<InvalidOperationException>(() =>
@@ -1163,17 +1167,18 @@ public sealed class AgentHomeServiceTests : IDisposable
 
 internal static class AgentHomeServicePhaseTestAccess
 {
-    private static readonly System.Reflection.MethodInfo PrepareMethod = typeof(AgentHomeService)
-        .GetMethod("PrepareUnderLeaseAsync", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
-    private static readonly System.Reflection.MethodInfo RunMethod = typeof(AgentHomeService)
-        .GetMethod("RunAsync", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+    private static readonly MethodInfo PrepareMethod = typeof(AgentHomeService)
+        .GetMethod("PrepareUnderLeaseAsync", BindingFlags.Instance | BindingFlags.NonPublic)!;
+
+    private static readonly MethodInfo RunMethod = typeof(AgentHomeService)
+        .GetMethod("RunAsync", BindingFlags.Instance | BindingFlags.NonPublic)!;
 
     public static async Task<AgentHomePrepareResult> PrepareAsync(this AgentHomeService service,
         AgentHomePrepareRequest request,
         CancellationToken cancellationToken = default)
     {
-        var identityField = typeof(AgentHomeService).GetField("_identityProvider", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
-        var providerField = typeof(AgentHomeService).GetField("_provider", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        var identityField = typeof(AgentHomeService).GetField("_identityProvider", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var providerField = typeof(AgentHomeService).GetField("_provider", BindingFlags.Instance | BindingFlags.NonPublic)!;
         var identityProvider = (IAgentHomeIdentityProvider)identityField.GetValue(service)!;
         var provider = (IAgentSandboxRuntimeProvider)providerField.GetValue(service)!;
         var identity = await identityProvider.GetAsync(cancellationToken);

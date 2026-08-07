@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 
-using System.Net.Http;
 using Microsoft.Extensions.Caching.Memory;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;

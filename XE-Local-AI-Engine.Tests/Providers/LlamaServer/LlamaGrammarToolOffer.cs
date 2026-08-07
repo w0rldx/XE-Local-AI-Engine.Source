@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Tools;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     The REAL production tool offer, plus the REAL MEAI OpenAI adapter that turns it into wire bytes. Shared by the
@@ -39,7 +40,7 @@ internal static class LlamaGrammarToolOffer
         var provider = new LocalToolOfferProvider(new NodeCatalogAgentToolRegistry(),
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
             runtimeSettings,
-            XE_Local_AI_Engine.Tests.Testing.NullCustomToolScopeFactory.Instance,
+            NullCustomToolScopeFactory.Instance,
             allowCloudKnowledgeAccess: false);
 
         // The profile pool is the widest offer (it adds spawn_subagent, whose 8000-char bounds are the largest we ship).

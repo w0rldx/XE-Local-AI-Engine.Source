@@ -162,4 +162,3 @@ public sealed record SaveAzureFoundryHeaderRequest
 
     public bool IsSecret { get; init; }
 }
-

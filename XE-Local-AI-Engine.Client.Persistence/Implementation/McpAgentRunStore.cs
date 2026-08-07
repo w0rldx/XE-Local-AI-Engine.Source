@@ -19,6 +19,7 @@ public sealed class McpAgentRunStore : IMcpAgentRunStore
     public const int MaxResultCharacters = 24_000;
     public const int MaxDisplayUtf8Bytes = 2 * 1024;
     public const long PayloadRetentionMilliseconds = 24L * 60 * 60 * 1000;
+
     public const int TombstoneReservationBytesV1 = McpAgentRunPayloadProtector.FixedRecordOverheadBytes
                                                    + 16 // request id
                                                    + 32 // keyed request fingerprint
@@ -30,6 +31,7 @@ public sealed class McpAgentRunStore : IMcpAgentRunStore
                                                    + 8 // terminal timestamp
                                                    + 8 // compaction timestamp
                                                    + 8; // persisted tombstone logical-byte charge
+
     public const int MaxNonterminalRuns = 32;
     public const long MaxIdentityCount = 1_000_000;
     public const long MaxActivePayloadBytes = 256L * 1024 * 1024;
@@ -89,17 +91,17 @@ public sealed class McpAgentRunStore : IMcpAgentRunStore
         var instructionsPayload = instructions is null ? null : _protector.Protect(request.RequestId, "instructions", instructions);
 
         await using (var command = CreateCommand(connection, transaction, """
-            INSERT INTO mcp_agent_runs (
-                request_id, request_fingerprint, accounting_version, status, version, claim_token, stop_reason,
-                stop_requested_at_utc, agent_definition_id, agent_definition_version, model_id, model_override_id, workspace_id,
-                binding_fingerprint, task_payload, instructions_payload, result_payload, display_payload, failure_code,
-                reserved_active_payload_bytes, active_payload_bytes, tombstone_logical_bytes, created_at_utc,
-                claimed_at_utc, completed_at_utc, payload_expires_at_utc, compacted_at_utc)
-            VALUES ($requestId, $fingerprint, $accountingVersion, $status, 0, NULL, $stopReason, NULL,
-                $agentDefinitionId, $agentDefinitionVersion, $modelId, $modelOverrideId, $workspaceId, $bindingFingerprint,
-                $taskPayload, $instructionsPayload, NULL, NULL, NULL, $reservation, $reservation, $tombstoneBytes,
-                $createdAtUtc, NULL, NULL, NULL, NULL);
-            """))
+                                                                          INSERT INTO mcp_agent_runs (
+                                                                              request_id, request_fingerprint, accounting_version, status, version, claim_token, stop_reason,
+                                                                              stop_requested_at_utc, agent_definition_id, agent_definition_version, model_id, model_override_id, workspace_id,
+                                                                              binding_fingerprint, task_payload, instructions_payload, result_payload, display_payload, failure_code,
+                                                                              reserved_active_payload_bytes, active_payload_bytes, tombstone_logical_bytes, created_at_utc,
+                                                                              claimed_at_utc, completed_at_utc, payload_expires_at_utc, compacted_at_utc)
+                                                                          VALUES ($requestId, $fingerprint, $accountingVersion, $status, 0, NULL, $stopReason, NULL,
+                                                                              $agentDefinitionId, $agentDefinitionVersion, $modelId, $modelOverrideId, $workspaceId, $bindingFingerprint,
+                                                                              $taskPayload, $instructionsPayload, NULL, NULL, NULL, $reservation, $reservation, $tombstoneBytes,
+                                                                              $createdAtUtc, NULL, NULL, NULL, NULL);
+                                                                          """))
         {
             Add(command, "$requestId", request.RequestId.ToString("D", CultureInfo.InvariantCulture));
             Add(command, "$fingerprint", fingerprint);
@@ -225,10 +227,10 @@ public sealed class McpAgentRunStore : IMcpAgentRunStore
 
         var token = Guid.NewGuid();
         await using var command = CreateCommand(connection, transaction, """
-            UPDATE mcp_agent_runs
-            SET status = $running, version = version + 1, claim_token = $claimToken, claimed_at_utc = $claimedAtUtc
-            WHERE request_id = $requestId AND version = $expectedVersion AND status = $queued AND stop_reason = $none;
-            """);
+                                                                         UPDATE mcp_agent_runs
+                                                                         SET status = $running, version = version + 1, claim_token = $claimToken, claimed_at_utc = $claimedAtUtc
+                                                                         WHERE request_id = $requestId AND version = $expectedVersion AND status = $queued AND stop_reason = $none;
+                                                                         """);
         Add(command, "$running", (int)McpAgentRunStatus.Running);
         Add(command, "$claimToken", token.ToString("D", CultureInfo.InvariantCulture));
         Add(command, "$claimedAtUtc", claimedAtUtc);
@@ -307,13 +309,13 @@ public sealed class McpAgentRunStore : IMcpAgentRunStore
         var activePayloadBytes = queued ? CalculateStoredPayloadBytes(row) : row.ActivePayloadBytes;
         var payloadExpiresAtUtc = queued ? checked(requestedAtUtc + PayloadRetentionMilliseconds) : row.PayloadExpiresAtUtc;
         await using (var command = CreateCommand(connection, transaction, """
-            UPDATE mcp_agent_runs
-            SET status = $status, version = version + 1, stop_reason = $stopReason,
-                stop_requested_at_utc = $requestedAtUtc, completed_at_utc = $completedAtUtc,
-                active_payload_bytes = $activePayloadBytes, failure_code = $failureCode,
-                payload_expires_at_utc = $payloadExpiresAtUtc
-            WHERE request_id = $requestId AND version = $expectedVersion AND stop_reason = $none;
-            """))
+                                                                          UPDATE mcp_agent_runs
+                                                                          SET status = $status, version = version + 1, stop_reason = $stopReason,
+                                                                              stop_requested_at_utc = $requestedAtUtc, completed_at_utc = $completedAtUtc,
+                                                                              active_payload_bytes = $activePayloadBytes, failure_code = $failureCode,
+                                                                              payload_expires_at_utc = $payloadExpiresAtUtc
+                                                                          WHERE request_id = $requestId AND version = $expectedVersion AND stop_reason = $none;
+                                                                          """))
         {
             Add(command, "$status", (int)status);
             Add(command, "$stopReason", (int)reason);
@@ -393,13 +395,13 @@ public sealed class McpAgentRunStore : IMcpAgentRunStore
         var payloadExpiresAtUtc = checked(finalization.CompletedAtUtc + PayloadRetentionMilliseconds);
 
         await using (var command = CreateCommand(connection, transaction, """
-            UPDATE mcp_agent_runs
-            SET status = $status, version = version + 1, result_payload = $resultPayload,
-                display_payload = $displayPayload, failure_code = $failureCode, completed_at_utc = $completedAtUtc,
-                active_payload_bytes = $actualActiveBytes, payload_expires_at_utc = $payloadExpiresAtUtc
-            WHERE request_id = $requestId AND version = $expectedVersion AND status = $running
-                AND claim_token = $claimToken AND stop_reason = $expectedStopReason;
-            """))
+                                                                          UPDATE mcp_agent_runs
+                                                                          SET status = $status, version = version + 1, result_payload = $resultPayload,
+                                                                              display_payload = $displayPayload, failure_code = $failureCode, completed_at_utc = $completedAtUtc,
+                                                                              active_payload_bytes = $actualActiveBytes, payload_expires_at_utc = $payloadExpiresAtUtc
+                                                                          WHERE request_id = $requestId AND version = $expectedVersion AND status = $running
+                                                                              AND claim_token = $claimToken AND stop_reason = $expectedStopReason;
+                                                                          """))
         {
             Add(command, "$status", (int)finalization.Status);
             Add(command, "$resultPayload", ToDb(resultPayload));
@@ -441,11 +443,11 @@ public sealed class McpAgentRunStore : IMcpAgentRunStore
 
         long releasedBytes;
         await using (var totals = CreateCommand(connection, transaction, """
-            SELECT COALESCE(SUM(active_payload_bytes - (
-                COALESCE(length(task_payload), 0) + COALESCE(length(instructions_payload), 0)
-                + COALESCE(length(result_payload), 0) + COALESCE(length(display_payload), 0) + $recordOverhead)), 0)
-            FROM mcp_agent_runs WHERE status = $running;
-            """))
+                                                                         SELECT COALESCE(SUM(active_payload_bytes - (
+                                                                             COALESCE(length(task_payload), 0) + COALESCE(length(instructions_payload), 0)
+                                                                             + COALESCE(length(result_payload), 0) + COALESCE(length(display_payload), 0) + $recordOverhead)), 0)
+                                                                         FROM mcp_agent_runs WHERE status = $running;
+                                                                         """))
         {
             Add(totals, "$recordOverhead", McpAgentRunPayloadProtector.FixedRecordOverheadBytes);
             Add(totals, "$running", (int)McpAgentRunStatus.Running);
@@ -458,24 +460,24 @@ public sealed class McpAgentRunStore : IMcpAgentRunStore
         }
 
         await using var command = CreateCommand(connection, transaction, """
-            UPDATE mcp_agent_runs
-            SET status = CASE stop_reason
-                    WHEN $userCancellation THEN $cancelled
-                    WHEN $watchdogExpired THEN $failed
-                    ELSE $interrupted
-                END,
-                version = version + 1,
-                completed_at_utc = $completedAtUtc,
-                payload_expires_at_utc = $payloadExpiresAtUtc,
-                active_payload_bytes = COALESCE(length(task_payload), 0) + COALESCE(length(instructions_payload), 0)
-                    + COALESCE(length(result_payload), 0) + COALESCE(length(display_payload), 0) + $recordOverhead,
-                failure_code = CASE stop_reason
-                    WHEN $userCancellation THEN 'cancelled'
-                    WHEN $watchdogExpired THEN 'watchdog_expired'
-                    ELSE 'interrupted'
-                END
-            WHERE status = $running;
-            """);
+                                                                         UPDATE mcp_agent_runs
+                                                                         SET status = CASE stop_reason
+                                                                                 WHEN $userCancellation THEN $cancelled
+                                                                                 WHEN $watchdogExpired THEN $failed
+                                                                                 ELSE $interrupted
+                                                                             END,
+                                                                             version = version + 1,
+                                                                             completed_at_utc = $completedAtUtc,
+                                                                             payload_expires_at_utc = $payloadExpiresAtUtc,
+                                                                             active_payload_bytes = COALESCE(length(task_payload), 0) + COALESCE(length(instructions_payload), 0)
+                                                                                 + COALESCE(length(result_payload), 0) + COALESCE(length(display_payload), 0) + $recordOverhead,
+                                                                             failure_code = CASE stop_reason
+                                                                                 WHEN $userCancellation THEN 'cancelled'
+                                                                                 WHEN $watchdogExpired THEN 'watchdog_expired'
+                                                                                 ELSE 'interrupted'
+                                                                             END
+                                                                         WHERE status = $running;
+                                                                         """);
         Add(command, "$interrupted", (int)McpAgentRunStatus.Interrupted);
         Add(command, "$cancelled", (int)McpAgentRunStatus.Cancelled);
         Add(command, "$failed", (int)McpAgentRunStatus.Failed);
@@ -513,11 +515,11 @@ public sealed class McpAgentRunStore : IMcpAgentRunStore
         long released;
         int count;
         await using (var totals = CreateCommand(connection, transaction, """
-            SELECT COUNT(*), COALESCE(SUM(active_payload_bytes), 0)
-            FROM mcp_agent_runs
-            WHERE status IN ($succeeded, $failed, $cancelled, $interrupted)
-                AND payload_expires_at_utc IS NOT NULL AND payload_expires_at_utc <= $cutoff AND active_payload_bytes > 0;
-            """))
+                                                                         SELECT COUNT(*), COALESCE(SUM(active_payload_bytes), 0)
+                                                                         FROM mcp_agent_runs
+                                                                         WHERE status IN ($succeeded, $failed, $cancelled, $interrupted)
+                                                                             AND payload_expires_at_utc IS NOT NULL AND payload_expires_at_utc <= $cutoff AND active_payload_bytes > 0;
+                                                                         """))
         {
             Add(totals, "$succeeded", (int)McpAgentRunStatus.Succeeded);
             Add(totals, "$failed", (int)McpAgentRunStatus.Failed);
@@ -533,29 +535,29 @@ public sealed class McpAgentRunStore : IMcpAgentRunStore
         if (count > 0)
         {
             await using var compact = CreateCommand(connection, transaction, """
-                UPDATE mcp_agent_runs
-                SET version = version + 1,
-                    claim_token = NULL,
-                    stop_reason = $none,
-                    stop_requested_at_utc = NULL,
-                    agent_definition_id = NULL,
-                    agent_definition_version = NULL,
-                    model_id = NULL,
-                    model_override_id = NULL,
-                    workspace_id = NULL,
-                    binding_fingerprint = NULL,
-                    task_payload = NULL,
-                    instructions_payload = NULL,
-                    result_payload = NULL,
-                    display_payload = NULL,
-                    reserved_active_payload_bytes = 0,
-                    active_payload_bytes = 0,
-                    claimed_at_utc = NULL,
-                    payload_expires_at_utc = NULL,
-                    compacted_at_utc = $compactedAtUtc
-                WHERE status IN ($succeeded, $failed, $cancelled, $interrupted)
-                    AND payload_expires_at_utc IS NOT NULL AND payload_expires_at_utc <= $cutoff AND active_payload_bytes > 0;
-                """);
+                                                                             UPDATE mcp_agent_runs
+                                                                             SET version = version + 1,
+                                                                                 claim_token = NULL,
+                                                                                 stop_reason = $none,
+                                                                                 stop_requested_at_utc = NULL,
+                                                                                 agent_definition_id = NULL,
+                                                                                 agent_definition_version = NULL,
+                                                                                 model_id = NULL,
+                                                                                 model_override_id = NULL,
+                                                                                 workspace_id = NULL,
+                                                                                 binding_fingerprint = NULL,
+                                                                                 task_payload = NULL,
+                                                                                 instructions_payload = NULL,
+                                                                                 result_payload = NULL,
+                                                                                 display_payload = NULL,
+                                                                                 reserved_active_payload_bytes = 0,
+                                                                                 active_payload_bytes = 0,
+                                                                                 claimed_at_utc = NULL,
+                                                                                 payload_expires_at_utc = NULL,
+                                                                                 compacted_at_utc = $compactedAtUtc
+                                                                             WHERE status IN ($succeeded, $failed, $cancelled, $interrupted)
+                                                                                 AND payload_expires_at_utc IS NOT NULL AND payload_expires_at_utc <= $cutoff AND active_payload_bytes > 0;
+                                                                             """);
             Add(compact, "$succeeded", (int)McpAgentRunStatus.Succeeded);
             Add(compact, "$failed", (int)McpAgentRunStatus.Failed);
             Add(compact, "$cancelled", (int)McpAgentRunStatus.Cancelled);
@@ -567,7 +569,11 @@ public sealed class McpAgentRunStore : IMcpAgentRunStore
 
             await UpdateLedgerAsync(connection,
                 transaction,
-                ledger with { ActivePayloadBytes = ledger.ActivePayloadBytes - released, UpdatedAtUtc = expiresBeforeUtc },
+                ledger with
+                {
+                    ActivePayloadBytes = ledger.ActivePayloadBytes - released,
+                    UpdatedAtUtc = expiresBeforeUtc
+                },
                 cancellationToken).ConfigureAwait(false);
         }
 
@@ -605,22 +611,22 @@ public sealed class McpAgentRunStore : IMcpAgentRunStore
     }
 
     private const string SelectColumns = """
-        SELECT request_id, request_fingerprint, accounting_version, status, version, claim_token, stop_reason,
-            stop_requested_at_utc, agent_definition_id, agent_definition_version, model_id, model_override_id, workspace_id,
-            binding_fingerprint, task_payload, instructions_payload, result_payload, display_payload, failure_code,
-            reserved_active_payload_bytes, active_payload_bytes, tombstone_logical_bytes, created_at_utc,
-            claimed_at_utc, completed_at_utc, payload_expires_at_utc, compacted_at_utc
-        FROM mcp_agent_runs
-        """;
+                                         SELECT request_id, request_fingerprint, accounting_version, status, version, claim_token, stop_reason,
+                                             stop_requested_at_utc, agent_definition_id, agent_definition_version, model_id, model_override_id, workspace_id,
+                                             binding_fingerprint, task_payload, instructions_payload, result_payload, display_payload, failure_code,
+                                             reserved_active_payload_bytes, active_payload_bytes, tombstone_logical_bytes, created_at_utc,
+                                             claimed_at_utc, completed_at_utc, payload_expires_at_utc, compacted_at_utc
+                                         FROM mcp_agent_runs
+                                         """;
 
     internal const string MetadataSelectColumns = """
-        SELECT request_id, request_fingerprint, accounting_version, status, version, claim_token, stop_reason,
-            stop_requested_at_utc, agent_definition_id, agent_definition_version, model_id, model_override_id, workspace_id,
-            binding_fingerprint, NULL, NULL, NULL, NULL, failure_code,
-            reserved_active_payload_bytes, active_payload_bytes, tombstone_logical_bytes, created_at_utc,
-            claimed_at_utc, completed_at_utc, payload_expires_at_utc, compacted_at_utc
-        FROM mcp_agent_runs
-        """;
+                                                  SELECT request_id, request_fingerprint, accounting_version, status, version, claim_token, stop_reason,
+                                                      stop_requested_at_utc, agent_definition_id, agent_definition_version, model_id, model_override_id, workspace_id,
+                                                      binding_fingerprint, NULL, NULL, NULL, NULL, failure_code,
+                                                      reserved_active_payload_bytes, active_payload_bytes, tombstone_logical_bytes, created_at_utc,
+                                                      claimed_at_utc, completed_at_utc, payload_expires_at_utc, compacted_at_utc
+                                                  FROM mcp_agent_runs
+                                                  """;
 
     private async Task<SqliteConnection> OpenConnectionAsync(CancellationToken cancellationToken)
     {
@@ -651,8 +657,7 @@ public sealed class McpAgentRunStore : IMcpAgentRunStore
 
     private static McpAgentRunRow ReadRow(SqliteDataReader reader, bool includePayload)
     {
-        var row = new McpAgentRunRow(
-            Guid.Parse(reader.GetString(0), CultureInfo.InvariantCulture),
+        var row = new McpAgentRunRow(Guid.Parse(reader.GetString(0), CultureInfo.InvariantCulture),
             (byte[])reader.GetValue(1),
             reader.GetInt32(2),
             (McpAgentRunStatus)reader.GetInt32(3),
@@ -744,10 +749,10 @@ public sealed class McpAgentRunStore : IMcpAgentRunStore
         CancellationToken cancellationToken)
     {
         await using var command = CreateCommand(connection, transaction, """
-            SELECT accounting_version, nonterminal_run_count, queued_run_count, running_run_count, identity_count, active_payload_bytes,
-                tombstone_logical_bytes, updated_at_utc
-            FROM mcp_agent_run_ledger WHERE id = 1;
-            """);
+                                                                         SELECT accounting_version, nonterminal_run_count, queued_run_count, running_run_count, identity_count, active_payload_bytes,
+                                                                             tombstone_logical_bytes, updated_at_utc
+                                                                         FROM mcp_agent_run_ledger WHERE id = 1;
+                                                                         """);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
@@ -770,17 +775,17 @@ public sealed class McpAgentRunStore : IMcpAgentRunStore
         CancellationToken cancellationToken)
     {
         await using var command = CreateCommand(connection, transaction, """
-            SELECT
-                COALESCE(SUM(CASE WHEN status IN ($queued, $running) THEN 1 ELSE 0 END), 0),
-                COALESCE(SUM(CASE WHEN status = $queued THEN 1 ELSE 0 END), 0),
-                COALESCE(SUM(CASE WHEN status = $running THEN 1 ELSE 0 END), 0),
-                COUNT(*),
-                COALESCE(SUM(active_payload_bytes), 0),
-                COALESCE(SUM(tombstone_logical_bytes), 0),
-                COALESCE(MIN(accounting_version), $accountingVersion),
-                COALESCE(MAX(accounting_version), $accountingVersion)
-            FROM mcp_agent_runs;
-            """);
+                                                                         SELECT
+                                                                             COALESCE(SUM(CASE WHEN status IN ($queued, $running) THEN 1 ELSE 0 END), 0),
+                                                                             COALESCE(SUM(CASE WHEN status = $queued THEN 1 ELSE 0 END), 0),
+                                                                             COALESCE(SUM(CASE WHEN status = $running THEN 1 ELSE 0 END), 0),
+                                                                             COUNT(*),
+                                                                             COALESCE(SUM(active_payload_bytes), 0),
+                                                                             COALESCE(SUM(tombstone_logical_bytes), 0),
+                                                                             COALESCE(MIN(accounting_version), $accountingVersion),
+                                                                             COALESCE(MAX(accounting_version), $accountingVersion)
+                                                                         FROM mcp_agent_runs;
+                                                                         """);
         Add(command, "$queued", (int)McpAgentRunStatus.Queued);
         Add(command, "$running", (int)McpAgentRunStatus.Running);
         Add(command, "$accountingVersion", AccountingVersion);
@@ -839,20 +844,20 @@ public sealed class McpAgentRunStore : IMcpAgentRunStore
         CancellationToken cancellationToken)
     {
         await using var command = CreateCommand(connection, transaction, """
-            INSERT INTO mcp_agent_run_ledger (
-                id, accounting_version, nonterminal_run_count, queued_run_count, running_run_count, identity_count, active_payload_bytes,
-                tombstone_logical_bytes, updated_at_utc)
-            VALUES (1, $accountingVersion, $nonterminal, $queued, $running, $identities, $activeBytes, $tombstoneBytes, $updatedAtUtc)
-            ON CONFLICT(id) DO UPDATE SET
-                accounting_version = excluded.accounting_version,
-                nonterminal_run_count = excluded.nonterminal_run_count,
-                queued_run_count = excluded.queued_run_count,
-                running_run_count = excluded.running_run_count,
-                identity_count = excluded.identity_count,
-                active_payload_bytes = excluded.active_payload_bytes,
-                tombstone_logical_bytes = excluded.tombstone_logical_bytes,
-                updated_at_utc = excluded.updated_at_utc;
-            """);
+                                                                         INSERT INTO mcp_agent_run_ledger (
+                                                                             id, accounting_version, nonterminal_run_count, queued_run_count, running_run_count, identity_count, active_payload_bytes,
+                                                                             tombstone_logical_bytes, updated_at_utc)
+                                                                         VALUES (1, $accountingVersion, $nonterminal, $queued, $running, $identities, $activeBytes, $tombstoneBytes, $updatedAtUtc)
+                                                                         ON CONFLICT(id) DO UPDATE SET
+                                                                             accounting_version = excluded.accounting_version,
+                                                                             nonterminal_run_count = excluded.nonterminal_run_count,
+                                                                             queued_run_count = excluded.queued_run_count,
+                                                                             running_run_count = excluded.running_run_count,
+                                                                             identity_count = excluded.identity_count,
+                                                                             active_payload_bytes = excluded.active_payload_bytes,
+                                                                             tombstone_logical_bytes = excluded.tombstone_logical_bytes,
+                                                                             updated_at_utc = excluded.updated_at_utc;
+                                                                         """);
         Add(command, "$accountingVersion", counters.AccountingVersion);
         Add(command, "$nonterminal", counters.NonterminalRunCount);
         Add(command, "$queued", counters.QueuedRunCount);
@@ -942,7 +947,6 @@ public sealed class McpAgentRunStore : IMcpAgentRunStore
         {
             throw new ArgumentException("The binding fingerprint must be 32 bytes.", nameof(request));
         }
-
     }
 
     private static void ValidateFinalization(McpAgentRunFinalization finalization)
@@ -983,32 +987,37 @@ public sealed class McpAgentRunStore : IMcpAgentRunStore
         return value.All(static character => char.IsAsciiLetterOrDigit(character) || character is '_' or '-' or '.');
     }
 
-    private static bool ContainsLineBreak(string value) => value.AsSpan().Contains('\r') || value.AsSpan().Contains('\n');
+    private static bool ContainsLineBreak(string value) =>
+        value.AsSpan().Contains('\r') || value.AsSpan().Contains('\n');
 
-    private static bool IsTerminal(McpAgentRunStatus status) => status is McpAgentRunStatus.Succeeded
-        or McpAgentRunStatus.Failed
-        or McpAgentRunStatus.Cancelled
-        or McpAgentRunStatus.Interrupted;
+    private static bool IsTerminal(McpAgentRunStatus status) =>
+        status is McpAgentRunStatus.Succeeded
+            or McpAgentRunStatus.Failed
+            or McpAgentRunStatus.Cancelled
+            or McpAgentRunStatus.Interrupted;
 
-    private static McpAgentRunStatus StatusForStop(McpAgentRunStopReason reason) => reason switch
-    {
-        McpAgentRunStopReason.UserCancellation => McpAgentRunStatus.Cancelled,
-        McpAgentRunStopReason.WatchdogExpired => McpAgentRunStatus.Failed,
-        McpAgentRunStopReason.HostShutdown => McpAgentRunStatus.Interrupted,
-        _ => throw new ArgumentOutOfRangeException(nameof(reason))
-    };
+    private static McpAgentRunStatus StatusForStop(McpAgentRunStopReason reason) =>
+        reason switch
+        {
+            McpAgentRunStopReason.UserCancellation => McpAgentRunStatus.Cancelled,
+            McpAgentRunStopReason.WatchdogExpired => McpAgentRunStatus.Failed,
+            McpAgentRunStopReason.HostShutdown => McpAgentRunStatus.Interrupted,
+            _ => throw new ArgumentOutOfRangeException(nameof(reason))
+        };
 
-    private static string FailureCodeForStop(McpAgentRunStopReason reason) => reason switch
-    {
-        McpAgentRunStopReason.UserCancellation => "cancelled",
-        McpAgentRunStopReason.WatchdogExpired => "watchdog_expired",
-        McpAgentRunStopReason.HostShutdown => "interrupted",
-        _ => throw new ArgumentOutOfRangeException(nameof(reason))
-    };
+    private static string FailureCodeForStop(McpAgentRunStopReason reason) =>
+        reason switch
+        {
+            McpAgentRunStopReason.UserCancellation => "cancelled",
+            McpAgentRunStopReason.WatchdogExpired => "watchdog_expired",
+            McpAgentRunStopReason.HostShutdown => "interrupted",
+            _ => throw new ArgumentOutOfRangeException(nameof(reason))
+        };
 
     [SuppressMessage("Performance", "CA1849:Call async methods when in an async method",
         Justification = "Microsoft.Data.Sqlite has no async transaction overload that preserves BEGIN IMMEDIATE serialization.")]
-    private static SqliteTransaction BeginImmediateTransaction(SqliteConnection connection) => connection.BeginTransaction(deferred: false);
+    private static SqliteTransaction BeginImmediateTransaction(SqliteConnection connection) =>
+        connection.BeginTransaction(deferred: false);
 
     [SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",
         Justification = "Command text is assembled exclusively from private fixed SQL fragments; all runtime values are bound parameters.")]
@@ -1026,20 +1035,24 @@ public sealed class McpAgentRunStore : IMcpAgentRunStore
         _ = command.Parameters.AddWithValue(name, providerValue);
     }
 
-    private static object ToDb(object? value) => value switch
-    {
-        null => DBNull.Value,
-        Guid guid => guid.ToString("D", CultureInfo.InvariantCulture),
-        _ => value
-    };
+    private static object ToDb(object? value) =>
+        value switch
+        {
+            null => DBNull.Value,
+            Guid guid => guid.ToString("D", CultureInfo.InvariantCulture),
+            _ => value
+        };
 
-    private static Guid? GetNullableGuid(SqliteDataReader reader, int ordinal) => reader.IsDBNull(ordinal)
-        ? null
-        : Guid.Parse(reader.GetString(ordinal), CultureInfo.InvariantCulture);
+    private static Guid? GetNullableGuid(SqliteDataReader reader, int ordinal) =>
+        reader.IsDBNull(ordinal)
+            ? null
+            : Guid.Parse(reader.GetString(ordinal), CultureInfo.InvariantCulture);
 
-    private static long? GetNullableInt64(SqliteDataReader reader, int ordinal) => reader.IsDBNull(ordinal) ? null : reader.GetInt64(ordinal);
+    private static long? GetNullableInt64(SqliteDataReader reader, int ordinal) =>
+        reader.IsDBNull(ordinal) ? null : reader.GetInt64(ordinal);
 
-    private static byte[]? GetNullableBytes(SqliteDataReader reader, int ordinal) => reader.IsDBNull(ordinal) ? null : (byte[])reader.GetValue(ordinal);
+    private static byte[]? GetNullableBytes(SqliteDataReader reader, int ordinal) =>
+        reader.IsDBNull(ordinal) ? null : (byte[])reader.GetValue(ordinal);
 
     private sealed record McpAgentRunRow(
         Guid RequestId,

@@ -22,13 +22,16 @@ public sealed class ListWorkspacesEndpoint(ISelectedFolderResolver selectedFolde
     {
         var references = await _selectedFolders.ListReferencesAsync(ct).ConfigureAwait(false);
         await Send.OkAsync(new ListWorkspacesResponse
-        {
-            Items = [.. references.Select(static reference => new WorkspaceResponse
             {
-                WorkspaceId = reference.Id,
-                Alias = reference.Alias
-            })]
-        },
+                Items =
+                [
+                    .. references.Select(static reference => new WorkspaceResponse
+                    {
+                        WorkspaceId = reference.Id,
+                        Alias = reference.Alias
+                    })
+                ]
+            },
             ct).ConfigureAwait(false);
     }
 }

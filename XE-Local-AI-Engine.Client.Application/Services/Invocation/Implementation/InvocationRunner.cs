@@ -874,7 +874,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
         // Built once for the whole turn: the offer list is fixed for the invocation, and the budgeter's framing memo is
         // keyed on these string instances (see ApplyContextBudgetAsync).
         var toolBudgetDefinitions = BuildToolBudgetDefinitions(package);
-        var seededMessages = await ApplyContextBudgetAsync(BuildChatMessages(package), package, toolBudgetDefinitions, resolvedModel, "initial-assembly", turnPolicy, transport, budgetGate).ConfigureAwait(false);
+        var seededMessages = await ApplyContextBudgetAsync(BuildChatMessages(package), package, toolBudgetDefinitions, resolvedModel, "initial-assembly", turnPolicy, transport, budgetGate)
+            .ConfigureAwait(false);
 
         var definition = BuildInvocationDefinition(package, resolvedModel, seededMessages, effectiveContextTokens);
         // Coarse span over the MAF agent build (AUD4-23) — another pre-first-token stage. Disposed right after the
@@ -1195,7 +1196,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
         // any participant is launched with. Previously unbudgeted — the workflow ran on the raw seed regardless of
         // length.
         var budgetGate = new ContextBudgetNoticeGate();
-        var seed = await ApplyContextBudgetAsync(BuildChatMessages(package), package, BuildToolBudgetDefinitions(package), resolvedModel, "orchestration-seed", turnPolicy, transport, budgetGate).ConfigureAwait(false);
+        var seed = await ApplyContextBudgetAsync(BuildChatMessages(package), package, BuildToolBudgetDefinitions(package), resolvedModel, "orchestration-seed", turnPolicy, transport, budgetGate)
+            .ConfigureAwait(false);
 
         await using var session = await _orchestrationAgentFactory.CreateAsync(definition, seed, invocationToken).ConfigureAwait(false);
 

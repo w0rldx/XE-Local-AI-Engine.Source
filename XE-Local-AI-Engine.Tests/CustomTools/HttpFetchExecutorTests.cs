@@ -15,8 +15,8 @@ public sealed class HttpFetchExecutorTests
     public async Task BuildRequest_SubstitutesPlaceholderInHeaderValue()
     {
         const string configJson = """
-            {"method":"GET","urlTemplate":"https://api.example.com/data","headers":[{"name":"Authorization","value":"Bearer {token}","isSecret":false}],"bodyTemplate":null,"allowedHosts":[]}
-            """;
+                                  {"method":"GET","urlTemplate":"https://api.example.com/data","headers":[{"name":"Authorization","value":"Bearer {token}","isSecret":false}],"bodyTemplate":null,"allowedHosts":[]}
+                                  """;
         const string parametersJson = """[{"name":"token","type":"string","description":"","required":true}]""";
         var config = CustomToolConfigParser.ParseHttpFetch(configJson);
         var parameters = CustomToolConfigParser.ParseParameters(parametersJson);
@@ -32,8 +32,8 @@ public sealed class HttpFetchExecutorTests
     public async Task BuildRequest_FixedHeader_PassesThroughUnchanged()
     {
         const string configJson = """
-            {"method":"GET","urlTemplate":"https://api.example.com/data","headers":[{"name":"X-Api-Key","value":"static-key-value","isSecret":true}],"bodyTemplate":null,"allowedHosts":[]}
-            """;
+                                  {"method":"GET","urlTemplate":"https://api.example.com/data","headers":[{"name":"X-Api-Key","value":"static-key-value","isSecret":true}],"bodyTemplate":null,"allowedHosts":[]}
+                                  """;
         var config = CustomToolConfigParser.ParseHttpFetch(configJson);
 
         using var request = HttpFetchExecutor.BuildRequest(config, [], "{}");

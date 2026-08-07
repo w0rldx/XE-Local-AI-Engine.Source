@@ -18,11 +18,14 @@ internal sealed class AgentHomeExecutionLeaseManager : IAgentHomeExecutionLeaseM
         return TryAcquireCore(key, allowPoisoned: true);
     }
 
-    public bool IsPoisoned(AgentHomeExecutionLeaseKey key) => _poisoned.ContainsKey(key);
+    public bool IsPoisoned(AgentHomeExecutionLeaseKey key) =>
+        _poisoned.ContainsKey(key);
 
-    public void MarkPoisoned(AgentHomeExecutionLeaseKey key) => _poisoned[key] = 0;
+    public void MarkPoisoned(AgentHomeExecutionLeaseKey key) =>
+        _poisoned[key] = 0;
 
-    public void ClearPoison(AgentHomeExecutionLeaseKey key) => _ = _poisoned.TryRemove(key, out _);
+    public void ClearPoison(AgentHomeExecutionLeaseKey key) =>
+        _ = _poisoned.TryRemove(key, out _);
 
     private IAgentHomeExecutionLease? TryAcquireCore(AgentHomeExecutionLeaseKey key, bool allowPoisoned)
     {
@@ -72,7 +75,8 @@ internal sealed class AgentHomeExecutionLeaseManager : IAgentHomeExecutionLeaseM
 
         public bool IsDisposed => Volatile.Read(ref _disposed) != 0;
 
-        public void Revoke() => _ = Interlocked.Exchange(ref _disposed, 1);
+        public void Revoke() =>
+            _ = Interlocked.Exchange(ref _disposed, 1);
     }
 
     private sealed class LeaseScope

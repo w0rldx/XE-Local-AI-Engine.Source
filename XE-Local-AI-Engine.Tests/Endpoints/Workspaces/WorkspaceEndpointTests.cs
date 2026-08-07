@@ -23,7 +23,11 @@ public sealed class WorkspaceEndpointTests
         await using var factory = CreateFactory(out _);
         using var client = factory.CreateClient();
 
-        using var post = await client.PostAsJsonAsync(Route, new { alias = "repo", hostPath = HostPath("trusted", "repo") }).ConfigureAwait(false);
+        using var post = await client.PostAsJsonAsync(Route, new
+        {
+            alias = "repo",
+            hostPath = HostPath("trusted", "repo")
+        }).ConfigureAwait(false);
         using var get = await client.GetAsync(Route).ConfigureAwait(false);
         using var delete = await client.DeleteAsync($"{Route}/{Guid.NewGuid()}").ConfigureAwait(false);
 
@@ -39,7 +43,11 @@ public sealed class WorkspaceEndpointTests
         using var client = factory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Post, Route)
         {
-            Content = JsonContent.Create(new { alias = "repo", hostPath = HostPath("trusted", "repo") })
+            Content = JsonContent.Create(new
+            {
+                alias = "repo",
+                hostPath = HostPath("trusted", "repo")
+            })
         };
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", McpKey);
 
@@ -59,7 +67,11 @@ public sealed class WorkspaceEndpointTests
         using var client = factory.CreateClient();
         var secretPath = HostPath("secret", "operator", Guid.NewGuid().ToString("N"));
 
-        using var createRequest = OperatorRequest(factory, HttpMethod.Post, Route, new { alias = "Repo One", hostPath = secretPath });
+        using var createRequest = OperatorRequest(factory, HttpMethod.Post, Route, new
+        {
+            alias = "Repo One",
+            hostPath = secretPath
+        });
         using var createResponse = await client.SendAsync(createRequest).ConfigureAwait(false);
         var createJson = await createResponse.Content.ReadAsStringAsync().ConfigureAwait(false);
         var created = AssertEx.NotNull(JsonSerializer.Deserialize<WorkspaceBody>(createJson, JsonOptions));
@@ -87,7 +99,11 @@ public sealed class WorkspaceEndpointTests
     {
         await using var factory = CreateFactory(out var preparation);
         using var client = factory.CreateClient();
-        using var createRequest = OperatorRequest(factory, HttpMethod.Post, Route, new { alias = "repo", hostPath = HostPath("trusted", "repo") });
+        using var createRequest = OperatorRequest(factory, HttpMethod.Post, Route, new
+        {
+            alias = "repo",
+            hostPath = HostPath("trusted", "repo")
+        });
         using var createResponse = await client.SendAsync(createRequest).ConfigureAwait(false);
         var created = AssertEx.NotNull(await createResponse.Content.ReadFromJsonAsync<WorkspaceBody>(JsonOptions).ConfigureAwait(false));
 
@@ -117,7 +133,11 @@ public sealed class WorkspaceEndpointTests
         using var client = factory.CreateClient();
         preparation.PrepareAsync(Arg.Any<ResolvedSelectedFolder>(), Arg.Any<CancellationToken>())
                    .Returns(Task.FromException<IWorkspaceRevocationSession>(new InvalidOperationException("clear failed")));
-        using var createRequest = OperatorRequest(factory, HttpMethod.Post, Route, new { alias = "repo", hostPath = HostPath("trusted", "repo") });
+        using var createRequest = OperatorRequest(factory, HttpMethod.Post, Route, new
+        {
+            alias = "repo",
+            hostPath = HostPath("trusted", "repo")
+        });
         using var createResponse = await client.SendAsync(createRequest).ConfigureAwait(false);
         var created = AssertEx.NotNull(await createResponse.Content.ReadFromJsonAsync<WorkspaceBody>(JsonOptions).ConfigureAwait(false));
 

@@ -44,7 +44,11 @@ internal sealed class McpAgentRunConfiguration : IEntityTypeConfiguration<McpAge
         builder.Property(entity => entity.PayloadExpiresAtUtc).HasColumnName("payload_expires_at_utc");
         builder.Property(entity => entity.CompactedAtUtc).HasColumnName("compacted_at_utc");
 
-        builder.HasIndex(entity => new { entity.Status, entity.CreatedAtUtc });
+        builder.HasIndex(entity => new
+        {
+            entity.Status,
+            entity.CreatedAtUtc
+        });
         builder.HasIndex(entity => entity.PayloadExpiresAtUtc);
     }
 }

@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.CustomTools;
 
 using System.Net;
-using System.Net.Http;
 using XE_Local_AI_Engine.Client.Services.CustomTools;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -68,40 +67,35 @@ public sealed class CustomToolSsrfGuardTests
     [Arguments("http://[::1]/")] // IPv6 loopback literal
     public async Task ValidateRequestUrl_ForNumericOrPrivateLiteral_Rejects(string url)
     {
-        AssertEx.Throws<CustomToolExecutionException>(
-            () => CustomToolSsrfGuard.ValidateRequestUrl(new Uri(url), [], hostIsParameterized: false));
+        AssertEx.Throws<CustomToolExecutionException>(() => CustomToolSsrfGuard.ValidateRequestUrl(new Uri(url), [], hostIsParameterized: false));
         await Task.CompletedTask;
     }
 
     [Test]
     public async Task ValidateRequestUrl_ForNonHttpScheme_Rejects()
     {
-        AssertEx.Throws<CustomToolExecutionException>(
-            () => CustomToolSsrfGuard.ValidateRequestUrl(new Uri("ftp://example.com/"), [], hostIsParameterized: false));
+        AssertEx.Throws<CustomToolExecutionException>(() => CustomToolSsrfGuard.ValidateRequestUrl(new Uri("ftp://example.com/"), [], hostIsParameterized: false));
         await Task.CompletedTask;
     }
 
     [Test]
     public async Task ValidateRequestUrl_ForUserInfo_Rejects()
     {
-        AssertEx.Throws<CustomToolExecutionException>(
-            () => CustomToolSsrfGuard.ValidateRequestUrl(new Uri("https://user:pass@example.com/"), [], hostIsParameterized: false));
+        AssertEx.Throws<CustomToolExecutionException>(() => CustomToolSsrfGuard.ValidateRequestUrl(new Uri("https://user:pass@example.com/"), [], hostIsParameterized: false));
         await Task.CompletedTask;
     }
 
     [Test]
     public async Task ValidateRequestUrl_ParameterizedHostWithoutAllowlist_Rejects()
     {
-        AssertEx.Throws<CustomToolExecutionException>(
-            () => CustomToolSsrfGuard.ValidateRequestUrl(new Uri("https://evil.example.com/"), [], hostIsParameterized: true));
+        AssertEx.Throws<CustomToolExecutionException>(() => CustomToolSsrfGuard.ValidateRequestUrl(new Uri("https://evil.example.com/"), [], hostIsParameterized: true));
         await Task.CompletedTask;
     }
 
     [Test]
     public async Task ValidateRequestUrl_HostNotInAllowlist_Rejects()
     {
-        AssertEx.Throws<CustomToolExecutionException>(
-            () => CustomToolSsrfGuard.ValidateRequestUrl(new Uri("https://evil.example.com/"), ["good.example.com"], hostIsParameterized: true));
+        AssertEx.Throws<CustomToolExecutionException>(() => CustomToolSsrfGuard.ValidateRequestUrl(new Uri("https://evil.example.com/"), ["good.example.com"], hostIsParameterized: true));
         await Task.CompletedTask;
     }
 

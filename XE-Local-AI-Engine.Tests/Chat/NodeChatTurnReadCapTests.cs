@@ -6,7 +6,6 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
-using XE_Local_AI_Engine.Tests.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -243,11 +242,11 @@ public sealed class NodeChatTurnReadCapTests : IDisposable
         var variantCorrelation = new NodeChatMessageCorrelation(conversationId, newerSiblingId, variantRequestId);
         await service.MarkAssistantStreamingAsync(variantCorrelation, updatedAtUtc: 16).ConfigureAwait(false);
         await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(variantCorrelation,
-                             NodeChatMessageStatusValues.Completed,
-                             UpdatedAtUtc: 17,
-                             "assistant-one-variant",
-                             "reasoning-one-variant",
-                             Model: "llama"))
+                         NodeChatMessageStatusValues.Completed,
+                         UpdatedAtUtc: 17,
+                         "assistant-one-variant",
+                         "reasoning-one-variant",
+                         Model: "llama"))
                      .ConfigureAwait(false);
 
         var loaded = AssertEx.NotNull(await service.GetConversationAsync(conversationId).ConfigureAwait(false));
@@ -259,11 +258,11 @@ public sealed class NodeChatTurnReadCapTests : IDisposable
             // Pin the OLDER sibling so the resolver's newest-wins default is overridden — the case where a cap that
             // pre-filtered by sequence would change which message is sent.
             await service.SetSelectedPathAsync(new NodeChatSetSelectedPathRequest(conversationId,
-                                 new Dictionary<Guid, Guid>
-                                 {
-                                     [variantGroupId!.Value] = oldSiblingId
-                                 },
-                                 UpdatedAtUtc: 18))
+                             new Dictionary<Guid, Guid>
+                             {
+                                 [variantGroupId!.Value] = oldSiblingId
+                             },
+                             UpdatedAtUtc: 18))
                          .ConfigureAwait(false);
         }
 
@@ -282,11 +281,11 @@ public sealed class NodeChatTurnReadCapTests : IDisposable
         await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversationId, messageId, requestId, createdAtUtc, "llama")).ConfigureAwait(false);
         await service.MarkAssistantStreamingAsync(correlation, createdAtUtc).ConfigureAwait(false);
         await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
-                             NodeChatMessageStatusValues.Completed,
-                             createdAtUtc,
-                             content,
-                             reasoning,
-                             Model: "llama"))
+                         NodeChatMessageStatusValues.Completed,
+                         createdAtUtc,
+                         content,
+                         reasoning,
+                         Model: "llama"))
                      .ConfigureAwait(false);
         return messageId;
     }

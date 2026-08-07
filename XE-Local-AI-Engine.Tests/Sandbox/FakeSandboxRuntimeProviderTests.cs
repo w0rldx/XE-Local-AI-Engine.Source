@@ -193,7 +193,8 @@ public sealed class FakeSandboxRuntimeProviderTests
             });
         }
 
-        static bool SuppressGit(string path) => path.Split('/').Contains(".git", StringComparer.Ordinal);
+        static bool SuppressGit(string path) =>
+            path.Split('/').Contains(".git", StringComparer.Ordinal);
 
         var files = await provider.ListFilesAsync(handle, new SandboxListFilesRequest
         {

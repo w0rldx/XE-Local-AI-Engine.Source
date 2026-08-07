@@ -1,8 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Scheduler.V1.Mappers;
 
-using PersistenceEntities = XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
+using PersistenceEntities = XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
 ///     Extension methods that translate between endpoint DTOs and the management service's input/record types.

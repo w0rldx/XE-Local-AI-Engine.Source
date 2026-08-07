@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Invocations.V1;
 
 using XE_Local_AI_Engine.Client.Models.Enums;
-using XE_Local_AI_Engine.Client.Services.Events;
 
 public sealed class InvocationMonitorResponse
 {
@@ -84,4 +83,3 @@ public sealed class InvocationHistoryResponse
     /// </summary>
     public string? TraceId { get; init; }
 }
-

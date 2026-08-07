@@ -15,9 +15,9 @@ public sealed class ProcessLaunchAdmissionRegistry : IProcessLaunchAdmissionRegi
         lock (_sync)
         {
             return new ProcessLaunchAdmissionSnapshot(_entries
-                    .Where(static pair => pair.Value.Admission is not null)
-                    .Select(static pair => pair.Key)
-                    .ToHashSet(),
+                                                      .Where(static pair => pair.Value.Admission is not null)
+                                                      .Select(static pair => pair.Key)
+                                                      .ToHashSet(),
                 _entries.ContainsKey(requested),
                 _entries.Values.Any(static entry => entry is { LaunchReferences: > 0, IsUnbound: true } or { IsOrphaned: true }));
         }
@@ -138,7 +138,8 @@ public sealed class ProcessLaunchAdmissionRegistry : IProcessLaunchAdmissionRegi
         }
     }
 
-    private static ProcessLaunchAdmissionKey Key(string modelName, ModelRole role) => new(modelName, role);
+    private static ProcessLaunchAdmissionKey Key(string modelName, ModelRole role) =>
+        new(modelName, role);
 
     private sealed class Entry(ProcessLaunchAdmission? admission)
     {

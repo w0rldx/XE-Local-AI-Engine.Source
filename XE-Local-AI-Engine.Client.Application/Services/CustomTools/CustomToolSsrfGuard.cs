@@ -119,7 +119,10 @@ internal static class CustomToolSsrfGuard
                 throw new CustomToolExecutionException("The host resolved to a private, loopback, link-local, or otherwise reserved address.");
             }
 
-            var socket = new Socket(SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
+            var socket = new Socket(SocketType.Stream, ProtocolType.Tcp)
+            {
+                NoDelay = true
+            };
             try
             {
                 await socket.ConnectAsync(addresses, port, cancellationToken).ConfigureAwait(false);
@@ -178,15 +181,15 @@ internal static class CustomToolSsrfGuard
         }
 
         var b = address.GetAddressBytes();
-        return b[0] == 0                                          // 0.0.0.0/8 (incl. unspecified)
-               || b[0] == 10                                      // 10.0.0.0/8
-               || (b[0] == 172 && b[1] >= 16 && b[1] <= 31)       // 172.16.0.0/12
-               || (b[0] == 192 && b[1] == 168)                    // 192.168.0.0/16
-               || (b[0] == 169 && b[1] == 254)                    // 169.254.0.0/16 (incl. 169.254.169.254 metadata)
-               || (b[0] == 100 && b[1] >= 64 && b[1] <= 127)      // 100.64.0.0/10 (CGNAT)
-               || (b[0] == 192 && b[1] == 0 && b[2] == 0)         // 192.0.0.0/24
-               || (b[0] == 198 && (b[1] == 18 || b[1] == 19))     // 198.18.0.0/15 (benchmarking)
-               || b[0] >= 224;                                    // 224.0.0.0/4 multicast + 240.0.0.0/4 reserved + 255.255.255.255
+        return b[0] == 0 // 0.0.0.0/8 (incl. unspecified)
+               || b[0] == 10 // 10.0.0.0/8
+               || (b[0] == 172 && b[1] >= 16 && b[1] <= 31) // 172.16.0.0/12
+               || (b[0] == 192 && b[1] == 168) // 192.168.0.0/16
+               || (b[0] == 169 && b[1] == 254) // 169.254.0.0/16 (incl. 169.254.169.254 metadata)
+               || (b[0] == 100 && b[1] >= 64 && b[1] <= 127) // 100.64.0.0/10 (CGNAT)
+               || (b[0] == 192 && b[1] == 0 && b[2] == 0) // 192.0.0.0/24
+               || (b[0] == 198 && (b[1] == 18 || b[1] == 19)) // 198.18.0.0/15 (benchmarking)
+               || b[0] >= 224; // 224.0.0.0/4 multicast + 240.0.0.0/4 reserved + 255.255.255.255
     }
 
     private static bool IsDeniedIPv6(IPAddress address)

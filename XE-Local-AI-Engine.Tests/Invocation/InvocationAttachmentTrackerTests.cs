@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Tests.Invocation;
 
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.Events;
-using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 

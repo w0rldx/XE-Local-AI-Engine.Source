@@ -29,8 +29,10 @@ public sealed class CustomToolTemplateTests
     [Test]
     public async Task Substitute_UndeclaredPlaceholder_Rejects()
     {
-        AssertEx.Throws<CustomToolExecutionException>(
-            () => CustomToolTemplate.Substitute("{q} {other}", new Dictionary<string, string> { ["q"] = "x" }, new HashSet<string>(["q"])));
+        AssertEx.Throws<CustomToolExecutionException>(() => CustomToolTemplate.Substitute("{q} {other}", new Dictionary<string, string>
+        {
+            ["q"] = "x"
+        }, new HashSet<string>(["q"])));
         await Task.CompletedTask;
     }
 

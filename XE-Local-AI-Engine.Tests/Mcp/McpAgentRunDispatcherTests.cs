@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Mcp;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -52,8 +53,7 @@ public sealed class McpAgentRunDispatcherTests
     [Arguments(McpAgentRunStopReason.UserCancellation, McpAgentRunStatus.Cancelled, "cancelled")]
     [Arguments(McpAgentRunStopReason.WatchdogExpired, McpAgentRunStatus.Failed, "watchdog_expired")]
     [Arguments(McpAgentRunStopReason.HostShutdown, McpAgentRunStatus.Interrupted, "interrupted")]
-    public async Task ExecuteAsync_WhenMarkerCommitsBetweenClaimAndReload_MarkerWinsWithoutInference(
-        McpAgentRunStopReason stopReason,
+    public async Task ExecuteAsync_WhenMarkerCommitsBetweenClaimAndReload_MarkerWinsWithoutInference(McpAgentRunStopReason stopReason,
         McpAgentRunStatus expectedStatus,
         string expectedFailureCode)
     {
@@ -78,12 +78,12 @@ public sealed class McpAgentRunDispatcherTests
         };
         McpAgentRunFinalization? finalization = null;
         store.ListAsync(Arg.Any<int>(), McpAgentRunStatus.Queued, Arg.Any<CancellationToken>())
-            .Returns([queued]);
+             .Returns([queued]);
         store.TryClaimAsync(Arg.Is<Guid>(requestId => requestId == queued.RequestId),
-                Arg.Is<long>(version => version == queued.Version),
-                Arg.Any<long>(),
-                Arg.Any<CancellationToken>())
-            .Returns(new McpAgentRunClaimResult(McpAgentRunClaimKind.Claimed, claimed));
+                 Arg.Is<long>(version => version == queued.Version),
+                 Arg.Any<long>(),
+                 Arg.Any<CancellationToken>())
+             .Returns(new McpAgentRunClaimResult(McpAgentRunClaimKind.Claimed, claimed));
         store.GetAsync(claimed.RequestId, Arg.Any<CancellationToken>()).Returns(_ =>
         {
             AssertEx.True(registry.Signal(claimed.RequestId, claimToken),
@@ -129,10 +129,10 @@ public sealed class McpAgentRunDispatcherTests
         McpAgentRunFinalization? finalization = null;
         store.ListAsync(Arg.Any<int>(), McpAgentRunStatus.Queued, Arg.Any<CancellationToken>()).Returns([queued]);
         store.TryClaimAsync(Arg.Is<Guid>(requestId => requestId == queued.RequestId),
-                Arg.Is<long>(version => version == queued.Version),
-                Arg.Any<long>(),
-                Arg.Any<CancellationToken>())
-            .Returns(new McpAgentRunClaimResult(McpAgentRunClaimKind.Claimed, claimed));
+                 Arg.Is<long>(version => version == queued.Version),
+                 Arg.Any<long>(),
+                 Arg.Any<CancellationToken>())
+             .Returns(new McpAgentRunClaimResult(McpAgentRunClaimKind.Claimed, claimed));
         store.GetAsync(claimed.RequestId, Arg.Any<CancellationToken>()).Returns(claimed);
         executor.ExecuteAsync(claimed, Arg.Any<CancellationToken>()).Returns(SpawnOutcome.Success("completed first"));
         store.TryFinalizeAsync(Arg.Any<McpAgentRunFinalization>(), Arg.Any<CancellationToken>()).Returns(callInfo =>
@@ -156,7 +156,7 @@ public sealed class McpAgentRunDispatcherTests
     }
 
     [Test]
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2025:Ensure tasks using IDisposable instances complete before disposal",
+    [SuppressMessage("Reliability", "CA2025:Ensure tasks using IDisposable instances complete before disposal",
         Justification = "The dispatcher task is explicitly awaited before the dispatcher using-scope exits.")]
     public async Task ExecuteAsync_AfterThirtyMinuteWatchdog_PersistsMarkerBeforeCancellingExecution()
     {
@@ -178,26 +178,26 @@ public sealed class McpAgentRunDispatcherTests
         McpAgentRunFinalization? finalization = null;
         store.ListAsync(Arg.Any<int>(), McpAgentRunStatus.Queued, Arg.Any<CancellationToken>()).Returns([queued]);
         store.TryClaimAsync(Arg.Is<Guid>(requestId => requestId == queued.RequestId),
-                Arg.Is<long>(version => version == queued.Version),
-                Arg.Any<long>(),
-                Arg.Any<CancellationToken>())
-            .Returns(new McpAgentRunClaimResult(McpAgentRunClaimKind.Claimed, claimed));
+                 Arg.Is<long>(version => version == queued.Version),
+                 Arg.Any<long>(),
+                 Arg.Any<CancellationToken>())
+             .Returns(new McpAgentRunClaimResult(McpAgentRunClaimKind.Claimed, claimed));
         store.GetAsync(claimed.RequestId, Arg.Any<CancellationToken>()).Returns(_ => current);
         store.RequestStopAsync(Arg.Is<Guid>(requestId => requestId == claimed.RequestId),
-                Arg.Any<long>(),
-                Arg.Is<McpAgentRunStopReason>(reason => reason == McpAgentRunStopReason.WatchdogExpired),
-                Arg.Any<long>(),
-                Arg.Any<CancellationToken>())
-            .Returns(_ =>
-            {
-                current = current with
-                {
-                    Version = current.Version + 1,
-                    StopReason = McpAgentRunStopReason.WatchdogExpired,
-                    StopRequestedAtUtc = 30
-                };
-                return new McpAgentRunStopResult(McpAgentRunStopKind.Requested, current);
-            });
+                 Arg.Any<long>(),
+                 Arg.Is<McpAgentRunStopReason>(reason => reason == McpAgentRunStopReason.WatchdogExpired),
+                 Arg.Any<long>(),
+                 Arg.Any<CancellationToken>())
+             .Returns(_ =>
+             {
+                 current = current with
+                 {
+                     Version = current.Version + 1,
+                     StopReason = McpAgentRunStopReason.WatchdogExpired,
+                     StopRequestedAtUtc = 30
+                 };
+                 return new McpAgentRunStopResult(McpAgentRunStopKind.Requested, current);
+             });
         executor.ExecuteAsync(Arg.Any<McpAgentRunRecord>(), Arg.Any<CancellationToken>()).Returns(async callInfo =>
         {
             executionStarted.TrySetResult();
@@ -309,7 +309,8 @@ public sealed class McpAgentRunDispatcherTests
 
         public TimeSpan? FirstDueTime { get; private set; }
 
-        public override DateTimeOffset GetUtcNow() => _utcNow;
+        public override DateTimeOffset GetUtcNow() =>
+            _utcNow;
 
         public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
         {

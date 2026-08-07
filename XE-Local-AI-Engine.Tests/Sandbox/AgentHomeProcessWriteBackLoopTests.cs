@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Sandbox;
 
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -335,10 +336,11 @@ public sealed class AgentHomeProcessWriteBackLoopTests : IDisposable
 
 internal static class AgentHomeProcessPhaseTestAccess
 {
-    private static readonly System.Reflection.MethodInfo PrepareMethod = typeof(AgentHomeService)
-        .GetMethod("PrepareUnderLeaseAsync", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
-    private static readonly System.Reflection.MethodInfo RunMethod = typeof(AgentHomeService)
-        .GetMethod("RunAsync", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+    private static readonly MethodInfo PrepareMethod = typeof(AgentHomeService)
+        .GetMethod("PrepareUnderLeaseAsync", BindingFlags.Instance | BindingFlags.NonPublic)!;
+
+    private static readonly MethodInfo RunMethod = typeof(AgentHomeService)
+        .GetMethod("RunAsync", BindingFlags.Instance | BindingFlags.NonPublic)!;
 
     public static Task<AgentHomePrepareResult> PrepareAsync(this AgentHomeService service,
         AgentHomePrepareRequest request,

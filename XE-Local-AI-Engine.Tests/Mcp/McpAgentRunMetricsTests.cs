@@ -234,7 +234,8 @@ public sealed class McpAgentRunMetricsTests
 
     private sealed record CapturedMeasurement(double Value, IReadOnlyDictionary<string, object?> Tags)
     {
-        public object? Tag(string name) => Tags.TryGetValue(name, out var value) ? value : null;
+        public object? Tag(string name) =>
+            Tags.TryGetValue(name, out var value) ? value : null;
     }
 
     private sealed class NodeMeterCapture : IDisposable
@@ -268,11 +269,14 @@ public sealed class McpAgentRunMetricsTests
                          .Select(entry => entry.Measurement)
                          .ToArray();
 
-        public Type MeasurementType(string instrumentName) => _measurementTypes[instrumentName];
+        public Type MeasurementType(string instrumentName) =>
+            _measurementTypes[instrumentName];
 
-        public void Observe() => _listener.RecordObservableInstruments();
+        public void Observe() =>
+            _listener.RecordObservableInstruments();
 
-        public void Dispose() => _listener.Dispose();
+        public void Dispose() =>
+            _listener.Dispose();
 
         private static IReadOnlyDictionary<string, object?> ToDictionary(ReadOnlySpan<KeyValuePair<string, object?>> tags)
         {

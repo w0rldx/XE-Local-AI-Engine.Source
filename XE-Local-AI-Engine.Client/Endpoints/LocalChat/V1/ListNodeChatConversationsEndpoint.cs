@@ -2,11 +2,11 @@ namespace XE_Local_AI_Engine.Client.Endpoints.LocalChat.V1;
 
 using FastEndpoints;
 using Microsoft.Extensions.Options;
-using SecurityOptions = XE_Local_AI_Engine.Client.Configuration.SecurityOptions;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.LocalChat.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using SecurityOptions = XE_Local_AI_Engine.Client.Configuration.SecurityOptions;
 
 public sealed class ListNodeChatConversationsEndpoint(INodeChatPersistenceService chatPersistence, IOptions<SecurityOptions> securityOptions)
     : Endpoint<ListNodeChatConversationsRequest, ListNodeChatConversationsResponse>

@@ -240,7 +240,12 @@ public sealed class McpAgentRunStoreTests : IDisposable
     {
         var databasePath = GetDatabasePath("recovery.sqlite");
         await InitializeDatabaseAsync(databasePath).ConfigureAwait(false);
-        var ids = new[] { Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid() };
+        var ids = new[]
+        {
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            Guid.NewGuid()
+        };
         await using var fixture = CreateFixture(databasePath);
 
         for (var index = 0; index < ids.Length; index++)
@@ -269,12 +274,13 @@ public sealed class McpAgentRunStoreTests : IDisposable
     private static async Task InitializeDatabaseAsync(string databasePath)
     {
         using var keyHolder = new FixedNodeSqliteKeyHolder();
-        await using var context = Testing.AgentDefinitionTestContextFactory.CreateForMigration(databasePath, keyHolder);
+        await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, keyHolder);
         await context.Database.EnsureDeletedAsync().ConfigureAwait(false);
         await context.Database.EnsureCreatedAsync().ConfigureAwait(false);
     }
 
-    private static StoreFixture CreateFixture(string databasePath) => new(databasePath);
+    private static StoreFixture CreateFixture(string databasePath) =>
+        new(databasePath);
 
     private static McpAgentRunAdmissionRequest CreateAdmission(McpAgentRunPayloadProtector protector, Guid requestId, string task)
     {
@@ -304,7 +310,7 @@ public sealed class McpAgentRunStoreTests : IDisposable
 
         public StoreFixture(string databasePath)
         {
-            _context = Testing.AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
+            _context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
             Protector = new McpAgentRunPayloadProtector(_keyHolder, new AesGcmNodeAeadCipher());
             Store = new McpAgentRunStore(_context, Protector);
         }

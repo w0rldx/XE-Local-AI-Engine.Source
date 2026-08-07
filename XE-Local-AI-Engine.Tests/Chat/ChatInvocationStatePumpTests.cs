@@ -20,14 +20,20 @@ public sealed class ChatInvocationStatePumpTests
     {
         // 50 ms between snapshots, comfortably past the 40 ms emit debounce, so every snapshot produces its own frame.
         var (events, _) = await DriveAsync(TimeSpan.FromMilliseconds(50),
-                                    ["Hel", "Hello", "Hello wo", "Hello world"],
-                                    terminalContent: "Hello world")
-                                .ConfigureAwait(false);
+                ["Hel", "Hello", "Hello wo", "Hello world"],
+                terminalContent: "Hello world")
+            .ConfigureAwait(false);
 
         var deltas = events.Where(streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantDelta).ToList();
         AssertEx.Equal(expected: 4, deltas.Count);
 
-        var expectedFragments = new[] { "Hel", "lo", " wo", "rld" };
+        var expectedFragments = new[]
+        {
+            "Hel",
+            "lo",
+            " wo",
+            "rld"
+        };
         for (var index = 0; index < deltas.Count; index++)
         {
             AssertEx.Equal(expectedFragments[index], deltas[index].Delta);
@@ -58,9 +64,9 @@ public sealed class ChatInvocationStatePumpTests
         // that tail before it lands. Without this the client would be relying on the terminal's own content to
         // correct itself on every single turn, rather than only after a real fault.
         var (events, _) = await DriveAsync(TimeSpan.FromMilliseconds(10),
-                                    ["Hello", "Hello world"],
-                                    terminalContent: "Hello world")
-                                .ConfigureAwait(false);
+                ["Hello", "Hello world"],
+                terminalContent: "Hello world")
+            .ConfigureAwait(false);
 
         var deltas = events.Where(streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantDelta).ToList();
         AssertEx.Equal(expected: 2, deltas.Count);

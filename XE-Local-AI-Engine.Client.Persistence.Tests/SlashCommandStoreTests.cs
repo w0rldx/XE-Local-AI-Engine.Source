@@ -3,9 +3,9 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Data.Sqlite;
-using XE_Local_AI_Engine.Client.Persistence.Implementation;
-using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Cryptography;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
@@ -151,8 +151,7 @@ public sealed class SlashCommandStoreTests : IDisposable
 
         await using var firstContext = AgentDefinitionTestContextFactory.Create(path, key);
         await using var secondContext = AgentDefinitionTestContextFactory.Create(path, key);
-        var outcomes = await Task.WhenAll(
-            TryAddAsync(new SlashCommandStore(firstContext, TimeProvider.System), "racer-a"),
+        var outcomes = await Task.WhenAll(TryAddAsync(new SlashCommandStore(firstContext, TimeProvider.System), "racer-a"),
             TryAddAsync(new SlashCommandStore(secondContext, TimeProvider.System), "racer-b"));
 
         AssertEx.Equal(expected: 1, outcomes.Count(static succeeded => succeeded));
@@ -230,18 +229,24 @@ public sealed class SlashCommandStoreTests : IDisposable
         }
     }
 
-    private string GetPath(string name) { Directory.CreateDirectory(_rootPath); return Path.Combine(_rootPath, name); }
+    private string GetPath(string name)
+    {
+        Directory.CreateDirectory(_rootPath);
+        return Path.Combine(_rootPath, name);
+    }
 
     private sealed class FixedKeyHolder : INodeSqliteKeyHolder
     {
         private byte[]? _key = Enumerable.Range(1, 32).Select(static value => (byte)value).ToArray();
         public ReadOnlyMemory<byte> Key => _key ?? throw new ObjectDisposedException(nameof(FixedKeyHolder));
+
         public void Dispose()
         {
             if (_key is not null)
             {
                 CryptographicOperations.ZeroMemory(_key);
             }
+
             _key = null;
         }
     }

@@ -141,7 +141,8 @@ public sealed class LocalChatHub(
     ///     </para>
     /// </summary>
     private async IAsyncEnumerable<ChatStreamEvent> TrackAttachment(IAsyncEnumerable<ChatStreamEvent> source,
-        [EnumeratorCancellation] CancellationToken cancellationToken)
+        [EnumeratorCancellation]
+        CancellationToken cancellationToken)
     {
         IDisposable? attachment = null;
         await using var registration = cancellationToken.Register(() => attachment?.Dispose()).ConfigureAwait(false);

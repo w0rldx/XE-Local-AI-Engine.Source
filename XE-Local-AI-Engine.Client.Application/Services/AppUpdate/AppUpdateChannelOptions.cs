@@ -39,9 +39,10 @@ public sealed class AppUpdateChannelOptions
     public bool IsConfigured => IsGitHubRepositoryUrl(GitHubRepositoryUrl);
 
     /// <summary>The validated anonymous source policy, or <see langword="null" /> for an unbaked build.</summary>
-    public AppUpdateSourcePolicy? SourcePolicy => IsConfigured
-        ? new AppUpdateSourcePolicy(GitHubRepositoryUrl.TrimEnd('/'), ReleaseTrack == AppUpdateReleaseTrack.Rc)
-        : null;
+    public AppUpdateSourcePolicy? SourcePolicy =>
+        IsConfigured
+            ? new AppUpdateSourcePolicy(GitHubRepositoryUrl.TrimEnd('/'), ReleaseTrack == AppUpdateReleaseTrack.Rc)
+            : null;
 
     private static bool IsGitHubRepositoryUrl(string value)
     {

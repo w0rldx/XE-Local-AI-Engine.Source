@@ -21,10 +21,13 @@ public sealed class RuntimeLicensePackagingTests
     [Test]
     public void SelfContainedProfiles_UseThePinnedRuntimeVersion()
     {
-        foreach (var runtimeIdentifier in new[] { "win-x64", "linux-x64" })
+        foreach (var runtimeIdentifier in new[]
+                 {
+                     "win-x64",
+                     "linux-x64"
+                 })
         {
-            var profile = XDocument.Load(RepositoryPaths.ClientProject(
-                "Properties", "PublishProfiles", $"{runtimeIdentifier}.pubxml"));
+            var profile = XDocument.Load(RepositoryPaths.ClientProject("Properties", "PublishProfiles", $"{runtimeIdentifier}.pubxml"));
 
             AssertEx.True(string.Equals(Property(profile, "SelfContained"), "true", StringComparison.OrdinalIgnoreCase));
             AssertEx.Equal("$(DotNetRuntimeVersion)", Property(profile, "RuntimeFrameworkVersion"));

@@ -133,8 +133,7 @@ internal sealed class GatedPreviewRunSession(PreviewWorkflowUpdate update) : IPr
 
     public Task MoveNextEntered => _moveNextEntered.Task;
 
-    public async IAsyncEnumerable<PreviewWorkflowUpdate> WatchAsync(
-        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    public async IAsyncEnumerable<PreviewWorkflowUpdate> WatchAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         _moveNextEntered.TrySetResult();
         await _releaseUpdate.Task.ConfigureAwait(false);

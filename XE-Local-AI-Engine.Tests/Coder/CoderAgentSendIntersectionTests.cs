@@ -123,7 +123,7 @@ public sealed class CoderAgentSendIntersectionTests
         var offerProvider = new LocalToolOfferProvider(new LocalAgentToolRegistry(),
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
             StubNodeRuntimeSettings.Create().WithToolCapableModels(capableModel).Build(),
-            XE_Local_AI_Engine.Tests.Testing.NullCustomToolScopeFactory.Instance,
+            NullCustomToolScopeFactory.Instance,
             allowCloudKnowledgeAccess: false);
 
         store = Substitute.For<IAgentDefinitionStore>();
@@ -137,7 +137,7 @@ public sealed class CoderAgentSendIntersectionTests
         return new AgentDefinitionResolver(store,
             playbookStore,
             skillStore,
-            Substitute.For<XE_Local_AI_Engine.Client.Persistence.Stores.ICustomToolStore>(),
+            Substitute.For<ICustomToolStore>(),
             offerProvider,
             new LexicalPlaybookRetrievalRanker(),
             Options.Create(new PlaybookRetrievalOptions()),

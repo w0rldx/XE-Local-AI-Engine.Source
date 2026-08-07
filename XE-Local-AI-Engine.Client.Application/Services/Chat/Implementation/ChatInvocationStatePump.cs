@@ -26,7 +26,8 @@ using XE_Local_AI_Engine.Client.Services.Events;
 ///         depends on. The sink drops instead, and repairs the whole stream rather than the frame.
 ///     </para>
 /// </summary>
-public sealed class ChatInvocationStatePump(INodeChatInvocationPump invocationPump,
+public sealed class ChatInvocationStatePump(
+    INodeChatInvocationPump invocationPump,
     TimeProvider timeProvider,
     IOptions<ChatStreamBudgetOptions>? options = null)
 {
