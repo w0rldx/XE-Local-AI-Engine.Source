@@ -32,6 +32,14 @@ public class TestingWebAppFactory : WebApplicationFactory<Program>, IAsyncInitia
 {
     private static readonly SemaphoreSlim HostStartupLock = new(initialCount: 1, maxCount: 1);
 
+    /// <summary>
+    ///     Fixed security stamp bound into the synthetic operator token by <see cref="CreateNodeAccessToken" />. Tests that
+    ///     ALSO persist the <c>node-admin-test</c> Identity row must seed this exact value so the JWT validator's
+    ///     fail-closed stamp check matches; tests that do not persist a user authenticate via the validator's
+    ///     user-not-found pass-through.
+    /// </summary>
+    public const string NodeAdminTestSecurityStamp = "node-admin-test-security-stamp";
+
     // Minimal React-shell fixture served for the SPA fallback (MapFallbackToFile("index.html")). wwwroot/** is
     // gitignored, so a clean checkout / CI host has no built SPA and the fallback would 404 — pointing the test host's
     // web root at this fixture makes route-coexistence assertions (shell served at "/" and deep links, JSON at API/health
@@ -197,11 +205,12 @@ public class TestingWebAppFactory : WebApplicationFactory<Program>, IAsyncInitia
             UserName = "admin@example.test",
             Email = "admin@example.test",
             SetupCompleted = true,
-            // This synthetic token is not bound to a persisted user's security stamp (IdentityUser seeds a random one in
-            // its constructor, which would never match a separately-seeded row). Clear it so the token carries no stamp
-            // claim and rides the JWT validator's skip-if-absent path — matching how production issues stamp-bound tokens
-            // only for real, persisted users. Real reset/change-password invalidation is covered by login-based tests.
-            SecurityStamp = null
+            // Bind the synthetic token to a FIXED, known security stamp (IdentityUser seeds a random one in its
+            // constructor, which would never match anything). The JWT validator now fails closed on a missing stamp, so
+            // the token must carry one; tests that ALSO persist this user (see NodeAdminTestSecurityStamp usage in
+            // TutorialStateEndpointTests) seed the same value so the stamp check matches, while tests that do not persist
+            // a user ride the validator's user-not-found pass-through.
+            SecurityStamp = NodeAdminTestSecurityStamp
         };
 
         return tokenService.CreateAccessToken(user, [NodeAuthorizationPolicies.AdminRole]).AccessToken;

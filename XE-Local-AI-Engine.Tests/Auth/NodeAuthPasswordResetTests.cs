@@ -5,6 +5,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client.Endpoints.Auth.V1;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -106,6 +107,33 @@ public sealed class NodeAuthPasswordResetTests
         // ...and is rejected immediately afterwards, even though it has not expired: the rotated security stamp no longer
         // matches, so an already-authenticated session cannot outlive the reset.
         AssertEx.Equal(HttpStatusCode.Unauthorized, (await GetMeAsync(client, accessToken).ConfigureAwait(false)).StatusCode);
+    }
+
+    [Test]
+    public async Task Request_WithStamplessLegacyToken_IsRejected()
+    {
+        await using var factory = new TestingWebAppFactory();
+        using var client = factory.CreateClient();
+        await SetupAsync(client).ConfigureAwait(false);
+
+        // A validly-signed token carrying NO security stamp — the shape of a token minted by a pre-upgrade build. The
+        // validator must fail closed so such a token cannot survive a reset, rather than bypassing the stamp check.
+        string legacyToken;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var tokenService = scope.ServiceProvider.GetRequiredService<INodeTokenService>();
+            var stamplessUser = new NodeUser
+            {
+                Id = "node-admin-test",
+                UserName = "admin@example.test",
+                Email = "admin@example.test",
+                SetupCompleted = true,
+                SecurityStamp = null
+            };
+            legacyToken = tokenService.CreateAccessToken(stamplessUser, [NodeAuthorizationPolicies.AdminRole]).AccessToken;
+        }
+
+        AssertEx.Equal(HttpStatusCode.Unauthorized, (await GetMeAsync(client, legacyToken).ConfigureAwait(false)).StatusCode);
     }
 
     private static async Task<HttpResponseMessage> GetMeAsync(HttpClient client, string accessToken)
