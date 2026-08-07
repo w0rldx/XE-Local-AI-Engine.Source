@@ -391,10 +391,10 @@ public sealed partial class InvocationRunner : IInvocationRunner
             var effectiveContextTokens = await PrepareLocalRuntimeAsync(resolvedModel, dispatcher, package.InvocationId, stream, turnStartedTimestamp, invocationToken).ConfigureAwait(false);
 
             // AUD4-02: fold the launched effective context window into the turn policy so the OUTER conversation
-            // budgeter sizes history against the real window. The per-send num_ctx override still wins; an unknown
-            // window (cloud/Ollama/not-yet-started) keeps the configured default. The same value is threaded into the
-            // agent definition below so the INNER provider-round budgeter (num_ctx side channel) agrees.
-            turnPolicy = ApplyEffectiveContext(turnPolicy, effectiveContextTokens);
+            // budgeter sizes history against the real window rather than the configured default (see
+            // TurnPolicy.WithEffectiveContext for the precedence). The same value is threaded into the agent definition
+            // below so the INNER provider-round budgeter (num_ctx side channel) resolves the identical window.
+            turnPolicy = turnPolicy.WithEffectiveContext(effectiveContextTokens);
 
             // Branch: a package carrying a compiled orchestration spec drives the handoff workflow; everything else is
             // the unchanged single-agent loop. Both accumulate into `stream`, then share the completion block below.
@@ -837,26 +837,6 @@ public sealed partial class InvocationRunner : IInvocationRunner
             new KeyValuePair<string, object?>("provider", provider),
             new KeyValuePair<string, object?>("model", model),
             new KeyValuePair<string, object?>("direction", direction));
-    }
-
-    /// <summary>
-    ///     Folds the launched effective context window into the turn policy. Precedence: a per-send <c>num_ctx</c>
-    ///     override (already resolved into <see cref="TurnPolicy.ContextCapacityTokens" /> by <see cref="TurnPolicy.Resolve" />)
-    ///     wins and is left untouched; otherwise a known effective window replaces the configured default so the outer
-    ///     conversation budgeter sizes against the real window. An unknown window leaves the policy unchanged.
-    /// </summary>
-    private static TurnPolicy ApplyEffectiveContext(TurnPolicy turnPolicy, int? effectiveContextTokens)
-    {
-        if (effectiveContextTokens is not > 0)
-        {
-            return turnPolicy;
-        }
-
-        return turnPolicy with
-        {
-            ContextCapacityTokens = Math.Min(turnPolicy.ContextCapacityTokens, effectiveContextTokens.Value),
-            ReservedOutputTokens = Math.Min(turnPolicy.ReservedOutputTokens, effectiveContextTokens.Value)
-        };
     }
 
     /// <summary>Records the model-readiness duration + outcome on <see cref="NodeMetrics" /> and returns the elapsed milliseconds.</summary>

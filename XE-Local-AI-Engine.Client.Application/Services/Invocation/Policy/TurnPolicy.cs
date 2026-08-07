@@ -67,6 +67,14 @@ public sealed record TurnPolicy
 
     public required int ContextCapacityTokens { get; init; }
 
+    /// <summary>
+    ///     The raw per-send <c>num_ctx</c> override this turn's <see cref="ContextCapacityTokens" /> came from, or
+    ///     <see langword="null" /> when the capacity is the configured <see cref="ConversationContextBudgetOptions.DefaultContextTokens" />
+    ///     fallback. <see cref="WithEffectiveContext" /> needs the distinction: a user-requested bound is a ceiling to
+    ///     keep, whereas the untrusted default must be REPLACED by the window the model actually launched with.
+    /// </summary>
+    public int? RequestedContextTokens { get; init; }
+
     public required int ReservedOutputTokens { get; init; }
 
     public required int MaxToolIterationsPerRequest { get; init; }
@@ -108,9 +116,8 @@ public sealed record TurnPolicy
 
         // Mirrors the pre-existing InvocationRunner.ResolveContextBudget: the per-send num_ctx override wins, else the
         // configured default; the reserved-output floor is widened by any explicit max-output-tokens override.
-        var capacity = package.SamplingOptions?.NumCtx is { } numCtx && numCtx > 0
-            ? numCtx
-            : budgetOptions.DefaultContextTokens;
+        var requestedContext = package.SamplingOptions?.NumCtx is { } numCtx && numCtx > 0 ? numCtx : (int?)null;
+        var capacity = requestedContext ?? budgetOptions.DefaultContextTokens;
         var requestedOutput = package.SamplingOptions?.MaxOutputTokens is { } maxOutput && maxOutput > 0
             ? maxOutput
             : 0;
@@ -126,6 +133,7 @@ public sealed record TurnPolicy
                 ? TimeSpan.FromSeconds(timeouts.ToolCallTimeoutSeconds)
                 : fallbackToolResultTimeout,
             ContextCapacityTokens = capacity,
+            RequestedContextTokens = requestedContext,
             ReservedOutputTokens = reserved,
             MaxToolIterationsPerRequest = toolPipelineOptions.MaximumToolIterationsPerRequest,
             MaxConsecutiveInvalidToolCallsPerTool = toolPipelineOptions.MaxConsecutiveInvalidToolCallsPerTool,
@@ -136,6 +144,48 @@ public sealed record TurnPolicy
             CircuitBreakerEnabled = resilienceOptions.CircuitBreakerEnabled,
             CircuitBreakerFailureThreshold = resilienceOptions.CircuitBreakerFailureThreshold,
             CircuitBreakerBreakDuration = TimeSpan.FromSeconds(resilienceOptions.CircuitBreakerBreakDurationSeconds)
+        };
+    }
+
+    /// <summary>
+    ///     Folds the window the model was ACTUALLY launched with (llama.cpp's <c>-c</c>, read once the model is warm)
+    ///     into this policy, so the outer conversation budgeter sizes against the real window. Precedence:
+    ///     <list type="bullet">
+    ///         <item>
+    ///             <description>
+    ///                 known effective window + a per-send <see cref="RequestedContextTokens" /> override → the smaller
+    ///                 of the two (the user asked for a bound, but the launched window still caps what is usable);
+    ///             </description>
+    ///         </item>
+    ///         <item>
+    ///             <description>
+    ///                 known effective window, no override → the effective window REPLACES the configured default in
+    ///                 both directions. Clamping instead (the pre-fix behavior) pinned every large-window model to the
+    ///                 8k default and failed long conversations with <c>ContextBudgetExceededException</c> while the
+    ///                 process happily ran a 64k window;
+    ///             </description>
+    ///         </item>
+    ///         <item><description>unknown effective window → unchanged (override, else the configured default).</description></item>
+    ///     </list>
+    ///     Kept in lockstep with <c>InvocationAgentFactory</c>, which resolves the same precedence into the
+    ///     <c>num_ctx</c> chat option the INNER per-round budgeter reads — the two must agree for a warm local model.
+    ///     <see cref="ReservedOutputTokens" /> is only ever clamped down: it can never exceed the real window.
+    /// </summary>
+    public TurnPolicy WithEffectiveContext(int? effectiveContextTokens)
+    {
+        if (effectiveContextTokens is not > 0)
+        {
+            return this;
+        }
+
+        var effective = effectiveContextTokens.Value;
+
+        return this with
+        {
+            ContextCapacityTokens = RequestedContextTokens is not null
+                ? Math.Min(ContextCapacityTokens, effective)
+                : effective,
+            ReservedOutputTokens = Math.Min(ReservedOutputTokens, effective)
         };
     }
 }

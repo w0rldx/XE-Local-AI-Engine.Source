@@ -42,6 +42,7 @@ using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Resilience;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -2302,6 +2303,101 @@ public sealed class InvocationRunnerTests
         await dispatcher.Received(1).ReportInvocationFailedAsync(package.InvocationId,
             "Conversation exceeds the model's context window even after truncation — Compact the conversation to summarize older messages, start a new chat, or switch to a larger-context model.",
             FailureCategory.ContextWindowExceeded);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenLaunchedWindowExceedsTheConfiguredDefault_BudgetsAgainstTheRealWindow()
+    {
+        // The regression: the launched window was only ever allowed to SHRINK the configured default, so a model
+        // running a 64k window was budgeted at the 8k default and long conversations failed before any provider call.
+        // A default of 1 token cannot admit even a single protected turn, so this run can only survive if the effective
+        // window replaced it.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(sender,
+            eventDispatcher: dispatcher,
+            providerResolver: CreateLlamaCppResolver(effectiveContextTokens: 65536),
+            contextBudgetOptions: new ConversationContextBudgetOptions
+            {
+                DefaultContextTokens = 1,
+                ReservedOutputTokenFloor = 0
+            });
+        var package = RuntimePackageBuilder.Valid().Build();
+
+        await RunAsync(runner, package);
+
+        await dispatcher.DidNotReceive().ReportInvocationFailedAsync(package.InvocationId,
+            Arg.Any<string>(),
+            FailureCategory.ContextWindowExceeded);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenLaunchedWindowIsBelowTheConfiguredDefault_StillClampsDown()
+    {
+        // The down-tier direction the original Math.Min was right about: a model launched below the configured default
+        // must be budgeted at the smaller REAL window, so an over-large default cannot push an over-budget send.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(sender,
+            eventDispatcher: dispatcher,
+            providerResolver: CreateLlamaCppResolver(effectiveContextTokens: 1),
+            contextBudgetOptions: new ConversationContextBudgetOptions
+            {
+                DefaultContextTokens = 131072,
+                ReservedOutputTokenFloor = 0
+            });
+        var package = RuntimePackageBuilder.Valid().Build();
+
+        await RunAsync(runner, package);
+
+        await dispatcher.Received(1).ReportInvocationFailedAsync(package.InvocationId,
+            Arg.Any<string>(),
+            FailureCategory.ContextWindowExceeded);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenPerSendNumCtxIsSmallerThanTheLaunchedWindow_HonoursTheOverride()
+    {
+        // The explicit per-send bound is the user's ask: a roomy launched window must not silently widen it back.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(sender,
+            eventDispatcher: dispatcher,
+            providerResolver: CreateLlamaCppResolver(effectiveContextTokens: 65536),
+            contextBudgetOptions: new ConversationContextBudgetOptions
+            {
+                DefaultContextTokens = 131072,
+                ReservedOutputTokenFloor = 0
+            });
+        var package = RuntimePackageBuilder.Valid()
+                                           .WithSamplingOptions(new SamplingOptions { NumCtx = 1 })
+                                           .Build();
+
+        await RunAsync(runner, package);
+
+        await dispatcher.Received(1).ReportInvocationFailedAsync(package.InvocationId,
+            Arg.Any<string>(),
+            FailureCategory.ContextWindowExceeded);
+    }
+
+    /// <summary>
+    ///     A resolver whose model is served by the llama.cpp provider (the only one the runner warms) reporting
+    ///     <paramref name="effectiveContextTokens" /> as its launched per-slot context window.
+    /// </summary>
+    private static ILocalModelProviderResolver CreateLlamaCppResolver(int effectiveContextTokens)
+    {
+        var provider = Substitute.For<ILocalModelProvider>();
+        provider.ProviderName.Returns(LlamaServerProviderConstants.ProviderName);
+        provider.GetRuntimeInfoAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                .Returns(Task.FromResult<LocalModelRuntimeInfo?>(new LocalModelRuntimeInfo(effectiveContextTokens)));
+
+        var resolver = Substitute.For<ILocalModelProviderResolver>();
+        resolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                .Returns(Task.FromResult(LlamaServerProviderConstants.ProviderName));
+        resolver.ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                .Returns(Task.FromResult(provider));
+
+        return resolver;
     }
 
     [Test]
