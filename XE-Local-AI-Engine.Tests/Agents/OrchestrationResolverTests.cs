@@ -146,7 +146,7 @@ public sealed class OrchestrationResolverTests
         playbookStore.ListEnabledByAgentAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
         var offerProvider = Substitute.For<ILocalToolOfferProvider>();
-        offerProvider.GetOfferedTools(Arg.Any<string?>()).Returns(new[]
+        offerProvider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(new[]
         {
             OfferTool("GetCurrentTime")
         });
@@ -252,6 +252,7 @@ public sealed class OrchestrationResolverTests
         var offerProvider = new LocalToolOfferProvider(new LocalAgentToolRegistry(),
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
             StubNodeRuntimeSettings.Create().WithToolCapableModels(ToolCapableModel, CloudParticipantModel).Build(),
+            XE_Local_AI_Engine.Tests.Testing.NullCustomToolScopeFactory.Instance,
             allowCloudKnowledgeAccess);
         var runtimeSettings = StubNodeRuntimeSettings.Create().WithToolCapableModels(ToolCapableModel, CloudParticipantModel).Build();
 
@@ -591,7 +592,7 @@ public sealed class OrchestrationResolverTests
         playbookStore.ListEnabledByAgentAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
         var offerProvider = Substitute.For<ILocalToolOfferProvider>();
-        offerProvider.GetOfferedTools(Arg.Any<string?>()).Returns(offeredTools);
+        offerProvider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(offeredTools);
         var runtimeSettings = StubNodeRuntimeSettings.Create().WithToolCapableModels(ToolCapableModel).Build();
         return new OrchestrationResolver(store,
             playbookStore,
@@ -631,7 +632,7 @@ public sealed class OrchestrationResolverTests
         playbookStore.ListEnabledByAgentAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
         var offerProvider = Substitute.For<ILocalToolOfferProvider>();
-        offerProvider.GetOfferedTools(Arg.Any<string?>()).Returns(callInfo =>
+        offerProvider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(callInfo =>
         {
             var modelId = callInfo.ArgAt<string?>(0);
             var capable = modelId is not null && string.Equals(modelId, ToolCapableModel, StringComparison.Ordinal);
@@ -678,7 +679,7 @@ public sealed class OrchestrationResolverTests
         playbookStore.ListEnabledByAgentAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
         var offerProvider = Substitute.For<ILocalToolOfferProvider>();
-        offerProvider.GetOfferedTools(Arg.Any<string?>()).Returns(callInfo =>
+        offerProvider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(callInfo =>
         {
             var modelId = callInfo.ArgAt<string?>(0);
             var capable = modelId is not null && string.Equals(modelId, ToolCapableModel, StringComparison.Ordinal);
@@ -794,7 +795,7 @@ public sealed class OrchestrationResolverTests
         playbookStore.ListEnabledByAgentAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
         var offerProvider = Substitute.For<ILocalToolOfferProvider>();
-        offerProvider.GetOfferedTools(Arg.Any<string?>()).Returns(callInfo =>
+        offerProvider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(callInfo =>
         {
             var modelId = callInfo.ArgAt<string?>(0);
             var capable = modelId is not null && string.Equals(modelId, ToolCapableModel, StringComparison.Ordinal);

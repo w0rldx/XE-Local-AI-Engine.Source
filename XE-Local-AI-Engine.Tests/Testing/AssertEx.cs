@@ -157,6 +157,26 @@ internal static class AssertEx
         }
     }
 
+    public static TException Throws<TException>(Action action, string? message = null) where TException : Exception
+    {
+        ArgumentNullException.ThrowIfNull(action);
+
+        try
+        {
+            action();
+        }
+        catch (TException exception)
+        {
+            return exception;
+        }
+        catch (Exception exception)
+        {
+            throw new AssertionException(message ?? $"Expected exception of type {typeof(TException).Name} but caught {exception.GetType().Name}: {exception.Message}");
+        }
+
+        throw new AssertionException(message ?? $"Expected exception of type {typeof(TException).Name} but no exception was thrown.");
+    }
+
     public static async Task<TException> ThrowsAsync<TException>(Func<Task> action, string? message = null) where TException : Exception
     {
         try

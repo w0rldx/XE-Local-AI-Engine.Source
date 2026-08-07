@@ -98,6 +98,9 @@ import type {
 	CreateAgentDefinitionData,
 	CreateAgentDefinitionErrors,
 	CreateAgentDefinitionResponses,
+	CreateCustomToolData,
+	CreateCustomToolErrors,
+	CreateCustomToolResponses,
 	CreateDevelopmentProjectData,
 	CreateDevelopmentProjectErrors,
 	CreateDevelopmentProjectResponses,
@@ -143,6 +146,9 @@ import type {
 	DeleteConversationFileData,
 	DeleteConversationFileErrors,
 	DeleteConversationFileResponses,
+	DeleteCustomToolData,
+	DeleteCustomToolErrors,
+	DeleteCustomToolResponses,
 	DeleteGoldenConversationData,
 	DeleteGoldenConversationErrors,
 	DeleteGoldenConversationResponses,
@@ -269,6 +275,9 @@ import type {
 	GetCudaBuildStatusData,
 	GetCudaBuildStatusErrors,
 	GetCudaBuildStatusResponses,
+	GetCustomToolData,
+	GetCustomToolErrors,
+	GetCustomToolResponses,
 	GetDevelopmentArtifactData,
 	GetDevelopmentArtifactErrors,
 	GetDevelopmentArtifactResponses,
@@ -416,6 +425,9 @@ import type {
 	ListConversationFilesData,
 	ListConversationFilesErrors,
 	ListConversationFilesResponses,
+	ListCustomToolsData,
+	ListCustomToolsErrors,
+	ListCustomToolsResponses,
 	ListDevelopmentArtifactsData,
 	ListDevelopmentArtifactsErrors,
 	ListDevelopmentArtifactsResponses,
@@ -648,6 +660,9 @@ import type {
 	UpdateAgentDefinitionData,
 	UpdateAgentDefinitionErrors,
 	UpdateAgentDefinitionResponses,
+	UpdateCustomToolData,
+	UpdateCustomToolErrors,
+	UpdateCustomToolResponses,
 	UpdateLlamaCppRuntimeData,
 	UpdateLlamaCppRuntimeErrors,
 	UpdateLlamaCppRuntimeResponses,
@@ -678,6 +693,9 @@ import type {
 	UploadKnowledgeDocumentData,
 	UploadKnowledgeDocumentErrors,
 	UploadKnowledgeDocumentResponses,
+	ValidateExecutableData,
+	ValidateExecutableErrors,
+	ValidateExecutableResponses,
 	ValidationProblemProbeData,
 	ValidationProblemProbeErrors,
 	ValidationProblemProbeResponses,
@@ -739,6 +757,8 @@ import {
 	zContinuePreviewRunResponse,
 	zCreateAgentDefinitionBody,
 	zCreateAgentDefinitionResponse,
+	zCreateCustomToolBody,
+	zCreateCustomToolResponse,
 	zCreateDevelopmentProjectBody,
 	zCreateDevelopmentProjectResponse,
 	zCreateDevelopmentRepositoryFromTemplateBody,
@@ -771,6 +791,8 @@ import {
 	zDeleteAgentDefinitionResponse,
 	zDeleteConversationFilePath,
 	zDeleteConversationFileResponse,
+	zDeleteCustomToolPath,
+	zDeleteCustomToolResponse,
 	zDeleteGoldenConversationPath,
 	zDeleteGoldenConversationResponse,
 	zDeleteImageModelPath,
@@ -842,6 +864,8 @@ import {
 	zGetConnectionStatusResponse,
 	zGetCudaBuildPrerequisitesResponse,
 	zGetCudaBuildStatusResponse,
+	zGetCustomToolPath,
+	zGetCustomToolResponse,
 	zGetDevelopmentArtifactPath,
 	zGetDevelopmentArtifactResponse,
 	zGetDevelopmentCapabilityResponse,
@@ -924,6 +948,7 @@ import {
 	zListAgentTemplatesResponse,
 	zListConversationFilesPath,
 	zListConversationFilesResponse,
+	zListCustomToolsResponse,
 	zListDevelopmentArtifactsPath,
 	zListDevelopmentArtifactsResponse,
 	zListDevelopmentEventsPath,
@@ -1062,6 +1087,9 @@ import {
 	zUpdateAgentDefinitionBody,
 	zUpdateAgentDefinitionPath,
 	zUpdateAgentDefinitionResponse,
+	zUpdateCustomToolBody,
+	zUpdateCustomToolPath,
+	zUpdateCustomToolResponse,
 	zUpdateLlamaCppRuntimeBody,
 	zUpdateLlamaCppRuntimeResponse,
 	zUpdateMcpServerBody,
@@ -1090,6 +1118,8 @@ import {
 	zUploadConversationFileResponse,
 	zUploadKnowledgeDocumentBody,
 	zUploadKnowledgeDocumentResponse,
+	zValidateExecutableBody,
+	zValidateExecutableResponse,
 	zValidationProblemProbeBody,
 	zValidationProblemProbeResponse,
 } from "./zod.gen";
@@ -4966,6 +4996,139 @@ export const reconnectDevelopmentRepository = <ThrowOnError extends boolean = fa
 			{ scheme: "bearer", type: "http" },
 		],
 		url: "/api/local/v1/development/projects/{projectId}/repository-connection",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const listCustomTools = <ThrowOnError extends boolean = false>(options?: Options<ListCustomToolsData, ThrowOnError>) =>
+	(options?.client ?? client).get<ListCustomToolsResponses, ListCustomToolsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListCustomToolsResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/custom-tools",
+		...options,
+	});
+
+export const createCustomTool = <ThrowOnError extends boolean = false>(options: Options<CreateCustomToolData, ThrowOnError>) =>
+	(options.client ?? client).post<CreateCustomToolResponses, CreateCustomToolErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zCreateCustomToolBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zCreateCustomToolResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/custom-tools",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const deleteCustomTool = <ThrowOnError extends boolean = false>(options: Options<DeleteCustomToolData, ThrowOnError>) =>
+	(options.client ?? client).delete<DeleteCustomToolResponses, DeleteCustomToolErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zDeleteCustomToolPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseValidator: async (data) => await zDeleteCustomToolResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/custom-tools/{customToolId}",
+		...options,
+	});
+
+export const getCustomTool = <ThrowOnError extends boolean = false>(options: Options<GetCustomToolData, ThrowOnError>) =>
+	(options.client ?? client).get<GetCustomToolResponses, GetCustomToolErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zGetCustomToolPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetCustomToolResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/custom-tools/{customToolId}",
+		...options,
+	});
+
+export const updateCustomTool = <ThrowOnError extends boolean = false>(options: Options<UpdateCustomToolData, ThrowOnError>) =>
+	(options.client ?? client).put<UpdateCustomToolResponses, UpdateCustomToolErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zUpdateCustomToolBody,
+					path: zUpdateCustomToolPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zUpdateCustomToolResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/custom-tools/{customToolId}",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const validateExecutable = <ThrowOnError extends boolean = false>(
+	options: Options<ValidateExecutableData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<ValidateExecutableResponses, ValidateExecutableErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zValidateExecutableBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zValidateExecutableResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/custom-tools/executable-probe",
 		...options,
 		headers: {
 			"Content-Type": "application/json",

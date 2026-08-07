@@ -73,5 +73,17 @@ public sealed record RuntimePackage
     /// </summary>
     public IReadOnlyList<ResolvedSkill>? Skills { get; init; }
 
+    /// <summary>
+    ///     OPTIONAL resolved node-local custom tools the offer carries (name + <c>Version</c> + Fixed/Parameterized mode).
+    ///     Non-empty only on the loopback single-agent path when the bound agent is offered enabled custom tools; null on
+    ///     every other path (mode-off fallback, orchestration, encrypted/server). Carried so the runner's session-approval
+    ///     choke point can bind an "approve for session" memo to a Fixed tool's <c>Version</c> (an edit invalidates it) and
+    ///     refuse a session memo for a Parameterized tool. Deliberately NOT folded into <see cref="ConfigHash" />: the
+    ///     custom tools' schema/name/approval already ride <see cref="AllowedTools" /> (which IS hashed), and the
+    ///     <c>Version</c> is intentionally hash-invisible so a config-hash-invisible edit still misses the version-bound
+    ///     memo and re-prompts.
+    /// </summary>
+    public IReadOnlyList<ResolvedCustomTool>? CustomTools { get; init; }
+
     public required string ConfigHash { get; init; }
 }

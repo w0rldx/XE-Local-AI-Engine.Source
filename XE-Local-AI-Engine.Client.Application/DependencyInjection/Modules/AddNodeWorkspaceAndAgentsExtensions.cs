@@ -1,12 +1,16 @@
 namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 
+using System.Net.Http;
 using Microsoft.Extensions.Caching.Memory;
+using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Automation;
 using XE_Local_AI_Engine.Client.Services.Automation.Implementation;
+using XE_Local_AI_Engine.Client.Services.CustomTools;
+using XE_Local_AI_Engine.Client.Services.CustomTools.Implementation;
 using XE_Local_AI_Engine.Client.Services.Insights;
 using XE_Local_AI_Engine.Client.Services.Insights.Implementation;
 using XE_Local_AI_Engine.Client.Services.Workspace;
@@ -35,6 +39,42 @@ internal static class AddNodeWorkspaceAndAgentsExtensions
         // an agent's enabled, assigned skills and the factory attaches them via MAF progressive disclosure, while the
         // CRUD service owns operator authoring. Scoped to match the scoped, DbContext-backed store.
         builder.Services.AddScoped<IAgentSkillStore, AgentSkillStore>();
+        // Node-local user-defined custom tool library. The model-facing description and the kind-specific config (which
+        // carries the secret header/env values) are encrypted at rest; the store owns id/version/timestamp stamping and
+        // the content-affecting version-bump rule, while the CRUD service owns operator authoring and validation.
+        builder.Services.AddScoped<ICustomToolStore, CustomToolStore>();
+        // Custom-tool executors + catalog (P2 SECURITY CORE). The catalog reads the store live per turn (no cache) and
+        // hands the resolver an executable already floored in ApprovalRequiredAIFunction. HttpFetch goes out through a
+        // dedicated named client whose SocketsHttpHandler pins the connection to an SSRF-validated address and refuses
+        // redirects; Command runs on the host under a scrubbed environment, wall-clock timeout, tree-kill, output cap,
+        // and a process-wide concurrency ceiling.
+        builder.Services.AddHttpClient(HttpFetchExecutor.HttpClientName)
+               .ConfigurePrimaryHttpMessageHandler(static () => new SocketsHttpHandler
+               {
+                   AllowAutoRedirect = false,
+                   UseCookies = false,
+                   // Never route through an ambient/system HTTP proxy: with a proxy the ConnectCallback would validate and
+                   // dial the PROXY endpoint while the proxy resolves the request hostname, letting a name the proxy maps
+                   // to a private/loopback address bypass the SSRF denylist. UseProxy=false keeps the validated address the
+                   // address actually contacted.
+                   UseProxy = false,
+                   ConnectCallback = CustomToolSsrfGuard.CreatePinnedConnectCallback(),
+                   // Short pooled lifetime so a pinned validated address is not reused indefinitely across DNS changes.
+                   PooledConnectionLifetime = TimeSpan.FromMinutes(1)
+               });
+        builder.Services.AddSingleton(static _ => new CustomToolConcurrencyLimiter());
+        // Executors + catalog are SINGLETON: the invocation stack that consumes the catalog (the single-agent and
+        // orchestration factories, the offer provider) is singleton, so a scoped catalog would be a captive dependency
+        // (ValidateOnBuild fails it) and the tool it hands the resolver would out-live any request scope at execution time.
+        // The executors depend only on singletons (IHttpClientFactory, the concurrency limiter, loggers); the catalog reads
+        // the scoped, DbContext-backed store through a fresh scope per call (see CustomToolCatalog), the same
+        // singleton→scoped-store pattern the MCP connection manager and the model-provider-map resolver use.
+        builder.Services.AddSingleton<ICustomToolExecutor, HttpFetchExecutor>();
+        builder.Services.AddSingleton<ICustomToolExecutor, HostProcessExecutor>();
+        builder.Services.AddSingleton<ICustomToolCatalog, CustomToolCatalog>();
+        // Operator-facing CRUD + author-time validation over the store. Reuses the P2 guards so what it accepts is
+        // exactly what the executors will run; masks secret header/env values on the read path.
+        builder.Services.AddScoped<ICustomToolService, CustomToolService>();
         // Node-local playbook actions. Behavior and advisory trigger conditions are encrypted at rest; enabled actions
         // are folded into the agent prompt by the resolver, while the CRUD service owns operator authoring.
         builder.Services.AddScoped<IPlaybookActionStore, PlaybookActionStore>();

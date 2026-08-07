@@ -16,6 +16,7 @@ internal sealed class OrchestrationAgentFactory : IOrchestrationAgentFactory
 
     private readonly IChatClient _chatClient;
     private readonly IClientLocalToolRegistry _clientLocalToolRegistry;
+    private readonly ICustomToolCatalog _customToolCatalog;
     private readonly ILogger<OrchestrationAgentFactory> _logger;
     private readonly ILoggerFactory _loggerFactory;
     private readonly IMcpToolRegistry _mcpToolRegistry;
@@ -30,7 +31,8 @@ internal sealed class OrchestrationAgentFactory : IOrchestrationAgentFactory
         IServiceProvider serviceProvider,
         IAgentToolRegistry toolRegistry,
         IClientLocalToolRegistry clientLocalToolRegistry,
-        IMcpToolRegistry mcpToolRegistry)
+        IMcpToolRegistry mcpToolRegistry,
+        ICustomToolCatalog customToolCatalog)
     {
         _chatClient = chatClient ?? throw new ArgumentNullException(nameof(chatClient));
         ArgumentNullException.ThrowIfNull(options);
@@ -41,6 +43,7 @@ internal sealed class OrchestrationAgentFactory : IOrchestrationAgentFactory
         _toolRegistry = toolRegistry ?? throw new ArgumentNullException(nameof(toolRegistry));
         _clientLocalToolRegistry = clientLocalToolRegistry ?? throw new ArgumentNullException(nameof(clientLocalToolRegistry));
         _mcpToolRegistry = mcpToolRegistry ?? throw new ArgumentNullException(nameof(mcpToolRegistry));
+        _customToolCatalog = customToolCatalog ?? throw new ArgumentNullException(nameof(customToolCatalog));
     }
 
     public async Task<IOrchestrationRunSession> CreateAsync(OrchestrationAgentDefinition definition,
@@ -73,7 +76,7 @@ internal sealed class OrchestrationAgentFactory : IOrchestrationAgentFactory
                 throw new ArgumentException($"Duplicate participant key '{participant.Key}' in orchestration.", nameof(definition));
             }
 
-            var agent = BuildAgent(participant);
+            var agent = await BuildAgentAsync(participant, cancellationToken).ConfigureAwait(false);
             agentsByKey[participant.Key] = agent;
             participantsByAgentId[agent.Id] = participant;
         }
@@ -102,9 +105,15 @@ internal sealed class OrchestrationAgentFactory : IOrchestrationAgentFactory
             _logger);
     }
 
-    private AIAgent BuildAgent(OrchestrationParticipant participant)
+    private async Task<AIAgent> BuildAgentAsync(OrchestrationParticipant participant, CancellationToken cancellationToken)
     {
-        var tools = InvocationToolResolver.Resolve(participant.Tools, _toolRegistry, _clientLocalToolRegistry, _mcpToolRegistry, _logger);
+        var tools = await InvocationToolResolver.ResolveAsync(participant.Tools,
+            _toolRegistry,
+            _clientLocalToolRegistry,
+            _mcpToolRegistry,
+            _customToolCatalog,
+            _logger,
+            cancellationToken).ConfigureAwait(false);
 
         // A handoff workflow drives its participant agents itself, so the outer runner's per-turn RunOptions.ChatOptions
         // (which carries model id + reasoning on the single-agent path) NEVER reaches them. The participant's resolved

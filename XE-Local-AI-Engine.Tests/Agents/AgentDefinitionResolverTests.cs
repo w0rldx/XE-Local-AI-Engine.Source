@@ -1291,13 +1291,14 @@ public sealed class AgentDefinitionResolverTests
         playbookStore.ListEnabledByAgentAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
         var offerProvider = Substitute.For<ILocalToolOfferProvider>();
-        offerProvider.GetOfferedTools(Arg.Any<string?>()).Returns([]);
-        offerProvider.GetOfferedToolsForProfile(Arg.Any<string?>()).Returns([]);
+        offerProvider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns([]);
+        offerProvider.GetOfferedToolsForProfileAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns([]);
         offerProvider.GetKnownToolNames().Returns([]);
         skillStore = Substitute.For<IAgentSkillStore>();
         return new AgentDefinitionResolver(store,
             playbookStore,
             skillStore,
+            Substitute.For<XE_Local_AI_Engine.Client.Persistence.Stores.ICustomToolStore>(),
             offerProvider,
             new LexicalPlaybookRetrievalRanker(),
             Options.Create(new PlaybookRetrievalOptions()),
@@ -1352,10 +1353,12 @@ public sealed class AgentDefinitionResolverTests
         var offerProvider = new LocalToolOfferProvider(new LocalAgentToolRegistry(),
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
             StubNodeRuntimeSettings.Create().WithToolCapableModels(CloudPinnedModel).Build(),
+            XE_Local_AI_Engine.Tests.Testing.NullCustomToolScopeFactory.Instance,
             allowCloudKnowledgeAccess);
         return new AgentDefinitionResolver(store,
             playbookStore,
             CreateEmptySkillStore(),
+            Substitute.For<XE_Local_AI_Engine.Client.Persistence.Stores.ICustomToolStore>(),
             offerProvider,
             new LexicalPlaybookRetrievalRanker(),
             Options.Create(new PlaybookRetrievalOptions()),
@@ -1378,7 +1381,7 @@ public sealed class AgentDefinitionResolverTests
         playbookStore.ListEnabledByAgentAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
         var offerProvider = Substitute.For<ILocalToolOfferProvider>();
-        offerProvider.GetOfferedTools(Arg.Any<string?>()).Returns(callInfo =>
+        offerProvider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(callInfo =>
         {
             var modelId = callInfo.ArgAt<string?>(0);
             onGetOffered?.Invoke(modelId);
@@ -1387,7 +1390,7 @@ public sealed class AgentDefinitionResolverTests
         // The profile-intersection pool mirrors the whole offer PLUS spawn_subagent (still capability-gated), matching
         // the real LocalToolOfferProvider.GetOfferedToolsForProfile asymmetry that keeps spawn out of the mode-off path.
         // The model-id observation fires here too, since a non-default profile gates via THIS method.
-        offerProvider.GetOfferedToolsForProfile(Arg.Any<string?>()).Returns(callInfo =>
+        offerProvider.GetOfferedToolsForProfileAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(callInfo =>
         {
             var modelId = callInfo.ArgAt<string?>(0);
             onGetOffered?.Invoke(modelId);
@@ -1397,6 +1400,7 @@ public sealed class AgentDefinitionResolverTests
         return new AgentDefinitionResolver(store,
             playbookStore,
             CreateEmptySkillStore(),
+            Substitute.For<XE_Local_AI_Engine.Client.Persistence.Stores.ICustomToolStore>(),
             offerProvider,
             new LexicalPlaybookRetrievalRanker(),
             Options.Create(new PlaybookRetrievalOptions()),
@@ -1459,9 +1463,9 @@ public sealed class AgentDefinitionResolverTests
         playbookStore.ListEnabledByAgentAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
         var offerProvider = Substitute.For<ILocalToolOfferProvider>();
-        offerProvider.GetOfferedTools(Arg.Any<string?>()).Returns(callInfo =>
+        offerProvider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(callInfo =>
             GateOffer(offeredTools, callInfo.ArgAt<string?>(0)));
-        offerProvider.GetOfferedToolsForProfile(Arg.Any<string?>()).Returns(callInfo =>
+        offerProvider.GetOfferedToolsForProfileAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(callInfo =>
             GateProfilePool(offeredTools, callInfo.ArgAt<string?>(0)));
         offerProvider.GetKnownToolNames().Returns([.. offeredTools.Select(static tool => tool.Name)]);
         var retrievalOptions = Options.Create(new PlaybookRetrievalOptions
@@ -1472,6 +1476,7 @@ public sealed class AgentDefinitionResolverTests
         return new AgentDefinitionResolver(store,
             playbookStore,
             CreateEmptySkillStore(),
+            Substitute.For<XE_Local_AI_Engine.Client.Persistence.Stores.ICustomToolStore>(),
             offerProvider,
             ranker,
             retrievalOptions,

@@ -73,6 +73,7 @@
 		"schedule": "Terminplaner",
 		"user": "Benutzer",
 		"skills": "Skills",
+		"customTools": "Eigene Tools",
 		"preview": "Open Canvas",
 		"images": "Bildgenerierung"
 	},
@@ -1631,6 +1632,10 @@
 				"enableTools": {
 					"label": "Tools aktivieren",
 					"description": "Lokale Chat-Agenten dürfen Tools aufrufen. Änderungen werden ohne Neustart des Knotens wirksam."
+				},
+				"customToolsEnabled": {
+					"label": "Benutzerdefinierte Tools aktivieren",
+					"description": "Erlaubt Agenten, benutzerdefinierte Tools auszuführen, die Host-Befehle ausführen, Programme starten und Netzwerkanfragen stellen. Standardmäßig deaktiviert. Jeder Aufruf erfordert weiterhin Ihre Genehmigung."
 				},
 				"toolCapableModels": {
 					"label": "Tool-fähige Modelle",

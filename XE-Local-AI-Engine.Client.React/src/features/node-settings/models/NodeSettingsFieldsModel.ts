@@ -256,6 +256,7 @@ export function validateToolCapableModels(values: readonly string[]): { value: s
 export interface NodeSettingsFieldsForm {
 	defaultModelName: string;
 	enableTools: boolean;
+	customToolsEnabled: boolean;
 	toolCapableModels: string[];
 	ollamaEndpoint: string;
 	huggingFaceDefaultQuant: string;
@@ -290,6 +291,7 @@ export interface NodeSettingsFieldsForm {
 export const nodeSettingsFieldDefaults: NodeSettingsFieldsForm = {
 	defaultModelName: "",
 	enableTools: true,
+	customToolsEnabled: false,
 	toolCapableModels: [],
 	ollamaEndpoint: "",
 	huggingFaceDefaultQuant: "",
@@ -329,6 +331,7 @@ export function toNodeSettingsFieldsForm(response: NodeSettingsResponse | undefi
 	return {
 		defaultModelName: response.defaultModelName ?? "",
 		enableTools: response.enableTools ?? nodeSettingsFieldDefaults.enableTools,
+		customToolsEnabled: response.customToolsEnabled ?? nodeSettingsFieldDefaults.customToolsEnabled,
 		toolCapableModels: response.toolCapableModels ? [...response.toolCapableModels] : [],
 		ollamaEndpoint: response.ollamaEndpoint ?? "",
 		huggingFaceDefaultQuant: response.huggingFaceDefaultQuant ?? "",
@@ -488,6 +491,10 @@ export function buildNodeSettingsRequest(
 
 	if (form.enableTools !== baseline.enableTools) {
 		body.enableTools = form.enableTools;
+	}
+
+	if (form.customToolsEnabled !== baseline.customToolsEnabled) {
+		body.customToolsEnabled = form.customToolsEnabled;
 	}
 
 	// toolCapableModels — list editor; cleaned + validated. Compared by JSON for a stable change check.

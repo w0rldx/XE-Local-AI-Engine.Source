@@ -16,6 +16,7 @@ internal static class NodeSettingsEndpointDtoMapper
             MaxAllowedMessageRequestTimeoutSeconds = StoredNodeSettings.MaxMaxMessageRequestTimeoutSeconds,
             DefaultModelName = settings.DefaultModelName,
             EnableTools = settings.EnableTools,
+            CustomToolsEnabled = settings.CustomToolsEnabled,
             ToolCapableModels = settings.ToolCapableModels,
             OllamaEndpoint = settings.OllamaEndpoint,
             HuggingFaceDefaultQuant = settings.HuggingFaceDefaultQuant,
@@ -89,6 +90,7 @@ internal static class NodeSettingsEndpointDtoMapper
                 ? currentSettings.DefaultModelName
                 : request.DefaultModelName.Trim(),
             EnableTools = request.EnableTools ?? currentSettings.EnableTools,
+            CustomToolsEnabled = request.CustomToolsEnabled ?? currentSettings.CustomToolsEnabled,
             ToolCapableModels = request.ToolCapableModels ?? currentSettings.ToolCapableModels,
             OllamaEndpoint = request.OllamaEndpoint is null
                 ? currentSettings.OllamaEndpoint

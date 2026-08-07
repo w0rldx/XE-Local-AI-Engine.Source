@@ -278,17 +278,31 @@ public sealed class NodeChatStreamService(
         // The unbound/deleted-agent fallback builds the raw offer here, so it must apply the SAME node policy (tighten-only)
         // — otherwise a node-wide policy is bypassable by a plain unbound chat turn. With no policy configured the
         // Permissive floor is identity, so the fallback offer stays byte-identical to today.
-        var allowedTools = !offerTools
-            ? null
-            : resolved?.AllowedTools
-              ??
-              [
-                  .. localToolOfferProvider.GetOfferedTools(activeModel, resolution.EffectiveModelIsCloud)
-                                           .Select(tool => tool with
-                                           {
-                                               RequiresApproval = toolApprovalPolicy.RequiresApproval(tool.Name, tool.Category, tool.RequiresApproval)
-                                           })
-              ];
+        // When a bound definition resolved, its AllowedTools already ran through the node approval policy in the resolver
+        // (custom tools merged there). The unbound/deleted-agent fallback builds the raw offer here via the async provider
+        // (so its custom tools merge in too) and applies the SAME node policy (tighten-only) — otherwise a node-wide policy
+        // is bypassable by a plain unbound chat turn. A custom tool called on this agentless path is not session-approvable
+        // (the package carries no CustomTools without a resolved agent), so it re-prompts each time — the safe direction.
+        IReadOnlyList<AllowedToolDto>? allowedTools;
+        if (!offerTools)
+        {
+            allowedTools = null;
+        }
+        else if (resolved?.AllowedTools is { } resolvedAllowedTools)
+        {
+            allowedTools = resolvedAllowedTools;
+        }
+        else
+        {
+            var fallbackOffer = await localToolOfferProvider.GetOfferedToolsAsync(activeModel, resolution.EffectiveModelIsCloud, cancellationToken).ConfigureAwait(false);
+            allowedTools =
+            [
+                .. fallbackOffer.Select(tool => tool with
+                {
+                    RequiresApproval = toolApprovalPolicy.RequiresApproval(tool.Name, tool.Category, tool.RequiresApproval)
+                })
+            ];
+        }
 
         // Cloud-egress consent: node-local conversation attachments are private data. When a cloud model would receive
         // this turn's attachment context and the operator has NOT opted in (KnowledgeBase:AllowCloudModelAccess),
@@ -418,7 +432,8 @@ public sealed class NodeChatStreamService(
             OrchestrationSpec: orchestration?.Spec,
             SupportsThinking: resolution.SupportsThinking,
             SamplingOptions: request.SamplingOptions,
-            Skills: resolved?.Skills));
+            Skills: resolved?.Skills,
+            CustomTools: resolved?.CustomTools));
 
         // Post-run adaptive-memory hook: fired once when the pump persists a Completed/Failed terminal, but ONLY when the
         // resolved agent has the playbook enabled AND opts into extraction. Retrieval/injection rides PlaybookEnabled

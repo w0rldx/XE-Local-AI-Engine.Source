@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.CustomTools;
 
 internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
 {
@@ -17,6 +18,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
     private const string ImportedSkillTrustStatement = "third-party skill, not validated by this node";
 
     private readonly IAgentSkillStore _agentSkillStore;
+    private readonly ICustomToolStore _customToolStore;
     private readonly IAgentInstructionProvider _instructionProvider;
     private readonly ILocalToolOfferProvider _localToolOfferProvider;
     private readonly ILogger<AgentDefinitionResolver> _logger;
@@ -30,6 +32,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
     public AgentDefinitionResolver(IAgentDefinitionStore store,
         IPlaybookActionStore playbookActionStore,
         IAgentSkillStore agentSkillStore,
+        ICustomToolStore customToolStore,
         ILocalToolOfferProvider localToolOfferProvider,
         IPlaybookRetrievalRanker retrievalRanker,
         IOptions<PlaybookRetrievalOptions> retrievalOptions,
@@ -41,6 +44,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _playbookActionStore = playbookActionStore ?? throw new ArgumentNullException(nameof(playbookActionStore));
         _agentSkillStore = agentSkillStore ?? throw new ArgumentNullException(nameof(agentSkillStore));
+        _customToolStore = customToolStore ?? throw new ArgumentNullException(nameof(customToolStore));
         _localToolOfferProvider = localToolOfferProvider ?? throw new ArgumentNullException(nameof(localToolOfferProvider));
         _retrievalRanker = retrievalRanker ?? throw new ArgumentNullException(nameof(retrievalRanker));
         ArgumentNullException.ThrowIfNull(retrievalOptions);
@@ -86,9 +90,10 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
         var effectiveModelIsCloud = pinnedModel is null
             ? activeModelIsCloud
             : (await _modelCapabilityResolver.ResolveAsync(pinnedModel, cancellationToken).ConfigureAwait(false)).IsCloud;
-        var allowedTools = ProjectAllowedTools(definition, effectiveModel, supportsTools, effectiveModelIsCloud);
+        var allowedTools = await ProjectAllowedToolsAsync(definition, effectiveModel, supportsTools, effectiveModelIsCloud, cancellationToken).ConfigureAwait(false);
         var resolvedPrompt = await ComposePromptAsync(definition, retrievalQuery, cancellationToken).ConfigureAwait(false);
         var skills = await ResolveSkillsAsync(definition, cancellationToken).ConfigureAwait(false);
+        var customTools = await ResolveCustomToolsAsync(allowedTools, cancellationToken).ConfigureAwait(false);
 
         return new ResolvedAgentRuntime(resolvedPrompt,
             allowedTools,
@@ -101,7 +106,35 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
             definition.PlaybookEnabled,
             definition.MemoryExtractionEnabled,
             effectiveModelIsCloud,
-            definition.Kind);
+            definition.Kind,
+            customTools);
+    }
+
+    /// <summary>
+    ///     Projects the resolved offer's custom tools into the runtime-package metadata the session-approval memo needs
+    ///     (name + version + Fixed/Parameterized). Reads the store ONCE, and only when the offer actually carries a
+    ///     <c>custom__</c> tool — the common no-custom-tool path does no store read and returns <c>null</c> so the package
+    ///     stays byte-identical to before this feature. A tool offered but no longer in the store (a mid-turn delete) is
+    ///     simply omitted; its later approval falls back to always-prompt.
+    /// </summary>
+    private async Task<IReadOnlyList<ResolvedCustomTool>?> ResolveCustomToolsAsync(IReadOnlyList<AllowedToolDto> allowedTools, CancellationToken cancellationToken)
+    {
+        var offeredCustomNames = allowedTools
+                                 .Where(static tool => tool.Name.StartsWith(CustomToolValidation.ToolNamePrefix, StringComparison.Ordinal))
+                                 .Select(static tool => tool.Name)
+                                 .ToHashSet(StringComparer.Ordinal);
+        if (offeredCustomNames.Count == 0)
+        {
+            return null;
+        }
+
+        var stored = await _customToolStore.ListAsync(cancellationToken).ConfigureAwait(false);
+        var resolved = stored
+                       .Where(tool => offeredCustomNames.Contains(tool.Name))
+                       .Select(static tool => new ResolvedCustomTool(tool.Name, tool.Version, tool.Mode == CustomToolMode.Fixed))
+                       .ToArray();
+
+        return resolved.Length > 0 ? resolved : null;
     }
 
     /// <summary>
@@ -329,7 +362,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
         return PlaybookPromptComposer.Compose(definition.Instructions, selected);
     }
 
-    private IReadOnlyList<AllowedToolDto> ProjectAllowedTools(AgentDefinitionRecord definition, string? effectiveModelId, bool supportsTools, bool effectiveModelIsCloud)
+    private async Task<IReadOnlyList<AllowedToolDto>> ProjectAllowedToolsAsync(AgentDefinitionRecord definition, string? effectiveModelId, bool supportsTools, bool effectiveModelIsCloud, CancellationToken cancellationToken)
     {
         // A model that does not advertise the Ollama "tools" capability cannot drive ANY tool call, so withhold the
         // entire offer (empty) before the per-tool name gating below. This is the capability gate; the offer provider's
@@ -352,7 +385,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
             // plain mode-off chat. With NO node policy configured the Permissive floor is identity, so the offer — and the
             // runtime-package config hash — stay byte-identical to the mode-off path from before this feature existed. Per-agent ToolApprovals
             // are intentionally NOT applied here: this path reproduces plain chat, which carries no per-agent overrides.
-            var wholeOffer = _localToolOfferProvider.GetOfferedTools(effectiveModelId, effectiveModelIsCloud);
+            var wholeOffer = await _localToolOfferProvider.GetOfferedToolsAsync(effectiveModelId, effectiveModelIsCloud, cancellationToken).ConfigureAwait(false);
             AllowedToolDto[] composedWholeOffer =
             [
                 .. wholeOffer.Select(tool => tool with
@@ -374,7 +407,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
         // profile that lists spawn_subagent resolve it while the default/mode-off path never does. Tools the definition
         // names but the pool does not contain (uninstalled or not capability-eligible) are dropped and logged — never
         // fabricated.
-        var offered = _localToolOfferProvider.GetOfferedToolsForProfile(effectiveModelId, effectiveModelIsCloud);
+        var offered = await _localToolOfferProvider.GetOfferedToolsForProfileAsync(effectiveModelId, effectiveModelIsCloud, cancellationToken).ConfigureAwait(false);
         var allowedNames = new HashSet<string>(definition.AllowedToolNames, StringComparer.Ordinal);
 
         var projected = offered

@@ -104,6 +104,7 @@ describe("navigationLinks", () => {
 			nodeRoutePaths.commands,
 			nodeRoutePaths.agents,
 			nodeRoutePaths.skills,
+			nodeRoutePaths.customTools,
 			nodeRoutePaths.mcp,
 			nodeRoutePaths.scheduler,
 			nodeRoutePaths.tools,
@@ -126,8 +127,8 @@ describe("navigationLinks", () => {
 		expect(models?.links?.some((nestedLink) => nestedLink.to === nodeRoutePaths.models)).toBe(true);
 	});
 
-	it("drops the agents and skills children from Automation when agentManagement is off", async () => {
-		// Both Agents and Skills are gated on agentManagement (skills are an agent-mode feature), so they drop together.
+	it("drops the agents, skills and custom-tools children from Automation when agentManagement is off", async () => {
+		// Agents, Skills and Custom tools are all gated on agentManagement (agent-mode features), so they drop together.
 		const { navigationLinks: gatedLinks } = await mockCapabilities({ agentManagement: false });
 		const automation = gatedLinks.find((link) => link.id === "automation");
 
@@ -138,6 +139,7 @@ describe("navigationLinks", () => {
 			nodeRoutePaths.tools,
 		]);
 		expect(automation?.links?.some((nestedLink) => nestedLink.to === nodeRoutePaths.skills)).toBe(false);
+		expect(automation?.links?.some((nestedLink) => nestedLink.to === nodeRoutePaths.customTools)).toBe(false);
 		expect(automation?.links?.some((nestedLink) => nestedLink.to === nodeRoutePaths.commands)).toBe(true);
 	});
 

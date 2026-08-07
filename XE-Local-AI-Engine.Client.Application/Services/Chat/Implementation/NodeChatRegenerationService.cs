@@ -265,17 +265,31 @@ public sealed class NodeChatRegenerationService(
             // A bound definition's AllowedTools already ran through the node approval policy in the resolver; the
             // unbound/deleted-agent fallback builds the raw offer here, so it applies the SAME node policy (tighten-only)
             // to avoid a bypass. Permissive floor = identity, so an unconfigured node stays byte-identical to today.
-            var allowedTools = !offerTools
-                ? null
-                : resolved?.AllowedTools
-                  ??
-                  [
-                      .. localToolOfferProvider.GetOfferedTools(activeModel, resolution.EffectiveModelIsCloud)
-                                               .Select(tool => tool with
-                                               {
-                                                   RequiresApproval = toolApprovalPolicy.RequiresApproval(tool.Name, tool.Category, tool.RequiresApproval)
-                                               })
-                  ];
+            // A bound definition's AllowedTools already ran through the node approval policy in the resolver (custom tools
+            // merged there); the unbound/deleted-agent fallback builds the raw offer here via the async provider (custom
+            // tools merge in too) and applies the SAME node policy (tighten-only) to avoid a bypass. A custom tool on this
+            // agentless path is not session-approvable (no resolved agent → no package CustomTools), so it re-prompts each
+            // time.
+            IReadOnlyList<AllowedToolDto>? allowedTools;
+            if (!offerTools)
+            {
+                allowedTools = null;
+            }
+            else if (resolved?.AllowedTools is { } resolvedAllowedTools)
+            {
+                allowedTools = resolvedAllowedTools;
+            }
+            else
+            {
+                var fallbackOffer = await localToolOfferProvider.GetOfferedToolsAsync(activeModel, resolution.EffectiveModelIsCloud, cancellationToken).ConfigureAwait(false);
+                allowedTools =
+                [
+                    .. fallbackOffer.Select(tool => tool with
+                    {
+                        RequiresApproval = toolApprovalPolicy.RequiresApproval(tool.Name, tool.Category, tool.RequiresApproval)
+                    })
+                ];
+            }
 
             // Knowledge-base grounding parity with the send path: a regenerated plain-chat turn honors
             // the same opt-in knowledge grounding + cloud-egress gate the send path applies, so a rerun does not silently
@@ -327,7 +341,8 @@ public sealed class NodeChatRegenerationService(
                 ReasoningEffort: resolved?.ReasoningEffort ?? reasoningEffort,
                 OrchestrationSpec: orchestration?.Spec,
                 SupportsThinking: resolution.SupportsThinking,
-                Skills: resolved?.Skills));
+                Skills: resolved?.Skills,
+                CustomTools: resolved?.CustomTools));
 
             // Post-run adaptive-memory hook (symmetric with the send path): fired once when the pump persists a
             // Completed/Failed terminal, ONLY when the resolved agent has the playbook enabled AND opts into extraction. A

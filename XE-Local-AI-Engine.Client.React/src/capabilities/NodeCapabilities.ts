@@ -150,6 +150,8 @@ export const nodeRoutePaths = {
 	agents: "/agents",
 	// node skill library page (agent-skills) — gated on nodeCapabilities.agentManagement (an agent-mode feature)
 	skills: "/skills",
+	// node custom-tool library page (user-authored HTTP/host-command tools) — gated on nodeCapabilities.agentManagement
+	customTools: "/custom-tools",
 	// MCP server management page (dynamic tool-catalog) — gated on nodeCapabilities.mcpServers
 	mcp: "/mcp",
 	// Quartz scheduler management page — gated on nodeCapabilities.scheduler

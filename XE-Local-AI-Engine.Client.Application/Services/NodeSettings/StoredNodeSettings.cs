@@ -136,6 +136,14 @@ public sealed partial record StoredNodeSettings
     /// <summary>Node-level master flag for the client voice (TTS) feature. Default (absent) is off.</summary>
     public const bool DefaultVoiceFeatureEnabled = false;
 
+    /// <summary>
+    ///     Node kill-switch for the user-defined custom tools feature. Default (absent) is OFF: custom tools execute host
+    ///     processes / outbound fetches, so the whole feature is opt-in at the node level (the per-agent allow-list and the
+    ///     forced per-call approval remain the second and third gates). When off, no custom tool is OFFERED to any model and
+    ///     <c>ICustomToolCatalog.TryResolveAsync</c> refuses to resolve one.
+    /// </summary>
+    public const bool DefaultCustomToolsEnabled = false;
+
     /// <summary>Tag format gate: a llama.cpp release tag is a literal <c>b</c> followed by one or more digits.</summary>
     public const string RecommendedLlamaCppTagPattern = "^b[0-9]+$";
 
@@ -291,6 +299,13 @@ public sealed partial record StoredNodeSettings
     ///     <see cref="DefaultVoiceFeatureEnabled" /> (off).
     /// </summary>
     public bool? VoiceFeatureEnabled { get; init; }
+
+    /// <summary>
+    ///     Node kill-switch for the user-defined custom tools feature. <see langword="null" /> (absent) reads as
+    ///     <see cref="DefaultCustomToolsEnabled" /> (off). A bool needs no clamping, so <c>NodeSettingsStore.Normalize</c>
+    ///     passes it through untouched.
+    /// </summary>
+    public bool? CustomToolsEnabled { get; init; }
 
     /// <summary>
     ///     Legacy neural-voice model allow-list. Retained only so settings written by older releases round-trip without

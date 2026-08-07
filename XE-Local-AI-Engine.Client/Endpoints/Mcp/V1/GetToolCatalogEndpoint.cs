@@ -28,7 +28,7 @@ public sealed class GetToolCatalogEndpoint(ILocalToolOfferProvider localToolOffe
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var catalog = _localToolOfferProvider.GetKnownTools();
+        var catalog = await _localToolOfferProvider.GetKnownToolsAsync(ct).ConfigureAwait(false);
         await Send.OkAsync(new ToolCatalogResponse
             {
                 Tools = [.. catalog.Select(entry => entry.ToResponse(_approvalPolicy))]

@@ -1,9 +1,11 @@
 namespace XE_Local_AI_Engine.Tests.Chat;
 
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Tools;
+using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Tools;
@@ -77,6 +79,7 @@ public sealed class LocalToolOfferProviderTests
             ]),
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
             runtimeSettings,
+            XE_Local_AI_Engine.Tests.Testing.NullCustomToolScopeFactory.Instance,
             allowCloudKnowledgeAccess: false);
 
         var beforeEdit = provider.GetOfferedTools("unsloth/gemma-4-12b-it-GGUF:Q5_K_M");
@@ -112,6 +115,7 @@ public sealed class LocalToolOfferProviderTests
             ]),
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
             runtimeSettings,
+            XE_Local_AI_Engine.Tests.Testing.NullCustomToolScopeFactory.Instance,
             allowCloudKnowledgeAccess: false);
 
         AssertEx.False(provider.GetOfferedToolsForProfile("some-model").Any(tool => tool.Name == SpawnSubAgentToolDefinition.ToolName),
@@ -392,6 +396,7 @@ public sealed class LocalToolOfferProviderTests
         var provider = new LocalToolOfferProvider(new LocalAgentToolRegistry(),
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
             StubNodeRuntimeSettings.Create().WithToolCapableModels("qwen3:8b").Build(),
+            XE_Local_AI_Engine.Tests.Testing.NullCustomToolScopeFactory.Instance,
             allowCloudKnowledgeAccess: false);
 
         var offered = provider.GetOfferedTools("some-other-model");
@@ -447,6 +452,7 @@ public sealed class LocalToolOfferProviderTests
         var provider = new LocalToolOfferProvider(new LocalAgentToolRegistry(),
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
             StubNodeRuntimeSettings.Create().WithToolCapableModels("qwen3:8b").Build(),
+            XE_Local_AI_Engine.Tests.Testing.NullCustomToolScopeFactory.Instance,
             allowCloudKnowledgeAccess: false);
 
         var offered = provider.GetOfferedToolsForProfile("qwen3:8b");
@@ -460,6 +466,88 @@ public sealed class LocalToolOfferProviderTests
         AssertEx.Equal(ToolCategory.ReadLocal, offered.Single(tool => tool.Name == "search_knowledge_base").Category);
         // ask_user reads an answer from the node-local operator and has no side effect of its own.
         AssertEx.Equal(ToolCategory.ReadLocal, offered.Single(tool => tool.Name == AskUserTool.ToolName).Category);
+    }
+
+    [Test]
+    public async Task GetOfferedToolsAsync_WhenModelIsLocalCapableAndKillSwitchOn_IncludesCustomToolAsClientLocalApprovalForced()
+    {
+        var provider = CreateProviderWithCustomTools(customToolsEnabled: true, CustomWeatherDescriptor);
+
+        var offered = await provider.GetOfferedToolsAsync("qwen3:8b", isCloudModel: false);
+
+        var custom = AssertEx.NotNull(offered.SingleOrDefault(tool => tool.Name == "custom__weather"));
+        AssertEx.True(custom.RequiresApproval, "a custom tool is always offered approval-forced");
+        AssertEx.Equal(ToolLocation.ClientLocal, custom.Location);
+        AssertEx.Equal(ToolCategory.Network, custom.Category);
+    }
+
+    [Test]
+    public async Task GetOfferedToolsAsync_WhenModelIsCloud_OmitsCustomTool()
+    {
+        var provider = CreateProviderWithCustomTools(customToolsEnabled: true, CustomWeatherDescriptor);
+
+        var offered = await provider.GetOfferedToolsAsync("qwen3:8b", isCloudModel: true);
+
+        AssertEx.False(offered.Any(tool => tool.Name == "custom__weather"),
+            "custom tools are node-local-only and must never be offered to a cloud model");
+    }
+
+    [Test]
+    public async Task GetOfferedToolsAsync_WhenKillSwitchOff_OmitsCustomTool()
+    {
+        var provider = CreateProviderWithCustomTools(customToolsEnabled: false, CustomWeatherDescriptor);
+
+        var offered = await provider.GetOfferedToolsAsync("qwen3:8b", isCloudModel: false);
+
+        AssertEx.False(offered.Any(tool => tool.Name == "custom__weather"),
+            "with the node kill-switch off, no custom tool may be offered");
+    }
+
+    [Test]
+    public async Task GetKnownToolsAsync_TagsCustomToolWithCustomSource_UngatedByKillSwitch()
+    {
+        // Known-tools are ungated by the kill-switch, since an authored tool exists on the node whether or not it is
+        // switched on. The agent form and CRUD collision therefore see it, tagged with the custom source for the badge.
+        var provider = CreateProviderWithCustomTools(customToolsEnabled: false, CustomWeatherDescriptor);
+
+        var known = await provider.GetKnownToolsAsync();
+
+        var entry = AssertEx.NotNull(known.SingleOrDefault(tool => tool.Name == "custom__weather"));
+        AssertEx.Equal("custom", entry.Source);
+    }
+
+    private static readonly LocalChatToolDescriptor CustomWeatherDescriptor =
+        new("custom__weather", "Fetches weather.", "{\"type\":\"object\"}", RequiresApproval: true, ToolCategory.Network);
+
+    private static LocalToolOfferProvider CreateProviderWithCustomTools(bool customToolsEnabled, params LocalChatToolDescriptor[] customDescriptors)
+    {
+        var registry = new FakeAgentToolRegistry([
+            new LocalChatToolDescriptor("open_url", "Opens a URL.", "{\"type\":\"object\"}", RequiresApproval: false)
+        ]);
+
+        var scopeFactory = new ServiceCollection()
+            .AddSingleton<ICustomToolCatalog>(new StubCustomToolCatalog(customDescriptors))
+            .BuildServiceProvider()
+            .GetRequiredService<IServiceScopeFactory>();
+
+        return new LocalToolOfferProvider(registry,
+            new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
+            StubNodeRuntimeSettings.Create().WithToolCapableModels("qwen3:8b").WithCustomToolsEnabled(customToolsEnabled).Build(),
+            scopeFactory,
+            allowCloudKnowledgeAccess: false);
+    }
+
+    private sealed class StubCustomToolCatalog(IReadOnlyList<LocalChatToolDescriptor> descriptors) : ICustomToolCatalog
+    {
+        public Task<IReadOnlyList<LocalChatToolDescriptor>> GetDescriptorsAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(descriptors);
+        }
+
+        public Task<AITool?> TryResolveAsync(string name, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<AITool?>(null);
+        }
     }
 
     private static LocalToolOfferProvider CreateProvider(params string[] toolCapableModels)
@@ -482,6 +570,7 @@ public sealed class LocalToolOfferProviderTests
         return new LocalToolOfferProvider(registry,
             mcpToolRegistry,
             StubNodeRuntimeSettings.Create().WithToolCapableModels(toolCapableModels).Build(),
+            XE_Local_AI_Engine.Tests.Testing.NullCustomToolScopeFactory.Instance,
             allowCloudKnowledgeAccess);
     }
 

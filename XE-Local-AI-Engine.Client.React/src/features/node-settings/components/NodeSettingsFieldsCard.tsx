@@ -174,6 +174,16 @@ export function NodeSettingsFieldsCard({
 						onChange={(event) => onChange("enableTools", event.currentTarget.checked)}
 						data-testid="node-settings-enable-tools"
 					/>
+					<Switch
+						label={t("pages.nodeSettings.fields.customToolsEnabled.label", "Enable custom tools")}
+						description={t(
+							"pages.nodeSettings.fields.customToolsEnabled.description",
+							"Allows agents to run user-defined tools that execute host commands, launch programs, and make network requests. Off by default. Each call still requires your approval.",
+						)}
+						checked={form.customToolsEnabled}
+						onChange={(event) => onChange("customToolsEnabled", event.currentTarget.checked)}
+						data-testid="node-settings-custom-tools-enabled"
+					/>
 					<TagsInput
 						label={t("pages.nodeSettings.fields.toolCapableModels.label", "Tool-capable models")}
 						description={t(

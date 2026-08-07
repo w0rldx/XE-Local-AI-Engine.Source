@@ -147,6 +147,16 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
             EncryptRequiredProperty(entry, entry.Property(entity => entity.Content), entry.Entity.SkillId, entry.Entity.Id, AgentSkillResource.ContentColumnName(entry.Entity.Name), trackedProperties);
         }
 
+        // Custom tools are node-scoped (no conversation/message), so the AAD binds the empty conversation id to the
+        // tool's own id plus the column name — same layout as agent skills. Description is required; the kind-specific
+        // config (which carries the secret header/env values) is a required encrypted column under a distinct AAD column
+        // name so a config blob can never be substituted for a description blob.
+        foreach (var entry in nodeContext.ChangeTracker.Entries<CustomTool>())
+        {
+            EncryptRequiredProperty(entry, entry.Property(entity => entity.Description), Guid.Empty, entry.Entity.Id, "description", trackedProperties);
+            EncryptRequiredProperty(entry, entry.Property(entity => entity.ConfigJson), Guid.Empty, entry.Entity.Id, "custom_tool_config_json", trackedProperties);
+        }
+
         // Playbook actions are node-scoped (no conversation/message), so the AAD binds the empty conversation id to the
         // action's own id plus the column name — same layout as agent definitions. Behavior is required; the optional
         // trigger condition only encrypts when present.

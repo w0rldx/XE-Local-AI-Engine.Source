@@ -123,6 +123,52 @@ public sealed class InvocationToolResolverTests
         AssertEx.False(resolved[0] is ApprovalRequiredAIFunction, "a non-approval tool with a non-approval offer must not be wrapped");
     }
 
+    [Test]
+    public async Task ResolveAsync_ResolvesCustomToolName_ToTheApprovalWrappedExecutable()
+    {
+        // The catalog returns the executable ALREADY wrapped in ApprovalRequiredAIFunction (its authoritative floor). A
+        // custom__ offered name that no built-in/ClientLocal/MCP registry satisfies must resolve from the catalog and stay
+        // wrapped — the resolver's tighten-only pass is a no-op on an already-wrapped function.
+        var wrapped = new ApprovalRequiredAIFunction(AIFunctionFactory.Create((string input) => input, "custom__weather"));
+        var catalog = new FakeCustomToolCatalog(("custom__weather", wrapped));
+        var offered = new[]
+        {
+            InvocationToolBridge.CreateOfferPlaceholder("custom__weather", requiresApproval: true)
+        };
+
+        var resolved = await InvocationToolResolver.ResolveAsync(offered,
+            new FakeToolRegistry(),
+            new FakeClientLocalToolRegistry(),
+            new FakeMcpToolRegistry(),
+            catalog,
+            NullLogger.Instance);
+
+        AssertEx.Equal(expected: 1, resolved.Count);
+        AssertEx.True(resolved[0] is ApprovalRequiredAIFunction, "a resolved custom tool must stay approval-wrapped");
+        AssertEx.Equal("custom__weather", resolved[0].Name);
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenCatalogReturnsNullForACustomName_DropsTheOffer()
+    {
+        // A custom offer the catalog cannot satisfy (kill-switch off, or the tool was deleted mid-turn) must be dropped,
+        // never fabricated — the same posture as any unmatched offer.
+        var catalog = new FakeCustomToolCatalog();
+        var offered = new[]
+        {
+            InvocationToolBridge.CreateOfferPlaceholder("custom__weather", requiresApproval: true)
+        };
+
+        var resolved = await InvocationToolResolver.ResolveAsync(offered,
+            new FakeToolRegistry(),
+            new FakeClientLocalToolRegistry(),
+            new FakeMcpToolRegistry(),
+            catalog,
+            NullLogger.Instance);
+
+        AssertEx.Equal(expected: 0, resolved.Count, "an unresolved custom offer must be dropped, not fabricated");
+    }
+
     private static IList<AITool> Resolve(IReadOnlyList<AITool> offered,
         FakeToolRegistry? toolRegistry = null,
         FakeClientLocalToolRegistry? clientLocalToolRegistry = null,
@@ -195,6 +241,29 @@ public sealed class InvocationToolResolverTests
             {
                 _tools[tool.Name] = tool.Executable;
             }
+        }
+    }
+
+    private sealed class FakeCustomToolCatalog : ICustomToolCatalog
+    {
+        private readonly Dictionary<string, AITool> _tools = new(StringComparer.Ordinal);
+
+        public FakeCustomToolCatalog(params (string Name, AITool Tool)[] tools)
+        {
+            foreach (var (name, tool) in tools)
+            {
+                _tools[name] = tool;
+            }
+        }
+
+        public Task<IReadOnlyList<LocalChatToolDescriptor>> GetDescriptorsAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<LocalChatToolDescriptor>>([]);
+        }
+
+        public Task<AITool?> TryResolveAsync(string name, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(_tools.TryGetValue(name, out var tool) ? tool : null);
         }
     }
 }

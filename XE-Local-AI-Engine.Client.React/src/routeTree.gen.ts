@@ -30,6 +30,7 @@ import { Route as LayoutImagesRouteImport } from './routes/_layout/images'
 import { Route as LayoutDiagnosticsRouteImport } from './routes/_layout/diagnostics'
 import { Route as LayoutDevelopmentRouteImport } from './routes/_layout/development'
 import { Route as LayoutDashboardRouteImport } from './routes/_layout/dashboard'
+import { Route as LayoutCustomToolsRouteImport } from './routes/_layout/custom-tools'
 import { Route as LayoutCommandsRouteImport } from './routes/_layout/commands'
 import { Route as LayoutCloudSettingsRouteImport } from './routes/_layout/cloud-settings'
 import { Route as LayoutChatRouteImport } from './routes/_layout/chat'
@@ -140,6 +141,11 @@ const LayoutDashboardRoute = LayoutDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => LayoutRoute,
 } as any)
+const LayoutCustomToolsRoute = LayoutCustomToolsRouteImport.update({
+  id: '/custom-tools',
+  path: '/custom-tools',
+  getParentRoute: () => LayoutRoute,
+} as any)
 const LayoutCommandsRoute = LayoutCommandsRouteImport.update({
   id: '/commands',
   path: '/commands',
@@ -169,6 +175,7 @@ export interface FileRoutesByFullPath {
   '/chat': typeof LayoutChatRoute
   '/cloud-settings': typeof LayoutCloudSettingsRoute
   '/commands': typeof LayoutCommandsRoute
+  '/custom-tools': typeof LayoutCustomToolsRoute
   '/dashboard': typeof LayoutDashboardRoute
   '/development': typeof LayoutDevelopmentRoute
   '/diagnostics': typeof LayoutDiagnosticsRoute
@@ -194,6 +201,7 @@ export interface FileRoutesByTo {
   '/chat': typeof LayoutChatRoute
   '/cloud-settings': typeof LayoutCloudSettingsRoute
   '/commands': typeof LayoutCommandsRoute
+  '/custom-tools': typeof LayoutCustomToolsRoute
   '/dashboard': typeof LayoutDashboardRoute
   '/development': typeof LayoutDevelopmentRoute
   '/diagnostics': typeof LayoutDiagnosticsRoute
@@ -222,6 +230,7 @@ export interface FileRoutesById {
   '/_layout/chat': typeof LayoutChatRoute
   '/_layout/cloud-settings': typeof LayoutCloudSettingsRoute
   '/_layout/commands': typeof LayoutCommandsRoute
+  '/_layout/custom-tools': typeof LayoutCustomToolsRoute
   '/_layout/dashboard': typeof LayoutDashboardRoute
   '/_layout/development': typeof LayoutDevelopmentRoute
   '/_layout/diagnostics': typeof LayoutDiagnosticsRoute
@@ -251,6 +260,7 @@ export interface FileRouteTypes {
     | '/chat'
     | '/cloud-settings'
     | '/commands'
+    | '/custom-tools'
     | '/dashboard'
     | '/development'
     | '/diagnostics'
@@ -276,6 +286,7 @@ export interface FileRouteTypes {
     | '/chat'
     | '/cloud-settings'
     | '/commands'
+    | '/custom-tools'
     | '/dashboard'
     | '/development'
     | '/diagnostics'
@@ -303,6 +314,7 @@ export interface FileRouteTypes {
     | '/_layout/chat'
     | '/_layout/cloud-settings'
     | '/_layout/commands'
+    | '/_layout/custom-tools'
     | '/_layout/dashboard'
     | '/_layout/development'
     | '/_layout/diagnostics'
@@ -478,6 +490,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutDashboardRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/custom-tools': {
+      id: '/_layout/custom-tools'
+      path: '/custom-tools'
+      fullPath: '/custom-tools'
+      preLoaderRoute: typeof LayoutCustomToolsRouteImport
+      parentRoute: typeof LayoutRoute
+    }
     '/_layout/commands': {
       id: '/_layout/commands'
       path: '/commands'
@@ -514,6 +533,7 @@ interface LayoutRouteChildren {
   LayoutChatRoute: typeof LayoutChatRoute
   LayoutCloudSettingsRoute: typeof LayoutCloudSettingsRoute
   LayoutCommandsRoute: typeof LayoutCommandsRoute
+  LayoutCustomToolsRoute: typeof LayoutCustomToolsRoute
   LayoutDashboardRoute: typeof LayoutDashboardRoute
   LayoutDevelopmentRoute: typeof LayoutDevelopmentRoute
   LayoutDiagnosticsRoute: typeof LayoutDiagnosticsRoute
@@ -539,6 +559,7 @@ const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutChatRoute: LayoutChatRoute,
   LayoutCloudSettingsRoute: LayoutCloudSettingsRoute,
   LayoutCommandsRoute: LayoutCommandsRoute,
+  LayoutCustomToolsRoute: LayoutCustomToolsRoute,
   LayoutDashboardRoute: LayoutDashboardRoute,
   LayoutDevelopmentRoute: LayoutDevelopmentRoute,
   LayoutDiagnosticsRoute: LayoutDiagnosticsRoute,

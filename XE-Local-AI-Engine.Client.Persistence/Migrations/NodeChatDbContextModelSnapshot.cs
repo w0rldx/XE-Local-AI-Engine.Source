@@ -321,50 +321,6 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.ToTable("agent_skills", (string)null);
                 });
 
-            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.SlashCommand", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
-                        .HasColumnName("id");
-
-                    b.Property<byte[]>("ActionConfiguration")
-                        .IsRequired()
-                        .HasColumnType("BLOB")
-                        .HasColumnName("action_configuration");
-
-                    b.Property<int>("ActionType")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("action_type");
-
-                    b.Property<long>("CreatedAtUtc")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("created_at_utc");
-
-                    b.Property<byte[]>("Description")
-                        .HasColumnType("BLOB")
-                        .HasColumnName("description");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("name")
-                        .UseCollation("NOCASE");
-
-                    b.Property<long>("UpdatedAtUtc")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("updated_at_utc");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Name")
-                        .IsUnique();
-
-                    b.ToTable("slash_commands", (string)null);
-                });
-
-
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.AgentSkillResource", b =>
                 {
                     b.Property<Guid>("Id")
@@ -514,6 +470,76 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.HasIndex("ConversationId");
 
                     b.ToTable("conversation_uploaded_files", (string)null);
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.CustomTool", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("Acknowledged")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false)
+                        .HasColumnName("acknowledged");
+
+                    b.Property<byte[]>("ConfigJson")
+                        .IsRequired()
+                        .HasColumnType("BLOB")
+                        .HasColumnName("config_json");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<byte[]>("Description")
+                        .IsRequired()
+                        .HasColumnType("BLOB")
+                        .HasColumnName("description");
+
+                    b.Property<bool>("Enabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(true)
+                        .HasColumnName("enabled");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("kind");
+
+                    b.Property<int>("Mode")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("mode");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("name")
+                        .UseCollation("NOCASE");
+
+                    b.Property<string>("ParametersJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("[]")
+                        .HasColumnName("parameters_json");
+
+                    b.Property<long>("UpdatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("updated_at_utc");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("custom_tools", (string)null);
                 });
 
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentArtifact", b =>
@@ -1613,17 +1639,8 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.McpAgentRun", b =>
                 {
                     b.Property<Guid>("RequestId")
-                        .ValueGeneratedNever()
                         .HasColumnType("TEXT")
                         .HasColumnName("request_id");
-
-                    b.Property<long?>("AgentDefinitionVersion")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("agent_definition_version");
-
-                    b.Property<Guid?>("AgentDefinitionId")
-                        .HasColumnType("TEXT")
-                        .HasColumnName("agent_definition_id");
 
                     b.Property<int>("AccountingVersion")
                         .HasColumnType("INTEGER")
@@ -1632,6 +1649,14 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.Property<long>("ActivePayloadBytes")
                         .HasColumnType("INTEGER")
                         .HasColumnName("active_payload_bytes");
+
+                    b.Property<Guid?>("AgentDefinitionId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("agent_definition_id");
+
+                    b.Property<long?>("AgentDefinitionVersion")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("agent_definition_version");
 
                     b.Property<byte[]>("BindingFingerprint")
                         .HasMaxLength(32)
@@ -1646,6 +1671,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("INTEGER")
                         .HasColumnName("claimed_at_utc");
 
+                    b.Property<long?>("CompactedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("compacted_at_utc");
+
                     b.Property<long?>("CompletedAtUtc")
                         .HasColumnType("INTEGER")
                         .HasColumnName("completed_at_utc");
@@ -1657,10 +1686,6 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.Property<byte[]>("DisplayPayload")
                         .HasColumnType("BLOB")
                         .HasColumnName("display_payload");
-
-                    b.Property<long?>("CompactedAtUtc")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("compacted_at_utc");
 
                     b.Property<string>("FailureCode")
                         .HasMaxLength(128)
@@ -1733,7 +1758,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
 
                     b.HasIndex("Status", "CreatedAtUtc");
 
-                    b.ToTable("mcp_agent_runs", t =>
+                    b.ToTable("mcp_agent_runs", null, t =>
                         {
                             t.HasCheckConstraint("CK_mcp_agent_runs_accounting_version", "accounting_version = 1");
 
@@ -1781,7 +1806,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
 
                     b.HasKey("Id");
 
-                    b.ToTable("mcp_agent_run_ledger", t =>
+                    b.ToTable("mcp_agent_run_ledger", null, t =>
                         {
                             t.HasCheckConstraint("CK_mcp_agent_run_ledger_accounting_version", "accounting_version = 1");
 
@@ -2872,6 +2897,49 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .IsUnique();
 
                     b.ToTable("scheduled_job_run_events", (string)null);
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.SlashCommand", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<byte[]>("ActionConfiguration")
+                        .IsRequired()
+                        .HasColumnType("BLOB")
+                        .HasColumnName("action_configuration");
+
+                    b.Property<int>("ActionType")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("action_type");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<byte[]>("Description")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("description");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("name")
+                        .UseCollation("NOCASE");
+
+                    b.Property<long>("UpdatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("updated_at_utc");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("slash_commands", (string)null);
                 });
 
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.AgentSkillResource", b =>

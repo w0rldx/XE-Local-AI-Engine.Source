@@ -132,6 +132,8 @@ describe("NodeSettingsFieldsModel mapping", () => {
 		// Absent in the response -> reranking off (empty string).
 		expect(form.rerankerModelName).toBe("");
 		expect(form.enableTools).toBe(false);
+		// Absent in the response -> seed default (StoredNodeSettings.DefaultCustomToolsEnabled, off).
+		expect(form.customToolsEnabled).toBe(false);
 		expect(form.toolCapableModels).toEqual(["qwen3:8b"]);
 		expect(form.llamaMaxLoadedProcesses).toBe(5);
 		expect(form.keepModelWarmEnabled).toBe(true);
@@ -145,6 +147,7 @@ describe("NodeSettingsFieldsModel mapping", () => {
 		// Each value must equal the corresponding C# const so a stale-server render shows the real defaults and the
 		// byte-cap fallbacks pass the backend `> 0` validator if ever saved.
 		expect(nodeSettingsFieldDefaults.enableTools).toBe(true); // DefaultEnableTools
+		expect(nodeSettingsFieldDefaults.customToolsEnabled).toBe(false); // DefaultCustomToolsEnabled
 		expect(nodeSettingsFieldDefaults.llamaMaxLoadedProcesses).toBe(3); // DefaultLlamaMaxLoadedProcesses
 		expect(nodeSettingsFieldDefaults.llamaIdleTimeToLiveSeconds).toBe(900); // DefaultLlamaIdleTimeToLiveSeconds
 		expect(nodeSettingsFieldDefaults.keepModelWarmEnabled).toBe(false);
@@ -179,6 +182,13 @@ describe("buildNodeSettingsRequest", () => {
 		const { body, errors } = buildNodeSettingsRequest(form, baseline, bounds, false);
 		expect(errors).toEqual({});
 		expect(body).toEqual({ defaultModelName: "qwen3:8b" });
+	});
+
+	it("sends the custom-tools kill-switch only when toggled", () => {
+		const form = { ...baseline, customToolsEnabled: true };
+		const { body, errors } = buildNodeSettingsRequest(form, baseline, bounds, false);
+		expect(errors).toEqual({});
+		expect(body).toEqual({ customToolsEnabled: true });
 	});
 
 	it("rejects an out-of-range bounded number with a range error", () => {
