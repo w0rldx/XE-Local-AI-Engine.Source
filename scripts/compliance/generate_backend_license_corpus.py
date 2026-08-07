@@ -40,6 +40,23 @@ SPECIAL_LICENSE_TEXTS = {
         Path("nuget/UTF.Unknown-2.6.0-MPL-1.1.txt.source.txt"),
     ),
 }
+UTF_UNKNOWN_SOURCE_COMMIT = "7e69ebbdd6ef96a3625fcaf39df42429b8eb0463"
+SPECIAL_SOURCE_AVAILABILITY = {
+    ("utf.unknown", "2.6.0", "MPL-1.1"): {
+        "licenseBasis": "MPL-1.1",
+        "notice": (
+            Path("nuget/UTF.Unknown-2.6.0-SOURCE-AVAILABILITY.txt"),
+            Path("nuget/UTF.Unknown-2.6.0-SOURCE-AVAILABILITY.txt.source.txt"),
+        ),
+        "sourceArchive": (
+            "https://github.com/CharsetDetector/UTF-unknown/archive/"
+            f"{UTF_UNKNOWN_SOURCE_COMMIT}.tar.gz"
+        ),
+        "sourceCommit": UTF_UNKNOWN_SOURCE_COMMIT,
+        "sourceRepository": "https://github.com/CharsetDetector/UTF-unknown",
+        "upstreamTag": "v2.6",
+    }
+}
 UPSTREAM_PACKAGE_LICENSE_TEXTS = {
     **{
         (name.casefold(), "8.2.0", "MIT"): (
@@ -338,8 +355,29 @@ def build_component(
             }
         )
 
+    source_availability = SPECIAL_SOURCE_AVAILABILITY.get((name.casefold(), version, expression))
+    if source_availability is not None:
+        notice_path, provenance_path = source_availability["notice"]
+        contents = verify_curated_text(license_root / notice_path, license_root / provenance_path)
+        destination = package_output / notice_path.name
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(contents)
+        digest = hashlib.sha256(contents).hexdigest()
+        if hashlib.sha256(destination.read_bytes()).hexdigest() != digest:
+            raise ValueError(f"omitted expected source-availability notice {notice_path.name}")
+        files.append(
+            {
+                "path": f"{relative_output}/{notice_path.name}",
+                "repositorySource": f"third-party/{notice_path.as_posix()}",
+                "role": "notice",
+                "sha256": digest,
+                "source": "curated-source-availability",
+                "sourceFile": notice_path.name,
+            }
+        )
+
     files.sort(key=lambda entry: (entry["role"] != "license", entry["sourceFile"].casefold(), entry["sourceFile"]))
-    return {
+    component = {
         "attributionPolicy": "NuGet Authors are preserved as authors and are not inferred to be copyright owners.",
         "authors": authors or None,
         "bundleInputs": selection["bundleInputs"],
@@ -355,6 +393,11 @@ def build_component(
         "runtimeIdentifier": rid,
         "version": version,
     }
+    if source_availability is not None:
+        component["sourceAvailability"] = {
+            key: value for key, value in source_availability.items() if key != "notice"
+        }
+    return component
 
 
 def write_notices(packages: list[dict], output_path: Path) -> None:
@@ -377,6 +420,18 @@ def write_notices(packages: list[dict], output_path: Path) -> None:
             lines.append(f"- Project: {entry['projectUrl'].strip()}")
         if entry["licenseUrl"]:
             lines.append(f"- License metadata URL: {entry['licenseUrl'].strip()}")
+        source_availability = entry.get("sourceAvailability")
+        if source_availability:
+            lines.extend(
+                [
+                    f"- Selected license basis: {source_availability['licenseBasis']}",
+                    "- Covered source availability:",
+                    f"  - Repository: {source_availability['sourceRepository']}",
+                    f"  - Upstream tag: {source_availability['upstreamTag']}",
+                    f"  - Immutable commit: {source_availability['sourceCommit']}",
+                    f"  - Source archive: {source_availability['sourceArchive']}",
+                ]
+            )
         lines.append("- Bundled legal terms:")
         for term in entry["licenseFiles"]:
             lines.append(f"  - {term['role']}: `{term['path']}` (SHA-256 `{term['sha256']}`)")

@@ -198,10 +198,9 @@
     <!--
       Only the active flavor's source is copied to output (renamed), so the artifact carries exactly one channel.
 
-      Always, NOT PreserveNewest, and that is load-bearing. A prior publish can leave the renamed destination newer
-      than its flavor source; under PreserveNewest the next publish may silently retain the wrong repo or release track.
-      Always makes every publish overwrite the destination regardless of timestamps, so the artifact's source policy
-      is always the one this build selected.
+      Always, NOT PreserveNewest, records the required copy policy. MSBuild's incremental publish pipeline can still
+      leave a manually disturbed destination missing until the source changes, so release packaging must verify that
+      the renamed file exists and contains the selected source policy before accepting an artifact.
     -->
     <Content Include="appsettings.AppUpdate.$(UpdateChannel).json"
              Condition="Exists('appsettings.AppUpdate.$(UpdateChannel).json')"
