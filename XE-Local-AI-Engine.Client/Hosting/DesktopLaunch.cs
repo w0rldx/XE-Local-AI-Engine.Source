@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Hosting;
 
 /// <summary>
-///     Resolves whether the process was started in "desktop" mode — a self-contained, double-click launch that binds
+///     Resolves whether the process was started in "desktop" mode — a packaged, double-click launch that binds
 ///     loopback HTTP, opens the default browser, and routes a closed console window into a graceful shutdown.
 ///     Desktop mode is opt-in via env <c>XE_LAUNCH_MODE=desktop</c> or CLI <c>--desktop</c>, and is also implied by a
 ///     Velopack-managed install (the caller passes <c>isManagedInstall</c>): the packaged installer/portable flavor IS

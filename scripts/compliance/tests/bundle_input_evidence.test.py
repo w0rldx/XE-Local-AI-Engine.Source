@@ -23,6 +23,31 @@ EVIDENCE = load("bundle_input_evidence")
 
 
 class BundleInputEvidenceTests(unittest.TestCase):
+    def test_framework_dependent_windows_payload_uses_loose_publish_inputs(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            nuget_root = root / "packages"
+            package_asset = nuget_root / "example.package" / "1.0.0" / "lib" / "net10.0" / "Example.dll"
+            package_asset.parent.mkdir(parents=True)
+            package_asset.write_bytes(b"managed package")
+            app_dll = root / "XE-Local-AI-Engine.Client.dll"
+            app_dll.write_bytes(b"managed app")
+            raw = root / "inputs.txt"
+            raw.write_text(
+                f"XE-BUNDLE-INPUTS-V2|win-x64|false|false|{nuget_root}\n"
+                f"loose||||XE-Local-AI-Engine.Client.dll|{app_dll}\n"
+                f"loose|Example.Package|1.0.0|PackageReference|Example.dll|{package_asset}\n",
+                encoding="utf-8",
+            )
+
+            output = root / "bundle-inputs.json"
+            self.assertEqual(2, CREATE.create_manifest(raw, "win-x64", output))
+            document = json.loads(output.read_text(encoding="utf-8"))
+            self.assertFalse(document["publishSingleFile"])
+            self.assertFalse(document["selfContained"])
+            packages = EVIDENCE.load_bundle_packages(output, "win-x64")
+            self.assertEqual(["loose"], [entry["disposition"] for entry in packages[("example.package", "1.0.0")]["inputs"]])
+
     def test_collapses_only_byte_identical_duplicate_capture_rows(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
@@ -128,6 +153,32 @@ class BundleInputEvidenceTests(unittest.TestCase):
             evidence.write_text(json.dumps(baseline))
             with self.assertRaisesRegex(ValueError, "duplicate input"):
                 EVIDENCE.load_bundle_packages(evidence, "linux-x64")
+
+    def test_rejects_publish_mode_that_does_not_match_the_rid_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            evidence = Path(temporary_directory) / "evidence.json"
+            baseline = {
+                "schemaVersion": 2,
+                "runtimeIdentifier": "win-x64",
+                "publishSingleFile": True,
+                "selfContained": True,
+                "inputs": [
+                    {
+                        "packageId": "Example",
+                        "packageVersion": "1.0.0",
+                        "disposition": "bundle",
+                        "origin": "nuget",
+                        "relativePath": "Example.dll",
+                        "sha256": "a" * 64,
+                        "sourceType": "PackageReference",
+                    }
+                ],
+            }
+            evidence.write_text(json.dumps(baseline))
+            with self.assertRaisesRegex(ValueError, "publish mode"):
+                EVIDENCE.load_bundle_packages(evidence, "win-x64")
+            baseline["publishSingleFile"] = False
+            baseline["selfContained"] = False
             baseline["inputs"] = [
                 {
                     "packageId": None,
@@ -141,7 +192,7 @@ class BundleInputEvidenceTests(unittest.TestCase):
             ]
             evidence.write_text(json.dumps(baseline))
             with self.assertRaisesRegex(ValueError, "NuGet-root bundle input.*lacks package identity"):
-                EVIDENCE.load_bundle_packages(evidence, "linux-x64")
+                EVIDENCE.load_bundle_packages(evidence, "win-x64")
 
     def test_capture_target_accounts_for_embedded_and_loose_publish_inputs(self) -> None:
         source = (Path(__file__).parents[1] / "capture_bundle_inputs.targets").read_text(encoding="utf-8")

@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.WindowsLauncher;
 using Extensions = Microsoft.Extensions.Hosting.Extensions;
 
 /// <summary>
@@ -57,6 +58,7 @@ public sealed class LayerDependencyTests
     private static readonly Assembly PersistenceAssembly = typeof(NodeChatDbContext).Assembly;
     private static readonly Assembly HostAssembly = typeof(WorkerHealthCheck).Assembly;
     private static readonly Assembly ServiceDefaultsAssembly = typeof(Extensions).Assembly;
+    private static readonly Assembly WindowsLauncherAssembly = typeof(WindowsLauncherApplication).Assembly;
 
     private static readonly IReadOnlyDictionary<string, string[]> ApprovedProjectReferences =
         new Dictionary<string, string[]>(StringComparer.Ordinal)
@@ -97,6 +99,7 @@ public sealed class LayerDependencyTests
                 "XE-Local-AI-Engine.Client",
                 "XE-Local-AI-Engine.Client.Application"
             ],
+            ["XE-Local-AI-Engine.WindowsLauncher"] = [],
             ["XE-Local-AI-Engine.AppHost"] = ["XE-Local-AI-Engine.Client"],
             ["XE-Local-AI-Engine.ServiceDefaults"] = ["XE-Local-AI-Engine.AI.Contracts"],
             ["XE-Local-AI-Engine.Providers.Abstractions"] = [],
@@ -119,6 +122,7 @@ public sealed class LayerDependencyTests
             ],
             [PersistenceAssembly] = [],
             [ServiceDefaultsAssembly] = ["XE-Local-AI-Engine.AI.Contracts"],
+            [WindowsLauncherAssembly] = [],
             [AbstractionsAssembly] = [],
             [CapabilitiesAssembly] = ["XE-Local-AI-Engine.Providers.Abstractions"],
             [CodexOAuthAssembly] = ["XE-Local-AI-Engine.Providers.Abstractions"],

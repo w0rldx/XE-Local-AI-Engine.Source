@@ -21,6 +21,7 @@
   <ItemGroup>
     <ProjectReference Include="..\XE-Local-AI-Engine.Testing.FakeOllama\XE-Local-AI-Engine.Testing.FakeOllama.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Client\XE-Local-AI-Engine.Client.csproj"/>
+    <ProjectReference Include="..\XE-Local-AI-Engine.WindowsLauncher\XE-Local-AI-Engine.WindowsLauncher.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Client.Application\XE-Local-AI-Engine.Client.Application.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.ServiceDefaults\XE-Local-AI-Engine.ServiceDefaults.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Capabilities\XE-Local-AI-Engine.Providers.Capabilities.csproj"/>

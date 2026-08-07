@@ -6,19 +6,30 @@ what it needs.
 There is **no installer**. You download a ZIP file, unzip it, and run the program from the folder. To
 remove it later you delete that folder.
 
+## Before you start — install .NET 10
+
+The Windows ZIP is framework-dependent and deliberately does **not** bundle .NET. Install the **x64 ASP.NET Core
+Runtime 10.0.10** or a newer .NET 10 servicing patch from Microsoft's [.NET 10 download page](https://dotnet.microsoft.com/en-us/download/dotnet/10.0).
+The ASP.NET Core Runtime is the requirement; the SDK and Hosting Bundle are not required just to run the app.
+
+If the base .NET runtime is missing, the Microsoft apphost displays its standard missing-framework message. If .NET
+exists but ASP.NET Core is missing or older than 10.0.10, the C# launcher prints the exact requirement and opens that
+download page.
+
 ---
 
 ## The short version
 
 For people who have done this kind of thing before:
 
-1. Download `XE-Local-AI-Engine-win-Portable.zip` and `CHECKSUMS.sha256` from [Releases](https://github.com/w0rldx/XE-Local-AI-Engine.Source/releases).
-2. **Right-click the ZIP → Properties → tick "Unblock" → OK.** *(Do this before extracting — it saves
+1. Install the x64 ASP.NET Core Runtime 10.0.10+ from Microsoft.
+2. Download `XE-Local-AI-Engine-win-Portable.zip` and `CHECKSUMS.sha256` from [Releases](https://github.com/w0rldx/XE-Local-AI-Engine.Source/releases).
+3. **Right-click the ZIP → Properties → tick "Unblock" → OK.** *(Do this before extracting — it saves
    you the SmartScreen warning.)*
-3. Verify its SHA-256 value, then extract it to a writable local directory, e.g.
+4. Verify its SHA-256 value, then extract it to a writable local directory, e.g.
    `%LOCALAPPDATA%\Programs\XE-Local-AI-Engine`. **Not** Program Files.
-4. Run **`XE-Local-AI-Engine.exe`** in the top-level folder — *not* the one inside `current\`.
-5. A console window opens and your browser opens the app. Leave the console open.
+5. Run **`XE-Local-AI-Engine.exe`** in the top-level folder — *not* the launcher inside `current\`.
+6. A console window opens and your browser opens the app. Leave the console open.
 
 Everything below is the same thing, explained slowly.
 
@@ -145,14 +156,14 @@ XE-Local-AI-Engine\
 ├── Update.exe                   ←  ❌ not this (the updater)
 ├── .portable
 └── current\
-    └── XE-Local-AI-Engine.Client.exe   ←  ❌ not this one either
+    ├── XE-Local-AI-Engine.WindowsLauncher.exe  ← managed by the top-level entry
+    └── XE-Local-AI-Engine.Client.dll           ← the framework-dependent app
 ```
 
 > ### ⚠️ Run the `XE-Local-AI-Engine.exe` in the **top folder**
 >
-> There is a second, similarly-named `.exe` inside the `current\` folder. It is much bigger, so people
-> often assume it's the "real" one. **It is not** — and launching it directly does not work in a
-> degraded way, it skips the desktop setup entirely: no data folder, no browser, no proper start.
+> The C# launcher and managed application live inside `current\`, but Velopack users must still start the top-level
+> entry. It preserves the portable install/update context and routes startup to the current version.
 >
 > The one you want is called **`XE-Local-AI-Engine.exe`** and sits **next to** the `current` folder —
 > not inside it.
@@ -225,9 +236,9 @@ Some managed or hardened machines hide it. Options:
 
 **This is the same unsigned-build cause, and it does not mean the file is harmful.**
 
-Unsigned, brand-new binaries with no download history are a shape some scanners distrust by default —
-and the large self-contained program inside `current\` compresses in a way heuristic scanners sometimes
-flag. Neither is evidence of anything; both are what a small unsigned release looks like.
+Unsigned, brand-new binaries with no download history are a shape some scanners distrust by default. The small C#
+launcher apphost and the managed application files are also new to reputation systems. That warning is not evidence
+that the files are safe or unsafe; it is what an unsigned first release looks like.
 
 You may need to add the folder to your antivirus exclusions. **Only do that if you are comfortable
 doing so** — and it is completely reasonable to decide you'd rather wait for a signed build instead.

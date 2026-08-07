@@ -11,11 +11,17 @@ require a maintainer PAT.
 
 | Platform | User-facing artifact | Install model | Self-update |
 |---|---|---|---|
-| Windows x64 | Velopack `Portable.zip` | Extract to a writable local directory and run the top-level `XE-Local-AI-Engine.exe` launcher | Yes |
+| Windows x64 | Velopack `Portable.zip` | Install ASP.NET Core Runtime 10.0.10+ (x64), extract to a writable directory, and run the top-level launcher | Yes |
 | Linux x64 | Velopack `.AppImage` | Mark executable and run the AppImage | Yes; Velopack replaces the AppImage in place |
 
 Windows packing passes `--noInst` to Velopack 1.2.0, so the release must contain exactly one Windows
 `Portable.zip` and no `Setup.exe`. Linux packing produces an AppImage, not a ZIP.
+
+The Windows payload is framework-dependent. `XE-Local-AI-Engine.Client` publishes as DLL/deps/runtimeconfig files with
+no apphost or runtime; `XE-Local-AI-Engine.WindowsLauncher` publishes a small C# apphost into the same directory. The
+launcher validates the payload and installed ASP.NET Core runtime before starting the managed app through `dotnet.exe`.
+The archive must not contain `coreclr.dll`, `hostfxr.dll`, `hostpolicy.dll`, `System.Private.CoreLib.dll`, or the .NET
+Library License. The Linux AppImage remains self-contained.
 
 Each release also contains the Velopack feed and full/delta package assets used by the updater, plus:
 
@@ -115,8 +121,17 @@ dotnet publish XE-Local-AI-Engine.Client/XE-Local-AI-Engine.Client.csproj \
   -p:UpdateChannel=main
 ```
 
-For Windows, use the `win-x64` publish profile. Raw `dotnet publish` output is not a Velopack package and must not be
-described as an official self-updating release.
+For a direct Windows payload, publish both projects into the same output directory:
+
+```bash
+WIN_OUT="$PWD/.tmp/publish/win-x64"
+dotnet publish XE-Local-AI-Engine.Client/XE-Local-AI-Engine.Client.csproj \
+  --configuration Release -p:PublishProfile=win-x64 -p:UpdateChannel=main --output "$WIN_OUT"
+dotnet publish XE-Local-AI-Engine.WindowsLauncher/XE-Local-AI-Engine.WindowsLauncher.csproj \
+  --configuration Release -p:PublishProfile=win-x64 --output "$WIN_OUT"
+```
+
+Raw `dotnet publish` output is not a Velopack package and must not be described as an official self-updating release.
 
 ## Legacy manual packagers
 
@@ -127,7 +142,7 @@ alternatives. `scripts/lint-release-scripts.sh` still analyzes them to prevent s
 Do not use their private tester-repository, GitHub App, manual-draft, or Linux-ZIP instructions as the current release
 contract.
 
-## Launcher sources
+## Legacy launcher sources
 
 The launcher and cleanup sources remain under:
 
@@ -136,5 +151,6 @@ publish/windows/
 publish/linux/
 ```
 
-They support local/direct publish layouts. The official Windows Velopack portable bundle exposes its own top-level
-launcher; the official Linux artifact is the AppImage itself.
+They support deprecated manual publish layouts. The official Windows payload uses the C# project under
+`XE-Local-AI-Engine.WindowsLauncher/`; Velopack exposes that apphost through its top-level launcher. The official Linux
+artifact is the AppImage itself.

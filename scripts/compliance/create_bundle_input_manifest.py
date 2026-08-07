@@ -12,9 +12,16 @@ from pathlib import Path
 def create_manifest(raw_path: Path, runtime_identifier: str, output_path: Path) -> int:
     lines = raw_path.read_text(encoding="utf-8-sig").splitlines()
     header = lines[0].split("|", 4) if lines else []
-    expected_header = ["XE-BUNDLE-INPUTS-V2", runtime_identifier, "true", "true"]
+    expected_modes = {"linux-x64": (True, True), "win-x64": (False, False)}
+    expected_single_file, expected_self_contained = expected_modes[runtime_identifier]
+    expected_header = [
+        "XE-BUNDLE-INPUTS-V2",
+        runtime_identifier,
+        str(expected_single_file).lower(),
+        str(expected_self_contained).lower(),
+    ]
     if len(header) != 5 or [value.casefold() for value in header[:4]] != [value.casefold() for value in expected_header]:
-        raise ValueError(f"bundle-input capture header does not match {'|'.join(expected_header)}|<NuGetPackageRoot>")
+        raise ValueError(f"publish-input capture header does not match {'|'.join(expected_header)}|<NuGetPackageRoot>")
     nuget_package_root = Path(header[4]).resolve()
     if not nuget_package_root.is_dir():
         raise ValueError(f"bundle-input capture NuGetPackageRoot is missing: {nuget_package_root}")
@@ -74,12 +81,12 @@ def create_manifest(raw_path: Path, runtime_identifier: str, output_path: Path) 
         )
     )
     document = {
-        "$generated": "Captured from MSBuild FilesToBundle and loose ResolvedFileToPublish inputs immediately before single-file bundling.",
+        "$generated": "Captured from MSBuild FilesToBundle and loose ResolvedFileToPublish inputs at the RID-specific publish boundary.",
         "inputs": inputs,
-        "publishSingleFile": True,
+        "publishSingleFile": expected_single_file,
         "runtimeIdentifier": runtime_identifier,
         "schemaVersion": 2,
-        "selfContained": True,
+        "selfContained": expected_self_contained,
     }
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(document, indent=2, sort_keys=True) + "\n", encoding="utf-8", newline="\n")
@@ -93,7 +100,7 @@ def main() -> int:
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     count = create_manifest(args.raw, args.rid, args.output)
-    print(f"created {args.rid} bundle-input evidence for {count} pre-bundle files")
+    print(f"created {args.rid} publish-input evidence for {count} files")
     return 0
 
 

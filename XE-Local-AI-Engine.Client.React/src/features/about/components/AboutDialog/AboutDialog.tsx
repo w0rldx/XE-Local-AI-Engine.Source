@@ -118,7 +118,7 @@ export function AboutDialog({ opened, onClose }: IAboutDialogProps) {
 						</Text>
 						<Stack gap={2}>
 							<Text size="sm" fw={600}>
-								{t("pages.about.runtimeTerms", "Bundled .NET runtime terms")}
+								{t("pages.about.runtimeTerms", "Platform .NET component terms")}
 							</Text>
 							{runtimeLegalDocuments.map((document) => (
 								<Anchor key={document.href} href={document.href} target="_blank" rel="noopener noreferrer" size="sm">

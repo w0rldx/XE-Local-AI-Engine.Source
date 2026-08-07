@@ -8,7 +8,6 @@ using Microsoft.Extensions.Options;
 using Scalar.AspNetCore;
 using Serilog;
 using Serilog.Events;
-using Velopack;
 using XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Client.Common.Extensions;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
@@ -25,12 +24,10 @@ using XE_Local_AI_Engine.Client.Services.Persistence;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.Shutdown;
 
-// Velopack install, update, and uninstall hook dispatch. This MUST be the FIRST executable statement and is
-// intentionally placed BEFORE the try/catch. When Velopack is invoked for an install, update, or uninstall hook it runs
-// the hook and exits the process, and that hook-driven exit must NOT be intercepted by the app's top-level catch, which
-// logs a fatal startup failure and rethrows. On a normal launch the call returns immediately, so every host — desktop,
-// headless, Aspire, and CI — proceeds unchanged. It is safe in all modes.
-VelopackApp.Build().Run();
+// IMPORTANT: Velopack hook dispatch must be the first executable statement and remain outside the top-level catch.
+// The Windows distribution uses the adjacent C# launcher as its managed executable locator. Linux and development
+// hosts retain the default locator. Hook-driven exits must not be logged as startup failures.
+FrameworkDependentVelopackBootstrap.Run(args);
 
 try
 {
@@ -46,13 +43,13 @@ try
     // the empty appsettings.json defaults leave the updater inert.
     builder.Configuration.AddJsonFile("appsettings.AppUpdate.json", optional: true, reloadOnChange: false);
 
-    // Desktop mode (self-contained double-click launch) is enabled by env XE_LAUNCH_MODE=desktop / --desktop, AND is
+    // Desktop mode (packaged double-click launch) is enabled by env XE_LAUNCH_MODE=desktop / --desktop, AND is
     // implied by a Velopack-managed install (installer or portable): that packaged flavor IS the desktop app — its in-app
-    // updater is desktop-only — but the Velopack stub launches the bare exe without the env/arg a manual launcher sets,
-    // so the install itself is the opt-in signal. VelopackApp.Build().Run() above established the locator this reads.
-    // Resolved once, early, so it can gate the loopback bind below and the HTTPS pipeline further down. A raw-exe/dev/
-    // Aspire/CI run is not a Velopack install and sets no env/arg, so every call below is skipped and the pipeline is
-    // byte-identical to before.
+    // updater is desktop-only — but the Velopack stub launches the managed entry point without the env/arg a manual
+    // launcher sets, so the install itself is the opt-in signal. FrameworkDependentVelopackBootstrap.Run(args) above
+    // established the locator this reads. Resolved once, early, so it can gate the loopback bind below and the HTTPS
+    // pipeline further down. A raw DLL/dev/Aspire/CI run is not a Velopack install and sets no env/arg, so every call
+    // below is skipped and the pipeline is byte-identical to before.
     var isDesktop = DesktopLaunch.IsDesktopMode(args, VelopackInstall.IsManaged());
     if (isDesktop)
     {

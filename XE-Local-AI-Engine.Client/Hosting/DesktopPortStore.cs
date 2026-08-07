@@ -48,7 +48,7 @@ internal static class DesktopPortStore
             return DesktopLaunch.LoopbackBindUrl;
         }
 
-#pragma warning disable S5332 // Desktop mode deliberately binds plain http on 127.0.0.1 (same as DesktopLaunch.LoopbackBindUrl): traffic never leaves the machine and localhost has no certificate story for a self-contained desktop app.
+#pragma warning disable S5332 // Desktop mode deliberately binds plain http on 127.0.0.1 (same as DesktopLaunch.LoopbackBindUrl): traffic never leaves the machine and localhost has no certificate story for a packaged desktop app.
         return $"http://{DesktopLaunch.LoopbackHost}:{port.Value.ToString(CultureInfo.InvariantCulture)}";
 #pragma warning restore S5332
     }

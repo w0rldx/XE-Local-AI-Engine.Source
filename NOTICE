@@ -21,14 +21,15 @@ components detected in a particular build.
    detected shipped components with the curated license decisions in both
    directions and fails on missing, unknown, or stale entries.
 
-2. Embedded .NET runtime
+2. Platform-specific .NET components
 
-   Official binaries are self-contained and include .NET runtime components.
-   Each payload carries the applicable Microsoft .NET license and the runtime
-   ThirdPartyNotices file under `licenses/dotnet/`. The Windows single-file
-   payload carries the .NET Library License; the Linux payload carries the .NET
-   MIT license. The repository records the reviewed source and checksum of the
-   separately maintained Windows license under `third-party/dotnet/`.
+   The Linux AppImage is self-contained and carries the applicable Microsoft
+   .NET and ASP.NET Core MIT licenses and ThirdPartyNotices under
+   `licenses/dotnet/`. The Windows Portable ZIP is framework-dependent: it does
+   not redistribute the .NET runtime. Its C# launcher uses Microsoft's Windows
+   apphost, licensed under MIT, and carries the exact host-pack license and
+   ThirdPartyNotices under the same directory. The installed ASP.NET Core/.NET
+   runtime remains the user's separately installed system component.
 
 3. Inference runtimes obtained on the user's machine
 

@@ -12,7 +12,7 @@ For the maintainer workflow, see [`publish/README.md`](../publish/README.md). Fo
 
 | Platform | Download | What the release does not contain |
 |---|---|---|
-| Windows x64 | `XE-Local-AI-Engine-win-Portable.zip` | No `Setup.exe`, MSI, or store installer |
+| Windows x64 | `XE-Local-AI-Engine-win-Portable.zip` | Framework-dependent; ASP.NET Core Runtime 10.0.10+ x64 required; no installer |
 | Linux x64 | The `.AppImage` asset | No Linux portable ZIP, DEB, RPM, or install script |
 
 Velopack feed indexes and full/delta packages are published beside the user-facing artifacts. Installed applications
@@ -34,6 +34,10 @@ The payloads carry their own SPDX manifest and license disclosures.
    `C:\Users\<you>\Apps\XE-Local-AI-Engine`.
 4. Run the top-level `XE-Local-AI-Engine.exe` beside the `current` directory. Do not launch the application binary
    inside `current` directly.
+
+The Windows package does not bundle .NET. Install the x64 ASP.NET Core Runtime 10.0.10 or a newer .NET 10 servicing
+patch first. The top-level Velopack entry launches the C# apphost in `current`; Microsoft's apphost reports a missing
+base runtime, and the launcher reports an absent/outdated ASP.NET Core runtime with the official download URL.
 
 Keep the extracted directory writable. The official portable bundle is Velopack-managed and updates in place. Avoid
 `Program Files`, read-only media, network shares, synchronized folders, and running from inside the ZIP preview.

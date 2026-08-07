@@ -17,6 +17,10 @@ Under the release notes, expand **Assets**. Choose the platform artifact:
 | Windows x64 | `XE-Local-AI-Engine-win-Portable.zip` |
 | Linux x64 | The file whose name ends in `.AppImage` |
 
+Windows also requires the x64 ASP.NET Core Runtime 10.0.10 or a newer .NET 10 servicing patch; install it from
+Microsoft's [.NET 10 download page](https://dotnet.microsoft.com/en-us/download/dotnet/10.0). The Linux AppImage is
+self-contained.
+
 Also download `CHECKSUMS.sha256`. The `.nupkg` files and `releases.win.json` / `releases.linux.json` are update-feed
 assets used by Velopack; users do not open them manually. GitHub's automatic **Source code** archives are not packaged
 applications.

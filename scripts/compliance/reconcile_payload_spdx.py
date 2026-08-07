@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 from pathlib import Path
 from urllib.parse import quote
 
@@ -13,6 +14,9 @@ from bundle_input_evidence import load_bundle_packages
 
 
 INVALID_LICENSES = {"", "UNKNOWN", "NOASSERTION"}
+THREE_PART_VERSION = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
+
+
 def load_json(path: Path) -> dict:
     with path.open(encoding="utf-8") as stream:
         value = json.load(stream)
@@ -83,24 +87,50 @@ def backend_license_map(
     return result
 
 
-def runtime_license(name: str, runtime_identifier: str, library_license_path: Path | None) -> tuple[str, dict | None]:
+def runtime_license(name: str, runtime_identifier: str) -> str:
     lowered = name.casefold()
     if lowered.startswith(("runtimepack.microsoft.aspnetcore.app.runtime.", "microsoft.aspnetcore.app.runtime.")):
-        return "MIT", None
+        if runtime_identifier == "win-x64":
+            raise ValueError("Windows framework-dependent payload must not include a .NET runtime pack")
+        return "MIT"
     if lowered.startswith(("runtimepack.microsoft.netcore.app.runtime.", "microsoft.netcore.app.runtime.")):
         if runtime_identifier == "win-x64":
-            if library_license_path is None or not library_license_path.is_file():
-                raise ValueError("Windows runtime reconciliation requires the .NET Library License text")
-            return (
-                "MIT AND LicenseRef-DotNet-Library",
-                {
-                    "licenseId": "LicenseRef-DotNet-Library",
-                    "name": "Microsoft .NET Library License",
-                    "extractedText": library_license_path.read_text(encoding="windows-1252"),
-                },
-            )
-        return "MIT", None
+            raise ValueError("Windows framework-dependent payload must not include a .NET runtime pack")
+        return "MIT"
     raise ValueError(f"unrecognized runtime pack {name}")
+
+
+def require_legal_document(path: Path | None, label: str) -> Path:
+    if path is None or not path.is_file() or path.stat().st_size == 0:
+        raise ValueError(f"Windows framework-dependent payload requires the {label}")
+    return path
+
+
+def windows_apphost_component(
+    runtime_identifier: str,
+    version: str | None,
+    license_path: Path | None,
+    notices_path: Path | None,
+) -> dict | None:
+    supplied = any(value is not None for value in (version, license_path, notices_path))
+    if runtime_identifier != "win-x64":
+        if supplied:
+            raise ValueError("Windows apphost metadata is only valid for the win-x64 payload")
+        return None
+    if version is None or THREE_PART_VERSION.fullmatch(version) is None:
+        raise ValueError("Windows framework-dependent payload requires the Windows apphost version")
+    exact_license = require_legal_document(license_path, "Windows apphost MIT license")
+    exact_notices = require_legal_document(notices_path, "Windows apphost third-party notices")
+    name = "Microsoft.NETCore.App.Host.win-x64"
+    purl = f"pkg:nuget/{name}@{version}"
+    component = package(name, version, "MIT", purl)
+    component["licenseComments"] = (
+        "Exact host-pack terms bundled at licenses/dotnet/DOTNET-APPHOST-LICENSE.txt "
+        f"(SHA-256 {hashlib.sha256(exact_license.read_bytes()).hexdigest()}) and "
+        "licenses/dotnet/DOTNET-APPHOST-THIRD-PARTY-NOTICES.txt "
+        f"(SHA-256 {hashlib.sha256(exact_notices.read_bytes()).hexdigest()})."
+    )
+    return component
 
 
 def detected_backend_packages(
@@ -108,7 +138,6 @@ def detected_backend_packages(
     bundle_input_manifest: Path,
     runtime_identifier: str,
     licenses: dict[tuple[str, str], str],
-    library_license_path: Path | None,
 ) -> tuple[list[dict], list[dict]]:
     matching_targets = [key for key in deps.get("targets", {}) if key.endswith(f"/{runtime_identifier}")]
     if len(matching_targets) != 1:
@@ -135,9 +164,7 @@ def detected_backend_packages(
                 "microsoft.aspnetcore.app.runtime.",
             )
         ):
-            expression, extracted = runtime_license(name, runtime_identifier, library_license_path)
-            if extracted is not None:
-                extracted_licenses.append(extracted)
+            expression = runtime_license(name, runtime_identifier)
         else:
             inventory_key = (folded_name, version)
             if inventory_key not in deps_package_keys:
@@ -180,8 +207,14 @@ def reconcile(
     backend_manifest_path: Path,
     frontend_manifest_path: Path,
     runtime_identifier: str,
-    library_license_path: Path | None,
+    legacy_library_license_path: Path | None = None,
+    *,
+    windows_apphost_version: str | None = None,
+    windows_apphost_license_path: Path | None = None,
+    windows_apphost_notices_path: Path | None = None,
 ) -> tuple[int, int]:
+    if legacy_library_license_path is not None:
+        raise ValueError("the Windows framework-dependent payload must not use the .NET Library License")
     document = load_json(spdx_path)
     root = next((entry for entry in document.get("packages", []) if entry.get("SPDXID") == "SPDXRef-RootPackage"), None)
     if root is None:
@@ -195,9 +228,16 @@ def reconcile(
         bundle_input_manifest,
         runtime_identifier,
         backend_license_map(load_json(backend_manifest_path), runtime_identifier, bundle_input_manifest),
-        library_license_path,
     )
     frontend = detected_frontend_packages(load_json(frontend_manifest_path))
+    apphost = windows_apphost_component(
+        runtime_identifier,
+        windows_apphost_version,
+        windows_apphost_license_path,
+        windows_apphost_notices_path,
+    )
+    if apphost is not None:
+        backend.append(apphost)
     components = backend + frontend
     purls = [entry["externalRefs"][0]["referenceLocator"] for entry in components]
     if len(purls) != len(set(purls)):
@@ -247,7 +287,9 @@ def main() -> int:
     parser.add_argument("--bundle-input-manifest", type=Path, required=True)
     parser.add_argument("--backend-manifest", type=Path, required=True)
     parser.add_argument("--frontend-manifest", type=Path, required=True)
-    parser.add_argument("--dotnet-library-license", type=Path)
+    parser.add_argument("--windows-apphost-version")
+    parser.add_argument("--windows-apphost-license", type=Path)
+    parser.add_argument("--windows-apphost-notices", type=Path)
     args = parser.parse_args()
     backend_count, frontend_count = reconcile(
         args.spdx,
@@ -256,7 +298,10 @@ def main() -> int:
         args.backend_manifest,
         args.frontend_manifest,
         args.rid,
-        args.dotnet_library_license,
+        None,
+        windows_apphost_version=args.windows_apphost_version,
+        windows_apphost_license_path=args.windows_apphost_license,
+        windows_apphost_notices_path=args.windows_apphost_notices,
     )
     print(f"reconciled payload SPDX: {backend_count} backend + {frontend_count} frontend shipped components")
     return 0

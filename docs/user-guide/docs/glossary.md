@@ -47,7 +47,8 @@ you have to extract it properly first.
 
 ### Portable build
 Software that doesn't install. You unzip a folder, run it from there, and delete the folder to remove
-it. Nothing is written to Windows' installed-programs list.
+it. Nothing is written to Windows' installed-programs list. “Portable” describes the app's files, not its framework:
+the Windows build still requires the separately installed x64 ASP.NET Core Runtime 10.0.10+.
 
 ### Mark of the Web / "Unblock"
 Windows quietly tags files downloaded from the internet with a hidden "came from the internet" marker.

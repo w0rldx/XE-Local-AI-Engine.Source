@@ -23,31 +23,47 @@ FORBIDDEN_MARKERS = (
     b"microsoft.agents.ai.hosting.dll",
     b"microsoft.agents.ai.hosting.openai.dll",
 )
-DOTNET_DOCUMENT_NAMES = (
+DOTNET_RUNTIME_DOCUMENT_NAMES = (
     "DOTNET-RUNTIME-LICENSE.txt",
     "DOTNET-RUNTIME-THIRD-PARTY-NOTICES.txt",
     "ASPNETCORE-RUNTIME-LICENSE.txt",
     "ASPNETCORE-RUNTIME-THIRD-PARTY-NOTICES.txt",
-    "DOTNET-LIBRARY-LICENSE.html",
 )
 COMMON_REQUIRED = (
-    "licenses/dotnet/dotnet-runtime-license.txt",
-    "licenses/dotnet/dotnet-runtime-third-party-notices.txt",
-    "licenses/dotnet/aspnetcore-runtime-license.txt",
-    "licenses/dotnet/aspnetcore-runtime-third-party-notices.txt",
     "_manifest/spdx_2.2/manifest.spdx.json",
     "wwwroot/component-manifest.json",
     "wwwroot/licenses/frontend/frontend-components.json",
     "wwwroot/licenses/frontend/third-party-notices.md",
     "backend-components.json",
     "third-party-notices.md",
-    *(f"licenses/dotnet/{name.lower()}" for name in DOTNET_DOCUMENT_NAMES),
-    *(f"wwwroot/licenses/dotnet/{name.lower()}" for name in DOTNET_DOCUMENT_NAMES),
 )
 RID_REQUIRED = {
-    "win-x64": (),
-    "linux-x64": (),
+    "win-x64": (
+        "xe-local-ai-engine.windowslauncher.exe",
+        "xe-local-ai-engine.windowslauncher.dll",
+        "xe-local-ai-engine.windowslauncher.deps.json",
+        "xe-local-ai-engine.windowslauncher.runtimeconfig.json",
+        "xe-local-ai-engine.client.dll",
+        "xe-local-ai-engine.client.deps.json",
+        "xe-local-ai-engine.client.runtimeconfig.json",
+        "licenses/dotnet/dotnet-apphost-license.txt",
+        "licenses/dotnet/dotnet-apphost-third-party-notices.txt",
+        "wwwroot/licenses/dotnet/dotnet-apphost-license.txt",
+        "wwwroot/licenses/dotnet/dotnet-apphost-third-party-notices.txt",
+    ),
+    "linux-x64": (
+        *(f"licenses/dotnet/{name.lower()}" for name in DOTNET_RUNTIME_DOCUMENT_NAMES),
+        *(f"wwwroot/licenses/dotnet/{name.lower()}" for name in DOTNET_RUNTIME_DOCUMENT_NAMES),
+    ),
 }
+WINDOWS_FORBIDDEN_RUNTIME_SUFFIXES = (
+    "coreclr.dll",
+    "hostfxr.dll",
+    "hostpolicy.dll",
+    "clrjit.dll",
+    "system.private.corelib.dll",
+    "dotnet-library-license.html",
+)
 
 
 def select_current_full_package(release_dir: Path, version: str) -> Path:
@@ -73,6 +89,18 @@ def assert_required_paths(paths: list[str], runtime_identifier: str, label: str)
     for required in required_suffixes(runtime_identifier):
         if not any(path.endswith(required) for path in normalized):
             raise ValueError(f"{label} is missing required {required.upper()}")
+
+
+def assert_framework_distribution(paths: list[str], runtime_identifier: str, label: str) -> None:
+    if runtime_identifier != "win-x64":
+        return
+    normalized = [path.replace("\\", "/").lower() for path in paths]
+    forbidden = next(
+        (path for path in normalized if any(path.endswith(suffix) for suffix in WINDOWS_FORBIDDEN_RUNTIME_SUFFIXES)),
+        None,
+    )
+    if forbidden is not None:
+        raise ValueError(f"{label} framework-dependent Windows payload contains forbidden runtime material: {forbidden}")
 
 
 def assert_no_removed_tts(path: str, content: bytes, label: str) -> None:
@@ -201,8 +229,13 @@ def assert_backend_terms(terms: dict[str, str], contents: dict[str, bytes], labe
             raise ValueError(f"{label} backend legal term checksum mismatch: {path}")
 
 
-def assert_dotnet_documents_are_served(contents: dict[str, bytes], label: str) -> None:
-    for name in DOTNET_DOCUMENT_NAMES:
+def assert_dotnet_documents_are_served(contents: dict[str, bytes], runtime_identifier: str, label: str) -> None:
+    names = (
+        ("DOTNET-APPHOST-LICENSE.txt", "DOTNET-APPHOST-THIRD-PARTY-NOTICES.txt")
+        if runtime_identifier == "win-x64"
+        else DOTNET_RUNTIME_DOCUMENT_NAMES
+    )
+    for name in names:
         bundled = contents.get(f"licenses/dotnet/{name}")
         served = contents.get(f"wwwroot/licenses/dotnet/{name}")
         if bundled is None or served is None:
@@ -224,6 +257,7 @@ def verify_zip_archive(archive: Path, runtime_identifier: str) -> None:
     with zipfile.ZipFile(archive) as package:
         names = package.namelist()
         assert_required_paths(names, runtime_identifier, str(archive))
+        assert_framework_distribution(names, runtime_identifier, str(archive))
         component_entries = [name for name in names if name.replace("\\", "/").lower().endswith("wwwroot/component-manifest.json")]
         if len(component_entries) != 1:
             raise ValueError(f"{archive} must contain exactly one frontend component manifest")
@@ -262,10 +296,15 @@ def verify_zip_archive(archive: Path, runtime_identifier: str) -> None:
         assert_dotnet_documents_are_served(
             {
                 relative: package.read(f"{prefix}{relative}")
-                for name in DOTNET_DOCUMENT_NAMES
+                for name in (
+                    ("DOTNET-APPHOST-LICENSE.txt", "DOTNET-APPHOST-THIRD-PARTY-NOTICES.txt")
+                    if runtime_identifier == "win-x64"
+                    else DOTNET_RUNTIME_DOCUMENT_NAMES
+                )
                 for relative in (f"licenses/dotnet/{name}", f"wwwroot/licenses/dotnet/{name}")
                 if f"{prefix}{relative}" in names
             },
+            runtime_identifier,
             str(archive),
         )
         terms = backend_legal_terms(package.read(backend_entry), runtime_identifier, str(archive))
@@ -288,6 +327,7 @@ def verify_zip_archive(archive: Path, runtime_identifier: str) -> None:
 def verify_tree(root: Path, runtime_identifier: str, label: str) -> None:
     files = [path for path in root.rglob("*") if path.is_file()]
     assert_required_paths([str(path.relative_to(root)) for path in files], runtime_identifier, label)
+    assert_framework_distribution([str(path.relative_to(root)) for path in files], runtime_identifier, label)
     component_files = [path for path in files if str(path.relative_to(root)).replace("\\", "/").lower().endswith("wwwroot/component-manifest.json")]
     if len(component_files) != 1:
         raise ValueError(f"{label} must contain exactly one frontend component manifest")
@@ -335,10 +375,15 @@ def verify_tree(root: Path, runtime_identifier: str, label: str) -> None:
     assert_dotnet_documents_are_served(
         {
             relative: (application_root / relative).read_bytes()
-            for name in DOTNET_DOCUMENT_NAMES
+            for name in (
+                ("DOTNET-APPHOST-LICENSE.txt", "DOTNET-APPHOST-THIRD-PARTY-NOTICES.txt")
+                if runtime_identifier == "win-x64"
+                else DOTNET_RUNTIME_DOCUMENT_NAMES
+            )
             for relative in (f"licenses/dotnet/{name}", f"wwwroot/licenses/dotnet/{name}")
             if (application_root / relative).is_file()
         },
+        runtime_identifier,
         label,
     )
     assert_backend_terms(

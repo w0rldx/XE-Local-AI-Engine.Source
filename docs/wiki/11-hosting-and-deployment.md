@@ -2,14 +2,14 @@
 
 > Baseline: `7e64ed589e14eecc0e522e807d2e531a1095d19a` · Reviewed: 2026-07-28 · Code-grounded.
 
-This page covers how the XE Local AI Engine node process is **hosted and shipped**: the Aspire AppHost used for local dev/integration, the shared `ServiceDefaults`, the configuration layers (`appsettings` + the user-editable `node-settings.json` + the encrypted `hf-token.enc`), the background hosted services that run inside the node, the self-contained single-file **desktop launcher** (`XE_LAUNCH_MODE=desktop`), the publish profiles + launchers used to produce a double-click distribution, and the legacy/manual cleanup scripts.
+This page covers how the XE Local AI Engine node process is **hosted and shipped**: the Aspire AppHost used for local dev/integration, the shared `ServiceDefaults`, the configuration layers (`appsettings` + the user-editable `node-settings.json` + the encrypted `hf-token.enc`), the background hosted services that run inside the node, packaged **desktop mode** (`XE_LAUNCH_MODE=desktop`), the asymmetric Windows/Linux publish profiles, the Windows C# launcher, and the legacy/manual cleanup scripts.
 
 There are **two distinct ways the node runs**:
 
 | Mode | Entry point | Used for | HTTP/HTTPS | DB + secrets source |
 |------|-------------|----------|------------|---------------------|
 | **Aspire dev / integration** | `XE-Local-AI-Engine.AppHost/AppHost.cs` orchestrates the `app` project | Local development and integration checks via the worktree-scoped `scripts/dev-*.sh` helpers | HTTPS (Kestrel default URLs) | Aspire parameters + env (`XE_NODE_SQLITE_KEY`, SQLite resource) |
-| **Self-contained desktop** | `XE-Local-AI-Engine.Client` binary launched with `XE_LAUNCH_MODE=desktop` | Shipped single-file app a tester double-clicks | Plain HTTP on loopback `127.0.0.1:<auto-port>` | Per-user data dir; connection string + operator key synthesized at startup |
+| **Packaged desktop** | Linux self-contained AppImage or Windows framework-dependent C# launcher + client DLL | Shipped portable app a user double-clicks | Plain HTTP on loopback `127.0.0.1:<auto-port>` | Per-user data dir; connection string + operator key synthesized at startup |
 
 The two paths are deliberately kept **byte-behaviour-identical when the desktop flag is off** — every desktop branch in `Program.cs` is gated and skipped in Aspire/CI/headless runs.
 
@@ -118,12 +118,12 @@ All per-node runtime artifacts (settings, encrypted credential stores, cert pins
 
 ---
 
-## 5. Self-contained single-file desktop launcher
+## 5. Packaged desktop mode
 
-Desktop mode turns the same binary into a double-click app. It is **opt-in** and resolved by `DesktopLaunch.IsDesktopMode(args, VelopackInstall.IsManaged())` (`Client/Hosting/DesktopLaunch.cs`, `Program.cs:49`) from any of three signals: env `XE_LAUNCH_MODE=desktop`, CLI `--desktop`, **or** running from a **Velopack-managed install** (`VelopackInstall.IsManaged()` — installer or portable flavor). The managed-install signal exists because the Velopack stub launches the bare exe with no env/arg, yet the packaged app *is* the desktop flavor (its in-app updater is desktop-only); `VelopackApp.Build().Run()` (`Program.cs:29`) establishes the locator `IsManaged()` reads. With **none** of the three signals present — Aspire, CI, and headless runs are not Velopack installs and set no env/arg — every desktop branch is skipped and behaviour is byte-identical.
+Desktop mode turns the node host into a double-click app. It is **opt-in** and resolved by `DesktopLaunch.IsDesktopMode(args, VelopackInstall.IsManaged())` from env `XE_LAUNCH_MODE=desktop`, CLI `--desktop`, or a **Velopack-managed portable install**. `FrameworkDependentVelopackBootstrap.Run(args)` establishes the locator. On Windows, it identifies the adjacent `XE-Local-AI-Engine.WindowsLauncher.exe` while the actual host runs through `dotnet.exe`; Linux uses Velopack's default AppImage locator. With none of those signals present, Aspire, CI, and headless behavior is unchanged.
 
 ```
- launcher script sets XE_LAUNCH_MODE=desktop
+ launcher/package selects desktop mode
             │
             ▼
  Program.cs: isDesktop = true
@@ -157,7 +157,7 @@ not a retained smoke-test transcript.
 
 ### Persistent per-user data + operator key
 
-`DesktopBootstrap` (`Client/Hosting/DesktopBootstrap.cs`) exists because a double-click launch supplies neither a DB connection string nor the operator secret. It targets `Environment.SpecialFolder.LocalApplicationData` (Windows `%LOCALAPPDATA%`, Linux `$XDG_DATA_HOME`/`~/.local/share`) so a single-file exe — whose `AppContext.BaseDirectory` is a volatile bundle-extraction temp — keeps its data across runs. The operator key is **generated once and persisted** to `node.key` (atomic temp-file write, `0600` on non-Windows); a torn/corrupt or wrong-length key **fails loudly** rather than regenerating (regenerating would brick the encrypted DB).
+`DesktopBootstrap` (`Client/Hosting/DesktopBootstrap.cs`) exists because a double-click launch supplies neither a DB connection string nor the operator secret. It targets `Environment.SpecialFolder.LocalApplicationData` (Windows `%LOCALAPPDATA%`, Linux `$XDG_DATA_HOME`/`~/.local/share`) so portable application replacement and Linux single-file extraction never relocate persistent data. The operator key is **generated once and persisted** to `node.key` (atomic temp-file write, `0600` on non-Windows); a torn/corrupt or wrong-length key **fails loudly** rather than regenerating (regenerating would brick the encrypted DB).
 
 ### No-orphan shutdown (the load-bearing invariant)
 
@@ -174,21 +174,26 @@ The **Windows Job Object is the source-defined hard-kill safety net** regardless
 
 ### Publish profiles
 
-`XE-Local-AI-Engine.Client/Properties/PublishProfiles/{linux-x64,win-x64}.pubxml` — both produce a **self-contained, single-file** build:
+Publishing is deliberately platform-specific:
 
-| Property | Value | Why |
-|----------|-------|-----|
-| `SelfContained` | `true` | no .NET runtime install required on the target |
-| `PublishSingleFile` | `true` | one binary |
-| `IncludeNativeLibrariesForSelfExtract` | `true` | embed `e_sqlite3` (EF Core SQLite) + libsodium/NSec native libs; extracted to a per-user temp dir on first launch |
-| `PublishTrimmed` | **`false`** | EF Core / Serilog / FastEndpoints / MEAI use heavy runtime reflection; the trimmer would silently strip reachable members. Trimming stays off until every dependency is trim-annotated and a trim smoke suite exists |
-| `RuntimeIdentifier` | `linux-x64` / `win-x64` | the two shipped targets |
+| Payload | `SelfContained` | `PublishSingleFile` | `UseAppHost` | Contract |
+|---|---:|---:|---:|---|
+| Linux client | `true` | `true` | default | Self-contained AppImage payload; runtime/native libraries are bundled; no system .NET prerequisite |
+| Windows client | `false` | `false` | `false` | Managed DLL/deps/runtimeconfig and application dependencies only |
+| Windows C# launcher | `false` | `false` | `true` | MIT Microsoft apphost plus launcher DLL/deps/runtimeconfig; validates ASP.NET Core 10.0.10+ and starts the client DLL |
 
-Publish e.g. `dotnet publish XE-Local-AI-Engine.Client -c Release -r linux-x64 -p:PublishProfile=linux-x64`. Output: `XE-Local-AI-Engine.Client/bin/Release/net10.0/<rid>/publish/`.
+The two Windows projects publish into the same payload directory before Velopack packs it. No Windows runtime pack,
+`coreclr.dll`, `hostfxr.dll`, or .NET Library License may appear. Trimming remains off for the reflection-heavy client.
 
-### Launcher scripts (`publish/`)
+### Official Windows launcher and legacy scripts
 
-For a **manually unzipped RC build, the bare binary does not enter desktop mode** — a launcher must set `XE_LAUNCH_MODE=desktop` (or pass `--desktop`). (A **Velopack-managed install is the exception**: `VelopackInstall.IsManaged()` flips desktop mode on automatically, so the installer/portable flavor needs no launcher — see §5.) Tracked launchers for the manual/RC-zip path:
+`XE-Local-AI-Engine.WindowsLauncher` is the official Windows entry point. Its apphost provides Microsoft's standard
+missing-.NET behavior; once running, the C# code validates architecture, required adjacent files, and the ASP.NET Core
+runtime floor, forwards all Velopack arguments to `dotnet XE-Local-AI-Engine.Client.dll`, sets desktop mode, waits, and
+propagates the child exit code. The main host wraps Velopack's process locator so an update waits for both the managed
+host and launcher to exit before replacing the current directory.
+
+For deprecated manually unzipped self-contained builds, the old scripts remain under `publish/`:
 
 - `publish/linux/run-xe-local-ai-engine.sh` — sets `XE_LAUNCH_MODE=desktop`, resolves its own dir (symlink-safe), and `exec`s the binary **in the foreground** so closing the terminal delivers `SIGHUP` to the process group → graceful teardown.
 - `publish/windows/run-xe-local-ai-engine.cmd` — sets `XE_LAUNCH_MODE=desktop` and runs the exe **in the current console window** (no `START`/`Start-Process`); a new/detached window would break the `CTRL_CLOSE_EVENT` → graceful-shutdown chain.
@@ -241,8 +246,9 @@ alternatives. See [`docs/velopack-release-install-guide.md`](../velopack-release
 ## 7. Installers & uninstaller
 
 **OS-native installers (MSI / DEB / RPM) are deferred.** Official binaries are Velopack-managed portable applications:
-Windows `Portable.zip` produced with `--noInst` (no `Setup.exe`) and a Linux AppImage. Both self-update. The runtime is
-also self-provisioning: it downloads its own llama.cpp binary and GGUF models into the per-user data directory.
+Windows `Portable.zip` produced with `--noInst` (no `Setup.exe`) and a Linux AppImage. Both self-update. Windows requires
+the separately installed x64 ASP.NET Core Runtime 10.0.10+; Linux bundles .NET. The application still self-provisions
+its llama.cpp binary and GGUF models into the per-user data directory.
 
 ### Legacy manual-bundle cleanup scripts
 

@@ -20,6 +20,7 @@ SPEC.loader.exec_module(MODULE)
 
 class PayloadSpdxReconciliationTests(unittest.TestCase):
     def fixture(self, root: Path, rid: str = "linux-x64") -> tuple[Path, Path, Path, Path, Path]:
+        is_self_contained = rid == "linux-x64"
         spdx = root / "manifest.spdx.json"
         spdx.write_text(
             json.dumps(
@@ -49,16 +50,26 @@ class PayloadSpdxReconciliationTests(unittest.TestCase):
                         f".NETCoreApp,Version=v10.0/{rid}": {
                             "Product/1.0.0": {"runtime": {"Product.dll": {}}},
                             "Example.Package/2.0.0": {"runtime": {"Example.dll": {}}},
-                            f"runtimepack.Microsoft.NETCore.App.Runtime.{rid}/10.0.10": {
-                                "runtime": {"System.Private.CoreLib.dll": {}}
-                            },
+                            **(
+                                {
+                                    f"runtimepack.Microsoft.NETCore.App.Runtime.{rid}/10.0.10": {
+                                        "runtime": {"System.Private.CoreLib.dll": {}}
+                                    }
+                                }
+                                if is_self_contained
+                                else {}
+                            ),
                             "Meta.Package/3.0.0": {"dependencies": {"Example.Package": "2.0.0"}},
                         }
                     },
                     "libraries": {
                         "Product/1.0.0": {"type": "project"},
                         "Example.Package/2.0.0": {"type": "package"},
-                        f"runtimepack.Microsoft.NETCore.App.Runtime.{rid}/10.0.10": {"type": "package"},
+                        **(
+                            {f"runtimepack.Microsoft.NETCore.App.Runtime.{rid}/10.0.10": {"type": "package"}}
+                            if is_self_contained
+                            else {}
+                        ),
                         "Meta.Package/3.0.0": {"type": "package"},
                     },
                 }
@@ -90,27 +101,33 @@ class PayloadSpdxReconciliationTests(unittest.TestCase):
                 {
                     "schemaVersion": 2,
                     "runtimeIdentifier": rid,
-                    "publishSingleFile": True,
-                    "selfContained": True,
+                    "publishSingleFile": is_self_contained,
+                    "selfContained": is_self_contained,
                     "inputs": [
                         {
                             "packageId": "Example.Package",
                             "packageVersion": "2.0.0",
-                            "disposition": "bundle",
+                            "disposition": "bundle" if is_self_contained else "loose",
                             "origin": "nuget",
                             "relativePath": "Example.dll",
                             "sha256": "a" * 64,
                             "sourceType": "PackageReference",
                         },
-                        {
-                            "packageId": f"Microsoft.NETCore.App.Runtime.{rid}",
-                            "packageVersion": "10.0.10",
-                            "disposition": "bundle",
-                            "origin": "nuget",
-                            "relativePath": "System.Private.CoreLib.dll",
-                            "sha256": "b" * 64,
-                            "sourceType": "PackageReference",
-                        },
+                        *(
+                            [
+                                {
+                                    "packageId": f"Microsoft.NETCore.App.Runtime.{rid}",
+                                    "packageVersion": "10.0.10",
+                                    "disposition": "bundle",
+                                    "origin": "nuget",
+                                    "relativePath": "System.Private.CoreLib.dll",
+                                    "sha256": "b" * 64,
+                                    "sourceType": "PackageReference",
+                                }
+                            ]
+                            if is_self_contained
+                            else []
+                        ),
                     ],
                 }
             ),
@@ -225,38 +242,75 @@ class PayloadSpdxReconciliationTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "not bound to the supplied bundle-input evidence"):
                 MODULE.reconcile(spdx, deps, bundle, backend, frontend, "linux-x64", None)
 
-    def test_windows_runtime_requires_and_records_library_license(self) -> None:
+    def test_windows_framework_dependent_payload_records_the_exact_mit_apphost_terms(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             spdx, deps, bundle, backend, frontend = self.fixture(root, "win-x64")
-            with self.assertRaisesRegex(ValueError, "requires the .NET Library License"):
+            with self.assertRaisesRegex(ValueError, "requires the Windows apphost version"):
                 MODULE.reconcile(spdx, deps, bundle, backend, frontend, "win-x64", None)
 
-            license_path = root / "DOTNET-LIBRARY-LICENSE.html"
-            license_path.write_text("library terms", encoding="utf-8")
-            MODULE.reconcile(spdx, deps, bundle, backend, frontend, "win-x64", license_path)
-            document = json.loads(spdx.read_text())
-            runtime = next(
-                entry for entry in document["packages"] if entry["name"].startswith("Microsoft.NETCore.App.Runtime.")
-            )
-            self.assertEqual("MIT AND LicenseRef-DotNet-Library", runtime["licenseDeclared"])
-            self.assertEqual("library terms", document["hasExtractedLicensingInfos"][0]["extractedText"])
-
-    def test_windows_library_license_preserves_windows_1252_legal_text(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary_directory:
-            license_path = Path(temporary_directory) / "DOTNET-LIBRARY-LICENSE.html"
-            license_path.write_bytes('Microsoft\u2019s \u201cAS-IS\u201d terms'.encode("windows-1252"))
-
-            expression, extracted = MODULE.runtime_license(
-                "runtimepack.Microsoft.NETCore.App.Runtime.win-x64",
+            license_path = root / "DOTNET-APPHOST-LICENSE.txt"
+            notices_path = root / "DOTNET-APPHOST-THIRD-PARTY-NOTICES.txt"
+            license_path.write_text("apphost MIT terms", encoding="utf-8")
+            notices_path.write_text("apphost notices", encoding="utf-8")
+            MODULE.reconcile(
+                spdx,
+                deps,
+                bundle,
+                backend,
+                frontend,
                 "win-x64",
-                license_path,
+                None,
+                windows_apphost_version="10.0.10",
+                windows_apphost_license_path=license_path,
+                windows_apphost_notices_path=notices_path,
             )
+            document = json.loads(spdx.read_text())
+            apphost = next(
+                entry for entry in document["packages"] if entry["name"] == "Microsoft.NETCore.App.Host.win-x64"
+            )
+            self.assertEqual("MIT", apphost["licenseDeclared"])
+            self.assertEqual(
+                "pkg:nuget/Microsoft.NETCore.App.Host.win-x64@10.0.10",
+                apphost["externalRefs"][0]["referenceLocator"],
+            )
+            self.assertIn(hashlib.sha256(b"apphost MIT terms").hexdigest(), apphost["licenseComments"])
+            self.assertIn(hashlib.sha256(b"apphost notices").hexdigest(), apphost["licenseComments"])
+            self.assertNotIn("hasExtractedLicensingInfos", document)
 
-            self.assertEqual("MIT AND LicenseRef-DotNet-Library", expression)
-            self.assertIsNotNone(extracted)
-            self.assertEqual('Microsoft\u2019s \u201cAS-IS\u201d terms', extracted["extractedText"])
-            self.assertNotIn("\ufffd", extracted["extractedText"])
+    def test_windows_framework_dependent_payload_rejects_a_runtime_pack(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            spdx, deps, bundle, backend, frontend = self.fixture(root, "win-x64")
+            bundle_payload = json.loads(bundle.read_text())
+            bundle_payload["inputs"].append(
+                {
+                    "packageId": "Microsoft.NETCore.App.Runtime.win-x64",
+                    "packageVersion": "10.0.10",
+                    "disposition": "loose",
+                    "origin": "nuget",
+                    "relativePath": "coreclr.dll",
+                    "sha256": "b" * 64,
+                    "sourceType": "PackageReference",
+                }
+            )
+            bundle.write_text(json.dumps(bundle_payload), encoding="utf-8")
+            backend_payload = json.loads(backend.read_text())
+            backend_payload["shipmentEvidence"]["sha256"] = hashlib.sha256(bundle.read_bytes()).hexdigest()
+            backend.write_text(json.dumps(backend_payload), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "must not include a .NET runtime pack"):
+                MODULE.reconcile(
+                    spdx,
+                    deps,
+                    bundle,
+                    backend,
+                    frontend,
+                    "win-x64",
+                    None,
+                    windows_apphost_version="10.0.10",
+                    windows_apphost_license_path=root / "missing-license",
+                    windows_apphost_notices_path=root / "missing-notices",
+                )
 
 
 if __name__ == "__main__":

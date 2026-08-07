@@ -5,7 +5,7 @@ using System.Text;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 
 /// <summary>
-///     Fills the two configuration values a self-contained desktop launch needs but that no env/Aspire source supplies:
+///     Fills the two configuration values a packaged desktop launch needs but that no env/Aspire source supplies:
 ///     the node SQLite connection string (SEC-1) and the operator secret (SEC-2). Everything here is strictly
 ///     desktop-mode-only — the caller invokes it solely inside the <c>XE_LAUNCH_MODE=desktop</c> / <c>--desktop</c>
 ///     branch — and each key is layered into in-memory configuration ONLY when it is not already supplied. That keeps the
@@ -16,8 +16,8 @@ using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 ///     The operator key is generated once and persisted to a per-user file so it is DETERMINISTIC across launches: a
 ///     fresh random key on every start would brick the encrypted node database. The connection string targets a per-user
 ///     data directory under <see cref="Environment.SpecialFolder.LocalApplicationData" /> (Windows
-///     <c>%LOCALAPPDATA%</c>; Linux <c>$XDG_DATA_HOME</c> or <c>~/.local/share</c>) so a single-file exe — whose
-///     <c>AppContext.BaseDirectory</c> is a volatile bundle-extraction temp — keeps its data between runs.
+///     <c>%LOCALAPPDATA%</c>; Linux <c>$XDG_DATA_HOME</c> or <c>~/.local/share</c>) so application replacement or Linux
+///     single-file extraction never relocates or deletes persistent data.
 /// </remarks>
 internal static class DesktopBootstrap
 {

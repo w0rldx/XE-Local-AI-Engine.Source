@@ -15,7 +15,10 @@ vi.mock("@/features/app-update/components/AppUpdateSection", () => ({
 }));
 
 import { AboutDialog } from "@/features/about/components/AboutDialog/AboutDialog";
-import { applicationInfo } from "@/features/about/data/AboutData";
+import {
+	applicationInfo,
+	runtimeLegalDocumentsForUserAgent,
+} from "@/features/about/data/AboutData";
 
 function renderWithProviders(ui: ReactElement) {
 	const queryClient = new QueryClient({
@@ -102,7 +105,18 @@ describe("AboutDialog", () => {
 		expect(screen.getByRole("link", { name: ".NET runtime third-party notices" })).toBeTruthy();
 		expect(screen.getByRole("link", { name: "ASP.NET Core runtime license" })).toBeTruthy();
 		expect(screen.getByRole("link", { name: "ASP.NET Core runtime third-party notices" })).toBeTruthy();
-		expect(screen.getByRole("link", { name: "Windows single-file .NET Library License" })).toBeTruthy();
+		expect(screen.queryByRole("link", { name: /Library License/ })).toBeNull();
+	});
+
+	it("selects only the MIT apphost terms for a Windows framework-dependent package", () => {
+		expect(runtimeLegalDocumentsForUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64)"))
+			.toEqual([
+				{ name: ".NET Windows apphost license", href: "/licenses/dotnet/DOTNET-APPHOST-LICENSE.txt" },
+				{
+					name: ".NET Windows apphost third-party notices",
+					href: "/licenses/dotnet/DOTNET-APPHOST-THIRD-PARTY-NOTICES.txt",
+				},
+			]);
 	});
 
 	it("filters the third-party license table by query", () => {
