@@ -38,6 +38,8 @@ public sealed class NodeChatDbContext : DbContext
 
     internal DbSet<AgentSkillResource> AgentSkillResources => Set<AgentSkillResource>();
 
+    internal DbSet<CustomTool> CustomTools => Set<CustomTool>();
+
     internal DbSet<PlaybookAction> PlaybookActions => Set<PlaybookAction>();
 
     internal DbSet<AgentExecutionLog> AgentExecutionLogs => Set<AgentExecutionLog>();
@@ -315,6 +317,7 @@ public sealed class NodeChatDbContext : DbContext
         modelBuilder.ApplyConfiguration(new CanvasWorkflowConfiguration());
         modelBuilder.ApplyConfiguration(new AgentSkillConfiguration());
         modelBuilder.ApplyConfiguration(new AgentSkillResourceConfiguration());
+        modelBuilder.ApplyConfiguration(new CustomToolConfiguration());
         modelBuilder.ApplyConfiguration(new PlaybookActionConfiguration());
         modelBuilder.ApplyConfiguration(new AgentExecutionLogConfiguration());
         modelBuilder.ApplyConfiguration(new GoldenConversationConfiguration());
