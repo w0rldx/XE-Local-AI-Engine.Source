@@ -119,6 +119,7 @@ public sealed class CoderOfferSeamTests
         return new LocalToolOfferProvider(registry,
             mcpRegistry,
             StubNodeRuntimeSettings.Create().WithToolCapableModels(toolCapableModels).Build(),
+            XE_Local_AI_Engine.Tests.Testing.NullCustomToolScopeFactory.Instance,
             allowCloudKnowledgeAccess: false);
     }
 }

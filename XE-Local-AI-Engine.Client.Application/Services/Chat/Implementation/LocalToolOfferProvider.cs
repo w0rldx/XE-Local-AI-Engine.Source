@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
@@ -18,6 +19,9 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
     private const string McpSourcePrefix = "mcp:";
     private const string McpNamePrefix = "mcp__";
 
+    // Source tag the React tool pickers key their danger badge off; must match parseToolCatalogSource in the frontend.
+    private const string CustomSource = "custom";
+
     // The built-in catalog is static for the process lifetime, so precompute its three projections once. The MCP part
     // is dynamic (servers connect/disconnect) and is read live from the registry on each call, then merged in.
     private readonly IReadOnlyList<AllowedToolDto> _builtinAllTools;
@@ -33,16 +37,22 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
 
     // Read LIVE per offer, not captured at construction. See IsToolCapable for why.
     private readonly INodeRuntimeSettings _runtimeSettings;
+
+    // This provider is a SINGLETON but the custom-tool catalog is SCOPED (DbContext-backed), so it is resolved from a
+    // fresh scope per offer call rather than captured — the established singleton→scoped-store pattern in this codebase.
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly AllowedToolDto _spawnOfferDto;
 
     public LocalToolOfferProvider(IAgentToolRegistry toolRegistry,
         IMcpToolRegistry mcpToolRegistry,
         INodeRuntimeSettings runtimeSettings,
+        IServiceScopeFactory scopeFactory,
         bool allowCloudKnowledgeAccess)
     {
         ArgumentNullException.ThrowIfNull(toolRegistry);
         _mcpToolRegistry = mcpToolRegistry ?? throw new ArgumentNullException(nameof(mcpToolRegistry));
         _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
+        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _allowCloudKnowledgeAccess = allowCloudKnowledgeAccess;
 
         var builtinDescriptors = toolRegistry.GetLocalChatToolDescriptors();
@@ -264,6 +274,39 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         ];
     }
 
+    public async Task<IReadOnlyList<AllowedToolDto>> GetOfferedToolsAsync(string? activeModelId, bool isCloudModel, CancellationToken cancellationToken = default)
+    {
+        var baseOffer = GetOfferedTools(activeModelId, isCloudModel);
+
+        // Custom tools are merged ONLY in the tool-capable branch (mirroring the MCP/knowledge gating) and ONLY for a
+        // node-local model — a custom command/fetch tool can reach local data and the host, so it is never offered to a
+        // cloud model (Azure Foundry or a Codex-pinned id), independent of the knowledge-tool cloud opt-in. When the model
+        // is non-capable or cloud, the base offer is returned unchanged (byte-identical config hash).
+        if (!IsToolCapable(activeModelId) || isCloudModel || CodexModelCatalog.IsCodexModel(activeModelId))
+        {
+            return baseOffer;
+        }
+
+        // The node kill-switch is off by default. It is checked here, before the scope and store read, so the common
+        // disabled path stays cheap.
+        if (!await _runtimeSettings.GetCustomToolsEnabledAsync(cancellationToken).ConfigureAwait(false))
+        {
+            return baseOffer;
+        }
+
+        var customDescriptors = await GetEnabledCustomDescriptorsAsync(cancellationToken).ConfigureAwait(false);
+        if (customDescriptors.Count == 0)
+        {
+            return baseOffer;
+        }
+
+        return
+        [
+            .. baseOffer,
+            .. customDescriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.ParameterSchema, descriptor.RequiresApproval, descriptor.Category))
+        ];
+    }
+
     public IReadOnlyList<AllowedToolDto> GetOfferedToolsForProfile(string? activeModelId, bool isCloudModel = false)
     {
         // The profile-intersection pool: the whole offer PLUS spawn_subagent (so a profile that opts in via
@@ -276,6 +319,19 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         }
 
         return [.. GetOfferedTools(activeModelId, isCloudModel), _spawnOfferDto];
+    }
+
+    public async Task<IReadOnlyList<AllowedToolDto>> GetOfferedToolsForProfileAsync(string? activeModelId, bool isCloudModel, CancellationToken cancellationToken = default)
+    {
+        // Non-capable models get the non-capable variant and NO spawn/custom tools, so the opt-in cannot bypass the gate.
+        if (!IsToolCapable(activeModelId))
+        {
+            return _builtinWithoutAgentHome;
+        }
+
+        // The async whole offer (built-in + MCP + capability/local-gated custom) PLUS the opt-in-only spawn tool — the same
+        // asymmetry as the synchronous GetOfferedToolsForProfile, with custom tools folded in through GetOfferedToolsAsync.
+        return [.. await GetOfferedToolsAsync(activeModelId, isCloudModel, cancellationToken).ConfigureAwait(false), _spawnOfferDto];
     }
 
     public IReadOnlyList<string> GetKnownToolNames()
@@ -317,6 +373,56 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
                 Category = descriptor.Category
             })
         ];
+    }
+
+    public async Task<IReadOnlyList<string>> GetKnownToolNamesAsync(CancellationToken cancellationToken = default)
+    {
+        // UNGATED by capability AND by the node kill-switch: an authored custom tool exists on the node regardless of the
+        // active model or the kill-switch, so CRUD collision validation and the agent form see the full name space.
+        var customDescriptors = await GetEnabledCustomDescriptorsAsync(cancellationToken).ConfigureAwait(false);
+        if (customDescriptors.Count == 0)
+        {
+            return GetKnownToolNames();
+        }
+
+        return
+        [
+            .. GetKnownToolNames(),
+            .. customDescriptors.Select(static descriptor => descriptor.Name)
+        ];
+    }
+
+    public async Task<IReadOnlyList<LocalToolCatalogEntry>> GetKnownToolsAsync(CancellationToken cancellationToken = default)
+    {
+        var customDescriptors = await GetEnabledCustomDescriptorsAsync(cancellationToken).ConfigureAwait(false);
+        if (customDescriptors.Count == 0)
+        {
+            return GetKnownTools();
+        }
+
+        return
+        [
+            .. GetKnownTools(),
+            .. customDescriptors.Select(static descriptor => new LocalToolCatalogEntry
+            {
+                Name = descriptor.Name,
+                Description = descriptor.Description,
+                RequiresApproval = descriptor.RequiresApproval,
+                Source = CustomSource,
+                Category = descriptor.Category
+            })
+        ];
+    }
+
+    // Reads the enabled, acknowledged custom-tool offer descriptors LIVE from the scoped catalog through a fresh scope
+    // (this provider is a singleton). The catalog leaves the node kill-switch OUT of GetDescriptorsAsync so the ungated
+    // known-tools views see authored tools even when the feature is switched off; the OFFER methods apply the kill-switch
+    // themselves before calling this. Reading no cache mirrors how the MCP registry is read live per offer.
+    private async Task<IReadOnlyList<LocalChatToolDescriptor>> GetEnabledCustomDescriptorsAsync(CancellationToken cancellationToken)
+    {
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var catalog = scope.ServiceProvider.GetRequiredService<ICustomToolCatalog>();
+        return await catalog.GetDescriptorsAsync(cancellationToken).ConfigureAwait(false);
     }
 
     private static AllowedToolDto ToOfferDto(string name, string? parameterSchema, bool requiresApproval, ToolCategory category)

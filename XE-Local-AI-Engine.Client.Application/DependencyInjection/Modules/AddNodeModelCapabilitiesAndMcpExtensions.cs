@@ -41,6 +41,8 @@ internal static class AddNodeModelCapabilitiesAndMcpExtensions
             return new LocalToolOfferProvider(sp.GetRequiredService<IAgentToolRegistry>(),
                 sp.GetRequiredService<IMcpToolRegistry>(),
                 sp.GetRequiredService<INodeRuntimeSettings>(),
+                // Singleton provider → the scoped, DbContext-backed custom-tool catalog is resolved per offer from a fresh scope.
+                sp.GetRequiredService<IServiceScopeFactory>(),
                 knowledgeOptions.AllowCloudModelAccess);
         });
         // MCP tool extensibility. The connection manager owns the MCP client lifecycle and republishes the dynamic

@@ -141,12 +141,14 @@ public sealed class AdaptiveMemoryConfigHashTests
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
         var skillStore = Substitute.For<IAgentSkillStore>();
         var offerProvider = Substitute.For<ILocalToolOfferProvider>();
-        offerProvider.GetOfferedTools(Arg.Any<string?>()).Returns([]);
+        offerProvider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns([]);
+        offerProvider.GetOfferedToolsForProfileAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns([]);
         offerProvider.GetKnownToolNames().Returns([]);
 
         return new AgentDefinitionResolver(store,
             playbookStore,
             skillStore,
+            Substitute.For<XE_Local_AI_Engine.Client.Persistence.Stores.ICustomToolStore>(),
             offerProvider,
             new LexicalPlaybookRetrievalRanker(),
             Options.Create(new PlaybookRetrievalOptions()),

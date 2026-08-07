@@ -2591,6 +2591,7 @@ public sealed class NodeChatStreamServiceTests
         var resolver = new AgentDefinitionResolver(store,
             CreateEmptyPlaybookStore(),
             CreateEmptySkillStore(),
+            Substitute.For<XE_Local_AI_Engine.Client.Persistence.Stores.ICustomToolStore>(),
             offerProvider,
             new LexicalPlaybookRetrievalRanker(),
             Options.Create(new PlaybookRetrievalOptions()),
@@ -2701,6 +2702,7 @@ public sealed class NodeChatStreamServiceTests
         var resolver = new AgentDefinitionResolver(store,
             CreateEmptyPlaybookStore(),
             CreateEmptySkillStore(),
+            Substitute.For<XE_Local_AI_Engine.Client.Persistence.Stores.ICustomToolStore>(),
             offerProvider,
             new LexicalPlaybookRetrievalRanker(),
             Options.Create(new PlaybookRetrievalOptions()),
@@ -2853,8 +2855,8 @@ public sealed class NodeChatStreamServiceTests
         }
 
         AssertEx.True(drained > 0, "Expected the send to stream events.");
-        offerProvider.Received().GetOfferedTools("qwen3:8b");
-        offerProvider.DidNotReceive().GetOfferedTools(new LocalChatAgentOptions().DefaultModel);
+        _ = offerProvider.Received().GetOfferedToolsAsync("qwen3:8b", Arg.Any<bool>(), Arg.Any<CancellationToken>());
+        _ = offerProvider.DidNotReceive().GetOfferedToolsAsync(new LocalChatAgentOptions().DefaultModel, Arg.Any<bool>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -2967,8 +2969,8 @@ public sealed class NodeChatStreamServiceTests
 
         AssertEx.True(drained > 0, "Expected the send to stream events.");
         // The resolved installed GGUF — not the static config default — drives the offer-time active model.
-        offerProvider.Received().GetOfferedTools("phi-4:Q4_K_M");
-        offerProvider.DidNotReceive().GetOfferedTools(new LocalChatAgentOptions().DefaultModel);
+        _ = offerProvider.Received().GetOfferedToolsAsync("phi-4:Q4_K_M", Arg.Any<bool>(), Arg.Any<CancellationToken>());
+        _ = offerProvider.DidNotReceive().GetOfferedToolsAsync(new LocalChatAgentOptions().DefaultModel, Arg.Any<bool>(), Arg.Any<CancellationToken>());
         AssertEx.Equal(InvocationStatus.Completed, dispatcher.CurrentInvocation!.Status);
     }
 
@@ -3038,7 +3040,7 @@ public sealed class NodeChatStreamServiceTests
         // Tool calling is enabled for ALL Codex ids, so the requested local tool offer (UseLocalTools: true) is
         // honored for the Codex model — capabilities still come from the Codex matrix, not the Ollama classifier. The
         // offer is requested with isCloudModel: true so the knowledge-tool provider-locality gate applies.
-        offerProvider.Received().GetOfferedTools("gpt-5.5", true);
+        _ = offerProvider.Received().GetOfferedToolsAsync("gpt-5.5", true, Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -3072,6 +3074,8 @@ public sealed class NodeChatStreamServiceTests
     {
         var provider = Substitute.For<ILocalToolOfferProvider>();
         provider.GetOfferedTools(Arg.Any<string?>(), Arg.Any<bool>()).Returns(tools);
+        provider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(tools);
+        provider.GetOfferedToolsForProfileAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(tools);
         return provider;
     }
 

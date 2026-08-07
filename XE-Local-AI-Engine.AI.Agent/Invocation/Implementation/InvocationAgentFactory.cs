@@ -32,6 +32,7 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
 
     private readonly IChatClient _chatClient;
     private readonly IClientLocalToolRegistry _clientLocalToolRegistry;
+    private readonly ICustomToolCatalog _customToolCatalog;
     private readonly ILogger<InvocationAgentFactory> _logger;
     private readonly ILoggerFactory _loggerFactory;
     private readonly IMcpToolRegistry _mcpToolRegistry;
@@ -46,7 +47,8 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
         IServiceProvider serviceProvider,
         IAgentToolRegistry toolRegistry,
         IClientLocalToolRegistry clientLocalToolRegistry,
-        IMcpToolRegistry mcpToolRegistry)
+        IMcpToolRegistry mcpToolRegistry,
+        ICustomToolCatalog customToolCatalog)
     {
         _chatClient = chatClient ?? throw new ArgumentNullException(nameof(chatClient));
         ArgumentNullException.ThrowIfNull(options);
@@ -57,14 +59,15 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
         _toolRegistry = toolRegistry ?? throw new ArgumentNullException(nameof(toolRegistry));
         _clientLocalToolRegistry = clientLocalToolRegistry ?? throw new ArgumentNullException(nameof(clientLocalToolRegistry));
         _mcpToolRegistry = mcpToolRegistry ?? throw new ArgumentNullException(nameof(mcpToolRegistry));
+        _customToolCatalog = customToolCatalog ?? throw new ArgumentNullException(nameof(customToolCatalog));
     }
 
-    public Task<InvocationAgentContext> CreateAsync(InvocationAgentDefinition definition, CancellationToken cancellationToken = default)
+    public async Task<InvocationAgentContext> CreateAsync(InvocationAgentDefinition definition, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(definition);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var tools = ResolveExecutableTools(definition);
+        var tools = await ResolveExecutableToolsAsync(definition, cancellationToken).ConfigureAwait(false);
 
         _logger.LogDebug("Creating invocation agent context for model {ModelId}.", definition.ModelId);
 
@@ -170,7 +173,7 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
         context.Items["modelId"] = definition.ModelId;
         context.Items["toolsEnabled"] = tools.Count > 0;
 
-        return Task.FromResult(context);
+        return context;
     }
 
     /// <summary>
@@ -408,9 +411,15 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
     ///     <see cref="InvocationToolResolver" /> so the single-agent and orchestration factories resolve tools
     ///     identically.
     /// </summary>
-    private IList<AITool> ResolveExecutableTools(InvocationAgentDefinition definition)
+    private Task<IList<AITool>> ResolveExecutableToolsAsync(InvocationAgentDefinition definition, CancellationToken cancellationToken)
     {
-        return InvocationToolResolver.Resolve(definition.Tools, _toolRegistry, _clientLocalToolRegistry, _mcpToolRegistry, _logger);
+        return InvocationToolResolver.ResolveAsync(definition.Tools,
+            _toolRegistry,
+            _clientLocalToolRegistry,
+            _mcpToolRegistry,
+            _customToolCatalog,
+            _logger,
+            cancellationToken);
     }
 
     private static IReadOnlyList<ChatMessage> BuildSeedMessages(InvocationAgentDefinition definition)

@@ -21,6 +21,7 @@ public sealed class RuntimePackageBuilder
     private string _resolvedSystemPrompt = "You are helpful.";
     private SamplingOptions? _samplingOptions;
     private IReadOnlyList<ResolvedSkill>? _skills;
+    private IReadOnlyList<ResolvedCustomTool>? _customTools;
     private TimeoutSettings _timeouts = new();
 
     private RuntimePackageBuilder()
@@ -186,6 +187,13 @@ public sealed class RuntimePackageBuilder
         return this;
     }
 
+    public RuntimePackageBuilder WithCustomTools(params ResolvedCustomTool[] customTools)
+    {
+        ArgumentNullException.ThrowIfNull(customTools);
+        _customTools = [.. customTools];
+        return this;
+    }
+
     /// <summary>Marks the package as a scheduled/headless run, which has no operator to answer an approval.</summary>
     public RuntimePackageBuilder AsUnattended()
     {
@@ -199,6 +207,7 @@ public sealed class RuntimePackageBuilder
         {
             IsUnattended = _isUnattended,
             Skills = _skills,
+            CustomTools = _customTools,
             InvocationId = _invocationId,
             ConversationId = _conversationId,
             ClientNodeId = _clientNodeId,
