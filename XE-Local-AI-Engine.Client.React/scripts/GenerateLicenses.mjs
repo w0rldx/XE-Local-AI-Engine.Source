@@ -112,12 +112,9 @@ function collectFrontendPackages() {
  * Restores the solution pinned to the Release configuration so the license scan is deterministic.
  *
  * nuget-license reads each project's restore assets (`project.assets.json`), which reflect the LAST
- * restore's `$(Configuration)`. A Debug restore pulls in Debug-only conditional packages
- * (Microsoft.Agents.AI.DevUI / Hosting / Hosting.OpenAI — see the `'$(Configuration)' == 'Debug'`
- * PackageReferences in XE-Local-AI-Engine.Client.csproj and XE-Local-AI-Engine.AI.Agent.csproj) that
- * are compiled out of Release and never ship. Forcing a Release restore here pins the assets so the
- * generated list only ever reflects the shipped (Release) package set, regardless of what a prior
- * build/IDE left restored.
+ * restore inputs. Forcing a Release restore here prevents a prior IDE or command-line restore from
+ * silently changing the dependency evidence consumed by the generator. Exact shipped-component
+ * reconciliation remains the responsibility of the per-RID publish evidence and compliance gate.
  */
 function restoreSolutionForRelease() {
 	const result = spawnSync("dotnet", ["restore", solutionPath, "-p:Configuration=Release", "--verbosity", "quiet"], {

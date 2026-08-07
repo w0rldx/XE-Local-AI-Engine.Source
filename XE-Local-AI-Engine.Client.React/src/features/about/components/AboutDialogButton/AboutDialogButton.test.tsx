@@ -41,9 +41,9 @@ describe("AboutDialogButton", () => {
 		expect(screen.queryByTestId("about-dialog-lifecycle")).toBeNull();
 
 		fireEvent.click(screen.getByRole("button", { name: "About" }));
-		await waitFor(() => expect(screen.getByTestId("about-dialog-lifecycle").dataset.opened).toBe("true"));
+		await waitFor(() => expect(screen.getByTestId("about-dialog-lifecycle").dataset["opened"]).toBe("true"));
 		fireEvent.click(screen.getByRole("button", { name: "Close mocked About" }));
 
-		await waitFor(() => expect(screen.getByTestId("about-dialog-lifecycle").dataset.opened).toBe("false"));
+		await waitFor(() => expect(screen.getByTestId("about-dialog-lifecycle").dataset["opened"]).toBe("false"));
 	});
 });

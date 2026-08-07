@@ -1,0 +1,7 @@
+Document: repository-authored source-availability notice for UTF.Unknown 2.6.0
+NuGet: https://www.nuget.org/packages/UTF.Unknown/2.6.0
+Upstream repository: https://github.com/CharsetDetector/UTF-unknown
+Upstream release: https://github.com/CharsetDetector/UTF-unknown/releases/tag/v2.6
+Upstream commit: 7e69ebbdd6ef96a3625fcaf39df42429b8eb0463
+Verified: 2026-08-07
+SHA-256: dff4d8102e1bb9142a38e6ef2f30d01196a2cf381c490a9950028b041fa862d6

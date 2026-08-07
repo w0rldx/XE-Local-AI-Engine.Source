@@ -72,6 +72,10 @@ class BackendLicenseCorpusTests(unittest.TestCase):
         for filename, contents in (
             ("SQLite-3.50.3-public-domain.html", "SQLite blessing\n"),
             ("UTF.Unknown-2.6.0-MPL-1.1.txt", "MPL 1.1\n"),
+            (
+                "UTF.Unknown-2.6.0-SOURCE-AVAILABILITY.txt",
+                "UTF.Unknown 2.6.0 covered source is available at immutable commit 7e69ebb.\n",
+            ),
         ):
             text_path = nuget / filename
             text_path.write_text(contents, encoding="utf-8")
@@ -308,12 +312,28 @@ class BackendLicenseCorpusTests(unittest.TestCase):
             ],
             document,
         )
-        paths = {
-            entry["name"]: entry["licenseTextPath"]
-            for entry in json.loads((output / "backend-components.json").read_text())["packages"]
-        }
+        packages = json.loads((output / "backend-components.json").read_text())["packages"]
+        paths = {entry["name"]: entry["licenseTextPath"] for entry in packages}
         self.assertIn("SQLite-3.50.3-public-domain.html", paths["SQLitePCLRaw.lib.e_sqlite3"])
         self.assertIn("UTF.Unknown-2.6.0-MPL-1.1.txt", paths["UTF.Unknown"])
+        utf_unknown = next(entry for entry in packages if entry["name"] == "UTF.Unknown")
+        self.assertEqual(
+            {
+                "licenseBasis": "MPL-1.1",
+                "sourceArchive": "https://github.com/CharsetDetector/UTF-unknown/archive/7e69ebbdd6ef96a3625fcaf39df42429b8eb0463.tar.gz",
+                "sourceCommit": "7e69ebbdd6ef96a3625fcaf39df42429b8eb0463",
+                "sourceRepository": "https://github.com/CharsetDetector/UTF-unknown",
+                "upstreamTag": "v2.6",
+            },
+            utf_unknown["sourceAvailability"],
+        )
+        source_notice = next(
+            entry for entry in utf_unknown["licenseFiles"] if entry["sourceFile"].endswith("SOURCE-AVAILABILITY.txt")
+        )
+        self.assertEqual("notice", source_notice["role"])
+        notices = (output / "THIRD-PARTY-NOTICES.md").read_text()
+        self.assertIn("Covered source availability", notices)
+        self.assertIn("7e69ebbdd6ef96a3625fcaf39df42429b8eb0463", notices)
 
         wrong = deps("linux-x64", {"Not.UTF.Unknown/1.0.0": {"runtime": {"Other.dll": {}}}})
         with self.assertRaisesRegex(ValueError, "unsupported special license mapping"):
