@@ -3,12 +3,12 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Knowledge.V1;
 using System.Security.Cryptography;
 using FastEndpoints;
 using Microsoft.Extensions.Options;
+using SecurityOptions = XE_Local_AI_Engine.Client.Configuration.SecurityOptions;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.LocalChat.V1;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
-using SecurityOptions = XE_Local_AI_Engine.Client.Configuration.SecurityOptions;
 
 /// <summary>
 ///     FastEndpoints handler for uploading one document into the knowledge base (POST multipart). Enforces the size cap +

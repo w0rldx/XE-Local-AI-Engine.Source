@@ -242,7 +242,7 @@ Every `TestingWebAppFactory` host writes a fresh SQLite DB (`xe-local-ai-engine-
 
 `XE-Local-AI-Engine.Tests/Architecture/LayerDependencyTests.cs` uses NetArchTest to freeze dependency direction (providers → Abstractions only; Contracts/Abstractions never reach back up). A structural refactor that breaks layering fails a *test*, not just review.
 
-`.editorconfig:450` sets `dotnet_diagnostic.IDE0130.severity = error` — **namespace must match folder path**, no carve-outs remain.
+`.editorconfig:450` sets `dotnet_diagnostic.IDE0130.severity = error` — **namespace must match folder path**. One deliberate carve-out: `[**/Endpoints/**/V1/Dtos/*.cs]` disables IDE0130 so endpoint DTO files can sit in a `Dtos/` subfolder while keeping the **flat** `…{Area}.V1` namespace. This is load-bearing, not laziness: FastEndpoints/NSwag builds OpenAPI **schema IDs from the full type namespace** (`XE_…EndpointsSkillsV1SkillResponse`), so nesting a `.Dtos` segment would rename ~361 schema keys and churn the entire generated hey-api client. `Mappers/` and `Validators/` subfolders are *not* serialized and nest their namespace normally (IDE0130 enforced). See `docs/wiki/16-code-conventions.md`.
 
 ### OpenAPI → hey-api is the sole REST data layer for React
 
