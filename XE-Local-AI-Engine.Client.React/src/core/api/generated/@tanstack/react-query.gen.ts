@@ -42,6 +42,7 @@ import {
 	connectConnection,
 	continuePreviewRun,
 	createAgentDefinition,
+	createCustomTool,
 	createDevelopmentProject,
 	createDevelopmentRepositoryFromTemplate,
 	createGoldenConversation,
@@ -57,6 +58,7 @@ import {
 	createWorkspace,
 	deleteAgentDefinition,
 	deleteConversationFile,
+	deleteCustomTool,
 	deleteGoldenConversation,
 	deleteImageModel,
 	deleteKnowledgeDocument,
@@ -99,6 +101,7 @@ import {
 	getConnectionStatus,
 	getCudaBuildPrerequisites,
 	getCudaBuildStatus,
+	getCustomTool,
 	getDevelopmentArtifact,
 	getDevelopmentCapability,
 	getDevelopmentProject,
@@ -150,6 +153,7 @@ import {
 	listAgentPlaybookActions,
 	listAgentTemplates,
 	listConversationFiles,
+	listCustomTools,
 	listDevelopmentArtifacts,
 	listDevelopmentEvents,
 	listDevelopmentProjects,
@@ -232,6 +236,7 @@ import {
 	unhandledExceptionProbe,
 	unloadLocalModel,
 	updateAgentDefinition,
+	updateCustomTool,
 	updateLlamaCppRuntime,
 	updateMcpServer,
 	updatePlaybookAction,
@@ -242,6 +247,7 @@ import {
 	updateSuggestedPlaybookAction,
 	uploadConversationFile,
 	uploadKnowledgeDocument,
+	validateExecutable,
 	validationProblemProbe,
 } from "../sdk.gen";
 import type {
@@ -308,6 +314,8 @@ import type {
 	ContinuePreviewRunResponse,
 	CreateAgentDefinitionData,
 	CreateAgentDefinitionResponse,
+	CreateCustomToolData,
+	CreateCustomToolResponse,
 	CreateDevelopmentProjectData,
 	CreateDevelopmentProjectResponse,
 	CreateDevelopmentRepositoryFromTemplateData,
@@ -341,6 +349,8 @@ import type {
 	DeleteAgentDefinitionResponse,
 	DeleteConversationFileData,
 	DeleteConversationFileResponse,
+	DeleteCustomToolData,
+	DeleteCustomToolResponse,
 	DeleteGoldenConversationData,
 	DeleteGoldenConversationResponse,
 	DeleteImageModelData,
@@ -430,6 +440,8 @@ import type {
 	GetCudaBuildPrerequisitesResponse,
 	GetCudaBuildStatusData,
 	GetCudaBuildStatusResponse,
+	GetCustomToolData,
+	GetCustomToolResponse,
 	GetDevelopmentArtifactData,
 	GetDevelopmentArtifactResponse,
 	GetDevelopmentCapabilityData,
@@ -536,6 +548,8 @@ import type {
 	ListAgentTemplatesResponse,
 	ListConversationFilesData,
 	ListConversationFilesResponse,
+	ListCustomToolsData,
+	ListCustomToolsResponse,
 	ListDevelopmentArtifactsData,
 	ListDevelopmentArtifactsResponse,
 	ListDevelopmentEventsData,
@@ -713,6 +727,8 @@ import type {
 	UnloadLocalModelResponse,
 	UpdateAgentDefinitionData,
 	UpdateAgentDefinitionResponse,
+	UpdateCustomToolData,
+	UpdateCustomToolResponse,
 	UpdateLlamaCppRuntimeData,
 	UpdateLlamaCppRuntimeError,
 	UpdateLlamaCppRuntimeResponse,
@@ -735,6 +751,8 @@ import type {
 	UploadConversationFileResponse,
 	UploadKnowledgeDocumentData,
 	UploadKnowledgeDocumentResponse,
+	ValidateExecutableData,
+	ValidateExecutableResponse,
 	ValidationProblemProbeData,
 	ValidationProblemProbeError,
 	ValidationProblemProbeResponse,
@@ -4249,6 +4267,111 @@ export const reconnectDevelopmentRepositoryMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await reconnectDevelopmentRepository({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const listCustomToolsQueryKey = (options?: Options<ListCustomToolsData>) => createQueryKey("listCustomTools", options);
+
+export const listCustomToolsOptions = (options?: Options<ListCustomToolsData>) =>
+	queryOptions<
+		ListCustomToolsResponse,
+		AxiosError<DefaultError>,
+		ListCustomToolsResponse,
+		ReturnType<typeof listCustomToolsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listCustomTools({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listCustomToolsQueryKey(options),
+	});
+
+export const createCustomToolMutation = (
+	options?: Partial<Options<CreateCustomToolData>>,
+): UseMutationOptions<CreateCustomToolResponse, AxiosError<DefaultError>, Options<CreateCustomToolData>> => {
+	const mutationOptions: UseMutationOptions<CreateCustomToolResponse, AxiosError<DefaultError>, Options<CreateCustomToolData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await createCustomTool({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const deleteCustomToolMutation = (
+	options?: Partial<Options<DeleteCustomToolData>>,
+): UseMutationOptions<DeleteCustomToolResponse, AxiosError<DefaultError>, Options<DeleteCustomToolData>> => {
+	const mutationOptions: UseMutationOptions<DeleteCustomToolResponse, AxiosError<DefaultError>, Options<DeleteCustomToolData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await deleteCustomTool({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getCustomToolQueryKey = (options: Options<GetCustomToolData>) => createQueryKey("getCustomTool", options);
+
+export const getCustomToolOptions = (options: Options<GetCustomToolData>) =>
+	queryOptions<GetCustomToolResponse, AxiosError<DefaultError>, GetCustomToolResponse, ReturnType<typeof getCustomToolQueryKey>>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getCustomTool({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getCustomToolQueryKey(options),
+	});
+
+export const updateCustomToolMutation = (
+	options?: Partial<Options<UpdateCustomToolData>>,
+): UseMutationOptions<UpdateCustomToolResponse, AxiosError<DefaultError>, Options<UpdateCustomToolData>> => {
+	const mutationOptions: UseMutationOptions<UpdateCustomToolResponse, AxiosError<DefaultError>, Options<UpdateCustomToolData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await updateCustomTool({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const validateExecutableMutation = (
+	options?: Partial<Options<ValidateExecutableData>>,
+): UseMutationOptions<ValidateExecutableResponse, AxiosError<DefaultError>, Options<ValidateExecutableData>> => {
+	const mutationOptions: UseMutationOptions<
+		ValidateExecutableResponse,
+		AxiosError<DefaultError>,
+		Options<ValidateExecutableData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await validateExecutable({
 				...options,
 				...fnOptions,
 				throwOnError: true,

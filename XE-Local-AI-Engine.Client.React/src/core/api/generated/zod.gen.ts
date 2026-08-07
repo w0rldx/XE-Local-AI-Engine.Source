@@ -2697,6 +2697,94 @@ export const zXeLocalAiEngineClientEndpointsDevelopmentV1ReconnectDevelopmentRep
 	expectedVersion: z.int().optional(),
 });
 
+export const zXeLocalAiEngineClientPersistenceCustomToolKind = z.enum(["HttpFetch", "Command"]);
+
+export const zXeLocalAiEngineClientPersistenceCustomToolMode = z.enum(["Fixed", "Parameterized"]);
+
+export const zXeLocalAiEngineClientServicesCustomToolsCustomToolParameterModel = z.object({
+	name: z.string().optional(),
+	type: z.string().optional(),
+	description: z.string().optional(),
+	required: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientServicesCustomToolsCustomToolHeaderModel = z.object({
+	name: z.string().optional(),
+	value: z.string().optional(),
+	isSecret: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientServicesCustomToolsHttpFetchDefinition = z.object({
+	method: z.string().optional(),
+	urlTemplate: z.string().optional(),
+	headers: z.array(zXeLocalAiEngineClientServicesCustomToolsCustomToolHeaderModel).optional(),
+	bodyTemplate: z.string().nullish(),
+	allowedHosts: z.array(z.string()).optional(),
+});
+
+export const zXeLocalAiEngineClientServicesCustomToolsCustomToolEnvironmentVariableModel = z.object({
+	name: z.string().optional(),
+	value: z.string().optional(),
+	isSecret: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientServicesCustomToolsCommandDefinition = z.object({
+	executable: z.string().optional(),
+	argsTemplate: z.array(z.string()).optional(),
+	workingDirectory: z.string().nullish(),
+	timeoutSeconds: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	env: z.array(zXeLocalAiEngineClientServicesCustomToolsCustomToolEnvironmentVariableModel).optional(),
+});
+
+export const zXeLocalAiEngineClientServicesCustomToolsCustomToolView = z.object({
+	id: z.guid(),
+	name: z.string(),
+	description: z.string(),
+	kind: zXeLocalAiEngineClientPersistenceCustomToolKind,
+	mode: zXeLocalAiEngineClientPersistenceCustomToolMode,
+	enabled: z.boolean(),
+	acknowledged: z.boolean(),
+	version: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	createdAtUtc: z.int(),
+	updatedAtUtc: z.int(),
+	parameters: z.array(zXeLocalAiEngineClientServicesCustomToolsCustomToolParameterModel),
+	http: zXeLocalAiEngineClientServicesCustomToolsHttpFetchDefinition.nullish(),
+	command: zXeLocalAiEngineClientServicesCustomToolsCommandDefinition.nullish(),
+});
+
+export const zXeLocalAiEngineClientServicesCustomToolsCustomToolDefinition = z.object({
+	name: z.string().optional(),
+	description: z.string().optional(),
+	kind: zXeLocalAiEngineClientPersistenceCustomToolKind.optional(),
+	mode: zXeLocalAiEngineClientPersistenceCustomToolMode.optional(),
+	enabled: z.boolean().optional(),
+	acknowledged: z.boolean().optional(),
+	parameters: z.array(zXeLocalAiEngineClientServicesCustomToolsCustomToolParameterModel).optional(),
+	http: zXeLocalAiEngineClientServicesCustomToolsHttpFetchDefinition.nullish(),
+	command: zXeLocalAiEngineClientServicesCustomToolsCommandDefinition.nullish(),
+});
+
+export const zXeLocalAiEngineClientServicesCustomToolsListCustomToolsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientServicesCustomToolsCustomToolView),
+});
+
+export const zXeLocalAiEngineClientServicesCustomToolsHostExecutableProbeResult = z.object({
+	ok: z.boolean().optional(),
+	reason: z.string().nullish(),
+	path: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientServicesCustomToolsProbeExecutableRequest = z.object({
+	path: z.string().nullish(),
+});
+
 export const zXeLocalAiEngineClientEndpointsConnectionV1ConnectionStatusResponse = z.object({
 	state: z.string(),
 	lastError: z.string().nullish(),
@@ -4799,6 +4887,54 @@ export const zReconnectDevelopmentRepositoryPath = z.object({
  */
 export const zReconnectDevelopmentRepositoryResponse =
 	zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectDetailResponse;
+
+/**
+ * Success
+ */
+export const zListCustomToolsResponse = zXeLocalAiEngineClientServicesCustomToolsListCustomToolsResponse;
+
+export const zCreateCustomToolBody = zXeLocalAiEngineClientServicesCustomToolsCustomToolDefinition;
+
+/**
+ * Success
+ */
+export const zCreateCustomToolResponse = zXeLocalAiEngineClientServicesCustomToolsCustomToolView;
+
+export const zDeleteCustomToolPath = z.object({
+	customToolId: z.string(),
+});
+
+/**
+ * No Content
+ */
+export const zDeleteCustomToolResponse = z.void();
+
+export const zGetCustomToolPath = z.object({
+	customToolId: z.string(),
+});
+
+/**
+ * Success
+ */
+export const zGetCustomToolResponse = zXeLocalAiEngineClientServicesCustomToolsCustomToolView;
+
+export const zUpdateCustomToolBody = zXeLocalAiEngineClientServicesCustomToolsCustomToolDefinition;
+
+export const zUpdateCustomToolPath = z.object({
+	customToolId: z.string(),
+});
+
+/**
+ * Success
+ */
+export const zUpdateCustomToolResponse = zXeLocalAiEngineClientServicesCustomToolsCustomToolView;
+
+export const zValidateExecutableBody = zXeLocalAiEngineClientServicesCustomToolsProbeExecutableRequest;
+
+/**
+ * Success
+ */
+export const zValidateExecutableResponse = zXeLocalAiEngineClientServicesCustomToolsHostExecutableProbeResult;
 
 /**
  * Success

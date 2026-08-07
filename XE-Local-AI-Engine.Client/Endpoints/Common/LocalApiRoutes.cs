@@ -264,6 +264,24 @@ public static class LocalApiRoutes
     }
 
     /// <summary>
+    ///     Node-wide user-defined custom tool library routes. Custom tools are operator-authored HttpFetch/Command tools
+    ///     that agent definitions enable per-agent (off by default) and run under the existing human-in-the-loop
+    ///     approval. Every route is Operator-gated; the read path masks secret header/env values.
+    /// </summary>
+    public static class CustomTools
+    {
+        // Collection (GET list, POST create) and the individual tool resource (GET, PUT, DELETE).
+        public const string Definitions = "custom-tools";
+        public const string DefinitionById = "custom-tools/{customToolId}";
+
+        // Authoring-time executable validation for the ProgramLaunch selector: POST a candidate absolute path, get
+        // back ok/reason from the same O_NOFOLLOW host-executable guard the executor runs. Desktop-only (a headless
+        // host has no operator picking a local binary); the literal "executable-probe" segment sits under the
+        // collection so it can never be parsed as a {customToolId}. POST carries the path in the body (no 415 trap).
+        public const string ExecutableProbe = "custom-tools/executable-probe";
+    }
+
+    /// <summary>
     ///     Scheduler management, run history, cancellation, and hub routes.
     /// </summary>
     public static class Scheduler
