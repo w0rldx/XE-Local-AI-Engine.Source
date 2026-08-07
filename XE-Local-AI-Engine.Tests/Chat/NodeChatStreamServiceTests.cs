@@ -68,6 +68,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -120,6 +121,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -175,6 +177,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -238,6 +241,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -286,6 +290,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -334,6 +339,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -392,6 +398,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -445,6 +452,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -513,6 +521,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             nodePolicy,
@@ -574,6 +583,7 @@ public sealed class NodeChatStreamServiceTests
             stager,
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -710,6 +720,7 @@ public sealed class NodeChatStreamServiceTests
             stager,
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -767,6 +778,7 @@ public sealed class NodeChatStreamServiceTests
             stager,
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -1001,6 +1013,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -1194,6 +1207,7 @@ public sealed class NodeChatStreamServiceTests
             {
                 AllowCloudModelAccess = allowCloudModelAccess
             }),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -1250,6 +1264,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -1307,6 +1322,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -1365,6 +1381,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -1424,6 +1441,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -1474,6 +1492,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -1535,6 +1554,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -1586,6 +1606,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -1666,6 +1687,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -1746,6 +1768,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -1814,6 +1837,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -1872,6 +1896,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -1943,6 +1968,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -2055,6 +2081,7 @@ public sealed class NodeChatStreamServiceTests
             {
                 AllowCloudModelAccess = allowCloudModelAccess
             }),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -2107,6 +2134,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -2165,6 +2193,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -2223,6 +2252,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -2279,6 +2309,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -2337,6 +2368,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -2410,6 +2442,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -2490,6 +2523,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -2591,6 +2625,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -2700,6 +2735,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -2800,6 +2836,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -2854,6 +2891,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -2911,6 +2949,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -2971,6 +3010,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -3109,6 +3149,7 @@ public sealed class NodeChatStreamServiceTests
             stager,
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -3147,6 +3188,7 @@ public sealed class NodeChatStreamServiceTests
             {
                 AllowCloudModelAccess = allowCloudModelAccess
             }),
+            Options.Create(new ChatStreamBudgetOptions()),
             scopeFactory,
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -3517,6 +3559,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -3785,6 +3828,10 @@ public sealed class NodeChatStreamServiceTests
         {
         }
 
+        public void CancelDetached(Guid invocationId)
+        {
+        }
+
         public void CancelAll()
         {
         }
@@ -3830,6 +3877,10 @@ public sealed class NodeChatStreamServiceTests
         }
 
         public void Cancel(Guid invocationId)
+        {
+        }
+
+        public void CancelDetached(Guid invocationId)
         {
         }
 
@@ -3889,6 +3940,10 @@ public sealed class NodeChatStreamServiceTests
         {
         }
 
+        public void CancelDetached(Guid invocationId)
+        {
+        }
+
         public void CancelAll()
         {
         }
@@ -3932,6 +3987,10 @@ public sealed class NodeChatStreamServiceTests
         }
 
         public void Cancel(Guid invocationId)
+        {
+        }
+
+        public void CancelDetached(Guid invocationId)
         {
         }
 
@@ -3986,6 +4045,10 @@ public sealed class NodeChatStreamServiceTests
             CancellationToken cancellationToken = default) => Task.FromResult(string.Empty);
 
         public void Cancel(Guid invocationId)
+        {
+        }
+
+        public void CancelDetached(Guid invocationId)
         {
         }
 
@@ -4045,6 +4108,10 @@ public sealed class NodeChatStreamServiceTests
         }
 
         public void Cancel(Guid invocationId)
+        {
+        }
+
+        public void CancelDetached(Guid invocationId)
         {
         }
 
@@ -4110,6 +4177,10 @@ public sealed class NodeChatStreamServiceTests
         {
         }
 
+        public void CancelDetached(Guid invocationId)
+        {
+        }
+
         public void CancelAll()
         {
         }
@@ -4170,6 +4241,10 @@ public sealed class NodeChatStreamServiceTests
         }
 
         public void Cancel(Guid invocationId)
+        {
+        }
+
+        public void CancelDetached(Guid invocationId)
         {
         }
 

@@ -71,6 +71,12 @@ public interface INodeRuntimeSettings
     Task<int> GetMaxPendingToolCallAgeMinutesAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
+    ///     The disconnect grace in seconds before a run with no attached client is cancelled
+    ///     (stored &gt; <c>WorkerNode:DetachedGraceSeconds</c> &gt; 300); <c>0</c> never cancels.
+    /// </summary>
+    Task<int> GetDetachedGraceSecondsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
     ///     The node-level sampling defaults, or <see langword="null" /> when none are configured (today's behavior). There
     ///     is no appsettings seed: this is a developer-only stored-or-nothing knob.
     /// </summary>
@@ -135,6 +141,9 @@ public interface INodeRuntimeSettings
 
     /// <inheritdoc cref="GetMaxPendingToolCallAgeMinutesAsync" />
     int GetMaxPendingToolCallAgeMinutes();
+
+    /// <inheritdoc cref="GetDetachedGraceSecondsAsync" />
+    int GetDetachedGraceSeconds();
 
     /// <inheritdoc cref="GetChatCacheReuseAsync" />
     int GetChatCacheReuse();

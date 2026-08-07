@@ -59,6 +59,9 @@ internal static class NodeSettingsEndpointDtoMapper
             MaxPendingToolCallAgeMinutes = settings.MaxPendingToolCallAgeMinutes,
             MinMaxPendingToolCallAgeMinutes = StoredNodeSettings.MinMaxPendingToolCallAgeMinutes,
             MaxAllowedMaxPendingToolCallAgeMinutes = StoredNodeSettings.MaxMaxPendingToolCallAgeMinutes,
+            DetachedGraceSeconds = settings.DetachedGraceSeconds,
+            MinDetachedGraceSeconds = StoredNodeSettings.MinDetachedGraceSeconds,
+            MaxAllowedDetachedGraceSeconds = StoredNodeSettings.MaxDetachedGraceSeconds,
             SamplingDefaults = settings.SamplingDefaults,
             VoiceFeatureEnabled = settings.VoiceFeatureEnabled,
             AllowedVoiceModels = settings.AllowedVoiceModels,
@@ -126,6 +129,7 @@ internal static class NodeSettingsEndpointDtoMapper
             AgentHomeMaxSelectedFolderBytes = request.AgentHomeMaxSelectedFolderBytes ?? currentSettings.AgentHomeMaxSelectedFolderBytes,
             AgentHomeMaxPatchBytes = request.AgentHomeMaxPatchBytes ?? currentSettings.AgentHomeMaxPatchBytes,
             MaxPendingToolCallAgeMinutes = request.MaxPendingToolCallAgeMinutes ?? currentSettings.MaxPendingToolCallAgeMinutes,
+            DetachedGraceSeconds = request.DetachedGraceSeconds ?? currentSettings.DetachedGraceSeconds,
             SamplingDefaults = request.SamplingDefaults ?? currentSettings.SamplingDefaults,
             // The node-default tool-approval policy has no editable field on this request yet (the operator
             // surface is planned but not yet built); preserve the currently stored value so an unrelated node-settings

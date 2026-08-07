@@ -12222,6 +12222,19 @@
             "type": "integer",
             "format": "int32"
           },
+          "detachedGraceSeconds": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minDetachedGraceSeconds": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedDetachedGraceSeconds": {
+            "type": "integer",
+            "format": "int32"
+          },
           "samplingDefaults": {
             "nullable": true,
             "oneOf": [
@@ -12454,6 +12467,11 @@
             "nullable": true
           },
           "maxPendingToolCallAgeMinutes": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "detachedGraceSeconds": {
             "type": "integer",
             "format": "int32",
             "nullable": true

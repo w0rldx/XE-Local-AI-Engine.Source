@@ -18,6 +18,13 @@ public interface IInvocationRunner
 
     void Cancel(Guid invocationId);
 
+    /// <summary>
+    ///     Cancels a run whose last client disconnected and stayed away past the disconnect grace
+    ///     (<c>DetachedInvocationReaper</c>). Identical to <see cref="Cancel" /> except for how the turn is attributed:
+    ///     an abandoned turn, not an operator stop. Both terminalize the row <c>Cancelled</c>.
+    /// </summary>
+    void CancelDetached(Guid invocationId);
+
     void CancelAll();
 
     void CleanupStaleToolCalls(TimeSpan maxAge);

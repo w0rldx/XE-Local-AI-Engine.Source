@@ -1642,6 +1642,119 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
+    public async Task RunAsync_WhenParkedOnAToolApprovalWhileAttached_KeepsTheFullParkBudget()
+    {
+        // Pins today's behaviour for the case the disconnect-grace work must NOT change: a browser is watching, so the
+        // park still gets MaxPendingToolCallAge on top of the turn budget and the 1 s turn budget cannot pre-empt it.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var invocationId = Guid.NewGuid();
+        var tracker = CreateAttachmentTracker();
+        using var attachment = tracker.Attach(invocationId);
+        var segment = 0;
+        var factory = CreateFactory(_ =>
+        {
+            segment++;
+            return segment == 1 ? ApprovalRequestUpdates() : CreateUpdates("done");
+        });
+        var runner = CreateRunner(sender, factory, eventDispatcher: dispatcher, attachmentTracker: tracker);
+        var package = RuntimePackageBuilder.Valid().WithInvocationId(invocationId).WithTimeout(invocationSeconds: 1).WithAllowedTool("run_in_agent_home").Build();
+
+        var runTask = RunAsync(runner, package);
+        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
+        await Task.Delay(TimeSpan.FromSeconds(2));
+
+        AssertEx.False(runTask.IsCompleted, "an attached operator weighing an approval must keep the full park budget");
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals.Single().RequestId, Approved: true));
+        await runTask.WaitAsync(TimeSpan.FromSeconds(10));
+
+        AssertEx.Equal(expected: 2, segment);
+        await dispatcher.DidNotReceive().ReportInvocationFailedAsync(package.InvocationId, Arg.Any<string>(), Arg.Any<FailureCategory>());
+    }
+
+    [Test]
+    public async Task RunAsync_WhenParkedOnAToolApprovalWhileDetached_FallsBackToThePlainInvocationTimeout()
+    {
+        // The §2-correction-1 fix. A browser that disconnected while the approval card was on screen used to buy the run
+        // MaxPendingToolCallAge + InvocationTimeout (~15 min) PER PARK, holding the llama-server lease the whole time,
+        // waiting for an answer that can no longer arrive. Detached, the park now gets only the turn budget.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var invocationId = Guid.NewGuid();
+        var tracker = CreateAttachmentTracker();
+
+        // Attached, then gone: exactly the "was watching, closed the tab" state. A run that NEVER attached is a
+        // different case (scheduled/platform runs) and is covered by InvocationAttachmentTrackerTests.
+        tracker.Attach(invocationId).Dispose();
+
+        var runner = CreateRunner(sender, CreateFactory(_ => ApprovalRequestUpdates()), eventDispatcher: dispatcher, attachmentTracker: tracker);
+        var package = RuntimePackageBuilder.Valid().WithInvocationId(invocationId).WithTimeout(invocationSeconds: 1).WithAllowedTool("run_in_agent_home").Build();
+
+        var runTask = RunAsync(runner, package);
+        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
+
+        // Nobody answers. The 1 s turn budget — not the 5 min park cap — is what ends this.
+        await runTask.WaitAsync(TimeSpan.FromSeconds(10));
+
+        await dispatcher.Received(requiredNumberOfCalls: 1).ReportInvocationFailedAsync(package.InvocationId, Arg.Any<string>(), Arg.Any<FailureCategory>());
+    }
+
+    [Test]
+    public async Task RunAsync_WhenAClientReAttachesDuringAPark_RestoresTheFullParkBudget()
+    {
+        // The reload case. The park started detached (short budget); the operator reloads mid-park, and from that moment
+        // the turn must get the full MaxPendingToolCallAge back — otherwise a reload inherits whatever the detached park
+        // left behind and the answer arrives too late.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var invocationId = Guid.NewGuid();
+        var tracker = CreateAttachmentTracker();
+        tracker.Attach(invocationId).Dispose();
+
+        var segment = 0;
+        var factory = CreateFactory(_ =>
+        {
+            segment++;
+            return segment == 1 ? ApprovalRequestUpdates() : CreateUpdates("done");
+        });
+        var runner = CreateRunner(sender, factory, eventDispatcher: dispatcher, attachmentTracker: tracker);
+        var package = RuntimePackageBuilder.Valid().WithInvocationId(invocationId).WithTimeout(invocationSeconds: 1).WithAllowedTool("run_in_agent_home").Build();
+
+        var runTask = RunAsync(runner, package);
+        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
+
+        // The reload lands well inside the detached park's 1 s budget and re-arms the deadline via AttachmentChanged.
+        using var reattached = tracker.Attach(invocationId);
+        await Task.Delay(TimeSpan.FromSeconds(2));
+
+        AssertEx.False(runTask.IsCompleted, "the re-attached park must get the full budget back from the moment of re-attach");
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals.Single().RequestId, Approved: true));
+        await runTask.WaitAsync(TimeSpan.FromSeconds(10));
+
+        AssertEx.Equal(expected: 2, segment);
+        await dispatcher.DidNotReceive().ReportInvocationFailedAsync(package.InvocationId, Arg.Any<string>(), Arg.Any<FailureCategory>());
+    }
+
+    [Test]
+    public async Task CancelDetached_ClassifiesTheTurnAsCancelledNotTimedOut()
+    {
+        // The reaper's cancel must look like an abandoned turn, not a node timeout: the row terminalizes Cancelled with
+        // no error text, exactly as a user stop does.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var package = RuntimePackageBuilder.Valid().WithTimeout().Build();
+        var runner = CreateRunner(sender, CreateFactory(cancellationToken => WaitForCancellation(started, cancellationToken)), eventDispatcher: dispatcher);
+
+        var runTask = RunAsync(runner, package);
+        await started.Task;
+        runner.CancelDetached(package.InvocationId);
+        await runTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        await dispatcher.Received(requiredNumberOfCalls: 1).ReportInvocationFailedAsync(package.InvocationId, Arg.Any<string>(), FailureCategory.Cancelled);
+    }
+
+    [Test]
     public async Task RunAsync_WhenTwoToolApprovalsInOneSegment_AnswersBothOnResume()
     {
         // A parallel-tool-call turn surfaces TWO approval requests in one segment. The runner must present and
@@ -2415,7 +2528,8 @@ public sealed class InvocationRunnerTests
         ConversationContextBudgetOptions? contextBudgetOptions = null,
         UserQuestionAnswerStash? userQuestionAnswerStash = null,
         IToolApprovalAuditRecorder? approvalAuditRecorder = null,
-        IToolApprovalPolicy? approvalPolicy = null)
+        IToolApprovalPolicy? approvalPolicy = null,
+        IInvocationAttachmentTracker? attachmentTracker = null)
     {
         var resolvedContextBudgetOptions = contextBudgetOptions ?? new ConversationContextBudgetOptions();
         var resolvedFactory = invocationAgentFactory ?? CreateFactory(agentUpdates ?? CreateUpdates("ok"));
@@ -2491,6 +2605,7 @@ public sealed class InvocationRunnerTests
             approvalAuditRecorder ?? Substitute.For<IToolApprovalAuditRecorder>(),
             approvalPolicy ?? NodeToolApprovalPolicy.FromSettings(settings: null),
             userQuestionAnswerStash ?? new UserQuestionAnswerStash(TimeProvider.System),
+            attachmentTracker ?? CreateAttachmentTracker(),
             NullLogger<InvocationRunner>.Instance);
     }
 
@@ -2504,6 +2619,14 @@ public sealed class InvocationRunnerTests
     {
         using var context = InvocationExecutionContext.CreatePlain(package, Guid.Empty);
         await runner.RunAsync(context, cancellationToken);
+    }
+
+    // A REAL tracker, not a substitute: the deadline tests turn on its ref-counting and its AttachmentChanged event
+    // firing exactly on the zero boundaries, and a stub that got either wrong would make them pass for the wrong reason.
+    private static InvocationAttachmentTracker CreateAttachmentTracker()
+    {
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        return new InvocationAttachmentTracker(new Lazy<IWorkerEventDispatcher>(() => dispatcher), TimeProvider.System);
     }
 
     private static CancellationTokenSource? GetActiveInvocationCancellationTokenSource(InvocationRunner runner)

@@ -97,7 +97,10 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
 
         foreach (var (key, running) in _processes.ToArray())
         {
-            TeardownProcess(key, running);
+            if (DetachProcess(key, running) is { } detached)
+            {
+                KillDetachedProcess(detached);
+            }
         }
 
         _admissionGate.Dispose();
@@ -164,18 +167,27 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
 
         using (reservation)
         {
+            // Daemons detached from the table under the gate, tree-killed after it is released (see KillDetachedProcesses).
+            var detached = new List<RunningServer>();
             await _admissionGate.WaitAsync(ct).ConfigureAwait(false);
             try
             {
                 foreach (var (key, running) in _processes.ToArray())
                 {
-                    TeardownProcess(key, running);
+                    if (DetachProcess(key, running) is { } evicted)
+                    {
+                        detached.Add(evicted);
+                    }
                 }
             }
             finally
             {
                 _admissionGate.Release();
             }
+
+            // Killed outside the gate but BEFORE the snapshot below: each kill releases that daemon's resident-process
+            // lease, and the snapshot this returns is the operator's report of what the eviction left behind.
+            KillDetachedProcesses(detached);
         }
 
         return new ImageServerEvictAllResult(true, _runtimeActivityGate.GetSnapshot());
@@ -381,11 +393,16 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
 
             // A DisposeAsync that ran while this spawn was in flight tore down only the daemons present in its
             // teardown snapshot; this one registered AFTER that snapshot, so if disposal is now observed it would be left
-            // resident (orphaned). Tear it down here. The teardown owns the kill/dispose/port-release, so null the handle
-            // to keep the catch below from acting on it again; the ObjectDisposedException is excluded from the error log.
+            // resident (orphaned). Tear it down here. The detach/kill pair (or, on a lost removal race, the concurrent
+            // path that won it) owns the kill/dispose/port-release, so null the handle to keep the catch below from
+            // acting on it again; the ObjectDisposedException is excluded from the error log.
             if (Volatile.Read(ref _disposed) != 0)
             {
-                TeardownProcess(modelName, running);
+                if (DetachProcess(modelName, running) is { } detached)
+                {
+                    KillDetachedProcess(detached);
+                }
+
                 handle = null;
                 throw new ObjectDisposedException(nameof(ImageServerProcessSupervisor));
             }
@@ -519,13 +536,15 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
     /// </summary>
     private async Task<int> AllocatePortAsync(CancellationToken ct)
     {
+        // Daemons detached from the table under the gate, tree-killed after it is released (see KillDetachedProcesses).
+        var detached = new List<RunningServer>();
         await _admissionGate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
             // Drop any daemon that has already exited so its slot/port is reclaimed before the cap check.
-            PruneExitedProcesses();
+            PruneExitedProcesses(detached);
 
-            if (_allocatedPorts.Count >= _options.MaxLoadedProcesses && !TryEvictIdleLeastRecentlyUsed())
+            if (_allocatedPorts.Count >= _options.MaxLoadedProcesses && !TryEvictIdleLeastRecentlyUsed(detached))
             {
                 throw CapReached();
             }
@@ -535,6 +554,12 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         finally
         {
             _admissionGate.Release();
+
+            // The gate is free BEFORE any child is killed: tree-killing a multi-GB image model is slow, and under the
+            // gate it serialized every unrelated model's port allocation and release behind it. This spawn still waits
+            // for its own victim to die before it returns to launch, so the VRAM the victim held is genuinely released
+            // before the incoming model loads.
+            KillDetachedProcesses(detached);
         }
     }
 
@@ -549,8 +574,12 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
     ///         out. An unleased daemon has no request in flight, so evicting it costs a reload and nothing else, whereas
     ///         refusing costs the operator the feature. A leased daemon is still never a victim.
     ///     </para>
+    ///     <para>
+    ///         The victim is detached here — its slot and port are free the moment this returns <see langword="true" /> —
+    ///         and appended to <paramref name="detached" /> for the caller to tree-kill once the gate is released.
+    ///     </para>
     /// </summary>
-    private bool TryEvictIdleLeastRecentlyUsed()
+    private bool TryEvictIdleLeastRecentlyUsed(List<RunningServer> detached)
     {
         var now = _timeProvider.GetUtcNow();
         string? victimKey = null;
@@ -596,11 +625,18 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
             return false;
         }
 
+        // Free the slot/port under the gate so the new admission proceeds immediately; the kill follows outside it.
+        // A lost removal race (a concurrent evict/reap already detached this victim) frees no slot of OUR doing, so
+        // report no admission rather than letting the cap be overrun on someone else's teardown.
+        if (DetachProcess(victimKey, victim) is not { } evicted)
+        {
+            return false;
+        }
+
         _logger.LogWarning("Loaded-model cap ({Cap}) reached; evicting {Idleness} sd-server for model {ModelName} to admit a new one.",
             _options.MaxLoadedProcesses, victimIsIdlePastTtl ? "idle" : "in-window but unleased", victimKey);
 
-        // Synchronous teardown under the admission gate: free the slot/port before the new admission proceeds.
-        TeardownProcess(victimKey, victim);
+        detached.Add(evicted);
         return true;
     }
 
@@ -609,13 +645,13 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         return new StableDiffusionRuntimeException("The maximum number of local image models are already loaded. Unload a model or raise the limit, then try again.");
     }
 
-    private void PruneExitedProcesses()
+    private void PruneExitedProcesses(List<RunningServer> detached)
     {
         foreach (var (key, running) in _processes)
         {
-            if (running.Handle.HasExited)
+            if (running.Handle.HasExited && DetachProcess(key, running) is { } exited)
             {
-                TeardownProcess(key, running);
+                detached.Add(exited);
             }
         }
     }
@@ -623,24 +659,68 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
     private async Task RemoveProcessAsync(string key, RunningServer running)
     {
         // Teardown must complete even during shutdown, so it is not bound to a caller cancellation token.
+        RunningServer? detached;
         await _admissionGate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
         try
         {
-            TeardownProcess(key, running);
+            detached = DetachProcess(key, running);
         }
         finally
         {
             _admissionGate.Release();
         }
+
+        // Killed OUTSIDE the gate so a multi-GB tree-kill does not serialize unrelated admissions — but still completed
+        // before this returns, because every caller here depends on the child actually being gone: the ensure/restart
+        // path reaps the outgoing daemon through this call and then immediately respawns under the same key (at the
+        // default cap of one, the replacement's load must not overlap the outgoing model's VRAM), and the wedged-daemon
+        // and idle-reaper paths must not leave a second child alive against the same model files.
+        if (detached is not null)
+        {
+            KillDetachedProcess(detached);
+        }
     }
 
-    private void TeardownProcess(string key, RunningServer running)
+    /// <summary>
+    ///     Removes a daemon from the table and releases its port reservation — everything that makes the slot available
+    ///     to the next admission — WITHOUT touching the child. Caller holds the admission gate. Returns the daemon when
+    ///     this call won the removal race (the caller then owes it a <see cref="KillDetachedProcess" />), or
+    ///     <see langword="null" /> when a concurrent path already removed it.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         INVARIANT: the port reservation is dropped here, before the child is killed, so the reservation set
+    ///         (which is what bounds the loaded-model CAP) never counts a daemon that is on its way out. That does not
+    ///         hand the next spawn a port the dying child still holds: <see cref="AllocatePort" /> bind-probes every
+    ///         candidate (<see cref="IsPortFree" />) and skips one that is still bound. The bind probe was always the
+    ///         real guard — <c>TreeKill</c> returns before the OS reclaims the socket, so releasing the port after the
+    ///         kill never proved availability either.
+    ///     </para>
+    ///     <para>
+    ///         The resident-process lease is deliberately NOT released here. Unlike the slot and the port it has no
+    ///         equivalent of the bind probe behind it: it is what holds off an exclusive runtime mutation
+    ///         (<see cref="IImageRuntimeActivityGate.TryAcquireMutationReservation" /> admits only at zero resident
+    ///         processes), and a child that has been detached but not yet killed still has the model files open. It is
+    ///         released in <see cref="KillDetachedProcess" /> instead, once the child is actually down.
+    ///     </para>
+    /// </remarks>
+    private RunningServer? DetachProcess(string key, RunningServer running)
     {
         if (!_processes.TryRemove(new KeyValuePair<string, RunningServer>(key, running)))
         {
-            return; // Already removed by a concurrent path.
+            return null; // Already removed by a concurrent path.
         }
 
+        ReleasePort(running.Port);
+        return running;
+    }
+
+    /// <summary>
+    ///     Tree-kills + disposes a detached daemon, then releases the resident-process lease it held. Never called while
+    ///     the admission gate is held.
+    /// </summary>
+    private static void KillDetachedProcess(RunningServer running)
+    {
         try
         {
             running.Handle.TreeKill();
@@ -649,7 +729,27 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         {
             running.Handle.Dispose();
             running.ResidentLease.Dispose();
-            ReleasePort(running.Port);
+        }
+    }
+
+    /// <summary>
+    ///     Tree-kills every daemon detached during an admission decision. A teardown failure is logged, never rethrown:
+    ///     the admission it trails has already succeeded (or failed with its own cap error), and turning a kill failure
+    ///     into the caller's exception would both mask that error and skip the remaining victims.
+    /// </summary>
+    private void KillDetachedProcesses(List<RunningServer> detached)
+    {
+        foreach (var running in detached)
+        {
+            try
+            {
+                KillDetachedProcess(running);
+            }
+            catch (Exception exception)
+            {
+                _logger.LogWarning(exception, "Tearing down an evicted sd-server (pid {ProcessId}) failed; its slot and port were already released.",
+                    running.Handle.ProcessId);
+            }
         }
     }
 

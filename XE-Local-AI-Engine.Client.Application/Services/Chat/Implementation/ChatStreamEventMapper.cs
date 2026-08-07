@@ -35,13 +35,23 @@ internal static class ChatStreamEventMapper
         };
     }
 
+    /// <summary>
+    ///     Maps a persisted row to a LIFECYCLE or TERMINAL event — pending / queued / streaming / completed / cancelled
+    ///     / failed / interrupted, and the user's own persisted message. These carry the full
+    ///     <see cref="ChatStreamEvent.Content" />/<see cref="ChatStreamEvent.Reasoning" /> from the row, which is
+    ///     affordable because there is at most one of them per turn.
+    ///     <para>
+    ///         It deliberately cannot build an <see cref="ChatStreamEventTypes.AssistantDelta" />: the delta path took
+    ///         its content from the persisted row too, which is what made the wire cost of a turn quadratic in its
+    ///         output length. Deltas go through <see cref="DeltaEvent" />, which has no access to a row at all — the
+    ///         type system now answers "which fields does this event carry", instead of a caller's discipline.
+    ///     </para>
+    /// </summary>
     public static ChatStreamEvent MessageEvent(string type,
         NodeChatMessageCorrelation correlation,
         NodeChatPersistedMessageDto message,
         long timestampMs,
         long sequence,
-        string? delta = null,
-        string? reasoningDelta = null,
         int? inputTokens = null,
         int? outputTokens = null,
         int? totalTokens = null,
@@ -54,16 +64,104 @@ internal static class ChatStreamEventMapper
             message.Status,
             sequence,
             timestampMs,
-            delta,
+            Content: message.Content,
+            Reasoning: message.Reasoning,
+            Error: message.Error,
+            Model: message.Model,
+            InputTokens: inputTokens ?? message.InputCount,
+            OutputTokens: outputTokens ?? message.OutputCount,
+            TotalTokens: totalTokens ?? message.TotalCount,
+            ReasoningTokens: reasoningTokens ?? message.ReasoningCount);
+    }
+
+    /// <summary>
+    ///     Builds one live <see cref="ChatStreamEventTypes.AssistantDelta" />: the content/reasoning increment plus the
+    ///     character offset each begins at, and NOTHING else — no accumulated content, no model, no token counts.
+    ///     <para>
+    ///         Note it takes no <see cref="NodeChatPersistedMessageDto" />. A delta frame no longer needs a database row,
+    ///         which is what lets the SSE cadence run at ~25 frames/s while persistence flushes on a far slower,
+    ///         growth-triggered cadence. The offsets are the client's gap detector: it appends the delta at the offset
+    ///         it expected, and re-subscribes (receiving an <see cref="ChatStreamEventTypes.AssistantSnapshot" />) if
+    ///         the offsets do not line up.
+    ///     </para>
+    /// </summary>
+    public static ChatStreamEvent DeltaEvent(NodeChatMessageCorrelation correlation,
+        long timestampMs,
+        long sequence,
+        string? contentDelta,
+        string? reasoningDelta,
+        long contentOffset,
+        long reasoningOffset)
+    {
+        return new ChatStreamEvent(ChatStreamEventTypes.AssistantDelta,
+            correlation.ConversationId,
+            correlation.MessageId,
+            correlation.RequestId,
+            NodeChatMessageStatusValues.Streaming,
+            sequence,
+            timestampMs,
+            contentDelta,
             reasoningDelta,
-            message.Content,
-            message.Reasoning,
-            message.Error,
-            message.Model,
-            inputTokens ?? message.InputCount,
-            outputTokens ?? message.OutputCount,
-            totalTokens ?? message.TotalCount,
-            reasoningTokens ?? message.ReasoningCount);
+            ContentOffset: contentOffset,
+            ReasoningOffset: reasoningOffset);
+    }
+
+    /// <summary>
+    ///     Builds an <see cref="ChatStreamEventTypes.AssistantSnapshot" />: an authoritative replacement of the
+    ///     client's accumulated text, with the offsets the next delta continues from. Used by the resume replay, and by
+    ///     the repair paths a client reaches through <c>ResumeMessage</c> after a gap or a queue overflow.
+    ///     <para>
+    ///         Its status stays <c>streaming</c> — a snapshot is a mid-stream state replacement, never a terminal. The
+    ///         resume path stamps the invocation id as BOTH the message id and the request id, as it does for tool-call
+    ///         and notice replay, so the ids are passed explicitly rather than as a correlation.
+    ///     </para>
+    /// </summary>
+    public static ChatStreamEvent SnapshotEvent(Guid conversationId,
+        Guid messageId,
+        Guid requestId,
+        string content,
+        string? reasoning,
+        long timestampMs,
+        long sequence)
+    {
+        return new ChatStreamEvent(ChatStreamEventTypes.AssistantSnapshot,
+            conversationId,
+            messageId,
+            requestId,
+            NodeChatMessageStatusValues.Streaming,
+            sequence,
+            timestampMs,
+            Content: content,
+            Reasoning: reasoning,
+            ContentOffset: content?.Length ?? 0,
+            ReasoningOffset: reasoning?.Length ?? 0);
+    }
+
+    /// <summary>
+    ///     Builds an <see cref="ChatStreamEventTypes.AssistantReconcile" />: "this stream is no longer contiguous —
+    ///     resynchronize". Carries no payload beyond the correlation and a sequence, because the repair carries the
+    ///     state: the client re-subscribes through <c>ResumeMessage</c> and its first frame is an authoritative
+    ///     <see cref="SnapshotEvent" />.
+    ///     <para>
+    ///         Raised when a bounded stream queue overflowed (<see cref="ChatStreamEventSink" />) or when a resume
+    ///         replay snapshot was too large to send (<see cref="InvocationResumeRegistry" />). The client consumes it
+    ///         in the adapter and surfaces nothing to the user; <c>chat_stream_reconcile_total</c> is the signal that
+    ///         it is happening.
+    ///     </para>
+    /// </summary>
+    public static ChatStreamEvent ReconcileEvent(NodeChatMessageCorrelation correlation,
+        long timestampMs,
+        long sequence)
+    {
+        ArgumentNullException.ThrowIfNull(correlation);
+
+        return new ChatStreamEvent(ChatStreamEventTypes.AssistantReconcile,
+            correlation.ConversationId,
+            correlation.MessageId,
+            correlation.RequestId,
+            NodeChatMessageStatusValues.Streaming,
+            sequence,
+            timestampMs);
     }
 
     public static ChatStreamEvent ToolCallEvent(Guid conversationId,

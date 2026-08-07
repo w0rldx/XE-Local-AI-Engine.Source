@@ -26,6 +26,7 @@ public sealed class StubNodeRuntimeSettings
     private TimeSpan _llamaIdleTimeToLive = TimeSpan.FromSeconds(StoredNodeSettings.DefaultLlamaIdleTimeToLiveSeconds);
     private int _llamaMaxLoadedProcesses = StoredNodeSettings.DefaultLlamaMaxLoadedProcesses;
     private int _maxPendingToolCallAgeMinutes = StoredNodeSettings.DefaultMaxPendingToolCallAgeMinutes;
+    private int _detachedGraceSeconds = StoredNodeSettings.DefaultDetachedGraceSeconds;
     private int _maxResponseSizeMb = StoredNodeSettings.DefaultMaxResponseSizeMb;
     private int _orchestrationIdleTimeoutSeconds = StoredNodeSettings.DefaultOrchestrationIdleTimeoutSeconds;
     private IReadOnlyList<string> _toolCapableModels = ["qwen3:8b"];
@@ -105,6 +106,12 @@ public sealed class StubNodeRuntimeSettings
     public StubNodeRuntimeSettings WithMaxPendingToolCallAgeMinutes(int maxPendingToolCallAgeMinutes)
     {
         _maxPendingToolCallAgeMinutes = maxPendingToolCallAgeMinutes;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithDetachedGraceSeconds(int detachedGraceSeconds)
+    {
+        _detachedGraceSeconds = detachedGraceSeconds;
         return this;
     }
 
@@ -197,6 +204,7 @@ public sealed class StubNodeRuntimeSettings
         settings.GetAgentHomeMaxSelectedFolderBytesAsync(Arg.Any<CancellationToken>()).Returns(_agentHomeMaxSelectedFolderBytes);
         settings.GetAgentHomeMaxPatchBytesAsync(Arg.Any<CancellationToken>()).Returns(_agentHomeMaxPatchBytes);
         settings.GetMaxPendingToolCallAgeMinutesAsync(Arg.Any<CancellationToken>()).Returns(_maxPendingToolCallAgeMinutes);
+        settings.GetDetachedGraceSecondsAsync(Arg.Any<CancellationToken>()).Returns(_detachedGraceSeconds);
         settings.GetSamplingDefaultsAsync(Arg.Any<CancellationToken>()).Returns((SamplingOptions?)null);
         settings.GetChatCacheReuseAsync(Arg.Any<CancellationToken>()).Returns(_chatCacheReuse);
         settings.GetSpeculativeModeAsync(Arg.Any<CancellationToken>()).Returns(_speculativeMode);
@@ -217,6 +225,7 @@ public sealed class StubNodeRuntimeSettings
         settings.GetMaxResponseSizeMb().Returns(_maxResponseSizeMb);
         settings.GetOrchestrationIdleTimeoutSeconds().Returns(_orchestrationIdleTimeoutSeconds);
         settings.GetMaxPendingToolCallAgeMinutes().Returns(_maxPendingToolCallAgeMinutes);
+        settings.GetDetachedGraceSeconds().Returns(_detachedGraceSeconds);
         settings.GetChatCacheReuse().Returns(_chatCacheReuse);
         settings.GetSpeculativeMode().Returns(_speculativeMode);
         settings.GetSpeculativeDraftModelName().Returns(_speculativeDraftModelName);

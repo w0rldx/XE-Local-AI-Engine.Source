@@ -1,7 +1,9 @@
 namespace XE_Local_AI_Engine.Tests.Chat;
 
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using NSubstitute;
+using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
@@ -91,26 +93,37 @@ public sealed class InvocationResumeRegistryTests
 
         await consumer;
 
-        // The replay is a pure SNAPSHOT event: full Content, NO delta fields. The reconnecting client applies
-        // Content as a replacement; a delta here would be appended to whatever it already rendered before the
-        // reconnect, duplicating it.
+        // The replay is an assistant-snapshot: full Content, NO delta fields. The reconnecting client applies Content
+        // as a replacement; a delta here would be appended to whatever it already rendered before the reconnect,
+        // duplicating it. Its offsets are what re-seat the client's delta-offset counters after the gap.
         var snapshot = events[0];
-        AssertEx.Equal(ChatStreamEventTypes.AssistantDelta, snapshot.Type);
+        AssertEx.Equal(ChatStreamEventTypes.AssistantSnapshot, snapshot.Type);
         AssertEx.Null(snapshot.Delta);
         AssertEx.Null(snapshot.ReasoningDelta);
         AssertEx.Equal("Hello", snapshot.Content);
+        AssertEx.Equal(expected: 5L, snapshot.ContentOffset);
         AssertEx.Equal(conversationId, snapshot.ConversationId);
         AssertEx.Equal(invocationId, snapshot.RequestId);
+        // A snapshot is a mid-stream replacement, never a terminal: the turn continues after it.
+        AssertEx.Equal(NodeChatMessageStatusValues.Streaming, snapshot.Status);
 
-        // Live delta carries only the newly appended fragment.
+        // Live delta carries only the newly appended fragment, at the offset the snapshot ended on — so the client can
+        // append it and detect a gap from the offsets alone.
         var delta = events[1];
         AssertEx.Equal(ChatStreamEventTypes.AssistantDelta, delta.Type);
         AssertEx.Equal(" world", delta.Delta);
+        AssertEx.Equal(expected: 5L, delta.ContentOffset);
+        AssertEx.Equal(snapshot.ContentOffset, delta.ContentOffset);
+        // The delta-only protocol: a live frame never re-sends the accumulated text.
+        AssertEx.Null(delta.Content);
+        AssertEx.Null(delta.Reasoning);
 
-        // Terminal event closes the stream.
+        // Terminal event closes the stream, and still carries the full text — one frame per turn, and the backstop
+        // that converges a client whose delta stream fell behind.
         var terminal = events[^1];
         AssertEx.Equal(ChatStreamEventTypes.AssistantCompleted, terminal.Type);
         AssertEx.Equal(NodeChatMessageStatusValues.Completed, terminal.Status);
+        AssertEx.Equal("Hello world", terminal.Content);
 
         // Resume streams number from zero, contiguous and ascending — the client rebases them onto the original
         // stream's sequence space at the reconnect boundary.
@@ -159,7 +172,7 @@ public sealed class InvocationResumeRegistryTests
         AssertEx.Equal("2", completed.Result);
 
         var snapshot = events[2];
-        AssertEx.Equal(ChatStreamEventTypes.AssistantDelta, snapshot.Type);
+        AssertEx.Equal(ChatStreamEventTypes.AssistantSnapshot, snapshot.Type);
         AssertEx.Equal("Hello", snapshot.Content);
         AssertEx.Null(snapshot.Delta);
 
@@ -207,10 +220,14 @@ public sealed class InvocationResumeRegistryTests
         await consumer;
 
         var snapshot = events[0];
+        AssertEx.Equal(ChatStreamEventTypes.AssistantSnapshot, snapshot.Type);
         AssertEx.Null(snapshot.Delta);
         AssertEx.Null(snapshot.ReasoningDelta);
         AssertEx.Equal("Hi", snapshot.Content);
         AssertEx.Equal("Let me think", snapshot.Reasoning);
+        // Reasoning gets its own offset, so a resumed turn stays diffable on both sides independently.
+        AssertEx.Equal(expected: 2L, snapshot.ContentOffset);
+        AssertEx.Equal(expected: 12L, snapshot.ReasoningOffset);
     }
 
     [Test]
@@ -466,11 +483,105 @@ public sealed class InvocationResumeRegistryTests
             DateTimeOffset.UtcNow);
     }
 
-    private static InvocationResumeRegistry CreateRegistry(IWorkerEventDispatcher dispatcher)
+    [Test]
+    public async Task ResumeAsync_PastTheSubscriberCap_RejectsWhileTheExistingSubscribersKeepStreaming()
+    {
+        // The cap REJECTS rather than evicting: a tab stuck in a reconnect loop must never knock a working browser off
+        // its own stream. The rejected caller sees the same failure shape as "not resumable" and refetches instead.
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var registry = CreateRegistry(dispatcher,
+            new ChatStreamBudgetOptions
+            {
+                MaxSubscribersPerInvocation = 2
+            });
+        var invocationId = Guid.NewGuid();
+        var conversationId = Guid.NewGuid();
+
+        RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Running, "Hello"));
+
+        var firstEvents = new List<ChatStreamEvent>();
+        var secondEvents = new List<ChatStreamEvent>();
+        var first = Task.Run(async () =>
+        {
+            await foreach (var streamEvent in registry.ResumeAsync(invocationId, CancellationToken.None))
+            {
+                firstEvents.Add(streamEvent);
+            }
+        });
+        var second = Task.Run(async () =>
+        {
+            await foreach (var streamEvent in registry.ResumeAsync(invocationId, CancellationToken.None))
+            {
+                secondEvents.Add(streamEvent);
+            }
+        });
+
+        // Both are attached (each has replayed its opening snapshot) before the third one asks.
+        await AssertEx.EventuallyAsync(() => firstEvents.Count >= 1 && secondEvents.Count >= 1, TimeSpan.FromSeconds(5));
+
+        await AssertEx.ThrowsAsync<InvalidOperationException>(async () =>
+        {
+            await foreach (var _ in registry.ResumeAsync(invocationId, CancellationToken.None))
+            {
+                // No events expected — the cap rejects this consumer at its first enumeration.
+            }
+        });
+
+        // The rejection changed nothing for the two that were already there: both still receive the live delta and
+        // the terminal.
+        RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Running, "Hello world"));
+        RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Completed, "Hello world"));
+
+        await first;
+        await second;
+
+        AssertEx.Equal(ChatStreamEventTypes.AssistantCompleted, firstEvents[^1].Type);
+        AssertEx.Equal(ChatStreamEventTypes.AssistantCompleted, secondEvents[^1].Type);
+        AssertEx.ContainsSingle(firstEvents, streamEvent => streamEvent.Delta == " world");
+        AssertEx.ContainsSingle(secondEvents, streamEvent => streamEvent.Delta == " world");
+    }
+
+    [Test]
+    public async Task ResumeAsync_WhenTheReplaySnapshotExceedsTheCap_ReconcilesInsteadOfReplaying()
+    {
+        // Above the cap the replay would be the single largest frame the protocol can produce. Reconciling instead
+        // costs one refetch of the persisted conversation, which holds the same text — and avoids inventing a
+        // truncated-snapshot semantic that every reader of a snapshot would then have to understand.
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var registry = CreateRegistry(dispatcher,
+            new ChatStreamBudgetOptions
+            {
+                MaxReplaySnapshotChars = 8
+            });
+        var invocationId = Guid.NewGuid();
+        var conversationId = Guid.NewGuid();
+
+        RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Running, "well past eight characters"));
+
+        var events = new List<ChatStreamEvent>();
+        await foreach (var streamEvent in registry.ResumeAsync(invocationId, CancellationToken.None))
+        {
+            events.Add(streamEvent);
+        }
+
+        // One reconcile, and the stream ENDS — it does not go on to replay the very snapshot the cap refused.
+        AssertEx.Equal(expected: 1, events.Count);
+        AssertEx.Equal(ChatStreamEventTypes.AssistantReconcile, events[0].Type);
+        AssertEx.Equal(conversationId, events[0].ConversationId);
+        AssertEx.Equal(invocationId, events[0].RequestId);
+        AssertEx.Null(events[0].Content);
+
+        // And the invocation is still live for the refetch/re-resume that follows: the cap rejects the REPLAY, not
+        // the run.
+        AssertEx.NotNull(registry.TryGetLiveInvocation(invocationId));
+    }
+
+    private static InvocationResumeRegistry CreateRegistry(IWorkerEventDispatcher dispatcher, ChatStreamBudgetOptions? budget = null)
     {
         return new InvocationResumeRegistry(dispatcher,
             TimeProvider.System,
-            NullLogger<InvocationResumeRegistry>.Instance);
+            NullLogger<InvocationResumeRegistry>.Instance,
+            budget is null ? null : Options.Create(budget));
     }
 
     private static InvocationState NewState(Guid invocationId,

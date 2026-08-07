@@ -624,6 +624,18 @@ export function NodeSettingsFieldsCard({
 							error={fieldError(t, errors, "maxPendingToolCallAgeMinutes")}
 							data-testid="node-settings-max-pending-toolcall-age"
 						/>
+						<NumberInput
+							label={t("pages.nodeSettings.fields.detachedGraceSeconds.label", "Disconnect grace")}
+							description={`${t("pages.nodeSettings.fields.allowedRange", "Allowed range")}: ${bounds.detachedGraceSeconds.min}–${bounds.detachedGraceSeconds.max} ${t("pages.nodeSettings.fields.seconds", "seconds")}. ${t("pages.nodeSettings.fields.detachedGraceSeconds.description", "How long a run keeps going after its last client disconnects. 0 never cancels.")}`}
+							suffix={` ${t("pages.nodeSettings.fields.seconds", "seconds")}`}
+							min={bounds.detachedGraceSeconds.min}
+							max={bounds.detachedGraceSeconds.max}
+							allowDecimal={false}
+							value={form.detachedGraceSeconds}
+							onChange={(value) => onChange("detachedGraceSeconds", value)}
+							error={fieldError(t, errors, "detachedGraceSeconds")}
+							data-testid="node-settings-detached-grace-seconds"
+						/>
 						<Text size="xs" c="dimmed">
 							{t(
 								"pages.nodeSettings.fields.advanced.samplingNote",

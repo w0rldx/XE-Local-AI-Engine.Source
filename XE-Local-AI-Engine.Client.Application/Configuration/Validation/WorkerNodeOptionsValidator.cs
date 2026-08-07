@@ -13,6 +13,7 @@ public sealed class WorkerNodeOptionsValidator : IValidateOptions<WorkerNodeOpti
                                .AppendIf(options.MaxResponseSizeMb is < 1 or > 100, "WorkerNode:MaxResponseSizeMb must be between 1 and 100.")
                                .AppendIf(string.IsNullOrWhiteSpace(options.DeadLetterQueuePath), "WorkerNode:DeadLetterQueuePath is required.")
                                .AppendIf(options.MaxPendingToolCallAgeMinutes is < 1 or > 60, "WorkerNode:MaxPendingToolCallAgeMinutes must be between 1 and 60.")
+                               .AppendIf(options.DetachedGraceSeconds is < 0 or > 86400, "WorkerNode:DetachedGraceSeconds must be between 0 and 86400.")
                                .ToArray();
 
         return errors.Length == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(errors);

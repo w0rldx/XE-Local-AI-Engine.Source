@@ -35,6 +35,7 @@ public static class NodeApplicationServiceCollectionExtensions
         builder.AddNodeDocumentIngestion(configuration);
         builder.AddNodeKnowledgeBase(configuration);
         builder.AddNodeChat(configuration);
+        builder.AddNodeChatStreamBudget(configuration);
         builder.AddNodeDevelopment(configuration);
         // Development Mode container sandbox (ADR 0004). After AddNodeDevelopment so it reads as what it is: a
         // Development Mode concern, not an AgentHome one.

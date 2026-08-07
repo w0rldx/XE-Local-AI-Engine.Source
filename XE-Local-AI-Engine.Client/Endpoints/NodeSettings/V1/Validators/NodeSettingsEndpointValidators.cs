@@ -107,6 +107,10 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
             .InclusiveBetween(StoredNodeSettings.MinMaxPendingToolCallAgeMinutes, StoredNodeSettings.MaxMaxPendingToolCallAgeMinutes)
             .When(static request => request.MaxPendingToolCallAgeMinutes is not null);
 
+        RuleFor(static request => request.DetachedGraceSeconds!.Value)
+            .InclusiveBetween(StoredNodeSettings.MinDetachedGraceSeconds, StoredNodeSettings.MaxDetachedGraceSeconds)
+            .When(static request => request.DetachedGraceSeconds is not null);
+
         // The default-sampling seed rides the wire as a string (precision-safe); reject a non-integer value with a 400.
         RuleFor(static request => request.SamplingDefaults!.Seed)
             .Must(static seed => SeedValue.IsValid(seed))

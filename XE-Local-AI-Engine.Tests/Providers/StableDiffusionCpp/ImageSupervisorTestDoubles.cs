@@ -183,7 +183,9 @@ internal sealed class AdvanceableClock : TimeProvider
 /// <summary>Builds an <see cref="ImageServerProcessSupervisor" /> over fakes with sensible test defaults.</summary>
 internal static class ImageSupervisorFactory
 {
-    public static ImageServerProcessSupervisor Create(FakeImageProcessLauncher? launcher = null,
+    // The launcher is the interface, not the shared fake: a test that needs a handle whose tree-kill blocks supplies its
+    // own double (the shared FakeImageProcessHandle kills instantly and cannot express that).
+    public static ImageServerProcessSupervisor Create(IImageServerProcessLauncher? launcher = null,
         FakeImageReadinessProbe? readinessProbe = null,
         FakeImageModelStore? modelStore = null,
         StableDiffusionRuntimeOptions? options = null,

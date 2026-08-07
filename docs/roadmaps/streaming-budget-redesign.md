@@ -335,7 +335,7 @@ New counters on `NodeMetrics` (content-free, matching the conventions already th
 | `chat_stream_detached_invocations` | UpDownCounter | — | The "leases held without subscribers" gauge v1 asked for. |
 | `chat_detached_invocation_reaped_total` | Counter | — | How often the grace deadline actually fires. |
 | `chat_partial_flush_total` | Counter | — | Flush count per turn; the direct before/after evidence for §2. |
-| `chat_partial_flush_chars_total` | Counter | — | Characters rewritten. `chars_total / output_chars` is the amplification ratio; the acceptance target is ≤10. |
+| `chat_partial_flush_chars_total` | Counter | — | Characters rewritten. `chars_total / output_chars` is the amplification ratio. Acceptance target, reconciled after Lane A's derivation: the growth branch is bounded by `n·(1+2g)/g` = **7** at the shipped `g = 0.2` (flush series `n·(1+g)/g` plus the terminal's full rewrite), so ≤10 holds wherever growth governs. A slow stream governed by the 2 s ceiling (§7.2, decided) can exceed 10 by design — that trade bought the crash-loss bound; the §2.4 revisit trigger (ceiling scaling) is the recorded answer if live ratios show the ceiling dominating in practice. |
 
 ---
 

@@ -157,6 +157,7 @@ describe("NodeSettingsFieldsModel mapping", () => {
 		expect(nodeSettingsFieldDefaults.agentHomeMaxSelectedFolderBytes).toBe(536870912); // DefaultAgentHomeMaxSelectedFolderBytes (512 MiB)
 		expect(nodeSettingsFieldDefaults.agentHomeMaxPatchBytes).toBe(52428800); // DefaultAgentHomeMaxPatchBytes (50 MiB)
 		expect(nodeSettingsFieldDefaults.maxPendingToolCallAgeMinutes).toBe(10); // DefaultMaxPendingToolCallAgeMinutes
+		expect(nodeSettingsFieldDefaults.detachedGraceSeconds).toBe(300); // DefaultDetachedGraceSeconds
 	});
 
 	it("resolves bounds from the response with a hardcoded fallback", () => {
@@ -443,5 +444,53 @@ describe("buildNodeSettingsRequest", () => {
 		const { body, errors } = buildNodeSettingsRequest(form, baseline, bounds, false);
 		expect(errors["usageRates"]).toBe("rate");
 		expect(body.usageRates).toBeUndefined();
+	});
+});
+
+describe("detachedGraceSeconds", () => {
+	const baseline = toNodeSettingsFieldsForm(undefined);
+	const bounds = toNodeSettingsFieldBounds(undefined);
+
+	it("round-trips through the form and back into the request body", () => {
+		const form = { ...baseline, detachedGraceSeconds: 120 };
+		const { body, errors } = buildNodeSettingsRequest(form, baseline, bounds, true);
+		expect(errors).toEqual({});
+		expect(body.detachedGraceSeconds).toBe(120);
+	});
+
+	it("sends an explicit 0 rather than treating it as unset", () => {
+		// 0 is the "never cancel" sentinel, so it must survive the changed-fields filter as a real edit.
+		const form = { ...baseline, detachedGraceSeconds: 0 };
+		const { body, errors } = buildNodeSettingsRequest(form, baseline, bounds, true);
+		expect(errors).toEqual({});
+		expect(body.detachedGraceSeconds).toBe(0);
+	});
+
+	it("reads the value and its bounds off the response, falling back to the seed default", () => {
+		expect(toNodeSettingsFieldsForm({ maxMessageRequestTimeoutSeconds: 300 } as NodeSettingsResponse).detachedGraceSeconds).toBe(300);
+		expect(
+			toNodeSettingsFieldsForm({ maxMessageRequestTimeoutSeconds: 300, detachedGraceSeconds: 45 } as NodeSettingsResponse)
+				.detachedGraceSeconds,
+		).toBe(45);
+		expect(bounds.detachedGraceSeconds).toEqual({ min: 0, max: 86400 });
+		expect(
+			toNodeSettingsFieldBounds({
+				maxMessageRequestTimeoutSeconds: 300,
+				minDetachedGraceSeconds: 10,
+				maxAllowedDetachedGraceSeconds: 600,
+			} as NodeSettingsResponse).detachedGraceSeconds,
+		).toEqual({ min: 10, max: 600 });
+	});
+
+	it("rejects a negative grace with a range error", () => {
+		const form = { ...baseline, detachedGraceSeconds: -1 };
+		const { body, errors } = buildNodeSettingsRequest(form, baseline, bounds, true);
+		expect(errors["detachedGraceSeconds"]).toBe("range");
+		expect(body.detachedGraceSeconds).toBeUndefined();
+	});
+
+	it("is developer-gated like its MaxPendingToolCallAge sibling", () => {
+		const form = { ...baseline, detachedGraceSeconds: 120 };
+		expect(buildNodeSettingsRequest(form, baseline, bounds, false).body.detachedGraceSeconds).toBeUndefined();
 	});
 });
