@@ -28,6 +28,7 @@ import {
 import { guardNodeChatStream } from "@/features/chat/api/NodeChatStreamGuard";
 import type {
 	ChatCompactionResult,
+	ChatConversationListModel,
 	ChatConversationModel,
 	ChatFeedbackRating,
 	ChatMessageFeedback,
@@ -80,7 +81,7 @@ export interface SendMessageRequest {
 }
 
 export interface NodeChatAdapter {
-	listConversations(options?: ListConversationsOptions): Promise<ChatConversationModel[]>;
+	listConversations(options?: ListConversationsOptions): Promise<ChatConversationListModel>;
 	getConversation(conversationId: string, options?: RequestOptions): Promise<ChatConversationModel>;
 	createConversation(request?: CreateConversationRequest, options?: RequestOptions): Promise<ChatConversationModel>;
 	deleteConversation(conversationId: string, purgeImmediately?: boolean, options?: RequestOptions): Promise<void>;
@@ -436,7 +437,7 @@ export const nodeChatAdapter: NodeChatAdapter = {
 				throwOnError: true,
 			}),
 		);
-		return (data.items ?? []).map(mapConversationSummary);
+		return { conversations: (data.items ?? []).map(mapConversationSummary), maxMessageSizeKb: data.maxMessageSizeKb };
 	},
 	async getConversation(conversationId, options) {
 		const { data } = await callWithResponseValidation(

@@ -1439,6 +1439,7 @@ export type XeLocalAiEngineClientEndpointsLocalChatV1ListConversationUploadsRequ
 
 export type XeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatConversationsResponse = {
 	items: Array<XeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationSummaryResponse>;
+	maxMessageSizeKb: number;
 };
 
 export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationSummaryResponse = {

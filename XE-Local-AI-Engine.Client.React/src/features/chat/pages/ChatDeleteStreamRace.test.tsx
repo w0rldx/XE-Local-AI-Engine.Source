@@ -192,9 +192,9 @@ describe("Chat delete-vs-stream race", () => {
 		adapter.getConversation.mockResolvedValue(conversation());
 		// The list starts with the one conversation; the delete drops it so a post-delete list refetch (and the
 		// selection fallback) cannot legitimately re-fetch the removed thread — isolating the stream race.
-		adapter.listConversations.mockResolvedValue([conversation()]);
+		adapter.listConversations.mockResolvedValue({ conversations: [conversation()] });
 		adapter.deleteConversation.mockImplementation(async (): Promise<void> => {
-			adapter.listConversations.mockResolvedValue([]);
+			adapter.listConversations.mockResolvedValue({ conversations: [] });
 		});
 	});
 
@@ -259,7 +259,7 @@ describe("Chat delete-vs-stream race", () => {
 		// The delete request fails, so the conversation survives on the server and stays visible/selectable.
 		adapter.deleteConversation.mockReset();
 		adapter.deleteConversation.mockRejectedValue(new Error("delete failed"));
-		adapter.listConversations.mockResolvedValue([conversation()]);
+		adapter.listConversations.mockResolvedValue({ conversations: [conversation()] });
 
 		// The send streams a delta then a terminal event. `secondEventPulled` flips only if the streaming loop
 		// consumes PAST the first event — which it can only do when the deleted marker was rolled back (otherwise

@@ -168,7 +168,7 @@ describe("Chat cancel ordering", () => {
 			error: null,
 		});
 		adapter.getConversation.mockResolvedValue(conversation());
-		adapter.listConversations.mockResolvedValue([conversation()]);
+		adapter.listConversations.mockResolvedValue({ conversations: [conversation()] });
 	});
 
 	afterEach(() => {
