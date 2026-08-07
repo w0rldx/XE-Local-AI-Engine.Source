@@ -50,7 +50,9 @@ internal sealed class HostProcessExecutor : ICustomToolExecutor
         ArgumentNullException.ThrowIfNull(tool);
 
         CommandConfig config;
-        SecretValueRedactor redactor;
+        // Definite-assigned to the empty-set redactor so a guard exception thrown before config parses is still
+        // scrubbed (userinfo-only) rather than reusing a bare inline redactor per catch.
+        var redactor = new SecretValueRedactor([]);
         ProcessStartInfo startInfo;
         try
         {
@@ -63,7 +65,7 @@ internal sealed class HostProcessExecutor : ICustomToolExecutor
         }
         catch (CustomToolExecutionException exception)
         {
-            return $"The custom tool call was blocked: {new SecretValueRedactor([]).Redact(exception.Message)}";
+            return $"The custom tool call was blocked: {redactor.Redact(exception.Message)}";
         }
         catch (CustomToolConfigurationException exception)
         {

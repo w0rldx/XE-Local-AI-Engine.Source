@@ -11,6 +11,13 @@ using System.Text;
 ///     a shell/interpreter, and must be a real regular file. On Linux the regular-file check uses <c>statx</c> with
 ///     <c>AT_SYMLINK_NOFOLLOW</c> so a symlinked executable is rejected rather than followed — the same libc-import
 ///     posture as the sandbox provider's no-follow guards (a raw <c>FileOptions</c> cast for the flag throws).
+///     <para>
+///         follow-up: this statx check and the later <see cref="Process.Start()" /> re-resolve the same path string as
+///         two separate syscalls, so a small TOCTOU window remains between them — a leaf swapped for a symlink after
+///         this check passes but before <c>Process.Start</c>'s execve would still be followed. Closing that fully needs
+///         <c>open(O_NOFOLLOW|O_PATH)+fstat+fexecve</c> so the same open file description is both checked and executed.
+///         Deferred: the operator authors a fixed absolute path, so the residual risk is low, not zero.
+///     </para>
 /// </summary>
 internal static class HostExecutableGuard
 {

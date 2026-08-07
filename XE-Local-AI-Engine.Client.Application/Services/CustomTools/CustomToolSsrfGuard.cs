@@ -137,7 +137,9 @@ internal static class CustomToolSsrfGuard
     ///     True when <paramref name="address" /> falls in any range a custom-tool fetch must never reach: loopback,
     ///     RFC 1918 private, link-local (incl. the 169.254.169.254 cloud-metadata address), CGNAT, IETF-reserved,
     ///     broadcast/multicast, and the IPv6 equivalents (ULA, link-local, site-local, multicast, NAT64, unspecified).
-    ///     IPv4-mapped IPv6 addresses are unwrapped and re-tested as IPv4.
+    ///     IPv4-mapped IPv6 addresses are unwrapped and re-tested as IPv4, and so is the deprecated IPv4-compatible form
+    ///     (<c>::a.b.c.d</c>, e.g. <c>::169.254.169.254</c>) — otherwise it would sail past every IPv4 check below and
+    ///     reach the metadata/loopback range it embeds.
     /// </summary>
     public static bool IsDeniedAddress(IPAddress address)
     {
@@ -146,6 +148,18 @@ internal static class CustomToolSsrfGuard
         if (address.IsIPv4MappedToIPv6)
         {
             return IsDeniedAddress(address.MapToIPv4());
+        }
+
+        if (address.AddressFamily == AddressFamily.InterNetworkV6)
+        {
+            var bytes = address.GetAddressBytes();
+            var highBitsZero = bytes.AsSpan(0, 12).IndexOfAnyExcept((byte)0) < 0;
+            if (highBitsZero && (bytes[12] | bytes[13] | bytes[14] | bytes[15]) != 0)
+            {
+                // ::/96 with a nonzero low 32 bits is the deprecated IPv4-compatible form; the all-zero low bits case
+                // (the IPv6 unspecified address, ::) is excluded by the != 0 guard and falls through to IsDeniedIPv6.
+                return IsDeniedAddress(new IPAddress(bytes.AsSpan(12, 4)));
+            }
         }
 
         return address.AddressFamily switch
