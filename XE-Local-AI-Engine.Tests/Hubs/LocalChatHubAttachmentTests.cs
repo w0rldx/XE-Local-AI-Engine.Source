@@ -1,7 +1,9 @@
 namespace XE_Local_AI_Engine.Tests.Hubs;
 
 using System.Runtime.CompilerServices;
+using Microsoft.Extensions.Options;
 using NSubstitute;
+using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Hubs;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Events;
@@ -109,7 +111,8 @@ public sealed class LocalChatHubAttachmentTests
         return new LocalChatHub(streamService,
             Substitute.For<INodeChatRegenerationService>(),
             Substitute.For<IInvocationResumeRegistry>(),
-            tracker);
+            tracker,
+            Options.Create(new SecurityOptions()));
     }
 
     private static InvocationAttachmentTracker CreateTracker()

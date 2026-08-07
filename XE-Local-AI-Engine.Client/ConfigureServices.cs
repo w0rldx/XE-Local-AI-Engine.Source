@@ -207,7 +207,11 @@ public static class ConfigureServices
             options.ClientTimeoutInterval = TimeSpan.FromMinutes(2);
             options.HandshakeTimeout = TimeSpan.FromSeconds(15);
             options.KeepAliveInterval = TimeSpan.FromSeconds(15);
-            options.MaximumReceiveMessageSize = 64 * 1024;
+            // Transport ceiling for ONE hub-invocation payload (a SendMessage envelope: content plus ids, model name,
+            // selected-path map, attachment ids). Kept deliberately above Security:MaxMessageSizeKb (256 KB of content
+            // by default) so an oversized paste is rejected by that app-level check with a legible message, rather than
+            // by SignalR tearing the connection down with an opaque frame-size error. Raise the two together.
+            options.MaximumReceiveMessageSize = 512 * 1024;
             options.StreamBufferCapacity = 1;
         });
         builder.Services.SwaggerDocument(options =>
