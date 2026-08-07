@@ -97,7 +97,10 @@ export function AgentToolSelector({
 
 			{rows.map((tool) => {
 				const isSelected = selectedToolNames.includes(tool.name);
-				const requiresApproval = toolApprovals[tool.name] ?? tool.requiresApproval;
+				// A custom (user-defined) tool always requires approval at runtime (forced by the tool registry),
+				// so the per-tool approval switch is pinned on and locked — flipping it would be a misleading no-op.
+				const isCustom = tool.source.kind === "custom";
+				const requiresApproval = isCustom ? true : (toolApprovals[tool.name] ?? tool.requiresApproval);
 
 				return (
 					<Paper withBorder={true} p="xs" key={tool.name} data-testid={`agent-tool-row-${tool.name}`}>
@@ -121,7 +124,7 @@ export function AgentToolSelector({
 								<Switch
 									size="sm"
 									checked={requiresApproval}
-									disabled={!toolCapable || !isSelected}
+									disabled={!toolCapable || !isSelected || isCustom}
 									label={
 										<Badge size="xs" variant="light" color={requiresApproval ? "orange" : "teal"}>
 											{requiresApproval
