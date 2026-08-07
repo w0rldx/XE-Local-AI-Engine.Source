@@ -6,7 +6,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     Verifies that the shared idle-TTL evicts an unused process and a new distinct model is admitted by evicting the
-///     idle LRU; when the cap is full of <em>in-use</em> processes a new distinct model is rejected at start.
+///     idle LRU; when the cap is full of <em>in-use</em> chat processes a new distinct model is rejected at start. An
+///     in-window but unleased POOLED (embedding/reranker) process, by contrast, yields its slot — otherwise the default
+///     cap (3 = the number of roles) plus background indexing hard-fails every chat model switch for a full TTL window.
 /// </summary>
 public sealed class SupervisorEvictionTests
 {
@@ -198,6 +200,59 @@ public sealed class SupervisorEvictionTests
         await supervisor.EnsureRunningAsync("model-b", ModelRole.Chat, CancellationToken.None);
         AssertEx.Equal(expected: 2, launcher.LaunchCount);
         AssertEx.True(launcher.Handles.OrderBy(h => h.ProcessId).First().WasTreeKilled, "After release the idle LRU is evicted as usual.");
+    }
+
+    [Test]
+    public async Task EnsureRunning_CapFullOfInWindowRoles_ChatSpawnEvictsLruPooled_NotChat()
+    {
+        var launcher = new FakeProcessLauncher();
+        var time = new AdvanceableTimeProvider();
+        var ttl = TimeSpan.FromMinutes(15);
+        await using var supervisor = SupervisorFactory.Create(launcher, options: CapOf(cap: 3, ttl), timeProvider: time);
+
+        // The default node shape: chat + embedding + reranker, all touched within the TTL window (background indexing
+        // keeps refreshing the pooled pair). Before pooled processes could yield, this made every chat model switch
+        // hard-fail with the cap error for up to a full TTL window.
+        await supervisor.EnsureRunningAsync("embed-model", ModelRole.Embedding, CancellationToken.None); // pooled LRU
+        time.Advance(TimeSpan.FromMinutes(1));
+        await supervisor.EnsureRunningAsync("rerank-model", ModelRole.Reranker, CancellationToken.None);
+        time.Advance(TimeSpan.FromMinutes(1));
+        await supervisor.EnsureRunningAsync("chat-a", ModelRole.Chat, CancellationToken.None);
+        time.Advance(TimeSpan.FromMinutes(1));
+
+        // A chat model switch succeeds by evicting the least-recently-used pooled process.
+        await supervisor.EnsureRunningAsync("chat-b", ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.Equal(expected: 4, launcher.LaunchCount);
+        var handles = launcher.Handles.OrderBy(h => h.ProcessId).ToList();
+        AssertEx.True(handles[0].WasTreeKilled, "The LRU pooled (embedding) process yields its slot.");
+        AssertEx.False(handles[1].WasTreeKilled, "The newer pooled (reranker) process survives — LRU within the pooled rank.");
+        AssertEx.False(handles[2].WasTreeKilled, "An in-window chat process is never a capacity-eviction victim.");
+    }
+
+    [Test]
+    public async Task EnsureRunning_CapFull_InWindowPooledButLeased_IsNotEvicted_UntilLeaseReleases()
+    {
+        var launcher = new FakeProcessLauncher();
+        var time = new AdvanceableTimeProvider();
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            options: CapOf(cap: 1, TimeSpan.FromMinutes(15)),
+            timeProvider: time);
+
+        await supervisor.EnsureRunningAsync("embed-model", ModelRole.Embedding, CancellationToken.None);
+        var lease = supervisor.TryAcquireInferenceLease("embed-model", ModelRole.Embedding).Lease;
+        AssertEx.NotNull(lease);
+
+        // A leased pooled process is mid-forward-pass — it must never be torn down to admit a newcomer.
+        var ex = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => supervisor.EnsureRunningAsync("chat-b", ModelRole.Chat, CancellationToken.None));
+        AssertEx.Contains(ex.Message, "maximum number of local models", StringComparison.OrdinalIgnoreCase);
+        AssertEx.False(launcher.Handles.Single().WasTreeKilled, "A leased pooled process must never be a capacity-eviction victim.");
+
+        // Released but still in-window: the pooled process now yields (this is the new behavior under the role rank).
+        lease!.Dispose();
+        await supervisor.EnsureRunningAsync("chat-b", ModelRole.Chat, CancellationToken.None);
+        AssertEx.Equal(expected: 2, launcher.LaunchCount);
+        AssertEx.True(launcher.Handles.OrderBy(h => h.ProcessId).First().WasTreeKilled, "The unleased in-window pooled process yields once its lease releases.");
     }
 
     private static LlamaServerSupervisorOptions CapOf(int cap, TimeSpan ttl)

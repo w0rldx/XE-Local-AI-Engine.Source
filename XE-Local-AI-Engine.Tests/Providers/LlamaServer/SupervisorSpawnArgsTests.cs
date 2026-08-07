@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// <summary>
 ///     Verifies the supervisor's launch argument vector always carries the mandatory role flags — chat →
 ///     <c>--jinja</c>; embedding → <c>--embeddings</c> + a non-<c>none</c> <c>--pooling</c> value — and always binds
-///     localhost only. Verified against the pinned llama.cpp release <c>b9692</c> flag names (<c>--jinja</c>,
+///     localhost only. Verified against the pinned llama.cpp release <c>b10201</c> flag names (<c>--jinja</c>,
 ///     <c>--embeddings</c>, <c>--pooling mean|cls|last</c>).
 /// </summary>
 public sealed class SupervisorSpawnArgsTests
@@ -323,6 +323,41 @@ public sealed class SupervisorSpawnArgsTests
         AssertEx.Equal("8192", spec.Arguments[IndexOf(spec.Arguments, "-c") + 1]);
         AssertEx.Equal("8192", spec.Arguments[IndexOf(spec.Arguments, "-ub") + 1]);
         AssertEx.Equal("8192", spec.Arguments[IndexOf(spec.Arguments, "-b") + 1]);
+    }
+
+    [Test]
+    public async Task EnsureRunning_ChatRole_EmitsExplicitHostPromptCacheBudget()
+    {
+        // The pinned build's implicit --cache-ram default is 8192 MiB — half the RAM of a 16 GB machine — so the
+        // supervisor must always emit the budget explicitly (upstream #22629: the Linux limit enforcement is
+        // ineffective under default overcommit; the OOM killer fires first).
+        var launcher = new FakeProcessLauncher();
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            options: new LlamaServerSupervisorOptions
+            {
+                ChatCacheRamMiB = 1234
+            });
+
+        await supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.True(launcher.Launches.TryDequeue(out var spec));
+        AssertEx.Equal("1234", spec!.Arguments[IndexOf(spec.Arguments, "--cache-ram") + 1]);
+    }
+
+    [Test]
+    [Arguments(ModelRole.Embedding, "nomic-embed")]
+    [Arguments(ModelRole.Reranker, "bge-reranker-v2-m3")]
+    public async Task EnsureRunning_PooledRole_DisablesHostPromptCache(ModelRole role, string modelName)
+    {
+        // One-shot forward passes cache no reusable prompt state — pooled roles pin --cache-ram 0 instead of
+        // inheriting the upstream 8192 MiB default per process.
+        var launcher = new FakeProcessLauncher();
+        await using var supervisor = NewSupervisor(launcher);
+
+        await supervisor.EnsureRunningAsync(modelName, role, CancellationToken.None);
+
+        AssertEx.True(launcher.Launches.TryDequeue(out var spec));
+        AssertEx.Equal("0", spec!.Arguments[IndexOf(spec.Arguments, "--cache-ram") + 1]);
     }
 
     private static void AssertChatBindsLocalhost(LlamaServerLaunchSpec spec)
