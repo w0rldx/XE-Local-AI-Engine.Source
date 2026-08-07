@@ -23,8 +23,7 @@ internal static class GgufFileSelector
     ///     quant) it returns the smallest fitting one so the repo still surfaces. Returns <see langword="null" /> when
     ///     nothing at or above the floor fits.
     /// </summary>
-    public static (GgufRepoFile File, MemoryFitEstimate Estimate)? SelectBestFit(
-        MemoryFitEstimator estimator,
+    public static (GgufRepoFile File, MemoryFitEstimate Estimate)? SelectBestFit(MemoryFitEstimator estimator,
         IReadOnlyList<GgufRepoFile> files,
         string quant,
         int ctxTarget,

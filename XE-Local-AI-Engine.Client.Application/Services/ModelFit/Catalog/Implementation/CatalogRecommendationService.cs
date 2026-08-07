@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.ModelFit.Catalog.Implementation;
 
 using System.Text.Json;
-using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Fit;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
