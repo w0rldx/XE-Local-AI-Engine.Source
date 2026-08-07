@@ -301,7 +301,12 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
         using (NodeActivitySource.Source.StartActivity("chat.invocation.validate_package"))
         {
-            var validationResult = _runtimePackageValidator.Validate(package);
+            // Size cap OFF here: this package's context is the node's own stored history plus node-authored synthetic
+            // context, and the inbound message was already capped at its entry seam (the chat hub for a local send, the
+            // envelope assembler for a platform-dispatched one). Re-applying the cap per turn hard-failed every later
+            // turn of a conversation that already held an oversized row — the conversation stayed unusable until the
+            // user abandoned it. Oversized history is the context budgeter's problem below, and it trims it.
+            var validationResult = _runtimePackageValidator.Validate(package, enforceMessageSizeCap: false);
             if (!validationResult.IsValid)
             {
                 throw new InvalidOperationException(string.Join("; ", validationResult.Errors));

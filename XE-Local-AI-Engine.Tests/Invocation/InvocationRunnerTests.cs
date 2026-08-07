@@ -41,6 +41,8 @@ using XE_Local_AI_Engine.Client.Services.Invocation.Envelope.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Resilience;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Client.Services.Validation;
+using XE_Local_AI_Engine.Client.Services.Validation.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer;
@@ -380,7 +382,7 @@ public sealed class InvocationRunnerTests
     {
         var sender = new MockHubMessageSender();
         var validator = Substitute.For<IRuntimePackageValidator>();
-        validator.Validate(Arg.Any<RuntimePackage>()).Returns(new RuntimePackageValidationResult(isValid: false, ["bad package"]));
+        validator.Validate(Arg.Any<RuntimePackage>(), Arg.Any<bool>()).Returns(new RuntimePackageValidationResult(isValid: false, ["bad package"]));
 
         var runner = CreateRunner(sender, validator: validator);
         var package = RuntimePackageBuilder.Valid().Build();
@@ -389,6 +391,66 @@ public sealed class InvocationRunnerTests
 
         AssertEx.Contains(exception.Message, "bad package");
         AssertEx.Empty(sender.SentEncryptedFailures);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenStoredHistoryHoldsAnOversizedMessage_StillRunsTheTurn()
+    {
+        // The poisoned-conversation regression: the per-turn re-validation used to hard-fail on ANY over-cap message in
+        // the assembled context, including one already persisted in the conversation. Every later turn then re-validated
+        // the same stored row and failed the same way, so the user could only abandon the conversation. The cap belongs
+        // to the entry seams; oversized history is the budgeter's problem.
+        var sender = new MockHubMessageSender();
+        var securityOptions = Options.Create(new SecurityOptions
+        {
+            MaxMessageSizeKb = 1,
+            AllowedModelNamePattern = "^[a-zA-Z0-9._:-]+$"
+        });
+        var validator = new RuntimePackageValidator(new ModelNameValidator(securityOptions), securityOptions);
+
+        var package = RuntimePackageBuilder.Valid().Build() with
+        {
+            ConversationContext =
+            [
+                new ConversationMessageDto
+                {
+                    Id = Guid.NewGuid(),
+                    Role = MessageRole.User,
+                    Content = new string(c: 'h', count: 2048),
+                    SortOrder = 0
+                },
+                new ConversationMessageDto
+                {
+                    Id = Guid.NewGuid(),
+                    Role = MessageRole.User,
+                    Content = "and what about this?",
+                    SortOrder = 1
+                }
+            ]
+        };
+
+        var runner = CreateRunner(sender, validator: validator);
+
+        await RunAsync(runner, package);
+
+        AssertEx.Empty(sender.SentEncryptedFailures);
+        AssertEx.Equal(expected: 1, sender.SentEncryptedCompletions.Count);
+    }
+
+    [Test]
+    public async Task RunAsync_NeverEnforcesTheMessageSizeCap()
+    {
+        // Pins the wiring the healing above depends on: the cap is enforced at the inbound seams (the chat hub and the
+        // encrypted-envelope assembler), never on the node's own re-assembled turn context.
+        var sender = new MockHubMessageSender();
+        var validator = Substitute.For<IRuntimePackageValidator>();
+        validator.Validate(Arg.Any<RuntimePackage>(), Arg.Any<bool>()).Returns(RuntimePackageValidationResult.Success);
+
+        var runner = CreateRunner(sender, validator: validator);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        validator.Received(1).Validate(Arg.Any<RuntimePackage>(), enforceMessageSizeCap: false);
     }
 
     [Test]
@@ -2634,7 +2696,7 @@ public sealed class InvocationRunnerTests
         var resolvedValidator = validator ?? Substitute.For<IRuntimePackageValidator>();
         if (validator is null)
         {
-            resolvedValidator.Validate(Arg.Any<RuntimePackage>()).Returns(RuntimePackageValidationResult.Success);
+            resolvedValidator.Validate(Arg.Any<RuntimePackage>(), Arg.Any<bool>()).Returns(RuntimePackageValidationResult.Success);
         }
 
         var resolvedCapabilityReporter = capabilityReporter ?? Substitute.For<ICapabilityReporter>();
