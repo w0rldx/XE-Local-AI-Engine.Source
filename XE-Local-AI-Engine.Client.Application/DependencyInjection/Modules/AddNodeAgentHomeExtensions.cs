@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Fake;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Reaping;
+using XE_Local_AI_Engine.Client.Services.Workspace;
 
 internal static class AddNodeAgentHomeExtensions
 {
@@ -24,6 +25,9 @@ internal static class AddNodeAgentHomeExtensions
         // the AgentHome gateway to the manifest initializer, sandbox provider, and selected-folder resolver. The tool
         // stays off the distributed wire until AgentHome is enabled.
         builder.Services.AddSingleton<IAgentHomeIdentityProvider, AgentHomeIdentityProvider>();
+        builder.Services.AddSingleton<IAgentHomeExecutionLeaseManager, AgentHomeExecutionLeaseManager>();
+        builder.Services.AddSingleton<IAgentHomeWorkspaceIsolation, AgentHomeWorkspaceIsolation>();
+        builder.Services.AddSingleton<IWorkspaceRevocationPreparation, AgentHomeWorkspaceRevocationPreparation>();
         // Workspace copy service: selected-folder copy with exclusions, symlink-escape guard, byte budget, and git baseline.
         builder.Services.AddSingleton<IAgentHomeWorkspaceService, AgentHomeWorkspaceService>();
         // Patch export service: post-run diff of the workspace-copy baseline with changes.patch, changed-files.json, and budget guard.
@@ -36,7 +40,7 @@ internal static class AddNodeAgentHomeExtensions
         builder.Services.AddScoped<INodePatchApplyService, NodePatchApplyService>();
         builder.Services.AddSingleton<IAgentHomeService, AgentHomeService>();
         // The chat agent-mode attachment stager is the SAME AgentHomeService singleton, so its conversation re-stage
-        // shares the run-level single-flight guard with run_in_agent_home rather than racing it on the node sandbox.
+        // shares the owner-node execution lease with run_in_agent_home rather than racing it on the node sandbox.
         builder.Services.AddSingleton<IConversationSandboxStager>(static sp => (AgentHomeService)sp.GetRequiredService<IAgentHomeService>());
         builder.Services.AddSingleton<IAgentHomeToolGateway, AgentHomeToolGateway>();
         builder.Services.AddSingleton<IClientLocalToolHandler, RunInAgentHomeToolHandler>();

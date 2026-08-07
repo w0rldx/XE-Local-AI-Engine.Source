@@ -20,6 +20,18 @@ public interface IModelFootprintProvider
     ///     (cancellation excepted).
     /// </summary>
     Task<ModelFootprint> ResolveFootprintAsync(string modelName, ModelRole role, HardwareProfile profile, CancellationToken ct);
+
+    /// <summary>
+    /// Purely recomputes the next smaller automatic hardware-tier footprint candidate for admission. Frozen and
+    /// deterministic allocations cannot be adjusted; shared launch state is unchanged until the explicit commit.
+    /// </summary>
+    bool TryDownTierForAdmission(ModelFootprint current, out ModelFootprint downTiered);
+
+    /// <summary>
+    /// Commits a fitting admission candidate and returns the effective monotone allocation footprint that launch will
+    /// consume. A caller must reserve the returned footprint, not the proposed one.
+    /// </summary>
+    bool TryCommitAdmissionFootprint(ModelFootprint candidate, out ModelFootprint committed);
 }
 
 /// <summary>
@@ -29,10 +41,11 @@ public interface IModelFootprintProvider
 /// </summary>
 public sealed record ModelFootprint
 {
-    private ModelFootprint(bool isKnown, ResourceFootprint resources)
+    private ModelFootprint(bool isKnown, ResourceFootprint resources, ProcessLaunchAdmission? admission)
     {
         IsKnown = isKnown;
         Resources = resources;
+        Admission = admission;
     }
 
     /// <summary>Whether a byte estimate is available. <see langword="false" /> ⇒ the gate rejects.</summary>
@@ -40,6 +53,8 @@ public sealed record ModelFootprint
 
     /// <summary>The estimated resident bytes when <see cref="IsKnown" />; otherwise <c>0</c> (do not consume it).</summary>
     public ResourceFootprint Resources { get; }
+
+    internal ProcessLaunchAdmission? Admission { get; }
 
     /// <summary>A known dual-axis resource footprint.</summary>
     public static ModelFootprint Known(ResourceFootprint resources)
@@ -49,9 +64,12 @@ public sealed record ModelFootprint
             throw new ArgumentOutOfRangeException(nameof(resources), "Resource axes must be non-negative.");
         }
 
-        return new ModelFootprint(isKnown: true, resources);
+        return new ModelFootprint(isKnown: true, resources, admission: null);
     }
 
+    internal static ModelFootprint Known(ProcessLaunchAdmission admission) =>
+        new(isKnown: true, admission.Allocation.Footprint, admission);
+
     /// <summary>An undeterminable footprint (not installed, or no header metadata and no file size).</summary>
-    public static ModelFootprint Unknown { get; } = new(isKnown: false, ResourceFootprint.Zero);
+    public static ModelFootprint Unknown { get; } = new(isKnown: false, ResourceFootprint.Zero, admission: null);
 }

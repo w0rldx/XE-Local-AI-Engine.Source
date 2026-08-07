@@ -164,6 +164,15 @@ public sealed class InferenceProfileServiceTests
         AssertEx.Equal<double?>(42d, AssertEx.NotNull(result.Metrics).TokensPerSecond);
         AssertEx.Equal(new LlamaServerProfilingVramSnapshot(6000, 8000),
             AssertEx.NotNull(fixture.CapturedBenchmarkContext).PreSpawnVram);
+        await fixture.Supervisor.Received(1).RunExclusiveProfilingAsync(profile.ModelName,
+            ModelRole.Chat,
+            Arg.Is<ResolvedLaunchArguments>(args => !args.ExploreMode
+                                                    && args.CtxSize == profile.CtxSize
+                                                    && args.NGpuLayers == profile.NGpuLayers),
+            enableMetrics: true,
+            Arg.Any<Func<LlamaServerProfilingContext, CancellationToken, Task<InferenceBenchmarkMetrics>>>(),
+            Arg.Any<CancellationToken>(),
+            Arg.Any<Func<CancellationToken, Task<LlamaServerProfilingVramSnapshot>>>());
         await fixture.BenchmarkStore.Received(1).ReplaceForSnapshotAsync(snapshotId,
             Arg.Is<IReadOnlyList<ModelFitBenchmarkInput>>(rows => rows.Count == 1
                                                                   && Math.Abs((rows[0].TokensPerSecond ?? 0d) - 42d) < 0.0001

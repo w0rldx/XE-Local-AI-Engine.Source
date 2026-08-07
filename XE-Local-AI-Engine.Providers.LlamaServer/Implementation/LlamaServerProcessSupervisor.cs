@@ -54,6 +54,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     // Guards the loaded-cap admission decision + port-set mutation so the cap can never be exceeded by a race.
     private readonly SemaphoreSlim _admissionGate = new(initialCount: 1, maxCount: 1);
     private readonly SemaphoreSlim _runtimeMutationGate = new(initialCount: 1, maxCount: 1);
+    private readonly Lock _runtimeOperationSync = new();
     private readonly HashSet<int> _allocatedPorts = [];
     private readonly ILlamaCppBinaryManager _binaryManager;
 
@@ -66,12 +67,13 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     // and leaves the model warm for the next send (the deliberate design — a user who cancels before the first token
     // does not throw away the load everyone behind them is waiting on). Exactly one runs per key at a time; it removes
     // itself on completion (success or failure) so the next ensure retries fresh.
-    private readonly ConcurrentDictionary<ProcessKey, Task<RunningProcess>> _inflightSpawns = new();
+    private readonly ConcurrentDictionary<ProcessKey, InflightSpawn> _inflightSpawns = new();
     private readonly LlamaServerExternalEndpointOptions _externalEndpoints;
     private readonly ILlamaServerHealthProbe _healthProbe;
     private readonly ILlamaFitParamsRunner _fitParamsRunner;
     private readonly ILlamaServerLaunchPolicy _launchPolicy;
     private readonly IProcessContextAllocationResolver _allocationResolver;
+    private readonly IProcessLaunchAdmissionRegistry _launchAdmissions;
     private readonly ILogger<LlamaServerProcessSupervisor> _logger;
     private readonly ILlamaServerProcessLauncher _launcher;
     private readonly ILlamaCppSourceBuildActivity _sourceBuildActivity;
@@ -95,7 +97,9 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     // runtime device audit; the composition root injects the singleton both sides share.
     private readonly ILlamaLayerPlacementReport _layerPlacementReport;
     private int _disposed;
+    private int _runtimeOperationCount;
     private int _runtimeMutationActivityCount;
+    private TaskCompletionSource? _runtimeOperationsDrained;
 
     /// <summary>
     ///     Creates a supervisor over the supplied collaborators. The reaper loop starts immediately. Constructed via DI
@@ -116,7 +120,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         ILlamaCppSourceBuildActivity? sourceBuildActivity = null,
         ILlamaFitParamsRunner? fitParamsRunner = null,
         IProcessContextAllocationResolver? allocationResolver = null,
-        ILlamaLayerPlacementReport? layerPlacementReport = null)
+        ILlamaLayerPlacementReport? layerPlacementReport = null,
+        IProcessLaunchAdmissionRegistry? launchAdmissions = null)
     {
         _binaryManager = binaryManager ?? throw new ArgumentNullException(nameof(binaryManager));
         _variantSelector = variantSelector ?? throw new ArgumentNullException(nameof(variantSelector));
@@ -128,6 +133,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         _profileResolver = profileResolver ?? throw new ArgumentNullException(nameof(profileResolver));
         _launchPolicy = launchPolicy ?? throw new ArgumentNullException(nameof(launchPolicy));
         _allocationResolver = allocationResolver ?? new DefaultProcessContextAllocationResolver(new LlamaServerLaunchPolicyOptions());
+        _launchAdmissions = launchAdmissions ?? new ProcessLaunchAdmissionRegistry();
         _externalEndpoints = externalEndpoints ?? new LlamaServerExternalEndpointOptions();
         _timeProvider = timeProvider ?? TimeProvider.System;
         _logger = logger ?? NullLogger<LlamaServerProcessSupervisor>.Instance;
@@ -148,9 +154,14 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
-        if (Interlocked.Exchange(ref _disposed, value: 1) != 0)
+        lock (_runtimeOperationSync)
         {
-            return;
+            if (_disposed != 0)
+            {
+                return;
+            }
+
+            _disposed = 1;
         }
 
         await _shutdownCts.CancelAsync().ConfigureAwait(false);
@@ -163,99 +174,191 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             // Expected on shutdown.
         }
 
+        await WaitForRuntimeOperationsDrainedAsync().ConfigureAwait(false);
+
+        // No new operation can enter after _disposed is set, and the separate operation barrier above proves every
+        // admitted operation has finished. Own the runtime gate exclusively through teardown and dispose it in-place.
+        await _runtimeMutationGate.WaitAsync().ConfigureAwait(false);
+        var inflightSpawns = _inflightSpawns.Values.Select(static inflight => inflight.Task).ToArray();
+
+        try
+        {
+            await Task.WhenAll(inflightSpawns).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            // Cancellation/failure is expected during shutdown. Completion is published only after each detached
+            // spawn has removed its registry entry and released its launch ticket, so reaching here is cleanup-safe.
+            _logger.LogDebug(ex, "One or more detached llama-server spawns ended while the supervisor was shutting down.");
+        }
+
         foreach (var (key, running) in _processes.ToArray())
         {
             TeardownProcess(key, running);
         }
 
         _admissionGate.Dispose();
-        _runtimeMutationGate.Dispose();
         foreach (var gate in _ensureGates.Values)
         {
             gate.Dispose();
         }
 
         _shutdownCts.Dispose();
+        _runtimeMutationGate.Dispose();
     }
 
     /// <inheritdoc />
     public async Task<LlamaServerEndpoint> EnsureRunningAsync(string modelName, ModelRole role, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
-        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
-
-        EnsureDecision decision;
-        await _runtimeMutationGate.WaitAsync(ct).ConfigureAwait(false);
+        BeginRuntimeOperation();
         try
         {
-            // Hybrid attach: a configured external endpoint short-circuits spawn/supervision entirely.
-            var external = _externalEndpoints.Resolve(modelName, role);
-            if (external is not null)
+            EnsureDecision decision;
+            await EnterRuntimeMutationGateAsync(ct).ConfigureAwait(false);
+            try
             {
-                return new LlamaServerEndpoint(modelName, role, external);
-            }
-
-            if (_sourceBuildActivity.ActiveBuildId is not null)
-            {
-                throw new LlamaRuntimeException("A llama.cpp source build is in progress; wait for it to complete before starting a local model.");
-            }
-
-            var key = new ProcessKey(modelName, role);
-
-            // Fast path: an already-running, live process is reused without taking the spawn gate — subject to a
-            // rate-limited liveness probe so a wedged (alive but unresponsive) process is respawned instead of handed out.
-            if (_processes.TryGetValue(key, out var existing) && !existing.Handle.HasExited)
-            {
-                var reused = await TryReuseAsync(key, existing, ct).ConfigureAwait(false);
-                if (reused is not null)
+                // Hybrid attach: a configured external endpoint short-circuits spawn/supervision entirely.
+                var external = _externalEndpoints.Resolve(modelName, role);
+                if (external is not null)
                 {
-                    return reused;
+                    return new LlamaServerEndpoint(modelName, role, external);
+                }
+
+                if (_sourceBuildActivity.ActiveBuildId is not null)
+                {
+                    throw new LlamaRuntimeException("A llama.cpp source build is in progress; wait for it to complete before starting a local model.");
+                }
+
+                var key = new ProcessKey(modelName, role);
+
+                // Fast path: an already-running, live process is reused without taking the spawn gate — subject to a
+                // rate-limited liveness probe so a wedged (alive but unresponsive) process is respawned instead of handed out.
+                if (_processes.TryGetValue(key, out var existing) && !existing.Handle.HasExited)
+                {
+                    var reused = await TryReuseAsync(key, existing, ct).ConfigureAwait(false);
+                    if (reused is not null)
+                    {
+                        return reused;
+                    }
+                }
+
+                // Decide (under the single-flight gate, held only briefly) between a reuse and joining/starting the DETACHED
+                // spawn, then await the spawn WITHOUT binding its lifetime to this caller's token.
+                decision = await DecideEnsureAsync(key, ct).ConfigureAwait(false);
+                if (decision.Reused is { } reusedEndpoint)
+                {
+                    return reusedEndpoint;
                 }
             }
-
-            // Decide (under the single-flight gate, held only briefly) between a reuse and joining/starting the DETACHED
-            // spawn, then await the spawn WITHOUT binding its lifetime to this caller's token.
-            decision = await DecideEnsureAsync(key, ct).ConfigureAwait(false);
-            if (decision.Reused is { } reusedEndpoint)
+            finally
             {
-                return reusedEndpoint;
+                _runtimeMutationGate.Release();
             }
+
+            // DecideEnsureAsync has now registered the detached task in _inflightSpawns. Release the mutation ordering gate
+            // before readiness completes: a mutation attempt observes the in-flight spawn and returns null instead of waiting
+            // for readiness, while a mutation lease already holding the gate still prevents this ensure from reaching here.
+            var running = await AwaitDetachedSpawnAsync(decision.SpawnTask!, ct).ConfigureAwait(false);
+            return running.Endpoint;
         }
         finally
         {
-            _runtimeMutationGate.Release();
+            EndRuntimeOperation();
         }
-
-        // DecideEnsureAsync has now registered the detached task in _inflightSpawns. Release the mutation ordering gate
-        // before readiness completes: a mutation attempt observes the in-flight spawn and returns null instead of waiting
-        // for readiness, while a mutation lease already holding the gate still prevents this ensure from reaching here.
-        var running = await AwaitDetachedSpawnAsync(decision.SpawnTask!, ct).ConfigureAwait(false);
-        return running.Endpoint;
     }
 
     /// <inheritdoc />
     public async Task<ILlamaServerRuntimeMutationLease?> TryAcquireRuntimeMutationLeaseAsync(CancellationToken ct)
     {
-        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+        BeginRuntimeOperation();
+        var operationTransferred = false;
         Interlocked.Increment(ref _runtimeMutationActivityCount);
         try
         {
-            await _runtimeMutationGate.WaitAsync(ct).ConfigureAwait(false);
+            await EnterRuntimeMutationGateAsync(ct).ConfigureAwait(false);
+
+            if (_processes.Values.Any(static process => !process.Handle.HasExited) || !_inflightSpawns.IsEmpty)
+            {
+                _runtimeMutationGate.Release();
+                return null;
+            }
+
+            var lease = new RuntimeMutationLease(_runtimeMutationGate,
+                () =>
+                {
+                    Interlocked.Decrement(ref _runtimeMutationActivityCount);
+                    EndRuntimeOperation();
+                });
+            operationTransferred = true;
+            return lease;
         }
-        catch
+        finally
         {
-            Interlocked.Decrement(ref _runtimeMutationActivityCount);
-            throw;
+            if (!operationTransferred)
+            {
+                Interlocked.Decrement(ref _runtimeMutationActivityCount);
+                EndRuntimeOperation();
+            }
+        }
+    }
+
+    private void BeginRuntimeOperation()
+    {
+        lock (_runtimeOperationSync)
+        {
+            ObjectDisposedException.ThrowIf(_disposed != 0, this);
+            if (_runtimeOperationCount++ == 0)
+            {
+                _runtimeOperationsDrained = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            }
+        }
+    }
+
+    private void EndRuntimeOperation()
+    {
+        TaskCompletionSource? drained = null;
+        lock (_runtimeOperationSync)
+        {
+            _runtimeOperationCount--;
+            if (_runtimeOperationCount == 0)
+            {
+                drained = _runtimeOperationsDrained;
+                _runtimeOperationsDrained = null;
+            }
         }
 
-        if (_processes.Values.Any(static process => !process.Handle.HasExited) || !_inflightSpawns.IsEmpty)
+        drained?.TrySetResult();
+    }
+
+    private Task WaitForRuntimeOperationsDrainedAsync()
+    {
+        lock (_runtimeOperationSync)
         {
-            _runtimeMutationGate.Release();
-            Interlocked.Decrement(ref _runtimeMutationActivityCount);
-            return null;
+            return _runtimeOperationCount == 0 ? Task.CompletedTask : _runtimeOperationsDrained!.Task;
+        }
+    }
+
+    private async Task EnterRuntimeMutationGateAsync(CancellationToken ct)
+    {
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+        using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(ct, _shutdownCts.Token);
+        try
+        {
+            await _runtimeMutationGate.WaitAsync(linkedCancellation.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            throw new ObjectDisposedException(GetType().FullName);
         }
 
-        return new RuntimeMutationLease(_runtimeMutationGate, () => Interlocked.Decrement(ref _runtimeMutationActivityCount));
+        if (Volatile.Read(ref _disposed) == 0)
+        {
+            return;
+        }
+
+        _runtimeMutationGate.Release();
+        throw new ObjectDisposedException(GetType().FullName);
     }
 
     /// <inheritdoc />
@@ -263,6 +366,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     {
         return Volatile.Read(ref _runtimeMutationActivityCount) > 0;
     }
+
+    internal int CountInflightSpawns() => _inflightSpawns.Count;
 
     private sealed class RuntimeMutationLease(SemaphoreSlim gate, Action onDisposed) : ILlamaServerRuntimeMutationLease
     {
@@ -312,8 +417,44 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
 
             // Join the in-flight detached spawn or start one. GetOrAdd runs its factory at most once here because we hold
             // the gate, so two callers never start two spawns for the same key.
-            var spawnTask = _inflightSpawns.GetOrAdd(key, StartDetachedSpawn);
-            return new EnsureDecision(Reused: null, spawnTask);
+            if (_inflightSpawns.TryGetValue(key, out var inflight))
+            {
+                return new EnsureDecision(Reused: null, inflight.Task);
+            }
+
+            IProcessLaunchTicket? launchTicket = null;
+            try
+            {
+                if (!_launchAdmissions.TryBeginLaunch(key.ModelName, key.Role, out var admission, out launchTicket))
+                {
+                    throw NonRetryable("The requested local model launch conflicts with another in-flight admission.");
+                }
+
+                var started = CreateDetachedSpawn(admission, launchTicket!);
+                if (!_inflightSpawns.TryAdd(key, started))
+                {
+                    return new EnsureDecision(Reused: null, _inflightSpawns[key].Task);
+                }
+
+                // The published immutable in-flight record now owns the ticket. Clear the local before starting the
+                // detached work so the finally below cannot release a successfully transferred launch reference.
+                launchTicket = null;
+                try
+                {
+                    StartDetachedSpawn(key, started);
+                    return new EnsureDecision(Reused: null, started.Task);
+                }
+                catch
+                {
+                    _inflightSpawns.TryRemove(new KeyValuePair<ProcessKey, InflightSpawn>(key, started));
+                    started.LaunchTicket.Dispose();
+                    throw;
+                }
+            }
+            finally
+            {
+                launchTicket?.Dispose();
+            }
         }
         finally
         {
@@ -329,7 +470,9 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     ///     registered". On failure the spawn tears down its own half-started child and the in-flight entry is dropped so
     ///     the next ensure retries fresh.
     /// </summary>
-    private Task<RunningProcess> StartDetachedSpawn(ProcessKey key)
+    private static InflightSpawn CreateDetachedSpawn(
+        ProcessLaunchAdmission? admission,
+        IProcessLaunchTicket launchTicket)
     {
         var completion = new TaskCompletionSource<RunningProcess>(TaskCreationOptions.RunContinuationsAsynchronously);
         var task = completion.Task;
@@ -342,25 +485,39 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
             TaskScheduler.Default);
 
+        return new InflightSpawn(completion, admission, launchTicket);
+    }
+
+    private void StartDetachedSpawn(ProcessKey key, InflightSpawn inflight)
+    {
         _ = Task.Run(async () =>
         {
+            RunningProcess? running = null;
+            Exception? failure = null;
             try
             {
-                var running = await SpawnWithRestartAsync(key, _shutdownCts.Token).ConfigureAwait(false);
-                completion.SetResult(running);
+                running = await SpawnWithRestartAsync(key, inflight.Admission, _shutdownCts.Token).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
-                completion.SetException(ex);
+                failure = ex;
             }
             finally
             {
-                // Remove THIS task (key+value) so a concurrent GetOrAdd that already captured a newer task is untouched.
-                _inflightSpawns.TryRemove(new KeyValuePair<ProcessKey, Task<RunningProcess>>(key, task));
+                // Remove THIS immutable in-flight record (key+value) so a newer record under the same key is untouched.
+                _inflightSpawns.TryRemove(new KeyValuePair<ProcessKey, InflightSpawn>(key, inflight));
+                inflight.LaunchTicket.Dispose();
+            }
+
+            if (failure is not null)
+            {
+                inflight.Completion.SetException(failure);
+            }
+            else
+            {
+                inflight.Completion.SetResult(running!);
             }
         });
-
-        return task;
     }
 
     /// <summary>
@@ -376,6 +533,13 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
 
     /// <summary>The outcome of <see cref="DecideEnsureAsync" />: a reused endpoint XOR the shared detached spawn task.</summary>
     private readonly record struct EnsureDecision(LlamaServerEndpoint? Reused, Task<RunningProcess>? SpawnTask);
+
+    private sealed record InflightSpawn(TaskCompletionSource<RunningProcess> Completion,
+        ProcessLaunchAdmission? Admission,
+        IProcessLaunchTicket LaunchTicket)
+    {
+        public Task<RunningProcess> Task => Completion.Task;
+    }
 
     /// <summary>
     ///     Reuse decision for an already-registered, not-yet-exited process: hands back its endpoint when it is healthy
@@ -446,6 +610,19 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     public async Task EvictAsync(string modelName, ModelRole role, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
+        BeginRuntimeOperation();
+        try
+        {
+            await EvictCoreAsync(modelName, role).ConfigureAwait(false);
+        }
+        finally
+        {
+            EndRuntimeOperation();
+        }
+    }
+
+    private async Task EvictCoreAsync(string modelName, ModelRole role)
+    {
         var key = new ProcessKey(modelName, role);
         if (_processes.TryGetValue(key, out var running))
         {
@@ -457,9 +634,22 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     public async Task EvictAllRolesAsync(string modelName, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
+        BeginRuntimeOperation();
+        try
+        {
+            await EvictAllRolesCoreAsync(modelName).ConfigureAwait(false);
+        }
+        finally
+        {
+            EndRuntimeOperation();
+        }
+    }
+
+    private async Task EvictAllRolesCoreAsync(string modelName)
+    {
         foreach (var role in Enum.GetValues<ModelRole>())
         {
-            await EvictAsync(modelName, role, ct).ConfigureAwait(false);
+            await EvictCoreAsync(modelName, role).ConfigureAwait(false);
         }
     }
 
@@ -467,8 +657,19 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     public async Task<LlamaServerEjectOutcome> EjectAsync(string modelName, ModelRole role, bool force, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
-        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+        BeginRuntimeOperation();
+        try
+        {
+            return await EjectCoreAsync(modelName, role, force, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            EndRuntimeOperation();
+        }
+    }
 
+    private async Task<LlamaServerEjectOutcome> EjectCoreAsync(string modelName, ModelRole role, bool force, CancellationToken ct)
+    {
         var key = new ProcessKey(modelName, role);
         if (!_processes.TryGetValue(key, out var target) || target.Handle.HasExited)
         {
@@ -659,7 +860,9 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     ///     Spawns the process for <paramref name="key" />, retrying on a failed start up to the restart cap with a
     ///     linear backoff; exceeding the cap surfaces a sanitized <see cref="LlamaRuntimeException" />.
     /// </summary>
-    private async Task<RunningProcess> SpawnWithRestartAsync(ProcessKey key, CancellationToken ct)
+    private async Task<RunningProcess> SpawnWithRestartAsync(ProcessKey key,
+        ProcessLaunchAdmission? admission,
+        CancellationToken ct)
     {
         Exception? lastError = null;
         var readinessTimeoutRetries = 0;
@@ -672,7 +875,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
 
             try
             {
-                return await SpawnOnceAsync(key, ct).ConfigureAwait(false);
+                return await SpawnOnceAsync(key, admission, ct).ConfigureAwait(false);
             }
             catch (LlamaRuntimeException ex) when (ex.Data.Contains(NonRetryableMarker))
             {
@@ -731,7 +934,9 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     ///     args come from the profile resolver (frozen-profile replay or explore-mode auto-fit) for this
     ///     <c>(model, role, backend)</c>.
     /// </summary>
-    private Task<RunningProcess> SpawnOnceAsync(ProcessKey key, CancellationToken ct)
+    private Task<RunningProcess> SpawnOnceAsync(ProcessKey key,
+        ProcessLaunchAdmission? admission,
+        CancellationToken ct)
     {
         // The resolver is awaited inside the core (after variant selection, before admission) exactly as before — a
         // slow profile read never stalls admission for other keys. No startup capture, no forced --metrics. The launch
@@ -742,6 +947,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             fitParamsCapture: null,
             ensureMetrics: false,
             applyLaunchPolicy: true,
+            admission,
             ct);
     }
 
@@ -763,6 +969,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         Action<string>? fitParamsCapture,
         bool ensureMetrics,
         bool applyLaunchPolicy,
+        ProcessLaunchAdmission? admission,
         CancellationToken ct)
     {
         var modelFilePath = await _modelStore.ResolveModelFilePathAsync(key.ModelName, ct).ConfigureAwait(false);
@@ -802,12 +1009,27 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         }
 
         var variant = await _variantSelector.SelectVariantAsync(ct).ConfigureAwait(false);
+        if (admission is not null)
+        {
+            if (variant != admission.Variant)
+            {
+                throw NonRetryable("The admitted local model launch no longer matches the selected runtime.");
+            }
+
+            var facts = await _modelStore.ResolveModelFootprintFactsAsync(key.ModelName, ct).ConfigureAwait(false);
+            var contentIdentity = facts?.ContentIdentity ?? $"{key.ModelName}:{facts?.FileSizeBytes ?? TryGetFileSizeBytes(modelFilePath)}";
+            if (!string.Equals(contentIdentity, admission.Allocation.ContentIdentity, StringComparison.Ordinal))
+            {
+                throw NonRetryable("The admitted local model launch no longer matches the installed model.");
+            }
+        }
+
         var binary = await _binaryManager.EnsureBinaryAsync(variant, ct).ConfigureAwait(false);
 
         // Resolve the launch args (frozen-profile replay or explore-mode auto-fit, or operator-supplied profiling args)
         // for this (model, role, backend) BEFORE taking the admission gate, so a slow profile read never stalls
         // admission for other keys.
-        var resolved = await resolveArgs(variant, ct).ConfigureAwait(false);
+        var resolved = admission?.ResolvedArguments ?? await resolveArgs(variant, ct).ConfigureAwait(false);
 
         // AUD4-06: serialize the spawn-through-readiness window of GPU-backed loads process-wide (shared with the image
         // supervisor) so two --fit loads never read the same free-VRAM snapshot at once and oversubscribe the device.
@@ -828,7 +1050,13 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         // Replay profiling bypasses it so the supplied frozen args ARE the experiment. Explore profiling applies the
         // production policy because the helper and server must observe the same concrete context/KV/FA vector as normal
         // serving; otherwise b9692 can report unchanged `-c 0 -ngl -1` defaults that are not replayable placement.
-        var planSet = await BuildLaunchPlanCandidatesAsync(key, variant, resolved, applyLaunchPolicy, ct).ConfigureAwait(false);
+        var planSet = await BuildLaunchPlanCandidatesAsync(key,
+                variant,
+                resolved,
+                applyLaunchPolicy,
+                admission?.Allocation,
+                ct)
+            .ConfigureAwait(false);
         var planCandidates = planSet.Candidates;
 
         Exception? optimizedFailure = null;
@@ -1043,6 +1271,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         GpuVariant variant,
         ResolvedLaunchArguments resolved,
         bool applyLaunchPolicy,
+        ProcessContextAllocation? admittedAllocation,
         CancellationToken ct)
     {
         if (!applyLaunchPolicy)
@@ -1050,8 +1279,27 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             return new LaunchPlanSet(null, [null]);
         }
 
-        var allocation = await _allocationResolver.ResolveAsync(key.ModelName, key.Role, variant, resolved, ct).ConfigureAwait(false)
+        ProcessContextAllocation allocation;
+        if (admittedAllocation is null)
+        {
+            allocation = await _allocationResolver.ResolveAsync(key.ModelName, key.Role, variant, resolved, ct).ConfigureAwait(false)
                          ?? throw NonRetryable("The requested model's process context could not be allocated.");
+        }
+        else if (admittedAllocation.Source == ProcessContextAllocationSource.HardwareTier)
+        {
+            if (!_allocationResolver.TryGetEffectiveCommittedAllocation(admittedAllocation, out allocation)
+                || !string.Equals(allocation.CacheKey, admittedAllocation.CacheKey, StringComparison.Ordinal)
+                || !string.Equals(allocation.ContentIdentity, admittedAllocation.ContentIdentity, StringComparison.Ordinal)
+                || allocation.ProcessContextTokens > admittedAllocation.ProcessContextTokens)
+            {
+                throw NonRetryable("The admitted local model context allocation is no longer valid.");
+            }
+        }
+        else
+        {
+            allocation = admittedAllocation;
+        }
+
         var plan = await _launchPolicy.ResolveAsync(key.Role, variant, resolved, allocation, ct).ConfigureAwait(false);
 
         return new LaunchPlanSet(allocation,
@@ -1326,108 +1574,131 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
         ArgumentNullException.ThrowIfNull(launchArgs);
         ArgumentNullException.ThrowIfNull(body);
-        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
-
-        await _runtimeMutationGate.WaitAsync(ct).ConfigureAwait(false);
-        var runtimeGateHeld = true;
+        BeginRuntimeOperation();
         try
         {
-            var key = new ProcessKey(modelName, role);
-
-            // Take the SAME single-flight gate the normal ensure path uses, so a concurrent user EnsureRunningAsync for this
-            // key queues behind the exclusive profiling spawn instead of racing it.
-            var gate = _ensureGates.GetOrAdd(key, static _ => new SemaphoreSlim(initialCount: 1, maxCount: 1));
-            await gate.WaitAsync(ct).ConfigureAwait(false);
+            await EnterRuntimeMutationGateAsync(ct).ConfigureAwait(false);
+            var runtimeGateHeld = true;
             try
             {
-                // A sibling-role ensure may already have registered a detached spawn before this profiling operation
-                // acquired the runtime-mutation gate. No NEW ensure can register while this gate is held, so snapshot and
-                // await every same-model spawn that is already in flight before evicting. A failed spawn leaves no live
-                // process to evict and must not block profiling; caller cancellation still aborts the profiling request.
-                var siblingSpawns = _inflightSpawns
-                                    .Where(pair => string.Equals(pair.Key.ModelName, modelName, StringComparison.Ordinal))
-                                    .Select(static pair => pair.Value)
-                                    .ToArray();
-                foreach (var siblingSpawn in siblingSpawns)
-                {
-                    try
-                    {
-                        await siblingSpawn.WaitAsync(ct).ConfigureAwait(false);
-                    }
-                    catch (OperationCanceledException) when (ct.IsCancellationRequested)
-                    {
-                        throw;
-                    }
-                    catch (Exception)
-                    {
-                        // The detached spawn faulted or was cancelled independently; its own cleanup removes the entry.
-                    }
-                }
+                var key = new ProcessKey(modelName, role);
 
-                // Explicitly evict every warm role for this model before capturing ambient VRAM. Admission only
-                // auto-evicts an IDLE LRU victim, so a freshly-used sibling role would otherwise survive, contaminate
-                // the pre-spawn baseline, and make the profiling spawn non-exclusive. The runtime-mutation gate is
-                // still held here, so no new ensure decision can repopulate any role until after this spawn registers.
-                await EvictAllRolesAsync(modelName, ct).ConfigureAwait(false);
-
-                var preSpawnVram = captureVramBeforeSpawn is null
-                    ? null
-                    : await captureVramBeforeSpawn(ct).ConfigureAwait(false);
-
-                // Thread-safe per-line sink backing the StartupCapture callback (both server pipes Enqueue concurrently).
-                var startupOutput = new ConcurrentQueue<string>();
-                var fitParamsOutput = new ConcurrentQueue<string>();
-
-                // Replay profiling uses the supplied frozen args verbatim. Explore profiling bypasses only the profile
-                // resolver and applies the same launch policy as normal serving so helper/server placement evidence is
-                // production-equivalent rather than derived from unset llama.cpp defaults.
-                var running = await SpawnCoreAsync(key,
-                        (_, _) => Task.FromResult(launchArgs),
-                        startupOutput.Enqueue,
-                        fitParamsOutput.Enqueue,
-                        ensureMetrics: enableMetrics,
-                        applyLaunchPolicy: launchArgs.ExploreMode,
-                        ct)
-                    .ConfigureAwait(false);
-
-                // The profiling process is now registered in _processes, so a mutation-lease acquisition observes it and
-                // fails atomically. Release the ordering gate before the body so unrelated normal ensures remain possible.
-                _runtimeMutationGate.Release();
-                runtimeGateHeld = false;
-
-                // Pin against idle eviction for the whole benchmark — the process is never marked-used during the body, so
-                // without the pin the reaper would treat it as idle past the TTL and tear it down mid-measurement.
-                running.Pin();
+                // Take the SAME single-flight gate the normal ensure path uses, so a concurrent user EnsureRunningAsync for this
+                // key queues behind the exclusive profiling spawn instead of racing it.
+                var gate = _ensureGates.GetOrAdd(key, static _ => new SemaphoreSlim(initialCount: 1, maxCount: 1));
+                await gate.WaitAsync(ct).ConfigureAwait(false);
                 try
                 {
-                    var context = new LlamaServerProfilingContext(running.Endpoint,
-                        startupOutput.ToArray(),
-                        fitParamsOutput.ToArray(),
-                        running.Handle.ProcessId)
+                    // A sibling-role ensure may already have registered a detached spawn before this profiling operation
+                    // acquired the runtime-mutation gate. No NEW ensure can register while this gate is held, so snapshot and
+                    // await every same-model spawn that is already in flight before evicting. A failed spawn leaves no live
+                    // process to evict and must not block profiling; caller cancellation still aborts the profiling request.
+                    var siblingSpawns = _inflightSpawns
+                                        .Where(pair => string.Equals(pair.Key.ModelName, modelName, StringComparison.Ordinal))
+                                        .Select(static pair => pair.Value.Task)
+                                        .ToArray();
+                    foreach (var siblingSpawn in siblingSpawns)
                     {
-                        PreSpawnVram = preSpawnVram,
-                        SuccessfulLaunchArguments = running.SuccessfulLaunchArguments
-                    };
-                    return await body(context, ct).ConfigureAwait(false);
+                        try
+                        {
+                            await siblingSpawn.WaitAsync(ct).ConfigureAwait(false);
+                        }
+                        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                        {
+                            throw;
+                        }
+                        catch (Exception)
+                        {
+                            // The detached spawn faulted or was cancelled independently; its own cleanup removes the entry.
+                        }
+                    }
+
+                    // Explicitly evict every warm role for this model before capturing ambient VRAM. Admission only
+                    // auto-evicts an IDLE LRU victim, so a freshly-used sibling role would otherwise survive, contaminate
+                    // the pre-spawn baseline, and make the profiling spawn non-exclusive. The runtime-mutation gate is
+                    // still held here, so no new ensure decision can repopulate any role until after this spawn registers.
+                    await EvictAllRolesCoreAsync(modelName).ConfigureAwait(false);
+
+                    var preSpawnVram = captureVramBeforeSpawn is null
+                        ? null
+                        : await captureVramBeforeSpawn(ct).ConfigureAwait(false);
+
+                    // Thread-safe per-line sink backing the StartupCapture callback (both server pipes Enqueue concurrently).
+                    var startupOutput = new ConcurrentQueue<string>();
+                    var fitParamsOutput = new ConcurrentQueue<string>();
+
+                    // Replay profiling uses the supplied frozen args verbatim. Explore profiling bypasses only the profile
+                    // resolver and applies the same launch policy as normal serving so helper/server placement evidence is
+                    // production-equivalent rather than derived from unset llama.cpp defaults.
+                    IProcessLaunchTicket? profilingTicket = null;
+                    try
+                    {
+                        if (!_launchAdmissions.TryBeginLaunch(modelName, role, out var profilingAdmission, out profilingTicket)
+                            || profilingAdmission is not null)
+                        {
+                            throw NonRetryable("The profiling launch conflicts with another in-flight admission.");
+                        }
+
+                        using var ownedProfilingTicket = profilingTicket;
+                        profilingTicket = null;
+                        var running = await SpawnCoreAsync(key,
+                                (_, _) => Task.FromResult(launchArgs),
+                                startupOutput.Enqueue,
+                                fitParamsOutput.Enqueue,
+                                ensureMetrics: enableMetrics,
+                                applyLaunchPolicy: launchArgs.ExploreMode,
+                                admission: null,
+                                ct)
+                            .ConfigureAwait(false);
+
+                        // The profiling process is registered, so mutation attempts now observe it and return null. Release
+                        // the ordering gate while retaining the separate operation barrier through body cleanup.
+                        _runtimeMutationGate.Release();
+                        runtimeGateHeld = false;
+
+                        // Pin against idle eviction for the whole benchmark — the process is never marked-used during the body,
+                        // so without the pin the reaper would treat it as idle past the TTL and tear it down mid-measurement.
+                        running.Pin();
+                        try
+                        {
+                            var context = new LlamaServerProfilingContext(running.Endpoint,
+                                startupOutput.ToArray(),
+                                fitParamsOutput.ToArray(),
+                                running.Handle.ProcessId)
+                            {
+                                PreSpawnVram = preSpawnVram,
+                                SuccessfulLaunchArguments = running.SuccessfulLaunchArguments
+                            };
+                            return await body(context, ct).ConfigureAwait(false);
+                        }
+                        finally
+                        {
+                            // Always unpin + evict the transient profiling process, even on body throw or cancellation.
+                            running.Unpin();
+                            await RemoveProcessAsync(key, running).ConfigureAwait(false);
+                        }
+                    }
+                    finally
+                    {
+                        profilingTicket?.Dispose();
+                    }
                 }
                 finally
                 {
-                    // Always unpin + evict the transient profiling process, even on body throw or cancellation.
-                    running.Unpin();
-                    await RemoveProcessAsync(key, running).ConfigureAwait(false);
+                    gate.Release();
                 }
             }
             finally
             {
-                gate.Release();
+                if (runtimeGateHeld)
+                {
+                    _runtimeMutationGate.Release();
+                }
             }
         }
         finally
         {
-            if (runtimeGateHeld)
-            {
-                _runtimeMutationGate.Release();
-            }
+            EndRuntimeOperation();
         }
     }
 

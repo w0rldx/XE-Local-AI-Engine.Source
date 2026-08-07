@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// <summary>
 ///     DB-backed <see cref="IInferenceProfileResolver" />. Replaces the supervisor's self-satisfying explore-only
 ///     default (registered LAST so it wins) and turns a persisted profile into the launch args for a cold spawn:
-///     <see cref="ResolvedLaunchArguments.Explore" /> when there is no usable profile, otherwise the profile's replay
+///     <see cref="ResolvedLaunchArguments.Explore" /> until a profile is frozen, otherwise the frozen profile's replay
 ///     args — re-validating a <see cref="InferenceProfileStatus.Frozen" /> profile through
 ///     <see cref="IInferenceInvalidationEvaluator" /> first and demoting it to <see cref="InferenceProfileStatus.Stale" />
 ///     when its baseline no longer holds.
@@ -68,12 +68,10 @@ public sealed class InferenceProfileResolver : IInferenceProfileResolver
         switch (record.Status)
         {
             case InferenceProfileStatus.Explored:
-                if (!HasReplayMetadata(record))
-                {
-                    return ResolvedLaunchArguments.Explore();
-                }
-
-                return BuildReplayOrExplore(record);
+                // Explored rows are optimizer drafts, not serving policy. Normal serving must keep auto-fit active until
+                // the operator freezes a benchmark-justified profile. BenchmarkAsync explicitly builds and supplies its
+                // draft replay arguments, so that protected profiling path does not pass through this resolver.
+                return ResolvedLaunchArguments.Explore();
 
             case InferenceProfileStatus.Frozen:
                 if (await _invalidationEvaluator.IsStaleAsync(record, ct).ConfigureAwait(false))
@@ -88,13 +86,6 @@ public sealed class InferenceProfileResolver : IInferenceProfileResolver
                 // Stale (or any future status): re-exploration is the only path back to auto-fit.
                 return ResolvedLaunchArguments.Explore();
         }
-    }
-
-    private static bool HasReplayMetadata(InferenceProfileRecord record)
-    {
-        return record.NGpuLayers is not null
-               && record.LaunchPolicyFingerprintVersion is not null
-               && !string.IsNullOrWhiteSpace(record.LaunchPolicyFingerprint);
     }
 
     // Replay enforces the KV/flash-attn invariants and throws on a corrupt persisted combo. On the cold spawn hot path a

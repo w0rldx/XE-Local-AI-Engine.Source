@@ -12,9 +12,8 @@ using XE_Local_AI_Engine.Client.Services.Workspace;
 /// <summary>
 ///     The single read-only gateway behind the three coder tool handlers. It resolves the node owner/node identity the
 ///     same way <c>AgentHomeService</c> does, builds the matching <see cref="SandboxAttachKey" />, and attaches to the
-///     live sandbox via <see cref="ISandboxRuntimeProvider.ConnectAsync" /> — which takes only the provider's internal
-///     lock, never the AgentHome <c>SemaphoreSlim</c> run guard, so a coder read never throws
-///     <c>AgentHomeBusyException</c> during an in-flight AgentHome run. Every model path is confined through
+///     live sandbox via <see cref="ISandboxRuntimeProvider.ConnectAsync" /> while holding or ambiently borrowing the
+///     shared owner-node execution lease. Unrelated reads fail immediately with a path-free busy response. Every model path is confined through
 ///     <see cref="WorkspacePathGuard" /> before it reaches the sandbox, and all three reads are then PROVIDER
 ///     operations — <see cref="ISandboxRuntimeProvider.ReadFileAsync" />,
 ///     <see cref="ISandboxRuntimeProvider.ListFilesAsync" /> and
@@ -25,40 +24,35 @@ using XE_Local_AI_Engine.Client.Services.Workspace;
 ///         <c>ExecuteAsync</c>. That made the operations POSIX-only — on a stock Windows 11 install <c>grep</c> does not
 ///         exist and <c>find</c> resolves to the DOS tool, which rejects the vector — and it put the confinement in an
 ///         argument list this class had to keep correct rather than in the component that owns the jail. The secret
-///         exclusions stay HERE as a result filter, deliberately: which entries a coder may see is this feature's
-///         policy, and it is broader than Development Mode's (Coder drops its whole copy-filter set, not just
-///         credentials).
+///         exclusions stay HERE as caller policy, deliberately: they are supplied to the provider so excluded trees
+///         are pruned before result budgets, then re-applied to returned paths as defense in depth. The policy is
+///         broader than Development Mode's (Coder drops its whole copy-filter set, not just credentials).
 ///     </para>
 /// </summary>
 internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
 {
-    /// <summary>
-    ///     How much more the provider is asked for than is ultimately returned.
-    ///     <para>
-    ///         Secret and build-output exclusions are applied to the RESULT, because which entries a coder may see is
-    ///         this feature's policy rather than the jail's. Asking the provider for exactly the caller's cap would
-    ///         therefore let one directory of excluded entries consume the whole budget and answer with nothing, which
-    ///         is the same defect Development Mode's listing already paid for once.
-    ///     </para>
-    /// </summary>
-    private const int SurveyRequestMultiplier = 4;
-
     private const string NoWorkspaceMessage =
         "No project workspace is available — select a project folder first, then try again.";
 
+    private const string WorkspaceBusyMessage =
+        "The project workspace is busy with another operation. Try again after it finishes.";
+
     private readonly IAgentHomeIdentityProvider _identityProvider;
+    private readonly IAgentHomeExecutionLeaseManager _leaseManager;
     private readonly CoderOptions _options;
     private readonly IAgentSandboxRuntimeProvider _provider;
     private readonly ISensitiveFileExclusionService _exclusionService;
 
     public CoderWorkspaceReader(IAgentSandboxRuntimeProvider provider,
         IAgentHomeIdentityProvider identityProvider,
+        IAgentHomeExecutionLeaseManager leaseManager,
         ISensitiveFileExclusionService exclusionService,
         IOptions<CoderOptions> options,
         IOptions<AgentHomeOptions> agentHomeOptions)
     {
         _provider = provider ?? throw new ArgumentNullException(nameof(provider));
         _identityProvider = identityProvider ?? throw new ArgumentNullException(nameof(identityProvider));
+        _leaseManager = leaseManager ?? throw new ArgumentNullException(nameof(leaseManager));
         _exclusionService = exclusionService ?? throw new ArgumentNullException(nameof(exclusionService));
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(agentHomeOptions);
@@ -80,11 +74,18 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
             return $"list_files rejected: {confined.RejectionReason}";
         }
 
-        var handle = await TryConnectAsync(cancellationToken).ConfigureAwait(false);
-        if (handle is null)
+        using var access = await TryOpenAsync(cancellationToken).ConfigureAwait(false);
+        if (access.IsBusy)
+        {
+            return WorkspaceBusyMessage;
+        }
+
+        if (access.Handle is null)
         {
             return NoWorkspaceMessage;
         }
+
+        var handle = access.Handle;
 
         var maxResults = ClampCap(request.MaxResults, _options.MaxListResults);
 
@@ -92,15 +93,15 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
         // ResolveJailPath + no-symlink controls a read goes through, so the listing is confined to the requested
         // subtree by the component that owns the jail rather than by an argument vector composed here.
         //
-        // The cap asked for is deliberately larger than the cap returned. Exclusions are applied to the RESULT — which
-        // entries a coder may see is this feature's policy, not the jail's — so requesting exactly maxResults would let
-        // a directory full of excluded entries consume the whole budget and return nothing actionable.
+        // Suppression is caller policy, but it runs inside the provider's bounded walk: a large .git baseline sorts
+        // before project aliases and would otherwise consume the whole cap before usable files are reached.
         var survey = await TrySurveyAsync(token => _provider.ListFilesAsync(handle,
                     new SandboxListFilesRequest
                     {
                         DirectoryPath = confined.SandboxPath,
-                        MaxEntries = SurveyRequestMultiplier * maxResults,
-                        NameGlob = request.Glob
+                        MaxEntries = maxResults,
+                        NameGlob = request.Glob,
+                        IsPathSuppressed = IsExcludedRelativePath
                     },
                     token),
                 cancellationToken)
@@ -161,11 +162,18 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
             return $"read_file rejected: '{confined.RelativePath}' is excluded because files with that name commonly hold credentials.";
         }
 
-        var handle = await TryConnectAsync(cancellationToken).ConfigureAwait(false);
-        if (handle is null)
+        using var access = await TryOpenAsync(cancellationToken).ConfigureAwait(false);
+        if (access.IsBusy)
+        {
+            return WorkspaceBusyMessage;
+        }
+
+        if (access.Handle is null)
         {
             return NoWorkspaceMessage;
         }
+
+        var handle = access.Handle;
 
         string content;
         try
@@ -209,11 +217,18 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
             return $"search_text rejected: {confined.RejectionReason}";
         }
 
-        var handle = await TryConnectAsync(cancellationToken).ConfigureAwait(false);
-        if (handle is null)
+        using var access = await TryOpenAsync(cancellationToken).ConfigureAwait(false);
+        if (access.IsBusy)
+        {
+            return WorkspaceBusyMessage;
+        }
+
+        if (access.Handle is null)
         {
             return NoWorkspaceMessage;
         }
+
+        var handle = access.Handle;
 
         var maxMatches = ClampCap(request.MaxMatches, _options.MaxSearchMatches);
 
@@ -222,16 +237,17 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
         // used to buy. Fixed-string unless the caller opts into regex, matching `-F`; binary files are skipped, matching
         // `-I`; and a model-supplied expression runs under a per-line timeout, which the shell-out never had.
         //
-        // Over-requesting for the same reason as the listing: secret exclusions are applied to the RESULT here, so a
-        // budget of exactly maxMatches could be spent entirely on lines that are about to be dropped.
+        // As with listing, suppression runs inside the bounded search so excluded matches cannot consume the match or
+        // byte budget before a usable project match is reached.
         var survey = await TrySurveyAsync(token => _provider.SearchTextAsync(handle,
                     new SandboxSearchTextRequest
                     {
                         DirectoryPath = confined.SandboxPath,
                         Pattern = pattern,
                         IsRegex = request.IsRegex == true,
-                        MaxMatches = SurveyRequestMultiplier * maxMatches,
-                        MaxOutputBytes = _options.MaxSearchOutputBytes
+                        MaxMatches = maxMatches,
+                        MaxOutputBytes = _options.MaxSearchOutputBytes,
+                        IsPathSuppressed = IsExcludedRelativePath
                     },
                     token),
                 cancellationToken)
@@ -260,9 +276,15 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
 
     // ---- attach ----
 
-    private async Task<SandboxHandle?> TryConnectAsync(CancellationToken cancellationToken)
+    private async Task<CoderWorkspaceAccess> TryOpenAsync(CancellationToken cancellationToken)
     {
         var identity = await _identityProvider.GetAsync(cancellationToken).ConfigureAwait(false);
+        var lease = _leaseManager.TryAcquire(new AgentHomeExecutionLeaseKey(identity.OwnerUserId, identity.NodeId));
+        if (lease is null)
+        {
+            return new CoderWorkspaceAccess(Handle: null, Lease: null, IsBusy: true);
+        }
+
         var attachKey = new SandboxAttachKey
         {
             OwnerUserId = identity.OwnerUserId,
@@ -274,14 +296,20 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
 
         try
         {
-            // ConnectAsync attaches to the live sandbox WITHOUT taking the AgentHome run guard (only RunLifecycleAsync
-            // takes it), so a coder read during an in-flight run does not throw AgentHomeBusyException.
-            return await _provider.ConnectAsync(attachKey, cancellationToken).ConfigureAwait(false);
+            // The operation owns or ambiently borrows the same owner-node lease AgentHome preparation and execution use.
+            var handle = await _provider.ConnectAsync(attachKey, cancellationToken).ConfigureAwait(false);
+            return new CoderWorkspaceAccess(handle, lease, IsBusy: false);
         }
         catch (SandboxHandleInvalidException)
         {
             // No live sandbox / no folder selected — a model-facing message, not an exception.
-            return null;
+            lease.Dispose();
+            return new CoderWorkspaceAccess(Handle: null, Lease: null, IsBusy: false);
+        }
+        catch
+        {
+            lease.Dispose();
+            throw;
         }
     }
 
@@ -479,5 +507,13 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
         }
 
         return prefix + trimmed;
+    }
+
+    private sealed record CoderWorkspaceAccess(SandboxHandle? Handle, IAgentHomeExecutionLease? Lease, bool IsBusy) : IDisposable
+    {
+        public void Dispose()
+        {
+            Lease?.Dispose();
+        }
     }
 }

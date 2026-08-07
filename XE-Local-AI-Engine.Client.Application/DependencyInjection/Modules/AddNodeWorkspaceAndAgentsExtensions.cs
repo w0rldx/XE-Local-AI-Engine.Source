@@ -22,6 +22,7 @@ internal static class AddNodeWorkspaceAndAgentsExtensions
         // workspace-copy and AgentHome gateway paths both depend on it.
         builder.Services.AddScoped<INodeSelectedFolderStore, NodeSelectedFolderStore>();
         builder.Services.AddScoped<ISelectedFolderResolver, SelectedFolderResolver>();
+        builder.Services.AddScoped<IWorkspaceRevocationService, WorkspaceRevocationService>();
         // Node-local agent definitions. Instructions and descriptions are encrypted at rest; the resolver/service
         // projects a bound definition into runtime-package inputs.
         builder.Services.AddScoped<IAgentDefinitionStore, AgentDefinitionStore>();

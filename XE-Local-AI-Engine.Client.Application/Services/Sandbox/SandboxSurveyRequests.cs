@@ -17,6 +17,14 @@ public sealed record SandboxListFilesRequest
     public required int MaxEntries { get; init; }
 
     /// <summary>
+    ///     Optional caller policy applied before the emitted-entry ceiling. The value receives a path relative to
+    ///     <see cref="DirectoryPath" /> and must return <see langword="true" /> for entries that should be neither
+    ///     descended into nor emitted. Applying it inside the bounded walk prevents an excluded subtree from consuming
+    ///     the whole survey budget before usable files are reached.
+    /// </summary>
+    public Func<string, bool>? IsPathSuppressed { get; init; }
+
+    /// <summary>
     ///     An optional glob matched against the file NAME only — never the path, and never used to skip a directory, so
     ///     a match deep in a non-matching directory is still found.
     /// </summary>
@@ -46,4 +54,11 @@ public sealed record SandboxSearchTextRequest
     ///     file whose lines are enormous.
     /// </summary>
     public required int MaxOutputBytes { get; init; }
+
+    /// <summary>
+    ///     Optional caller policy applied before the match and output ceilings. The value receives a path relative to
+    ///     <see cref="DirectoryPath" /> and must return <see langword="true" /> for entries that should be neither
+    ///     descended into nor searched.
+    /// </summary>
+    public Func<string, bool>? IsPathSuppressed { get; init; }
 }

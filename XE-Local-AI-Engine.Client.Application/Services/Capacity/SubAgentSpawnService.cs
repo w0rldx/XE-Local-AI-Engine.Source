@@ -40,7 +40,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 ///         AllowedToolNames) is tool-less. Every expected rejection is a sanitized string, not an exception.
 ///     </para>
 /// </summary>
-internal sealed class SubAgentSpawnService : ISubAgentSpawnService
+internal sealed class SubAgentSpawnService : ISubAgentSpawnService, IMcpAgentExecutionService
 {
     // The inner agent-as-tool exposes a single "query" input parameter (re-verified against MAF 1.15.0
     // AIAgentExtensions.AsAIFunction); the spawn task is passed under
@@ -74,6 +74,8 @@ internal sealed class SubAgentSpawnService : ISubAgentSpawnService
     private readonly IAgentInstructionProvider _instructionProvider;
     private readonly ILogger<SubAgentSpawnService> _logger;
     private readonly ILoggerFactory _loggerFactory;
+    private readonly IMcpExecutionBindingResolver _mcpExecutionBindingResolver;
+    private readonly IMcpWorkspaceExecutionSessionFactory _mcpWorkspaceSessionFactory;
     private readonly IMcpToolRegistry _mcpToolRegistry;
     private readonly IModelCapabilityResolver _modelCapabilityResolver;
     private readonly SpawnOptions _options;
@@ -91,6 +93,8 @@ internal sealed class SubAgentSpawnService : ISubAgentSpawnService
         IOptions<SpawnOptions> options,
         IAgentInstructionProvider instructionProvider,
         IModelCapabilityResolver modelCapabilityResolver,
+        IMcpExecutionBindingResolver mcpExecutionBindingResolver,
+        IMcpWorkspaceExecutionSessionFactory mcpWorkspaceSessionFactory,
         ILoggerFactory loggerFactory,
         ILogger<SubAgentSpawnService> logger)
     {
@@ -106,6 +110,8 @@ internal sealed class SubAgentSpawnService : ISubAgentSpawnService
         _options = options.Value;
         _instructionProvider = instructionProvider ?? throw new ArgumentNullException(nameof(instructionProvider));
         _modelCapabilityResolver = modelCapabilityResolver ?? throw new ArgumentNullException(nameof(modelCapabilityResolver));
+        _mcpExecutionBindingResolver = mcpExecutionBindingResolver ?? throw new ArgumentNullException(nameof(mcpExecutionBindingResolver));
+        _mcpWorkspaceSessionFactory = mcpWorkspaceSessionFactory ?? throw new ArgumentNullException(nameof(mcpWorkspaceSessionFactory));
         _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -154,6 +160,209 @@ internal sealed class SubAgentSpawnService : ISubAgentSpawnService
             CapacityVerdict.QueueSameModel => await RunQueuedAsync(binding, context, role, request.Task, ct).ConfigureAwait(false),
             _ => decision.Reason
         };
+    }
+
+    /// <inheritdoc />
+    public async Task<SpawnOutcome> SpawnForMcpAsync(McpExecutionBindingRequest request,
+        string task,
+        string? expectedBindingFingerprint,
+        CancellationToken ct,
+        Guid? workspaceId = null)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (string.IsNullOrWhiteSpace(task))
+        {
+            return SpawnOutcome.Rejected(McpExecutionFailureCodes.InvalidRequest, "Cannot run: provide a non-empty task.");
+        }
+
+        var context = SpawnContext.Current;
+        if (context is { Depth: >= 1 })
+        {
+            return SpawnOutcome.Rejected(McpExecutionFailureCodes.CapacityDeclined, ReasonDepthExceeded);
+        }
+
+        var resolution = await _mcpExecutionBindingResolver.ResolveAsync(request, ct).ConfigureAwait(false);
+        if (resolution.Binding is not { } mcpBinding)
+        {
+            return SpawnOutcome.Rejected(resolution.FailureCode ?? McpExecutionFailureCodes.InternalFailure, resolution.DisplayMessage);
+        }
+
+        if (expectedBindingFingerprint is not null
+            && !string.Equals(expectedBindingFingerprint, mcpBinding.BindingFingerprint, StringComparison.Ordinal))
+        {
+            return SpawnOutcome.Rejected(McpExecutionFailureCodes.AgentConfigChanged,
+                "Cannot run: the accepted agent execution configuration has changed.");
+        }
+
+        using var fanOutLease = context?.TryEnterFanOut();
+        if (context is null || fanOutLease is null)
+        {
+            return SpawnOutcome.Rejected(McpExecutionFailureCodes.CapacityDeclined, ReasonFanOutExceeded);
+        }
+
+        if (!TryCreateResolvedMcpBinding(mcpBinding, out var binding))
+        {
+            return SpawnOutcome.Rejected(McpExecutionFailureCodes.AgentConfigChanged,
+                "Cannot run: the accepted agent capability configuration is not valid.");
+        }
+
+        var isWorkspaceCoder = McpExecutionBindingPolicy.IsExactReadOnlyWorkspaceCoder(mcpBinding);
+        if ((isWorkspaceCoder && workspaceId is null) || (!isWorkspaceCoder && workspaceId is not null))
+        {
+            return SpawnOutcome.Rejected(McpExecutionFailureCodes.WorkspaceNotAuthorized,
+                "Cannot run: the selected workspace is not authorized.");
+        }
+
+        const ModelRole role = ModelRole.Chat;
+        var decision = await _capacityService.DecideAsync(binding.ModelName, role, ct).ConfigureAwait(false);
+        return decision.Verdict switch
+        {
+            CapacityVerdict.Allow => await RunAllowedMcpAsync(binding, decision, context, task, workspaceId, ct).ConfigureAwait(false),
+            CapacityVerdict.QueueSameModel => await RunQueuedMcpAsync(binding, context, role, task, workspaceId, ct).ConfigureAwait(false),
+            _ => SpawnOutcome.Rejected(McpExecutionFailureCodes.CapacityDeclined, decision.Reason)
+        };
+    }
+
+    private async Task<SpawnOutcome> RunAllowedMcpAsync(ResolvedBinding binding,
+        CapacityDecision decision,
+        SpawnContext context,
+        string task,
+        Guid? workspaceId,
+        CancellationToken ct)
+    {
+        if (decision.Reservation is null && !context.TryConsumeCloudSpawn())
+        {
+            return SpawnOutcome.Rejected(McpExecutionFailureCodes.CapacityDeclined, ReasonCloudCapExceeded);
+        }
+
+        try
+        {
+            var workspace = await OpenWorkspaceAsync(workspaceId, ct).ConfigureAwait(false);
+            if (workspace.Failure is { } failure)
+            {
+                return failure;
+            }
+
+            using var session = workspace.Session;
+            using var ambient = session?.EnterAmbientScope();
+            var content = await RunSubAgentAsync(binding, context, task, ct).ConfigureAwait(false);
+            return SpawnOutcome.Success(content);
+        }
+        finally
+        {
+            decision.Reservation?.Dispose();
+        }
+    }
+
+    private async Task<SpawnOutcome> RunQueuedMcpAsync(ResolvedBinding binding,
+        SpawnContext context,
+        ModelRole role,
+        string task,
+        Guid? workspaceId,
+        CancellationToken ct)
+    {
+        var workspace = await OpenWorkspaceAsync(workspaceId, ct).ConfigureAwait(false);
+        if (workspace.Failure is { } failure)
+        {
+            return failure;
+        }
+
+        using var session = workspace.Session;
+        using var ambient = session?.EnterAmbientScope();
+        var timedOut = false;
+        var content = await _spawnSerializer.RunSerializedAsync(binding.ModelName,
+            role,
+            TimeSpan.FromSeconds(_options.QueueWaitSeconds),
+            innerCt => RunSubAgentAsync(binding, context, task, innerCt),
+            () =>
+            {
+                timedOut = true;
+                return string.Empty;
+            },
+            ct).ConfigureAwait(false);
+        return timedOut
+            ? SpawnOutcome.Rejected(McpExecutionFailureCodes.CapacityDeclined, ReasonQueueBusy)
+            : SpawnOutcome.Success(content);
+    }
+
+    private async Task<WorkspaceOpenOutcome> OpenWorkspaceAsync(Guid? workspaceId, CancellationToken cancellationToken)
+    {
+        if (workspaceId is not { } id)
+        {
+            return new WorkspaceOpenOutcome(Session: null, Failure: null);
+        }
+
+        var opened = await _mcpWorkspaceSessionFactory.OpenAsync(id, cancellationToken).ConfigureAwait(false);
+        return opened.Session is { } session
+            ? new WorkspaceOpenOutcome(session, Failure: null)
+            : new WorkspaceOpenOutcome(Session: null,
+                Failure: SpawnOutcome.Rejected(opened.FailureCode ?? McpExecutionFailureCodes.WorkspacePreparationFailed,
+                    opened.DisplayMessage));
+    }
+
+    private bool TryCreateResolvedMcpBinding(McpExecutionBinding binding, out ResolvedBinding resolvedBinding)
+    {
+        if (!TryResolveMcpTools(binding.AllowedTools, out var tools))
+        {
+            resolvedBinding = null!;
+            return false;
+        }
+
+        var reasoning = binding.AgentDefinitionId is null
+            ? null
+            : new ChildReasoning(binding.ReasoningEffort, binding.SupportsThinking);
+        resolvedBinding = new ResolvedBinding(binding.ModelId, binding.Instructions, tools, reasoning, Skills: null);
+        return true;
+    }
+
+    private bool TryResolveMcpTools(IReadOnlyList<AllowedToolDto> allowedTools, out IList<AITool>? tools)
+    {
+        if (allowedTools.Count == 0)
+        {
+            tools = null;
+            return true;
+        }
+
+        var safeOffer = allowedTools
+                        .Where(static tool => tool.Category == ToolCategory.ReadLocal
+                                              && !tool.RequiresApproval
+                                              && (string.Equals(tool.Name, "list_files", StringComparison.Ordinal)
+                                                  || string.Equals(tool.Name, "read_file", StringComparison.Ordinal)
+                                                  || string.Equals(tool.Name, "search_text", StringComparison.Ordinal)))
+                        .ToArray();
+        if (safeOffer.Length != 3
+            || !HasExactCoderToolNames(safeOffer.Select(static tool => tool.Name))
+            || safeOffer.Length != allowedTools.Count)
+        {
+            tools = null;
+            return false;
+        }
+
+        var executables = InvocationToolResolver.Resolve(ToOfferPlaceholders(safeOffer),
+            _toolRegistry,
+            _clientLocalToolRegistry,
+            _mcpToolRegistry,
+            _logger);
+        if (executables.Count != 3
+            || executables.Any(static tool => tool is ApprovalRequiredAIFunction)
+            || !HasExactCoderToolNames(executables.Select(static tool => tool.Name)))
+        {
+            tools = null;
+            return false;
+        }
+
+        tools = executables.ToList();
+        return true;
+    }
+
+    private static bool HasExactCoderToolNames(IEnumerable<string> names)
+    {
+        var distinctNames = names.ToHashSet(StringComparer.Ordinal);
+        return distinctNames.Count == 3
+               && distinctNames.Contains("list_files")
+               && distinctNames.Contains("read_file")
+               && distinctNames.Contains("search_text");
     }
 
     // Allow: a cloud spawn consumes a cloud-budget unit (DoS-of-wallet cap); a local Allow carries a ledger reservation
@@ -489,4 +698,6 @@ internal sealed class SubAgentSpawnService : ISubAgentSpawnService
     // The child's reasoning inputs: the resolved effort plus the child model's OWN thinking capability, which together
     // drive ParticipantReasoningOptions.Build exactly as the orchestration-participant path does.
     private sealed record ChildReasoning(string? ReasoningEffort, bool SupportsThinking);
+
+    private sealed record WorkspaceOpenOutcome(IMcpWorkspaceExecutionSession? Session, SpawnOutcome? Failure);
 }

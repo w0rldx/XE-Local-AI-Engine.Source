@@ -241,11 +241,22 @@ public sealed class NodeChatStreamService(
             }
         }
 
+        // Subscribe before pre-run notice production (cloud attachment/knowledge withholding) so those notices reach
+        // the stream. The scope also covers every pre-ownership exit, preventing handler leaks when staging or package
+        // construction fails before the pump/runner teardown exists.
         eventDispatcher.InvocationStateChanged += OnInvocationStateChanged;
         eventDispatcher.ToolCallLifecycleChanged += OnToolCallLifecycleChanged;
         eventDispatcher.TurnNoticeChanged += OnTurnNoticeChanged;
         eventDispatcher.ApprovalRequestedChanged += OnApprovalRequestedChanged;
         eventDispatcher.UserQuestionRequestedChanged += OnUserQuestionRequestedChanged;
+        using var eventSubscription = new CallbackDisposable(() =>
+        {
+            eventDispatcher.InvocationStateChanged -= OnInvocationStateChanged;
+            eventDispatcher.ToolCallLifecycleChanged -= OnToolCallLifecycleChanged;
+            eventDispatcher.TurnNoticeChanged -= OnTurnNoticeChanged;
+            eventDispatcher.ApprovalRequestedChanged -= OnApprovalRequestedChanged;
+            eventDispatcher.UserQuestionRequestedChanged -= OnUserQuestionRequestedChanged;
+        });
 
         // The active-model precedence, the effective-agent resolution, and the orchestration spec were all computed up
         // front (ResolveTurnAsync) so the placeholder could be stamped with the resolved agent's attribution; reuse
@@ -313,9 +324,48 @@ public sealed class NodeChatStreamService(
         // returns the exact staged paths (empty when Agent Mode is off, there are no extracted files, OR attachments are
         // withheld from a cloud effective model).
         var isAgentHomeTurn = offerTools && OffersAgentHomeTools(allowedTools);
-        var stagedAttachmentPaths = isAgentHomeTurn && attachmentsAllowed
-            ? await PrepareConversationAttachmentsSafelyAsync(request.ConversationId, runCancellation.Token).ConfigureAwait(false)
-            : [];
+        ConversationSandboxPreparation? sandboxPreparation = null;
+        string? sandboxPreparationError = null;
+        if (isAgentHomeTurn && attachmentsAllowed)
+        {
+            try
+            {
+                sandboxPreparation = await conversationSandboxStager.PrepareConversationAttachmentsAsync(request.ConversationId, runCancellation.Token).ConfigureAwait(false);
+                if (sandboxPreparation is null)
+                {
+                    sandboxPreparationError = "The AgentHome workspace could not be prepared for this response.";
+                }
+                else if (sandboxPreparation.IsBusy)
+                {
+                    sandboxPreparationError = "The AgentHome workspace is busy. Try again after the current operation finishes.";
+                }
+            }
+            catch (OperationCanceledException) when (runCancellation.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                logger.LogWarning(exception, "AgentHome attachment staging failed for conversation {ConversationId}.", request.ConversationId);
+                sandboxPreparationError = "The AgentHome workspace could not be prepared for this response.";
+            }
+        }
+
+        await using var sandboxPreparationLease = sandboxPreparation;
+        if (sandboxPreparationError is not null)
+        {
+            var failedMessage = await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
+                    NodeChatMessageStatusValues.Failed,
+                    NowUnixMilliseconds(),
+                    Error: sandboxPreparationError,
+                    Envelope: new AgentRunEnvelopeMetadata(InvocationId: null, DurationMs: 0L)),
+                CancellationToken.None).ConfigureAwait(false);
+            preOwnershipGuard.TerminalizationHandled();
+            yield return ToMessageEvent(ChatStreamEventTypes.AssistantFailed, correlation, failedMessage, sequence.Next());
+            yield break;
+        }
+
+        var stagedAttachmentPaths = sandboxPreparation?.StagedPaths ?? [];
 
         // The synthetic prepended context differs by mode: plain chat inlines the extracted text directly; agent mode
         // injects only a short pointer naming the staged files (the agent reads their content through its tools, so the
@@ -386,7 +436,10 @@ public sealed class NodeChatStreamService(
                 () => CollectUserTurns(conversation, userMessage, selectedPath))
             : null;
 
-        var pumpTask = invocationStatePump.PumpAsync(stateChannel.Reader,
+        Task pumpTask;
+        Task runTask;
+        using var invocationScope = sandboxPreparation?.EnterInvocationScope();
+        pumpTask = invocationStatePump.PumpAsync(stateChannel.Reader,
             eventChannel.Writer,
             correlation,
             // Stamp the FINAL persisted assistant-message model from the effective model (the pump terminalizes from
@@ -399,7 +452,7 @@ public sealed class NodeChatStreamService(
             // KB sources that grounded this turn land on the terminal row's metadata_json; null when
             // the turn used no knowledge base.
             knowledgeSources);
-        var runTask = RunInvocationAsync(package,
+        runTask = RunInvocationAsync(package,
             assistantMessageId,
             stateChannel.Writer,
             eventChannel.Writer,
@@ -474,11 +527,7 @@ public sealed class NodeChatStreamService(
             }
             finally
             {
-                eventDispatcher.InvocationStateChanged -= OnInvocationStateChanged;
-                eventDispatcher.ToolCallLifecycleChanged -= OnToolCallLifecycleChanged;
-                eventDispatcher.TurnNoticeChanged -= OnTurnNoticeChanged;
-                eventDispatcher.ApprovalRequestedChanged -= OnApprovalRequestedChanged;
-                eventDispatcher.UserQuestionRequestedChanged -= OnUserQuestionRequestedChanged;
+                eventSubscription.Dispose();
             }
         }
     }
@@ -812,22 +861,13 @@ public sealed class NodeChatStreamService(
         return allowedTools is not null && allowedTools.Any(tool => AgentHomeCapableToolNames.Contains(tool.Name));
     }
 
-    // Best-effort attachment staging: re-stages the conversation's uploaded attachments into the node sandbox so the
-    // agent's file tools can read them, returning the workspace-relative staged paths (empty on failure or no-op). A
-    // failure leaves the agent without the staged workspace (its file tools report "no workspace") but must never fail
-    // the chat turn — a genuine user cancel is handled by the run path downstream.
-    private async Task<IReadOnlyList<string>> PrepareConversationAttachmentsSafelyAsync(Guid conversationId, CancellationToken cancellationToken)
+    private sealed class CallbackDisposable(Action callback) : IDisposable
     {
-        try
+        private Action? _callback = callback;
+
+        public void Dispose()
         {
-            return await conversationSandboxStager.PrepareConversationAttachmentsAsync(conversationId, cancellationToken).ConfigureAwait(false) ?? [];
-        }
-        catch (Exception exception)
-        {
-            logger.LogWarning(exception,
-                "AgentHome attachment staging for conversation {ConversationId} failed; the agent will run without staged attachments.",
-                conversationId);
-            return [];
+            Interlocked.Exchange(ref _callback, null)?.Invoke();
         }
     }
 

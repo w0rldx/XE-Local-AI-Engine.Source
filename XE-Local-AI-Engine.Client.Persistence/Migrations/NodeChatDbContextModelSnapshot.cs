@@ -1566,6 +1566,201 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.ToTable("knowledge_document_sections", (string)null);
                 });
 
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.McpAgentRun", b =>
+                {
+                    b.Property<Guid>("RequestId")
+                        .ValueGeneratedNever()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("request_id");
+
+                    b.Property<long?>("AgentDefinitionVersion")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("agent_definition_version");
+
+                    b.Property<Guid?>("AgentDefinitionId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("agent_definition_id");
+
+                    b.Property<int>("AccountingVersion")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("accounting_version");
+
+                    b.Property<long>("ActivePayloadBytes")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("active_payload_bytes");
+
+                    b.Property<byte[]>("BindingFingerprint")
+                        .HasMaxLength(32)
+                        .HasColumnType("BLOB")
+                        .HasColumnName("binding_fingerprint");
+
+                    b.Property<Guid?>("ClaimToken")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("claim_token");
+
+                    b.Property<long?>("ClaimedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("claimed_at_utc");
+
+                    b.Property<long?>("CompletedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("completed_at_utc");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<byte[]>("DisplayPayload")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("display_payload");
+
+                    b.Property<long?>("CompactedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("compacted_at_utc");
+
+                    b.Property<string>("FailureCode")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("failure_code");
+
+                    b.Property<byte[]>("InstructionsPayload")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("instructions_payload");
+
+                    b.Property<string>("ModelId")
+                        .HasMaxLength(1024)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("model_id");
+
+                    b.Property<string>("ModelOverrideId")
+                        .HasMaxLength(1024)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("model_override_id");
+
+                    b.Property<long?>("PayloadExpiresAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("payload_expires_at_utc");
+
+                    b.Property<byte[]>("RequestFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("BLOB")
+                        .HasColumnName("request_fingerprint");
+
+                    b.Property<long>("ReservedActivePayloadBytes")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("reserved_active_payload_bytes");
+
+                    b.Property<byte[]>("ResultPayload")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("result_payload");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("status");
+
+                    b.Property<int>("StopReason")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("stop_reason");
+
+                    b.Property<long?>("StopRequestedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("stop_requested_at_utc");
+
+                    b.Property<byte[]>("TaskPayload")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("task_payload");
+
+                    b.Property<long>("TombstoneLogicalBytes")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("tombstone_logical_bytes");
+
+                    b.Property<long>("Version")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
+
+                    b.Property<Guid?>("WorkspaceId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("RequestId");
+
+                    b.HasIndex("PayloadExpiresAtUtc");
+
+                    b.HasIndex("Status", "CreatedAtUtc");
+
+                    b.ToTable("mcp_agent_runs", t =>
+                        {
+                            t.HasCheckConstraint("CK_mcp_agent_runs_accounting_version", "accounting_version = 1");
+
+                            t.HasCheckConstraint("CK_mcp_agent_runs_nonnegative", "version >= 0 AND reserved_active_payload_bytes >= 0 AND active_payload_bytes >= 0 AND tombstone_logical_bytes >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.McpAgentRunLedger", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("id");
+
+                    b.Property<int>("AccountingVersion")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("accounting_version");
+
+                    b.Property<long>("ActivePayloadBytes")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("active_payload_bytes");
+
+                    b.Property<long>("IdentityCount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("identity_count");
+
+                    b.Property<long>("NonterminalRunCount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("nonterminal_run_count");
+
+                    b.Property<long>("QueuedRunCount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("queued_run_count");
+
+                    b.Property<long>("RunningRunCount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("running_run_count");
+
+                    b.Property<long>("TombstoneLogicalBytes")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("tombstone_logical_bytes");
+
+                    b.Property<long>("UpdatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("updated_at_utc");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("mcp_agent_run_ledger", t =>
+                        {
+                            t.HasCheckConstraint("CK_mcp_agent_run_ledger_accounting_version", "accounting_version = 1");
+
+                            t.HasCheckConstraint("CK_mcp_agent_run_ledger_nonnegative", "nonterminal_run_count >= 0 AND queued_run_count >= 0 AND running_run_count >= 0 AND nonterminal_run_count = queued_run_count + running_run_count AND identity_count >= 0 AND active_payload_bytes >= 0 AND tombstone_logical_bytes >= 0");
+
+                            t.HasCheckConstraint("CK_mcp_agent_run_ledger_singleton", "id = 1");
+                        });
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            AccountingVersion = 1,
+                            ActivePayloadBytes = 0L,
+                            IdentityCount = 0L,
+                            NonterminalRunCount = 0L,
+                            QueuedRunCount = 0L,
+                            RunningRunCount = 0L,
+                            TombstoneLogicalBytes = 0L,
+                            UpdatedAtUtc = 0L
+                        });
+                });
+
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.McpServerApiKey", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2286,10 +2481,15 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasDefaultValue(0)
                         .HasColumnName("mode");
 
+                    b.Property<long?>("RevokedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("revoked_at_utc");
+
                     b.HasKey("Id");
 
                     b.HasIndex("Alias")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("revoked_at_utc IS NULL");
 
                     b.ToTable("selected_folders", (string)null);
                 });

@@ -16,4 +16,6 @@ internal sealed record class NodeSelectedFolder
     public SelectedFolderMode Mode { get; set; } = SelectedFolderMode.Copy;
 
     public long CreatedAtUtc { get; set; }
+
+    public long? RevokedAtUtc { get; set; }
 }

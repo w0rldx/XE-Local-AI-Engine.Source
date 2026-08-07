@@ -170,6 +170,28 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
         return Task.CompletedTask;
     }
 
+    public Task ResetDirectoryAsync(SandboxHandle handle, string sandboxPath, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(handle);
+        ArgumentException.ThrowIfNullOrWhiteSpace(sandboxPath);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var prefix = sandboxPath.EndsWith('/') ? sandboxPath : sandboxPath + "/";
+        lock (_sync)
+        {
+            var state = GetAliveState(handle);
+            foreach (var path in state.SandboxFiles.Keys
+                                      .Where(path => string.Equals(path, sandboxPath, StringComparison.Ordinal)
+                                                     || path.StartsWith(prefix, StringComparison.Ordinal))
+                                      .ToArray())
+            {
+                _ = state.SandboxFiles.Remove(path);
+            }
+        }
+
+        return Task.CompletedTask;
+    }
+
     public Task<string> ReadFileAsync(SandboxHandle handle, string sandboxPath, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(handle);
@@ -219,6 +241,7 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
             IReadOnlyList<string> entries =
             [
                 .. EnumerateUnder(handle, request.DirectoryPath, cancellationToken)
+                   .Where(entry => request.IsPathSuppressed?.Invoke(entry.Relative) != true)
                    .Where(entry => request.NameGlob is not { Length: > 0 } glob
                                    || FileSystemName.MatchesSimpleExpression(glob, entry.Relative.Split('/')[^1], ignoreCase: true))
                    .Select(static entry => "./" + entry.Relative)
@@ -249,6 +272,11 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
 
             foreach (var (relative, content) in EnumerateUnder(handle, request.DirectoryPath, cancellationToken))
             {
+                if (request.IsPathSuppressed?.Invoke(relative) == true)
+                {
+                    continue;
+                }
+
                 var lineNumber = 0;
                 foreach (var line in content.Split('\n'))
                 {

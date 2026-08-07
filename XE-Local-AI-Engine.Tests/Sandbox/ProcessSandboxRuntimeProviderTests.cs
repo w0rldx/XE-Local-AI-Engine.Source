@@ -241,6 +241,31 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
     }
 
     [Test]
+    public async Task ProcessSandboxProvider_ResetDirectory_RemovesOnlyRequestedSubtree()
+    {
+        using var provider = CreateProvider();
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
+        var selected = WriteHostTempFile("old");
+        var other = WriteHostTempFile("keep");
+        await provider.CopyIntoAsync(handle, new SandboxCopyRequest
+        {
+            SourcePath = selected,
+            DestinationPath = "/agent-home/workspace/selected/a.txt"
+        });
+        await provider.CopyIntoAsync(handle, new SandboxCopyRequest
+        {
+            SourcePath = other,
+            DestinationPath = "/agent-home/memory/keep.txt"
+        });
+
+        await provider.ResetDirectoryAsync(handle, "/agent-home/workspace/selected");
+
+        await AssertEx.ThrowsAsync<FileNotFoundException>(() =>
+            provider.ReadFileAsync(handle, "/agent-home/workspace/selected/a.txt"));
+        AssertEx.Equal("keep", await provider.ReadFileAsync(handle, "/agent-home/memory/keep.txt"));
+    }
+
+    [Test]
     public async Task ProcessSandboxProvider_CopyInto_RejectsPathOutsideJail()
     {
         using var provider = CreateProvider();
@@ -410,24 +435,72 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
     }
 
     [Test]
-    public async Task ProcessSandboxProvider_CopyInto_WhenGrowsConcurrently_NeverTruncated()
+    public async Task ProcessSandboxProvider_CopyInto_WhenOverPerFileCap_ThrowsAndWritesNothing()
     {
-        // A source one byte over the cap is SKIPPED-AND-LOGGED (degrade gracefully, parity with the deleted container
-        // provider), never silently truncated to the stale size and never thrown (a throw would abort the whole
-        // workspace-copy loop in AgentHomeWorkspaceService). The destination must simply not exist.
+        // The provider must fail the copy so AgentHome cleanup runs; returning success would let a snapshot claim bytes
+        // that were never written.
         using var provider = CreateProvider(8);
         var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
         var source = WriteHostTempFileBytes([1, 2, 3, 4, 5, 6, 7, 8, 9]); // 9 bytes = over the 8-byte cap
 
-        // No throw: the over-cap file is skipped, not rejected with an exception.
-        await provider.CopyIntoAsync(handle, new SandboxCopyRequest
+        await AssertEx.ThrowsAsync<InvalidDataException>(() => provider.CopyIntoAsync(handle, new SandboxCopyRequest
         {
             SourcePath = source,
             DestinationPath = "workspace/over.bin"
-        });
+        }));
 
         // Nothing was written (never truncated to the stale size).
         await AssertEx.ThrowsAsync<FileNotFoundException>(() => provider.ReadFileAsync(handle, "workspace/over.bin"));
+    }
+
+    [Test]
+    public async Task ProcessSandboxProvider_CopyInto_WhenSourceKeepsGrowing_ThrowsAndWritesNothing()
+    {
+        const int initialBytes = 4 * 1024;
+        const int capBytes = 64 * 1024;
+        using var provider = CreateProvider(capBytes);
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
+        var source = WriteHostTempFileBytes(new byte[initialBytes]);
+        using var stop = new CancellationTokenSource();
+        var sourceExceededCap = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var writer = Task.Run(async () =>
+        {
+            var block = new byte[4096];
+            await using var stream = new FileStream(source, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
+            while (stream.Length <= capBytes)
+            {
+                await stream.WriteAsync(block, stop.Token);
+            }
+
+            sourceExceededCap.SetResult();
+            await Task.Delay(Timeout.Infinite, stop.Token);
+        });
+
+        try
+        {
+            // Establish the rejection precondition explicitly instead of racing the synchronous guarded read against
+            // an ungated Task.Run. The writer parks once the source crosses the cap, keeping disk use bounded.
+            await sourceExceededCap.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await AssertEx.ThrowsAsync<InvalidDataException>(() => provider.CopyIntoAsync(handle, new SandboxCopyRequest
+            {
+                SourcePath = source,
+                DestinationPath = "workspace/growing.bin"
+            }));
+        }
+        finally
+        {
+            await stop.CancelAsync();
+            try
+            {
+                await writer;
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected when cancellation releases the parked writer.
+            }
+        }
+
+        await AssertEx.ThrowsAsync<FileNotFoundException>(() => provider.ReadFileAsync(handle, "workspace/growing.bin"));
     }
 
     [Test]

@@ -97,6 +97,31 @@ public sealed class FakeSandboxRuntimeProviderTests
     }
 
     [Test]
+    public async Task ResetDirectoryAsync_RemovesOnlyRequestedSubtree()
+    {
+        var provider = new FakeSandboxRuntimeProvider(new FixedTimeProvider(FixedNow));
+        provider.WriteHostFile("selected", "old");
+        provider.WriteHostFile("other", "keep");
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
+        await provider.CopyIntoAsync(handle, new SandboxCopyRequest
+        {
+            SourcePath = "selected",
+            DestinationPath = "/agent-home/workspace/selected/a.txt"
+        });
+        await provider.CopyIntoAsync(handle, new SandboxCopyRequest
+        {
+            SourcePath = "other",
+            DestinationPath = "/agent-home/memory/keep.txt"
+        });
+
+        await provider.ResetDirectoryAsync(handle, "/agent-home/workspace/selected");
+
+        var paths = provider.SnapshotSandboxPaths(handle);
+        AssertEx.True(paths.All(path => !path.StartsWith("/agent-home/workspace/selected/", StringComparison.Ordinal)));
+        AssertEx.Contains(paths, path => path == "/agent-home/memory/keep.txt");
+    }
+
+    [Test]
     public async Task CopyIntoAsync_WhenSourceNotSeeded_FallsBackToRealDisk()
     {
         var provider = new FakeSandboxRuntimeProvider(new FixedTimeProvider(FixedNow));
@@ -144,6 +169,51 @@ public sealed class FakeSandboxRuntimeProviderTests
         AssertEx.Equal(expected: 2, paths.Count);
         AssertEx.Equal("/agent-home/a", paths[0]);
         AssertEx.Equal("/agent-home/b", paths[1]);
+    }
+
+    [Test]
+    public async Task Surveys_ApplyCallerSuppressionBeforeResultBudgets()
+    {
+        var provider = new FakeSandboxRuntimeProvider(new FixedTimeProvider(FixedNow));
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
+        provider.WriteHostFile("visible", "visible needle");
+        await provider.CopyIntoAsync(handle, new SandboxCopyRequest
+        {
+            SourcePath = "visible",
+            DestinationPath = "/workspace/project/visible.cs"
+        });
+        for (var index = 0; index < 4; index++)
+        {
+            var source = "metadata-" + index;
+            provider.WriteHostFile(source, "hidden needle");
+            await provider.CopyIntoAsync(handle, new SandboxCopyRequest
+            {
+                SourcePath = source,
+                DestinationPath = $"/workspace/.git/objects/{index}"
+            });
+        }
+
+        static bool SuppressGit(string path) => path.Split('/').Contains(".git", StringComparer.Ordinal);
+
+        var files = await provider.ListFilesAsync(handle, new SandboxListFilesRequest
+        {
+            DirectoryPath = "/workspace",
+            MaxEntries = 1,
+            IsPathSuppressed = SuppressGit
+        });
+        var matches = await provider.SearchTextAsync(handle, new SandboxSearchTextRequest
+        {
+            DirectoryPath = "/workspace",
+            Pattern = "needle",
+            MaxMatches = 1,
+            MaxOutputBytes = 4096,
+            IsPathSuppressed = SuppressGit
+        });
+
+        AssertEx.Equal(1, files.Count);
+        AssertEx.Equal("./project/visible.cs", files[0]);
+        AssertEx.Equal(1, matches.Count);
+        AssertEx.Contains(matches[0], "./project/visible.cs:1:visible needle");
     }
 
     [Test]

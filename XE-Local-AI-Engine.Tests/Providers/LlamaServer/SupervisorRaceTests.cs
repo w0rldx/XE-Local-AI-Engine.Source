@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
+using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -12,6 +13,49 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 public sealed class SupervisorRaceTests
 {
+    [Test]
+    public async Task DisposeAsync_WaitsForAdmittedEjectBeforeDisposingMutationState()
+    {
+        var launcher = new FakeProcessLauncher();
+        var supervisor = SupervisorFactory.Create(launcher,
+            options: new LlamaServerSupervisorOptions
+            {
+                IdleTimeToLive = TimeSpan.FromHours(1),
+                MaxLoadedProcesses = 3,
+                MaxRestartAttempts = 3,
+                EjectDrainTimeout = TimeSpan.FromSeconds(5)
+            });
+        await supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
+        var inferenceLease = supervisor.TryAcquireInferenceLease("model-a", ModelRole.Chat).Lease;
+        AssertEx.NotNull(inferenceLease);
+
+        var eject = supervisor.EjectAsync("model-a", ModelRole.Chat, force: false, CancellationToken.None);
+        AssertEx.True(supervisor.TryAcquireInferenceLease("model-a", ModelRole.Chat).ProcessEvicting,
+            "The eject must synchronously mark the process evicting before entering its drain wait.");
+        var disposal = supervisor.DisposeAsync().AsTask();
+        await Task.Delay(50);
+        AssertEx.False(disposal.IsCompleted, "Disposal must wait for the already-admitted eject operation.");
+
+        inferenceLease!.Dispose();
+        AssertEx.Equal(LlamaServerEjectOutcome.Ejected, await eject.WaitAsync(TimeSpan.FromSeconds(3)));
+        await disposal.WaitAsync(TimeSpan.FromSeconds(3));
+        AssertEx.True(launcher.Handles.Single().WasTreeKilled);
+    }
+
+    [Test]
+    public async Task PublicAsyncMutators_AfterDispose_RejectBeforeTouchingDisposedGates()
+    {
+        var supervisor = SupervisorFactory.Create();
+        await supervisor.DisposeAsync();
+
+        await AssertEx.ThrowsAsync<ObjectDisposedException>(() =>
+            supervisor.EvictAsync("model-a", ModelRole.Chat, CancellationToken.None));
+        await AssertEx.ThrowsAsync<ObjectDisposedException>(() =>
+            supervisor.EvictAllRolesAsync("model-a", CancellationToken.None));
+        await AssertEx.ThrowsAsync<ObjectDisposedException>(() =>
+            supervisor.EjectAsync("model-a", ModelRole.Chat, force: false, CancellationToken.None));
+    }
+
     [Test]
     public async Task RuntimeMutationLease_WhileHeld_BlocksEnsureUntilDisposed()
     {
@@ -28,6 +72,50 @@ public sealed class SupervisorRaceTests
         await lease!.DisposeAsync();
         await ensure;
         AssertEx.Equal(1, launcher.LaunchCount);
+    }
+
+    [Test]
+    public async Task DisposeAsync_RejectsEnsureThatPassedEntryCheckBeforeMutationBarrier()
+    {
+        var launcher = new FakeProcessLauncher();
+        var registry = new ProcessLaunchAdmissionRegistry();
+        var supervisor = SupervisorFactory.Create(launcher, launchAdmissions: registry);
+        var lease = await supervisor.TryAcquireRuntimeMutationLeaseAsync(CancellationToken.None);
+        AssertEx.NotNull(lease);
+        var ensure = supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
+        await Task.Delay(50);
+        AssertEx.False(ensure.IsCompleted);
+
+        var disposal = supervisor.DisposeAsync().AsTask();
+        await Task.Delay(50);
+        await lease!.DisposeAsync();
+
+        await AssertEx.ThrowsAsync<ObjectDisposedException>(() => ensure);
+        await disposal;
+        AssertEx.Equal(0, launcher.LaunchCount);
+        AssertEx.Equal(expected: 0, supervisor.CountInflightSpawns());
+        AssertEx.False(registry.Snapshot("model-a", ModelRole.Chat).HasRequestedKey);
+    }
+
+    [Test]
+    public async Task DisposeAsync_CancelsMutationLeaseDelayedBeforeRuntimeGateWithoutActivityLeak()
+    {
+        var supervisor = SupervisorFactory.Create();
+        var blocker = await supervisor.TryAcquireRuntimeMutationLeaseAsync(CancellationToken.None);
+        AssertEx.NotNull(blocker);
+        var pending = supervisor.TryAcquireRuntimeMutationLeaseAsync(CancellationToken.None);
+        await Task.Delay(50);
+        AssertEx.False(pending.IsCompleted);
+        AssertEx.True(supervisor.IsKeepWarmSuppressed());
+
+        var disposal = supervisor.DisposeAsync().AsTask();
+        await Task.Delay(50);
+        await blocker!.DisposeAsync();
+
+        await AssertEx.ThrowsAsync<ObjectDisposedException>(() => pending);
+        await disposal;
+        AssertEx.False(supervisor.IsKeepWarmSuppressed());
+        AssertEx.Equal(expected: 0, supervisor.CountInflightSpawns());
     }
 
     [Test]
@@ -92,6 +180,109 @@ public sealed class SupervisorRaceTests
         await lease.DisposeAsync();
         var endpoint = await supervisor.EnsureRunningAsync("healthy", ModelRole.Chat, CancellationToken.None);
         AssertEx.NotNull(endpoint);
+    }
+
+    [Test]
+    public async Task EnsureRunning_CallerCancellation_RetainsOrphanBlockerUntilDetachedLaunchSettles()
+    {
+        var health = new GatedHealthProbe();
+        var registry = new ProcessLaunchAdmissionRegistry();
+        var allocation = new ProcessContextAllocation(8192,
+            ModelTrainContextTokens: 131072,
+            ProcessContextAllocationSource.HardwareTier,
+            ProcessPlacementMode.GpuResident,
+            ResourceFootprint.Zero,
+            ContentIdentity: "model-a:0",
+            CacheKey: "cache:model-a");
+        using var consumer = registry.Acquire(new ProcessLaunchAdmission("model-a",
+            ModelRole.Chat,
+            GpuVariant.Cpu,
+            ResolvedLaunchArguments.Explore(),
+            allocation));
+        AssertEx.NotNull(consumer);
+        await using var supervisor = SupervisorFactory.Create(healthProbe: health,
+            variantSelector: new FakeVariantSelector(GpuVariant.Cpu),
+            launchAdmissions: registry);
+        using var cancellation = new CancellationTokenSource();
+        var ensure = supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, cancellation.Token);
+        await WaitUntilAsync(() => health.Waiting == 1);
+
+        await cancellation.CancelAsync();
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() => ensure);
+        consumer!.Dispose();
+        AssertEx.True(registry.Snapshot("model-b", ModelRole.Chat).HasGlobalBlocker);
+        AssertEx.False(registry.TryAcquire(new ProcessLaunchAdmission("model-b",
+            ModelRole.Chat,
+            GpuVariant.Cpu,
+            ResolvedLaunchArguments.Explore(),
+            allocation with
+            {
+                ContentIdentity = "model-b:0",
+                CacheKey = "cache:model-b"
+            }), out _));
+
+        health.Release();
+        await WaitUntilAsync(() => !registry.Snapshot("model-a", ModelRole.Chat).HasRequestedKey);
+    }
+
+    [Test]
+    public async Task DisposeAsync_AwaitsDetachedSpawnCleanupAndReleasesLaunchTicket()
+    {
+        var health = new GatedHealthProbe();
+        var launcher = new FakeProcessLauncher();
+        var registry = new ProcessLaunchAdmissionRegistry();
+        var allocation = new ProcessContextAllocation(8192,
+            ModelTrainContextTokens: 131072,
+            ProcessContextAllocationSource.HardwareTier,
+            ProcessPlacementMode.Cpu,
+            ResourceFootprint.Zero,
+            ContentIdentity: "model-a:0",
+            CacheKey: "cache:model-a");
+        AssertEx.True(registry.TryAcquire(new ProcessLaunchAdmission("model-a",
+            ModelRole.Chat,
+            GpuVariant.Cpu,
+            ResolvedLaunchArguments.Explore(),
+            allocation), out var consumer));
+        var supervisor = SupervisorFactory.Create(launcher,
+            healthProbe: health,
+            variantSelector: new FakeVariantSelector(GpuVariant.Cpu),
+            launchAdmissions: registry);
+        var ensure = supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
+        await WaitUntilAsync(() => health.Waiting == 1);
+        consumer!.Dispose();
+
+        await supervisor.DisposeAsync();
+
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() => ensure);
+        AssertEx.Equal(expected: 0, supervisor.CountInflightSpawns());
+        var handle = launcher.Handles.Single();
+        AssertEx.True(handle.WasTreeKilled);
+        AssertEx.True(handle.WasDisposed);
+        AssertEx.False(registry.Snapshot("model-a", ModelRole.Chat).HasRequestedKey);
+        AssertEx.True(registry.TryAcquire(new ProcessLaunchAdmission("model-b",
+            ModelRole.Chat,
+            GpuVariant.Cpu,
+            ResolvedLaunchArguments.Explore(),
+            allocation with
+            {
+                ContentIdentity = "model-b:0",
+                CacheKey = "cache:model-b"
+            }), out var next));
+        next!.Dispose();
+    }
+
+    private static async Task WaitUntilAsync(Func<bool> predicate)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(3);
+        while (!predicate())
+        {
+            if (DateTime.UtcNow >= deadline)
+            {
+                throw new AssertionException("Timed out waiting for the expected detached-spawn state.");
+            }
+
+            await Task.Delay(10);
+        }
     }
 
     [Test]

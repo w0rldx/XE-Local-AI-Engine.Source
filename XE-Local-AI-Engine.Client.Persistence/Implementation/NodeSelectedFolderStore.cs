@@ -37,7 +37,7 @@ public sealed class NodeSelectedFolderStore(NodeChatDbContext dbContext, TimePro
     {
         var entity = await _dbContext.SelectedFolders
                                      .AsNoTracking()
-                                     .FirstOrDefaultAsync(folder => folder.Id == id, cancellationToken)
+                                     .FirstOrDefaultAsync(folder => folder.Id == id && folder.RevokedAtUtc == null, cancellationToken)
                                      .ConfigureAwait(false);
 
         return entity is null ? null : ToRecord(entity);
@@ -49,7 +49,7 @@ public sealed class NodeSelectedFolderStore(NodeChatDbContext dbContext, TimePro
 
         var entity = await _dbContext.SelectedFolders
                                      .AsNoTracking()
-                                     .FirstOrDefaultAsync(folder => folder.Alias == folderAlias, cancellationToken)
+                                     .FirstOrDefaultAsync(folder => folder.Alias == folderAlias && folder.RevokedAtUtc == null, cancellationToken)
                                      .ConfigureAwait(false);
 
         return entity is null ? null : ToRecord(entity);
@@ -59,6 +59,7 @@ public sealed class NodeSelectedFolderStore(NodeChatDbContext dbContext, TimePro
     {
         var entities = await _dbContext.SelectedFolders
                                        .AsNoTracking()
+                                       .Where(folder => folder.RevokedAtUtc == null)
                                        .OrderBy(folder => folder.CreatedAtUtc)
                                        .ToListAsync(cancellationToken)
                                        .ConfigureAwait(false);
@@ -66,8 +67,24 @@ public sealed class NodeSelectedFolderStore(NodeChatDbContext dbContext, TimePro
         return entities.Select(ToRecord).ToArray();
     }
 
+    public async Task<bool> RevokeAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var revokedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
+        var affected = await _dbContext.SelectedFolders
+                                       .Where(folder => folder.Id == id && folder.RevokedAtUtc == null)
+                                       .ExecuteUpdateAsync(setters => setters.SetProperty(folder => folder.RevokedAtUtc, revokedAtUtc), cancellationToken)
+                                       .ConfigureAwait(false);
+
+        return affected == 1;
+    }
+
     private static SelectedFolderRecord ToRecord(NodeSelectedFolder entity)
     {
-        return new SelectedFolderRecord(entity.Id, entity.Alias, Encoding.UTF8.GetString(entity.HostPath), entity.Mode, entity.CreatedAtUtc);
+        return new SelectedFolderRecord(entity.Id,
+            entity.Alias,
+            Encoding.UTF8.GetString(entity.HostPath),
+            entity.Mode,
+            entity.CreatedAtUtc,
+            entity.RevokedAtUtc);
     }
 }

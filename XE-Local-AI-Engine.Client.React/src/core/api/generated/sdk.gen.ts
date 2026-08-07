@@ -131,6 +131,9 @@ import type {
 	CreateSkillData,
 	CreateSkillErrors,
 	CreateSkillResponses,
+	CreateWorkspaceData,
+	CreateWorkspaceErrors,
+	CreateWorkspaceResponses,
 	DeleteAgentDefinitionData,
 	DeleteAgentDefinitionErrors,
 	DeleteAgentDefinitionResponses,
@@ -170,6 +173,9 @@ import type {
 	DeleteSkillData,
 	DeleteSkillErrors,
 	DeleteSkillResponses,
+	DeleteWorkspaceData,
+	DeleteWorkspaceErrors,
+	DeleteWorkspaceResponses,
 	DetectDevelopmentRepositoryProfileData,
 	DetectDevelopmentRepositoryProfileErrors,
 	DetectDevelopmentRepositoryProfileResponses,
@@ -479,6 +485,9 @@ import type {
 	ListSkillsData,
 	ListSkillsErrors,
 	ListSkillsResponses,
+	ListWorkspacesData,
+	ListWorkspacesErrors,
+	ListWorkspacesResponses,
 	NodeAuthStatusData,
 	NodeAuthStatusResponses,
 	NodeChangePasswordData,
@@ -754,6 +763,8 @@ import {
 	zCreateScheduledJobResponse,
 	zCreateSkillBody,
 	zCreateSkillResponse,
+	zCreateWorkspaceBody,
+	zCreateWorkspaceResponse,
 	zDeleteAgentDefinitionPath,
 	zDeleteAgentDefinitionResponse,
 	zDeleteConversationFilePath,
@@ -781,6 +792,8 @@ import {
 	zDeleteScheduledJobResponse,
 	zDeleteSkillPath,
 	zDeleteSkillResponse,
+	zDeleteWorkspacePath,
+	zDeleteWorkspaceResponse,
 	zDetectDevelopmentRepositoryProfilePath,
 	zDetectDevelopmentRepositoryProfileResponse,
 	zDisableAutoConnectResponse,
@@ -940,6 +953,7 @@ import {
 	zListSkillResourcesPath,
 	zListSkillResourcesResponse,
 	zListSkillsResponse,
+	zListWorkspacesResponse,
 	zNodeAuthStatusResponse,
 	zNodeChangePasswordBody,
 	zNodeChangePasswordResponse,
@@ -6150,4 +6164,67 @@ export const updateSuggestedPlaybookAction = <ThrowOnError extends boolean = fal
 			"Content-Type": "application/json",
 			...options.headers,
 		},
+	});
+
+export const listWorkspaces = <ThrowOnError extends boolean = false>(options?: Options<ListWorkspacesData, ThrowOnError>) =>
+	(options?.client ?? client).get<ListWorkspacesResponses, ListWorkspacesErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListWorkspacesResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/workspaces",
+		...options,
+	});
+
+export const createWorkspace = <ThrowOnError extends boolean = false>(options: Options<CreateWorkspaceData, ThrowOnError>) =>
+	(options.client ?? client).post<CreateWorkspaceResponses, CreateWorkspaceErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zCreateWorkspaceBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zCreateWorkspaceResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/workspaces",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const deleteWorkspace = <ThrowOnError extends boolean = false>(options: Options<DeleteWorkspaceData, ThrowOnError>) =>
+	(options.client ?? client).delete<DeleteWorkspaceResponses, DeleteWorkspaceErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zDeleteWorkspacePath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseValidator: async (data) => await zDeleteWorkspaceResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/workspaces/{workspaceId}",
+		...options,
 	});

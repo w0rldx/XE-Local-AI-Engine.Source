@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using NSubstitute;
@@ -97,6 +98,48 @@ public sealed class McpServerInboundAuthTests
         // that it is NOT 401/403, i.e. the credential was accepted and the request reached the MCP transport.
         AssertEx.True(response.StatusCode is not HttpStatusCode.Unauthorized and not HttpStatusCode.Forbidden,
             $"A correct API key must pass authentication; got {response.StatusCode}.");
+    }
+
+    [Test]
+    public async Task McpEndpoint_ToolsList_AdvertisesExactlyEightReadOnlyToolsWithoutHostPathFields()
+    {
+        await using var factory = CreateFactory(ValidKey);
+        using var client = factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, McpEndpointRoute)
+        {
+            Content = new StringContent("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"params\":{}}",
+                Encoding.UTF8,
+                "application/json")
+        };
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", ValidKey);
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/event-stream"));
+        request.Headers.TryAddWithoutValidation("MCP-Protocol-Version", "2025-06-18");
+
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var toolNames = Regex.Matches(body, "\\\"name\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"")
+                             .Select(static match => match.Groups[1].Value)
+                             .Where(static name => name is "list_agents"
+                                                   or "list_models"
+                                                   or "run_agent"
+                                                   or "list_workspaces"
+                                                   or "start_agent_run"
+                                                   or "get_agent_run"
+                                                   or "cancel_agent_run"
+                                                   or "list_agent_runs")
+                             .OrderBy(static name => name, StringComparer.Ordinal)
+                             .ToArray();
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Equal(8, toolNames.Length);
+        AssertEx.Equal("cancel_agent_run|get_agent_run|list_agent_runs|list_agents|list_models|list_workspaces|run_agent|start_agent_run",
+            string.Join('|', toolNames));
+        AssertEx.Contains(body, "\"workspace_id\"");
+        AssertEx.False(body.Contains("hostPath", StringComparison.OrdinalIgnoreCase), "MCP schema must not advertise host paths.");
+        AssertEx.False(body.Contains("host_path", StringComparison.OrdinalIgnoreCase), "MCP schema must not advertise host paths.");
+        AssertEx.False(body.Contains("write_file", StringComparison.OrdinalIgnoreCase), "MCP discovery must not advertise filesystem mutation.");
+        AssertEx.False(body.Contains("execute_command", StringComparison.OrdinalIgnoreCase), "MCP discovery must not advertise process execution.");
     }
 
     [Test]

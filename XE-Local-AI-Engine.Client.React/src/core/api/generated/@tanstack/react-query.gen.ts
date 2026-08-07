@@ -53,6 +53,7 @@ import {
 	createPreviewWorkflow,
 	createScheduledJob,
 	createSkill,
+	createWorkspace,
 	deleteAgentDefinition,
 	deleteConversationFile,
 	deleteGoldenConversation,
@@ -66,6 +67,7 @@ import {
 	deletePreviewWorkflow,
 	deleteScheduledJob,
 	deleteSkill,
+	deleteWorkspace,
 	detectDevelopmentRepositoryProfile,
 	disableAutoConnect,
 	disableScheduledJob,
@@ -169,6 +171,7 @@ import {
 	listScheduledJobTemplates,
 	listSkillResources,
 	listSkills,
+	listWorkspaces,
 	nodeAuthStatus,
 	nodeChangePassword,
 	nodeLogin,
@@ -324,6 +327,8 @@ import type {
 	CreateScheduledJobResponse,
 	CreateSkillData,
 	CreateSkillResponse,
+	CreateWorkspaceData,
+	CreateWorkspaceResponse,
 	DeleteAgentDefinitionData,
 	DeleteAgentDefinitionResponse,
 	DeleteConversationFileData,
@@ -352,6 +357,8 @@ import type {
 	DeleteScheduledJobResponse,
 	DeleteSkillData,
 	DeleteSkillResponse,
+	DeleteWorkspaceData,
+	DeleteWorkspaceResponse,
 	DetectDevelopmentRepositoryProfileData,
 	DetectDevelopmentRepositoryProfileResponse,
 	DisableAutoConnectData,
@@ -565,6 +572,8 @@ import type {
 	ListSkillResourcesResponse,
 	ListSkillsData,
 	ListSkillsResponse,
+	ListWorkspacesData,
+	ListWorkspacesResponse,
 	NodeAuthStatusData,
 	NodeAuthStatusResponse,
 	NodeChangePasswordData,
@@ -5412,6 +5421,59 @@ export const updateSuggestedPlaybookActionMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await updateSuggestedPlaybookAction({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const listWorkspacesQueryKey = (options?: Options<ListWorkspacesData>) => createQueryKey("listWorkspaces", options);
+
+export const listWorkspacesOptions = (options?: Options<ListWorkspacesData>) =>
+	queryOptions<
+		ListWorkspacesResponse,
+		AxiosError<DefaultError>,
+		ListWorkspacesResponse,
+		ReturnType<typeof listWorkspacesQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listWorkspaces({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listWorkspacesQueryKey(options),
+	});
+
+export const createWorkspaceMutation = (
+	options?: Partial<Options<CreateWorkspaceData>>,
+): UseMutationOptions<CreateWorkspaceResponse, AxiosError<DefaultError>, Options<CreateWorkspaceData>> => {
+	const mutationOptions: UseMutationOptions<CreateWorkspaceResponse, AxiosError<DefaultError>, Options<CreateWorkspaceData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await createWorkspace({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const deleteWorkspaceMutation = (
+	options?: Partial<Options<DeleteWorkspaceData>>,
+): UseMutationOptions<DeleteWorkspaceResponse, AxiosError<DefaultError>, Options<DeleteWorkspaceData>> => {
+	const mutationOptions: UseMutationOptions<DeleteWorkspaceResponse, AxiosError<DefaultError>, Options<DeleteWorkspaceData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await deleteWorkspace({
 				...options,
 				...fnOptions,
 				throwOnError: true,

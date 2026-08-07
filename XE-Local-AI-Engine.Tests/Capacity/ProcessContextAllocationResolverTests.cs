@@ -451,6 +451,125 @@ public sealed class ProcessContextAllocationResolverTests
         AssertEx.False(resolver.TryDownTierAfterOutOfMemory(frozen, out _));
     }
 
+    [Test]
+    public async Task AdmissionDownTier_IsPureUntilCommitted_ThenPersistsMonotonicallyWithoutConsumingOomRetries()
+    {
+        var resolver = BuildResolver(Profile(64 * Gb, 32 * Gb, vramKnown: true), processBudget: 32 * Gb);
+        var automatic = AssertEx.NotNull(await resolver.ResolveAsync(Model,
+            ModelRole.Chat,
+            GpuVariant.Cuda,
+            ResolvedLaunchArguments.Explore(),
+            CancellationToken.None));
+
+        AssertEx.True(resolver.TryDownTierForAdmission(automatic, out var first));
+        AssertEx.True(resolver.TryDownTierForAdmission(first, out var second));
+        AssertEx.True(first.ProcessContextTokens < automatic.ProcessContextTokens);
+        AssertEx.True(first.Footprint.GpuBytes < automatic.Footprint.GpuBytes);
+
+        var unchanged = AssertEx.NotNull(await resolver.ResolveAsync(Model,
+            ModelRole.Chat,
+            GpuVariant.Cuda,
+            ResolvedLaunchArguments.Explore(),
+            CancellationToken.None));
+        AssertEx.Equal(automatic, unchanged, "candidate generation must not mutate shared launch state");
+
+        AssertEx.True(resolver.TryCommitAdmissionAllocation(second, out var committedLow));
+        AssertEx.Equal(second, committedLow);
+        AssertEx.True(resolver.TryCommitAdmissionAllocation(first, out var committedAfterStaleHigh));
+        AssertEx.Equal(second, committedAfterStaleHigh, "a stale higher candidate must not overwrite a committed lower tier");
+
+        var persisted = AssertEx.NotNull(await resolver.ResolveAsync(Model,
+            ModelRole.Chat,
+            GpuVariant.Cuda,
+            ResolvedLaunchArguments.Explore(),
+            CancellationToken.None));
+        AssertEx.Equal(second, persisted);
+
+        AssertEx.True(resolver.TryDownTierAfterOutOfMemory(second, out var firstOom));
+        AssertEx.True(resolver.TryDownTierAfterOutOfMemory(firstOom, out var secondOom));
+        AssertEx.False(resolver.TryDownTierAfterOutOfMemory(secondOom, out _));
+    }
+
+    [Test]
+    public async Task AdmissionDownTier_NoFitWalkLeavesCachedAllocationUnchanged()
+    {
+        var resolver = BuildResolver(Profile(64 * Gb, 32 * Gb, vramKnown: true), processBudget: 32 * Gb);
+        var automatic = AssertEx.NotNull(await resolver.ResolveAsync(Model,
+            ModelRole.Chat,
+            GpuVariant.Cuda,
+            ResolvedLaunchArguments.Explore(),
+            CancellationToken.None));
+        var candidate = automatic;
+        while (resolver.TryDownTierForAdmission(candidate, out var lower))
+        {
+            candidate = lower;
+        }
+
+        var unchanged = AssertEx.NotNull(await resolver.ResolveAsync(Model,
+            ModelRole.Chat,
+            GpuVariant.Cuda,
+            ResolvedLaunchArguments.Explore(),
+            CancellationToken.None));
+        AssertEx.Equal(automatic, unchanged);
+    }
+
+    [Test]
+    public async Task OomDownTier_StaleHigherCallerContinuesFromCommittedLowerAllocation()
+    {
+        var resolver = BuildResolver(Profile(64 * Gb, 32 * Gb, vramKnown: true), processBudget: 32 * Gb);
+        var automatic = AssertEx.NotNull(await resolver.ResolveAsync(Model,
+            ModelRole.Chat,
+            GpuVariant.Cuda,
+            ResolvedLaunchArguments.Explore(),
+            CancellationToken.None));
+        var candidate = automatic;
+        while (candidate.ProcessContextTokens > 8192
+               && resolver.TryDownTierForAdmission(candidate, out var lower))
+        {
+            candidate = lower;
+        }
+
+        AssertEx.Equal(expected: 8192, candidate.ProcessContextTokens);
+        AssertEx.True(resolver.TryCommitAdmissionAllocation(candidate, out _));
+        AssertEx.True(resolver.TryDownTierAfterOutOfMemory(automatic, out var first));
+        AssertEx.Equal(expected: 4096, first.ProcessContextTokens);
+        AssertEx.True(resolver.TryDownTierAfterOutOfMemory(automatic, out var second));
+        AssertEx.Equal(expected: 2048, second.ProcessContextTokens);
+        AssertEx.False(resolver.TryDownTierAfterOutOfMemory(automatic, out _));
+    }
+
+    [Test]
+    public async Task AdmissionDownTier_RejectsFrozenAndDeterministicAllocations()
+    {
+        var frozenResolver = BuildResolver(Profile(64 * Gb, 32 * Gb, vramKnown: true), processBudget: 32 * Gb);
+        var frozen = AssertEx.NotNull(await frozenResolver.ResolveAsync(Model,
+            ModelRole.Chat,
+            GpuVariant.Cuda,
+            ResolvedLaunchArguments.Replay(ctxSize: 65536),
+            CancellationToken.None));
+        AssertEx.False(frozenResolver.TryDownTierForAdmission(frozen, out _));
+
+        var deterministicResolver = BuildResolver(Profile(64 * Gb, 32 * Gb, vramKnown: true),
+            processBudget: 32 * Gb,
+            options: new LlamaServerLaunchPolicyOptions
+            {
+                DeterministicContextTokensOverride = 65536
+            });
+        var deterministic = AssertEx.NotNull(await deterministicResolver.ResolveAsync(Model,
+            ModelRole.Chat,
+            GpuVariant.Cuda,
+            ResolvedLaunchArguments.Explore(),
+            CancellationToken.None));
+        AssertEx.False(deterministicResolver.TryDownTierForAdmission(deterministic, out _));
+
+        var auxiliary = AssertEx.NotNull(await frozenResolver.ResolveAsync(Model,
+            ModelRole.Embedding,
+            GpuVariant.Cuda,
+            ResolvedLaunchArguments.Explore(),
+            CancellationToken.None));
+        AssertEx.False(frozenResolver.TryDownTierForAdmission(auxiliary, out _));
+    }
+
     private static ProcessContextAllocationResolver BuildResolver(HardwareProfile profile,
         long? processBudget = null,
         GgufModelFootprintFacts? facts = null,

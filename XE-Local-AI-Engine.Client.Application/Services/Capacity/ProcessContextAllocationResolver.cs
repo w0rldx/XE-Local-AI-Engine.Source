@@ -35,7 +35,7 @@ public sealed class ProcessContextAllocationResolver(
         new(StringComparer.Ordinal);
 
     private readonly ConcurrentDictionary<string, Lazy<Task<ProcessContextAllocation?>>> _cache = new(StringComparer.Ordinal);
-    private readonly ConcurrentDictionary<string, ProcessContextAllocation> _oomAdjustedAllocations = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, ProcessContextAllocation> _adjustedAllocations = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, int> _oomDownTiers = new(StringComparer.Ordinal);
     private readonly MemoryFitEstimator _estimator = estimator ?? throw new ArgumentNullException(nameof(estimator));
     private readonly IGgufModelStore _modelStore = modelStore ?? throw new ArgumentNullException(nameof(modelStore));
@@ -94,9 +94,84 @@ public sealed class ProcessContextAllocationResolver(
             throw;
         }
 
-        return allocation is not null && _oomAdjustedAllocations.TryGetValue(key, out var adjusted)
+        return allocation is not null && _adjustedAllocations.TryGetValue(key, out var adjusted)
             ? adjusted
             : allocation;
+    }
+
+    public bool TryDownTierForAdmission(ProcessContextAllocation current, out ProcessContextAllocation downTiered)
+    {
+        ArgumentNullException.ThrowIfNull(current);
+        downTiered = current;
+        if (current.Source != ProcessContextAllocationSource.HardwareTier
+            || !_hardwareAllocationContexts.TryGetValue(current.CacheKey, out var context)
+            || context.Role != ModelRole.Chat
+            || !TryGetNextTier(current.ProcessContextTokens, out var next))
+        {
+            return false;
+        }
+
+        downTiered = BuildAllocation(current.CacheKey,
+            context.ContentIdentity,
+            next,
+            context.TrainCeiling,
+            ProcessContextAllocationSource.HardwareTier,
+            context.Variant,
+            context.Profile,
+            context.Facts,
+            context.ProcessGpuBudget);
+        return true;
+    }
+
+    public bool TryCommitAdmissionAllocation(ProcessContextAllocation candidate, out ProcessContextAllocation committed)
+    {
+        ArgumentNullException.ThrowIfNull(candidate);
+        committed = candidate;
+        if (candidate.Source != ProcessContextAllocationSource.HardwareTier)
+        {
+            return true;
+        }
+
+        if (!_hardwareAllocationContexts.TryGetValue(candidate.CacheKey, out var context)
+            || !string.Equals(candidate.ContentIdentity, context.ContentIdentity, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        committed = CommitAdjustedAllocation(candidate);
+        return true;
+    }
+
+    public bool TryGetEffectiveCommittedAllocation(ProcessContextAllocation admitted, out ProcessContextAllocation effective)
+    {
+        ArgumentNullException.ThrowIfNull(admitted);
+        effective = admitted;
+        if (admitted.Source != ProcessContextAllocationSource.HardwareTier)
+        {
+            return true;
+        }
+
+        if (!_hardwareAllocationContexts.TryGetValue(admitted.CacheKey, out var context)
+            || !string.Equals(admitted.ContentIdentity, context.ContentIdentity, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        if (_adjustedAllocations.TryGetValue(admitted.CacheKey, out var adjusted))
+        {
+            if (!string.Equals(adjusted.CacheKey, admitted.CacheKey, StringComparison.Ordinal)
+                || !string.Equals(adjusted.ContentIdentity, admitted.ContentIdentity, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            if (adjusted.ProcessContextTokens <= admitted.ProcessContextTokens)
+            {
+                effective = adjusted;
+            }
+        }
+
+        return true;
     }
 
     public bool TryDownTierAfterOutOfMemory(ProcessContextAllocation current, out ProcessContextAllocation downTiered)
@@ -113,37 +188,60 @@ public sealed class ProcessContextAllocationResolver(
             return false;
         }
 
-        var next = 0;
-        foreach (var tier in LlamaServerLaunchPolicyOptions.ChatContextTiers)
+        lock (context)
         {
-            if (tier < current.ProcessContextTokens)
+            var effective = _adjustedAllocations.TryGetValue(current.CacheKey, out var adjusted)
+                            && adjusted.ProcessContextTokens < current.ProcessContextTokens
+                ? adjusted
+                : current;
+            if (!TryGetNextTier(effective.ProcessContextTokens, out var next))
             {
-                next = tier;
-                break;
+                return false;
             }
-        }
 
-        if (next <= 0)
+            var count = _oomDownTiers.AddOrUpdate(current.CacheKey, 1, static (_, prior) => prior + 1);
+            if (count > MaximumAutomaticDownTiers)
+            {
+                return false;
+            }
+
+            var candidate = BuildAllocation(current.CacheKey,
+                context.ContentIdentity,
+                next,
+                context.TrainCeiling,
+                ProcessContextAllocationSource.HardwareTier,
+                context.Variant,
+                context.Profile,
+                context.Facts,
+                context.ProcessGpuBudget);
+            downTiered = CommitAdjustedAllocation(candidate);
+            return true;
+        }
+    }
+
+    private ProcessContextAllocation CommitAdjustedAllocation(ProcessContextAllocation candidate)
+    {
+        return _adjustedAllocations.AddOrUpdate(candidate.CacheKey,
+            static (_, proposed) => proposed,
+            static (_, existing, proposed) => existing.ProcessContextTokens <= proposed.ProcessContextTokens
+                ? existing
+                : proposed,
+            candidate);
+    }
+
+    private static bool TryGetNextTier(int currentTokens, out int next)
+    {
+        var candidate = LlamaServerLaunchPolicyOptions.ChatContextTiers
+                                                      .Where(tier => tier < currentTokens)
+                                                      .Select(static tier => (int?)tier)
+                                                      .FirstOrDefault();
+        if (candidate is null)
         {
+            next = 0;
             return false;
         }
 
-        var count = _oomDownTiers.AddOrUpdate(current.CacheKey, 1, static (_, prior) => prior + 1);
-        if (count > MaximumAutomaticDownTiers)
-        {
-            return false;
-        }
-
-        downTiered = BuildAllocation(current.CacheKey,
-            context.ContentIdentity,
-            next,
-            context.TrainCeiling,
-            ProcessContextAllocationSource.HardwareTier,
-            context.Variant,
-            context.Profile,
-            context.Facts,
-            context.ProcessGpuBudget);
-        _oomAdjustedAllocations[current.CacheKey] = downTiered;
+        next = candidate.Value;
         return true;
     }
 
@@ -183,6 +281,7 @@ public sealed class ProcessContextAllocationResolver(
 
         var processGpuBudget = await ResolveProcessGpuBudgetAsync(variant, profile, ct).ConfigureAwait(false);
         _hardwareAllocationContexts[key] = new HardwareAllocationContext(contentIdentity,
+            role,
             variant,
             profile,
             facts,
@@ -443,6 +542,7 @@ public sealed class ProcessContextAllocationResolver(
 
     private sealed record HardwareAllocationContext(
         string ContentIdentity,
+        ModelRole Role,
         GpuVariant Variant,
         HardwareProfile Profile,
         GgufModelFootprintFacts Facts,

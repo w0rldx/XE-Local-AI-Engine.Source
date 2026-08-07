@@ -207,7 +207,10 @@ public sealed class AgentHomeProcessWriteBackLoopTests : IDisposable
                               .BuildServiceProvider();
 
         var memoryProposalService = new AgentHomeMemoryProposalService(NullLogger<AgentHomeMemoryProposalService>.Instance);
+        var leases = new AgentHomeExecutionLeaseManager();
+        var isolation = new AgentHomeWorkspaceIsolation(provider, leases, NullLogger<AgentHomeWorkspaceIsolation>.Instance);
         var workspaceService = new AgentHomeWorkspaceService(provider,
+            isolation,
             new SensitiveFileExclusionService(),
             runtimeSettings,
             NullLogger<AgentHomeWorkspaceService>.Instance);
@@ -218,6 +221,8 @@ public sealed class AgentHomeProcessWriteBackLoopTests : IDisposable
         var service = new AgentHomeService(manifestService,
             provider,
             new StaticIdentityProvider("owner-a", "node-1"),
+            leases,
+            isolation,
             workspaceService,
             patchService,
             memoryProposalService,
@@ -326,4 +331,33 @@ public sealed class AgentHomeProcessWriteBackLoopTests : IDisposable
             return _utcNow;
         }
     }
+}
+
+internal static class AgentHomeProcessPhaseTestAccess
+{
+    private static readonly System.Reflection.MethodInfo PrepareMethod = typeof(AgentHomeService)
+        .GetMethod("PrepareUnderLeaseAsync", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+    private static readonly System.Reflection.MethodInfo RunMethod = typeof(AgentHomeService)
+        .GetMethod("RunAsync", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+
+    public static Task<AgentHomePrepareResult> PrepareAsync(this AgentHomeService service,
+        AgentHomePrepareRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var attachKey = new SandboxAttachKey
+        {
+            OwnerUserId = "owner-a",
+            NodeId = "node-1",
+            ProviderName = "process",
+            RuntimeProfile = request.RuntimeProfile ?? "dotnet-agent-home",
+            ManifestVersion = AgentHomeManifest.CurrentVersion
+        };
+        return (Task<AgentHomePrepareResult>)PrepareMethod.Invoke(service,
+            [request, attachKey, attachKey.RuntimeProfile, cancellationToken])!;
+    }
+
+    public static Task<AgentHomeRunResult> RunAsync(this AgentHomeService service,
+        AgentHomeRunRequest request,
+        CancellationToken cancellationToken = default) =>
+        (Task<AgentHomeRunResult>)RunMethod.Invoke(service, [request, cancellationToken])!;
 }

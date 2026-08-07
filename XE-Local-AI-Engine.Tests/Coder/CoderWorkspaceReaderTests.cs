@@ -4,6 +4,7 @@ using System.Text;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
+using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 using XE_Local_AI_Engine.Client.Services.Coder;
 using XE_Local_AI_Engine.Client.Services.Coder.Implementation;
 using XE_Local_AI_Engine.Client.Services.Coder.Tools;
@@ -236,6 +237,29 @@ public sealed class CoderWorkspaceReaderTests : IDisposable
     }
 
     [Test]
+    public async Task ListFiles_WhenExcludedBaselineExceedsSurveyBudget_StillReturnsProjectFile()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        using var provider = CreateProvider();
+        var handle = await CreateOrAttachAsync(provider);
+        await RunShellInJailAsync(provider, handle,
+            "mkdir -p agent-home/workspace/selected/.git/objects agent-home/workspace/selected/project "
+            + "&& for n in 1 2 3 4; do echo metadata > agent-home/workspace/selected/.git/objects/$n; done "
+            + "&& echo code > agent-home/workspace/selected/project/visible.cs");
+        var reader = CreateReader(provider, maxListResults: 1);
+
+        var result = await reader.ListFilesAsync(new ListFilesToolRequest());
+
+        AssertEx.Contains(result, "project/visible.cs");
+        AssertEx.False(result.Contains("No files found", StringComparison.Ordinal),
+            "an excluded .git baseline must be pruned before it can consume the bounded provider survey");
+    }
+
+    [Test]
     public async Task SearchText_ReturnsRelativeLineMatches_CappedAtMax()
     {
         if (!OperatingSystem.IsLinux())
@@ -286,6 +310,32 @@ public sealed class CoderWorkspaceReaderTests : IDisposable
         AssertEx.Contains(result, "src/a.txt:");
         AssertEx.False(result.Contains("supersecret", StringComparison.Ordinal), ".env content must never enter search output (grep --exclude)");
         AssertEx.False(result.Contains("gitsecret", StringComparison.Ordinal), ".git content must never enter search output (grep --exclude-dir)");
+    }
+
+    [Test]
+    public async Task SearchText_WhenExcludedBaselineExceedsMatchBudget_StillReturnsProjectMatch()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        using var provider = CreateProvider();
+        var handle = await CreateOrAttachAsync(provider);
+        await RunShellInJailAsync(provider, handle,
+            "mkdir -p agent-home/workspace/selected/.git/objects agent-home/workspace/selected/project "
+            + "&& for n in 1 2 3 4; do echo needle > agent-home/workspace/selected/.git/objects/$n; done "
+            + "&& echo 'visible needle' > agent-home/workspace/selected/project/visible.cs");
+        var reader = CreateReader(provider, maxSearchMatches: 1);
+
+        var result = await reader.SearchTextAsync(new SearchTextToolRequest
+        {
+            Pattern = "needle"
+        });
+
+        AssertEx.Contains(result, "project/visible.cs:");
+        AssertEx.False(result.Contains(".git", StringComparison.Ordinal),
+            "excluded baseline matches must be pruned before they can consume the bounded provider survey");
     }
 
     [Test]
@@ -475,7 +525,7 @@ public sealed class CoderWorkspaceReaderTests : IDisposable
     }
 
     [Test]
-    public async Task CoderRead_DuringAgentHomeRun_DoesNotThrowBusy()
+    public async Task CoderRead_WithAmbientSameKeyLease_BorrowsAndReads()
     {
         // A coder read attaches via ConnectAsync, which never takes the AgentHome run guard, so two concurrent
         // coder reads both succeed and neither throws AgentHomeBusyException. (The fake provider's ConnectAsync mirrors
@@ -491,7 +541,9 @@ public sealed class CoderWorkspaceReaderTests : IDisposable
             SourcePath = SeedHostFile(provider, "hello"),
             DestinationPath = WorkspacePathGuard.WorkspaceRoot + "/src/a.txt"
         });
-        var reader = CreateReader(provider);
+        var leases = new AgentHomeExecutionLeaseManager();
+        var reader = CreateReader(provider, leases);
+        using var ownerLease = leases.TryAcquire(new AgentHomeExecutionLeaseKey(Owner, Node));
 
         var first = reader.ReadFileAsync(new ReadFileToolRequest
         {
@@ -505,6 +557,44 @@ public sealed class CoderWorkspaceReaderTests : IDisposable
 
         AssertEx.Contains(results[0], "hello");
         AssertEx.Contains(results[1], "hello");
+    }
+
+    [Test]
+    public async Task CoderRead_WithUnrelatedSameKeyLease_ReturnsPathFreeBusyResponse()
+    {
+        var provider = new FakeSandboxRuntimeProvider(TimeProvider.System);
+        _ = await provider.CreateOrAttachAsync(new SandboxCreateRequest
+        {
+            AttachKey = AttachKey(provider.ProviderName),
+            RuntimeProfile = "dotnet-agent-home"
+        });
+        var leases = new AgentHomeExecutionLeaseManager();
+        var reader = CreateReader(provider, leases);
+        using var ownerLease = leases.TryAcquire(new AgentHomeExecutionLeaseKey(Owner, Node));
+
+        Task<string> read;
+        using (ExecutionContext.SuppressFlow())
+        {
+            read = Task.Run(() => reader.ReadFileAsync(new ReadFileToolRequest { Path = "private/source.cs" }));
+        }
+
+        var response = await read;
+        AssertEx.Contains(response, "workspace is busy", StringComparison.OrdinalIgnoreCase);
+        AssertEx.False(response.Contains("private/source.cs", StringComparison.Ordinal), "busy responses must not echo model paths");
+    }
+
+    [Test]
+    public async Task CoderRead_WhenOwnerNodeIsPoisoned_ReturnsPathFreeBusyResponse()
+    {
+        var provider = new FakeSandboxRuntimeProvider(TimeProvider.System);
+        var leases = new AgentHomeExecutionLeaseManager();
+        leases.MarkPoisoned(new AgentHomeExecutionLeaseKey(Owner, Node));
+        var reader = CreateReader(provider, leases);
+
+        var response = await reader.ReadFileAsync(new ReadFileToolRequest { Path = "private/source.cs" });
+
+        AssertEx.Contains(response, "workspace is busy", StringComparison.OrdinalIgnoreCase);
+        AssertEx.False(response.Contains("private/source.cs", StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -553,15 +643,21 @@ public sealed class CoderWorkspaceReaderTests : IDisposable
         return new ProcessSandboxRuntimeProvider(options, TimeProvider.System);
     }
 
-    private static CoderWorkspaceReader CreateReader(IAgentSandboxRuntimeProvider provider)
+    private static CoderWorkspaceReader CreateReader(IAgentSandboxRuntimeProvider provider,
+        IAgentHomeExecutionLeaseManager? leaseManager = null,
+        int? maxListResults = null,
+        int? maxSearchMatches = null)
     {
         return new CoderWorkspaceReader(provider,
             new StubIdentityProvider(),
+            leaseManager ?? new AgentHomeExecutionLeaseManager(),
             new SensitiveFileExclusionService(),
             Options.Create(new CoderOptions
             {
                 // A small default line cap so the truncation test trips deterministically; bytes stay generous.
-                DefaultReadLineCap = 2000
+                DefaultReadLineCap = 2000,
+                MaxListResults = maxListResults ?? 500,
+                MaxSearchMatches = maxSearchMatches ?? 200
             }),
             Options.Create(new AgentHomeOptions()));
     }

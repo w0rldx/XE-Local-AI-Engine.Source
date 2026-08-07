@@ -7,6 +7,7 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
+using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.Win32.SafeHandles;
@@ -562,24 +563,42 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         EnsureNoSymlinkComponentsUnderJail(state.JailRoot, destination, request.DestinationPath);
 
         // Re-open the host source under the no-follow / byte-cap-on-re-read guard ported from the container provider:
-        // never trust a path string sized by an earlier walk — a swap-to-symlink throws (security), while an over-cap or
-        // grown-after-sizing file is SKIPPED-AND-LOGGED (degrade gracefully, parity with the deleted provider) so one
-        // legitimately-large file does not abort the whole workspace-copy loop in AgentHomeWorkspaceService.
+        // never trust a path string sized by an earlier walk. A swap-to-symlink, over-cap file, or growth-after-sizing
+        // throws so the workspace preparation cannot report a successful snapshot for bytes that were never copied.
         var content = ReadHostFileUnderGuard(request.SourcePath);
-        if (content is null)
-        {
-            // AgentHomeWorkspaceService copies plan.Files in a loop with NO per-file try/catch and only a folder-wide
-            // MaxSelectedFolderBytes pre-check (no per-file MaxCopyFileBytes gate), so a single >cap file reaching here
-            // MUST NOT throw or it aborts the entire folder copy. Skip+log, matching the deleted
-            // LocalContainerSandboxProvider. Security cases (traversal/symlink) still throw above.
-            _logger.LogWarning("Copy-into skipped: a selected file exceeded the {Cap}-byte per-file cap or grew after sizing on re-read.",
-                _maxCopyFileBytes);
-            return;
-        }
 
         // No-follow create on Linux: if the leaf was swapped for a symlink between the component check and the write,
         // O_NOFOLLOW makes the create fail rather than write through the link.
         await WriteJailFileNoFollowAsync(destination, content, cancellationToken).ConfigureAwait(false);
+    }
+
+    public Task ResetDirectoryAsync(SandboxHandle handle, string sandboxPath, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(handle);
+        ArgumentException.ThrowIfNullOrWhiteSpace(sandboxPath);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var state = GetAliveState(handle);
+        var resolved = ResolveJailPath(state, sandboxPath);
+        EnsureNoSymlinkComponentsUnderJail(state.JailRoot, resolved, sandboxPath);
+
+        if (Directory.Exists(resolved))
+        {
+            StandaloneGitClone.Delete(resolved);
+        }
+        else if (File.Exists(resolved))
+        {
+            throw new UnauthorizedAccessException("The requested sandbox directory is occupied by a file.");
+        }
+
+        Directory.CreateDirectory(resolved);
+        EnsureNoSymlinkComponentsUnderJail(state.JailRoot, resolved, sandboxPath);
+        if (Directory.EnumerateFileSystemEntries(resolved).Any())
+        {
+            throw new IOException("The sandbox directory could not be proven empty after reset.");
+        }
+
+        return Task.CompletedTask;
     }
 
     public async Task<string> ReadFileAsync(SandboxHandle handle, string sandboxPath, CancellationToken cancellationToken = default)
@@ -632,7 +651,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
 
         IReadOnlyList<string> entries = WorkspaceFileScanner.ListFiles(root,
             request.MaxEntries,
-            static _ => false,
+            request.IsPathSuppressed ?? (static _ => false),
             request.NameGlob,
             cancellationToken);
         return Task.FromResult(entries);
@@ -651,7 +670,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             request.IsRegex,
             request.MaxMatches,
             request.MaxOutputBytes,
-            static _ => false,
+            request.IsPathSuppressed ?? (static _ => false),
             cancellationToken);
         return Task.FromResult(matches);
     }
@@ -1303,12 +1322,12 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
     // ---- ported host-file no-follow / byte-cap guard (from LocalContainerSandboxProvider, marker-J-local pattern) ----
 
     /// <summary>
-    ///     Reads the host file under the no-follow / byte-recheck guards. Returns the bytes, or <see langword="null" />
-    ///     when the file exceeds the per-file cap on this re-read or grew after sizing (caller blocks the copy). Throws
+    ///     Reads the host file under the no-follow / byte-recheck guards. Throws <see cref="InvalidDataException" />
+    ///     when the file exceeds the per-file cap on this re-read or grew after sizing. Throws
     ///     <see cref="UnauthorizedAccessException" /> when the final path component is a symlink or the open cannot be
     ///     performed safely — a swap-after-walk attack signal.
     /// </summary>
-    private byte[]? ReadHostFileUnderGuard(string sourcePath)
+    private byte[] ReadHostFileUnderGuard(string sourcePath)
     {
         var fileHandle = OpenNoFollow(sourcePath);
 
@@ -1317,7 +1336,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             var length = RandomAccess.GetLength(fileHandle);
             if (length > _maxCopyFileBytes)
             {
-                return null;
+                throw new InvalidDataException("The copy source exceeds the configured per-file byte limit.");
             }
 
             var content = new byte[length];
@@ -1339,7 +1358,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             Span<byte> probe = stackalloc byte[1];
             if (RandomAccess.Read(fileHandle, probe, length) > 0)
             {
-                return null;
+                throw new InvalidDataException("The copy source grew while it was being read.");
             }
 
             return content;

@@ -3405,6 +3405,23 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActio
 		.optional(),
 });
 
+export const zXeLocalAiEngineClientEndpointsWorkspacesV1WorkspaceResponse = z.object({
+	workspaceId: z.string(),
+	alias: z.string(),
+	mode: z.string().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsWorkspacesV1CreateWorkspaceRequest = z.object({
+	alias: z.string().nullish(),
+	hostPath: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsWorkspacesV1DeleteWorkspaceRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsWorkspacesV1ListWorkspacesResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsWorkspacesV1WorkspaceResponse).optional(),
+});
+
 /**
  * Success
  */
@@ -5160,3 +5177,24 @@ export const zUpdateSuggestedPlaybookActionPath = z.object({
  * Success
  */
 export const zUpdateSuggestedPlaybookActionResponse = zXeLocalAiEngineClientEndpointsAgentsV1PlaybookActionResponse;
+
+/**
+ * Success
+ */
+export const zListWorkspacesResponse = zXeLocalAiEngineClientEndpointsWorkspacesV1ListWorkspacesResponse;
+
+export const zCreateWorkspaceBody = zXeLocalAiEngineClientEndpointsWorkspacesV1CreateWorkspaceRequest;
+
+/**
+ * Success
+ */
+export const zCreateWorkspaceResponse = zXeLocalAiEngineClientEndpointsWorkspacesV1WorkspaceResponse;
+
+export const zDeleteWorkspacePath = z.object({
+	workspaceId: z.string(),
+});
+
+/**
+ * No Content
+ */
+export const zDeleteWorkspaceResponse = z.void();

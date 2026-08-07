@@ -5,6 +5,7 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 
 /// <summary>
@@ -18,6 +19,7 @@ public sealed class CapacityService : ICapacityService
     // reason (the calling agent's transcript is not a trusted sink for node-internal detail).
     private const string ReasonAllow = "Capacity available.";
     private const string ReasonAllowCloud = "Cloud provider selected; no local capacity required.";
+    private const string ReasonAllowExternal = "External endpoint configured; no local capacity required.";
     private const string ReasonQueueSameModel = "Model already running; the spawn will share that process.";
     private const string ReasonRejectFootprintUnknown = "Insufficient capacity: the model's memory footprint could not be determined.";
     private const string ReasonRejectByteBudget = "Insufficient capacity: not enough free memory for another model.";
@@ -27,6 +29,8 @@ public sealed class CapacityService : ICapacityService
     private readonly IModelFootprintProvider _footprintProvider;
     private readonly IRuntimeDeviceAudit _runtimeAudit;
     private readonly IPendingFootprintLedger _ledger;
+    private readonly IProcessLaunchAdmissionRegistry _launchAdmissions;
+    private readonly LlamaServerExternalEndpointOptions _externalEndpoints;
     private readonly ILocalModelProviderResolver _localProviderResolver;
     private readonly IOllamaModelService _ollamaModelService;
     private readonly ILlamaServerProcessSupervisor _supervisor;
@@ -37,7 +41,9 @@ public sealed class CapacityService : ICapacityService
         ILlamaServerProcessSupervisor supervisor,
         IOllamaModelService ollamaModelService,
         IModelFootprintProvider footprintProvider,
-        IPendingFootprintLedger ledger)
+        IPendingFootprintLedger ledger,
+        IProcessLaunchAdmissionRegistry launchAdmissions,
+        LlamaServerExternalEndpointOptions externalEndpoints)
     {
         _cloudFactory = cloudFactory ?? throw new ArgumentNullException(nameof(cloudFactory));
         _localProviderResolver = localProviderResolver ?? throw new ArgumentNullException(nameof(localProviderResolver));
@@ -46,6 +52,8 @@ public sealed class CapacityService : ICapacityService
         _ollamaModelService = ollamaModelService ?? throw new ArgumentNullException(nameof(ollamaModelService));
         _footprintProvider = footprintProvider ?? throw new ArgumentNullException(nameof(footprintProvider));
         _ledger = ledger ?? throw new ArgumentNullException(nameof(ledger));
+        _launchAdmissions = launchAdmissions ?? throw new ArgumentNullException(nameof(launchAdmissions));
+        _externalEndpoints = externalEndpoints ?? throw new ArgumentNullException(nameof(externalEndpoints));
     }
 
     /// <inheritdoc />
@@ -65,6 +73,11 @@ public sealed class CapacityService : ICapacityService
 
         var providerName = await _localProviderResolver.ResolveProviderNameForModelAsync(modelName, ct).ConfigureAwait(false);
         var isOllama = string.Equals(providerName, OllamaLocalModelProvider.OllamaProviderName, StringComparison.OrdinalIgnoreCase);
+        var isLlamaServer = string.Equals(providerName, LlamaServerProviderConstants.ProviderName, StringComparison.OrdinalIgnoreCase);
+        if (isLlamaServer && _externalEndpoints.Resolve(modelName, role) is not null)
+        {
+            return new CapacityDecision(CapacityVerdict.Allow, ReasonAllowExternal, OllamaEvictionWarning: false);
+        }
 
         // AUD4-03: warm the runtime device audit OUTSIDE the decision gate. Its --list-devices probe is bounded and
         // cached, but running it under the ledger gate would serialize every capacity decision behind a one-time probe.
@@ -87,6 +100,13 @@ public sealed class CapacityService : ICapacityService
         }
 
         var ollamaWarning = isOllama && running.Count > 0;
+        var launchSnapshot = isLlamaServer
+            ? _launchAdmissions.Snapshot(modelName, role)
+            : new ProcessLaunchAdmissionSnapshot(new HashSet<ProcessLaunchAdmissionKey>(), HasRequestedKey: false, HasGlobalBlocker: false);
+        if (launchSnapshot.HasRequestedKey || launchSnapshot.HasGlobalBlocker)
+        {
+            return new CapacityDecision(CapacityVerdict.RejectInsufficient, ReasonRejectByteBudget, ollamaWarning);
+        }
 
         // forceRefresh: an admission decision runs per model-load (rare, and already serialized under this gate), so it
         // must read a live VRAM/RAM snapshot rather than the profiler's boot-time cache — a stale free-VRAM figure would
@@ -111,19 +131,42 @@ public sealed class CapacityService : ICapacityService
         }
 
         // Process-count headroom mirrors the supervisor's loaded-cap (distinct (model,role) + this new one ≤ cap).
-        if (running.Count + 1 > _localProviderResolver.MaxLoadedProcesses)
+        var activeProcessKeys = running.Select(static key => new ProcessLaunchAdmissionKey(key.ModelName, key.Role))
+                                       .Concat(launchSnapshot.AdmittedKeys)
+                                       .ToHashSet();
+        if (activeProcessKeys.Count + 1 > _localProviderResolver.MaxLoadedProcesses)
         {
             return new CapacityDecision(CapacityVerdict.RejectInsufficient, ReasonRejectProcessCap, ollamaWarning);
         }
 
-        if (!FitsResourceBudget(profile, footprint.Resources))
+        while (!FitsResourceBudget(profile, footprint.Resources))
+        {
+            if (!_footprintProvider.TryDownTierForAdmission(footprint, out footprint))
+            {
+                return new CapacityDecision(CapacityVerdict.RejectInsufficient, ReasonRejectByteBudget, ollamaWarning);
+            }
+        }
+
+        if (!_footprintProvider.TryCommitAdmissionFootprint(footprint, out footprint)
+            || !FitsResourceBudget(profile, footprint.Resources))
         {
             return new CapacityDecision(CapacityVerdict.RejectInsufficient, ReasonRejectByteBudget, ollamaWarning);
         }
 
-        // Admit: reserve the footprint so a concurrent decision sees this in-flight load. The caller releases on child exit.
-        var reservation = _ledger.Reserve(footprint.Resources);
-        return new CapacityDecision(CapacityVerdict.Allow, ReasonAllow, ollamaWarning, reservation);
+        // Publish only after the exact footprint is reserved. Registry failure disposes the tentative reservation before
+        // returning, preserving the ledger -> registry lock order and leaving neither half of the admission live.
+        using var reservation = new AdmissionReservation(_ledger.Reserve(footprint.Resources));
+        if (!isLlamaServer)
+        {
+            return reservation.TransferToDecision(ollamaWarning);
+        }
+
+        if (footprint.Admission is null || !reservation.TryAttach(_launchAdmissions, footprint.Admission))
+        {
+            return new CapacityDecision(CapacityVerdict.RejectInsufficient, ReasonRejectByteBudget, ollamaWarning);
+        }
+
+        return reservation.TransferToDecision(ollamaWarning);
     }
 
     // Each non-zero resource axis is checked against its live free baseline, which already nets out resident loaded
@@ -195,4 +238,67 @@ public sealed class CapacityService : ICapacityService
 
     // A running model identity keyed on (model, role); Ordinal so identity matches the supervisor's keying.
     private readonly record struct RunningKey(string ModelName, ModelRole Role);
+
+    private sealed class AdmissionReservation(IDisposable footprintReservation) : IDisposable
+    {
+        private IDisposable? _reservation = footprintReservation ?? throw new ArgumentNullException(nameof(footprintReservation));
+
+        public bool TryAttach(IProcessLaunchAdmissionRegistry registry, ProcessLaunchAdmission admission)
+        {
+            var launchLease = registry.Acquire(admission);
+            if (launchLease is null)
+            {
+                return false;
+            }
+
+            try
+            {
+                _reservation = new CompositeReservation(launchLease, _reservation!);
+                return true;
+            }
+            catch
+            {
+                launchLease.Dispose();
+                throw;
+            }
+        }
+
+        public CapacityDecision TransferToDecision(bool ollamaWarning)
+        {
+            var decision = new CapacityDecision(CapacityVerdict.Allow,
+                ReasonAllow,
+                ollamaWarning,
+                _reservation);
+            _reservation = null;
+            return decision;
+        }
+
+        public void Dispose()
+        {
+            _reservation?.Dispose();
+            _reservation = null;
+        }
+    }
+
+    private sealed class CompositeReservation(IDisposable launchLease, IDisposable footprintReservation) : IDisposable
+    {
+        private int _disposed;
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) != 0)
+            {
+                return;
+            }
+
+            try
+            {
+                launchLease.Dispose();
+            }
+            finally
+            {
+                footprintReservation.Dispose();
+            }
+        }
+    }
 }

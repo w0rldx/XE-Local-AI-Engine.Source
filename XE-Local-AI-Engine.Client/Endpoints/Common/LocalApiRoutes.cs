@@ -627,4 +627,11 @@ public static class LocalApiRoutes
         /// </summary>
         public const string ServerEndpoint = "mcp/server";
     }
+
+    /// <summary>Operator-managed opaque workspace allowlist for inbound MCP delegation.</summary>
+    public static class Workspaces
+    {
+        public const string Collection = "workspaces";
+        public const string ById = "workspaces/{workspaceId}";
+    }
 }

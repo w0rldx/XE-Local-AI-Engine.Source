@@ -13,18 +13,24 @@ using XE_Local_AI_Engine.Client.Models.Events;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
+using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Agents.Approval.Implementation;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.Coder;
+using XE_Local_AI_Engine.Client.Services.Coder.Implementation;
+using XE_Local_AI_Engine.Client.Services.Coder.Tools;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Memory;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Client.Services.Sandbox;
+using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
@@ -528,6 +534,8 @@ public sealed class NodeChatStreamServiceTests
     }
 
     [Test]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
+        Justification = "The returned preparation transfers lease ownership to the chat service, whose disposal behavior this test asserts.")]
     public async Task SendMessageAsync_WhenAgentOffersAgentHomeTools_StagesConversationAttachments()
     {
         var conversationId = Guid.NewGuid();
@@ -540,6 +548,9 @@ public sealed class NodeChatStreamServiceTests
         // conversation's attachments into the sandbox before the tool loop runs.
         var offerProvider = CreateOfferProvider(CreateLocalToolDto("read_file", "{\"type\":\"object\"}"));
         var stager = Substitute.For<IConversationSandboxStager>();
+        var preparationLease = new TrackingAgentHomeExecutionLease();
+        stager.PrepareConversationAttachmentsAsync(conversationId, Arg.Any<CancellationToken>())
+              .Returns(new ConversationSandboxPreparation([], preparationLease));
         var service = new NodeChatStreamService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
@@ -578,6 +589,88 @@ public sealed class NodeChatStreamServiceTests
         }
 
         await stager.Received(1).PrepareConversationAttachmentsAsync(conversationId, Arg.Any<CancellationToken>());
+        AssertEx.Equal(expected: 1, preparationLease.DisposeCount);
+        AssertEx.Equal(expected: 1, preparationLease.AmbientScopeEnterCount);
+        AssertEx.Equal(expected: 1, preparationLease.AmbientScopeDisposeCount);
+    }
+
+    [Test]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
+        Justification = "The preparation transfers its tracked owner lease to the chat service; the assertions verify lifecycle disposal.")]
+    public async Task SendMessageAsync_AgentHomeInvocationAcrossAwait_CoderReadBorrowsUntilRunCompletes()
+    {
+        const string owner = "owner";
+        const string node = "node";
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var leases = new AgentHomeExecutionLeaseManager();
+        var key = new AgentHomeExecutionLeaseKey(owner, node);
+        var ownedLease = await AcquireLeaseAfterYieldAsync(leases, key);
+        var preparationLease = new TrackingAgentHomeExecutionLease(ownedLease);
+        var stager = Substitute.For<IConversationSandboxStager>();
+        stager.PrepareConversationAttachmentsAsync(conversationId, Arg.Any<CancellationToken>())
+              .Returns(new ConversationSandboxPreparation([], preparationLease));
+
+        var provider = Substitute.For<IAgentSandboxRuntimeProvider>();
+        provider.ProviderName.Returns("fake");
+        var attachKey = new SandboxAttachKey
+        {
+            OwnerUserId = owner,
+            NodeId = node,
+            ProviderName = "fake",
+            RuntimeProfile = "dotnet-agent-home",
+            ManifestVersion = AgentHomeManifest.CurrentVersion
+        };
+        var handle = new SandboxHandle
+        {
+            ProviderName = "fake",
+            SandboxId = "sandbox",
+            AttachKey = attachKey,
+            CreatedAt = DateTimeOffset.UtcNow,
+            ManifestVersion = AgentHomeManifest.CurrentVersion
+        };
+        provider.ConnectAsync(Arg.Any<SandboxAttachKey>(), Arg.Any<CancellationToken>()).Returns(handle);
+        provider.ReadFileAsync(Arg.Any<SandboxHandle>(), Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns("hello from coder");
+        var identity = new StubAgentHomeIdentityProvider(owner, node);
+        var exclusions = Substitute.For<ISensitiveFileExclusionService>();
+        exclusions.SecretEntryNames.Returns([]);
+        exclusions.ExcludedEntryNames.Returns([]);
+        var reader = new CoderWorkspaceReader(provider,
+            identity,
+            leases,
+            exclusions,
+            Options.Create(new CoderOptions()),
+            Options.Create(new AgentHomeOptions()));
+        var runner = new AwaitingCoderReadInvocationRunner(dispatcher, reader);
+        var service = CreateAgentHomeService(persistence, runner, dispatcher, stager);
+
+        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "read the workspace",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId,
+                           UseLocalTools: true)).ConfigureAwait(false))
+        {
+            // Drain the stream so the invocation, pump, and invocation-scope teardown all complete.
+        }
+
+        AssertEx.Contains(runner.ReadResult, "hello from coder");
+        AssertEx.False(runner.ReadResult.Contains("workspace is busy", StringComparison.OrdinalIgnoreCase));
+        AssertEx.Equal(expected: 1, preparationLease.AmbientScopeDisposeCount);
+        AssertEx.Equal(expected: 1, preparationLease.DisposeCount);
+        using var afterCompletion = leases.TryAcquire(key);
+        AssertEx.NotNull(afterCompletion);
+        AssertEx.False(afterCompletion!.IsBorrowed);
+    }
+
+    private static async Task<IAgentHomeExecutionLease> AcquireLeaseAfterYieldAsync(
+        IAgentHomeExecutionLeaseManager leases,
+        AgentHomeExecutionLeaseKey key)
+    {
+        await Task.Yield();
+        return AssertEx.NotNull(leases.TryAcquire(key));
     }
 
     [Test]
@@ -635,6 +728,8 @@ public sealed class NodeChatStreamServiceTests
     }
 
     [Test]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
+        Justification = "The returned preparation transfers ownership to the chat service for the duration of the turn.")]
     public async Task SendMessageAsync_WhenAgentHomeToolsAndStagedAttachments_InjectsPointerHint()
     {
         var conversationId = Guid.NewGuid();
@@ -646,7 +741,8 @@ public sealed class NodeChatStreamServiceTests
         var offerProvider = CreateOfferProvider(CreateLocalToolDto("read_file", "{\"type\":\"object\"}"));
         var stager = Substitute.For<IConversationSandboxStager>();
         IReadOnlyList<string> stagedPaths = ["attachments/spec.md"];
-        stager.PrepareConversationAttachmentsAsync(conversationId, Arg.Any<CancellationToken>()).Returns(stagedPaths);
+        stager.PrepareConversationAttachmentsAsync(conversationId, Arg.Any<CancellationToken>())
+              .Returns(new ConversationSandboxPreparation(stagedPaths, lease: null));
 
         var service = new NodeChatStreamService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
@@ -691,6 +787,170 @@ public sealed class NodeChatStreamServiceTests
         // But the file CONTENT is NOT inlined in agent mode (the agent reads it via its tools).
         AssertEx.False(runner.CapturedContext.Any(message => message.Content.Contains(ConversationAttachmentContextComposer.Preamble, StringComparison.Ordinal)),
             "Agent mode must not inline attachment text.");
+    }
+
+    [Test]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
+        Justification = "The returned preparation transfers lease ownership to the chat service, whose fail-closed disposal this test asserts.")]
+    public async Task SendMessageAsync_WhenAgentHomePreparationIsBusy_FailsClosedAndReleasesPreparationOnce()
+    {
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        NodeChatTerminalizeMessageRequest? terminalRequest = null;
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, request => terminalRequest = request);
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = Substitute.For<IInvocationRunner>();
+        var lease = new TrackingAgentHomeExecutionLease();
+        var stager = Substitute.For<IConversationSandboxStager>();
+        stager.PrepareConversationAttachmentsAsync(conversationId, Arg.Any<CancellationToken>())
+              .Returns(new ConversationSandboxPreparation([], lease, isBusy: true));
+        var service = CreateAgentHomeService(persistence, runner, dispatcher, stager);
+
+        var events = new List<ChatStreamEvent>();
+        await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "hello",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId,
+                           UseLocalTools: true)).ConfigureAwait(false))
+        {
+            events.Add(streamEvent);
+        }
+
+        AssertEx.NotNull(terminalRequest);
+        AssertEx.Equal(NodeChatMessageStatusValues.Failed, terminalRequest!.Status);
+        AssertEx.Contains(terminalRequest.Error, "workspace is busy", StringComparison.OrdinalIgnoreCase);
+        AssertEx.True(events.Any(streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantFailed));
+        AssertEx.Equal(expected: 1, lease.DisposeCount);
+        AssertEx.Equal(expected: 0, lease.AmbientScopeEnterCount);
+        await persistence.Received(1).TerminalizeAssistantMessageAsync(Arg.Any<NodeChatTerminalizeMessageRequest>(), Arg.Any<CancellationToken>());
+        await runner.DidNotReceive().RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task SendMessageAsync_WhenAgentHomePreparationFails_FailsClosedWithoutInvokingModel()
+    {
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        NodeChatTerminalizeMessageRequest? terminalRequest = null;
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, request => terminalRequest = request);
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = Substitute.For<IInvocationRunner>();
+        var stager = Substitute.For<IConversationSandboxStager>();
+        stager.PrepareConversationAttachmentsAsync(conversationId, Arg.Any<CancellationToken>())
+              .Returns<Task<ConversationSandboxPreparation>>(_ => throw new IOException("/private/operator/path"));
+        var service = CreateAgentHomeService(persistence, runner, dispatcher, stager);
+
+        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "hello",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId,
+                           UseLocalTools: true)).ConfigureAwait(false))
+        {
+            // Drain the failure stream so terminalization completes.
+        }
+
+        AssertEx.NotNull(terminalRequest);
+        AssertEx.Equal(NodeChatMessageStatusValues.Failed, terminalRequest!.Status);
+        AssertEx.Equal("The AgentHome workspace could not be prepared for this response.", terminalRequest.Error);
+        AssertEx.False(terminalRequest.Error!.Contains("/private", StringComparison.Ordinal));
+        await persistence.Received(1).TerminalizeAssistantMessageAsync(Arg.Any<NodeChatTerminalizeMessageRequest>(), Arg.Any<CancellationToken>());
+        await runner.DidNotReceive().RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
+        Justification = "The returned preparation transfers lease ownership to the chat service, whose exceptional disposal this test asserts.")]
+    public async Task SendMessageAsync_WhenPreOwnershipBuildFails_ReleasesPreparationExactlyOnce()
+    {
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        NodeChatTerminalizeMessageRequest? terminalRequest = null;
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, request => terminalRequest = request);
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = Substitute.For<IInvocationRunner>();
+        var lease = new TrackingAgentHomeExecutionLease();
+        var stager = Substitute.For<IConversationSandboxStager>();
+        stager.PrepareConversationAttachmentsAsync(conversationId, Arg.Any<CancellationToken>())
+              .Returns(new ConversationSandboxPreparation(["attachments/spec.md"], lease));
+        var packageBuilder = Substitute.For<ILocalChatRuntimePackageBuilder>();
+        packageBuilder.Build(Arg.Any<LocalChatRuntimePackageRequest>()).Returns(_ => throw new InvalidOperationException("package build failed"));
+        var service = CreateAgentHomeService(persistence, runner, dispatcher, stager, packageBuilder);
+
+        _ = await AssertEx.ThrowsAsync<InvalidOperationException>(async () =>
+        {
+            await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                               "hello",
+                               MessageId: assistantMessageId,
+                               RequestId: requestId,
+                               UseLocalTools: true)).ConfigureAwait(false))
+            {
+                // Drain until the expected package-build exception is observed.
+            }
+        });
+
+        AssertEx.Equal(expected: 1, lease.DisposeCount);
+        AssertEx.Equal(expected: 0, lease.AmbientScopeEnterCount);
+        AssertEx.NotNull(terminalRequest);
+        AssertEx.Equal(NodeChatMessageStatusValues.Interrupted, terminalRequest!.Status);
+        await runner.DidNotReceive().RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
+        Justification = "The returned preparation transfers lease ownership to the detached chat run, whose delayed disposal this test asserts.")]
+    public async Task SendMessageAsync_WhenAgentHomeClientDisconnects_KeepsPreparationUntilDetachedRunDrains()
+    {
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var releaseRunner = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var runner = new GatedCompletingInvocationRunner(dispatcher, releaseRunner.Task);
+        var lease = new TrackingAgentHomeExecutionLease();
+        var stager = Substitute.For<IConversationSandboxStager>();
+        stager.PrepareConversationAttachmentsAsync(conversationId, Arg.Any<CancellationToken>())
+              .Returns(new ConversationSandboxPreparation([], lease));
+        var service = CreateAgentHomeService(persistence, runner, dispatcher, stager);
+        using var clientCancellation = new CancellationTokenSource();
+        var disconnected = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var enumerationTask = Task.Run(async () =>
+        {
+            try
+            {
+                await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                                       "hello",
+                                       MessageId: assistantMessageId,
+                                       RequestId: requestId,
+                                       UseLocalTools: true),
+                                   clientCancellation.Token).ConfigureAwait(false))
+                {
+                    if (streamEvent.Type == ChatStreamEventTypes.AssistantDelta)
+                    {
+                        await clientCancellation.CancelAsync().ConfigureAwait(false);
+                        disconnected.TrySetResult();
+                    }
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected after the simulated client disconnects.
+            }
+        });
+
+        await disconnected.Task.ConfigureAwait(false);
+        AssertEx.Equal(expected: 0, lease.DisposeCount);
+        AssertEx.False(enumerationTask.IsCompleted, "The disconnected stream must await the detached run before releasing its workspace.");
+
+        releaseRunner.SetResult();
+        await enumerationTask.ConfigureAwait(false);
+        AssertEx.Equal(expected: 1, lease.DisposeCount);
+        AssertEx.Equal(expected: 1, lease.AmbientScopeEnterCount);
+        AssertEx.Equal(expected: 1, lease.AmbientScopeDisposeCount);
     }
 
     [Test]
@@ -2809,6 +3069,41 @@ public sealed class NodeChatStreamServiceTests
         return new KnowledgeSearchHit(Guid.NewGuid(), Guid.NewGuid(), title, "Section", content, "knowledge-base", score, ChunkIndex: 0, KnowledgeDocumentStatus.Indexed, ServingLastKnownGood: false);
     }
 
+    private static NodeChatStreamService CreateAgentHomeService(INodeChatPersistenceService persistence,
+        IInvocationRunner runner,
+        RecordingWorkerEventDispatcher dispatcher,
+        IConversationSandboxStager stager,
+        ILocalChatRuntimePackageBuilder? runtimePackageBuilder = null)
+    {
+        return new NodeChatStreamService(persistence,
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
+            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
+                CreateGgufModelCapabilityResolver(), Substitute.For<IActiveCloudChatClientFactory>(), NullLogger<ChatTurnResolver>.Instance),
+            new NodeChatMutationGuard(persistence),
+            runtimePackageBuilder ?? new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions
+            {
+                EnableTools = true
+            }),
+            StubNodeRuntimeSettings.Create().WithEnableTools(true).Build(),
+            new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(CreateLocalToolDto("read_file", "{\"type\":\"object\"}")),
+            CreateDefaultAgentProvider(),
+            CreateNodeSettingsStore(),
+            CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationUploadedFileStore>(),
+            stager,
+            CreateFenceSeedProvider(),
+            Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
+            TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
+            NullLogger<NodeChatStreamService>.Instance);
+    }
+
     // Builds a NodeChatStreamService wired with the given scope factory (for the knowledge-base retrieval path), mirroring
     // the default-harness construction used by the attachment-egress helper. cloud-vs-local is chosen by the Model passed
     // to the send, not here; allowCloudModelAccess seeds the KB egress gate.
@@ -2853,6 +3148,52 @@ public sealed class NodeChatStreamServiceTests
 
         public void Dispose()
         {
+        }
+    }
+
+    private sealed class TrackingAgentHomeExecutionLease(IAgentHomeExecutionLease? inner = null) : IAgentHomeExecutionLease
+    {
+        public bool IsBorrowed => inner?.IsBorrowed ?? false;
+
+        public int DisposeCount { get; private set; }
+
+        public int AmbientScopeEnterCount { get; private set; }
+
+        public int AmbientScopeDisposeCount { get; private set; }
+
+        public IDisposable EnterAmbientScope()
+        {
+            AmbientScopeEnterCount++;
+            var ambient = inner?.EnterAmbientScope();
+            return new CallbackDisposable(() =>
+            {
+                ambient?.Dispose();
+                AmbientScopeDisposeCount++;
+            });
+        }
+
+        public void Dispose()
+        {
+            DisposeCount++;
+            inner?.Dispose();
+        }
+
+        private sealed class CallbackDisposable(Action callback) : IDisposable
+        {
+            private Action? _callback = callback;
+
+            public void Dispose()
+            {
+                Interlocked.Exchange(ref _callback, null)?.Invoke();
+            }
+        }
+    }
+
+    private sealed class StubAgentHomeIdentityProvider(string owner, string node) : IAgentHomeIdentityProvider
+    {
+        public Task<AgentHomeOwnerIdentity> GetAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new AgentHomeOwnerIdentity(owner, node));
         }
     }
 
@@ -3571,6 +3912,60 @@ public sealed class NodeChatStreamServiceTests
         {
             return Task.FromResult(string.Empty);
         }
+
+        public void Cancel(Guid invocationId)
+        {
+        }
+
+        public void CancelAll()
+        {
+        }
+
+        public void CleanupStaleToolCalls(TimeSpan maxAge)
+        {
+        }
+
+        public void ResolveApprovalResult(ApprovalResolvedEvent evt, ApprovalScope scope = ApprovalScope.Once)
+        {
+        }
+
+        public void ResolveUserQuestionResult(UserQuestionAnsweredEvent evt)
+        {
+        }
+
+        public void ResolveToolCallResult(ToolCallResultEvent evt)
+        {
+        }
+    }
+
+    private sealed class AwaitingCoderReadInvocationRunner(
+        RecordingWorkerEventDispatcher dispatcher,
+        ICoderWorkspaceReader reader) : IInvocationRunner
+    {
+        public int ActiveInvocationCount => 0;
+
+        public string ReadResult { get; private set; } = string.Empty;
+
+        public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
+        {
+            await Task.Yield();
+            ReadResult = await reader.ReadFileAsync(new ReadFileToolRequest
+            {
+                Path = "src/a.txt"
+            },
+                cancellationToken)
+                .ConfigureAwait(false);
+            await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, ReadResult).ConfigureAwait(false);
+            await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId).ConfigureAwait(false);
+        }
+
+        public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default) =>
+            Task.FromResult(true);
+
+        public Task<string> ExecuteApiToolCallAsync(Guid invocationId,
+            string toolName,
+            string parameters,
+            CancellationToken cancellationToken = default) => Task.FromResult(string.Empty);
 
         public void Cancel(Guid invocationId)
         {

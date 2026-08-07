@@ -27,7 +27,11 @@ internal sealed class NodeSelectedFolderConfiguration : IEntityTypeConfiguration
         builder.Property(entity => entity.CreatedAtUtc)
                .HasColumnName("created_at_utc");
 
+        builder.Property(entity => entity.RevokedAtUtc)
+               .HasColumnName("revoked_at_utc");
+
         builder.HasIndex(entity => entity.Alias)
-               .IsUnique();
+               .IsUnique()
+               .HasFilter("revoked_at_utc IS NULL");
     }
 }

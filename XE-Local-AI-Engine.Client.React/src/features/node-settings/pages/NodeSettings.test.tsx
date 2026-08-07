@@ -107,7 +107,11 @@ vi.mock("@/features/node-settings/components/SourceBuildCard", () => ({
 // The MCP server-key panel owns its own data layer (the inbound-credential SDK endpoints) and has its own dedicated
 // test; stub it to null here, matching the source-build cards above, so these page tests stay isolated.
 vi.mock("@/features/node-settings/components/McpServerKeyPanel", () => ({
-	McpServerKeyPanel: () => null,
+	McpServerKeyPanel: () => <div data-testid="mcp-server-key-panel" />,
+}));
+
+vi.mock("@/features/node-settings/components/McpWorkspaceAllowlistPanel", () => ({
+	McpWorkspaceAllowlistPanel: () => <div data-testid="mcp-workspace-allowlist-panel" />,
 }));
 
 vi.mock("@/features/node-settings/components/ImageRuntimeSourceBuildCard", () => ({
@@ -235,6 +239,14 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 		useDeveloperModeStore.setState({ developerMode: false });
 		// The GGUF in-flight set is a shared session store; reset it so a reranker-download test starts with none.
 		useGgufBrowseStore.setState({ inFlightDownloads: [] });
+	});
+
+	it("mounts workspace access directly below the inbound MCP key panel", () => {
+		renderPage();
+
+		const keyPanel = screen.getByTestId("mcp-server-key-panel");
+		const workspacePanel = screen.getByTestId("mcp-workspace-allowlist-panel");
+		expect(keyPanel.compareDocumentPosition(workspacePanel) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
 	});
 
 	afterEach(() => {

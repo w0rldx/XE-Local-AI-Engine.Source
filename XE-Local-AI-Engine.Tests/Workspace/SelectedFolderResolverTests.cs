@@ -157,6 +157,12 @@ public sealed class SelectedFolderResolverTests
         {
             return Task.FromResult<IReadOnlyList<SelectedFolderRecord>>(_records.ToArray());
         }
+
+        public Task<bool> RevokeAsync(Guid id, CancellationToken cancellationToken = default)
+        {
+            var removed = _records.RemoveAll(record => record.Id == id) == 1;
+            return Task.FromResult(removed);
+        }
     }
 
     private sealed class ThrowingSelectedFolderStore : INodeSelectedFolderStore
@@ -179,6 +185,11 @@ public sealed class SelectedFolderResolverTests
         public Task<IReadOnlyList<SelectedFolderRecord>> ListAsync(CancellationToken cancellationToken = default)
         {
             return Task.FromResult<IReadOnlyList<SelectedFolderRecord>>([]);
+        }
+
+        public Task<bool> RevokeAsync(Guid id, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(false);
         }
     }
 }

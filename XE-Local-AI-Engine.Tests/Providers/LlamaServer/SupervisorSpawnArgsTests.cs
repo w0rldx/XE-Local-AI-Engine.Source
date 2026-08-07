@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
 using System.Globalization;
+using NSubstitute;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
@@ -99,6 +100,99 @@ public sealed class SupervisorSpawnArgsTests
         AssertEx.Equal("q8_0", spec.Arguments[IndexOf(spec.Arguments, "-ctk") + 1]);
         AssertEx.Equal("q8_0", spec.Arguments[IndexOf(spec.Arguments, "-ctv") + 1]);
         AssertEx.False(spec.Arguments.Contains("-t"), "A full-GPU spawn must not emit CPU thread flags.");
+    }
+
+    [Test]
+    public async Task EnsureRunning_UsesAdmissionAdjustedAllocationContext()
+    {
+        var launcher = new FakeProcessLauncher();
+        var initial = new ProcessContextAllocation(ProcessContextTokens: 65536,
+            ModelTrainContextTokens: 131072,
+            ProcessContextAllocationSource.HardwareTier,
+            ProcessPlacementMode.GpuResident,
+            ResourceFootprint.Zero,
+            ContentIdentity: "llama3:0",
+            CacheKey: "cache");
+        var selected = initial with
+        {
+            ProcessContextTokens = 16384
+        };
+        var stored = initial;
+        var allocationResolver = Substitute.For<IProcessContextAllocationResolver>();
+        allocationResolver.ResolveAsync(Arg.Any<string>(),
+                              Arg.Any<ModelRole>(),
+                              Arg.Any<GpuVariant>(),
+                              Arg.Any<ResolvedLaunchArguments>(),
+                              Arg.Any<CancellationToken>())
+                          .Returns(_ => Task.FromResult<ProcessContextAllocation?>(stored));
+        allocationResolver.TryCommitAdmissionAllocation(selected, out Arg.Any<ProcessContextAllocation>())
+                          .Returns(call =>
+                          {
+                              stored = selected;
+                              call[1] = stored;
+                              return true;
+                          });
+        allocationResolver.TryGetEffectiveCommittedAllocation(Arg.Any<ProcessContextAllocation>(),
+                              out Arg.Any<ProcessContextAllocation>())
+                          .Returns(call =>
+                          {
+                              call[1] = stored;
+                              return true;
+                          });
+        AssertEx.True(allocationResolver.TryCommitAdmissionAllocation(selected, out var committed));
+        AssertEx.Equal(selected, committed);
+        var launchAdmissions = new ProcessLaunchAdmissionRegistry();
+        var admission = new ProcessLaunchAdmission("llama3",
+            ModelRole.Chat,
+            GpuVariant.Cuda,
+            ResolvedLaunchArguments.Explore(),
+            committed);
+        AssertEx.True(launchAdmissions.TryAcquire(admission, out var consumer));
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            variantSelector: new FakeVariantSelector(GpuVariant.Cuda),
+            profileResolver: new FakeInferenceProfileResolver(ResolvedLaunchArguments.Replay(ctxSize: 4096, nGpuLayers: 8)),
+            allocationResolver: allocationResolver,
+            launchAdmissions: launchAdmissions);
+
+        await supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.True(launcher.Launches.TryDequeue(out var spec));
+        AssertEx.Equal("16384", spec!.Arguments[IndexOf(spec.Arguments, "-c") + 1]);
+        AssertEx.Contains(spec.Arguments, "--fit");
+        AssertEx.False(spec.Arguments.Contains("--n-gpu-layers"), "the post-admission frozen profile must not replace admitted Explore args");
+        consumer!.Dispose();
+    }
+
+    [Test]
+    [Arguments(GpuVariant.Vulkan, "llama3:0")]
+    [Arguments(GpuVariant.Cuda, "different-content")]
+    public async Task EnsureRunning_AdmittedIdentityMismatch_FailsBeforeLauncher(GpuVariant actualVariant,
+        string contentIdentity)
+    {
+        var launcher = new FakeProcessLauncher();
+        var registry = new ProcessLaunchAdmissionRegistry();
+        var allocation = new ProcessContextAllocation(8192,
+            ModelTrainContextTokens: 131072,
+            ProcessContextAllocationSource.HardwareTier,
+            ProcessPlacementMode.GpuResident,
+            ResourceFootprint.Zero,
+            contentIdentity,
+            CacheKey: "cache");
+        using var consumer = registry.Acquire(new ProcessLaunchAdmission("llama3",
+            ModelRole.Chat,
+            GpuVariant.Cuda,
+            ResolvedLaunchArguments.Explore(),
+            allocation));
+        AssertEx.NotNull(consumer);
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            variantSelector: new FakeVariantSelector(actualVariant),
+            launchAdmissions: registry);
+
+        await AssertEx.ThrowsAsync<LlamaRuntimeException>(() =>
+            supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None));
+
+        AssertEx.Equal(0, launcher.LaunchCount);
+        consumer!.Dispose();
     }
 
     [Test]
