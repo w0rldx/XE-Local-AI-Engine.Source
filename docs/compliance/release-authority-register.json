@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "legal_notice": "This register and its automation record release inputs and check structure, completeness, evidence paths, and freshness. They are not legal advice and do not certify ownership, authority, or license sufficiency.",
+  "owner_confirmation_input": {
+    "status": "pending_durable_evidence",
+    "recorded_on": "2026-08-07",
+    "summary": "The owner confirmed release authority during the working session. Durable named approval and supporting evidence remain required before this register may pass; this input is not a signed repository assertion."
+  },
+  "decisions": [
+    {
+      "id": "project-rights-holder-apache-authority",
+      "scope": "Project rights holder and authority to publish project-authored material under Apache-2.0.",
+      "status": "unresolved",
+      "approver": { "name": "", "authority_basis": "" },
+      "decision_date": "",
+      "expires_on": "",
+      "evidence": []
+    },
+    {
+      "id": "author-identities-aliases",
+      "scope": "Exactly two author identities or public aliases: repository owner identity/alias and second author identity/alias; do not add private identity data to this public register.",
+      "subjects": ["Repository owner identity or public alias — pending", "Second author identity or public alias — pending"],
+      "status": "unresolved",
+      "approver": { "name": "", "authority_basis": "" },
+      "decision_date": "",
+      "expires_on": "",
+      "evidence": []
+    },
+    {
+      "id": "employer-contractor-predecessor-c0re-permissions",
+      "scope": "Employer, contractor, predecessor-project, and C0re permissions or documented non-applicability.",
+      "status": "unresolved",
+      "approver": { "name": "", "authority_basis": "" },
+      "decision_date": "",
+      "expires_on": "",
+      "evidence": []
+    },
+    {
+      "id": "copied-adapted-materials",
+      "scope": "Copied or adapted schemas, migrations, golden vectors, and templates, including documented non-applicability where appropriate.",
+      "status": "unresolved",
+      "approver": { "name": "", "authority_basis": "" },
+      "decision_date": "",
+      "expires_on": "",
+      "evidence": []
+    },
+    {
+      "id": "logos-media-branding",
+      "scope": "Logos, media, names, and branding rights and release permissions.",
+      "status": "unresolved",
+      "approver": { "name": "", "authority_basis": "" },
+      "decision_date": "",
+      "expires_on": "",
+      "evidence": []
+    },
+    {
+      "id": "vendored-agency-agents",
+      "scope": "Vendored agency-agents content provenance, modification rights, redistribution terms, or documented removal/non-applicability.",
+      "status": "unresolved",
+      "approver": { "name": "", "authority_basis": "" },
+      "decision_date": "",
+      "expires_on": "",
+      "evidence": []
+    },
+    {
+      "id": "third-party-redistribution-terms",
+      "scope": "Third-party, native, WASM, .NET, and Velopack license and binary redistribution terms.",
+      "status": "unresolved",
+      "approver": { "name": "", "authority_basis": "" },
+      "decision_date": "",
+      "expires_on": "",
+      "evidence": []
+    },
+    {
+      "id": "canonical-tag-binary-authority",
+      "scope": "Authority for the canonical repository tag and the portable binaries published through Velopack.",
+      "status": "unresolved",
+      "approver": { "name": "", "authority_basis": "" },
+      "decision_date": "",
+      "expires_on": "",
+      "evidence": []
+    },
+    {
+      "id": "signing-risk-decision",
+      "scope": "Named acceptance of the current unsigned portable-build risk and the later certificate/signing gate.",
+      "status": "unresolved",
+      "approver": { "name": "", "authority_basis": "" },
+      "decision_date": "",
+      "expires_on": "",
+      "evidence": []
+    }
+  ]
+}
