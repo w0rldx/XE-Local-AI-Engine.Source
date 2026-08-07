@@ -107,6 +107,33 @@ public sealed class LlamaServerSupervisorOptionsTests
     }
 
     [Test]
+    public void ComputeDefaultChatCacheRamMiB_ScalesWithRamAndClamps()
+    {
+        // One eighth of RAM, clamped to [512, 8192] MiB: floor on unknown/tiny, upstream default only at 64 GB+.
+        AssertEx.Equal(expected: 512, LlamaServerSupervisorOptions.ComputeDefaultChatCacheRamMiB(0));
+        AssertEx.Equal(expected: 512, LlamaServerSupervisorOptions.ComputeDefaultChatCacheRamMiB(2 * BytesPerGiB));
+        AssertEx.Equal(expected: 2048, LlamaServerSupervisorOptions.ComputeDefaultChatCacheRamMiB(16 * BytesPerGiB));
+        AssertEx.Equal(expected: 4096, LlamaServerSupervisorOptions.ComputeDefaultChatCacheRamMiB(32 * BytesPerGiB));
+        AssertEx.Equal(expected: 8192, LlamaServerSupervisorOptions.ComputeDefaultChatCacheRamMiB(64 * BytesPerGiB));
+        AssertEx.Equal(expected: 8192, LlamaServerSupervisorOptions.ComputeDefaultChatCacheRamMiB(256 * BytesPerGiB));
+    }
+
+    [Test]
+    public async Task Validate_NegativeChatCacheRam_Throws()
+    {
+        var options = new LlamaServerSupervisorOptions
+        {
+            ChatCacheRamMiB = -1
+        };
+
+        await AssertEx.ThrowsAsync<InvalidOperationException>(() =>
+        {
+            options.Validate();
+            return Task.CompletedTask;
+        });
+    }
+
+    [Test]
     public async Task Validate_NegativeReadinessRetries_Throws()
     {
         var options = new LlamaServerSupervisorOptions

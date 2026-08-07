@@ -14,7 +14,7 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Options;
 ///             <c>ngram-*</c> self-speculate from the prompt/context with no draft model file and no extra VRAM.
 ///         </item>
 ///     </list>
-///     Mode values are validated against the pinned llama-server build (b9692); <see cref="DisabledMode" /> (the default)
+///     Mode values are validated against the pinned llama-server build (b10201); <see cref="DisabledMode" /> (the default)
 ///     emits nothing. Like the chat cache-reuse window, these are server-launch flags, orthogonal to the frozen
 ///     inference profile and NOT part of its identity — changing them never invalidates a stored profile, it only takes
 ///     effect on the next natural (re)spawn.
@@ -33,8 +33,10 @@ public readonly record struct SpeculativeDecodingSettings(
     public const string DisabledMode = "none";
 
     /// <summary>
-    ///     Every <c>--spec-type</c> value accepted by the pinned llama-server build (b9692), verified against the
-    ///     binary's <c>--help</c>. Kept lowercase; <see cref="NormalizedMode" /> lowercases operator input before lookup.
+    ///     The <c>--spec-type</c> values this application exposes, each verified accepted by the pinned llama-server
+    ///     build (b10201 <c>--help</c>, re-probed 2026-08-07). A deliberate SUBSET: b10201 additionally accepts
+    ///     <c>draft-dflash</c>, <c>draft-dspark</c>, which are not offered here. Kept lowercase;
+    ///     <see cref="NormalizedMode" /> lowercases operator input before lookup.
     /// </summary>
     private static readonly IReadOnlySet<string> AllowedModes = new HashSet<string>(StringComparer.Ordinal)
     {

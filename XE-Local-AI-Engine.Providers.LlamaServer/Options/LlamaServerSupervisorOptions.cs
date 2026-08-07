@@ -35,6 +35,36 @@ public sealed class LlamaServerSupervisorOptions
     public int ChatCacheReuse { get; init; } = 256;
 
     /// <summary>
+    ///     llama-server chat-role host-RAM prompt-cache budget in MiB (<c>--cache-ram N</c>). The pinned build's
+    ///     upstream default is 8192 MiB — half the physical RAM of a 16 GB machine — inherited silently when the flag
+    ///     is omitted, and its eviction is known-ineffective on Linux under default overcommit (the OOM killer fires
+    ///     before <c>std::bad_alloc</c> does; upstream issue #22629). The supervisor therefore always emits the flag
+    ///     explicitly: this budget for chat, <c>0</c> (disabled) for pooled embedding/rerank roles, which do one-shot
+    ///     forward passes with no prompt state worth caching. Defaults to a detected-RAM-proportional value via
+    ///     <see cref="ComputeDefaultChatCacheRamMiB" />; <c>0</c> disables the host prompt cache entirely. Like
+    ///     <see cref="ChatCacheReuse" />, it is a launch flag outside any frozen-profile identity.
+    /// </summary>
+    public int ChatCacheRamMiB { get; init; } = ComputeDefaultChatCacheRamMiB(GC.GetGCMemoryInfo().TotalAvailableMemoryBytes);
+
+    /// <summary>
+    ///     Detected-RAM default for <see cref="ChatCacheRamMiB" />: one eighth of total available memory, clamped to
+    ///     [512, 8192] MiB — 2048 on a 16 GB machine, 4096 on 32 GB, the upstream default 8192 only at 64 GB+. An
+    ///     unknown/non-positive total yields the conservative floor.
+    /// </summary>
+    public static int ComputeDefaultChatCacheRamMiB(long totalAvailableMemoryBytes)
+    {
+        const int FloorMiB = 512;
+        const int CeilingMiB = 8192;
+        if (totalAvailableMemoryBytes <= 0)
+        {
+            return FloorMiB;
+        }
+
+        var oneEighthMiB = totalAvailableMemoryBytes / (8L * 1024L * 1024L);
+        return (int)Math.Clamp(oneEighthMiB, FloorMiB, CeilingMiB);
+    }
+
+    /// <summary>
     ///     Chat-role speculative-decoding <c>--spec-type</c>. Ships <see cref="SpeculativeDecodingSettings.DisabledMode" />
     ///     (<c>none</c>, off) — operator opt-in. Validated against the pinned build's accepted set; <c>draft-*</c> modes
     ///     also need <see cref="SpeculativeDraftModelPath" />, <c>ngram-*</c> modes self-speculate with no draft model.
@@ -230,6 +260,11 @@ public sealed class LlamaServerSupervisorOptions
         if (HttpNetworkTimeout <= TimeSpan.Zero)
         {
             throw new InvalidOperationException($"{nameof(HttpNetworkTimeout)} must be positive (was {HttpNetworkTimeout}).");
+        }
+
+        if (ChatCacheRamMiB < 0)
+        {
+            throw new InvalidOperationException($"{nameof(ChatCacheRamMiB)} must be non-negative (was {ChatCacheRamMiB}).");
         }
     }
 }
