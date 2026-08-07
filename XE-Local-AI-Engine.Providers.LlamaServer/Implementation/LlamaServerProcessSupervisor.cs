@@ -1049,7 +1049,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         // quantization + flash-attention optimization, and the CPU thread policy the audited launch defaults omitted.
         // Replay profiling bypasses it so the supplied frozen args ARE the experiment. Explore profiling applies the
         // production policy because the helper and server must observe the same concrete context/KV/FA vector as normal
-        // serving; otherwise b9692 can report unchanged `-c 0 -ngl -1` defaults that are not replayable placement.
+        // serving; otherwise the fit helper (behavior observed on b9692) can report unchanged `-c 0 -ngl -1` defaults
+        // that are not replayable placement.
         var planSet = await BuildLaunchPlanCandidatesAsync(key,
                 variant,
                 resolved,
@@ -1081,7 +1082,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             try
             {
                 var spec = BuildLaunchSpec(key, binary.ServerExecutablePath, modelFilePath, port, variant, resolved,
-                    _options.ChatCacheReuse, speculative, candidate);
+                    _options.ChatCacheReuse, speculative, candidate, _options.ChatCacheRamMiB);
 
                 // Benchmark replay spawns need /metrics (explore already carries --metrics); only append when missing.
                 if (ensureMetrics && !spec.Arguments.Contains("--metrics", StringComparer.Ordinal))
@@ -1132,7 +1133,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                 IReadOnlyList<string>? fittedArgsForSuccessfulAttempt = null;
                 if (fitParamsCapture is not null && resolved.ExploreMode && variant != GpuVariant.Cpu)
                 {
-                    // b9692 leaves -ngl at its automatic sentinel when the initial placement already fits. Verbose
+                    // The fit helper (observed on b9692) leaves -ngl at its automatic sentinel when the initial
+                    // placement already fits. Verbose
                     // load_tensors output is the authoritative proof that automatic placement meant every layer was
                     // offloaded; the fit parser uses that proof to normalize replay to explicit all-layers (-2).
                     if (!spec.Arguments.Contains("-v", StringComparer.Ordinal)
@@ -1749,7 +1751,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         ResolvedLaunchArguments resolved,
         int chatCacheReuse,
         SpeculativeDecodingSettings speculative = default,
-        LlamaServerLaunchPlan? plan = null)
+        LlamaServerLaunchPlan? plan = null,
+        int chatCacheRamMiB = 0)
     {
         var args = new List<string>
         {
@@ -1800,6 +1803,13 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                 args.Add(chatCacheReuse.ToString(CultureInfo.InvariantCulture));
             }
 
+            // Host-RAM prompt-cache budget. Emitted EXPLICITLY on every chat spawn because the pinned build's
+            // implicit default is 8192 MiB — half the RAM of a 16 GB machine — and its limit enforcement is
+            // known-ineffective on Linux under default overcommit (upstream #22629: the OOM killer fires before
+            // std::bad_alloc, SIGKILLing the server past its own eviction). 0 disables the cache.
+            args.Add("--cache-ram");
+            args.Add(chatCacheRamMiB.ToString(CultureInfo.InvariantCulture));
+
             AppendSpeculativeArgs(args, speculative);
         }
         else if (key.Role == ModelRole.Embedding)
@@ -1809,11 +1819,17 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             args.Add("--pooling");
             args.Add("mean");
             AppendPooledForwardPassBatchArgs(args, resolved, plan);
+
+            // One-shot forward passes have no prompt state worth caching — disable the host prompt cache instead of
+            // inheriting the upstream 8192 MiB default (see the chat branch).
+            args.Add("--cache-ram");
+            args.Add("0");
         }
         else if (key.Role == ModelRole.Reranker)
         {
             // Reranker role. POST /v1/rerank is exposed only with --rerank (alias --reranking) + `--pooling rank`
-            // (verified against llama.cpp release b9692). This is MUTUALLY EXCLUSIVE with the embedding branch above —
+            // (verified against b9692, re-confirmed against the pinned b10201 --help). This is MUTUALLY EXCLUSIVE with
+            // the embedding branch above —
             // a rerank server scores (query, document) pairs and never gets --embeddings — and carries none of the
             // chat-only flags (--jinja, --cache-reuse, speculative). Because each role is its own branch, a single
             // process can only ever receive one role's flags, so --embeddings and --rerank never coexist.
@@ -1821,6 +1837,11 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             args.Add("--pooling");
             args.Add("rank");
             AppendPooledForwardPassBatchArgs(args, resolved, plan);
+
+            // One-shot scoring passes have no prompt state worth caching — disable the host prompt cache instead of
+            // inheriting the upstream 8192 MiB default (see the chat branch).
+            args.Add("--cache-ram");
+            args.Add("0");
         }
         else
         {
@@ -1850,7 +1871,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             {
                 // Let llama.cpp auto-fit choose + print placement; --metrics exposes the gauges the benchmark reads.
                 // The explicit -c is RESPECTED by --fit (it fits ngl/batch around it) and the KV/FA flags are not
-                // placement flags, so auto-fit stays active (verified against b9692).
+                // placement flags, so auto-fit stays active (verified against b9692; b10201 --help confirms --fit
+                // adjusts only UNSET arguments, so the explicit -c is respected).
                 args.Add("--fit");
                 args.Add("on");
                 args.Add("--metrics");
@@ -1939,7 +1961,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     {
         if (plan is { UseKvCacheQuantization: true } resolvedPlan && !string.IsNullOrWhiteSpace(resolvedPlan.KvCacheType))
         {
-            // Quantized/explicit KV requires the fused flash-attention path with matching K/V types (b9692).
+            // Quantized/explicit KV requires the fused flash-attention path with matching K/V types (b9692; unchanged
+            // in the pinned b10201).
             args.Add("-fa");
             args.Add("on");
             args.Add("-ctk");
@@ -2112,6 +2135,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         var now = _timeProvider.GetUtcNow();
         ProcessKey? victimKey = null;
         RunningProcess? victim = null;
+        var victimRank = int.MaxValue;
         foreach (var (key, running) in _processes)
         {
             // A live profiling-pinned process is reserved for its benchmark — never select it as a cap-admission victim
@@ -2122,22 +2146,41 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             }
 
             // In-flight inference disqualifies a live process as a capacity-eviction victim for the same reason the
-            // idle reaper skips it: past-TTL only means "no new request started", not "not mid-generation".
+            // idle reaper skips it: past-TTL only means "no new request started", not "not mid-generation". This is a
+            // best-effort heuristic read; the atomic claim is TryBeginEvict on the chosen victim below.
             if (running.ActiveLeases > 0 && !running.Handle.HasExited)
             {
                 continue;
             }
 
-            if (now - running.LastUsedUtc < _options.IdleTimeToLive && !running.Handle.HasExited)
+            // Victim preference, best first:
+            //   0 — exited or idle past the TTL (any role): the reaper would take it anyway.
+            //   1 — in-window but unleased POOLED role (embedding/reranker). Background indexing/search touches these
+            //       continuously, so on the default cap (3 = the number of roles) they otherwise pin all slots and a
+            //       foreground chat model switch hard-fails for up to a full TTL window ("maximum number of local
+            //       models are already loaded") — the most likely user-visible runtime failure on consumer hardware.
+            //       A pooled reload costs ~1s against a chat reload's tens of seconds, so the pooled process yields.
+            //   An in-window CHAT process is never a victim: keep-warm recency protection is deliberate there (the
+            //   cheap error beats silently evicting a multi-GB model the user is about to reuse), and admission
+            //   rejects as before when no rank qualifies.
+            var isIdlePastTtl = running.Handle.HasExited || now - running.LastUsedUtc >= _options.IdleTimeToLive;
+            var isPooledRole = key.Role is ModelRole.Embedding or ModelRole.Reranker;
+            if (!isIdlePastTtl && !isPooledRole)
             {
-                continue; // Not idle — never evict an in-window process to admit a new one.
+                continue; // An in-window chat process is never a victim.
             }
 
-            if (victim is null || running.LastUsedUtc < victim.LastUsedUtc)
+            var rank = isIdlePastTtl ? 0 : 1;
+
+            // A better rank always wins; within the same rank, least-recently-used wins.
+            if (victim is not null && (rank != victimRank ? rank > victimRank : running.LastUsedUtc >= victim.LastUsedUtc))
             {
-                victimKey = key;
-                victim = running;
+                continue;
             }
+
+            victimKey = key;
+            victim = running;
+            victimRank = rank;
         }
 
         if (victimKey is null || victim is null)
@@ -2145,8 +2188,17 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             return false;
         }
 
-        _logger.LogWarning("Loaded-model cap ({Cap}) reached; evicting idle llama-server for model {ModelName} role {Role} to admit a new one.",
-            _options.MaxLoadedProcesses, victimKey.Value.ModelName, victimKey.Value.Role);
+        // Atomically latch the chosen victim before tearing it down. If a request acquired a lease on it between the
+        // heuristic scan and here, TryBeginEvict fails and no victim is admitted this round — the caller surfaces the
+        // cap error rather than tree-killing a process under an active lease. An EXITED victim holds no real lease,
+        // so it is torn down regardless.
+        if (!victim.Handle.HasExited && !victim.TryBeginEvict())
+        {
+            return false;
+        }
+
+        _logger.LogWarning("Loaded-model cap ({Cap}) reached; evicting {Idleness} llama-server for model {ModelName} role {Role} to admit a new one.",
+            _options.MaxLoadedProcesses, victimRank == 0 ? "idle" : "in-window pooled", victimKey.Value.ModelName, victimKey.Value.Role);
 
         // Synchronous teardown under the admission gate: free the slot/port before the new admission proceeds.
         TeardownProcess(victimKey.Value, victim);
@@ -2400,6 +2452,28 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         public void MarkEvicting()
         {
             Interlocked.Exchange(ref _evicting, value: 1);
+        }
+
+        /// <summary>
+        ///     Atomically claims this process as a cap-admission eviction victim: sets the evicting flag (so
+        ///     <see cref="LlamaServerProcessSupervisor.TryAcquireInferenceLease" />'s post-acquire re-check refuses any
+        ///     racing lease) and then re-checks that no lease slipped in first. Returns <see langword="false" /> —
+        ///     clearing the flag — when a lease won the race, so a process is never torn down under in-flight inference.
+        /// </summary>
+        public bool TryBeginEvict()
+        {
+            if (Interlocked.CompareExchange(ref _evicting, value: 1, comparand: 0) != 0)
+            {
+                return false; // An operator eject already owns this process's teardown.
+            }
+
+            if (ActiveLeases > 0)
+            {
+                ClearEvicting();
+                return false;
+            }
+
+            return true;
         }
 
         /// <summary>Clears the evicting flag (a graceful eject that timed out and left the process running).</summary>

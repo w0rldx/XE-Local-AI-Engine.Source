@@ -5,7 +5,7 @@ using System.Runtime.InteropServices;
 /// <summary>
 ///     A single pinned, hash-verified llama.cpp prebuilt asset (one OS/arch/variant combination).
 /// </summary>
-/// <param name="AssetName">The release asset file name (for example <c>llama-b9692-bin-win-vulkan-x64.zip</c>).</param>
+/// <param name="AssetName">The release asset file name (for example <c>llama-b10201-bin-win-vulkan-x64.zip</c>).</param>
 /// <param name="Sha256">Lowercase hex SHA256 the downloaded archive must match.</param>
 /// <param name="ServerRelativePath">
 ///     Path to <c>llama-server</c> inside the extracted archive (Windows archives nest under <c>build/bin/</c>).
@@ -30,7 +30,7 @@ public sealed record LlamaCppAssetPin(
 /// </summary>
 /// <remarks>
 ///     <para>
-///         <strong>Pinned tag <c>b9692</c></strong> (published 2026-06-17). SHA256 digests are taken from the GitHub
+///         <strong>Pinned tag <c>b10201</c></strong> (published 2026-07-31). SHA256 digests are taken from the GitHub
 ///         release-assets API <c>digest</c> field — llama.cpp publishes NO <c>.sha256</c> sidecar files, so the digest
 ///         API is the source of truth. Re-pin (tag + every hash) when bumping the recommended version.
 ///     </para>

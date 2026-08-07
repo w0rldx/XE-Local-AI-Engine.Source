@@ -9,7 +9,8 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// <remarks>
 ///     <para>
 ///         The two modes are mutually exclusive per run because any explicit fit-arg DISABLES llama.cpp auto-fit
-///         (verified against release <c>b9692</c>): explore writes no explicit args so auto-fit runs; replay writes the
+///         (verified against release <c>b9692</c>; the pinned <c>b10201</c> <c>--help</c> confirms <c>--fit</c> adjusts
+///         only UNSET arguments): explore writes no explicit args so auto-fit runs; replay writes the
 ///         frozen args and omits <c>--fit</c>. Re-exploring is the only path back to auto-fit.
 ///     </para>
 ///     <para>
