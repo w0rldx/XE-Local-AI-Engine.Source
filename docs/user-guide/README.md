@@ -31,7 +31,7 @@ under Apache-2.0. This page is the user guide: how to download, install and use 
 | **Know what leaves my computer** | [Privacy & your data](docs/privacy-and-data.md) |
 | **Update to a newer build** | [Updating](docs/updating.md) |
 | **Send feedback or report a bug** | [Giving feedback](docs/feedback.md) |
-| **Download the latest build** | [Releases](https://github.com/w0rldx/XE-Local-AI-Engine.Source/releases/latest) |
+| **Download the latest build** | [Releases](https://github.com/w0rldx/XE-Local-AI-Engine.Source/releases) |
 
 ---
 
@@ -75,15 +75,15 @@ you to guess.*
 
 A graphics card is **optional**. Without one the app still works; answers just arrive more slowly.
 
-> **Windows and Linux, both x64.** The Linux build is portable and **does not update itself** — see
-> [Linux installation](docs/install-linux.md). There is no macOS build and no ARM build.
+> **Windows and Linux, both x64.** Both official downloads are portable Velopack applications and can update
+> themselves. Windows ships as a Portable ZIP; Linux ships as an AppImage. There is no macOS or ARM build.
 
 ### Step 2 — Download the app from GitHub
 
 GitHub is built for programmers and the download page confuses almost everyone the first time. Here is
 exactly what to do.
 
-**1. Open the releases page:** [**→ Latest release**](https://github.com/w0rldx/XE-Local-AI-Engine.Source/releases/latest)
+**1. Open the releases page:** [**→ Releases**](https://github.com/w0rldx/XE-Local-AI-Engine.Source/releases)
 
 **2. ⚠️ Do NOT use the green `<> Code` button** if you just want to run the app. It downloads this
 repository's **source code**, not a ready-to-run build — there is nothing to double-click inside it.
@@ -97,38 +97,37 @@ You will see a list like this:
 ▼ Assets                                                    7
 
    XE-Local-AI-Engine-win-Portable.zip                  ✅ WINDOWS — download this
-   XE-Local-AI-Engine-<version>-linux-Portable.zip      ✅ LINUX — download this
-   XE-Local-AI-Engine-<version>-linux-Portable.zip.sha256   (Linux checksum)
-   XE-Local-AI-Engine-<version>-delta.nupkg             ❌ ignore
-   XE-Local-AI-Engine-<version>-full.nupkg              ❌ ignore
-   releases.win.json                                    ❌ ignore
-   RELEASES                                             ❌ ignore
+   XE-Local-AI-Engine-<version>-linux.AppImage       ✅ LINUX — download the .AppImage
+   CHECKSUMS.sha256                                  ✅ download this too
+   XE-Local-AI-Engine-<version>-delta.nupkg          ❌ updater file; ignore
+   XE-Local-AI-Engine-<version>-full.nupkg           ❌ updater file; ignore
+   releases.win.json / releases.linux.json           ❌ updater feeds; ignore
 
    Source code (zip)                                       ❌ ignore
    Source code (tar.gz)                                    ❌ ignore
 ```
 
-**4. Windows: click `XE-Local-AI-Engine-win-Portable.zip`** — about 100 MB. **Linux:** grab the
-`...-linux-Portable.zip` instead and follow the [Linux guide](docs/install-linux.md). (`<version>` is a
-placeholder for the build number, e.g. `v0.1.0-rc.5.0`.) The other files are for the Windows app's own
-updater; you never open them.
+**4. Windows: click `XE-Local-AI-Engine-win-Portable.zip`. Linux: click the `.AppImage`.** Download
+`CHECKSUMS.sha256` too, verify the platform artifact, then follow the matching installation guide. The `.nupkg` and
+feed files are for the app's updater; you never open them manually.
 
 **5. If your browser blocks it** (Edge/Chrome: *"is not commonly downloaded"*), open your downloads
 list with `Ctrl`+`J`, click the `⋯` next to the file and choose **Keep** → **Keep anyway**. Same cause
 as the Windows warning below: the build is unsigned.
 
-**Check you got the right file:** it should be named `XE-Local-AI-Engine-win-Portable.zip` and be
-**90–100 MB**. If it's only a few hundred KB, you downloaded the source code by mistake — go back to
-point 2.
+**Check you got the right file:** Windows downloads `XE-Local-AI-Engine-win-Portable.zip`; Linux downloads an
+`.AppImage`. If you downloaded GitHub's **Source code** archive, go back to point 2.
 
-There is **no installer** and no `Setup.exe`. You unzip a folder and run it.
+There is **no installer** and no `Setup.exe`. Windows users extract the Portable ZIP to a writable local directory;
+Linux users mark the AppImage executable and run it.
 
 *More detail, checksum verification, and how to get emailed about new builds:*
 [**Downloading from GitHub**](docs/download-from-github.md)
 
 ### Step 3 — Install and run
 
-Follow the [**Windows installation guide**](docs/install-windows.md).
+Follow the [**Windows installation guide**](docs/install-windows.md) or
+[**Linux installation guide**](docs/install-linux.md).
 
 > ### ⚠️ Windows will warn you. This is expected.
 >
@@ -190,8 +189,9 @@ Everything below runs **on your own machine** unless you deliberately connect an
   register one. Never point it at code you do not trust.**
 - **Image generation** — generate images locally. Grouped as a preview feature in the app.
 - **Canvas** — a visual workspace for wiring up multi-step workflows
-- **Read answers aloud** — local text-to-speech in the browser. Currently sits **behind a developer
-  setting** rather than being on by default, so it is not available out of the box yet.
+- **Read answers aloud** — text-to-speech through voices exposed by your browser and operating system.
+  Availability, quality, and whether a system voice uses the network depend on that platform's speech
+  implementation, which the app does not control.
 - **Optional cloud providers** — Azure AI Foundry and Codex, if you want them. Entirely optional.
 - **Ollama** — if you already run Ollama, the app can use its models. It will not install or manage
   Ollama for you.
@@ -202,8 +202,8 @@ Everything below runs **on your own machine** unless you deliberately connect an
 
 - **No speech-to-text** — the app can talk, but it cannot listen. This is not two-way voice chat.
 - **No macOS build**, no ARM build.
-- **No self-update on Linux** — the Windows build updates itself; the Linux one is replaced by hand
-  (see [Linux](docs/install-linux.md)).
+- **Unsigned binaries** — Windows and Linux releases can trigger trust warnings until certificate signing is added.
+  Verify `CHECKSUMS.sha256` before running a download.
 
 ---
 

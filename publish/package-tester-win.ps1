@@ -15,7 +15,7 @@
 # Usage (from the repo root):
 #   $env:VPK_TOKEN = "<token>"
 #   $env:XE_TESTER_GITHUB_APP_CLIENT_ID = "<GitHub App client ID>"
-#   .\publish\package-tester-win.ps1                     # version read from Directory.Build.props
+#   .\publish\package-tester-win.ps1                     # version read from eng/ReleaseVersion.props
 #   .\publish\package-tester-win.ps1 -SkipUpload         # pack only, no GitHub upload
 #   .\publish\package-tester-win.ps1 -PublishDraft -ExpectedPortableSha256 <sha256>
 #
@@ -52,7 +52,7 @@
 [CmdletBinding()]
 param(
     # Optional assertion, WITHOUT the leading 'v'. When supplied it must match
-    # VersionPrefix-VersionSuffix from Directory.Build.props exactly.
+    # VersionPrefix-VersionSuffix from eng/ReleaseVersion.props exactly.
     [string]$Version,
     [string]$GitHubAppClientId = $env:XE_TESTER_GITHUB_APP_CLIENT_ID,
     [string]$TesterRepo = "https://github.com/w0rldx/XE-Local-AI-Engine.Tester-App",
@@ -78,11 +78,12 @@ function Assert-LastExitCode {
 }
 
 function Get-ProjectVersion {
-    [xml]$props = Get-Content "Directory.Build.props"
+    $versionPropsPath = Join-Path "eng" "ReleaseVersion.props"
+    [xml]$props = Get-Content $versionPropsPath
     $prefix = ($props.Project.PropertyGroup.VersionPrefix | Where-Object { $_ }) | Select-Object -First 1
     $suffix = ($props.Project.PropertyGroup.VersionSuffix | Where-Object { $_ }) | Select-Object -First 1
     if (-not $prefix) {
-        throw "Could not read VersionPrefix from Directory.Build.props."
+        throw "Could not read VersionPrefix from eng/ReleaseVersion.props."
     }
 
     if ($suffix) { return "$prefix-$suffix" }
@@ -454,7 +455,7 @@ if ($dirtyPaths.Count -gt 0) {
 }
 
 $canonicalTesterRepo = "https://github.com/w0rldx/XE-Local-AI-Engine.Tester-App"
-$canonicalSourceRepo = "https://github.com/w0rldx/XE-Local-AI-Engine.git"
+$canonicalSourceRepo = "https://github.com/w0rldx/XE-Local-AI-Engine.Source.git"
 if ($TesterRepo.TrimEnd('/') -ne $canonicalTesterRepo) {
     throw "TesterRepo must be the canonical tester repository: $canonicalTesterRepo"
 }
@@ -464,10 +465,10 @@ if ($TesterRepo.TrimEnd('/') -ne $canonicalTesterRepo) {
 $TesterRepo = $TesterRepo.TrimEnd('/')
 $repoSlug = ($TesterRepo -replace '^https://github.com/', '')
 
-# --- Version: single source of truth is Directory.Build.props -----------------------
+# --- Version: single source of truth is eng/ReleaseVersion.props --------------------
 $projectVersion = Get-ProjectVersion
 if ($Version -and $Version -ne $projectVersion) {
-    throw "Requested version '$Version' does not match Directory.Build.props version '$projectVersion'."
+    throw "Requested version '$Version' does not match eng/ReleaseVersion.props version '$projectVersion'."
 }
 $Version = $projectVersion
 if ($Version -notmatch '^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z]+(?:\.[0-9A-Za-z]+)*)?$') {

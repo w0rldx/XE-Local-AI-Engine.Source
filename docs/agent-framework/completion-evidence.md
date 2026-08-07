@@ -106,7 +106,7 @@ The opt-in lane passed on 2026-07-27 local time (2026-07-26 UTC) against
   production resolver/provider/MEAI/MAF/runner types and a response hash without
   retaining the response text.
 
-## Release, Debug, DevUI, and packaging validation
+## Release, Debug, and packaging validation
 
 Run the Linux-safe evidence lane:
 
@@ -115,8 +115,7 @@ scripts/run-agent-framework-validation.sh --with-linux-package
 ```
 
 It serializes Release and Debug restore/build, runs the permanent Agent Framework
-suite plus the llama-server adapter-policy/architecture scope, runs the Debug-only
-registration and route-registration contract tests, runs the release-script
+suite plus the llama-server adapter-policy/architecture scope, runs the release-script
 static-analysis/P0 compile gate, and can optionally build the real portable
 `linux-x64` package. Logs are path-sanitized and hashed in
 `docs/agent-framework/evidence/validation/manifest.json`.
@@ -135,14 +134,13 @@ instead of being silently omitted from the identity. The manifest records `resul
   2 live llama-server round trips skipped by their explicit opt-in environment gate,
   with unchanged test assemblies;
 - Debug solution restore/build: passed with 0 warnings and 0 errors;
-- Debug DevUI DI-registration contract: 1/1 passed;
-- Debug DevUI endpoint-mapping contract: 1/1 passed;
 - release-script static analysis and the `P0_SPIKE` compile gate: clean;
 - the portable `linux-x64` package was not rebuilt in this refresh
   (`linuxPortablePackageIncluded: false`).
 
-The two Debug checks prove service construction and endpoint mapping only. They are
-not a live browser, live HTTP, or interactive DevUI proof.
+The DevUI packages and routes recorded by the historical evidence below were removed before the first public binary
+because configuration-conditioned package references leaked those preview assemblies into Release restore assets.
+The current validation lane therefore has no DevUI-specific checks.
 
 ### Approval replay hardening
 
@@ -179,8 +177,8 @@ As a manual rehearsal before an RC, it can still be run on Windows:
 pwsh ./publish/package-tester-win.ps1 -SkipUpload
 ```
 
-Record the resulting package hashes beside the Linux evidence. Do not relabel the
-Linux portable ZIP or PowerShell static analysis as a Windows packaging pass.
+Record the resulting package hashes beside the official Linux AppImage evidence. Do not relabel an AppImage smoke or
+PowerShell static analysis as a Windows packaging pass.
 
 ## Rollback
 

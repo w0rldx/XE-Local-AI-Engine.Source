@@ -357,8 +357,7 @@ From `Client/Program.cs`, the host performs a deterministic startup before servi
 3. Apply EF migrations: node chat DB, then node identity DB; recover interrupted chat messages; reconcile
    stale scheduled runs; activate the invocation resume registry; register the worker shutdown drain.
 4. Build the HTTP pipeline: exception handler (RFC7807), HTTPS/HSTS (skipped in desktop), antiforgery,
-   static files, health checks, `LocalApiSecurityMiddleware`, auth, FastEndpoints, hubs, (dev) Scalar +
-   Agent DevUI, SPA fallback.
+   static files, health checks, `LocalApiSecurityMiddleware`, auth, FastEndpoints, hubs, (dev) Scalar, SPA fallback.
 
 Persistence specifics (selected per-column encryption, 45 migration implementations plus 2 model
 snapshots, and recovery services) are covered in

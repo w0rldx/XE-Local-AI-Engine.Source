@@ -12,10 +12,11 @@ remove it later you delete that folder.
 
 For people who have done this kind of thing before:
 
-1. Download `XE-Local-AI-Engine-win-Portable.zip` from [Releases](https://github.com/w0rldx/XE-Local-AI-Engine.Source/releases/latest).
+1. Download `XE-Local-AI-Engine-win-Portable.zip` and `CHECKSUMS.sha256` from [Releases](https://github.com/w0rldx/XE-Local-AI-Engine.Source/releases).
 2. **Right-click the ZIP → Properties → tick "Unblock" → OK.** *(Do this before extracting — it saves
    you the SmartScreen warning.)*
-3. Extract to a folder you own, e.g. `C:\Apps\XE-Local-AI-Engine`. **Not** Program Files.
+3. Verify its SHA-256 value, then extract it to a writable local directory, e.g.
+   `%LOCALAPPDATA%\Programs\XE-Local-AI-Engine`. **Not** Program Files.
 4. Run **`XE-Local-AI-Engine.exe`** in the top-level folder — *not* the one inside `current\`.
 5. A console window opens and your browser opens the app. Leave the console open.
 
@@ -25,8 +26,8 @@ Everything below is the same thing, explained slowly.
 
 ## Step 1 — Download the app
 
-1. Go to the [**Releases page**](https://github.com/w0rldx/XE-Local-AI-Engine.Source/releases/latest).
-2. Under **Assets**, click **`XE-Local-AI-Engine-win-Portable.zip`** to download it (roughly 100 MB).
+1. Go to the [**Releases page**](https://github.com/w0rldx/XE-Local-AI-Engine.Source/releases).
+2. Under **Assets**, download **`XE-Local-AI-Engine-win-Portable.zip`** and `CHECKSUMS.sha256`.
 
 > **Never downloaded from GitHub before?** The page is genuinely confusing — the big green **`<> Code`**
 > button is *not* the app, and the file list is often collapsed.
@@ -36,13 +37,29 @@ You will see other files listed. **You do not need them:**
 
 | File | What it's for |
 |---|---|
-| `XE-Local-AI-Engine-win-Portable.zip` | **← this is the one you want** |
+| `XE-Local-AI-Engine-win-Portable.zip` | **← the Windows application** |
+| `CHECKSUMS.sha256` | **← download this to verify the ZIP** |
 | `...-full.nupkg`, `...-delta.nupkg` | used by the app's built-in updater |
 | `releases.win.json`, `RELEASES` | the update list the app reads |
 
 > **Don't see any files?** The Assets list may just be collapsed — click the word "Assets" (or the
 > small ► triangle) to expand it. If files are genuinely missing, it may be a temporary GitHub issue;
 > try again shortly or [open an issue](https://github.com/w0rldx/XE-Local-AI-Engine.Source/issues/new/choose).
+
+### Verify the download
+
+Open PowerShell in the download directory:
+
+```powershell
+Get-FileHash .\XE-Local-AI-Engine-win-Portable.zip -Algorithm SHA256
+Select-String -Path .\CHECKSUMS.sha256 -Pattern 'XE-Local-AI-Engine-win-Portable.zip'
+```
+
+The computed SHA-256 value must match the value at the start of the checksum line, ignoring letter case. If it does
+not match, do not run the file.
+
+`RELEASE-MANIFEST.json` and `RELEASE.spdx.json` on the release page provide source-binding and SPDX inventory
+details.
 
 ---
 
@@ -103,9 +120,9 @@ Unblock-File "C:\Apps\XE-Local-AI-Engine\XE-Local-AI-Engine.exe"
 ## Step 3 — Extract it
 
 1. **Right-click** the ZIP → **Extract All…**
-2. Choose a folder you own and can write to. Good choices:
-   - `C:\Apps\XE-Local-AI-Engine`
-   - `C:\Users\<your name>\XE-Local-AI-Engine`
+2. Choose a local folder you own and can write to. Good choices:
+   - `%LOCALAPPDATA%\Programs\XE-Local-AI-Engine`
+   - `C:\Users\<your name>\Apps\XE-Local-AI-Engine`
 3. Click **Extract** and wait — there are a lot of files.
 
 > **Avoid these locations:**
@@ -113,6 +130,8 @@ Unblock-File "C:\Apps\XE-Local-AI-Engine\XE-Local-AI-Engine.exe"
 > - Your `Downloads` folder — easy to delete by accident
 > - OneDrive / Dropbox / any synced folder — sync will fight the app over its files and can corrupt them
 > - A network drive or USB stick — too slow, and it will feel broken
+
+The directory must remain writable because Velopack updates this portable application in place.
 
 ---
 
@@ -146,9 +165,8 @@ XE-Local-AI-Engine\
 
 **This will probably happen, and it does not mean anything is wrong.**
 
-Windows shows this warning for any program it has not seen many times before from a known publisher.
-Getting rid of it requires a code-signing certificate, which costs several hundred euros a year — I
-have not bought one yet. That is the entire reason for the warning.
+Windows shows this warning for a new program from an unknown publisher. The project does not yet have a code-signing
+certificate, so current artifacts are unsigned. Certificate signing is planned.
 
 ### ① What you'll see — and why it looks like a dead end
 
@@ -214,9 +232,8 @@ flag. Neither is evidence of anything; both are what a small unsigned release lo
 You may need to add the folder to your antivirus exclusions. **Only do that if you are comfortable
 doing so** — and it is completely reasonable to decide you'd rather wait for a signed build instead.
 
-If you'd like to confirm your download is byte-for-byte what I published first, GitHub publishes a
-SHA-256 digest next to each release asset:
-→ [**How to check it**](download-from-github.md#step-6--check-you-got-the-right-thing)
+Confirm the download against the release's `CHECKSUMS.sha256` before adding any antivirus exclusion:
+→ [**How to verify it**](download-from-github.md#step-4--verify-sha-256)
 
 ---
 

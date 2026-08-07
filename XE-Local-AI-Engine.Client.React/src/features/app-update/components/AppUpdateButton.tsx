@@ -3,7 +3,12 @@ import { IconRefresh } from "@tabler/icons-react";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { noBodyOptions, useApplyAppUpdate, useAppUpdateStatus } from "@/features/app-update/queries/useAppUpdate";
+import {
+	noBodyOptions,
+	useApplyAppUpdate,
+	useAppUpdateStatus,
+	useProbeAppUpdateStatus,
+} from "@/features/app-update/queries/useAppUpdate";
 
 // Interval (ms) between health-live polls while waiting for the server to come back.
 const HEALTH_POLL_INTERVAL_MS = 2000;
@@ -13,18 +18,20 @@ const HEALTH_POLL_TIMEOUT_MS = 60_000;
 type ApplyState = "idle" | "applying" | "restarting" | "ready" | "error";
 
 /**
- * "Update now" button. Calls `applyAppUpdate`, then polls `/health/live` until the
- * server responds, then reloads the page. Hides when no update is available or the
- * user is not signed in.
+ * Owns the full ready-state update UI. Keeping this component mounted while an update is applying is load-bearing:
+ * the old host clears its cached availability before exit, but restart polling must continue until the new version
+ * answers. Calls `applyAppUpdate`, probes `/health/live` plus the side-effect-free version endpoint, then reloads.
  */
 export function AppUpdateButton() {
 	const { t } = useTranslation();
 	const { data: status } = useAppUpdateStatus();
 	const applyMutation = useApplyAppUpdate();
+	const probeStatusMutation = useProbeAppUpdateStatus();
 
 	const [applyState, setApplyState] = useState<ApplyState>("idle");
 	const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const pollStartRef = useRef<number>(0);
+	const expectedVersionRef = useRef<string | null>(null);
 	// doHealthPoll re-arms the timer AFTER an awaited fetch — without this guard, an unmount that lands mid-await
 	// would run the cleanup first and then arm a timer nothing ever clears (a stray recurring /health/live poll).
 	const mountedRef = useRef(true);
@@ -38,8 +45,8 @@ export function AppUpdateButton() {
 		};
 	}, []);
 
-	const isSignedIn = status?.authState === "signedIn";
-	const shouldRender = status?.isDesktop === true && isSignedIn && status?.updateAvailable === true;
+	const availableVersion = status?.availableVersion ?? null;
+	const shouldRender = status?.isDesktop === true && status.isConfigured === true;
 
 	if (!shouldRender) {
 		return null;
@@ -72,9 +79,12 @@ export function AppUpdateButton() {
 		try {
 			const response = await fetch("/health/live", { cache: "no-store" });
 			if (response.ok) {
-				setApplyState("ready");
-				window.location.reload();
-				return;
+				const probedStatus = await probeStatusMutation.mutateAsync();
+				if (probedStatus.currentVersion === expectedVersionRef.current) {
+					setApplyState("ready");
+					window.location.reload();
+					return;
+				}
 			}
 		} catch {
 			// Server still down — keep polling.
@@ -84,9 +94,18 @@ export function AppUpdateButton() {
 	}
 
 	async function handleApply() {
+		if (!availableVersion) {
+			setApplyState("error");
+			return;
+		}
 		setApplyState("applying");
 		try {
-			await applyMutation.mutateAsync(noBodyOptions);
+			const result = await applyMutation.mutateAsync(noBodyOptions);
+			if (!result.applying) {
+				setApplyState("idle");
+				return;
+			}
+			expectedVersionRef.current = availableVersion;
 			setApplyState("restarting");
 			pollStartRef.current = Date.now();
 			scheduleHealthPoll();
@@ -110,6 +129,14 @@ export function AppUpdateButton() {
 		return (
 			<Text size="sm" c="red">
 				{t("pages.about.appUpdate.applyError")}
+			</Text>
+		);
+	}
+
+	if (applyState === "idle" && !status.updateAvailable) {
+		return (
+			<Text size="sm" c="dimmed">
+				{t("pages.about.appUpdate.upToDate")}
 			</Text>
 		);
 	}

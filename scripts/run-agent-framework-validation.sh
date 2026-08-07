@@ -27,7 +27,6 @@ This lane is intentionally Linux-safe. It runs:
   * the permanent deterministic Agent Framework compatibility suite
   * the Release llama-server adapter-policy and architecture dependency tests
   * Debug restore + build
-  * the Debug-only DevUI registration and route-registration contract tests
   * release-script static analysis (shellcheck + PSScriptAnalyzer + P0_SPIKE compile gate)
   * optionally the real linux-x64 portable packager
 
@@ -166,16 +165,6 @@ run_step debug-restore scripts/with-build-lock.sh --lock-file "${SHARED_BUILD_LO
   dotnet restore XE-Local-AI-Engine.slnx -p:Configuration=Debug
 run_step debug-build scripts/with-build-lock.sh --lock-file "${SHARED_BUILD_LOCK}" -- \
   dotnet build XE-Local-AI-Engine.slnx --configuration Debug --no-restore
-run_step debug-devui-registration-contract scripts/with-build-lock.sh --lock-file "${SHARED_BUILD_LOCK}" -- \
-  scripts/assembly-guard.sh guard --test-bins -- \
-  dotnet test XE-Local-AI-Engine.AI.Agent.Tests/XE-Local-AI-Engine.AI.Agent.Tests.csproj \
-    --configuration Debug --no-build --max-parallel-test-modules 1 \
-    --treenode-filter '/*/*/AgentDevUiExtensionsTests/*'
-run_step debug-devui-route-contract scripts/with-build-lock.sh --lock-file "${SHARED_BUILD_LOCK}" -- \
-  scripts/assembly-guard.sh guard --test-bins -- \
-  dotnet test XE-Local-AI-Engine.Tests/XE-Local-AI-Engine.Tests.csproj \
-    --configuration Debug --no-build --max-parallel-test-modules 1 \
-    --treenode-filter '/*/*/FrameworkDevUiHostingSmokeTests/*'
 run_step release-static-analysis scripts/with-build-lock.sh --lock-file "${SHARED_BUILD_LOCK}" -- \
   scripts/lint-release-scripts.sh
 
@@ -223,10 +212,6 @@ manifest = {
             "LlamaServerAdapterIntegrationTests and LayerDependencyTests in Release; "
             "live llama-server adapter round trips remain opt-in when their environment variables are absent."
         ),
-    },
-    "debugContractChecks": {
-        "registration": "AgentDevUiExtensionsTests proves Debug-only DI registration.",
-        "route": "FrameworkDevUiHostingSmokeTests proves Debug-only endpoint mapping; it is not a live browser or HTTP runtime proof.",
     },
     "windowsTesterPackage": {
         "status": "gap",

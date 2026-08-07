@@ -58,12 +58,14 @@ This wipes chats, agents, scheduler jobs, and settings, but **keeps** your downl
 
 ## Fully remove the app
 
-Use the uninstaller shipped in the zip (it stops the app + model engine, then deletes your data dir after you confirm):
+1. Stop the app and confirm its console/terminal has closed.
+2. Remove the application files:
+   - **Windows:** delete the extracted Velopack portable directory.
+   - **Linux:** delete the AppImage.
+3. To remove all user data too, delete the platform data directory from the table above.
 
-- **Windows:** right-click `uninstall-xe-local-ai-engine.ps1` → **Run with PowerShell**.
-- **Linux:** from a terminal in the unzipped folder, run `./uninstall-xe-local-ai-engine.sh`.
-
-Then delete the unzipped app folder. To preview without deleting, pass `--dry-run` (Linux) / `-DryRun` (Windows). To keep your data, pass `--keep-data` / `-KeepData`.
+Deleting the application files does not delete the separate user-data directory. Back it up before removal if you may
+need chats, settings, models, or keys later.
 
 ## Reporting a problem
 

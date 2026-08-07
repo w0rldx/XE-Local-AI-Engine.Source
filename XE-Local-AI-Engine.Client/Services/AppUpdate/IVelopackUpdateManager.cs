@@ -9,26 +9,38 @@ public enum VelopackCheckOutcome
     /// <summary>A check completed and no newer release is available.</summary>
     UpToDate,
 
-    /// <summary>GitHub rejected the token (401) — the user must re-authenticate.</summary>
-    Unauthorized,
+    /// <summary>The check could not reach the feed because of a documented transport or timeout failure.</summary>
+    Offline,
 
-    /// <summary>The signed-in user lacks read access to the release repo (403).</summary>
-    Forbidden,
+    /// <summary>The check reached a non-transient failure and must not be presented as an offline condition.</summary>
+    Failed
+}
 
-    /// <summary>GitHub was unreachable / the feed could not be read — treat as offline, advertise no update.</summary>
-    Offline
+/// <summary>Sanitized diagnostic category for a failed update check. No exception message, URL, or path is retained.</summary>
+public enum AppUpdateFailureReason
+{
+    None,
+    Transport,
+    Timeout,
+    Tls,
+    MalformedFeed,
+    Integrity,
+    Http,
+    Unexpected
 }
 
 /// <summary>The result of <see cref="IVelopackUpdateManager.CheckForUpdateAsync" />.</summary>
 /// <param name="Outcome">The check outcome.</param>
 /// <param name="AvailableVersion">The newer version when <see cref="Outcome" /> is <see cref="VelopackCheckOutcome.UpdateAvailable" />; otherwise <see langword="null" />.</param>
-public sealed record VelopackCheckResult(VelopackCheckOutcome Outcome, string? AvailableVersion);
+public sealed record VelopackCheckResult(VelopackCheckOutcome Outcome,
+    string? AvailableVersion,
+    AppUpdateFailureReason FailureReason = AppUpdateFailureReason.None);
 
 /// <summary>
 ///     The seam over Velopack's <c>UpdateManager</c> for a single build flavor's GitHub source. It keeps every Velopack
 ///     type (UpdateManager, GithubSource, UpdateInfo, VelopackAsset) inside the implementation so the update service and
 ///     its tests depend only on this interface — no real network, no Velopack types, in unit tests. One instance is
-///     created per access token (the token is supplied at construction by the factory).
+///     created for the baked anonymous public source policy.
 /// </summary>
 public interface IVelopackUpdateManager
 {
@@ -38,26 +50,24 @@ public interface IVelopackUpdateManager
     /// <summary>The currently installed app version, or <c>"0.0.0"</c> when not a Velopack install.</summary>
     string CurrentVersion { get; }
 
-    /// <summary>Checks GitHub for a newer release, mapping auth / offline failures to a <see cref="VelopackCheckResult" /> (never throws on those).</summary>
+    /// <summary>Checks GitHub for a newer release and returns a sanitized outcome and diagnostic category.</summary>
     Task<VelopackCheckResult> CheckForUpdateAsync(CancellationToken ct);
 
     /// <summary>
-    ///     Downloads the latest release and applies it, then restarts into the new version (re-using
-    ///     <paramref name="restartArgs" /> so desktop mode + the persisted loopback port survive). No-op when no update is
-    ///     available. When an update IS applied the process is replaced and this never returns; it returns
-    ///     <see langword="false" /> only when the live re-check found nothing to apply.
+    ///     Downloads the latest release and asks Velopack to wait for this host to exit before applying it and restarting
+    ///     into the new version. Re-uses <paramref name="restartArgs" /> so desktop mode + the persisted loopback port
+    ///     survive. This method deliberately does not terminate the process: the endpoint must first complete its
+    ///     <c>{ applying: true }</c> response, then stop the host gracefully.
     /// </summary>
-    /// <returns><see langword="false" /> when no update was available to apply (success replaces the process, so it never returns <see langword="true" />).</returns>
-    Task<bool> ApplyUpdateAndRestartAsync(IReadOnlyList<string> restartArgs, CancellationToken ct);
+    /// <returns><see langword="true" /> after the updater is waiting for host exit; <see langword="false" /> when no update was available.</returns>
+    Task<bool> PrepareUpdateAndRestartAsync(IReadOnlyList<string> restartArgs, CancellationToken ct);
 }
 
 /// <summary>
-///     Builds an <see cref="IVelopackUpdateManager" /> bound to the running build flavor's GitHub repo + a user access
-///     token. Behind a factory so the update service can construct a manager per check with the current token, and so
-///     tests substitute the whole construction.
+///     Builds an <see cref="IVelopackUpdateManager" /> bound to the running build flavor's anonymous public GitHub source.
 /// </summary>
 public interface IVelopackUpdateManagerFactory
 {
-    /// <summary>Creates a manager for <paramref name="accessToken" /> against the baked flavor repo (prerelease included).</summary>
-    IVelopackUpdateManager Create(string accessToken);
+    /// <summary>Creates a manager against the baked public source policy.</summary>
+    IVelopackUpdateManager Create();
 }

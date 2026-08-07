@@ -680,7 +680,10 @@ public sealed class PreviewWorkflowExecutionServiceTests
         await using var service = CreateService(runner, publisher, provider, options);
         _ = await service.StartAsync(PreviewGraphBuilder.Linear(), connectionId: null).ConfigureAwait(false);
         _ = await service.StartAsync(PreviewGraphBuilder.Linear(), connectionId: null).ConfigureAwait(false);
-        await WaitForAsync(() => service.ActiveRunIds.Count == 2, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+        await WaitForAsync(
+                () => service.ListRuns().Count(run => run.IsLive && run.State == PreviewRunState.Paused) == 2,
+                TimeSpan.FromSeconds(5))
+            .ConfigureAwait(false);
 
         // The cap is genuinely reached first, so the recovery below is proving something.
         _ = await AssertEx.ThrowsAsync<PreviewWorkflowCapReachedException>(async () =>
@@ -692,6 +695,58 @@ public sealed class PreviewWorkflowExecutionServiceTests
         AssertEx.Equal(expected: 2, cancelled);
         await WaitForAsync(() => service.ActiveRunIds.Count == 0, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
         _ = await service.StartAsync(PreviewGraphBuilder.Linear(), connectionId: null).ConfigureAwait(false);
+    }
+
+    [Test]
+    [Arguments(PreviewWorkflowUpdateKind.RunPaused)]
+    [Arguments(PreviewWorkflowUpdateKind.RunCompleted)]
+    [Arguments(PreviewWorkflowUpdateKind.RunFailed)]
+    public async Task PreviewExec_CancelledRun_IgnoresLateDrainUpdate(PreviewWorkflowUpdateKind lateUpdateKind)
+    {
+        var provider = new FakeLocalModelProvider();
+        var publisher = new RecordingPreviewEventPublisher();
+        var options = DefaultOptions();
+        options.MaxConcurrentRuns = 1;
+
+        var lateUpdate = lateUpdateKind switch
+        {
+            PreviewWorkflowUpdateKind.RunPaused => PreviewWorkflowUpdate.RunPaused("pause", "late", "req-late"),
+            PreviewWorkflowUpdateKind.RunCompleted => PreviewWorkflowUpdate.RunCompleted("late"),
+            PreviewWorkflowUpdateKind.RunFailed => PreviewWorkflowUpdate.RunFailed("late"),
+            _ => throw new ArgumentOutOfRangeException(nameof(lateUpdateKind), lateUpdateKind, "Unsupported late update kind.")
+        };
+        await using var gatedSession = new GatedPreviewRunSession(lateUpdate);
+        var starts = 0;
+        var runner = new FakePreviewWorkflowRunner((_, _) =>
+            Interlocked.Increment(ref starts) == 1
+                ? gatedSession
+                : new ScriptedPreviewRunSession([]));
+
+        await using var service = CreateService(runner, publisher, provider, options);
+        var cancelledRunId = await service.StartAsync(PreviewGraphBuilder.Linear(), connectionId: null).ConfigureAwait(false);
+        await gatedSession.MoveNextEntered.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+
+        AssertEx.Equal(PreviewRunCommandOutcome.Accepted,
+            await service.CancelAsync(cancelledRunId, CancellationToken.None).ConfigureAwait(false));
+        AssertEx.True(publisher.HasRunEvent(PreviewWorkflowHubEvents.RunCancelled),
+            "cancellation must publish the one authoritative terminal event before an in-flight update returns.");
+
+        gatedSession.ReleaseUpdate();
+
+        await WaitForAsync(() => service.ActiveRunIds.Count == 0, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+        var retained = AssertEx.NotNull(service.GetRun(cancelledRunId), "the cancelled result must remain replayable.");
+        AssertEx.Equal(PreviewRunState.Cancelled, retained.State,
+            "a late drain update must not overwrite the terminal cancelled state.");
+        AssertEx.False(publisher.HasRunEvent(PreviewWorkflowHubEvents.RunPaused),
+            "a late pause must not be published after cancellation.");
+        AssertEx.False(publisher.HasRunEvent(PreviewWorkflowHubEvents.RunCompleted),
+            "a late completion must not be published after cancellation.");
+        AssertEx.False(publisher.HasRunEvent(PreviewWorkflowHubEvents.RunFailed),
+            "a late failure must not be published after cancellation.");
+
+        var replacementRunId = await service.StartAsync(PreviewGraphBuilder.Linear(), connectionId: null).ConfigureAwait(false);
+        AssertEx.True(service.ActiveRunIds.Contains(replacementRunId),
+            "the cancelled run must release its concurrency slot for the next run.");
     }
 
     private static long SeqOf(PreviewWorkflowBufferedEvent bufferedEvent)

@@ -129,10 +129,10 @@ public sealed record NodeSettingsResponse
     /// <summary>Node-level master flag for the client voice feature. <see langword="null" /> reads as off.</summary>
     public bool? VoiceFeatureEnabled { get; init; }
 
-    /// <summary>Allow-list of voice model ids the client may load. <see langword="null" /> reads as the bundled Kokoro model.</summary>
+    /// <summary>Legacy neural-voice model allow-list, retained for settings compatibility but unused by Web Speech.</summary>
     public IReadOnlyList<string>? AllowedVoiceModels { get; init; }
 
-    /// <summary>The default Kokoro voice profile id. <see langword="null" /> reads as <c>af_heart</c>.</summary>
+    /// <summary>Preferred browser voice identifier; unmatched legacy values safely fall back to a browser voice.</summary>
     public string? DefaultVoiceProfile { get; init; }
 
     // ── Usage cost rates ──
@@ -230,4 +230,3 @@ public sealed record SaveNodeSettingsRequest
     /// </summary>
     public IReadOnlyDictionary<string, ModelRate>? UsageRates { get; init; }
 }
-

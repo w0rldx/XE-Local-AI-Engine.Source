@@ -81,7 +81,7 @@ public static class ConfigureServices
             writeToProviders: true);
 
         // Explicit, stable Data Protection key-ring. The framework already auto-registers Data Protection (so the
-        // encrypted token stores — CloudCredentialStore, CodexTokenStore, HfTokenStore, GitHubTokenStore, the auth
+        // encrypted token stores — CloudCredentialStore, CodexTokenStore and HfTokenStore — plus the auth
         // TokenStore — are protected today); this is DEFENSIVE stability hardening, not a confidentiality fix. It pins
         // a STABLE application-name discriminator so the key-ring never shifts between Velopack updates, and persists
         // the keys under the SAME per-user data directory the rest of the node state uses (the NodeData:Directory key

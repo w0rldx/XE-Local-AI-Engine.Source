@@ -150,11 +150,32 @@ internal sealed class PreviewWorkflowRunHandle : IAsyncDisposable
         }
     }
 
-    public void SetState(PreviewRunState state)
+    public bool TryTransitionState(PreviewRunState expected, PreviewRunState next)
     {
         lock (_stateGate)
         {
-            State = state;
+            if (State != expected)
+            {
+                return false;
+            }
+
+            State = next;
+            return true;
+        }
+    }
+
+    public bool TryCancel(out PreviewRunState previous)
+    {
+        lock (_stateGate)
+        {
+            previous = State;
+            if (previous is not (PreviewRunState.Running or PreviewRunState.Paused))
+            {
+                return false;
+            }
+
+            State = PreviewRunState.Cancelled;
+            return true;
         }
     }
 

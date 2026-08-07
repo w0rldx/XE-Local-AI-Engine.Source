@@ -1,24 +1,37 @@
 namespace XE_Local_AI_Engine.Client.Services.AppUpdate;
 
 using System.Net;
+using System.Security.Authentication;
+using System.Text.Json;
 using Microsoft.Extensions.Options;
 using Velopack;
+using Velopack.Exceptions;
 using Velopack.Sources;
 
 /// <summary>
 ///     The real Velopack-backed <see cref="IVelopackUpdateManager" />. Wraps a <see cref="UpdateManager" /> over a
-///     <see cref="GithubSource" /> for the baked flavor repo (prerelease included while shipping <c>rc.N</c>), with the
-///     user access token passed as the GitHub auth token. All Velopack types stay inside this class. Auth / offline
-///     failures from <see cref="UpdateManager.CheckForUpdatesAsync" /> are mapped to a <see cref="VelopackCheckResult" />
-///     rather than thrown, so a revoked token or an offline box never crashes the background check.
+///     <see cref="GithubSource" /> for the baked public repo and explicit stable/RC track, with a null access token. All
+///     Velopack types stay inside this class. Check failures are reduced to sanitized categories so transport outages
+///     can be distinguished from malformed feeds, integrity failures, and unexpected faults without retaining their
+///     potentially sensitive exception messages.
 /// </summary>
 public sealed class VelopackUpdateManager : IVelopackUpdateManager
 {
+    private readonly Action<UpdateManager, VelopackAsset, string[]> _scheduleApplyAfterExit;
     private readonly UpdateManager _updateManager;
 
-    internal VelopackUpdateManager(UpdateManager updateManager)
+    internal VelopackUpdateManager(UpdateManager updateManager) : this(updateManager,
+        static (manager, release, restartArgs) =>
+            manager.WaitExitThenApplyUpdates(release, silent: false, restart: true, restartArgs))
+    {
+    }
+
+    internal VelopackUpdateManager(UpdateManager updateManager,
+        Action<UpdateManager, VelopackAsset, string[]> scheduleApplyAfterExit)
     {
         _updateManager = updateManager ?? throw new ArgumentNullException(nameof(updateManager));
+        _scheduleApplyAfterExit = scheduleApplyAfterExit
+                                  ?? throw new ArgumentNullException(nameof(scheduleApplyAfterExit));
     }
 
     public bool IsInstalled => _updateManager.IsInstalled;
@@ -47,18 +60,18 @@ public sealed class VelopackUpdateManager : IVelopackUpdateManager
             var version = updateInfo.TargetFullRelease.Version.ToString();
             return new VelopackCheckResult(VelopackCheckOutcome.UpdateAvailable, version);
         }
-        catch (HttpRequestException exception)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            return new VelopackCheckResult(MapHttpFailure(exception.StatusCode), AvailableVersion: null);
+            throw;
         }
-        catch (Exception exception) when (exception is not OperationCanceledException)
+        catch (Exception exception)
         {
-            // Any other read failure (DNS, TLS, malformed feed) is treated as offline — advertise no update, never crash.
-            return new VelopackCheckResult(VelopackCheckOutcome.Offline, AvailableVersion: null);
+            var (outcome, reason) = ClassifyFailure(exception);
+            return new VelopackCheckResult(outcome, AvailableVersion: null, reason);
         }
     }
 
-    public async Task<bool> ApplyUpdateAndRestartAsync(IReadOnlyList<string> restartArgs, CancellationToken ct)
+    public async Task<bool> PrepareUpdateAndRestartAsync(IReadOnlyList<string> restartArgs, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(restartArgs);
 
@@ -75,29 +88,52 @@ public sealed class VelopackUpdateManager : IVelopackUpdateManager
 
         await _updateManager.DownloadUpdatesAsync(updateInfo, progress: null, ct).ConfigureAwait(false);
 
-        // Applies the downloaded release and restarts into the new version. Re-using the current restart args keeps the
-        // relaunch in desktop mode so the persisted loopback port is re-bound and the browser tab reconnects. This call
-        // replaces the process and does not return on success — the `return true` below is unreachable on a real apply
-        // but keeps the seam honest for tests / non-restarting hosts.
-        _updateManager.ApplyUpdatesAndRestart(updateInfo.TargetFullRelease, [.. restartArgs]);
+        // Start the updater in wait-for-exit mode, but do NOT terminate this host here. ApplyUpdatesAndRestart exits the
+        // process synchronously in Velopack 1.2.0, which aborts the HTTP response that tells React to begin restart
+        // polling. The endpoint completes { applying: true } first and then requests graceful host shutdown.
+        _scheduleApplyAfterExit(_updateManager, updateInfo.TargetFullRelease, [.. restartArgs]);
         return true;
     }
 
-    private static VelopackCheckOutcome MapHttpFailure(HttpStatusCode? statusCode)
+    internal static (VelopackCheckOutcome Outcome, AppUpdateFailureReason Reason) ClassifyFailure(Exception exception)
     {
-        return statusCode switch
+        return exception switch
         {
-            HttpStatusCode.Unauthorized => VelopackCheckOutcome.Unauthorized,
-            HttpStatusCode.Forbidden => VelopackCheckOutcome.Forbidden,
-            _ => VelopackCheckOutcome.Offline
+            OperationCanceledException or TimeoutException => (VelopackCheckOutcome.Offline, AppUpdateFailureReason.Timeout),
+            ChecksumFailedException => (VelopackCheckOutcome.Failed, AppUpdateFailureReason.Integrity),
+            AuthenticationException => (VelopackCheckOutcome.Failed, AppUpdateFailureReason.Tls),
+            JsonException or FormatException or InvalidDataException =>
+                (VelopackCheckOutcome.Failed, AppUpdateFailureReason.MalformedFeed),
+            HttpRequestException httpException => ClassifyHttpFailure(httpException),
+            _ => (VelopackCheckOutcome.Failed, AppUpdateFailureReason.Unexpected)
         };
     }
+
+    private static (VelopackCheckOutcome Outcome, AppUpdateFailureReason Reason) ClassifyHttpFailure(
+        HttpRequestException exception)
+    {
+        if (exception.StatusCode is HttpStatusCode.RequestTimeout or HttpStatusCode.GatewayTimeout)
+        {
+            return (VelopackCheckOutcome.Offline, AppUpdateFailureReason.Timeout);
+        }
+
+        return exception.HttpRequestError switch
+        {
+            HttpRequestError.NameResolutionError or
+                HttpRequestError.ConnectionError or
+                HttpRequestError.ProxyTunnelError or
+                HttpRequestError.ResponseEnded => (VelopackCheckOutcome.Offline, AppUpdateFailureReason.Transport),
+            HttpRequestError.SecureConnectionError => (VelopackCheckOutcome.Failed, AppUpdateFailureReason.Tls),
+            HttpRequestError.InvalidResponse => (VelopackCheckOutcome.Failed, AppUpdateFailureReason.MalformedFeed),
+            _ => (VelopackCheckOutcome.Failed, AppUpdateFailureReason.Http)
+        };
+    }
+
 }
 
 /// <summary>
-///     Builds <see cref="VelopackUpdateManager" /> instances bound to the baked flavor repo and a user
-///     access token. The repo URL comes from <see cref="AppUpdateChannelOptions" /> — fixed per artifact, so a tester
-///     build can never construct a manager against the main repo.
+///     Builds <see cref="VelopackUpdateManager" /> instances bound to the baked anonymous public source policy. Velopack
+///     continues to select its Windows/Linux feed channel from the installed package metadata.
 /// </summary>
 public sealed class VelopackUpdateManagerFactory : IVelopackUpdateManagerFactory
 {
@@ -109,13 +145,15 @@ public sealed class VelopackUpdateManagerFactory : IVelopackUpdateManagerFactory
         _options = options.Value;
     }
 
-    public IVelopackUpdateManager Create(string accessToken)
+    public IVelopackUpdateManager Create()
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(accessToken);
+        return new VelopackUpdateManager(new UpdateManager(CreateGithubSource()));
+    }
 
-        // prerelease:true while shipping rc.N so a published RC is seen as an available update. The token is sent by
-        // GithubSource as Authorization: Bearer for private-repo reads.
-        var source = new GithubSource(_options.GitHubRepositoryUrl, accessToken, prerelease: true);
-        return new VelopackUpdateManager(new UpdateManager(source));
+    internal GithubSource CreateGithubSource()
+    {
+        var policy = _options.SourcePolicy
+                     ?? throw new InvalidOperationException("App self-update is not configured for this build.");
+        return new GithubSource(policy.GitHubRepositoryUrl, accessToken: null, policy.IncludePrereleases);
     }
 }

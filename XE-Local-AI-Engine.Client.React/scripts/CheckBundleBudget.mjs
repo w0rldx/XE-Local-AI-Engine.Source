@@ -15,23 +15,10 @@ function collectJavaScriptAssets(root, directory = root) {
 	});
 }
 
-function category(asset) {
-	if (asset.name.startsWith("ort/") || /(?:^|\/)ort[^/]*\.(?:js|mjs)$/.test(asset.name)) {
-		return "ort";
-	}
-	if (/worker/i.test(asset.name)) {
-		return "worker";
-	}
-	return "application";
-}
-
 export function measureJavaScriptAssets(distDirectory) {
 	const assets = collectJavaScriptAssets(distDirectory);
-	const total = (kind) => assets.filter((asset) => category(asset) === kind).reduce((sum, asset) => sum + asset.bytes, 0);
 	return {
-		applicationJavaScriptBytes: total("application"),
-		workerJavaScriptBytes: total("worker"),
-		ortJavaScriptBytes: total("ort"),
+		applicationJavaScriptBytes: assets.reduce((sum, asset) => sum + asset.bytes, 0),
 		largestAssets: assets.toSorted((left, right) => right.bytes - left.bytes).slice(0, 5),
 	};
 }
@@ -56,9 +43,7 @@ if (isMain) {
 	try {
 		const { measurements, violations } = checkBundleBudget();
 		process.stdout.write(
-			`Bundle budget: app ${(measurements.applicationJavaScriptBytes / 1_000_000).toFixed(2)} MB, ` +
-				`worker ${(measurements.workerJavaScriptBytes / 1_000_000).toFixed(2)} MB, ` +
-				`ORT ${(measurements.ortJavaScriptBytes / 1_000_000).toFixed(2)} MB. Largest deployed scripts:\n` +
+			`Bundle budget: app ${(measurements.applicationJavaScriptBytes / 1_000_000).toFixed(2)} MB. Largest deployed scripts:\n` +
 				`${measurements.largestAssets.map((asset) => `  ${asset.name} ${(asset.bytes / 1_000).toFixed(1)} kB`).join("\n")}\n`,
 		);
 		if (violations.length > 0) {

@@ -1,9 +1,9 @@
 import { z } from "zod";
 
-export const COMMAND_NAME_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-export const COMMAND_NAME_MAX = 64;
-export const COMMAND_DESCRIPTION_MAX = 1024;
-export const COMMAND_PROMPT_MAX = 20_000;
+const COMMAND_NAME_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const COMMAND_NAME_MAX = 64;
+const COMMAND_DESCRIPTION_MAX = 1024;
+const COMMAND_PROMPT_MAX = 20_000;
 export const CUSTOM_COMMAND_CAPACITY = 100;
 
 export type CommandSource = "builtIn" | "custom";

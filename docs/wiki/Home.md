@@ -53,7 +53,7 @@ explore → freeze → replay tuning; the supervisor no longer forces `--n-gpu-l
 [Local Runtime & Providers](03-local-runtime-and-providers.md) and the [Architecture Overview](01-architecture-overview.md) launch-args seam),
 **GGUF quant recommendation** (quality tier + hardware-fit + recommended-variant badge — see
 [Model-fit / Advisor](07-model-fit.md)), **chat file upload → agent attachments** (encrypted store — see
-[Chat](05-chat.md)), a browser **client voice runtime** (Kokoro TTS), and an **onboarding first-response tour**.
+[Chat](05-chat.md)), a browser **client voice runtime** (Web Speech through browser/OS voices), and an **onboarding first-response tour**.
 
 **Shipped flagship features (now documented):** local **image generation** via stable-diffusion.cpp (see
 [Image Generation](14-image-generation.md)) and an offline **Knowledge Base / RAG** with hybrid FTS+vector
@@ -85,7 +85,7 @@ action, never implicit. Prebuilt download stays the default. If you read anywher
 | 08 | [Data & Persistence](08-data-and-persistence.md) | EF Core + SQLite, per-column AEAD encryption, entities, migration timeline |
 | 09 | [API & Hubs](09-api-and-hubs.md) | FastEndpoints `/api/local/v1` (23 route families), 10 possible local SignalR hubs (9 unconditional plus conditional Development), WorkerHub, OpenAPI→hey-api |
 | 10 | [React Client](10-react-client.md) | 25 features, TanStack Query/Zustand, hey-api, shared hub connections, dialog system, i18n, SPA serving |
-| 11 | [Hosting & Deployment](11-hosting-and-deployment.md) | Aspire AppHost, desktop launcher, publish profiles, uninstaller |
+| 11 | [Hosting & Deployment](11-hosting-and-deployment.md) | Aspire AppHost, desktop launcher, publish profiles, legacy/manual cleanup |
 | 12 | [Security & Privacy](12-security-and-privacy.md) | Egress boundary, secret handling, loopback/Host-Origin, redaction, node-local AI ops, Development Mode execution boundary |
 | 13 | [Testing & Validation](13-testing-and-validation.md) | Test topology, validation commands, E2E, RC evidence |
 | 14 | [Image Generation](14-image-generation.md) | Local stable-diffusion.cpp: `sd-server` supervisor, serialized job coordinator, encrypted image store |

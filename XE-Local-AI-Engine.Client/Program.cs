@@ -25,9 +25,6 @@ using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.Persistence;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.Shutdown;
-#if DEBUG
-using Microsoft.Agents.AI.DevUI;
-#endif
 
 // Velopack install, update, and uninstall hook dispatch. This MUST be the FIRST executable statement and is
 // intentionally placed BEFORE the try/catch. When Velopack is invoked for an install, update, or uninstall hook it runs
@@ -44,7 +41,7 @@ try
     var builder = WebApplication.CreateBuilder(args);
 
     // App self-update build flavor: layer the baked, channel-specific update config (repo URL +
-    // GitHub App client_id) over the appsettings defaults. The publish output renames the active
+    // stable/RC release track) over the appsettings defaults. The publish output renames the active
     // appsettings.AppUpdate.{flavor}.json to appsettings.AppUpdate.json (see the Client .csproj), so exactly one
     // channel file is present and it can never point a tester build at the main repo. Optional: absent in dev/CI, where
     // the empty appsettings.json defaults leave the updater inert.
@@ -123,25 +120,10 @@ try
     var isDevelopmentModeEnabled = builder.Configuration.GetValue($"{DevelopmentOptions.Section}:Enabled", defaultValue: true);
     builder.AddServices(builder.Configuration);
 
-    // App self-update (Velopack + GitHub device flow). Desktop-mode only: off the flag this registers nothing and the
+    // App self-update (Velopack + anonymous public GitHub releases). Desktop-mode only: off the flag this registers nothing and the
     // desktop-only endpoints are filtered out of FastEndpoints above. The process args are re-passed on relaunch so the
     // new version comes back up in desktop mode and re-binds the persisted loopback port.
     builder.AddAppUpdate(builder.Configuration, isDesktop, args);
-
-    // Agent Framework DevUI (development only): a representative named agent plus the
-    // OpenAI-compatible Responses/Conversations services the DevUI dashboard requires.
-    // Compiled out of Release entirely so the preview/alpha DevUI + Hosting packages
-    // never ship in the published desktop build; the IsDevelopment() gate stays as
-    // defense in depth for Debug builds run against a non-Development environment.
-#if DEBUG
-    if (builder.Environment.IsDevelopment())
-    {
-        builder.AddLocalAiAgentDevUi();
-        builder.AddOpenAIResponses();
-        builder.AddOpenAIConversations();
-        builder.AddDevUI();
-    }
-#endif
 
     // W3C trace correlation that works with Aspire/OpenTelemetry OFF (the desktop/RC default). Forcing the W3C
     // Activity id format and registering a listener for the ASP.NET Core hosting source makes ASP.NET create a request
@@ -325,7 +307,7 @@ try
     {
         config.Endpoints.RoutePrefix = LocalApiRoutes.Prefix;
 
-        // Desktop-only surface (app self-update + GitHub auth): off the desktop flag these endpoints are excluded from
+        // Desktop-only app self-update surface: off the desktop flag these endpoints are excluded from
         // registration entirely, so the routes are absent (a request 404s) rather than throwing a 500 for a missing
         // service. Mirrors the invariant that the updater is desktop-mode only. On the desktop flag the filter is a
         // no-op (returns true for every endpoint).
@@ -406,18 +388,6 @@ try
             settings.AddPreferredSecuritySchemes("Bearer");
         }).AllowAnonymous();
     }
-
-    // Agent Framework DevUI dashboard (development only) at /devui. The OpenAI-compatible
-    // Responses + Conversations endpoints must be mapped before MapDevUI. Compiled out of
-    // Release (see the registration block above).
-#if DEBUG
-    if (app.Environment.IsDevelopment())
-    {
-        app.MapOpenAIResponses();
-        app.MapOpenAIConversations();
-        app.MapDevUI();
-    }
-#endif
 
     app.MapFallbackToFile("index.html");
 

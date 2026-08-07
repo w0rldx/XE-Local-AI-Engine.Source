@@ -1,61 +1,40 @@
 // @vitest-environment jsdom
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { detectWasm, detectWebGpu } from "./CapabilityDetector";
+import { detectVoiceCapabilities, detectWebSpeech, resetVoiceCapabilitiesCache } from "./CapabilityDetector";
 
-interface FakeDevice {
-	readonly lost: Promise<unknown>;
+const voice = {
+	name: "Local English",
+	lang: "en-US",
+	voiceURI: "local-en",
+	localService: true,
+	default: true,
+} as SpeechSynthesisVoice;
+
+function setSpeechSynthesis(value: SpeechSynthesis | undefined): void {
+	Object.defineProperty(globalThis, "speechSynthesis", { value, configurable: true });
 }
 
-interface FakeAdapter {
-	requestDevice(): Promise<FakeDevice>;
-}
-
-function stubNavigatorGpu(gpu: unknown): void {
-	Object.defineProperty(navigator, "gpu", { value: gpu, configurable: true });
-}
-
-function clearNavigatorGpu(): void {
-	if ("gpu" in navigator) {
-		Reflect.deleteProperty(navigator as object, "gpu");
-	}
-}
-
-describe("CapabilityDetector.detectWebGpu", () => {
+describe("Web Speech capability detection", () => {
 	afterEach(() => {
-		clearNavigatorGpu();
+		vi.restoreAllMocks();
+		resetVoiceCapabilitiesCache();
+		Reflect.deleteProperty(globalThis, "speechSynthesis");
 	});
 
-	it("returns false and falls back when navigator.gpu is absent", async () => {
-		clearNavigatorGpu();
-
-		await expect(detectWebGpu()).resolves.toBe(false);
+	it("reports unavailable without the browser speech engine", async () => {
+		setSpeechSynthesis(undefined);
+		await expect(detectWebSpeech(0)).resolves.toEqual({ available: false, voices: [] });
 	});
 
-	it("does not throw and returns false when requestAdapter resolves null", async () => {
-		stubNavigatorGpu({ requestAdapter: () => Promise.resolve(null) });
-
-		await expect(detectWebGpu()).resolves.toBe(false);
-	});
-
-	it("returns true when an adapter and device are obtained", async () => {
-		const adapter: FakeAdapter = { requestDevice: () => Promise.resolve({ lost: Promise.resolve() }) };
-		stubNavigatorGpu({ requestAdapter: () => Promise.resolve(adapter) });
-
-		await expect(detectWebGpu()).resolves.toBe(true);
-	});
-
-	it("returns false when requestDevice rejects", async () => {
-		const adapter: FakeAdapter = { requestDevice: () => Promise.reject(new Error("no device")) };
-		stubNavigatorGpu({ requestAdapter: () => Promise.resolve(adapter) });
-
-		await expect(detectWebGpu()).resolves.toBe(false);
-	});
-});
-
-describe("CapabilityDetector.detectWasm", () => {
-	it("detects the WebAssembly API in a standard environment", () => {
-		expect(detectWasm()).toBe(true);
+	it("returns installed voices without probing neural inference capabilities", async () => {
+		setSpeechSynthesis({ getVoices: () => [voice] } as SpeechSynthesis);
+		await expect(detectVoiceCapabilities()).resolves.toEqual({
+			webSpeech: {
+				available: true,
+				voices: [{ voiceId: "local-en", name: "Local English", lang: "en-US", localService: true }],
+			},
+		});
 	});
 });

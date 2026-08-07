@@ -65,7 +65,7 @@
     <PackageVersion Include="Microsoft.Extensions.AI" Version="10.8.3" />
     <PackageVersion Include="Microsoft.Extensions.AI.Abstractions" Version="10.8.3" />
     <PackageVersion Include="Microsoft.Extensions.AI.OpenAI" Version="10.8.3" />
-    <!-- Transitive only (pulled in by Microsoft.Extensions.AI.OpenAI / Microsoft.Agents.AI.Hosting.OpenAI): pinned
+    <!-- Transitive only (pulled in by Microsoft.Extensions.AI.OpenAI): pinned
          explicitly, matching the version CentralPackageTransitivePinningEnabled currently resolves, so the plain
          OpenAI SDK's OPENAI001-experimental OpenAIClient(AuthenticationPolicy, OpenAIClientOptions) ctor that
          AzureFoundryChatClientFactory's v1-surface builders depend on is a visible, greppable dependency, and a
@@ -83,14 +83,10 @@
     <PackageVersion Include="Microsoft.Extensions.Options.DataAnnotations" Version="10.0.9" />
     <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.9" />
     <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.7.0" />
-    <!-- Compatibility cohort: upgrade the stable MAF trio and the Debug-only Hosting/Hosting.OpenAI/DevUI
-         prerelease packages together after verifying their exact matching release set. -->
+    <!-- Compatibility cohort: upgrade the stable MAF trio together after verifying their matching release set. -->
     <PackageVersion Include="Microsoft.Agents.AI" Version="1.15.0" />
     <PackageVersion Include="Microsoft.Agents.AI.Abstractions" Version="1.15.0" />
     <PackageVersion Include="Microsoft.Agents.AI.Workflows" Version="1.15.0" />
-    <PackageVersion Include="Microsoft.Agents.AI.Hosting" Version="1.15.0-preview.260722.1" />
-    <PackageVersion Include="Microsoft.Agents.AI.Hosting.OpenAI" Version="1.15.0-alpha.260722.1" />
-    <PackageVersion Include="Microsoft.Agents.AI.DevUI" Version="1.15.0-preview.260722.1" />
     <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery" Version="10.7.0" />
     <PackageVersion Include="ModelContextProtocol" Version="2.0.0" />
     <PackageVersion Include="ModelContextProtocol.AspNetCore" Version="2.0.0" />

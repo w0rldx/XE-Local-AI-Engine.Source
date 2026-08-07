@@ -1,0 +1,3 @@
+Source: https://raw.githubusercontent.com/spdx/license-list-data/v3.28.0/text/ISC.txt
+Retrieved: 2026-08-07
+SHA-256: f2ec607f67bb0dd3053b49835b02110d5cd0f8eb6da3aac4dc0b142a6b299be9

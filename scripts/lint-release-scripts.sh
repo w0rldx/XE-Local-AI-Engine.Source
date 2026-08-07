@@ -2,10 +2,9 @@
 # lint-release-scripts.sh — static analysis for the release-critical shell + PowerShell scripts.
 #
 # Why this exists
-#   GitHub Actions is disabled for this repo, so publish/package-tester-win.ps1 is the ONLY
-#   release path and the ONLY quality gate. Neither it nor publish/package-rc.sh had any static
-#   analysis: a defect in the gate itself (e.g. `@($null).Count` being 1, which made the
-#   vulnerability audit throw on a clean solution) shipped unnoticed because nothing looked at it.
+#   The tag-triggered GitHub workflow is the official release path. The deprecated manual
+#   packagers remain useful reference and recovery surfaces, so they still receive static analysis:
+#   a defect in a gate itself (for example `@($null).Count` being 1) must not pass unnoticed.
 #
 # What it does
 #   - shellcheck over the release-path shell scripts
@@ -59,13 +58,15 @@ SHELL_TARGETS=(
   "scripts/dev-status.sh"
   "scripts/dev-stop.sh"
   "scripts/aspire-readiness-smoke.sh"
+  "scripts/compliance/tests/sbom-tool-wrapper.test.sh"
   "scripts/openapi-live-check.sh"
+  "scripts/run-release-contract-tests.sh"
   "scripts/tests/coverage-merge.test.sh"
   "scripts/tests/dev-aspire-helpers.test.sh"
   "scripts/tests/dev-stop-select.test.sh"
   "scripts/tests/gpu-smoke.test.sh"
   "scripts/tests/openapi-live-check.test.sh"
-  "scripts/tests/project-validate-contract.test.sh"
+  "scripts/tests/release-authority.test.sh"
   "scripts/run-tests-memory-safe.sh"
   "scripts/run-e2e-local.sh"
   "scripts/run-gpu-smoke-local.sh"
@@ -79,17 +80,7 @@ SHELL_TARGETS=(
   "scripts/assembly-guard.sh"
 )
 
-# Behavioral tests are declared explicitly and cross-checked against discovery below. This makes
-# adding a new test without wiring it into the default gate a loud failure rather than a vacuous
-# green. Keep this list in lexical order to match the glob expansion used for the comparison.
-BEHAVIOR_TESTS=(
-  "scripts/tests/coverage-merge.test.sh"
-  "scripts/tests/dev-aspire-helpers.test.sh"
-  "scripts/tests/dev-stop-select.test.sh"
-  "scripts/tests/gpu-smoke.test.sh"
-  "scripts/tests/openapi-live-check.test.sh"
-  "scripts/tests/project-validate-contract.test.sh"
-)
+RELEASE_CONTRACT_RUNNER="scripts/run-release-contract-tests.sh"
 
 # Release-path PowerShell scripts, plus the Windows ports of the two test-integrity guards. The
 # guards are not on the release path, but they are the only thing standing between a Windows agent
@@ -332,35 +323,16 @@ fi
 # Behavioral shell tests — part of the default validation, never implicit.
 # ---------------------------------------------------------------------------
 if [[ "${RUN_BEHAVIOR}" == "true" ]]; then
-  discovered_behavior=()
-  while IFS= read -r test_file; do
-    discovered_behavior+=("${test_file#"${PROJECT_ROOT}/"}")
-  done < <(find "${PROJECT_ROOT}/scripts/tests" -maxdepth 1 -type f -name '*.test.sh' -print | LC_ALL=C sort)
-
-  if [[ "${discovered_behavior[*]}" != "${BEHAVIOR_TESTS[*]}" ]]; then
-    echo "[lint] FAIL: scripts/tests/*.test.sh does not match BEHAVIOR_TESTS." >&2
-    printf '[lint]   declared: %s\n' "${BEHAVIOR_TESTS[*]}" >&2
-    printf '[lint]   discovered: %s\n' "${discovered_behavior[*]}" >&2
+  log "=== auto-enrolled release contract tests ==="
+  behavior_output="$("${PROJECT_ROOT}/${RELEASE_CONTRACT_RUNNER}" 2>&1)"
+  behavior_status=$?
+  printf '%s\n' "${behavior_output}"
+  if [[ "${behavior_status}" -ne 0 ]] \
+      || ! grep -Fxq 'run-release-contract-tests.sh: PASS' <<<"${behavior_output}"; then
+    echo "[lint] FAIL: ${RELEASE_CONTRACT_RUNNER} failed or omitted its non-vacuous pass marker." >&2
     FINDINGS=1
   else
-    behavior_passed=0
-    log "=== behavioral shell tests (${#BEHAVIOR_TESTS[@]} test(s)) ==="
-    for test_file in "${BEHAVIOR_TESTS[@]}"; do
-      test_output="$("${PROJECT_ROOT}/${test_file}" 2>&1)"
-      test_status=$?
-      printf '%s\n' "${test_output}"
-      expected_pass="$(basename "${test_file}"): PASS"
-      if [[ "${test_status}" -eq 0 ]] && grep -Fxq "${expected_pass}" <<<"${test_output}"; then
-        ((behavior_passed += 1))
-      else
-        echo "[lint] FAIL: ${test_file} exited ${test_status} or omitted '${expected_pass}'." >&2
-        FINDINGS=1
-      fi
-    done
-    log "behavior tests: ${behavior_passed}/${#BEHAVIOR_TESTS[@]} passed"
-    if [[ "${behavior_passed}" -ne "${#BEHAVIOR_TESTS[@]}" ]]; then
-      FINDINGS=1
-    fi
+    log "release contract tests: passed"
   fi
 fi
 

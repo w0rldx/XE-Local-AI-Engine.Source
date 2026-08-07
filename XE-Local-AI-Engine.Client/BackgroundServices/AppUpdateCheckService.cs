@@ -10,9 +10,9 @@ using XE_Local_AI_Engine.Client.Services.AppUpdate;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         <b>Desktop + signed-in only, offline-tolerant.</b> The service itself is only registered in desktop mode;
-///         <see cref="IAppUpdateService.CheckForUpdatesAsync" /> additionally no-ops when signed out / unconfigured and
-///         degrades a 401/403/offline to a recorded snapshot — never a crash.
+///         <b>Desktop + configured only, offline-tolerant.</b> The service itself is only registered in desktop mode;
+///         <see cref="IAppUpdateService.RefreshIfStaleAsync" /> additionally no-ops when unconfigured and degrades an
+///         offline or malformed feed to a recorded snapshot — never a crash.
 ///     </para>
 ///     <para>
 ///         <b>Notify-only.</b> It never downloads or applies — apply is always operator-initiated via the update endpoint.
@@ -20,8 +20,9 @@ using XE_Local_AI_Engine.Client.Services.AppUpdate;
 /// </remarks>
 public sealed class AppUpdateCheckService : BackgroundService
 {
-    // A short, non-blocking delay so the host finishes coming up before the (network) GitHub probe runs.
-    private static readonly TimeSpan DefaultStartupDelay = TimeSpan.FromSeconds(10);
+    // Keep the automatic probe well away from startup and within the anonymous GitHub rate budget.
+    internal static readonly TimeSpan DefaultStartupDelay = TimeSpan.FromMinutes(10);
+    internal static readonly TimeSpan DefaultMinimumCheckInterval = TimeSpan.FromMinutes(10);
 
     private readonly IAppUpdateService _appUpdateService;
     private readonly ILogger<AppUpdateCheckService> _logger;
@@ -64,16 +65,17 @@ public sealed class AppUpdateCheckService : BackgroundService
     {
         try
         {
-            await _appUpdateService.CheckForUpdatesAsync(cancellationToken).ConfigureAwait(false);
+            await _appUpdateService.RefreshIfStaleAsync(DefaultMinimumCheckInterval, cancellationToken)
+                                   .ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             throw;
         }
-        catch (Exception exception)
+        catch (Exception)
         {
-            // Never crash startup over an update check — the service degrades failures internally; log and move on.
-            _logger.LogWarning(exception, "The app self-update check could not complete.");
+            // Never crash startup or emit feed/parser details over an update check; log a fixed message and move on.
+            _logger.LogWarning("The app self-update check could not complete.");
         }
     }
 }

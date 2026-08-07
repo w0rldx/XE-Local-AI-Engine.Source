@@ -12,7 +12,7 @@
 #
 #   <version>      Pack version WITHOUT a leading 'v' (e.g. 0.1.0-rc.1.2).
 #                  The script adds the canonical 'v' prefix for the changelog
-#                  heading. Defaults to Directory.Build.props if omitted.
+#                  heading. Defaults to eng/ReleaseVersion.props if omitted.
 #   [output-file]  Defaults to RELEASE_NOTES.md in the repo root.
 #
 # Behaviour:
@@ -28,15 +28,9 @@ cd "$(git rev-parse --show-toplevel)"
 VERSION="${1:-}"
 OUTPUT="${2:-RELEASE_NOTES.md}"
 
-# Fall back to the version composed from Directory.Build.props.
+# Fall back to the version composed from the canonical release manifest.
 if [[ -z "$VERSION" ]]; then
-  PREFIX=$(grep -oP '(?<=<VersionPrefix>)[^<]+' Directory.Build.props)
-  SUFFIX=$(grep -oP '(?<=<VersionSuffix>)[^<]+' Directory.Build.props || true)
-  if [[ -n "${SUFFIX:-}" ]]; then
-    VERSION="${PREFIX}-${SUFFIX}"
-  else
-    VERSION="${PREFIX}"
-  fi
+  VERSION="$(scripts/read-release-version.py)"
 fi
 
 # Normalise: strip any leading 'v' the caller may have passed, then re-add it

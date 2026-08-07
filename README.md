@@ -3,11 +3,17 @@
 XE Local AI Engine is the node-side runtime for running local AI workloads while preserving the existing C0re platform contract. The Node Web Server hosts the React management UI, owns the platform
 `WorkerHub` connection, and supervises node-owned `llama-server` host child processes for local inference.
 
-The repository is being prepared for an RC release. Release documentation and validation evidence live in this repo and must stay current with runtime behavior.
+The current source version is `0.1.0-rc.5.2`, composed in `eng/ReleaseVersion.props`. Release documentation and
+validation evidence live in this repository and must stay current with runtime behavior.
 
 > **Just want to install and use the app?** Start with the **[User Guide](docs/user-guide/README.md)** — download,
 > install (Windows & Linux), first run, troubleshooting, and privacy, all in plain language. App downloads are on the
-> [Releases](../../releases/latest) page.
+> [Releases](https://github.com/w0rldx/XE-Local-AI-Engine.Source/releases) page.
+
+Official binaries are portable-only: Windows ships a Velopack `Portable.zip` with no `Setup.exe`, and Linux ships a
+Velopack AppImage rather than a ZIP. Both formats are self-updating. Release assets are currently unsigned because no
+signing certificate exists; verify `CHECKSUMS.sha256` and review `RELEASE-MANIFEST.json` / `RELEASE.spdx.json` before
+running them. Signing is planned.
 
 ## What ships from this repo
 
@@ -81,6 +87,9 @@ Component-specific notes:
 - .NET SDK from [`global.json`](global.json)
 - Node.js compatible with `XE-Local-AI-Engine.Client.React/package.json`
 - pnpm via Corepack or a local install
+- Python 3 for repository validation and lifecycle scripts
+- The Aspire CLI for AppHost development and readiness checks
+- On Linux/WSL, `setsid` (normally provided by `util-linux`) for transactional `scripts/dev-start.sh` cleanup
 - A GPU with current drivers is optional; the app self-provisions its llama.cpp runtime and GGUF models at first run. (Neither Docker nor Ollama is required to build or run the engine — llama.cpp is the local runtime and inference needs only a driver; see [docs/wiki/03-local-runtime-and-providers.md](docs/wiki/03-local-runtime-and-providers.md).)
 - Docker: **not required by default.** The container provider for **Development Mode only** ([ADR 0004](docs/adr/0004-development-mode-container-execution-docker-stopgap.md)) has shipped, but it is **opt-in and off unless you configure it**: it activates only when you set `Development:Sandbox:Provider=docker`, and the shipped `appsettings.json` leaves that key unset. On a node that does set it, Development Mode needs a running daemon, plus its data root inside the WSL2 filesystem on Windows; the real-daemon integration tests need one too (without a daemon they report as blocked or skipped-with-reason, never as a pass). Nothing else in the app gains a Docker dependency. See [Development Mode container implementation status](docs/roadmaps/development-mode-container-status.md).
 
@@ -191,18 +200,23 @@ user-data directory — a second instance races on the SQLite database.
 
 ### Release
 
-The intended, tag-triggered release path is **[`.github/workflows/release.yml`](.github/workflows/release.yml)**:
-pushing a `v*` tag builds Velopack packages for **win-x64** and **linux-x64**, generates the changelog with a pinned
-`git-cliff`, and publishes them to **this repository's** GitHub Releases using the built-in `GITHUB_TOKEN` — no
-separate artifact repo and no PAT. `workflow_dispatch` is a manual fallback for picking a tag/ref from the Actions UI.
-GitHub Actions must be enabled on the repository for the workflow to run; whether it currently is enabled is a
-repository-owner setting this document does not track.
+The tag-triggered **[`.github/workflows/release.yml`](.github/workflows/release.yml)** is the only official release
+path. It rejects a tag/version/source mismatch, runs the shared validation workflow, lets the Windows and Linux matrix
+jobs build and retain assets only, then splits publication into two protected write transactions. The serialized
+`prepare-release-draft` job creates the draft, merges both Velopack channels, verifies the remote bytes, attaches
+detached SPDX/release-manifest/checksum evidence, and re-verifies the complete remote draft after the
+`open-source-release` environment authorizes repository write access. A separately approved `publish-release` job
+re-verifies that same draft, promotes it without rebuilding or replacing any asset, and confirms both public feeds
+anonymously.
 
-`publish/package-tester-win.ps1` and `publish/package-rc.sh` are **deprecated, reference-only manual packagers** —
-both carry deprecation headers and still target the retired `w0rldx/XE-Local-AI-Engine.Tester-App` artifact repo. They
-are no longer the release path, but `scripts/lint-release-scripts.sh` still statically analyzes them so they don't
-bit-rot silently, and `package-rc.sh` remains a quick way to produce a local, self-contained portable zip with **no
-Velopack metadata and therefore no self-update** (`--rid <rid>` to build one platform instead of both).
+Windows packing uses Velopack 1.2.0 with `--noInst`, producing a managed `Portable.zip` plus feed/full/delta assets and
+no `Setup.exe`. Linux produces a managed AppImage. Public update checks require no GitHub device login or access token:
+the `main` flavor follows stable releases, the `tester` flavor includes release candidates, and Velopack selects the
+independent Windows/Linux OS channel from package metadata.
+
+`publish/package-tester-win.ps1` and `publish/package-rc.sh` are **deprecated, reference-only** scripts. They describe
+superseded manual distribution flows and are not publication alternatives. `scripts/lint-release-scripts.sh` still
+analyzes them so retained reference code does not decay silently.
 
 > **A `win-x64` zip from `package-rc.sh` is cross-built on Linux.** Smoke-test it on real Windows before handing it to
 > anyone — native-library self-extraction, console-close child cleanup, and browser auto-open cannot be verified
@@ -232,7 +246,7 @@ Required evidence includes:
 - generated schema/sample-manifest validation, including a clean `openapi:check`,
 - pinned runtime binary and package checksums,
 - the matching `v<version>` source tag on the exact packaged commit,
-- a real-Windows smoke-test transcript for the exact generated `Portable.zip`,
+- a real-Windows smoke-test transcript for the exact generated `Portable.zip` and a Linux AppImage smoke test,
 - the generated release assets and their checksums, pushed source-tag verification, and
 - confirmation that the release was published to this repository's GitHub Releases.
 
@@ -241,7 +255,8 @@ Run `scripts/lint-release-scripts.sh`. **The Pester suite is part of that defaul
 (a skipped test suite must never read as a pass). See [Testing & Validation](docs/wiki/13-testing-and-validation.md)
 and [the release guide](publish/README.md) for the full sequence.
 
-Standalone OS-package distribution (MSI/deb/rpm) is deferred: under the runtime re-architecture the app self-provisions its llama.cpp runtime and GGUF models at first run, so there is no installer bundle to validate. A future packaging effort would be its own plan.
+Standalone OS installers/packages (MSI/DEB/RPM) remain deferred. The official distribution is the Velopack-managed
+Windows Portable ZIP and Linux AppImage.
 
 ## License
 

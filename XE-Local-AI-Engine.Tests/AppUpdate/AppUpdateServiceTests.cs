@@ -3,283 +3,348 @@ namespace XE_Local_AI_Engine.Tests.AppUpdate;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
+using XE_Local_AI_Engine.Client.BackgroundServices;
 using XE_Local_AI_Engine.Client.Services.AppUpdate;
+using XE_Local_AI_Engine.Tests.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Testing;
 
-/// <summary>
-///     Covers the app-update orchestration: it no-ops without a session / off desktop (no GitHub call), maps the Velopack
-///     check outcomes to the snapshot (update available, reauth, no-access, offline), uses the baked tester repo for the
-///     tester flavor, and surfaces a sanitized apply failure. The Velopack manager is mocked behind the seam — no network.
-/// </summary>
+/// <summary>Covers anonymous public-update orchestration without any GitHub credential dependency.</summary>
 public sealed class AppUpdateServiceTests
 {
     [Test]
-    public async Task CheckForUpdates_WhenSignedOut_DoesNotCheckGitHub()
+    public void Constructor_ConfiguredDesktop_PrimesImmediateStatusWithoutCheckingTheNetwork()
     {
-        var tokenStore = Substitute.For<IGitHubTokenStore>();
-        tokenStore.GetSessionAsync(Arg.Any<CancellationToken>()).Returns((GitHubSession?)null);
-        var factory = Substitute.For<IVelopackUpdateManagerFactory>();
-        var service = CreateService(tokenStore, factory, isDesktop: true);
+        var manager = ManagerReturning(new VelopackCheckResult(VelopackCheckOutcome.UpToDate, null));
+        manager.CurrentVersion.Returns("0.1.0-rc.5.2");
+        var factory = FactoryReturning(manager);
+        var state = new AppUpdateState();
 
-        var snapshot = await service.CheckForUpdatesAsync(CancellationToken.None);
+        using var service = CreateService(factory, isDesktop: true, state: state);
 
-        AssertEx.Equal(AppUpdateAuthState.SignedOut, snapshot.AuthState);
-        AssertEx.False(snapshot.UpdateAvailable);
-        factory.DidNotReceive().Create(Arg.Any<string>());
+        AssertEx.True(state.Current.IsDesktop);
+        AssertEx.True(state.Current.IsConfigured);
+        AssertEx.Equal("0.1.0-rc.5.2", state.Current.CurrentVersion);
+        AssertEx.Equal(AppUpdateCheckStatus.NotChecked, state.Current.CheckStatus);
+        AssertEx.Null(state.Current.LastCheckedUtc);
+        AssertEx.False(state.Current.UpdateAvailable);
+        factory.Received(1).Create();
+        manager.DidNotReceive().CheckForUpdateAsync(Arg.Any<CancellationToken>());
     }
 
     [Test]
-    public async Task CheckForUpdates_WhenNotDesktop_DoesNotCheckGitHub()
+    public void Constructor_WhenVersionDiscoveryFails_KeepsDesktopStatusAvailableAndLogsNoSensitiveDetails()
     {
-        var tokenStore = Substitute.For<IGitHubTokenStore>();
-        tokenStore.GetSessionAsync(Arg.Any<CancellationToken>()).Returns(new GitHubSession("ghu_token", "octocat"));
+        const string sensitive = "Velopack metadata at /home/private with token=secret";
         var factory = Substitute.For<IVelopackUpdateManagerFactory>();
-        var service = CreateService(tokenStore, factory, isDesktop: false);
+        factory.Create().Returns(_ => throw new InvalidOperationException(sensitive));
+        var logger = new CapturingLogger<AppUpdateService>();
+        var state = new AppUpdateState();
+
+        using var service = CreateService(factory, isDesktop: true, logger: logger, state: state);
+
+        AssertEx.True(state.Current.IsDesktop);
+        AssertEx.True(state.Current.IsConfigured);
+        AssertEx.Equal("0.0.0", state.Current.CurrentVersion);
+        AssertEx.Equal(AppUpdateCheckStatus.Failed, state.Current.CheckStatus);
+        AssertEx.Null(state.Current.LastCheckedUtc);
+        AssertEx.False(logger.AllText.Contains("secret", StringComparison.Ordinal));
+        AssertEx.False(logger.AllText.Contains("/home/private", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public async Task CheckForUpdates_PublicConfiguredBuild_CreatesAnonymousManagerWithoutTokenLookup()
+    {
+        var manager = ManagerReturning(new VelopackCheckResult(VelopackCheckOutcome.UpToDate, null));
+        var factory = FactoryReturning(manager);
+        using var service = CreateService(factory, isDesktop: true);
 
         var snapshot = await service.CheckForUpdatesAsync(CancellationToken.None);
 
-        AssertEx.Equal(AppUpdateAuthState.SignedOut, snapshot.AuthState);
-        factory.DidNotReceive().Create(Arg.Any<string>());
-        await tokenStore.DidNotReceive().GetSessionAsync(Arg.Any<CancellationToken>());
+        AssertEx.True(snapshot.IsConfigured);
+        AssertEx.False(snapshot.UpdateAvailable);
+        AssertEx.Equal(AppUpdateCheckStatus.Ready, snapshot.CheckStatus);
+        factory.Received(1).Create();
+    }
+
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task RefreshIfStale_ManualAndStartupChecksInEitherOrder_RunOneGitHubCheck(bool startupFirst)
+    {
+        var checkEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseCheck = new TaskCompletionSource<VelopackCheckResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var manager = Substitute.For<IVelopackUpdateManager>();
+        manager.CurrentVersion.Returns("0.1.0");
+        manager.CheckForUpdateAsync(Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            checkEntered.TrySetResult();
+            return releaseCheck.Task;
+        });
+        var factory = FactoryReturning(manager);
+        using var service = CreateService(factory, isDesktop: true);
+        using var startup = new AppUpdateCheckService(service,
+            NullLogger<AppUpdateCheckService>.Instance,
+            TimeSpan.Zero);
+
+        Task startupTask;
+        Task<AppUpdateSnapshot> manualTask;
+        if (startupFirst)
+        {
+            startupTask = startup.CheckOnceAsync(CancellationToken.None);
+            await checkEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            manualTask = service.RefreshIfStaleAsync(TimeSpan.FromMinutes(10), CancellationToken.None);
+        }
+        else
+        {
+            manualTask = service.RefreshIfStaleAsync(TimeSpan.FromMinutes(10), CancellationToken.None);
+            await checkEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            startupTask = startup.CheckOnceAsync(CancellationToken.None);
+        }
+
+        releaseCheck.SetResult(new VelopackCheckResult(VelopackCheckOutcome.UpToDate, null));
+
+        await startupTask;
+        var manualSnapshot = await manualTask;
+
+        factory.Received(1).Create();
+        await manager.Received(1).CheckForUpdateAsync(Arg.Any<CancellationToken>());
+        AssertEx.Equal(AppUpdateCheckStatus.Ready, manualSnapshot.CheckStatus);
+    }
+
+    [Test]
+    public async Task CheckForUpdates_WhenNotDesktop_DoesNotCreateManager()
+    {
+        var factory = Substitute.For<IVelopackUpdateManagerFactory>();
+        using var service = CreateService(factory, isDesktop: false);
+
+        var snapshot = await service.CheckForUpdatesAsync(CancellationToken.None);
+
+        AssertEx.False(snapshot.IsDesktop);
+        factory.DidNotReceive().Create();
     }
 
     [Test]
     public async Task CheckForUpdates_WhenUpdateAvailable_RecordsAvailableVersion()
     {
-        var manager = Substitute.For<IVelopackUpdateManager>();
-        manager.CurrentVersion.Returns("0.1.0-rc.1");
-        manager.CheckForUpdateAsync(Arg.Any<CancellationToken>())
-               .Returns(new VelopackCheckResult(VelopackCheckOutcome.UpdateAvailable, "0.1.0-rc.2"));
-        var service = CreateService(SignedInStore(), FactoryReturning(manager), isDesktop: true);
+        var manager = ManagerReturning(new VelopackCheckResult(VelopackCheckOutcome.UpdateAvailable, "0.2.0"));
+        manager.CurrentVersion.Returns("0.1.0");
+        using var service = CreateService(FactoryReturning(manager), isDesktop: true);
 
         var snapshot = await service.CheckForUpdatesAsync(CancellationToken.None);
 
         AssertEx.True(snapshot.UpdateAvailable);
-        AssertEx.Equal("0.1.0-rc.2", AssertEx.NotNull(snapshot.AvailableVersion));
-        AssertEx.Equal(AppUpdateAuthState.SignedIn, snapshot.AuthState);
-        AssertEx.Equal("octocat", AssertEx.NotNull(snapshot.Login));
+        AssertEx.Equal("0.2.0", AssertEx.NotNull(snapshot.AvailableVersion));
     }
 
     [Test]
-    public async Task CheckForUpdates_WhenUpToDate_RecordsNoUpdate()
+    public async Task CheckForUpdates_WhenFeedIsOffline_RecordsOfflineGracefully()
     {
-        var manager = Substitute.For<IVelopackUpdateManager>();
-        manager.CurrentVersion.Returns("0.1.0-rc.2");
-        manager.CheckForUpdateAsync(Arg.Any<CancellationToken>())
-               .Returns(new VelopackCheckResult(VelopackCheckOutcome.UpToDate, AvailableVersion: null));
-        var service = CreateService(SignedInStore(), FactoryReturning(manager), isDesktop: true);
+        var manager = ManagerReturning(new VelopackCheckResult(VelopackCheckOutcome.Offline, null));
+        using var service = CreateService(FactoryReturning(manager), isDesktop: true);
 
         var snapshot = await service.CheckForUpdatesAsync(CancellationToken.None);
 
-        AssertEx.False(snapshot.UpdateAvailable);
-        AssertEx.Equal(AppUpdateAuthState.SignedIn, snapshot.AuthState);
-    }
-
-    [Test]
-    public async Task CheckForUpdates_WhenUnauthorized_RecordsReauthRequired()
-    {
-        var manager = Substitute.For<IVelopackUpdateManager>();
-        manager.CurrentVersion.Returns("0.1.0-rc.1");
-        manager.CheckForUpdateAsync(Arg.Any<CancellationToken>())
-               .Returns(new VelopackCheckResult(VelopackCheckOutcome.Unauthorized, AvailableVersion: null));
-        var service = CreateService(SignedInStore(), FactoryReturning(manager), isDesktop: true);
-
-        var snapshot = await service.CheckForUpdatesAsync(CancellationToken.None);
-
-        AssertEx.Equal(AppUpdateAuthState.ReauthRequired, snapshot.AuthState);
+        AssertEx.Equal(AppUpdateCheckStatus.Offline, snapshot.CheckStatus);
         AssertEx.False(snapshot.UpdateAvailable);
     }
 
     [Test]
-    public async Task CheckForUpdates_WhenForbidden_RecordsNoAccess()
+    public async Task CheckForUpdates_WhenManagerReportsMalformedFeed_RecordsFailedAndLogsSafeReason()
     {
-        var manager = Substitute.For<IVelopackUpdateManager>();
-        manager.CurrentVersion.Returns("0.1.0-rc.1");
-        manager.CheckForUpdateAsync(Arg.Any<CancellationToken>())
-               .Returns(new VelopackCheckResult(VelopackCheckOutcome.Forbidden, AvailableVersion: null));
-        var service = CreateService(SignedInStore(), FactoryReturning(manager), isDesktop: true);
+        var logger = new CapturingLogger<AppUpdateService>();
+        var manager = ManagerReturning(new VelopackCheckResult(VelopackCheckOutcome.Failed,
+            null,
+            AppUpdateFailureReason.MalformedFeed));
+        using var service = CreateService(FactoryReturning(manager), isDesktop: true, logger: logger);
 
         var snapshot = await service.CheckForUpdatesAsync(CancellationToken.None);
 
-        AssertEx.Equal(AppUpdateAuthState.NoAccess, snapshot.AuthState);
+        AssertEx.Equal(AppUpdateCheckStatus.Failed, snapshot.CheckStatus);
+        AssertEx.Contains(logger.AllText, nameof(AppUpdateFailureReason.MalformedFeed));
     }
 
     [Test]
-    public async Task CheckForUpdates_WhenOffline_RecordsOfflineGracefully()
+    public async Task CheckForUpdates_WhenUnexpectedFailureEscapesManager_IsFailedAndLogsNoSensitiveDetails()
     {
+        const string sensitive = "https://github.com/example/public-repo?token=secret at /home/operator/private";
         var manager = Substitute.For<IVelopackUpdateManager>();
-        manager.CurrentVersion.Returns("0.1.0-rc.1");
+        manager.CurrentVersion.Returns("0.1.0");
         manager.CheckForUpdateAsync(Arg.Any<CancellationToken>())
-               .Returns(new VelopackCheckResult(VelopackCheckOutcome.Offline, AvailableVersion: null));
-        var service = CreateService(SignedInStore(), FactoryReturning(manager), isDesktop: true);
+               .Returns<Task<VelopackCheckResult>>(_ => throw new FormatException(sensitive));
+        var logger = new CapturingLogger<AppUpdateService>();
+        using var service = CreateService(FactoryReturning(manager), isDesktop: true, logger: logger);
 
         var snapshot = await service.CheckForUpdatesAsync(CancellationToken.None);
 
-        AssertEx.True(snapshot.IsOffline);
-        AssertEx.False(snapshot.UpdateAvailable);
-        AssertEx.Equal(AppUpdateAuthState.SignedIn, snapshot.AuthState);
+        AssertEx.Equal(AppUpdateCheckStatus.Failed, snapshot.CheckStatus);
+        AssertEx.Contains(logger.AllText, nameof(AppUpdateFailureReason.Unexpected));
+        AssertEx.False(logger.AllText.Contains("secret", StringComparison.Ordinal));
+        AssertEx.False(logger.AllText.Contains("/home/operator/private", StringComparison.Ordinal));
+        AssertEx.False(logger.AllText.Contains("public-repo", StringComparison.Ordinal));
     }
 
     [Test]
-    public async Task CheckForUpdates_UsesTesterRepo_ForTesterFlavor()
+    public async Task Apply_PublicConfiguredBuild_UsesAnonymousManager()
     {
         var manager = Substitute.For<IVelopackUpdateManager>();
-        manager.CurrentVersion.Returns("0.1.0-rc.1");
-        manager.CheckForUpdateAsync(Arg.Any<CancellationToken>())
-               .Returns(new VelopackCheckResult(VelopackCheckOutcome.UpToDate, AvailableVersion: null));
-        var factory = Substitute.For<IVelopackUpdateManagerFactory>();
-        factory.Create(Arg.Any<string>()).Returns(manager);
+        manager.CurrentVersion.Returns("0.1.0");
+        manager.PrepareUpdateAndRestartAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>()).Returns(false);
+        var factory = FactoryReturning(manager);
+        var state = new AppUpdateState();
+        state.Store(new AppUpdateSnapshot("0.1.0",
+            "0.2.0",
+            UpdateAvailable: true,
+            IsConfigured: true,
+            IsDesktop: true,
+            CheckStatus: AppUpdateCheckStatus.Ready,
+            LastCheckedUtc: DateTimeOffset.UtcNow));
+        using var service = CreateService(factory, isDesktop: true, state: state);
 
-        // The real flavor→repo mapping lives in VelopackUpdateManagerFactory (which reads the baked repo URL); here we
-        // assert the service builds the manager from the signed-in token so the baked tester repo is what gets used.
-        var service = CreateService(SignedInStore(), factory, isDesktop: true,
-            channel: "tester", repoUrl: "https://github.com/example/tester-repo");
+        var applying = await service.ApplyAsync(CancellationToken.None);
 
-        await service.CheckForUpdatesAsync(CancellationToken.None);
-
-        factory.Received(1).Create("ghu_token");
+        AssertEx.False(applying);
+        AssertEx.False(state.Current.UpdateAvailable);
+        AssertEx.Null(state.Current.AvailableVersion);
+        AssertEx.Equal(AppUpdateCheckStatus.Ready, state.Current.CheckStatus);
+        factory.Received(1).Create();
     }
 
     [Test]
-    public async Task Apply_WhenManagerThrows_SurfacesSanitizedError_WithoutTokenOrPath()
+    public async Task Apply_WhenManagerThrows_SurfacesSanitizedError_AndLogsNoSensitiveDetails()
     {
+        const string sensitive = "download failed at /home/secret/path with token";
         var manager = Substitute.For<IVelopackUpdateManager>();
-        manager.ApplyUpdateAndRestartAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>())
-               .Returns<Task<bool>>(_ => throw new InvalidOperationException("download failed at /home/secret/path with ghu_token"));
-        var service = CreateService(SignedInStore(), FactoryReturning(manager), isDesktop: true);
+        manager.PrepareUpdateAndRestartAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>())
+               .Returns<Task<bool>>(_ => throw new InvalidOperationException(sensitive));
+        var logger = new CapturingLogger<AppUpdateService>();
+        var state = AvailableUpdateState();
+        using var service = CreateService(FactoryReturning(manager), isDesktop: true, logger: logger, state: state);
 
         var exception = await AssertEx.ThrowsAsync<AppUpdateException>(() => service.ApplyAsync(CancellationToken.None));
 
-        AssertEx.False(exception.Message.Contains("ghu_token", StringComparison.Ordinal), "the token must not leak into the error");
-        AssertEx.False(exception.Message.Contains("/home/secret/path", StringComparison.Ordinal), "the path must not leak into the error");
+        AssertEx.False(exception.Message.Contains("token", StringComparison.Ordinal));
+        AssertEx.False(exception.Message.Contains("/home/secret/path", StringComparison.Ordinal));
+        AssertEx.False(logger.AllText.Contains("token", StringComparison.Ordinal));
+        AssertEx.False(logger.AllText.Contains("/home/secret/path", StringComparison.Ordinal));
     }
 
     [Test]
-    public async Task Apply_WhenSignedOut_DoesNothing()
+    public async Task Apply_ConcurrentRequests_RunOneVelopackOperation()
     {
-        var tokenStore = Substitute.For<IGitHubTokenStore>();
-        tokenStore.GetSessionAsync(Arg.Any<CancellationToken>()).Returns((GitHubSession?)null);
-        var factory = Substitute.For<IVelopackUpdateManagerFactory>();
-        var service = CreateService(tokenStore, factory, isDesktop: true);
-
-        var applying = await service.ApplyAsync(CancellationToken.None);
-
-        AssertEx.False(applying);
-        factory.DidNotReceive().Create(Arg.Any<string>());
-    }
-
-    [Test]
-    public async Task Apply_WhenLiveRecheckFindsNothing_ReturnsFalse_WithoutFakeRestart()
-    {
-        // Simulates the stale-snapshot race: the cached status said "update available", but the live re-check inside
-        // ApplyUpdateAndRestartAsync finds nothing, so it returns false (no process replacement). The service must
-        // surface that real outcome so the endpoint reports Applying:false rather than stranding the client.
+        var applyEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseApply = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var manager = Substitute.For<IVelopackUpdateManager>();
-        manager.ApplyUpdateAndRestartAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>())
-               .Returns(false);
-        var service = CreateService(SignedInStore(), FactoryReturning(manager), isDesktop: true);
+        manager.CurrentVersion.Returns("0.1.0");
+        manager.PrepareUpdateAndRestartAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>())
+               .Returns(_ =>
+               {
+                   applyEntered.TrySetResult();
+                   return releaseApply.Task;
+               });
+        var factory = FactoryReturning(manager);
+        using var service = CreateService(factory, isDesktop: true, state: AvailableUpdateState());
 
-        var applying = await service.ApplyAsync(CancellationToken.None);
+        var first = service.ApplyAsync(CancellationToken.None);
+        await applyEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var second = service.ApplyAsync(CancellationToken.None);
+        factory.Received(1).Create();
+        await manager.Received(1).PrepareUpdateAndRestartAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>());
+        releaseApply.SetResult(true);
 
-        AssertEx.False(applying);
+        AssertEx.True(await first);
+        AssertEx.False(await second);
+        factory.Received(1).Create();
+        await manager.Received(1).PrepareUpdateAndRestartAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    ///     An unbaked build must report <see cref="AppUpdateAuthState.NotConfigured" />, NOT signed-out. Signed-out is
-    ///     what makes React offer the GitHub sign-in card, and on this build that card cannot work — the device flow is
-    ///     rejected on the same <c>IsConfigured</c> predicate. Covers both unbaked shapes that actually ship: the
-    ///     <c>main</c> channel's <c>REPLACE_*</c> placeholders, and a tester build before packaging injects the ID.
-    /// </summary>
     [Test]
-    [Arguments("https://github.com/REPLACE_OWNER/REPLACE_MAIN_REPO", "REPLACE_MAIN_CLIENT_ID")]
-    [Arguments("https://github.com/w0rldx/XE-Local-AI-Engine.Tester-App", "")]
-    public async Task CheckForUpdates_WhenBuildIsNotConfigured_ReportsNotConfigured_AndMakesNoGitHubCall(string repoUrl,
-        string clientId)
+    public async Task ApplyAndCheck_UseOneExclusiveVelopackOperationGate()
     {
-        var tokenStore = Substitute.For<IGitHubTokenStore>();
+        var applyEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseApply = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var manager = Substitute.For<IVelopackUpdateManager>();
+        manager.CurrentVersion.Returns("0.1.0");
+        manager.PrepareUpdateAndRestartAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>())
+               .Returns(_ =>
+               {
+                   applyEntered.TrySetResult();
+                   return releaseApply.Task;
+               });
+        manager.CheckForUpdateAsync(Arg.Any<CancellationToken>())
+               .Returns(new VelopackCheckResult(VelopackCheckOutcome.UpToDate, null));
+        var factory = FactoryReturning(manager);
+        using var service = CreateService(factory, isDesktop: true, state: AvailableUpdateState());
+
+        var apply = service.ApplyAsync(CancellationToken.None);
+        await applyEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var check = service.CheckForUpdatesAsync(CancellationToken.None);
+        await manager.DidNotReceive().CheckForUpdateAsync(Arg.Any<CancellationToken>());
+        releaseApply.SetResult(false);
+
+        AssertEx.False(await apply);
+        AssertEx.Equal(AppUpdateCheckStatus.Ready, (await check).CheckStatus);
+        await manager.Received(1).PrepareUpdateAndRestartAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>());
+        await manager.Received(1).CheckForUpdateAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task CheckForUpdates_WhenBuildIsNotConfigured_MakesNoGitHubCall()
+    {
         var factory = Substitute.For<IVelopackUpdateManagerFactory>();
-        var service = CreateService(tokenStore, factory, isDesktop: true, repoUrl: repoUrl, clientId: clientId);
+        using var service = CreateService(factory, isDesktop: true, repoUrl: "");
 
         var snapshot = await service.CheckForUpdatesAsync(CancellationToken.None);
 
-        AssertEx.Equal(AppUpdateAuthState.NotConfigured, snapshot.AuthState);
+        AssertEx.False(snapshot.IsConfigured);
         AssertEx.False(snapshot.UpdateAvailable);
-        AssertEx.False(snapshot.IsOffline, "an unconfigured build is not offline — nothing was ever attempted");
-        AssertEx.Null(snapshot.Login);
-        AssertEx.True(snapshot.IsDesktop, "the section still renders; only its controls are withheld");
-        factory.DidNotReceive().Create(Arg.Any<string>());
-        await tokenStore.DidNotReceive().GetSessionAsync(Arg.Any<CancellationToken>());
+        AssertEx.Equal(AppUpdateCheckStatus.NotChecked, snapshot.CheckStatus);
+        factory.DidNotReceive().Create();
     }
 
-    /// <summary>
-    ///     A configured build that simply has no stored session must stay <see cref="AppUpdateAuthState.SignedOut" />.
-    ///     This is the counterpart that stops the new state from swallowing the ordinary signed-out case — the two were
-    ///     previously indistinguishable on the wire, which is the whole reason the state was added.
-    /// </summary>
-    [Test]
-    public async Task CheckForUpdates_WhenConfiguredButSignedOut_StaysSignedOut_NotNotConfigured()
+    private static IVelopackUpdateManager ManagerReturning(VelopackCheckResult result)
     {
-        var tokenStore = Substitute.For<IGitHubTokenStore>();
-        tokenStore.GetSessionAsync(Arg.Any<CancellationToken>()).Returns((GitHubSession?)null);
-        var factory = Substitute.For<IVelopackUpdateManagerFactory>();
-        var service = CreateService(tokenStore, factory, isDesktop: true);
-
-        var snapshot = await service.CheckForUpdatesAsync(CancellationToken.None);
-
-        AssertEx.Equal(AppUpdateAuthState.SignedOut, snapshot.AuthState);
-        await tokenStore.Received(1).GetSessionAsync(Arg.Any<CancellationToken>());
+        var manager = Substitute.For<IVelopackUpdateManager>();
+        manager.CurrentVersion.Returns("0.1.0");
+        manager.CheckForUpdateAsync(Arg.Any<CancellationToken>()).Returns(result);
+        return manager;
     }
 
-    /// <summary>
-    ///     Apply must stay inert on an unconfigured build regardless of the new state — the state is a UI signal, not a
-    ///     relaxation of the gate.
-    /// </summary>
-    [Test]
-    public async Task Apply_WhenBuildIsNotConfigured_DoesNothing()
+    private static AppUpdateState AvailableUpdateState()
     {
-        var factory = Substitute.For<IVelopackUpdateManagerFactory>();
-        var service = CreateService(SignedInStore(), factory, isDesktop: true, clientId: "");
-
-        var applying = await service.ApplyAsync(CancellationToken.None);
-
-        AssertEx.False(applying);
-        factory.DidNotReceive().Create(Arg.Any<string>());
-    }
-
-    private static IGitHubTokenStore SignedInStore()
-    {
-        var tokenStore = Substitute.For<IGitHubTokenStore>();
-        tokenStore.GetSessionAsync(Arg.Any<CancellationToken>()).Returns(new GitHubSession("ghu_token", "octocat"));
-        return tokenStore;
+        var state = new AppUpdateState();
+        state.Store(new AppUpdateSnapshot("0.1.0",
+            "0.2.0",
+            UpdateAvailable: true,
+            IsConfigured: true,
+            IsDesktop: true,
+            CheckStatus: AppUpdateCheckStatus.Ready,
+            LastCheckedUtc: DateTimeOffset.UtcNow));
+        return state;
     }
 
     private static IVelopackUpdateManagerFactory FactoryReturning(IVelopackUpdateManager manager)
     {
         var factory = Substitute.For<IVelopackUpdateManagerFactory>();
-        factory.Create(Arg.Any<string>()).Returns(manager);
+        factory.Create().Returns(manager);
         return factory;
     }
 
-    private static AppUpdateService CreateService(IGitHubTokenStore tokenStore,
-        IVelopackUpdateManagerFactory factory,
+    private static AppUpdateService CreateService(IVelopackUpdateManagerFactory factory,
         bool isDesktop,
-        string channel = "main",
-        string repoUrl = "https://github.com/example/main-repo",
-        string clientId = "Iv1.testclientid")
+        string repoUrl = "https://github.com/example/public-repo",
+        Microsoft.Extensions.Logging.ILogger<AppUpdateService>? logger = null,
+        AppUpdateState? state = null)
     {
         var options = Options.Create(new AppUpdateChannelOptions
         {
-            Channel = channel,
             GitHubRepositoryUrl = repoUrl,
-            GitHubAppClientId = clientId
+            ReleaseTrack = AppUpdateReleaseTrack.Stable
         });
-        var hostContext = new AppUpdateHostContext(isDesktop, RestartArgs: ["--desktop"]);
 
-        return new AppUpdateService(tokenStore,
-            factory,
-            new AppUpdateState(),
+        return new AppUpdateService(factory,
+            state ?? new AppUpdateState(),
             options,
-            hostContext,
-            NullLogger<AppUpdateService>.Instance);
+            new AppUpdateHostContext(isDesktop, RestartArgs: ["--desktop"]),
+            logger ?? NullLogger<AppUpdateService>.Instance);
     }
 }

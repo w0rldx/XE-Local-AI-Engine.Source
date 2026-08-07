@@ -1,0 +1,9 @@
+<Project>
+  <PropertyGroup>
+    <!-- Single release identity source used by builds, packaging, compliance checks, and rendered documentation. -->
+    <VersionPrefix>0.1.0</VersionPrefix>
+    <VersionSuffix>rc.5.2</VersionSuffix>
+    <!-- Supported .NET 10 servicing floor verified against Microsoft's release metadata on 2026-08-07. -->
+    <DotNetRuntimeVersion>10.0.10</DotNetRuntimeVersion>
+  </PropertyGroup>
+</Project>

@@ -105,7 +105,6 @@ import {
 	getDevelopmentTask,
 	getGgufDownloads,
 	getGgufDownloadStatus,
-	getGitHubAuthStatus,
 	getHardwareProfile,
 	getHfTokenStatus,
 	getImageJob,
@@ -139,7 +138,6 @@ import {
 	getToolCapableModels,
 	getToolCatalog,
 	getTutorialState,
-	getVoiceManifest,
 	harvestGoldenConversations,
 	importAgentTemplates,
 	inspectGgufRepository,
@@ -185,7 +183,6 @@ import {
 	nodeSetup,
 	type Options,
 	pinNodeChatConversation,
-	pollGitHubAuth,
 	pollNodeBinding,
 	previewDevelopmentPatch,
 	previewSkillImport,
@@ -219,11 +216,9 @@ import {
 	setNodeChatConversationMemoryExcluded,
 	setNodeChatMessageFeedback,
 	setNodeChatSelectedPath,
-	signOutGitHubAuth,
 	startCudaBuild,
 	startDevelopmentNextAction,
 	startGgufDownload,
-	startGitHubAuth,
 	startImageModelDownload,
 	startLlamaCppSourceBuild,
 	startNodeBinding,
@@ -442,8 +437,6 @@ import type {
 	GetGgufDownloadsResponse,
 	GetGgufDownloadStatusData,
 	GetGgufDownloadStatusResponse,
-	GetGitHubAuthStatusData,
-	GetGitHubAuthStatusResponse,
 	GetHardwareProfileData,
 	GetHardwareProfileResponse,
 	GetHfTokenStatusData,
@@ -514,8 +507,6 @@ import type {
 	GetToolCatalogResponse,
 	GetTutorialStateData,
 	GetTutorialStateResponse,
-	GetVoiceManifestData,
-	GetVoiceManifestResponse,
 	HarvestGoldenConversationsData,
 	HarvestGoldenConversationsResponse,
 	ImportAgentTemplatesData,
@@ -608,8 +599,6 @@ import type {
 	NodeSetupResponse,
 	PinNodeChatConversationData,
 	PinNodeChatConversationResponse,
-	PollGitHubAuthData,
-	PollGitHubAuthResponse,
 	PollNodeBindingData,
 	PollNodeBindingResponse,
 	PreviewDevelopmentPatchData,
@@ -684,16 +673,12 @@ import type {
 	SetNodeChatSelectedPathData,
 	SetNodeChatSelectedPathError,
 	SetNodeChatSelectedPathResponse,
-	SignOutGitHubAuthData,
-	SignOutGitHubAuthResponse,
 	StartCudaBuildData,
 	StartCudaBuildResponse,
 	StartDevelopmentNextActionData,
 	StartDevelopmentNextActionResponse,
 	StartGgufDownloadData,
 	StartGgufDownloadResponse,
-	StartGitHubAuthData,
-	StartGitHubAuthResponse,
 	StartImageModelDownloadData,
 	StartImageModelDownloadResponse,
 	StartLlamaCppSourceBuildData,
@@ -835,27 +820,6 @@ export const deleteWorkspaceMutation = (
 	};
 	return mutationOptions;
 };
-
-export const getVoiceManifestQueryKey = (options?: Options<GetVoiceManifestData>) => createQueryKey("getVoiceManifest", options);
-
-export const getVoiceManifestOptions = (options?: Options<GetVoiceManifestData>) =>
-	queryOptions<
-		GetVoiceManifestResponse,
-		AxiosError<DefaultError>,
-		GetVoiceManifestResponse,
-		ReturnType<typeof getVoiceManifestQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await getVoiceManifest({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: getVoiceManifestQueryKey(options),
-	});
 
 export const getTutorialStateQueryKey = (options?: Options<GetTutorialStateData>) => createQueryKey("getTutorialState", options);
 
@@ -4815,80 +4779,6 @@ export const getAppUpdateStatusOptions = (options?: Options<GetAppUpdateStatusDa
 		},
 		queryKey: getAppUpdateStatusQueryKey(options),
 	});
-
-export const getGitHubAuthStatusQueryKey = (options?: Options<GetGitHubAuthStatusData>) =>
-	createQueryKey("getGitHubAuthStatus", options);
-
-export const getGitHubAuthStatusOptions = (options?: Options<GetGitHubAuthStatusData>) =>
-	queryOptions<
-		GetGitHubAuthStatusResponse,
-		AxiosError<DefaultError>,
-		GetGitHubAuthStatusResponse,
-		ReturnType<typeof getGitHubAuthStatusQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await getGitHubAuthStatus({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: getGitHubAuthStatusQueryKey(options),
-	});
-
-export const pollGitHubAuthMutation = (
-	options?: Partial<Options<PollGitHubAuthData>>,
-): UseMutationOptions<PollGitHubAuthResponse, AxiosError<DefaultError>, Options<PollGitHubAuthData>> => {
-	const mutationOptions: UseMutationOptions<PollGitHubAuthResponse, AxiosError<DefaultError>, Options<PollGitHubAuthData>> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await pollGitHubAuth({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const signOutGitHubAuthMutation = (
-	options?: Partial<Options<SignOutGitHubAuthData>>,
-): UseMutationOptions<SignOutGitHubAuthResponse, AxiosError<DefaultError>, Options<SignOutGitHubAuthData>> => {
-	const mutationOptions: UseMutationOptions<
-		SignOutGitHubAuthResponse,
-		AxiosError<DefaultError>,
-		Options<SignOutGitHubAuthData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await signOutGitHubAuth({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const startGitHubAuthMutation = (
-	options?: Partial<Options<StartGitHubAuthData>>,
-): UseMutationOptions<StartGitHubAuthResponse, AxiosError<DefaultError>, Options<StartGitHubAuthData>> => {
-	const mutationOptions: UseMutationOptions<StartGitHubAuthResponse, AxiosError<DefaultError>, Options<StartGitHubAuthData>> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await startGitHubAuth({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
 
 export const unhandledExceptionProbeMutation = (
 	options?: Partial<Options<UnhandledExceptionProbeData>>,

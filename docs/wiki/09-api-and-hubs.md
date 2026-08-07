@@ -25,7 +25,7 @@ If you are adding or changing an endpoint or hub, this is the page that tells yo
  │  • UseAuthentication / UseAuthorization (JWT bearer, Operator policy) │
  │  • UseFastEndpoints (RoutePrefix = api/local/v1)                      │
  │  • MapHub × 9, plus DevelopmentAttemptHub when Development is enabled │
- │  • (non-Production) OpenAPI JSON + /scalar + (Development) /devui     │
+ │  • (non-Production) OpenAPI JSON + /scalar                            │
  │  • MapFallbackToFile("index.html")  (serves the React build)         │
  └───────────────────────────────────────────────────────────────────────┘
 ```
@@ -52,7 +52,7 @@ The middleware/mapping order above is authoritative — see `XE-Local-AI-Engine.
   `Send.CreatedAtAsync<TEndpoint>()` location resolution follow.
 - **operationId = camelCased class name.** A single global `NameGenerator` strips the `Endpoint` suffix and lowercases the first char (`Program.cs:327-336`): `CreateScheduledJobEndpoint` → `createScheduledJob`. These operationIds are what the hey-api React SDK function names are derived from, so **the C# class name is the public contract name** — rename with care.
 - **Errors → ProblemDetails.** `config.Errors.UseProblemDetails()` (`Program.cs:338`) turns validation failures into RFC7807. Domain exceptions are handled by the `IExceptionHandler` chain (see §4). Note that not every non-2xx is ProblemDetails: several families answer a **typed domain object** instead (the source-build `409` is the notable one — see §1 design notes).
-- **Desktop-only endpoints.** `config.Endpoints.Filter` (`Program.cs:320`) drops any endpoint implementing `IDesktopOnlyEndpoint` unless the host launched in desktop mode. Only the `app-update/*` and `github-auth/*` families use it, so they are absent from a headless OpenAPI regen.
+- **Desktop-only endpoints.** `config.Endpoints.Filter` (`Program.cs:320`) drops any endpoint implementing `IDesktopOnlyEndpoint` unless the host launched in desktop mode. The `app-update/*` family uses it, so those endpoints are absent from a headless OpenAPI regen.
 
 ### Endpoint inventory (by feature)
 
@@ -65,9 +65,8 @@ One row per nested class in `LocalApiRoutes.cs`, in file order. The "Owner page"
 | **LocalChat** (`chat/*`) | `chat/conversations` (+ `{id}` rename/pin/archive/branch/memory-excluded/selected-path), `chat/.../messages/{id}/revisions\|feedback`, `chat/conversations/{id}/uploads(/{fileId})` (file attachments — POST multipart upload / GET list / DELETE), `chat/cancel`, `chat/approvals/resolve` | [Chat](05-chat.md) |
 | **NodeBinding** (`binding/*`) | `binding/start`, `binding/poll`, `binding/cancel` | [Hosting & Deployment](11-hosting-and-deployment.md) |
 | **Connection** (`connection/*`) | `connection`, `connection/connect`, `connection/disconnect`, `connection/auto-connect/enable\|disable` | [Architecture Overview](01-architecture-overview.md) |
-| **NodeSettings** (`node-settings`) | get/save node settings | [Hosting & Deployment](11-hosting-and-deployment.md) |
+| **NodeSettings** (`node-settings`) | get/save node settings, including the `VoiceFeatureEnabled` gate | [Hosting & Deployment](11-hosting-and-deployment.md) |
 | **CloudSettings** (`cloud-settings*`) | `cloud-settings`, `cloud-settings/entra/device-code/start\|status`, `cloud-settings/entra/auth-code/start\|status` | [Security & Privacy](12-security-and-privacy.md) |
-| **Voice** (`voice/*`) | `voice/manifest` (GET — config-only TTS manifest: allowed models, voice profiles, feature flag, integrity hashes, download URLs; the backend serves no audio) | [React Client](10-react-client.md) |
 | **Tutorial** (`tutorial-state`) | `tutorial-state` (GET reads the current user's recorded tour entries; PUT upserts one) | [React Client](10-react-client.md) |
 | **Cloud / Codex** (`cloud/codex/*`) | `cloud/codex/login`, `cloud/codex/status`, `cloud/codex/logout` (ChatGPT OAuth) | [Chat](05-chat.md) |
 | **LocalModels** (`models/*`) | `models`, `models/{name}`, `models/{name}/details\|kind\|unload`, `models/select`, `models/running` | [Local Runtime & Providers](03-local-runtime-and-providers.md) |
@@ -79,8 +78,7 @@ One row per nested class in `LocalApiRoutes.cs`, in file order. The "Owner page"
 | **ModelFit** (`model-fit/*`) | `model-fit/recommendations/latest\|refresh`, `model-fit/hardware-profile`, `model-fit/gguf/browse\|inspect`, `model-fit/download(/cancel)`, `model-fit/gguf/downloads(/{modelName})`, `model-fit/running(/eject)`, `model-fit/catalog(/refresh)`, `model-fit/llamacpp/version\|runtime\|update`, `model-fit/llamacpp/cuda-build(/prerequisites\|status\|cancel\|remove)`, `model-fit/llamacpp/source-build(/prerequisites\|status\|cancel\|remove)`, `model-fit/hf-token`, `model-fit/profiles(/explore\|benchmark\|freeze\|invalidate)` (inference optimizer) | [Model Fit](07-model-fit.md), [Local Runtime & Providers](03-local-runtime-and-providers.md) |
 | **Preview / Open Canvas** (`preview/*`) | `preview/workflows`, `preview/workflows/{id}(/execute)`, `preview/runs/execute`, `preview/runs/{id}/continue\|cancel` | [React Client](10-react-client.md) |
 | **Images** (`images/*`) | `images/jobs` (POST create / GET list), `images/jobs/{jobId}(/cancel)`, `images/{imageId}` (decrypted PNG retrieve), `images/models`, `images/models/downloads`, `images/runtime(/eject)`, `images/runtime/source-build(/prerequisites\|status\|cancel\|remove)` | [Image Generation](14-image-generation.md) |
-| **GitHubAuth** (`github-auth/*`) | `github-auth/start\|poll\|status\|sign-out` — device-flow sign-in for app self-update. **Desktop-mode only** (`IDesktopOnlyEndpoint`); the device code and access token never appear in any contract | [Hosting & Deployment](11-hosting-and-deployment.md) |
-| **AppUpdate** (`app-update/*`) | `app-update/status` (cached snapshot; `?refresh=true` forces a check with a 60 s floor), `app-update/apply`. **Desktop-mode only** | [Hosting & Deployment](11-hosting-and-deployment.md) |
+| **AppUpdate** (`app-update/*`) | `app-update/status` (cached snapshot; `?refresh=true` forces a check with a 10-minute floor), `app-update/apply`. **Desktop-mode only** | [Hosting & Deployment](11-hosting-and-deployment.md) |
 | **KnowledgeBase** (`knowledge-base/*`) | `knowledge-base/documents` (POST multipart upload / GET list), `knowledge-base/documents/{documentId}(/reindex)`, `knowledge-base/reindex`, `knowledge-base/search`, `knowledge-base/reranker/download-recommended` | [Knowledge Base](15-knowledge-base.md) |
 | **Mcp** (`mcp/*`) | **Outbound** (node as MCP *client*): `mcp/servers`, `mcp/servers/{id}(/enabled\|/tools)`, `tool-catalog`. **Inbound** (node as MCP *server*): `mcp/server-key` (GET reveal / POST generate / DELETE revoke, Operator-gated) plus the non-FastEndpoints `mcp/server` transport itself — see §2.1 | [Agent Mode](04-agent-mode.md) |
 
@@ -211,7 +209,7 @@ Full rationale: [Security & Privacy](12-security-and-privacy.md).
 
 ### Dev-only surfaces
 
-Not mapped in Production (`Program.cs:363-389`): OpenAPI JSON at `/openapi/local/v1/{documentName}.json`, the Scalar API reference at `/scalar`, and (Development only) the Agent Framework DevUI at `/devui` with OpenAI-compatible Responses/Conversations endpoints.
+Not mapped in Production: OpenAPI JSON at `/openapi/local/v1/{documentName}.json` and the Scalar API reference at `/scalar`.
 
 ### Static SPA fallback
 

@@ -475,7 +475,8 @@
 				"applyError": "Update fehlgeschlagen. Bitte erneut versuchen.",
 				"upToDate": "Du bist auf dem neuesten Stand.",
 				"availableVersion": "Verfügbar:",
-				"offline": "Die Update-Prüfung ist offline nicht verfügbar.",
+				"offline": "Der Update-Dienst konnte nicht erreicht werden. Prüfe deine Verbindung und versuche es erneut.",
+				"checkFailed": "Die Update-Informationen konnten nicht verarbeitet werden. Bitte versuche es später erneut.",
 				"notConfigured": "Automatische Updates sind in diesem Build nicht verfügbar. Für eine neuere Version installiere sie bitte manuell.",
 				"copyCode": "Code kopieren",
 				"copied": "Kopiert"
@@ -3577,15 +3578,35 @@
 			"subtitle": "Erstellen Sie knotenweite Slash-Befehle, die im aktuellen Chat einen konfigurierten Prompt senden. Befehle können nur vom Benutzer aufgerufen werden.",
 			"createButton": "Neuer Befehl",
 			"capacity": "Das Limit von 100 benutzerdefinierten Befehlen ist erreicht. Löschen Sie einen, bevor Sie einen neuen erstellen.",
-			"list": { "loading": "Befehle werden geladen…", "empty": "Keine Befehle verfügbar.", "command": "Befehl", "action": "Aktion", "builtIn": "Integriert" },
+			"list": {
+				"loading": "Befehle werden geladen…",
+				"empty": "Keine Befehle verfügbar.",
+				"command": "Befehl",
+				"action": "Aktion",
+				"builtIn": "Integriert"
+			},
 			"editor": { "createTitle": "Neuer Befehl", "editTitle": "Befehl bearbeiten" },
 			"delete": { "title": "Befehl löschen", "description": "'/{{name}}' löschen? Dies kann nicht rückgängig gemacht werden." },
-			"errors": { "load": "Befehle konnten nicht geladen werden.", "save": "Der Befehl konnte nicht gespeichert werden.", "delete": "Der Befehl konnte nicht gelöscht werden." },
+			"errors": {
+				"load": "Befehle konnten nicht geladen werden.",
+				"save": "Der Befehl konnte nicht gespeichert werden.",
+				"delete": "Der Befehl konnte nicht gelöscht werden."
+			},
 			"form": {
-				"name": { "label": "Befehlsname", "description": "Kleinbuchstaben, Zahlen und einzelne Bindestriche. Ohne / eingeben.", "placeholder": "review", "invalid": "Geben Sie einen gültigen kleingeschriebenen Befehlsnamen ein." },
+				"name": {
+					"label": "Befehlsname",
+					"description": "Kleinbuchstaben, Zahlen und einzelne Bindestriche. Ohne / eingeben.",
+					"placeholder": "review",
+					"invalid": "Geben Sie einen gültigen kleingeschriebenen Befehlsnamen ein."
+				},
 				"description": { "label": "Beschreibung", "placeholder": "Optionale Zusammenfassung für die Autovervollständigung" },
 				"action": { "label": "Aktion", "sendPrompt": "Prompt senden" },
-				"prompt": { "label": "Prompt", "description": "Wird beim Aufruf des Befehls im aktuellen Chat an den Agenten gesendet.", "placeholder": "Prüfe die aktuelle Arbeit und melde Probleme nach Schweregrad.", "required": "Ein Prompt ist erforderlich." }
+				"prompt": {
+					"label": "Prompt",
+					"description": "Wird beim Aufruf des Befehls im aktuellen Chat an den Agenten gesendet.",
+					"placeholder": "Prüfe die aktuelle Arbeit und melde Probleme nach Schweregrad.",
+					"required": "Ein Prompt ist erforderlich."
+				}
 			}
 		},
 		"skills": {
@@ -4199,19 +4220,13 @@
 			"play": "Diese Antwort vorlesen",
 			"stop": "Vorlesen stoppen"
 		},
-		"notice": {
-			"downloading": "Sprachmodell wird heruntergeladen…",
-			"downloadProgress": "{{loaded}} / {{total}} MB",
-			"downloadError": "Das Sprachmodell konnte nicht heruntergeladen werden. Es wird auf die Browser-Sprachausgabe zurückgegriffen.",
-			"webSpeechFallback": "Browser-Sprachausgabe wird verwendet – WebGPU ist nicht verfügbar."
-		},
 		"settings": {
 			"title": "Sprachausgabe (Text-to-Speech)",
 			"operatorGate": "Sprachfunktion des Knotens:",
 			"gateOn": "Aktiviert",
 			"gateOff": "Deaktiviert",
 			"enableLabel": "Antworten auf diesem Gerät vorlesen",
-			"enableDescription": "Wird nur in diesem Browser gespeichert. Die Synthese läuft lokal; es werden keine Audiodaten an das Gerät gesendet.",
+			"enableDescription": "Wird nur in diesem Browser gespeichert. Die Sprachausgabe übernimmt der Browser oder das Betriebssystem.",
 			"autoPlayLabel": "Assistenten-Antworten automatisch vorlesen",
 			"profileLabel": "Stimme",
 			"rateLabel": "Sprechgeschwindigkeit",
@@ -4223,7 +4238,6 @@
 			"operatorDefaultProfileDescription": "Die Stimme, mit der neue Benutzer auf diesem Knoten starten.",
 			"operatorSaveError": "Die Sprach-Einstellung des Knotens konnte nicht gespeichert werden.",
 			"previewLabel": "Stimme anhören",
-			"builtInVoicesGroupLabel": "Integrierte Stimmen",
 			"systemVoiceGroupLabel": "Systemstimmen ({{language}})"
 		}
 	},

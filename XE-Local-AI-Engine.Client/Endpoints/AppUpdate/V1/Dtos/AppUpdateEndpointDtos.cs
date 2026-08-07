@@ -1,77 +1,19 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.AppUpdate.V1;
 
-// ---------------------------------------------------------------------------
-// GitHub device-flow DTOs
-//
-// SECURITY INVARIANT: none of these contracts carries the GitHub access token OR the device_code. The device_code stays
-// server-side; start returns only the user code + verification URI, and the token is held only in the encrypted
-// store. Tests AppUpdateContracts_ContainNoTokenField + GitHubAuth_Start_DoesNotReturnDeviceCode assert this.
-// ---------------------------------------------------------------------------
-
-/// <summary>
-///     Response for <c>POST github-auth/start</c>: the user-facing device-flow prompt. The secret <c>device_code</c> is
-///     deliberately ABSENT — it is held server-side and replayed by <c>poll</c> (the React client polls
-///     <c>github-auth/poll</c>, which reads the in-flight device code from the server, not from this DTO).
-/// </summary>
-public sealed class GitHubAuthStartResponse
-{
-    /// <summary>The short code the user types at <see cref="VerificationUri" /> (e.g. <c>WDJB-MJHT</c>).</summary>
-    public required string UserCode { get; init; }
-
-    /// <summary>The github.com URL the user opens to enter the <see cref="UserCode" /> (validated host == github.com).</summary>
-    public required string VerificationUri { get; init; }
-
-    /// <summary>Seconds until the codes expire (the user must finish within this window).</summary>
-    public required int ExpiresInSeconds { get; init; }
-
-    /// <summary>Minimum seconds the client must wait between <c>poll</c> calls.</summary>
-    public required int IntervalSeconds { get; init; }
-}
-
-/// <summary>
-///     Response for <c>POST github-auth/poll</c>: the device-flow poll outcome. On <c>authorized</c> the token has already
-///     been stored server-side and <see cref="Login" /> carries the GitHub login — the token itself is NEVER returned.
-/// </summary>
-public sealed class GitHubAuthPollResponse
-{
-    /// <summary>Poll state — <c>pending</c>, <c>authorized</c>, <c>denied</c>, or <c>expired</c> (lowercase).</summary>
-    public required string State { get; init; }
-
-    /// <summary>The signed-in GitHub login on <c>authorized</c>; otherwise <see langword="null" />.</summary>
-    public string? Login { get; init; }
-}
-
-/// <summary>
-///     Response for <c>GET github-auth/status</c>: the current GitHub sign-in state. Reports presence + login only — never
-///     the token.
-/// </summary>
-public sealed class GitHubAuthStatusResponse
-{
-    /// <summary>Auth state — <c>signedOut</c>, <c>signedIn</c>, <c>reauthRequired</c>, or <c>noAccess</c> (lowercase).</summary>
-    public required string AuthState { get; init; }
-
-    /// <summary>The signed-in GitHub login when signed in; otherwise <see langword="null" />.</summary>
-    public string? Login { get; init; }
-}
-
-// ---------------------------------------------------------------------------
-// App-update status / apply DTOs
-// ---------------------------------------------------------------------------
-
 /// <summary>
 ///     Query-string request for <c>GET app-update/status</c>. <see cref="Refresh" /> (default false) forces a fresh GitHub
-///     check, subject to a 60s rate-limit floor (a younger snapshot is served from cache regardless).
+///     check, subject to a 10-minute rate-limit floor (a younger snapshot is served from cache regardless).
 /// </summary>
 public sealed class GetAppUpdateStatusRequest
 {
-    /// <summary>When true, re-checks GitHub (rate-limited to once per 60s); null/false serves the cached snapshot.</summary>
+    /// <summary>When true, re-checks GitHub (rate-limited to once per 10 minutes); null/false serves the cached snapshot.</summary>
     public bool? Refresh { get; init; }
 }
 
 /// <summary>
 ///     Response for <c>GET app-update/status</c>. Surfaces the running version, the available version (when newer),
-///     whether an update is available, the GitHub auth state, whether this build is the desktop self-update build,
-///     whether the last check was offline, and when it ran. It NEVER carries the GitHub token.
+///     whether an update is available, whether this build is configured and desktop, the sanitized check status, and
+///     when it ran.
 /// </summary>
 public sealed class AppUpdateStatusResponse
 {
@@ -84,17 +26,14 @@ public sealed class AppUpdateStatusResponse
     /// <summary>True only when a newer release was resolved.</summary>
     public required bool UpdateAvailable { get; init; }
 
-    /// <summary>Auth state — <c>signedOut</c>, <c>signedIn</c>, <c>reauthRequired</c>, or <c>noAccess</c> (lowercase).</summary>
-    public required string AuthState { get; init; }
-
-    /// <summary>The signed-in GitHub login when signed in; otherwise <see langword="null" />.</summary>
-    public string? Login { get; init; }
+    /// <summary>True when the artifact carries a usable public GitHub update source.</summary>
+    public required bool IsConfigured { get; init; }
 
     /// <summary>True when running as the desktop self-update build (React renders the update UI only then).</summary>
     public required bool IsDesktop { get; init; }
 
-    /// <summary>True when GitHub was unreachable at the time of the snapshot.</summary>
-    public required bool IsOffline { get; init; }
+    /// <summary>Sanitized result: <c>notChecked</c>, <c>ready</c>, <c>offline</c>, or <c>failed</c>.</summary>
+    public required string CheckStatus { get; init; }
 
     /// <summary>Unix-ms instant the last check ran (UTC); null before the first check.</summary>
     public long? LastCheckedUtc { get; init; }

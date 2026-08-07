@@ -5,7 +5,12 @@ import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
-import { applicationInfo, type IThirdPartyPackage, thirdPartyPackages } from "@/features/about/data/AboutData";
+import {
+	applicationInfo,
+	type IThirdPartyPackage,
+	runtimeLegalDocuments,
+	thirdPartyPackages,
+} from "@/features/about/data/AboutData";
 import { AppUpdateSection } from "@/features/app-update/components/AppUpdateSection";
 import { useOnboarding } from "@/features/onboarding/context/OnboardingContext";
 
@@ -54,7 +59,7 @@ export function AboutDialog({ opened, onClose }: IAboutDialogProps) {
 	};
 
 	return (
-		<DialogShell opened={opened} onClose={onClose} title={t("pages.about.title", "About")} size="xl">
+		<DialogShell opened={opened} onClose={onClose} title={t("pages.about.title", "About")} size="xl" keepMounted={true}>
 			<Tabs defaultValue="application" px="md" pb="md">
 				<Tabs.List>
 					<Tabs.Tab value="application">{t("pages.about.applicationTab", "Application")}</Tabs.Tab>
@@ -111,6 +116,16 @@ export function AboutDialog({ opened, onClose }: IAboutDialogProps) {
 						<Text size="sm" c="dimmed">
 							{t("pages.about.licensesIntro", "Key third-party packages used by this application.")}
 						</Text>
+						<Stack gap={2}>
+							<Text size="sm" fw={600}>
+								{t("pages.about.runtimeTerms", "Bundled .NET runtime terms")}
+							</Text>
+							{runtimeLegalDocuments.map((document) => (
+								<Anchor key={document.href} href={document.href} target="_blank" rel="noopener noreferrer" size="sm">
+									{document.name}
+								</Anchor>
+							))}
+						</Stack>
 						<TextInput
 							value={licenseFilter}
 							onChange={handleFilterChange}

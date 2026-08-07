@@ -33,5 +33,10 @@ This is an early-stage project maintained by one person in their spare time, so 
 
 ## Known posture (not vulnerabilities to report)
 
-- Release binaries are currently **unsigned**, which triggers Windows SmartScreen and browser "not commonly downloaded" warnings. Code signing is a tracked follow-up.
+- Release binaries are currently **unsigned because the project does not yet have a signing certificate**. Windows
+  can show browser reputation and SmartScreen **Unknown publisher** warnings; Linux desktop environments or security
+  tools can require an explicit trust/execute action for the AppImage. Certificate signing is planned.
+- Official releases publish `CHECKSUMS.sha256`, `RELEASE-MANIFEST.json`, and `RELEASE.spdx.json`. Verify the platform
+  artifact's SHA-256 before running it. Checksums and SPDX inventory improve integrity/transparency but do not provide
+  publisher authentication equivalent to a trusted code signature.
 - Development Mode executes repository code on your machine by design; treat it as running the target repo's own build/test commands. See the user guide's privacy/security notes.

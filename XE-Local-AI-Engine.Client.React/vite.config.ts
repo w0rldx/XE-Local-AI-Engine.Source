@@ -4,47 +4,25 @@ import { devtools } from "@tanstack/devtools-vite";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import viteReact from "@vitejs/plugin-react";
 import UnoCSS from "unocss/vite";
-import { defineConfig, loadEnv, normalizePath, type ProxyOptions } from "vite";
-import { viteStaticCopy } from "vite-plugin-static-copy";
+import { defineConfig, loadEnv, type ProxyOptions } from "vite";
 
 import signalrProxyPaths from "./config/signalr-proxy-paths.json";
 import aspNetCoreDevelopmentCertificate from "./vite-plugins/aspnetcore-development-certificate";
 import tablerDevelopmentBugfix from "./vite-plugins/tabler-development-bugfix";
+import { createFrontendComponentManifestPlugin } from "./scripts/FrontendComponentManifest.mjs";
 import fs from "node:fs";
 import path from "node:path";
 
-// onnxruntime-web ships the WASM/JSEP binaries the in-browser TTS runtime (Kokoro via @huggingface/transformers)
-// loads at runtime. It is a transitive dependency, so under pnpm it is NOT hoisted to the top-level node_modules —
-// it lives under node_modules/.pnpm/onnxruntime-web@<version-hash>/. We resolve its absolute `dist` directory (no
-// wildcard in the directory path) so the static-copy glob's only wildcard is the filename and the binaries land FLAT
-// in the served `/ort` dir (the runtime points ORT's `wasm.wasmPaths` at `/ort/` — see KokoroProvider/TtsWorker).
-function resolveOnnxRuntimeWebDistDir(): string {
-	const hoisted = path.resolve(__dirname, "node_modules/onnxruntime-web/dist");
-	if (fs.existsSync(hoisted)) {
-		return hoisted;
-	}
-
-	const pnpmDir = path.resolve(__dirname, "node_modules/.pnpm");
-	const pnpmEntry = fs.readdirSync(pnpmDir).find((name) => name.startsWith("onnxruntime-web@"));
-	if (!pnpmEntry) {
-		throw new Error("onnxruntime-web not found in node_modules — install dependencies before building.");
-	}
-
-	return path.join(pnpmDir, pnpmEntry, "node_modules/onnxruntime-web/dist");
-}
-
-const ortWasmCopySource = normalizePath(path.join(resolveOnnxRuntimeWebDistDir(), "*.{wasm,mjs}"));
-
 // The version shown in the About dialog must match the released artifact without a second hand-maintained constant.
-// Directory.Build.props is the single source of truth for the .NET assembly version AND `vpk --packVersion`; parse it
+// eng/ReleaseVersion.props is the single source of truth for the .NET assembly version AND `vpk --packVersion`; parse it
 // here and compose `VersionPrefix[-VersionSuffix]` (e.g. "0.1.0-rc.1").
 function resolveAppVersion(): string {
-	const propsPath = path.resolve(__dirname, "../Directory.Build.props");
+	const propsPath = path.resolve(__dirname, "../eng/ReleaseVersion.props");
 	const xml = fs.readFileSync(propsPath, "utf8");
 	const prefix = xml.match(/<VersionPrefix>([^<]+)<\/VersionPrefix>/)?.[1]?.trim();
 	const suffix = xml.match(/<VersionSuffix>([^<]+)<\/VersionSuffix>/)?.[1]?.trim();
 	if (!prefix) {
-		throw new Error("VersionPrefix not found in Directory.Build.props — cannot derive the client app version.");
+		throw new Error("VersionPrefix not found in eng/ReleaseVersion.props — cannot derive the client app version.");
 	}
 
 	return suffix ? `${prefix}-${suffix}` : prefix;
@@ -53,6 +31,9 @@ function resolveAppVersion(): string {
 // Set it on process.env BEFORE Vite resolves env so it lands in `import.meta.env` (Vite exposes VITE_-prefixed
 // process.env vars to the client). `??=` lets CI/release override with an explicit value if ever needed.
 process.env.VITE_APP_VERSION ??= resolveAppVersion();
+// Keep clean-clone production builds usable without requiring contributors to materialize `.env.template` first.
+// The same default is enforced by Environment.ts; setting it here also lets Vite resolve the index.html placeholder.
+process.env.VITE_APP_TITLE ??= "XE Local AI Engine";
 
 const coverageThresholds =
 	process.env.VITEST_COVERAGE_CHECK === "true"
@@ -103,32 +84,19 @@ export default defineConfig(({ command, mode }) => {
 	return {
 		base: "/",
 		plugins: [
+			createFrontendComponentManifestPlugin(),
 			devtools(),
 			tanstackRouter({ target: "react", autoCodeSplitting: true }),
 			viteReact(),
 			UnoCSS(),
 			aspNetCoreDevelopmentCertificate({ certificateName: "c0re.client.react.web" }),
 			tablerDevelopmentBugfix(),
-			viteStaticCopy({
-				// `stripBase: true` flattens the matched files into `dist/ort/` (otherwise the deep node_modules path is
-				// reconstructed under the dest).
-				targets: [{ src: ortWasmCopySource, dest: "ort", rename: { stripBase: true } }],
-			}),
 		],
-		// WebGPU needs NO COOP/COEP / cross-origin isolation (only multithreaded SharedArrayBuffer WASM does), so no
-		// cross-origin headers are configured here.
-		assetsInclude: ["**/*.onnx"],
 		// Emit hidden source maps so production stacks captured by the diagnostics snapshot subsystem
 		// symbolicate, without exposing a `//# sourceMappingURL` to end users.
 		build: { sourcemap: "hidden" },
-		// Dedicated ES-module Web Worker (TtsWorker.ts) runs Kokoro synthesis off the main thread; the WebGPU ORT
-		// execution provider forbids ORT's `wasm.proxy`, so an own worker is mandatory and must be emitted as ESM.
-		worker: { format: "es" },
 		optimizeDeps: {
 			include: ["@tanstack/react-form-devtools"],
-			// esbuild's dep pre-bundling chokes on the WASM/dynamic imports inside these packages; exclude them so
-			// Vite serves their real ESM (the worker + Kokoro load onnxruntime-web/transformers at runtime).
-			exclude: ["@huggingface/transformers", "onnxruntime-web"],
 		},
 		resolve: {
 			alias: [

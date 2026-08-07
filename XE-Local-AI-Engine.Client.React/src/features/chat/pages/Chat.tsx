@@ -210,12 +210,12 @@ export function Chat() {
 	// Developer mode + per-send sampling overrides. Read directly from global stores.
 	const developerMode = useDeveloperModeStore((state) => state.developerMode);
 	const samplingOptions = useChatSamplingPreferencesStore((state) => state.options);
-	// Voice runtime: the manifest-derived gate drives showVoiceControls; the playback tap mirrors the stream into TTS.
+	// Voice runtime: the node setting drives showVoiceControls; the playback tap mirrors the stream into Web Speech.
 	const voiceRuntime = useVoiceRuntime();
 	const { onTurnStart: onVoiceTurnStart, onAnswerProgress: onVoiceAnswerProgress } = useVoicePlayback();
 	const chatUiCapabilities = useMemo(
-		() => buildChatUiCapabilities(nodeCapabilities.chat, voiceRuntime.manifest?.enabled ?? false),
-		[voiceRuntime.manifest?.enabled],
+		() => buildChatUiCapabilities(nodeCapabilities.chat, voiceRuntime.enabled),
+		[voiceRuntime.enabled],
 	);
 	// Knowledge-base documents drive whether the composer's "Use Knowledge Base" toggle is enabled: grounding on an
 	// empty corpus is a no-op, so the toggle stays visible but disabled until at least one document is INDEXED. The

@@ -1,0 +1,19 @@
+[
+  {
+    "Id": "SQLitePCLRaw.lib.e_sqlite3",
+    "Version": "3.50.3",
+    "License": "blessing",
+    "Copyright": "SQLite is in the public domain; package copyright metadata names SourceGear, LLC.",
+    "Authors": "SQLite Authors; SourceGear, LLC",
+    "ProjectUrl": "https://www.sqlite.org/",
+    "LicenseUrl": "https://www.sqlite.org/copyright.html"
+  },
+  {
+    "Id": "UTF.Unknown",
+    "Version": "2.6.0",
+    "License": "MPL-1.1",
+    "Authors": "UTF.Unknown contributors",
+    "ProjectUrl": "https://github.com/CharsetDetector/UTF-unknown",
+    "LicenseUrl": "https://github.com/CharsetDetector/UTF-unknown/blob/master/license/MPL-1.1.txt"
+  }
+]

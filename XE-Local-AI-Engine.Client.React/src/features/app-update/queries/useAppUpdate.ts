@@ -1,65 +1,25 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import type {
-	ApplyAppUpdateData,
-	PollGitHubAuthData,
-	SignOutGitHubAuthData,
-	StartGitHubAuthData,
-} from "@/core/api/generated";
+import type { ApplyAppUpdateData, GetAppUpdateStatusResponse } from "@/core/api/generated";
+import { getAppUpdateStatus } from "@/core/api/generated/sdk.gen";
 import {
 	applyAppUpdateMutation,
 	getAppUpdateStatusOptions,
 	getAppUpdateStatusQueryKey,
-	getGitHubAuthStatusOptions,
-	getGitHubAuthStatusQueryKey,
-	pollGitHubAuthMutation,
-	signOutGitHubAuthMutation,
-	startGitHubAuthMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import type { Options } from "@/core/api/generated/sdk.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
+import { callWithResponseValidation, withResponseValidation } from "@/core/api/ResponseValidation";
 
-// Auth state literals as returned by the backend (AppUpdateAuthStateWire.Of). `authState` is a plain string on the
-// wire rather than an OpenAPI enum, so this union — not the generated client — is what pins the accepted values.
-// "notConfigured" means the build was never baked with a usable repo URL + GitHub App client ID, so self-update
-// cannot work here at all and sign-in must not be offered.
-export type AuthState = "signedIn" | "signedOut" | "reauthRequired" | "noAccess" | "notConfigured";
+const emptyOptions = {} as Options<ApplyAppUpdateData>;
 
-// Query IDs used for cache invalidation.
-const queryIds = {
-	appUpdateStatus: "getAppUpdateStatus",
-	gitHubAuthStatus: "getGitHubAuthStatus",
-} as const;
-
-// Invalidation helper shared by mutations that change auth/update state.
-function invalidateStatus(queryClient: ReturnType<typeof useQueryClient>): Promise<void[]> {
-	return Promise.all([
-		queryClient.invalidateQueries({
-			// biome-ignore lint/style/useNamingConvention: generated hey-api query-key discriminator.
-			queryKey: [{ _id: queryIds.appUpdateStatus }],
-		}),
-		queryClient.invalidateQueries({
-			// biome-ignore lint/style/useNamingConvention: generated hey-api query-key discriminator.
-			queryKey: [{ _id: queryIds.gitHubAuthStatus }],
-		}),
-	]);
-}
-
-// No-body request object for endpoints that take no body/path/query (just the url).
-// All three fields are optional/never in the generated data types so `{}` satisfies them.
-const emptyOptions = {} as Options<StartGitHubAuthData & PollGitHubAuthData & SignOutGitHubAuthData & ApplyAppUpdateData>;
-
-// Combined app-update + auth status. Pass refresh:true to force a server-side check (60s floor enforced by backend).
 export function useAppUpdateStatus(refresh?: boolean) {
 	return useQuery({
 		...withResponseValidation(getAppUpdateStatusOptions({ query: { refresh: refresh ?? null } })),
+		// Poll only the local cached snapshot. A live GitHub check remains explicit through refresh=true.
+		refetchInterval: 60_000,
 	});
 }
 
-// Forces a live server-side check (?refresh=true, 60s floor enforced by backend) and writes the fresh snapshot back
-// into the default `useAppUpdateStatus()` cache so the displayed status updates. Returns the refresh callback plus an
-// `isRefreshing` flag for button loading state. The default query (refresh:null) only re-serves the cached snapshot on
-// `refetch()`, so this is what the "Check for updates" button must call to actually hit GitHub.
 export function useRefreshAppUpdateStatus() {
 	const queryClient = useQueryClient();
 
@@ -69,7 +29,6 @@ export function useRefreshAppUpdateStatus() {
 				withResponseValidation(getAppUpdateStatusOptions({ query: { refresh: true } })),
 			),
 		onSuccess: (data) => {
-			// Seed the default (refresh:null) cache so the visible status reflects the forced check.
 			queryClient.setQueryData(
 				getAppUpdateStatusQueryKey({ query: { refresh: null } }),
 				data,
@@ -78,55 +37,32 @@ export function useRefreshAppUpdateStatus() {
 	});
 }
 
-// GitHub auth status (signed-in / signed-out / reauthRequired / noAccess).
-export function useGitHubAuthStatus() {
-	return useQuery({
-		...withResponseValidation(getGitHubAuthStatusOptions()),
-	});
-}
-
-// Starts the GitHub device flow. Returns userCode / verificationUri / expiresInSeconds / intervalSeconds.
-// The device_code is intentionally held only by the backend; React never sees it.
-export function useStartGitHubAuth() {
+/** Reads the server's cached restart identity without replacing the status displayed by the mounted About dialog. */
+export function useProbeAppUpdateStatus() {
 	return useMutation({
-		...withResponseValidation(startGitHubAuthMutation()),
+		mutationFn: async () => {
+			const { data } = await callWithResponseValidation(getAppUpdateStatus({
+				query: { refresh: null },
+				throwOnError: true,
+			}));
+			return data;
+		},
 	});
 }
 
-// Polls the device flow until authorized / denied / expired. Caller drives the poll interval.
-export function usePollGitHubAuth() {
+export function useApplyAppUpdate() {
 	const queryClient = useQueryClient();
-
+	const statusKey = getAppUpdateStatusQueryKey({ query: { refresh: null } });
 	return useMutation({
-		...withResponseValidation(pollGitHubAuthMutation()),
-		onSuccess: async (data) => {
-			if (data?.state === "authorized") {
-				await invalidateStatus(queryClient);
+		...withResponseValidation(applyAppUpdateMutation()),
+		onSuccess: (result) => {
+			if (!result.applying) {
+				queryClient.setQueryData<GetAppUpdateStatusResponse>(statusKey, (current) => current
+					? { ...current, availableVersion: null, updateAvailable: false, checkStatus: "ready" }
+					: current);
 			}
 		},
 	});
 }
 
-// Clears the local stored token. Attempts a best-effort server-side revoke call, but this is
-// effectively a no-op: the GitHub device flow has no client_secret, so GitHub cannot verify the
-// revoke request and will not actually invalidate the token server-side.
-export function useSignOutGitHubAuth() {
-	const queryClient = useQueryClient();
-
-	return useMutation({
-		...withResponseValidation(signOutGitHubAuthMutation()),
-		onSuccess: () => invalidateStatus(queryClient),
-	});
-}
-
-// Triggers download + apply + relaunch. No-op if no update is available.
-export function useApplyAppUpdate() {
-	return useMutation({
-		...withResponseValidation(applyAppUpdateMutation()),
-	});
-}
-
-// Convenience empty-options export for callers that invoke no-body mutations.
-// Use as: `mutation.mutate(noBodyOptions)` or `mutation.mutateAsync(noBodyOptions)`.
 export { emptyOptions as noBodyOptions };
-export { getAppUpdateStatusQueryKey, getGitHubAuthStatusQueryKey };

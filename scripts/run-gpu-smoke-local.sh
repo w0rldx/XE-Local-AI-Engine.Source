@@ -721,7 +721,7 @@ for resource in status.get("resources", []):
     if resource.get("name") != "app":
         continue
     urls = [u.get("url", "") for u in resource.get("urls", [])]
-    # Only the bare origin; /scalar, /openapi and /devui share the same host:port.
+    # Only the bare origin; /scalar and /openapi share the same host:port.
     origins = [u.rstrip("/") for u in urls if u.count("/") == 2]
     for scheme in ("https://", "http://"):
         for origin in origins:

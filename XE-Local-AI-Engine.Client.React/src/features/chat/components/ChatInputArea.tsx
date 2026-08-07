@@ -33,7 +33,6 @@ import type {
 	ReasoningEffort,
 } from "@/features/chat/models/ChatModels";
 import { VoiceComposerControls } from "@/features/voice/components/VoiceComposerControls";
-import { VoiceStatusNotice } from "@/features/voice/components/VoiceStatusNotice";
 
 // The composer toolbar lives inside the Textarea's native bottomSection (Mantine 9.3+), which is absolutely
 // positioned at a fixed height — it does not grow to fit its content. On wide viewports the toolbar is one
@@ -168,7 +167,7 @@ export function ChatInputArea({
 	// composer is interactive (not disabled / mid-send).
 	const fileAttachmentsEnabled = capabilities.showFileAttachmentControls && Boolean(onUploadFiles);
 	const attachmentControlsDisabled = disabled || isSending;
-	// Voice controls are dev-gated AND require the operator-owned manifest gate (capabilities.showVoiceControls,
+	// Voice controls are dev-gated AND require the operator-owned node gate (capabilities.showVoiceControls,
 	// derived from manifest.Enabled). The leaf components additionally self-gate on the runtime context.
 	const showVoiceControls = developerMode && capabilities.showVoiceControls;
 	const { width } = useWindowDimensions();
@@ -484,7 +483,6 @@ export function ChatInputArea({
 					disabled={attachmentControlsDisabled}
 				/>
 			) : null}
-			{showVoiceControls ? <VoiceStatusNotice /> : null}
 			<SlashCommandAutocomplete
 				store={autocomplete.combobox}
 				options={autocomplete.matches}

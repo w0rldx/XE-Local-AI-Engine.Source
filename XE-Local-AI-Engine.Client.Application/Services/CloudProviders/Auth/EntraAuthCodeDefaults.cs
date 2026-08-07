@@ -10,7 +10,7 @@ using System.Net;
 public static class EntraAuthCodeDefaults
 {
     // Composed from parts (scheme + host + port + path) rather than a single hardcoded URI literal so it does not
-    // trip the hardcoded-URI analyzer (S1075) — mirrors KokoroVoiceCatalog's download-URL composition.
+    // trip the hardcoded-URI analyzer (S1075); keep the host/path split explicit.
     private const string DefaultRedirectHost = "localhost";
     private const string DefaultRedirectPort = "53682";
     private const string DefaultRedirectPath = "/signin-oidc";

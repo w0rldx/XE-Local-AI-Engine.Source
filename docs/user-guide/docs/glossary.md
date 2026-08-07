@@ -66,7 +66,7 @@ seen before from a known publisher. → [What to click](install-windows.md#the-w
 ### Checksum / SHA-256
 A long fingerprint calculated from a file's exact contents. If your download's fingerprint matches the
 published one, your copy is identical — nothing was corrupted or altered in transit.
-→ [How to check](download-from-github.md#step-6--check-you-got-the-right-thing)
+→ [How to check](download-from-github.md#step-4--verify-sha-256)
 
 ### Console window
 The black window full of scrolling text that opens alongside the app. It is **not** an error — it's the
@@ -262,12 +262,13 @@ search, because each catches what the other misses.
 If you don't already know you want it, you don't need it.
 
 ### TTS (Text-to-Speech)
-Reading replies aloud. Two options: your browser's built-in voices, or **Kokoro**, a higher-quality
-voice that runs locally in your browser.
+Reading replies aloud through voices exposed by your browser and operating system. Which voices are
+available, and whether synthesis stays offline, depends on that platform's speech implementation and
+is outside the app's control.
 
 ### WebGPU
-A browser feature that lets web pages use your graphics card. Used to make the local text-to-speech
-voice faster and higher quality. Falls back automatically if unavailable.
+A browser feature that lets web pages use your graphics card. The app's text-to-speech output uses
+the browser's Web Speech implementation instead and does not require WebGPU.
 
 ---
 

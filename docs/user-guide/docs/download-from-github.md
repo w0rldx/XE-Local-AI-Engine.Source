@@ -1,171 +1,67 @@
 # How to download the app from GitHub
 
-If you have not used GitHub before, this page is for you. GitHub is a website built for programmers,
-and the download you want is **not** the big green button — that is the single most common mistake.
+The ready-to-run application is on the repository's **Releases** page, not behind the green **Code** button.
 
-**What you are looking for:** one file named `XE-Local-AI-Engine-win-Portable.zip`.
+## Step 1 — Open the latest release
 
----
+The repository and its release assets are public. You do not need to sign in to GitHub.
 
-## Step 1 — Open the Releases page
+[**Open the Releases page →**](https://github.com/w0rldx/XE-Local-AI-Engine.Source/releases)
 
-This repository is public — you don't need to sign in to GitHub or accept an invitation to see it or
-download from it.
+## Step 2 — Expand Assets
 
-**[→ Click here for the latest release](https://github.com/w0rldx/XE-Local-AI-Engine.Source/releases/latest)**
+Under the release notes, expand **Assets**. Choose the platform artifact:
 
-You can also get there manually: on the repository's front page, look at the right-hand sidebar for
-**"Releases"** and click it.
-
----
-
-## Step 2 — Ignore the green "Code" button
-
-> ### ⚠️ The green **`<> Code`** button downloads source code, not the app
->
-> That button downloads this repository's **source code** — useful if you're a developer who wants to
-> build it yourself, but it is **not** the ready-to-run application, and there is no `.exe` inside it.
->
-> **If you downloaded something and found no `.exe` inside, this is what happened.** Come back to the
-> Releases page and grab a release asset instead.
-
----
-
-## Step 3 — Find the newest release
-
-The Releases page lists versions newest-first. The top entry is the one you want.
-
-You will see labels next to it:
-
-| Label | Meaning |
+| Platform | Download |
 |---|---|
-| **Pre-release** | Expected — every beta build here is marked this way. Not a problem. |
-| **Latest** | The newest build. |
+| Windows x64 | `XE-Local-AI-Engine-win-Portable.zip` |
+| Linux x64 | The file whose name ends in `.AppImage` |
 
-The version looks like `v0.1.0-rc.5.0`. Higher numbers are newer.
+Also download `CHECKSUMS.sha256`. The `.nupkg` files and `releases.win.json` / `releases.linux.json` are update-feed
+assets used by Velopack; users do not open them manually. GitHub's automatic **Source code** archives are not packaged
+applications.
 
----
+## Step 3 — Keep the unsigned download if you trust it
 
-## Step 4 — Open "Assets"
+The project does not yet have a signing certificate, so current release artifacts are unsigned. Signing is planned.
 
-Under the release notes there is a section called **Assets**. It is sometimes **collapsed**, showing
-just a small ► triangle and a file count.
+- Edge or Chrome may say the Windows ZIP is not commonly downloaded. Open the downloads list, choose **Keep**, then
+  **Keep anyway** if you trust the release.
+- Firefox may require **Allow download**.
+- Linux desktop environments or security tools may require an explicit trust/execute action for the AppImage.
 
-**Click the word "Assets"** (or the triangle) to expand it.
+Verify the checksum before running either artifact.
 
-You will then see a list like this:
+## Step 4 — Verify SHA-256
 
-```
-▼ Assets                                                    7
+### Windows
 
-   📄  XE-Local-AI-Engine-win-Portable.zip                  ✅ WINDOWS — this one
-   📄  XE-Local-AI-Engine-<version>-linux-Portable.zip      (Linux build)
-   📄  XE-Local-AI-Engine-<version>-linux-Portable.zip.sha256   (Linux checksum)
-   📄  XE-Local-AI-Engine-<version>-delta.nupkg             ❌ ignore
-   📄  XE-Local-AI-Engine-<version>-full.nupkg              ❌ ignore
-   📄  releases.win.json                                    ❌ ignore
-   📄  RELEASES                                             ❌ ignore
-
-   📄  Source code (zip)                                       ❌ ignore
-   📄  Source code (tar.gz)                                    ❌ ignore
-```
-
-*(`<version>` is a placeholder — the real files carry the version number of the build you're viewing,
-e.g. `v0.1.0-rc.5.0`. On **Linux**, grab the two `linux-Portable` files instead and follow the
-[Linux guide](install-linux.md).)*
-
-### Click **`XE-Local-AI-Engine-win-Portable.zip`**
-
-That starts the download. It is around 100 MB, so give it a minute.
-
-<details>
-<summary><b>What are the other files?</b></summary>
-
-- **`.nupkg` files** — used by the app's built-in updater when it upgrades itself. You never open these.
-- **`releases.win.json` / `RELEASES`** — the list the updater reads to discover new versions.
-- **"Source code (zip / tar.gz)"** — added automatically by GitHub to every release. It contains the
-  project's **source code**, not the packaged application. There is nothing runnable inside unless you
-  build it yourself.
-
-Downloading the wrong one wastes time but does no harm.
-
-</details>
-
----
-
-## Step 5 — If your browser blocks the download
-
-Browsers are suspicious of large `.exe`-containing ZIP files from sites they don't recognise.
-
-**Microsoft Edge / Google Chrome** may show *"… is not commonly downloaded"* or *"blocked"*:
-
-1. Open your **Downloads** list (`Ctrl` + `J`).
-2. Find the blocked entry.
-3. Click the **`⋯`** menu next to it → **Keep**.
-4. If asked again, choose **Keep anyway** / **Show more** → **Keep anyway**.
-
-**Firefox:** click the **`⋯`** next to the download → **Allow download**.
-
-This is the same category of warning as the one Windows shows later, and it has the same cause: the
-build is not code-signed. See [the SmartScreen section](install-windows.md#the-windows-smartscreen-warning).
-
----
-
-## Step 6 — Check you got the right thing
-
-The downloaded file should be:
-
-- **Named** `XE-Local-AI-Engine-win-Portable.zip`
-- **Roughly 90–100 MB**
-
-If it is only a few hundred kilobytes, you downloaded the source code by mistake — go back to
-[Step 2](#step-2--ignore-the-green-code-button).
-
-<details>
-<summary><b>Optional: verify the download is genuine</b></summary>
-
-You can confirm your copy is byte-for-byte what I published.
-
-**1. Get the expected value from GitHub.** GitHub records a **SHA-256 digest** for each release asset.
-Depending on your GitHub layout it appears in the asset's download panel (open the `...` menu beside
-the file) — it is **not** printed in the release notes text, so don't hunt for it there. This value is
-published by GitHub from the stored file itself, so it always matches the exact build you're downloading.
-If you can't find it in the interface, message me and I'll confirm the digest for your release.
-
-**2. Compute the value on your machine.** Open PowerShell and run:
+Open PowerShell in the download directory:
 
 ```powershell
-Get-FileHash "$env:USERPROFILE\Downloads\XE-Local-AI-Engine-win-Portable.zip" -Algorithm SHA256
+Get-FileHash .\XE-Local-AI-Engine-win-Portable.zip -Algorithm SHA256
+Select-String -Path .\CHECKSUMS.sha256 -Pattern 'XE-Local-AI-Engine-win-Portable.zip'
 ```
 
-**3. Compare them.** They should match, ignoring upper/lower case and the `sha256:` prefix.
+The computed hash must match the hash at the start of the checksum line, ignoring letter case. If it does not match,
+do not run the file.
 
-If yours does not match, **do not run the file** — please tell me.
+### Linux
 
-> **Note:** the release notes themselves are a changelog and do **not** contain a checksum. The digest
-> is published by GitHub on the asset itself, which is better — it is computed by GitHub from the
-> stored file rather than typed in by me.
+Run this in the download directory:
 
-</details>
+```bash
+grep -E '  \./.*\.AppImage$' CHECKSUMS.sha256 | sha256sum --check -
+```
 
----
+The command must print `OK`.
+
+`RELEASE-MANIFEST.json` binds the asset inventory to the source tag and commit. `RELEASE.spdx.json` provides the
+detached SPDX release inventory.
 
 ## Next
 
-**→ [Installing on Windows](install-windows.md)** — unblocking, extracting, and getting past the
-Windows security warning.
-
----
-
-## Getting notified about new builds
-
-Optional, but useful: GitHub can email you when I publish a new build.
-
-1. On the repository front page, click **Watch** (top right).
-2. Choose **Custom** → tick **Releases** → **Apply**.
-
-You will then be emailed for new releases only, not for every change.
-
----
+- [Install on Windows](install-windows.md)
+- [Install on Linux](install-linux.md)
 
 **[← Back to the main page](../README.md)**

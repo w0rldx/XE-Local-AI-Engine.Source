@@ -127,15 +127,6 @@ public static class LocalApiRoutes
     }
 
     /// <summary>
-    ///     Client voice (TTS) runtime routes. The manifest is config-only (allowed models, voice profiles, feature flag,
-    ///     integrity hashes, download URLs) — the backend serves no audio.
-    /// </summary>
-    public static class Voice
-    {
-        public const string Manifest = "voice/manifest";
-    }
-
-    /// <summary>
     ///     Per-user onboarding tour state routes. GET reads the current user's recorded tour entries; PUT upserts one.
     /// </summary>
     public static class Tutorial
@@ -537,21 +528,8 @@ public static class LocalApiRoutes
     }
 
     /// <summary>
-    ///     GitHub App device-flow sign-in routes for app self-update. The device_code (secret polling credential) and the
-    ///     access token NEVER appear in any of these contracts — start returns only the user code + verification URI, and
-    ///     status/poll report presence + login only. Desktop-mode only; Operator-gated.
-    /// </summary>
-    public static class GitHubAuth
-    {
-        public const string Start = "github-auth/start";
-        public const string Poll = "github-auth/poll";
-        public const string Status = "github-auth/status";
-        public const string SignOut = "github-auth/sign-out";
-    }
-
-    /// <summary>
     ///     App self-update routes (Velopack). Status reads the cached snapshot (<c>?refresh=true</c> forces a check with a
-    ///     60s floor); apply downloads + applies + relaunches. Never exposes the GitHub token. Desktop-mode only;
+    ///     10-minute floor); apply downloads + applies + relaunches. Desktop-mode only;
     ///     Operator-gated.
     /// </summary>
     public static class AppUpdate

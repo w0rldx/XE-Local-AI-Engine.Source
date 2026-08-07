@@ -3,21 +3,12 @@
 import "@/i18n";
 
 import { MantineProvider } from "@mantine/core";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, screen } from "@testing-library/react";
-import type { ReactElement, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// Isolate the section from the network and from its children's own hooks.
 vi.mock("@/features/app-update/queries/useAppUpdate", () => ({
-	noBodyOptions: {},
 	useAppUpdateStatus: vi.fn(),
 	useRefreshAppUpdateStatus: vi.fn(),
-	useSignOutGitHubAuth: vi.fn(),
-}));
-
-vi.mock("@/features/app-update/components/GitHubSignInCard", () => ({
-	GitHubSignInCard: () => <div data-testid="github-sign-in-card" />,
 }));
 
 vi.mock("@/features/app-update/components/AppUpdateButton", () => ({
@@ -27,82 +18,44 @@ vi.mock("@/features/app-update/components/AppUpdateButton", () => ({
 import {
 	useAppUpdateStatus,
 	useRefreshAppUpdateStatus,
-	useSignOutGitHubAuth,
 } from "@/features/app-update/queries/useAppUpdate";
 import { AppUpdateSection } from "./AppUpdateSection";
 
-function renderWithProviders(ui: ReactElement) {
-	const queryClient = new QueryClient({
-		defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-	});
-	function Wrapper({ children }: { children: ReactNode }) {
-		return (
-			<QueryClientProvider client={queryClient}>
-				<MantineProvider>{children}</MantineProvider>
-			</QueryClientProvider>
-		);
-	}
-	return render(ui, { wrapper: Wrapper });
-}
-
-// A status payload shaped like AppUpdateStatusResponse, with the auth state under test.
-function statusOf(authState: string, overrides: Record<string, unknown> = {}) {
-	return {
-		currentVersion: "0.1.0-rc.2",
-		availableVersion: null,
-		updateAvailable: false,
-		authState,
-		login: null,
-		isDesktop: true,
-		isOffline: false,
-		lastCheckedUtc: 1_700_000_000_000,
-		...overrides,
-	};
-}
-
-function setupMocks(authState: string, overrides: Record<string, unknown> = {}) {
+function setup(overrides: Record<string, unknown> = {}) {
 	vi.mocked(useAppUpdateStatus).mockReturnValue({
-		data: statusOf(authState, overrides),
-	} as never);
-	vi.mocked(useRefreshAppUpdateStatus).mockReturnValue({
-		mutate: vi.fn(),
-		mutateAsync: vi.fn(),
-		isPending: false,
-	} as never);
-	vi.mocked(useSignOutGitHubAuth).mockReturnValue({
-		mutate: vi.fn(),
-		mutateAsync: vi.fn(),
-		isPending: false,
-	} as never);
-}
-
-function setupBrowserMocks() {
-	Object.defineProperty(window, "matchMedia", {
-		writable: true,
-		value: vi.fn().mockImplementation((query: string) => ({
-			matches: false,
-			media: query,
-			onchange: null,
-			addListener: vi.fn(),
-			removeListener: vi.fn(),
-			addEventListener: vi.fn(),
-			removeEventListener: vi.fn(),
-			dispatchEvent: vi.fn(),
-		})),
-	});
-	Object.defineProperty(window, "ResizeObserver", {
-		writable: true,
-		value: class {
-			observe = vi.fn();
-			unobserve = vi.fn();
-			disconnect = vi.fn();
+		data: {
+			currentVersion: "0.1.0-rc.2",
+			availableVersion: null,
+			updateAvailable: false,
+			isConfigured: true,
+			isDesktop: true,
+			checkStatus: "ready",
+			lastCheckedUtc: 1_700_000_000_000,
+			...overrides,
 		},
-	});
+	} as never);
+	vi.mocked(useRefreshAppUpdateStatus).mockReturnValue({ mutate: vi.fn(), isPending: false } as never);
 }
 
 describe("AppUpdateSection", () => {
 	beforeEach(() => {
-		setupBrowserMocks();
+		Object.defineProperty(window, "matchMedia", {
+			writable: true,
+			value: vi.fn().mockImplementation((query: string) => ({
+				matches: false,
+				media: query,
+				onchange: null,
+				addListener: vi.fn(),
+				removeListener: vi.fn(),
+				addEventListener: vi.fn(),
+				removeEventListener: vi.fn(),
+				dispatchEvent: vi.fn(),
+			})),
+		});
+		Object.defineProperty(window, "ResizeObserver", {
+			writable: true,
+			value: class { observe = vi.fn(); unobserve = vi.fn(); disconnect = vi.fn(); },
+		});
 	});
 
 	afterEach(() => {
@@ -110,67 +63,46 @@ describe("AppUpdateSection", () => {
 		vi.clearAllMocks();
 	});
 
-	describe("when the build is not configured for self-update", () => {
-		beforeEach(() => {
-			setupMocks("notConfigured");
-		});
+	it("offers anonymous update checks without any GitHub sign-in UI", () => {
+		setup();
+		render(<MantineProvider><AppUpdateSection /></MantineProvider>);
 
-		it("does not offer a sign-in button that cannot work", () => {
-			renderWithProviders(<AppUpdateSection />);
-			expect(screen.queryByTestId("github-sign-in-card")).toBeNull();
-		});
-
-		it("does not offer a check-for-updates button, since the check is inert server-side", () => {
-			renderWithProviders(<AppUpdateSection />);
-			expect(screen.queryByRole("button", { name: /check for updates/i })).toBeNull();
-		});
-
-		it("explains that updates are unavailable rather than silently showing nothing", () => {
-			renderWithProviders(<AppUpdateSection />);
-			expect(screen.getByText(/automatic updates aren't available in this build/i)).toBeTruthy();
-		});
-
-		it("still shows the running version so the tester can report it", () => {
-			renderWithProviders(<AppUpdateSection />);
-			expect(screen.getByText("0.1.0-rc.2")).toBeTruthy();
-		});
+		expect(screen.getByRole("button", { name: /check for updates/i })).toBeTruthy();
+		expect(screen.queryByText(/sign in with github/i)).toBeNull();
 	});
 
-	describe("when the build is configured", () => {
-		it("offers sign-in and the check button while signed out", () => {
-			setupMocks("signedOut");
-			renderWithProviders(<AppUpdateSection />);
+	it("shows the update button when the public feed has an update", () => {
+		setup({ updateAvailable: true, availableVersion: "0.1.0-rc.3" });
+		render(<MantineProvider><AppUpdateSection /></MantineProvider>);
 
-			expect(screen.getByTestId("github-sign-in-card")).toBeTruthy();
-			expect(screen.getByRole("button", { name: /check for updates/i })).toBeTruthy();
-			// The unconfigured notice must not leak into an ordinary signed-out build.
-			expect(screen.queryByText(/automatic updates aren't available in this build/i)).toBeNull();
-		});
+		expect(screen.getByTestId("app-update-button")).toBeTruthy();
+	});
 
-		it("still offers sign-in when re-authentication is required", () => {
-			setupMocks("reauthRequired");
-			renderWithProviders(<AppUpdateSection />);
+	it("withholds controls when the artifact has no public source", () => {
+		setup({ isConfigured: false });
+		render(<MantineProvider><AppUpdateSection /></MantineProvider>);
 
-			expect(screen.getByTestId("github-sign-in-card")).toBeTruthy();
-		});
+		expect(screen.queryByRole("button", { name: /check for updates/i })).toBeNull();
+		expect(screen.getByText(/automatic updates aren't available in this build/i)).toBeTruthy();
+	});
 
-		it("shows the update button when an update is available", () => {
-			setupMocks("signedIn", { updateAvailable: true, availableVersion: "0.1.0-rc.3", login: "octocat" });
-			renderWithProviders(<AppUpdateSection />);
+	it("distinguishes an offline feed from a failed feed", () => {
+		setup({ checkStatus: "offline" });
+		const { rerender } = render(<MantineProvider><AppUpdateSection /></MantineProvider>);
 
-			expect(screen.getByTestId("app-update-button")).toBeTruthy();
-		});
+		expect(screen.getByText(/couldn't reach the update service/i)).toBeTruthy();
+
+		setup({ checkStatus: "failed" });
+		rerender(<MantineProvider><AppUpdateSection /></MantineProvider>);
+
+		expect(screen.getByText(/couldn't process the update information/i)).toBeTruthy();
+		expect(screen.queryByText(/couldn't reach the update service/i)).toBeNull();
 	});
 
 	it("renders nothing outside desktop mode", () => {
-		setupMocks("signedOut", { isDesktop: false });
-		renderWithProviders(<AppUpdateSection />);
+		setup({ isDesktop: false });
+		render(<MantineProvider><AppUpdateSection /></MantineProvider>);
 
-		// Asserted on the section's own content rather than an empty container: MantineProvider injects a <style>
-		// element of its own, so the container is never literally empty.
 		expect(screen.queryByText(/^Updates$/)).toBeNull();
-		expect(screen.queryByTestId("github-sign-in-card")).toBeNull();
-		expect(screen.queryByRole("button", { name: /check for updates/i })).toBeNull();
-		expect(screen.queryByText("0.1.0-rc.2")).toBeNull();
 	});
 });

@@ -26,7 +26,7 @@ Source: `XE-Local-AI-Engine.Client.React/package.json`.
 | Markdown | `react-markdown` + `remark-gfm` + `react-syntax-highlighter` | Chat + editor rendering. |
 | i18n | `i18next` + `react-i18next` + browser language detector | `en` / `de`. |
 | Canvas | `@xyflow/react` | Preview workflow builder (see [Agent Mode](04-agent-mode.md) / Preview). |
-| Voice / TTS | `kokoro-js` | In-browser text-to-speech (Kokoro-82M on WebGPU/WASM); chat voice output, see `features/voice`. No backend egress. |
+| Voice / TTS | Browser Web Speech API | Text-to-speech through browser/operating-system voices; availability and network behavior are platform-controlled. No TTS npm runtime or voice-model download. |
 | Onboarding tour | `react-joyride` | Guided first-response walkthrough (see `features/onboarding`). |
 
 Tooling gates (`pnpm build` / `pnpm lint`): `tsc --noEmit`, a custom `scripts/CheckEventCurrentTargetInUpdaters.mjs` guard, Biome lint, Stylelint, plus `knip` and `dependency-cruiser` in `pnpm validate`.
@@ -56,7 +56,7 @@ i18n is initialized as a side-effect import (`src/i18n.ts`) and `dayjs` is exten
 
 Two trees carry essentially all the code:
 
-- **`src/core/`** — cross-cutting infrastructure: API/transport (`core/api`, incl. `core/api/signalr`), auth (`core/auth`), routing/query integrations (`core/integrations`), layout/navigation (`core/layout`), theme (`core/theme`), locales plumbing (`core/locales`), dev tools (`core/dev-tools`), frontend diagnostics collection + redaction (`core/diagnostics`), the shared UI library (`core/ui`), and the browser AI runtime (`core/runtime` — the WebGPU/WASM TTS engine: `TtsProvider`/`TtsWorker`, `VoiceRuntime`, `ModelCache`, `CapabilityDetector`, consumed by `features/voice`).
+- **`src/core/`** — cross-cutting infrastructure: API/transport (`core/api`, incl. `core/api/signalr`), auth (`core/auth`), routing/query integrations (`core/integrations`), layout/navigation (`core/layout`), theme (`core/theme`), locales plumbing (`core/locales`), dev tools (`core/dev-tools`), frontend diagnostics collection + redaction (`core/diagnostics`), the shared UI library (`core/ui`), and the browser voice runtime (`core/runtime` — `TtsProvider`, `VoiceRuntime`, and `CapabilityDetector`, consumed by `features/voice`, all backed by Web Speech rather than a bundled model or worker).
 - **`src/features/`** — one folder per product area, each self-contained with `pages/`, `components/`, `queries/` (TanStack Query hooks), `models/` (DTO ↔ view mappers + Zod), and optionally `stores/` and `hooks/`.
 
 Seven smaller siblings exist and are worth knowing before you put something in the wrong place: `src/capabilities/` (the central `nodeRoutePaths` + `nodeCapabilities` declaration), `src/routes/` + the generated `routeTree.gen.ts` (TanStack Router file routes — thin, one `createFileRoute` per page), `src/data/` (static navigation and language menu data), `src/components/` (the logo marks), `src/modules/` (the standalone theme configurator), `src/locales/` (the bundled `en`/`de` JSON), and `src/pages/` (the `Home` landing page).
@@ -67,10 +67,10 @@ Source: `ls XE-Local-AI-Engine.Client.React/src/features` (25 directories).
 
 | Feature | What it owns | Deep-dive |
 |---|---|---|
-| `about` | About dialog: build/version (from `Directory.Build.props`) + an auto-generated third-party license list (`data/third-party-licenses.generated.json`, npm + NuGet) | — |
+| `about` | About dialog: build/version (from `eng/ReleaseVersion.props`, imported by `Directory.Build.props`) + an auto-generated third-party license list (`data/third-party-licenses.generated.json`, npm + NuGet) | — |
 | `agents` | Agent definitions, templates, playbooks, golden conversations, feedback insights, execution logs, orchestration topology | [Agent Mode](04-agent-mode.md) |
 | `api-foundation` | Validation-problem probe (boundary/error-contract harness) | [API & Hubs](09-api-and-hubs.md) |
-| `app-update` | Velopack self-update UI: GitHub device-flow sign-in + update check/apply | [Hosting & Deployment](11-hosting-and-deployment.md) |
+| `app-update` | Velopack self-update UI: anonymous public-feed check and apply | [Hosting & Deployment](11-hosting-and-deployment.md) |
 | `binding` | Node binding to the C0re platform | [Security & Privacy](12-security-and-privacy.md) |
 | `chat` | Streaming chat UI, SignalR adapter, reasoning/tool-call rendering, sampling options, file-upload attachments + pane drag-and-drop (`usePaneFileDrop`, `ChatAttachmentChips`) | [Chat](05-chat.md) |
 | `cloud-settings` | Cloud provider credentials/config (kept node-local) | [Security & Privacy](12-security-and-privacy.md) |
@@ -91,7 +91,7 @@ Source: `ls XE-Local-AI-Engine.Client.React/src/features` (25 directories).
 | `skills` | Node skill library + per-agent skill picklist | [Agent Mode](04-agent-mode.md) |
 | `tools` | Tool catalog / capability surface | [Agent Mode](04-agent-mode.md) |
 | `usage-dashboard` | Agent token-usage dashboard at `/usage`, backed by the single `agents/usage-summary` endpoint. `models/UsageDashboardModel.ts` does all the aggregation **client-side** — `aggregateByDay` / `aggregateByModel`, `clampDateRange` against the server-reported retention floor (30-day fallback) — feeding `UsageTotalsCards`, `UsageDailyChart`, `UsageProviderBreakdown` and `UsageModelTable`. Like `/invocations` it carries no extra route guard: the authenticated `_layout` *is* the operator gate and the endpoint 401s otherwise | [Agent Mode](04-agent-mode.md) |
-| `voice` | Browser text-to-speech: voice manifest adapter, preferences store, composer controls, per-message play button, and voice-audition preview (Kokoro on WebGPU) | [Chat](05-chat.md) |
+| `voice` | Web Speech text-to-speech: node-settings feature gate, platform-voice catalog, preferences store, composer controls, per-message play button, and voice preview. Browser/OS voice behavior is outside repository control. | [Chat](05-chat.md) |
 
 Each feature follows the same shape, e.g. `features/agents/` has `pages/AgentsPage.tsx`, `components/*` (forms, panels, gallery), `queries/use*.ts` (TanStack Query hooks), `models/*Models.ts` + `*Mappers.ts` (Zod + DTO mapping), and `stores/AgentManagementStore.ts`. Two features deviate deliberately: `diagnostics` is flat (no `pages/`, no `queries/` — it has no backend to query), and `about` renders as a dialog rather than a route.
 
@@ -239,7 +239,7 @@ Notes for maintainers:
 - This repo uses `UseStaticFiles()` + `MapFallbackToFile("index.html")`. There is **no** `UseDefaultFiles()` call in `Program.cs` — the fallback to `index.html` is what makes deep links resolve to the SPA. (The C0re "static files" convention is the same shape; the `UseDefaultFiles` step is not present here.)
 - Static files are mapped **before** the local-API security middleware; the API surface, auth and the hubs come after. All 9 unconditional hubs and the conditional Development hub call `RequireAuthorization(NodeAuthorizationPolicies.Operator)`. Full ordering and the per-hub contracts: [API & Hubs](09-api-and-hubs.md).
 - Same-origin is the whole reason the axios `baseURL` is `""`: in production the SPA and the API share one origin, so relative paths just work.
-- HTTPS redirect/HSTS are skipped in desktop mode (`isDesktop`); Swagger/Scalar (`/scalar`) and the Agent Framework DevUI (`/devui`) are dev-only and never shipped to production.
+- HTTPS redirect/HSTS are skipped in desktop mode (`isDesktop`); Swagger/Scalar (`/scalar`) is a development-only surface.
 
 ---
 
