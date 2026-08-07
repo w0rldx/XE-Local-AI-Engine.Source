@@ -196,7 +196,12 @@ public class TestingWebAppFactory : WebApplicationFactory<Program>, IAsyncInitia
             Id = "node-admin-test",
             UserName = "admin@example.test",
             Email = "admin@example.test",
-            SetupCompleted = true
+            SetupCompleted = true,
+            // This synthetic token is not bound to a persisted user's security stamp (IdentityUser seeds a random one in
+            // its constructor, which would never match a separately-seeded row). Clear it so the token carries no stamp
+            // claim and rides the JWT validator's skip-if-absent path — matching how production issues stamp-bound tokens
+            // only for real, persisted users. Real reset/change-password invalidation is covered by login-based tests.
+            SecurityStamp = null
         };
 
         return tokenService.CreateAccessToken(user, [NodeAuthorizationPolicies.AdminRole]).AccessToken;

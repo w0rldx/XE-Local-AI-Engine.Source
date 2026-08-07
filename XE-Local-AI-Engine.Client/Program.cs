@@ -514,7 +514,8 @@ static async Task<int> ResetAdminPasswordAsync(IServiceProvider services, string
         return 1;
     }
 
-    Log.Information("Admin password reset succeeded. All existing sessions were signed out; sign in with the new password.");
+    Log.Information("Admin password reset succeeded. Refresh tokens revoked and existing access tokens invalidated; "
+                    + "sign in with the new password.");
     return 0;
 }
 

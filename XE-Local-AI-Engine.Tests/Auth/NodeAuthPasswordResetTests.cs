@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Auth;
 
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client.Endpoints.Auth.V1;
@@ -85,6 +86,35 @@ public sealed class NodeAuthPasswordResetTests
         AssertEx.Equal(HttpStatusCode.Unauthorized, refreshResponse.StatusCode);
     }
 
+    [Test]
+    public async Task Reset_InvalidatesAlreadyIssuedAccessTokens()
+    {
+        await using var factory = new TestingWebAppFactory();
+        using var client = factory.CreateClient();
+        await SetupAsync(client).ConfigureAwait(false);
+
+        using var loginResponse = await LoginAsync(client, OldPassword).ConfigureAwait(false);
+        AssertEx.Equal(HttpStatusCode.OK, loginResponse.StatusCode);
+        var accessToken = AssertEx.NotNull(await loginResponse.Content.ReadFromJsonAsync<AccessTokenBody>().ConfigureAwait(false)).AccessToken;
+
+        // The bearer token works before the reset...
+        AssertEx.Equal(HttpStatusCode.OK, (await GetMeAsync(client, accessToken).ConfigureAwait(false)).StatusCode);
+
+        var result = await ResetAsync(factory, NewPassword).ConfigureAwait(false);
+        AssertEx.True(result.Succeeded);
+
+        // ...and is rejected immediately afterwards, even though it has not expired: the rotated security stamp no longer
+        // matches, so an already-authenticated session cannot outlive the reset.
+        AssertEx.Equal(HttpStatusCode.Unauthorized, (await GetMeAsync(client, accessToken).ConfigureAwait(false)).StatusCode);
+    }
+
+    private static async Task<HttpResponseMessage> GetMeAsync(HttpClient client, string accessToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/local/v1/auth/me");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        return await client.SendAsync(request).ConfigureAwait(false);
+    }
+
     private static async Task<NodePasswordChangeResult> ResetAsync(TestingWebAppFactory factory, string newPassword)
     {
         await using var scope = factory.Services.CreateAsyncScope();
@@ -119,4 +149,6 @@ public sealed class NodeAuthPasswordResetTests
 
         return AssertEx.NotNull(setCookie).Split(separator: ';', count: 2)[0];
     }
+
+    private sealed record AccessTokenBody(string AccessToken, DateTime ExpiresAtUtc);
 }
