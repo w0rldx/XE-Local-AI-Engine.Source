@@ -23,6 +23,14 @@ public sealed record NodeSettingsResponse
 
     public bool? EnableTools { get; init; }
 
+    /// <summary>
+    ///     Node kill-switch for the user-defined custom tools feature. <see langword="null" /> reads as off (default).
+    ///     DANGER: enabling this allows agents to run user-defined tools that execute host commands, launch programs, and
+    ///     make network requests. Off by default; each call still requires operator approval per the per-agent allow-list
+    ///     and the forced per-call approval gate.
+    /// </summary>
+    public bool? CustomToolsEnabled { get; init; }
+
     public IReadOnlyList<string>? ToolCapableModels { get; init; }
 
     public string? OllamaEndpoint { get; init; }
@@ -152,6 +160,14 @@ public sealed record SaveNodeSettingsRequest
     public string? DefaultModelName { get; init; }
 
     public bool? EnableTools { get; init; }
+
+    /// <summary>
+    ///     Node kill-switch for the user-defined custom tools feature. <see langword="null" /> keeps the current stored
+    ///     value. DANGER: enabling this allows agents to run user-defined tools that execute host commands, launch
+    ///     programs, and make network requests. Off by default; each call still requires operator approval per the
+    ///     per-agent allow-list and the forced per-call approval gate.
+    /// </summary>
+    public bool? CustomToolsEnabled { get; init; }
 
     public IReadOnlyList<string>? ToolCapableModels { get; init; }
 

@@ -481,6 +481,7 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse = {
 	maxAllowedMessageRequestTimeoutSeconds?: number;
 	defaultModelName?: string | null;
 	enableTools?: boolean | null;
+	customToolsEnabled?: boolean | null;
 	toolCapableModels?: Array<string> | null;
 	ollamaEndpoint?: string | null;
 	huggingFaceDefaultQuant?: string | null;
@@ -557,6 +558,7 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest 
 	maxMessageRequestTimeoutSeconds?: number | null;
 	defaultModelName?: string | null;
 	enableTools?: boolean | null;
+	customToolsEnabled?: boolean | null;
 	toolCapableModels?: Array<string> | null;
 	ollamaEndpoint?: string | null;
 	huggingFaceDefaultQuant?: string | null;

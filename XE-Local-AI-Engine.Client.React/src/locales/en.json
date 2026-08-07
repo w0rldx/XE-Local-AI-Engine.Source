@@ -1632,6 +1632,10 @@
 					"label": "Enable tools",
 					"description": "Allow local chat agents to call tools. Changes take effect without restarting the node."
 				},
+				"customToolsEnabled": {
+					"label": "Enable custom tools",
+					"description": "Allows agents to run user-defined tools that execute host commands, launch programs, and make network requests. Off by default. Each call still requires your approval."
+				},
 				"toolCapableModels": {
 					"label": "Tool-capable models",
 					"description": "Model names that support tool calling. Press Enter to add each name. Changes take effect without restarting the node."

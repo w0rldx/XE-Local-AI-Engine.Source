@@ -103,6 +103,7 @@ public sealed class NodeSettingsEndpointTests
         {
             MaxMessageRequestTimeoutSeconds = 300,
             EnableTools = false,
+            CustomToolsEnabled = true,
             ToolCapableModels = ["qwen3:8b", "gemma3:12b"],
             OllamaEndpoint = "http://127.0.0.1:11500",
             HuggingFaceDefaultQuant = "Q5_K_M",
@@ -124,6 +125,7 @@ public sealed class NodeSettingsEndpointTests
 
         AssertEx.Equal(HttpStatusCode.OK, getResponse.StatusCode);
         AssertEx.Equal(expected: false, settings.EnableTools);
+        AssertEx.Equal(expected: true, settings.CustomToolsEnabled);
         AssertEx.Equal("http://127.0.0.1:11500", settings.OllamaEndpoint);
         AssertEx.Equal("Q5_K_M", settings.HuggingFaceDefaultQuant);
         AssertEx.Equal(expected: 5, settings.LlamaMaxLoadedProcesses);
