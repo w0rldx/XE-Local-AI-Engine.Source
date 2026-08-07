@@ -9,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Endpoints.Images.V1;
 using XE_Local_AI_Engine.Client.Endpoints.Images.V1.Mappers;
+using XE_Local_AI_Engine.Client.Endpoints.Images.V1.Validators;
 using XE_Local_AI_Engine.Client.Hubs;
 using XE_Local_AI_Engine.Client.Services.Images;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp;

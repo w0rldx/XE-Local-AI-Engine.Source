@@ -1,6 +1,8 @@
 # Code Organization Conventions
 
 > Baseline: `de2aa553d9ec557afe3de4965f9568ba3a49920f` · Reviewed: 2026-08-07 · Code-grounded.
+> Updated 2026-08-07: endpoint areas now fold DTOs/mappers/validators into `V1/{Dtos,Mappers,Validators}/`
+> subfolders (only endpoints stay at the top level); `Dtos/` keeps a flat namespace by design.
 
 This page states **where a new type or file goes and which house patterns to follow** — the conventions
 that [02-project-layout.md](02-project-layout.md) (the *project* inventory and layering map) does not
@@ -46,12 +48,23 @@ own top-level input/result `record`s, `enum`s, or exceptions; move them to a sib
 **Stays put:** a single small param/result record colocated with its only consumer; `private`/nested
 records scoped inside a service; an interface file (`IXxx.cs`) carrying its own small contract records.
 
-### Same-folder moves only — IDE0130 is a build error
+### Subfolders under `V1/` must nest their namespace — IDE0130 is a build error
 
-Every file in a folder shares one namespace, so moving a type between files *in the same folder* is a
-zero-risk pure move (no `using` changes). Moving a file into a **new subfolder** while the namespace stays
-flat trips **IDE0130** (namespace-must-match-folder), which is warnings-as-errors → **build failure**.
-Keep same-folder moves same-folder. See `docs/agent-knowledge.md` for the full trap.
+**IDE0130** (namespace-must-match-folder) is `severity = error` in Release. Moving a file into a subfolder
+therefore requires nesting its namespace to match: a file in `Endpoints/{Area}/V1/Mappers/` must be
+`namespace …{Area}.V1.Mappers;`, and every consumer in the parent `…{Area}.V1` namespace must add a
+`using …{Area}.V1.Mappers;` (a **child** namespace is *not* auto-visible to its parent). A **parent**
+namespace *is* auto-visible to its children, so a mapper in `…V1.Mappers` sees the DTOs in `…V1` with no
+`using`. Moving a type between files *in the same folder* stays a zero-risk pure move (no namespace/`using`
+change). See `docs/agent-knowledge.md` for the full trap.
+
+**The one deliberate exception — `Dtos/`.** DTO files live in `Endpoints/{Area}/V1/Dtos/` but keep the
+**flat** `…{Area}.V1` namespace, and IDE0130 is disabled for `**/Endpoints/**/V1/Dtos/*.cs` in
+`.editorconfig`. Reason: FastEndpoints/NSwag derives OpenAPI **schema IDs from the full type namespace**
+(`XE_…EndpointsSkillsV1SkillResponse`); nesting a `.Dtos` segment would rename ~361 schema keys and churn
+the entire generated hey-api client for no behavioural gain. Flat DTO namespaces keep the contract stable
+*and* keep them same-namespace as the endpoints that consume them (no `using` needed). `Mappers/` and
+`Validators/` are **not** serialized, so they nest normally (IDE0130 stays enforced there).
 
 ### `using` directives go **inside** the file-scoped namespace
 
@@ -60,19 +73,34 @@ Contrary to the near-universal C# convention: `.editorconfig` sets
 "normal" placement a **build error**. Every file is `namespace X;` first, then `using …;`
 (`DeleteNodeChatConversationEndpoint.cs:1-6`). Do not "fix" it back to usings-on-top.
 
-### DTO families aggregate in one `*Dtos.cs` / `*Contracts.cs` — on purpose
+### An area folds into `V1/{Dtos,Mappers,Validators}/` — only endpoints stay at the top
 
-`Endpoints/{Area}/V1/{Area}EndpointDtos.cs` and `{Area}Contracts.cs` deliberately hold a whole family of
-related request/response records in one file (e.g. `DevelopmentContracts.cs`, 40+ records). Intentional —
-do **not** explode into one-record-per-file.
+Each `Endpoints/{Area}/V1/` folder keeps **only endpoint classes** (`*Endpoint.cs` / plural `*Endpoints.cs`)
+at its top level. Supporting types are sorted into subfolders:
 
-### Endpoint↔DTO mappers colocate at the bottom of `*Contracts.cs`
+- **`Dtos/`** — request/response DTO files (`{Area}EndpointDtos.cs`, `{Area}Contracts.cs`). Flat namespace
+  (see the IDE0130 exception above).
+- **`Mappers/`** — the `internal static` endpoint↔DTO/entity mappers, one concern per file. Nested
+  `…V1.Mappers` namespace; consumers add `using …V1.Mappers;`.
+- **`Validators/`** — FastEndpoints `Validator<T>` classes. Nested `…V1.Validators` namespace.
 
-Established pattern (7+ instances: `DevelopmentContractMapper`, `CloudSettingsEndpointDtoMapper`,
-`NodeSettingsEndpointDtoMapper`, `PreviewWorkflowResponseMapper`, `InvocationMonitorResponseMapper`,
-`VoiceManifestEndpointDtoMapper`, `TutorialStateMapper`): the `internal static` mapper sits at the bottom
-of the area's `*Contracts.cs` / `*EndpointDtos.cs`. A mapper inlined among endpoint classes in an
-`*Endpoint(s).cs` file is the outlier — move it beside its siblings.
+Small endpoint-support helpers that are neither DTO, mapper, nor validator (a route-name constant, a wire
+enum, a request-size-limit, a filename sanitizer) may **stay colocated at the top level** — they are
+endpoint infrastructure, not a category worth a folder of one. An endpoint's own single request/response
+record inlined in its `*Endpoint.cs` also stays put.
+
+### DTO families still aggregate in one `*Dtos.cs` / `*Contracts.cs` — on purpose
+
+Inside `Dtos/`, a file like `DevelopmentContracts.cs` (40+ records) deliberately holds a whole family of
+related request/response records. Intentional — do **not** explode into one-record-per-file.
+
+### Mappers are standalone files under `Mappers/`
+
+Each `internal static` mapper is its own `{Name}Mapper.cs` in the area's `Mappers/` subfolder (e.g.
+`DevelopmentContractMapper`, `CloudSettingsEndpointDtoMapper`, `NodeSettingsEndpointDtoMapper`,
+`PreviewWorkflowResponseMapper`, `InvocationMonitorResponseMapper`, `VoiceManifestEndpointDtoMapper`,
+`TutorialStateMapper`). A mapper inlined inside a `*Dtos.cs`/`*Contracts.cs` or among endpoint classes in
+an `*Endpoint(s).cs` file is the outlier — extract it into `Mappers/`.
 
 ### Persistence: EF Core + SQLite behind a `*Store` layer
 
@@ -193,7 +221,7 @@ actual code; where the two disagree, this page and the code win.
 | `using` directives **above** the namespace | `using` **inside** the file-scoped namespace (`.editorconfig` → build error otherwise) |
 | **PostgreSQL** + Npgsql, raw `DbContext` in handlers | **SQLite** + per-column AEAD, access via a `*Store` layer |
 | **xUnit + Shouldly + Moq** | **TUnit** `[Test]` + `AssertEx` + **NSubstitute** |
-| Command/Query record *is* the contract, no DTO/mapping layer | explicit `*Dtos.cs`/`*Contracts.cs` per area + colocated mapper |
+| Command/Query record *is* the contract, no DTO/mapping layer | explicit `*Dtos.cs`/`*Contracts.cs` in `V1/Dtos/` + standalone mappers in `V1/Mappers/` |
 | `GlobalUsings.cs` / `global using` | none — relies on `ImplicitUsings=enable` + explicit per-file usings |
 | `Result<T>` return pattern | not used — FastEndpoints `Send.NotFoundAsync` + nullable returns |
 | Hand-written `Api/` + axios interceptor request functions | **hey-api** generated client is the single REST source; TanStack Query wraps it |
