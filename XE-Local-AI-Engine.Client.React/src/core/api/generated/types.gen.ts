@@ -28,42 +28,6 @@ export type XeLocalAiEngineClientEndpointsWorkspacesV1ListWorkspacesResponse = {
 	items?: Array<XeLocalAiEngineClientEndpointsWorkspacesV1WorkspaceResponse>;
 };
 
-export type XeLocalAiEngineClientEndpointsVoiceV1VoiceManifestResponse = {
-	enabled: boolean;
-	models: Array<XeLocalAiEngineClientEndpointsVoiceV1VoiceManifestModelDto>;
-	voices: Array<XeLocalAiEngineClientEndpointsVoiceV1VoiceManifestVoiceDto>;
-	defaultVoiceId: string;
-	remoteFallback?: XeLocalAiEngineClientEndpointsVoiceV1VoiceManifestRemoteFallbackDto | null;
-};
-
-export type XeLocalAiEngineClientEndpointsVoiceV1VoiceManifestModelDto = {
-	id: string;
-	displayName: string;
-	language: string;
-	version: string;
-	files: Array<XeLocalAiEngineClientEndpointsVoiceV1VoiceManifestModelFileDto>;
-};
-
-export type XeLocalAiEngineClientEndpointsVoiceV1VoiceManifestModelFileDto = {
-	dtype: string;
-	file: string;
-	byteSize: number;
-	sha256: string;
-	downloadUrl: string;
-};
-
-export type XeLocalAiEngineClientEndpointsVoiceV1VoiceManifestVoiceDto = {
-	id: string;
-	name: string;
-	language: string;
-	gender: string;
-};
-
-export type XeLocalAiEngineClientEndpointsVoiceV1VoiceManifestRemoteFallbackDto = {
-	enabled: boolean;
-	endpoint?: string | null;
-};
-
 export type XeLocalAiEngineClientEndpointsTutorialStateV1TutorialStateResponse = {
 	entries: Array<XeLocalAiEngineClientEndpointsTutorialStateV1TutorialStateEntryResponse>;
 };
@@ -2488,32 +2452,14 @@ export type XeLocalAiEngineClientEndpointsAppUpdateV1AppUpdateStatusResponse = {
 	currentVersion: string;
 	availableVersion?: string | null;
 	updateAvailable: boolean;
-	authState: string;
-	login?: string | null;
+	isConfigured: boolean;
 	isDesktop: boolean;
-	isOffline: boolean;
+	checkStatus: string;
 	lastCheckedUtc?: number | null;
 };
 
 export type XeLocalAiEngineClientEndpointsAppUpdateV1GetAppUpdateStatusRequest = {
 	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthStatusResponse = {
-	authState: string;
-	login?: string | null;
-};
-
-export type XeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthPollResponse = {
-	state: string;
-	login?: string | null;
-};
-
-export type XeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthStartResponse = {
-	userCode: string;
-	verificationUri: string;
-	expiresInSeconds: number;
-	intervalSeconds: number;
 };
 
 export type XeLocalAiEngineClientEndpointsApiFoundationV1ValidationProblemProbeResponse = {
@@ -3030,33 +2976,6 @@ export type DeleteWorkspaceResponses = {
 };
 
 export type DeleteWorkspaceResponse = DeleteWorkspaceResponses[keyof DeleteWorkspaceResponses];
-
-export type GetVoiceManifestData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/voice/manifest";
-};
-
-export type GetVoiceManifestErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type GetVoiceManifestResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsVoiceV1VoiceManifestResponse;
-};
-
-export type GetVoiceManifestResponse = GetVoiceManifestResponses[keyof GetVoiceManifestResponses];
 
 export type GetTutorialStateData = {
 	body?: never;
@@ -8658,114 +8577,6 @@ export type GetAppUpdateStatusResponses = {
 };
 
 export type GetAppUpdateStatusResponse = GetAppUpdateStatusResponses[keyof GetAppUpdateStatusResponses];
-
-export type GetGitHubAuthStatusData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/github-auth/status";
-};
-
-export type GetGitHubAuthStatusErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type GetGitHubAuthStatusResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthStatusResponse;
-};
-
-export type GetGitHubAuthStatusResponse = GetGitHubAuthStatusResponses[keyof GetGitHubAuthStatusResponses];
-
-export type PollGitHubAuthData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/github-auth/poll";
-};
-
-export type PollGitHubAuthErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type PollGitHubAuthResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthPollResponse;
-};
-
-export type PollGitHubAuthResponse = PollGitHubAuthResponses[keyof PollGitHubAuthResponses];
-
-export type SignOutGitHubAuthData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/github-auth/sign-out";
-};
-
-export type SignOutGitHubAuthErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type SignOutGitHubAuthResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthStatusResponse;
-};
-
-export type SignOutGitHubAuthResponse = SignOutGitHubAuthResponses[keyof SignOutGitHubAuthResponses];
-
-export type StartGitHubAuthData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/github-auth/start";
-};
-
-export type StartGitHubAuthErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type StartGitHubAuthResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthStartResponse;
-};
-
-export type StartGitHubAuthResponse = StartGitHubAuthResponses[keyof StartGitHubAuthResponses];
 
 export type UnhandledExceptionProbeData = {
 	body?: never;

@@ -2,16 +2,17 @@ import { create } from "zustand";
 
 // Client-side voice preferences (UI-state), mirroring NodeChatPreferencesStore: zustand + guarded
 // globalThis.localStorage, global (not per-conversation) keys, safe read/write with try/catch. These are the
-// runtime knobs the operator-owned manifest does NOT cover — voice is OFF and autoplay is OFF by default so the
+// runtime knobs the operator-owned node setting does NOT cover — voice is OFF and autoplay is OFF by default so the
 // dev-gated feature never speaks unless the user opts in. The selected profile + rate
-// persist across reloads. No server mirroring (server-state lives in the manifest query).
+// persist across reloads. A legacy profile id remains harmless: Web Speech falls back to the requested language or
+// browser default when it cannot find the stored id.
 
 const VOICE_ENABLED_STORAGE_KEY = "xe-voice-enabled";
 const VOICE_PROFILE_STORAGE_KEY = "xe-voice-profile";
 const VOICE_SPEAKING_RATE_STORAGE_KEY = "xe-voice-speaking-rate";
 const VOICE_AUTOPLAY_STORAGE_KEY = "xe-voice-autoplay";
 
-// Clamp range for the speaking rate (matches the Web Speech / Kokoro usable band). 1 = natural speed.
+// Clamp range for Web Speech. 1 = natural speed.
 const MIN_RATE = 0.5;
 const MAX_RATE = 2;
 const DEFAULT_RATE = 1;

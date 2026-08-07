@@ -287,9 +287,6 @@ import type {
 	GetGgufDownloadStatusData,
 	GetGgufDownloadStatusErrors,
 	GetGgufDownloadStatusResponses,
-	GetGitHubAuthStatusData,
-	GetGitHubAuthStatusErrors,
-	GetGitHubAuthStatusResponses,
 	GetHardwareProfileData,
 	GetHardwareProfileErrors,
 	GetHardwareProfileResponses,
@@ -389,9 +386,6 @@ import type {
 	GetTutorialStateData,
 	GetTutorialStateErrors,
 	GetTutorialStateResponses,
-	GetVoiceManifestData,
-	GetVoiceManifestErrors,
-	GetVoiceManifestResponses,
 	HarvestGoldenConversationsData,
 	HarvestGoldenConversationsErrors,
 	HarvestGoldenConversationsResponses,
@@ -522,9 +516,6 @@ import type {
 	PinNodeChatConversationData,
 	PinNodeChatConversationErrors,
 	PinNodeChatConversationResponses,
-	PollGitHubAuthData,
-	PollGitHubAuthErrors,
-	PollGitHubAuthResponses,
 	PollNodeBindingData,
 	PollNodeBindingErrors,
 	PollNodeBindingResponses,
@@ -624,9 +615,6 @@ import type {
 	SetNodeChatSelectedPathData,
 	SetNodeChatSelectedPathErrors,
 	SetNodeChatSelectedPathResponses,
-	SignOutGitHubAuthData,
-	SignOutGitHubAuthErrors,
-	SignOutGitHubAuthResponses,
 	StartCudaBuildData,
 	StartCudaBuildErrors,
 	StartCudaBuildResponses,
@@ -636,9 +624,6 @@ import type {
 	StartGgufDownloadData,
 	StartGgufDownloadErrors,
 	StartGgufDownloadResponses,
-	StartGitHubAuthData,
-	StartGitHubAuthErrors,
-	StartGitHubAuthResponses,
 	StartImageModelDownloadData,
 	StartImageModelDownloadErrors,
 	StartImageModelDownloadResponses,
@@ -867,7 +852,6 @@ import {
 	zGetGgufDownloadsResponse,
 	zGetGgufDownloadStatusPath,
 	zGetGgufDownloadStatusResponse,
-	zGetGitHubAuthStatusResponse,
 	zGetHardwareProfileQuery,
 	zGetHardwareProfileResponse,
 	zGetHfTokenStatusResponse,
@@ -920,7 +904,6 @@ import {
 	zGetToolCapableModelsResponse,
 	zGetToolCatalogResponse,
 	zGetTutorialStateResponse,
-	zGetVoiceManifestResponse,
 	zHarvestGoldenConversationsPath,
 	zHarvestGoldenConversationsResponse,
 	zImportAgentTemplatesBody,
@@ -989,7 +972,6 @@ import {
 	zPinNodeChatConversationBody,
 	zPinNodeChatConversationPath,
 	zPinNodeChatConversationResponse,
-	zPollGitHubAuthResponse,
 	zPollNodeBindingBody,
 	zPollNodeBindingResponse,
 	zPreviewDevelopmentPatchBody,
@@ -1059,14 +1041,12 @@ import {
 	zSetNodeChatSelectedPathBody,
 	zSetNodeChatSelectedPathPath,
 	zSetNodeChatSelectedPathResponse,
-	zSignOutGitHubAuthResponse,
 	zStartCudaBuildResponse,
 	zStartDevelopmentNextActionBody,
 	zStartDevelopmentNextActionPath,
 	zStartDevelopmentNextActionResponse,
 	zStartGgufDownloadBody,
 	zStartGgufDownloadResponse,
-	zStartGitHubAuthResponse,
 	zStartImageModelDownloadBody,
 	zStartImageModelDownloadResponse,
 	zStartLlamaCppSourceBuildBody,
@@ -1192,26 +1172,6 @@ export const deleteWorkspace = <ThrowOnError extends boolean = false>(options: O
 			{ scheme: "bearer", type: "http" },
 		],
 		url: "/api/local/v1/workspaces/{workspaceId}",
-		...options,
-	});
-
-export const getVoiceManifest = <ThrowOnError extends boolean = false>(options?: Options<GetVoiceManifestData, ThrowOnError>) =>
-	(options?.client ?? client).get<GetVoiceManifestResponses, GetVoiceManifestErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: z.never().optional(),
-					path: z.never().optional(),
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zGetVoiceManifestResponse.parseAsync(data),
-		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
-		],
-		url: "/api/local/v1/voice/manifest",
 		...options,
 	});
 
@@ -5620,88 +5580,6 @@ export const getAppUpdateStatus = <ThrowOnError extends boolean = false>(
 			{ scheme: "bearer", type: "http" },
 		],
 		url: "/api/local/v1/app-update/status",
-		...options,
-	});
-
-export const getGitHubAuthStatus = <ThrowOnError extends boolean = false>(
-	options?: Options<GetGitHubAuthStatusData, ThrowOnError>,
-) =>
-	(options?.client ?? client).get<GetGitHubAuthStatusResponses, GetGitHubAuthStatusErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: z.never().optional(),
-					path: z.never().optional(),
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zGetGitHubAuthStatusResponse.parseAsync(data),
-		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
-		],
-		url: "/api/local/v1/github-auth/status",
-		...options,
-	});
-
-export const pollGitHubAuth = <ThrowOnError extends boolean = false>(options?: Options<PollGitHubAuthData, ThrowOnError>) =>
-	(options?.client ?? client).post<PollGitHubAuthResponses, PollGitHubAuthErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: z.never().optional(),
-					path: z.never().optional(),
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zPollGitHubAuthResponse.parseAsync(data),
-		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
-		],
-		url: "/api/local/v1/github-auth/poll",
-		...options,
-	});
-
-export const signOutGitHubAuth = <ThrowOnError extends boolean = false>(options?: Options<SignOutGitHubAuthData, ThrowOnError>) =>
-	(options?.client ?? client).post<SignOutGitHubAuthResponses, SignOutGitHubAuthErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: z.never().optional(),
-					path: z.never().optional(),
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zSignOutGitHubAuthResponse.parseAsync(data),
-		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
-		],
-		url: "/api/local/v1/github-auth/sign-out",
-		...options,
-	});
-
-export const startGitHubAuth = <ThrowOnError extends boolean = false>(options?: Options<StartGitHubAuthData, ThrowOnError>) =>
-	(options?.client ?? client).post<StartGitHubAuthResponses, StartGitHubAuthErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: z.never().optional(),
-					path: z.never().optional(),
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zStartGitHubAuthResponse.parseAsync(data),
-		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
-		],
-		url: "/api/local/v1/github-auth/start",
 		...options,
 	});
 

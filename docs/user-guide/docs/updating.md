@@ -1,156 +1,98 @@
 # Updating to a new build
 
-New releases appear on the [Releases page](https://github.com/w0rldx/XE-Local-AI-Engine.Source/releases/latest). There are two ways to get them.
+Official Windows and Linux downloads are Velopack-managed portable applications. Both can update themselves from the
+public GitHub release feed.
 
-**Your data is never touched by an update.** Chats, models and settings live in a separate folder, so
-they carry across every version.
+Update checks are **anonymous**. You do not need a GitHub account, device-code sign-in, access token, or repository
+invitation.
 
-> ### 🐧 On Linux, only Option B applies
->
-> The Linux build ships with the in-app updater **switched off** — a portable ZIP is not something an
-> updater can safely rewrite in place. There is no GitHub sign-in to do and no update button to press;
-> you replace the folder by hand, which takes about a minute.
-> **→ [Updating a Linux build](install-linux.md#updating-to-a-new-version)**
->
-> Everything under Option A below is Windows-only.
+## Release tracks and operating-system channels
 
----
+Two independent settings select an update:
 
-## Option A — Update inside the app *(recommended, Windows)*
+- **Main flavor:** follows stable releases.
+- **Tester flavor:** follows stable releases and release candidates.
+- **Windows/Linux channel:** Velopack automatically selects packages for the installed operating system.
 
-The app can update itself. It needs a **one-time GitHub sign-in** first, so the updater is authorised
-to check GitHub for new releases.
+Choosing the tester flavor does not change the operating-system channel.
 
-### The one-time sign-in
+## Update inside the app
 
-The app uses GitHub's **device code** flow — you never type your GitHub password into the app.
+1. Open the update section in the app.
+2. Check for updates.
+3. Download and apply the offered version.
+4. Allow the app to restart when prompted.
 
-1. In the app, go to the update or settings area and start the GitHub sign-in.
-2. The app shows a **short code** (something like `ABCD-1234`).
-3. It opens [github.com/login/device](https://github.com/login/device) in your browser — or open that
-   address yourself.
-4. **Type the code** into GitHub and confirm.
-5. Return to the app. It's now authorised.
+On Windows, Velopack updates the extracted portable application and restarts through the top-level launcher.
 
-The resulting token is stored encrypted in your data folder. You should only need to do this once.
-
-**What it can and cannot do.** This is a GitHub *App* authorisation, not a broad account grant. It is
-configured for **read-only access to repository contents** on the release repository. It cannot write
-to any repository, cannot open issues or push code, and cannot see repositories the App isn't
-installed on.
-
-> ### Signing out in the app does not revoke it at GitHub
->
-> Signing out deletes the **local copy** of the token only — the authorisation itself stays on your
-> GitHub account until you remove it there.
->
-> To revoke it properly: **github.com → Settings → Applications → Authorized GitHub Apps** → revoke.
->
-> You can do that any time; the app will simply ask you to sign in again if it needs to update.
-
-> **Why is this needed?** The updater checks GitHub for new releases and needs its own authorisation to
-> do that reliably.
->
-> **This is not related to your app login.** Your local profile is a login to the app on your computer;
-> the GitHub authorisation only lets the updater check for and download new releases. Two separate
-> things.
-
-### After that
-
-The app checks for new versions and can download and install them itself. Restart when prompted.
+On Linux, Velopack replaces the AppImage itself. If the AppImage is in a directory your user cannot write, the update
+may require `pkexec`. Keeping it in `~/Applications` normally avoids elevation.
 
 <details>
-<summary><b>The sign-in isn't offered, or updating does nothing</b></summary>
+<summary><b>The updater says this build is not managed</b></summary>
 
-In-app updating only works for the **portable Velopack build downloaded from this repository's
-Releases page**. If you're running a build from somewhere else, updating is intentionally disabled and
-you should use Option B.
+Self-update works only from an official Velopack artifact:
 
-Also check that you completed the GitHub device-code sign-in when prompted — see above.
+- Windows: the extracted `XE-Local-AI-Engine-win-Portable.zip` bundle, launched through its top-level
+  `XE-Local-AI-Engine.exe`.
+- Linux: the Velopack `.AppImage`.
+
+A raw `dotnet publish`, source build, or deprecated manual ZIP has no official Velopack installation metadata. Update
+that build by replacing it manually with a verified official artifact.
 
 </details>
 
----
+## Manual replacement
 
-## Option B — Update manually
-
-Always works, and it is the **only** way on Linux.
+Manual replacement remains available if the in-app updater cannot run.
 
 ### Windows
 
-1. **Stop the app** — close the console window.
-2. Download the new `XE-Local-AI-Engine-win-Portable.zip` from
-   [Releases](https://github.com/w0rldx/XE-Local-AI-Engine.Source/releases/latest).
-   → [Download walkthrough](download-from-github.md)
-3. **Right-click the ZIP → Properties → Unblock → OK** (avoids the Windows warning again).
-4. Extract it — either over the old folder, or to a new one and delete the old afterwards.
-5. Run `XE-Local-AI-Engine.exe` from the top-level folder.
+1. Stop the app by closing its console window.
+2. Download the new `XE-Local-AI-Engine-win-Portable.zip` and `CHECKSUMS.sha256` from the
+   [Releases page](https://github.com/w0rldx/XE-Local-AI-Engine.Source/releases).
+3. Verify the ZIP's SHA-256 value.
+4. Extract it fully to a new writable local directory.
+5. Run the top-level `XE-Local-AI-Engine.exe` beside the `current` directory.
+
+Do not overwrite files while the old version is running.
 
 ### Linux
 
-1. **Stop the app** — close the terminal, or press `Ctrl+C` in it.
-2. Download the new `XE-Local-AI-Engine-<version>-linux-Portable.zip` from
-   [Releases](https://github.com/w0rldx/XE-Local-AI-Engine.Source/releases/latest).
-3. Unzip it. It expands into its own **versioned folder**, so it lands beside the old one rather than
-   over it.
-4. Run `./start-xe-local-ai-engine.sh` in the new folder.
-5. Once you're happy it works, delete the old folder.
+1. Stop the app with `Ctrl+C` or by closing its terminal.
+2. Download the new `.AppImage` and `CHECKSUMS.sha256` from the same release.
+3. Verify the AppImage's SHA-256 value.
+4. Move it to a writable local directory, run `chmod +x`, and start it.
 
-→ [Full details](install-linux.md#updating-to-a-new-version)
+See the full [Linux installation guide](install-linux.md).
 
-Your account, chats, settings and downloaded models are all still there.
+## Your data
 
-> Windows may show its security warning once more, because the `.exe` is a new file.
-> → [What to click](install-windows.md#the-windows-smartscreen-warning)
+Application updates do not replace the separate per-user data directory. Chats, settings, downloaded models, and
+managed runtimes carry forward.
 
----
-
-## Version numbers
-
-They look like `v0.1.0-rc.5.0` — higher is newer. Every build is marked **Pre-release** on GitHub,
-which is expected for a beta.
-
-Each release lists what changed. Skimming that is worthwhile: it tells you what's worth re-testing, and
-whether something you previously reported is fixed.
-
----
-
-## Getting told about new builds
-
-Optional. GitHub can email you:
-
-1. Click **Watch** at the top right of the repository front page.
-2. **Custom** → tick **Releases** → **Apply**.
-
-You'll be emailed for new releases only.
-
----
+Keep backups of data you care about. A binary update does not replace a backup policy.
 
 ## Going back to an older version
 
-Possible, with one real caveat.
+Back up the complete data directory first. Database migrations are forward-only, and an older binary may not
+understand a database already migrated by a newer one.
 
-> ### ⚠️ Back up your data folder first
->
-> The database **upgrades** when you run a newer build, and those upgrades are **not reversed** when
-> you go back. An older build may not be able to read a database a newer one has already upgraded.
->
-> Copy `%LOCALAPPDATA%\XE-Local-AI-Engine` somewhere safe **before** downgrading.
+Then download and verify the older platform artifact and run it from a separate location. If it cannot open the
+migrated data, stop it and restore the complete pre-update backup or return to the newer version. Do not delete
+`node.sqlite` as a downgrade technique.
 
-Then download the older release and run it as in Option B.
+## Signing warnings after an update
 
-If the older build won't start against your upgraded database, either restore your backup or go back to
-the newer version. **Don't delete `node.sqlite` as a "fix"** — that's data loss, not a downgrade.
-
----
+Current release artifacts are unsigned because no signing certificate exists yet. Signing is planned. Windows may
+show SmartScreen again for new bytes, and Linux security tools may require you to trust a newly downloaded AppImage.
+Verify the new artifact against `CHECKSUMS.sha256` before running it.
 
 ## Problems with an update
 
-If a new build is worse than the one before — slower, broken, or it lost something — **that is exactly
-the kind of thing worth reporting.** Please include which version worked and which doesn't.
+When reporting a regression, include the version that worked, the version that failed, the operating system, and the
+error shown in the console.
 
-→ [How to report it](feedback.md)
-
----
+See [Giving feedback](feedback.md).
 
 **[← Back to the main page](../README.md)**

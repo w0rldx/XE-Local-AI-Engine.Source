@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { type SpeechSynthesisLike, WebSpeechProvider } from "./WebSpeechProvider";
 
@@ -43,15 +43,18 @@ describe("WebSpeechProvider voice selection", () => {
 
 	it("falls back to the on-device language-prefix pick when voiceId maps to no OS voice", () => {
 		const { provider, spoken } = makeProvider();
-		// "de_web_default" is a LOGICAL manifest id, not an OS voice name — so the language pick takes over and
+		const fetchSpy = vi.spyOn(globalThis, "fetch");
+		// An old logical voice id is not an OS voice name — so the language pick takes over and
 		// prefers the on-device German voice (Anna) over the network one (Google Deutsch).
-		provider.synthesize("Hallo Welt.", { language: "de", voiceId: "de_web_default" });
+		provider.synthesize("Hallo Welt.", { language: "de", voiceId: "af_heart" });
 		expect(spoken[0]?.voice?.name).toBe("Anna");
+		expect(fetchSpy).not.toHaveBeenCalled();
+		fetchSpy.mockRestore();
 	});
 
 	it("sets only the requested lang when neither voiceId nor language matches any OS voice", () => {
 		const { provider, spoken } = makeProvider();
-		provider.synthesize("Bonjour.", { language: "fr", voiceId: "de_web_default" });
+		provider.synthesize("Bonjour.", { language: "fr", voiceId: "af_heart" });
 		expect(spoken[0]?.voice).toBeNull();
 		expect(spoken[0]?.lang).toBe("fr");
 	});

@@ -24,42 +24,6 @@ export const zXeLocalAiEngineClientEndpointsWorkspacesV1ListWorkspacesResponse =
 	items: z.array(zXeLocalAiEngineClientEndpointsWorkspacesV1WorkspaceResponse).optional(),
 });
 
-export const zXeLocalAiEngineClientEndpointsVoiceV1VoiceManifestModelFileDto = z.object({
-	dtype: z.string(),
-	file: z.string(),
-	byteSize: z.int(),
-	sha256: z.string(),
-	downloadUrl: z.string(),
-});
-
-export const zXeLocalAiEngineClientEndpointsVoiceV1VoiceManifestModelDto = z.object({
-	id: z.string(),
-	displayName: z.string(),
-	language: z.string(),
-	version: z.string(),
-	files: z.array(zXeLocalAiEngineClientEndpointsVoiceV1VoiceManifestModelFileDto),
-});
-
-export const zXeLocalAiEngineClientEndpointsVoiceV1VoiceManifestVoiceDto = z.object({
-	id: z.string(),
-	name: z.string(),
-	language: z.string(),
-	gender: z.string(),
-});
-
-export const zXeLocalAiEngineClientEndpointsVoiceV1VoiceManifestRemoteFallbackDto = z.object({
-	enabled: z.boolean(),
-	endpoint: z.string().nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsVoiceV1VoiceManifestResponse = z.object({
-	enabled: z.boolean(),
-	models: z.array(zXeLocalAiEngineClientEndpointsVoiceV1VoiceManifestModelDto),
-	voices: z.array(zXeLocalAiEngineClientEndpointsVoiceV1VoiceManifestVoiceDto),
-	defaultVoiceId: z.string(),
-	remoteFallback: zXeLocalAiEngineClientEndpointsVoiceV1VoiceManifestRemoteFallbackDto.nullish(),
-});
-
 export const zXeLocalAiEngineClientEndpointsTutorialStateV1TutorialStateEntryResponse = z.object({
 	key: z.string(),
 	status: z.string(),
@@ -2902,37 +2866,13 @@ export const zXeLocalAiEngineClientEndpointsAppUpdateV1AppUpdateStatusResponse =
 	currentVersion: z.string(),
 	availableVersion: z.string().nullish(),
 	updateAvailable: z.boolean(),
-	authState: z.string(),
-	login: z.string().nullish(),
+	isConfigured: z.boolean(),
 	isDesktop: z.boolean(),
-	isOffline: z.boolean(),
+	checkStatus: z.string(),
 	lastCheckedUtc: z.int().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsAppUpdateV1GetAppUpdateStatusRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthStatusResponse = z.object({
-	authState: z.string(),
-	login: z.string().nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthPollResponse = z.object({
-	state: z.string(),
-	login: z.string().nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthStartResponse = z.object({
-	userCode: z.string(),
-	verificationUri: z.string(),
-	expiresInSeconds: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	intervalSeconds: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-});
 
 export const zXeLocalAiEngineClientEndpointsApiFoundationV1ValidationProblemProbeResponse = z.object({
 	name: z.string(),
@@ -3500,11 +3440,6 @@ export const zDeleteWorkspacePath = z.object({
  * No Content
  */
 export const zDeleteWorkspaceResponse = z.void();
-
-/**
- * Success
- */
-export const zGetVoiceManifestResponse = zXeLocalAiEngineClientEndpointsVoiceV1VoiceManifestResponse;
 
 /**
  * Success
@@ -4992,26 +4927,6 @@ export const zGetAppUpdateStatusQuery = z.object({
  * Success
  */
 export const zGetAppUpdateStatusResponse = zXeLocalAiEngineClientEndpointsAppUpdateV1AppUpdateStatusResponse;
-
-/**
- * Success
- */
-export const zGetGitHubAuthStatusResponse = zXeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthStatusResponse;
-
-/**
- * Success
- */
-export const zPollGitHubAuthResponse = zXeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthPollResponse;
-
-/**
- * Success
- */
-export const zSignOutGitHubAuthResponse = zXeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthStatusResponse;
-
-/**
- * Success
- */
-export const zStartGitHubAuthResponse = zXeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthStartResponse;
 
 /**
  * No Content

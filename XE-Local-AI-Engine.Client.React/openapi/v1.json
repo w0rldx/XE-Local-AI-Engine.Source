@@ -132,40 +132,6 @@
         ]
       }
     },
-    "/api/local/v1/voice/manifest": {
-      "get": {
-        "tags": [
-          "Voice"
-        ],
-        "operationId": "getVoiceManifest",
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsVoiceV1VoiceManifestResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          }
-        },
-        "security": [
-          {
-            "JWTBearerAuth": []
-          },
-          {
-            "Bearer": []
-          }
-        ]
-      }
-    },
     "/api/local/v1/tutorial-state": {
       "get": {
         "tags": [
@@ -8847,142 +8813,6 @@
         ]
       }
     },
-    "/api/local/v1/github-auth/status": {
-      "get": {
-        "tags": [
-          "Github-Auth"
-        ],
-        "operationId": "getGitHubAuthStatus",
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAppUpdateV1GitHubAuthStatusResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          }
-        },
-        "security": [
-          {
-            "JWTBearerAuth": []
-          },
-          {
-            "Bearer": []
-          }
-        ]
-      }
-    },
-    "/api/local/v1/github-auth/poll": {
-      "post": {
-        "tags": [
-          "Github-Auth"
-        ],
-        "operationId": "pollGitHubAuth",
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAppUpdateV1GitHubAuthPollResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          }
-        },
-        "security": [
-          {
-            "JWTBearerAuth": []
-          },
-          {
-            "Bearer": []
-          }
-        ]
-      }
-    },
-    "/api/local/v1/github-auth/sign-out": {
-      "post": {
-        "tags": [
-          "Github-Auth"
-        ],
-        "operationId": "signOutGitHubAuth",
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAppUpdateV1GitHubAuthStatusResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          }
-        },
-        "security": [
-          {
-            "JWTBearerAuth": []
-          },
-          {
-            "Bearer": []
-          }
-        ]
-      }
-    },
-    "/api/local/v1/github-auth/start": {
-      "post": {
-        "tags": [
-          "Github-Auth"
-        ],
-        "operationId": "startGitHubAuth",
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAppUpdateV1GitHubAuthStartResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          }
-        },
-        "security": [
-          {
-            "JWTBearerAuth": []
-          },
-          {
-            "Bearer": []
-          }
-        ]
-      }
-    },
     "/api/local/v1/diagnostics/exception-probe": {
       "post": {
         "tags": [
@@ -10476,143 +10306,6 @@
             "items": {
               "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsWorkspacesV1WorkspaceResponse"
             }
-          }
-        }
-      },
-      "XE_Local_AI_EngineClientEndpointsVoiceV1VoiceManifestResponse": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "enabled",
-          "models",
-          "voices",
-          "defaultVoiceId"
-        ],
-        "properties": {
-          "enabled": {
-            "type": "boolean"
-          },
-          "models": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsVoiceV1VoiceManifestModelDto"
-            }
-          },
-          "voices": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsVoiceV1VoiceManifestVoiceDto"
-            }
-          },
-          "defaultVoiceId": {
-            "type": "string"
-          },
-          "remoteFallback": {
-            "nullable": true,
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsVoiceV1VoiceManifestRemoteFallbackDto"
-              }
-            ]
-          }
-        }
-      },
-      "XE_Local_AI_EngineClientEndpointsVoiceV1VoiceManifestModelDto": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "id",
-          "displayName",
-          "language",
-          "version",
-          "files"
-        ],
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "displayName": {
-            "type": "string"
-          },
-          "language": {
-            "type": "string"
-          },
-          "version": {
-            "type": "string"
-          },
-          "files": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsVoiceV1VoiceManifestModelFileDto"
-            }
-          }
-        }
-      },
-      "XE_Local_AI_EngineClientEndpointsVoiceV1VoiceManifestModelFileDto": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "dtype",
-          "file",
-          "byteSize",
-          "sha256",
-          "downloadUrl"
-        ],
-        "properties": {
-          "dtype": {
-            "type": "string"
-          },
-          "file": {
-            "type": "string"
-          },
-          "byteSize": {
-            "type": "integer"
-          },
-          "sha256": {
-            "type": "string"
-          },
-          "downloadUrl": {
-            "type": "string"
-          }
-        }
-      },
-      "XE_Local_AI_EngineClientEndpointsVoiceV1VoiceManifestVoiceDto": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "id",
-          "name",
-          "language",
-          "gender"
-        ],
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "language": {
-            "type": "string"
-          },
-          "gender": {
-            "type": "string"
-          }
-        }
-      },
-      "XE_Local_AI_EngineClientEndpointsVoiceV1VoiceManifestRemoteFallbackDto": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "enabled"
-        ],
-        "properties": {
-          "enabled": {
-            "type": "boolean"
-          },
-          "endpoint": {
-            "type": "string",
-            "nullable": true
           }
         }
       },
@@ -18815,9 +18508,9 @@
         "required": [
           "currentVersion",
           "updateAvailable",
-          "authState",
+          "isConfigured",
           "isDesktop",
-          "isOffline"
+          "checkStatus"
         ],
         "properties": {
           "currentVersion": {
@@ -18830,18 +18523,14 @@
           "updateAvailable": {
             "type": "boolean"
           },
-          "authState": {
-            "type": "string"
-          },
-          "login": {
-            "type": "string",
-            "nullable": true
+          "isConfigured": {
+            "type": "boolean"
           },
           "isDesktop": {
             "type": "boolean"
           },
-          "isOffline": {
-            "type": "boolean"
+          "checkStatus": {
+            "type": "string"
           },
           "lastCheckedUtc": {
             "type": "integer",
@@ -18852,64 +18541,6 @@
       "XE_Local_AI_EngineClientEndpointsAppUpdateV1GetAppUpdateStatusRequest": {
         "type": "object",
         "additionalProperties": false
-      },
-      "XE_Local_AI_EngineClientEndpointsAppUpdateV1GitHubAuthStatusResponse": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "authState"
-        ],
-        "properties": {
-          "authState": {
-            "type": "string"
-          },
-          "login": {
-            "type": "string",
-            "nullable": true
-          }
-        }
-      },
-      "XE_Local_AI_EngineClientEndpointsAppUpdateV1GitHubAuthPollResponse": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "state"
-        ],
-        "properties": {
-          "state": {
-            "type": "string"
-          },
-          "login": {
-            "type": "string",
-            "nullable": true
-          }
-        }
-      },
-      "XE_Local_AI_EngineClientEndpointsAppUpdateV1GitHubAuthStartResponse": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "userCode",
-          "verificationUri",
-          "expiresInSeconds",
-          "intervalSeconds"
-        ],
-        "properties": {
-          "userCode": {
-            "type": "string"
-          },
-          "verificationUri": {
-            "type": "string"
-          },
-          "expiresInSeconds": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "intervalSeconds": {
-            "type": "integer",
-            "format": "int32"
-          }
-        }
       },
       "XE_Local_AI_EngineClientEndpointsApiFoundationV1ValidationProblemProbeResponse": {
         "type": "object",

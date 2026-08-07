@@ -98,7 +98,7 @@ related request/response records. Intentional — do **not** explode into one-re
 
 Each `internal static` mapper is its own `{Name}Mapper.cs` in the area's `Mappers/` subfolder (e.g.
 `DevelopmentContractMapper`, `CloudSettingsEndpointDtoMapper`, `NodeSettingsEndpointDtoMapper`,
-`PreviewWorkflowResponseMapper`, `InvocationMonitorResponseMapper`, `VoiceManifestEndpointDtoMapper`,
+`PreviewWorkflowResponseMapper`, `InvocationMonitorResponseMapper`, `SkillMapper`,
 `TutorialStateMapper`). A mapper inlined inside a `*Dtos.cs`/`*Contracts.cs` or among endpoint classes in
 an `*Endpoint(s).cs` file is the outlier — extract it into `Mappers/`.
 

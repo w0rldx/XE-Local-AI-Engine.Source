@@ -1,0 +1,25 @@
+<Project>
+  <Target Name="CaptureXeBundleInputs"
+          AfterTargets="PrepareForBundle"
+          BeforeTargets="GenerateSingleFileBundle"
+          Condition="'$(XeBundleInputEvidenceRaw)' != ''">
+    <Error Condition="'$(PublishSingleFile)' != 'true'"
+           Text="Bundle input evidence requires PublishSingleFile=true." />
+    <Error Condition="'$(SelfContained)' != 'true'"
+           Text="Bundle input evidence requires SelfContained=true." />
+    <Error Condition="'$(NuGetPackageRoot)' == ''"
+           Text="Bundle input evidence requires a resolved NuGetPackageRoot." />
+    <WriteLinesToFile File="$(XeBundleInputEvidenceRaw)"
+                      Lines="XE-BUNDLE-INPUTS-V2|$(RuntimeIdentifier)|$(PublishSingleFile)|$(SelfContained)|$(NuGetPackageRoot)"
+                      Overwrite="true"
+                      Encoding="UTF-8" />
+    <WriteLinesToFile File="$(XeBundleInputEvidenceRaw)"
+                      Lines="@(FilesToBundle->'bundle|%(NuGetPackageId)|%(NuGetPackageVersion)|%(ReferenceSourceTarget)|%(RelativePath)|%(FullPath)')"
+                      Overwrite="false"
+                      Encoding="UTF-8" />
+    <WriteLinesToFile File="$(XeBundleInputEvidenceRaw)"
+                      Lines="@(ResolvedFileToPublish->'loose|%(NuGetPackageId)|%(NuGetPackageVersion)|%(ReferenceSourceTarget)|%(RelativePath)|%(FullPath)')"
+                      Overwrite="false"
+                      Encoding="UTF-8" />
+  </Target>
+</Project>

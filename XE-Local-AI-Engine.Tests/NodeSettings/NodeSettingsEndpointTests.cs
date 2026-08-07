@@ -529,33 +529,33 @@ public sealed class NodeSettingsEndpointTests
     }
 
     [Test]
-    public void NodeSettings_VoiceFields_RoundTripThroughMapper()
+    public void NodeSettings_LegacyVoiceFields_RoundTripWithoutActivatingNeuralVoiceBehavior()
     {
         var request = new SaveNodeSettingsRequest
         {
             VoiceFeatureEnabled = true,
-            AllowedVoiceModels = ["onnx-community/Kokoro-82M-v1.0-ONNX"],
-            DefaultVoiceProfile = "  am_adam  "
+            AllowedVoiceModels = ["legacy-neural-model"],
+            DefaultVoiceProfile = "  af_heart  "
         };
 
         var stored = request.ToStoredSettings(new StoredNodeSettings());
 
         AssertEx.Equal(expected: true, stored.VoiceFeatureEnabled);
         AssertEx.NotNull(stored.AllowedVoiceModels);
-        AssertEx.Contains(stored.AllowedVoiceModels!, "onnx-community/Kokoro-82M-v1.0-ONNX");
-        AssertEx.Equal("am_adam", stored.DefaultVoiceProfile);
+        AssertEx.Contains(stored.AllowedVoiceModels!, "legacy-neural-model");
+        AssertEx.Equal("af_heart", stored.DefaultVoiceProfile);
 
         var response = stored.ToResponse();
 
         AssertEx.Equal(expected: true, response.VoiceFeatureEnabled);
         AssertEx.NotNull(response.AllowedVoiceModels);
-        AssertEx.Contains(response.AllowedVoiceModels!, "onnx-community/Kokoro-82M-v1.0-ONNX");
-        AssertEx.Equal("am_adam", response.DefaultVoiceProfile);
+        AssertEx.Contains(response.AllowedVoiceModels!, "legacy-neural-model");
+        AssertEx.Equal("af_heart", response.DefaultVoiceProfile);
 
         // Omitting the voice fields on a later save keeps the current stored values (additive merge).
         var merged = new SaveNodeSettingsRequest().ToStoredSettings(stored);
         AssertEx.Equal(expected: true, merged.VoiceFeatureEnabled);
-        AssertEx.Equal("am_adam", merged.DefaultVoiceProfile);
+        AssertEx.Equal("af_heart", merged.DefaultVoiceProfile);
         AssertEx.NotNull(merged.AllowedVoiceModels);
     }
 

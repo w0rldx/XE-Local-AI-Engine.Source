@@ -1,22 +1,14 @@
-// The TTS provider abstraction — the single contract every speech backend implements.
-//
-// Two provider families exist:
-//  - PCM providers (`producesPcm: true`, e.g. Kokoro) yield raw audio chunks the `PlaybackQueue` schedules.
-//  - Self-playing providers (`producesPcm: false`, e.g. Web Speech) render audio through the OS and yield nothing.
-// `VoiceRuntime` branches on `producesPcm` so a uniform interface covers both without leaking provider details.
+// Contract for the browser-owned Web Speech provider.
 
-import type { VoiceLanguageCode } from "./VoiceManifest";
+export type TtsProviderId = "web-speech";
+export type VoiceLanguageCode = string;
 
-/** Stable provider identifiers, ordered conceptually best→floor down the fallback ladder. */
-export type TtsProviderId = "kokoro-webgpu" | "kokoro-wasm" | "web-speech" | "remote";
-
-/** A single decoded audio chunk emitted by a PCM provider. Kokoro yields 24 kHz mono `Float32Array` PCM. */
+/** Retained as the empty-stream element type so the provider contract stays an async iterable. */
 export interface AudioChunk {
 	readonly pcm: Float32Array;
 	readonly sampleRate: number;
 }
 
-/** Per-synthesis options. `voiceId` selects the speaker, `rate` the speaking speed, `language` the routing hint. */
 export interface VoiceSynthesisOptions {
 	readonly voiceId?: string;
 	readonly rate?: number;
@@ -25,14 +17,9 @@ export interface VoiceSynthesisOptions {
 
 export interface TtsProvider {
 	readonly id: TtsProviderId;
-	/** True when `synthesize` yields `AudioChunk`s for the `PlaybackQueue`; false when the provider plays audio itself. */
-	readonly producesPcm: boolean;
-	/** Loads weights / acquires the speech engine. Rejects on failure so `VoiceRuntime` can fall back. */
+	readonly producesPcm: false;
 	init(): Promise<void>;
-	/** Streams synthesized audio. PCM providers yield chunks; self-playing providers speak and yield nothing. */
 	synthesize(text: string, options?: VoiceSynthesisOptions): AsyncIterable<AudioChunk>;
-	/** Barge-in: halts any in-flight utterance immediately (self-playing providers cancel their queued speech). */
 	stop(): void;
-	/** Releases the worker / engine handle. Idempotent. */
 	dispose(): void;
 }

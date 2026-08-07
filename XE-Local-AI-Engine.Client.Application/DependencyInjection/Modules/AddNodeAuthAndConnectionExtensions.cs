@@ -15,8 +15,6 @@ using XE_Local_AI_Engine.Client.Services.Persistence;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.Tutorial;
 using XE_Local_AI_Engine.Client.Services.Tutorial.Implementation;
-using XE_Local_AI_Engine.Client.Services.Voice;
-using XE_Local_AI_Engine.Client.Services.Voice.Implementation;
 
 internal static class AddNodeAuthAndConnectionExtensions
 {
@@ -69,8 +67,6 @@ internal static class AddNodeAuthAndConnectionExtensions
             new CachedNodeSettingsStore(sp.GetRequiredService<NodeSettingsStore>(), sp.GetRequiredService<IMemoryCache>()));
         builder.Services.AddSingleton<INodeRuntimeSettings, NodeRuntimeSettings>();
 
-        // Voice manifest: config-only composition over the node settings store + the static Kokoro catalog (no audio).
-        builder.Services.AddSingleton<IVoiceManifestService, VoiceManifestService>();
         // Encrypted at-rest store for the Entra ID public-client authentication record (device-code / interactive-
         // browser silent-auth resume), read by AzureFoundryChatClientFactory and written by the sign-in coordinator.
         builder.Services.AddSingleton<IEntraTokenCacheStore, EntraTokenCacheStore>();

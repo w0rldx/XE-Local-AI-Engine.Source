@@ -56,7 +56,7 @@ It captures recent activity, network calls and errors, **with secrets redacted**
 
 - **What you did** — the steps, as plainly as you can
 - **What happened** vs **what you expected**
-- **The app version** — e.g. `v0.1.0-rc.5.0`, from the release you downloaded
+- **The app version** — e.g. `v0.1.0-rc.5.1`, from the release you downloaded
 - **Your system** — Windows version, CPU, GPU, RAM
 - **Any red text in the console window** — copy it as text if possible
 - **A screenshot**, if it's a visual problem

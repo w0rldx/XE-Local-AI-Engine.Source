@@ -253,7 +253,7 @@ playbook P1–P5 / eval flow and the adaptive-memory extraction loop; the wiring
 
 ### Two recent subsystems have explicit egress boundaries
 
-- **Voice / text-to-speech has client-side synthesis and model-download egress.** Kokoro / WebGPU inference executes in the React app and generated audio is not posted to the node. On first use, however, the browser fetches Kokoro model files directly from manifest-provided Hugging Face URLs (`ModelCache.ts`; `KokoroVoiceCatalog.cs`). The Web Speech fallback delegates to the browser/operating-system implementation, so this repository does not establish that fallback's network behavior. See [React Client](10-react-client.md).
+- **Voice / text-to-speech delegates to Web Speech.** The repository makes no voice-model request, ships no voice inference runtime, and does not post generated audio to the node. Synthesis is provided by the browser/operating-system speech implementation; its installed voices, offline support, and any service network traffic are outside repository control. See [React Client](10-react-client.md).
 - **Inference profiling / machine key is local-only, per-box.** The per-machine launch-tuning profiles ([Local Runtime & Providers](03-local-runtime-and-providers.md)) are keyed by a `MachineKeyProvider` identifier that is a **local-only random id** — never hardware-derived, and `IMachineKeyProvider` documents it must **NEVER** be emitted in telemetry, aggregates, or logs. The profiles themselves hold only structural launch args (no secrets) and never leave the node. Keep the machine key off every outbound DTO/aggregate.
 
 ---

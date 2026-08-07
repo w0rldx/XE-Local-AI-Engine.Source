@@ -163,13 +163,13 @@ The same `AttachmentFileIds` are re-sent on **every** turn from the React side (
 
 ## Voice / text-to-speech output
 
-Assistant answers can be spoken aloud. Kokoro synthesis runs in the browser and no generated audio is posted to the node, but voice is not an egress-free feature: on first use the React client fetches Kokoro model files directly from manifest-provided Hugging Face URLs. The Web Speech fallback delegates synthesis to the browser/operating-system implementation, whose network behavior is outside the repository's control. The backend serves the voice manifest; see [React client](10-react-client.md) and [Security & privacy](12-security-and-privacy.md).
+Assistant answers can be spoken aloud through the browser/operating-system Web Speech implementation. The repository ships no voice model or model-download path, and generated audio is not posted to the node. Available voices, quality, offline support, and any platform-service network behavior remain outside repository control. The backend supplies only the `VoiceFeatureEnabled` node setting; see [React client](10-react-client.md) and [Security & privacy](12-security-and-privacy.md).
 
 The chat-side tap is `useVoicePlayback` (`features/voice/useVoicePlayback.ts:24`), intentionally **decoupled** from the stream reducer: `Chat.tsx` (`:176`) feeds it the same `ChatStreamingState` it hands to the renderer, and the hook diffs only the **answer** text (never reasoning/tool parts), buffers whole sentences (`SentenceBuffer`), and fire-and-forget-enqueues each completed sentence to the runtime so synthesis never blocks the hot stream loop.
 
-- **Selected voice wins** (`enqueueSentence`, `:41-50`): the engine and its language are driven from the *selected* voice's own language (`VoicePreferencesStore.voiceProfile` → `manifest.defaultVoiceId`), so auto-play matches the node-settings audition exactly — an English answer is never re-routed away from a German voice the user picked. `detectAnswerLanguage` is only the fallback when no voice resolves at all.
+- **Selected voice wins** (`enqueueSentence`, `:41-50`): the engine and its language are driven from the selected platform voice stored in `VoicePreferencesStore`, so auto-play matches the settings audition. `detectAnswerLanguage` is only the fallback when no selected voice resolves.
 - **Barge-in** (`onTurnStart`, `:55-61`): every new send / regenerate / cancel stops current playback and resets the per-turn sentence buffer, so a new turn's audio never trails the previous one.
-- **Web Speech voiceId** honored: when the runtime ladder falls through to `WebSpeechProvider` (`core/runtime/VoiceRuntime.ts:81-82`), the selected `voiceId` still drives the platform utterance.
+- **Web Speech voice ID honored:** `WebSpeechProvider` applies the selected voice ID to the platform utterance.
 
 ## Per-send advanced sampling
 

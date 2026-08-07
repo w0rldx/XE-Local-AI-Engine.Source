@@ -43,6 +43,25 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
     }
 
     [Test]
+    public async Task OldFileWithNeuralVoiceFields_LoadsAndPreservesLegacySelection()
+    {
+        await WriteSettingsJsonAsync(
+            """
+            {
+              "voiceFeatureEnabled": true,
+              "allowedVoiceModels": ["onnx-community/Kokoro-82M-v1.0-ONNX"],
+              "defaultVoiceProfile": "af_heart"
+            }
+            """);
+
+        var loaded = await LoadAsync();
+
+        AssertEx.Equal(expected: true, loaded.VoiceFeatureEnabled);
+        AssertEx.ContainsSingle(loaded.AllowedVoiceModels!, model => model == "onnx-community/Kokoro-82M-v1.0-ONNX");
+        AssertEx.Equal("af_heart", loaded.DefaultVoiceProfile);
+    }
+
+    [Test]
     public async Task StoredFields_WithinRange_RoundTrip()
     {
         var saved = new StoredNodeSettings

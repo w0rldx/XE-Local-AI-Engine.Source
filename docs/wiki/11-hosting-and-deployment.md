@@ -2,7 +2,7 @@
 
 > Baseline: `7e64ed589e14eecc0e522e807d2e531a1095d19a` · Reviewed: 2026-07-28 · Code-grounded.
 
-This page covers how the XE Local AI Engine node process is **hosted and shipped**: the Aspire AppHost used for local dev/integration, the shared `ServiceDefaults`, the configuration layers (`appsettings` + the user-editable `node-settings.json` + the encrypted `hf-token.enc`), the background hosted services that run inside the node, the self-contained single-file **desktop launcher** (`XE_LAUNCH_MODE=desktop`), the publish profiles + launchers used to produce a double-click distribution, and the RC-shipped cross-platform uninstaller scripts.
+This page covers how the XE Local AI Engine node process is **hosted and shipped**: the Aspire AppHost used for local dev/integration, the shared `ServiceDefaults`, the configuration layers (`appsettings` + the user-editable `node-settings.json` + the encrypted `hf-token.enc`), the background hosted services that run inside the node, the self-contained single-file **desktop launcher** (`XE_LAUNCH_MODE=desktop`), the publish profiles + launchers used to produce a double-click distribution, and the legacy/manual cleanup scripts.
 
 There are **two distinct ways the node runs**:
 
@@ -42,7 +42,7 @@ What it wires (`AppHost.cs`):
 
 - **`node-sqlite-key`** — an Aspire parameter marked sensitive (`builder.AddParameter("node-sqlite-key", secret: true)`). **No value is tracked.** The AppHost's `appsettings.Development.json` used to commit one shared development-only default, which meant anyone with the source could derive keys for data created under it; that default was removed. Seeding is now the dev scripts' job: `dev_ensure_node_operator_secret` (`scripts/dev-aspire-common.sh`) mints a per-checkout base64 32-byte secret at `XE-Local-AI-Engine.AppHost/.data/node.key` (owner-only, `.gitignore`d) on first use and reuses it afterwards, and `scripts/dev-start.sh` hands it to Aspire as the environment variable `Parameters__node-sqlite-key` — the env form of the `Parameters:node-sqlite-key` configuration key Aspire resolves the parameter from. `--non-interactive` rules out a prompt and `--isolated` rules out the normal user-secrets store, so configuration is the only route. The value never reaches a command line, only process environments. A developer starting the AppHost some other way (IDE F5, bare `aspire run`) is prompted for the parameter instead, or can set it with `dotnet user-secrets set "Parameters:node-sqlite-key" <base64-32-byte> --project XE-Local-AI-Engine.AppHost/XE-Local-AI-Engine.AppHost.csproj`.
 - **`node-sqlite`** — a SQLite resource (`builder.AddSqlite(...)`) backed by a file under `.data/node-sqlite/node-chat.db`. In Development it also enables `WithSqliteWeb()` (a browser DB inspector).
-- **`app`** — the node web server (`AddProject<XE_Local_AI_Engine_Client>("app", "https")`) with external HTTP endpoints, `ASPIRE_ENABLED=true`, `ASPNETCORE_ENVIRONMENT=Development`, the SQLite key piped in as `XE_NODE_SQLITE_KEY`, `NodeAuth__Jwt__*` issuer/audience, a `WithReference`/`WaitFor` dependency on the SQLite resource, and two health checks (`/health/live`, `/health/ready`). Extra dashboard URLs are surfaced: `/scalar`, `/openapi/local/v1/v1.json`, `/devui`.
+- **`app`** — the node web server (`AddProject<XE_Local_AI_Engine_Client>("app", "https")`) with external HTTP endpoints, `ASPIRE_ENABLED=true`, `ASPNETCORE_ENVIRONMENT=Development`, the SQLite key piped in as `XE_NODE_SQLITE_KEY`, `NodeAuth__Jwt__*` issuer/audience, a `WithReference`/`WaitFor` dependency on the SQLite resource, and two health checks (`/health/live`, `/health/ready`). Extra development URLs are surfaced for `/scalar` and `/openapi/local/v1/v1.json`.
 - **`client-react`** — the Vite dev server (`AddViteApp(...)` with `WithPnpm()`), HTTPS endpoint on port **5175**, proxying to the `app` HTTPS endpoint via `VITE_PROXY_TARGET`, `WaitFor(app)`, and isolated Chromium browser logs.
 
 > **No HostAgent, and no Docker resource in the AppHost.** The old in-Aspire `HostAgent.Linux` (Docker) sandbox/runtime resource and the HostAgent gRPC client are **gone** — the AppHost contains an explicit comment to that effect. Inference and the AgentHome sandbox run as **host processes** now (see [Local Runtime & Providers](03-local-runtime-and-providers.md)). The **Ollama** provider still exists in the codebase but was **de-orchestrated** from the AppHost — `llama.cpp` is the dev runtime and there is no Ollama resource in `AppHost.cs`.
@@ -77,10 +77,9 @@ Only service discovery and the standard resilience/discovery HTTP defaults remai
 
 1. **Resolve desktop mode early** — `var isDesktop = DesktopLaunch.IsDesktopMode(args, VelopackInstall.IsManaged());`. If desktop, it (a) resolves the per-user data directory, (b) acquires the single-instance lease, (c) binds through `DesktopPortStore.ResolveBindUrl(...)` using the remembered loopback port or `127.0.0.1:0`, and (d) synthesizes config via `DesktopBootstrap.EnsureLocalDataConfiguration(builder.Configuration)` **before** `AddServices` reads configuration.
 2. `AddServiceDefaults()` then `AddServices(builder.Configuration)`.
-3. DevUI / OpenAI-compatible Responses+Conversations services — **Development only**.
-4. After `Build()`: apply node-chat + node-identity EF migrations, recover interrupted chat messages, reconcile stale scheduled runs, eagerly activate the invocation-resume registry, and register the **worker shutdown drain** on `ApplicationStopping`.
-5. Pipeline: Serilog request logging (with access-token query redaction), `UseExceptionHandler` (RFC7807), **HTTPS redirect + HSTS bypassed in desktop mode**, antiforgery, static files, health checks, `LocalApiSecurityMiddleware`, routing, rate limiter, auth, FastEndpoints (route prefix `LocalApiRoutes.Prefix`), 9 unconditional SignalR hubs plus conditional `DevelopmentAttemptHub` (all `RequireAuthorization(Operator)`), Scalar/Swagger (non-Production), DevUI (Development), and `MapFallbackToFile("index.html")` for the SPA.
-6. **Desktop only**: `ActivateDesktopLifecycle(app)` installs the console-close → graceful-stop triggers and the on-started browser launch.
+3. After `Build()`: apply node-chat + node-identity EF migrations, recover interrupted chat messages, reconcile stale scheduled runs, eagerly activate the invocation-resume registry, and register the **worker shutdown drain** on `ApplicationStopping`.
+4. Pipeline: Serilog request logging (with access-token query redaction), `UseExceptionHandler` (RFC7807), **HTTPS redirect + HSTS bypassed in desktop mode**, antiforgery, static files, health checks, `LocalApiSecurityMiddleware`, routing, rate limiter, auth, FastEndpoints (route prefix `LocalApiRoutes.Prefix`), 9 unconditional SignalR hubs plus conditional `DevelopmentAttemptHub` (all `RequireAuthorization(Operator)`), Scalar/Swagger (non-Production), and `MapFallbackToFile("index.html")` for the SPA.
+5. **Desktop only**: `ActivateDesktopLifecycle(app)` installs the console-close → graceful-stop triggers and the on-started browser launch.
 
 See [API & Hubs](09-api-and-hubs.md) for endpoint/hub detail and [Security & Privacy](12-security-and-privacy.md) for the loopback / `LocalApiSecurityMiddleware` invariants.
 
@@ -198,13 +197,14 @@ Both scripts carry an explicit **single-instance caveat**: only one instance per
 
 ### RC bundle packaging
 
-`publish/package-tester-win.ps1` was the Windows tester RC path from `0.1.0-rc.4.0` through `0.1.0-rc.5.0` and is now
-**deprecated, reference-only** — the tag-triggered `.github/workflows/release.yml` is the intended release path (§8).
-It still requires **PowerShell 7+ (`pwsh`)** — it declares `#Requires -Version 7.0`, and Windows PowerShell 5.1 turns its native-stderr 404 detection into a terminating error. **When manually run** on a clean Windows checkout it validates the release version/tag; rejects local Vite environment overrides; runs frontend lint, OpenAPI drift, license, coverage, production-audit, and build gates; runs backend restore, transitive NuGet vulnerability audit, Release build, and serial solution tests (refusing to start unless the **machine time zone is non-UTC**, since .NET ignores `$env:TZ` on Windows); verifies the staged SPA, tester channel/repository, and caller-supplied GitHub App client ID; then generates release notes, packs the five Velopack assets plus a local SHA-256 manifest, uploads the draft, and updates the release body. `-PublishDraft` additionally proves the pushed canonical source tag resolves to HEAD and verifies all five downloaded draft assets against that manifest before publication. A supplied client ID is always validated — empty, placeholder, and malformed (non-`Iv…`) values are rejected — and no client ID is committed in this repository. `-SkipUpload` runs every build and test gate; it relaxes only the client-ID *requirement*, and an ID-less rehearsal is stamped `REHEARSAL-DO-NOT-SHIP.txt` with the updater inert.
+`publish/package-tester-win.ps1` was the Windows tester RC path from `0.1.0-rc.4.0` through `0.1.0-rc.5.1` and is now
+**deprecated, reference-only** — the tag-triggered `.github/workflows/release.yml` is the canonical release path (§8).
+`publish/package-rc.sh` is likewise deprecated and reference-only. Their private tester-repository, GitHub App,
+manual-draft, and Linux-ZIP behavior describes superseded distribution and must not be applied to official releases.
+Both remain covered by `scripts/lint-release-scripts.sh`.
 
-`publish/package-rc.sh` remains the manual portable-zip path (a bash script; it builds **both** RIDs by default, cross-building `win-x64` on Linux — smoke-test that on real Windows). It stages the single-file binary, SPA, desktop launcher, uninstaller, `READ-ME-FIRST.txt`, and `LICENSE`/`NOTICE`, then emits a zip plus `.sha256` sidecar. It fails if the SPA is missing and scans the stage for leaked runtime/state files. Its output never self-updates for two independent reasons: no Velopack metadata exists, and it publishes with an explicit `-p:UpdateChannel=main` (the inert channel) that `assert_app_config_sane` hard-fails on if it ever reads as live.
-
-`LICENSE` and `NOTICE` are `Content` items in `XE-Local-AI-Engine.Client.csproj`, so they land in the publish directory both packaging paths stage from — the software is licensed under Apache-2.0.
+Official release payloads include the Apache-2.0 license, third-party license disclosures, and a validated payload SPDX
+manifest. Detached checksum, release-manifest, and SPDX evidence is attached after remote draft-byte verification.
 
 ### Changelog automation & release notes
 
@@ -218,26 +218,36 @@ Release notes are generated from conventional-commit history rather than hand-wr
 
 ### In-app self-update (Velopack)
 
-The desktop app can update itself: `AddAppUpdateExtensions.cs` wires a Velopack updater fed by a GitHub **device-flow** authorization (the operator copies the device code before the browser opens). The update path is **desktop-only** (gated like every other desktop branch; see the endpoint desktop-gate tests under `XE-Local-AI-Engine.Tests/AppUpdate/`). Update-feed/channel config lives in `appsettings.AppUpdate.{main,tester}.json`, selected at publish time by `-p:UpdateChannel=tester|main` (default `main`).
+The desktop app can update itself: `AddAppUpdateExtensions.cs` wires a Velopack updater to the public GitHub release
+feed with a null access token. Update checks are anonymous; no GitHub device flow or stored update token remains. The
+update path is **desktop-only** (gated like every other desktop branch; see the endpoint desktop-gate tests under
+`XE-Local-AI-Engine.Tests/AppUpdate/`). Update-feed configuration lives in
+`appsettings.AppUpdate.{main,tester}.json`, selected at publish time by `-p:UpdateChannel=tester|main` (default `main`).
 
-The two channel files are deliberately **not** symmetric:
+The two flavor files differ only in release-track visibility:
 
-| File | `GitHubRepositoryUrl` | `GitHubAppClientId` | Status |
+| File | `GitHubRepositoryUrl` | `ReleaseTrack` | Status |
 |---|---|---|---|
-| `appsettings.AppUpdate.tester.json` | `https://github.com/w0rldx/XE-Local-AI-Engine.Source` — a **real, intentional, non-secret** value | **empty** (public repo needs no app auth) | live |
-| `appsettings.AppUpdate.main.json` | `https://github.com/w0rldx/XE-Local-AI-Engine.Source` — a **real, intentional, non-secret** value | **empty** | live |
+| `appsettings.AppUpdate.tester.json` | `https://github.com/w0rldx/XE-Local-AI-Engine.Source` — public, intentional, non-secret | `Rc` | live |
+| `appsettings.AppUpdate.main.json` | `https://github.com/w0rldx/XE-Local-AI-Engine.Source` — public, intentional, non-secret | `Stable` | live |
 
-Both update channels now point at the public source repo `.Source`, consolidating distribution here. The `main` channel was previously inert (`REPLACE_*` placeholders, kept unwired as an owner decision while distribution was tester-only); it is now wired. Because `.Source` is public, no client ID is required and none is committed. These URLs are public configuration, not leaked secrets, and **must not be "redacted" back to placeholders** — doing so silently breaks self-update for installed builds. The migration is done on the CI side: `.github/workflows/release.yml` builds and publishes to this repo. The manual packagers (`publish/package-tester-win.ps1`, `publish/package-rc.sh`) are deprecated, reference-only, and still target the retired tester repo — they are no longer the release path. See [`docs/velopack-release-install-guide.md`](../velopack-release-install-guide.md).
+Both flavors point at the same public repository. `ReleaseTrack` controls stable-versus-RC visibility; Velopack's
+independent package metadata selects the `win` or `linux` OS feed. These URLs are public configuration, not secrets,
+and must not be replaced with placeholders. The manual packagers are deprecated, reference-only, and not release
+alternatives. See [`docs/velopack-release-install-guide.md`](../velopack-release-install-guide.md).
 
 ---
 
 ## 7. Installers & uninstaller
 
-**OS-native installers (MSI / deb / rpm) are deferred.** The shipped distribution vehicle is the self-contained single-file desktop build + launcher script + RC zip. The runtime is **self-provisioning** (it downloads its own llama.cpp binary and GGUF models on demand into the per-user data dir), so a heavyweight installer is not required to get a working node.
+**OS-native installers (MSI / DEB / RPM) are deferred.** Official binaries are Velopack-managed portable applications:
+Windows `Portable.zip` produced with `--noInst` (no `Setup.exe`) and a Linux AppImage. Both self-update. The runtime is
+also self-provisioning: it downloads its own llama.cpp binary and GGUF models into the per-user data directory.
 
-### Uninstaller scripts (RC-shipped)
+### Legacy manual-bundle cleanup scripts
 
-A pair of **lightweight uninstaller scripts** ships in the RC zip next to the launchers, built for the *current* app shape (Velopack desktop + portable zip):
+Two cleanup scripts remain for deprecated manual bundle layouts; they are **not** user-facing assets in the official
+Windows Portable ZIP or Linux AppImage:
 
 - `publish/windows/uninstall-xe-local-ai-engine.ps1` (packaged as `Uninstall-XE-Local-AI-Engine.ps1`) — PowerShell 5.1-compatible.
 - `publish/linux/uninstall-xe-local-ai-engine.sh` (packaged as `uninstall-xe-local-ai-engine.sh`) — plain POSIX `sh`.
@@ -245,7 +255,7 @@ A pair of **lightweight uninstaller scripts** ships in the RC zip next to the la
 Both always **stop** the running node process and the `llama-server` / `sd-server` child runtimes it spawned — matched **strictly** by executable path under the app's own per-user data dir, mirroring `StaleLlamaServerReaper`'s own-binaries-root discrimination so an unrelated `llama-server` (e.g. Ollama's) is never touched. They then branch:
 
 - **Velopack-managed install detected** (a `current/` dir or `Update`/`Update.exe` helper at the data-dir root — on the default Windows layout the managed install root *is* the data dir): the script **does not delete** the tree. It delegates to Velopack (on Windows it can best-effort invoke `Update.exe --uninstall`; otherwise it points at the OS "Apps & features" uninstall) and stops. This is the safety valve that prevents brute-force-deleting a live managed install.
-- **Portable / manual install** (what the RC zip actually ships — no Velopack tree present): after an **explicit confirmation** (typed `y`; `--yes`/`-Yes` skips it for automation), it deletes **only** the per-user data dir (`%LOCALAPPDATA%\XE-Local-AI-Engine` / `$XDG_DATA_HOME/XE-Local-AI-Engine`) — `node.sqlite`, `node.key`, `node-settings.json`, `hf-token.enc`, the downloaded `llama.cpp`/`stable-diffusion.cpp` binaries, `models/`, and the AgentHome workspace.
+- **Portable / manual install** (no Velopack tree present): after an **explicit confirmation** (typed `y`; `--yes`/`-Yes` skips it for automation), it deletes **only** the per-user data dir (`%LOCALAPPDATA%\XE-Local-AI-Engine` / `$XDG_DATA_HOME/XE-Local-AI-Engine`) — `node.sqlite`, `node.key`, `node-settings.json`, `hf-token.enc`, the downloaded `llama.cpp`/`stable-diffusion.cpp` binaries, `models/`, and the AgentHome workspace.
 
 Both refuse to run elevated/as-root (a per-user data dir would resolve to the wrong profile), support `--dry-run` and `--keep-data`, and never delete anything outside that exact directory. Portable-zip users delete the unzipped app folder by hand afterward.
 
@@ -260,7 +270,7 @@ Both refuse to run elevated/as-root (a per-user data dir would resolve to the wr
 | Role | Repository | What lives there |
 |---|---|---|
 | **Source** | `w0rldx/XE-Local-AI-Engine.Source` | the code, and the `v<version>` release tags |
-| **Tester artifacts (retired)** | `w0rldx/XE-Local-AI-Engine.Tester-App` | tester releases published under the historical manual flow, through `0.1.0-rc.5.0` |
+| **Tester artifacts (retired)** | `w0rldx/XE-Local-AI-Engine.Tester-App` | tester releases published under the historical manual flow, through `0.1.0-rc.5.1` |
 
 Historically these shared a version *string* but nothing else: the `v<version>` git tag was created on **HEAD of the
 source repo**, and `vpk upload github --tag` then created a same-named release on the **tester repo**, whose commits
@@ -273,17 +283,18 @@ publishes both `win-x64` and `linux-x64` Velopack packages to **this repo's** Gi
 
 ### GitHub Actions and the release workflow
 
-`.github/workflows/release.yml` is the **intended, tag-triggered release path**: pushing a `v*` tag builds win-x64 +
-linux-x64 Velopack packages, generates the changelog via a pinned `git-cliff`, and publishes them to this repo's
-GitHub Releases with the built-in `GITHUB_TOKEN`. `workflow_dispatch` is a manual fallback. Its `validate` job calls
-`build-and-test.yml` as a reusable workflow, so the exact tagged commit re-runs the full build + backend/frontend
-gate set before anything is packed or uploaded (fail-closed: `version` and `release` both `needs: validate`).
-**GitHub Actions must be enabled on the repository for this workflow to run** — that is an owner-level repository
-setting, and this documentation does not track or assert its current state.
+`.github/workflows/release.yml` is the canonical tag-triggered release path. It validates the exact tagged commit,
+binds SemVer/tag/source identity, and gives matrix jobs build-only responsibility. The serialized
+`prepare-release-draft` job receives write access only after approval through the `open-source-release` environment;
+it creates the Velopack draft, merges the Windows and Linux channels, verifies the remote bytes, uploads detached
+SPDX/release-manifest/checksum evidence, and re-verifies the complete draft. A separately approved `publish-release`
+job re-downloads and verifies that same draft, then promotes it without rebuilding, repacking, re-uploading, or
+replacing any asset before anonymous public-feed verification. Windows packing is `--noInst`; Linux packing produces
+an AppImage. The workflow uses the built-in `GITHUB_TOKEN`, not a maintainer PAT.
 
 The manual packagers are now deprecated, reference-only material: `publish/package-tester-win.ps1` was the RC path
-from `0.1.0-rc.4.0` through `0.1.0-rc.5.0`, run by hand on Windows against the tester repo; `publish/package-rc.sh`
-remains a manual portable-zip helper. Both still carry static analysis via `scripts/lint-release-scripts.sh`. See
+from `0.1.0-rc.4.0` through `0.1.0-rc.5.1`, run by hand on Windows against the tester repo; `publish/package-rc.sh`
+remains a historical manual portable-zip helper. Both still carry static analysis via `scripts/lint-release-scripts.sh`. See
 [Testing & Validation](13-testing-and-validation.md) for where the quality gates run, and
 [`docs/velopack-release-install-guide.md`](../velopack-release-install-guide.md) for the full release story.
 

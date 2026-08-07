@@ -248,15 +248,19 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
 
         try
         {
-            if (handle.GetState() != PreviewRunState.Paused || handle.PendingRequestId is null)
+            if (handle.PendingRequestId is null)
             {
                 return PreviewRunCommandOutcome.WrongState;
             }
 
             var requestId = handle.PendingRequestId;
+            if (!handle.TryTransitionState(PreviewRunState.Paused, PreviewRunState.Running))
+            {
+                return PreviewRunCommandOutcome.WrongState;
+            }
+
             handle.PendingRequestId = null;
             handle.PausedNodeId = null;
-            handle.SetState(PreviewRunState.Running);
             handle.ResetIdleClock();
 
             await handle.Session.ResumeAsync(requestId, handle.CancellationTokenSource.Token).ConfigureAwait(false);
@@ -302,14 +306,11 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
         try
         {
             // Cancel works in Running AND Paused. Idempotent for terminal states.
-            var state = handle.GetState();
-            if (state is PreviewRunState.Cancelled or PreviewRunState.Completed or PreviewRunState.Faulted)
+            if (!handle.TryCancel(out var previousState))
             {
                 return PreviewRunCommandOutcome.Accepted;
             }
 
-            var wasPaused = state == PreviewRunState.Paused;
-            handle.SetState(PreviewRunState.Cancelled);
             await CancelTokenSourceAsync(handle).ConfigureAwait(false);
 
             // Publish the terminal cancelled event NOW so the UI reflects the cancel immediately on the 202. A Running
@@ -319,7 +320,7 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
             await PublishRunAsync(PreviewWorkflowHubEvents.RunCancelled, handle.RunId, nodeId: null, output: null,
                 error: null, requestId: null, CancellationToken.None).ConfigureAwait(false);
 
-            if (wasPaused)
+            if (previousState == PreviewRunState.Paused)
             {
                 // A Paused run has NO active drain observing the CTS (the drain ended when the run paused) — dispose
                 // here. A Running run's drain observes the cancelled token, unwinds, and disposes itself (no re-publish).
@@ -624,10 +625,18 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
             return false;
         }
 
-        _logger.LogWarning("Preview run {RunId} exceeded the output byte cap; cancelling.", handle.RunId);
+        if (!handle.TryTransitionState(PreviewRunState.Running, PreviewRunState.Faulted))
+        {
+            if (handle.GetState() == PreviewRunState.Cancelled)
+            {
+                await RemoveAndDisposeAsync(handle).ConfigureAwait(false);
+            }
+
+            return true;
+        }
 
         // Cancel the held run, mark failed, and emit the terminal failure. Cancellation unblocks the session.
-        handle.SetState(PreviewRunState.Faulted);
+        _logger.LogWarning("Preview run {RunId} exceeded the output byte cap; cancelling.", handle.RunId);
         await CancelTokenSourceAsync(handle).ConfigureAwait(false);
 
         await PublishRunAsync(PreviewWorkflowHubEvents.RunFailed, handle.RunId, nodeId: null, output: null,
@@ -641,7 +650,16 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
     {
         handle.PendingRequestId = update.RequestId;
         handle.PausedNodeId = update.NodeId;
-        handle.SetState(PreviewRunState.Paused);
+        if (!handle.TryTransitionState(PreviewRunState.Running, PreviewRunState.Paused))
+        {
+            if (handle.GetState() == PreviewRunState.Cancelled)
+            {
+                await RemoveAndDisposeAsync(handle).ConfigureAwait(false);
+            }
+
+            return;
+        }
+
         // Suspend the idle clock so the sweeper does not kill a run waiting on a human Continue.
         handle.SuspendIdleClock();
 
@@ -651,7 +669,16 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
 
     private async Task CompleteRunAsync(PreviewWorkflowRunHandle handle, string? output, CancellationToken cancellationToken)
     {
-        handle.SetState(PreviewRunState.Completed);
+        if (!handle.TryTransitionState(PreviewRunState.Running, PreviewRunState.Completed))
+        {
+            if (handle.GetState() == PreviewRunState.Cancelled)
+            {
+                await RemoveAndDisposeAsync(handle).ConfigureAwait(false);
+            }
+
+            return;
+        }
+
         await PublishRunAsync(PreviewWorkflowHubEvents.RunCompleted, handle.RunId, nodeId: null, output, error: null,
             requestId: null, cancellationToken).ConfigureAwait(false);
         await RemoveAndDisposeAsync(handle).ConfigureAwait(false);
@@ -659,13 +686,22 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
 
     private async Task FailRunAsync(PreviewWorkflowRunHandle handle, string error, string? nodeId)
     {
+        if (!handle.TryTransitionState(PreviewRunState.Running, PreviewRunState.Faulted))
+        {
+            if (handle.GetState() == PreviewRunState.Cancelled)
+            {
+                await RemoveAndDisposeAsync(handle).ConfigureAwait(false);
+            }
+
+            return;
+        }
+
         if (nodeId is not null)
         {
             await PublishNodeAsync(PreviewWorkflowHubEvents.NodeFailed, handle.RunId, nodeId, output: null, error,
                 CancellationToken.None).ConfigureAwait(false);
         }
 
-        handle.SetState(PreviewRunState.Faulted);
         await PublishRunAsync(PreviewWorkflowHubEvents.RunFailed, handle.RunId, nodeId: null, output: null, error,
             requestId: null, CancellationToken.None).ConfigureAwait(false);
         await RemoveAndDisposeAsync(handle).ConfigureAwait(false);

@@ -21,16 +21,9 @@ vi.mock("@/features/voice/VoiceRuntimeContext", () => ({
 
 function baseContext(overrides: Partial<VoiceRuntimeContextValue> = {}): VoiceRuntimeContextValue {
 	return {
-		manifest: { enabled: true, models: [], voices: [], defaultVoiceId: "af_heart" },
 		enabled: true,
-		capabilities: undefined,
+		defaultVoiceProfile: "af_heart",
 		runtime: undefined,
-		audioSuspended: false,
-		resumeAudio: () => Promise.resolve(),
-		downloadProgress: undefined,
-		downloadError: undefined,
-		dismissDownloadNotice: () => undefined,
-		lastError: undefined,
 		playingMessageId: undefined,
 		playMessage,
 		previewVoice: () => Promise.resolve(),

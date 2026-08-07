@@ -23,7 +23,7 @@ import http.server, json, socketserver, sys
 class Handler(http.server.BaseHTTPRequestHandler):
     health_requests = 0
     def do_GET(self):
-        if self.path == "/health/ready":
+        if self.path == "/health/live":
             Handler.health_requests += 1
             if Handler.health_requests < 3:
                 self.send_error(503); return

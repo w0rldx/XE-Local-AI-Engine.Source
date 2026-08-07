@@ -7,12 +7,10 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 **Tag convention.** Source tags carry a `v` prefix: `vX.Y.Z-rc.N.M` for release candidates, `vX.Y.Z` for validated
 stable releases. The section headings below use the bare version, matching the tag without its `v`.
 
-**Repository & release home.** Source and its `v<version>` tags live in `w0rldx/XE-Local-AI-Engine.Source`, which is
-also the release home going forward — the `main` update channel points here. Historically, built tester artifacts were
-published as pre-releases on the separate `w0rldx/XE-Local-AI-Engine.Tester-App` repo (now being retired), so a tester
-release through `0.1.0-rc.5.0` has no tag in this repo, and vice versa; the "What actually shipped" table below records
-them. Tester releases through `0.1.0-rc.4.1` carry **bare** tags (`0.1.0-rc.4.1`) with `v`-prefixed release names; from
-`0.1.0-rc.5.0` onward both are `v`-prefixed (rc.4.2 was never cut, so rc.5.0 is the first such release).
+**Repository & release home.** Source, `v<version>` tags, official binaries, and public update feeds live in
+`w0rldx/XE-Local-AI-Engine.Source`. The `main` flavor follows stable releases and the `tester` flavor also sees release
+candidates; Velopack independently selects the Windows or Linux package channel. Historical releases through
+`0.1.0-rc.5.1` used a separate tester-repository flow, recorded below for provenance only.
 
 > **This file is hand-maintained.** `cliff.toml` drives git-cliff, which generates `RELEASE_NOTES.md` for the Velopack
 > package body — it does **not** generate this file. Update this file yourself when you cut a release; nothing will do
@@ -33,14 +31,15 @@ The tester repo is the authoritative record of what reached a tester. Reconciled
 | 0.1.0-rc.4.0 | `v0.1.0-rc.4.0` | 2026-07-06 |
 | 0.1.0-rc.4.1 | **none** | 2026-07-07 |
 | 0.1.0-rc.5.0 | `v0.1.0-rc.5.0` | 2026-08-04 |
+| 0.1.0-rc.5.1 | `v0.1.0-rc.5.1` | 2026-08-05 |
 
 **Update 2026-08-05:** `0.1.0-rc.4.2` was never released — the version target moved directly from the burned
-`0.1.0-rc.4.1` to `0.1.0-rc.5.0`, which is what `Directory.Build.props` now reads. `v0.1.0-rc.5.0` was tagged and
+`0.1.0-rc.4.1` to `0.1.0-rc.5.0`. `v0.1.0-rc.5.0` was tagged and
 published to the tester repo on 2026-08-04 (pre-release). The reconciliation counts in the paragraph below predate
 rc.5.0 and describe the run through rc.4.1.
 
-All seven shipped as GitHub **pre-releases**. Six local tags map 1:1 to a tester release, each published 5–90 minutes
-after its tagged commit. The section dates below are the **tester publish dates**, not the tag dates — they differ for
+All eight shipped as GitHub **pre-releases**. Seven local tags map 1:1 to a tester release. The section dates below are
+the **tester publish dates**, not the tag dates — they differ for
 `0.1.0-rc.1.1`, whose commit was tagged at 00:35 local time on 2026-06-27 but published at 22:41 UTC on 2026-06-26.
 
 **One unmatched entry, deliberately not papered over:** `0.1.0-rc.4.1` was published to the tester repo with **no
@@ -51,12 +50,39 @@ gates now prevent it. No local tag lacks a tester release.
 
 ## [Unreleased]
 
-_No unreleased changes recorded yet._
+The source release identity is currently `0.1.0-rc.5.2`, composed in `eng/ReleaseVersion.props`. This version is the
+first candidate reserved for the canonical public repository's portable Windows and Linux release flow. The prior
+`v0.1.0-rc.5.1` tag remains bound to its historical source commit and is not reused.
+
+### Added
+
+- Official portable Linux distribution as a Velopack AppImage with in-place self-update.
+- Detached `CHECKSUMS.sha256`, `RELEASE-MANIFEST.json`, and `RELEASE.spdx.json` generated from remotely verified draft
+  bytes.
+- Payload SPDX generation/validation and bundled dependency-license disclosure checks.
+
+### Changed
+
+- Official Windows distribution remains portable-only and is now enforced as exactly one Velopack `Portable.zip`
+  produced with `--noInst`; no `Setup.exe` is published.
+- Public update checks are anonymous. The `main` flavor follows stable releases, the `tester` flavor includes release
+  candidates, and Velopack's independent OS channel selects Windows or Linux packages.
+- The release workflow binds the version, tag, and source commit. Matrix jobs build only; a protected serialized job
+  merges both Velopack channels, verifies remote bytes, and attaches detached evidence. A second protected job
+  re-verifies and publishes the unchanged draft after a separate approval.
+- Release artifacts remain unsigned because no signing certificate exists. Signing is planned; the publication gate
+  requires an approved, current unsigned-risk decision in the interim.
+
+## [0.1.0-rc.5.1] — 2026-08-05
+
+Tagged `v0.1.0-rc.5.1` at commit `a29224eb5f3ab07129c02874dd02b44b91a4cc13` and published as a prerelease through
+the historical tester repository on 2026-08-05. No corresponding release exists in the canonical public repository.
+This is a provenance-only entry: the detailed shipped change set was not reconstructed during this documentation pass.
+The version and immutable tag are already used and must not be reassigned to later source.
 
 ## [0.1.0-rc.5.0] — 2026-08-04
 
-Tagged `v0.1.0-rc.5.0` and published to the tester repo on 2026-08-04 (pre-release), which is the version
-`Directory.Build.props` reads. **`0.1.0-rc.4.2` was never cut** — the target moved straight from the burned
+Tagged `v0.1.0-rc.5.0` and published to the tester repo on 2026-08-04 (pre-release). **`0.1.0-rc.4.2` was never cut** — the target moved straight from the burned
 `0.1.0-rc.4.1` to `0.1.0-rc.5.0`. `0.1.0-rc.4.1` remains burned: it was published to the tester repo with no matching
 source tag.
 
@@ -253,15 +279,6 @@ source tag.
 
 ### Known issues
 
-- **There is no CI.** GitHub Actions is disabled on this repository — `build-and-test.yml` and `release.yml` are both
-  `disabled_manually`, `e2e.yml` was never registered as a workflow, and the repo has 6 runs, 6 failures and 0
-  successes in its entire history. The only enforced quality gate is `publish/package-tester-win.ps1`, which runs the
-  frontend and backend gate sets on the packaging machine at release time. Between releases, validation is manual.
-  **Follow-up (2026-08-06):** this was the state at the time of the `0.1.0-rc.5.0` release; it is not the current
-  state. A tag-triggered `.github/workflows/release.yml` has since been added as the intended release path, building
-  win-x64 + linux-x64 Velopack packages and publishing them to this repo's GitHub Releases with the built-in
-  `GITHUB_TOKEN`. GitHub Actions must be enabled on the repository for it to run. `publish/package-tester-win.ps1` and
-  `publish/package-rc.sh` are now deprecated, reference-only manual packagers rather than the release path.
 - No backend hard coverage gate (no baseline yet, so a real threshold would either block the RC or be hollow). The
   frontend coverage thresholds are enforced only by `test:coverage:check`, which the packaging script runs.
 - Local-only mode (no `CentralPlatform:BaseUrl`): cloud services remain registered and fail with a generic HTTP error

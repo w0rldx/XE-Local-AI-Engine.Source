@@ -6,35 +6,24 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { VoiceManifest } from "@/core/runtime/VoiceManifest";
-
 // Mock the generated TanStack factories so the card → useVoiceNodeSettings → real withResponseValidation bridge runs
 // against owned queryFn/mutationFn (no network). The real hook still composes the mutation onSuccess invalidation, so
 // this exercises the full read → toggle → save → invalidate path.
-const { getNodeSettingsOptionsMock, saveMutationFn, toastError, nodeSettingsQueryKey, voiceManifestQueryKey } = vi.hoisted(
-	() => ({
-		getNodeSettingsOptionsMock: vi.fn(),
-		saveMutationFn: vi.fn(),
-		toastError: vi.fn(),
-		nodeSettingsQueryKey: ["getNodeSettings"] as const,
-		voiceManifestQueryKey: ["getVoiceManifest"] as const,
-	}),
-);
+const { getNodeSettingsOptionsMock, saveMutationFn, toastError, nodeSettingsQueryKey } = vi.hoisted(() => ({
+	getNodeSettingsOptionsMock: vi.fn(),
+	saveMutationFn: vi.fn(),
+	toastError: vi.fn(),
+	nodeSettingsQueryKey: ["getNodeSettings"] as const,
+}));
 
 vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	getNodeSettingsOptions: getNodeSettingsOptionsMock,
 	getNodeSettingsQueryKey: () => nodeSettingsQueryKey,
-	getVoiceManifestQueryKey: () => voiceManifestQueryKey,
 	saveNodeSettingsMutation: () => ({ mutationFn: saveMutationFn }),
 }));
 
 vi.mock("@/core/dev-tools/stores/DeveloperModeStore", () => ({
 	useDeveloperModeStore: (selector: (state: { developerMode: boolean }) => unknown) => selector({ developerMode: true }),
-}));
-
-let mockManifest: VoiceManifest | undefined;
-vi.mock("@/features/voice/VoiceRuntimeContext", () => ({
-	useVoiceRuntime: () => ({ manifest: mockManifest }),
 }));
 
 vi.mock("@/core/ui/notifications/Toast", () => ({ toast: { error: toastError, success: vi.fn() } }));
@@ -44,18 +33,6 @@ vi.mock("react-i18next", () => ({
 }));
 
 import { VoiceSettingsCard } from "@/features/voice/components/VoiceSettingsCard";
-
-function manifestWithVoices(): VoiceManifest {
-	return {
-		enabled: false,
-		models: [],
-		voices: [
-			{ id: "af_heart", name: "Heart", language: "en", gender: "female" },
-			{ id: "am_michael", name: "Michael", language: "en", gender: "male" },
-		],
-		defaultVoiceId: "af_heart",
-	};
-}
 
 function renderCard(): { queryClient: QueryClient } {
 	const queryClient = new QueryClient({
@@ -77,7 +54,6 @@ describe("VoiceSettingsCard operator controls", () => {
 		getNodeSettingsOptionsMock.mockReset();
 		saveMutationFn.mockReset();
 		toastError.mockReset();
-		mockManifest = manifestWithVoices();
 		getNodeSettingsOptionsMock.mockReturnValue({
 			queryKey: nodeSettingsQueryKey,
 			queryFn: async () => ({ voiceFeatureEnabled: false, defaultVoiceProfile: undefined }),
@@ -125,7 +101,7 @@ describe("VoiceSettingsCard operator controls", () => {
 		);
 	});
 
-	it("invalidates the voice manifest query after a successful node save", async () => {
+	it("invalidates the shared node-settings query after a successful node save", async () => {
 		const { queryClient } = renderCard();
 		const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
 
@@ -134,7 +110,6 @@ describe("VoiceSettingsCard operator controls", () => {
 
 		fireEvent.click(gate);
 
-		await waitFor(() => expect(invalidateSpy).toHaveBeenCalledWith(expect.objectContaining({ queryKey: voiceManifestQueryKey })));
-		expect(invalidateSpy).toHaveBeenCalledWith(expect.objectContaining({ queryKey: nodeSettingsQueryKey }));
+		await waitFor(() => expect(invalidateSpy).toHaveBeenCalledWith(expect.objectContaining({ queryKey: nodeSettingsQueryKey })));
 	});
 });

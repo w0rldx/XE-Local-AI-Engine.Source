@@ -1,7 +1,7 @@
 // Client-side answer-language heuristic. The backend does NOT tag answers with a
-// `contentLanguage`, so the voice runtime needs a cheap local guess to route synthesis: "en" → Kokoro (WebGPU/WASM),
-// "de"/other → Web Speech (Kokoro ships no German voice). This is deliberately small and conservative: it only
-// distinguishes German from English, defaulting to English when there is no positive German signal.
+// `contentLanguage`, so the Web Speech provider needs a cheap local guess to select an installed language voice. This
+// is deliberately small and conservative: it only distinguishes German from English, defaulting to English when
+// there is no positive German signal.
 
 export type AnswerLanguage = "en" | "de";
 

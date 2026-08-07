@@ -5,14 +5,10 @@
     <RootNamespace>XE_Local_AI_Engine.Client</RootNamespace>
     <!--
       Disable the SDK StaticWebAssets pipeline for this host. After the /app→root cutover the React
-      shell lives at wwwroot\index.html (BasePath "/"), which collides with the
-      Microsoft.Agents.AI.DevUI package's own staticwebassets\index.html (also BasePath "/") — the SDK
-      fails with "Conflicting assets with the same target path 'index.html'" (and, in the dev manifest
-      path, "Sequence contains more than one element") on rebuilds. The host serves the React shell +
-      assets via app.UseStaticFiles() + MapFallbackToFile("index.html") (physical wwwroot files), NOT via the
-      StaticWebAssets manifest, and Blazor endpoints are removed at cutover, so nothing depends
-      on the SWA pipeline here. With it off there is no manifest to collide, which also makes the
-      wwwroot copy idempotent across rebuilds. wwwroot content still publishes via the default
+      shell lives at wwwroot\index.html and the host serves the React shell + assets via
+      app.UseStaticFiles() + MapFallbackToFile("index.html") (physical wwwroot files), not via a
+      StaticWebAssets manifest. Blazor endpoints are removed, so nothing depends on the SWA pipeline.
+      Keeping it off also makes the wwwroot copy idempotent across rebuilds. wwwroot content publishes via the default
       <Content Include="wwwroot\**"> (CopyToPublishDirectory) for UseStaticFiles.
     -->
     <StaticWebAssetsEnabled>false</StaticWebAssetsEnabled>
@@ -33,6 +29,8 @@
   <ItemGroup>
     <Content Remove="node-settings.json"/>
     <None Remove="node-settings.json"/>
+    <!-- Repository scaffolding keeps wwwroot tracked but is not part of the executable web payload. -->
+    <Content Update="wwwroot/.gitignore" CopyToOutputDirectory="Never" CopyToPublishDirectory="Never"/>
   </ItemGroup>
 
   <!--
@@ -76,11 +74,6 @@
     <PackageReference Include="Microsoft.Extensions.Http.Resilience"/>
     <PackageReference Include="Microsoft.Extensions.AI"/>
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI"/>
-    <!-- Debug-only: DevUI dashboard dependencies only ship as preview/alpha packages; the Release
-         (published desktop) build compiles the DevUI wiring out (#if DEBUG in Program.cs) and must
-         not carry these assemblies. -->
-    <PackageReference Include="Microsoft.Agents.AI.Hosting.OpenAI" Condition="'$(Configuration)' == 'Debug'"/>
-    <PackageReference Include="Microsoft.Agents.AI.DevUI" Condition="'$(Configuration)' == 'Debug'"/>
     <PackageReference Include="NSec.Cryptography"/>
     <PackageReference Include="OllamaSharp"/>
     <PackageReference Include="Scalar.AspNetCore"/>
@@ -98,9 +91,8 @@
   </ItemGroup>
 
   <!--
-    App self-update build flavor (decision #12). UpdateChannel selects, at publish time, the baked-in update repo URL +
-    GitHub App client_id consumed by AppUpdateChannelOptions. Both values are PUBLIC config (the device-flow client_id
-    needs no client secret; the repo URL is public) — not secrets, safe to bake into the artifact. There is no runtime
+    App self-update build flavor (decision #12). UpdateChannel selects, at publish time, the baked-in public update repo
+    URL and stable/RC release track consumed by AppUpdateChannelOptions. There is no runtime
     switch: a tester build can never point at the main repo and vice-versa. The active flavor's
     appsettings.AppUpdate.{flavor}.json is copied to the output as appsettings.AppUpdate.json so the host loads exactly
     one channel file regardless of UpdateChannel. Default flavor is main.
@@ -129,7 +121,73 @@
              Link="NOTICE"
              CopyToPublishDirectory="PreserveNewest"
              CopyToOutputDirectory="Never"/>
+    <Content Include="$(MSBuildProjectDirectory)/../third-party/nuget/**"
+             Link="licenses/nuget/%(RecursiveDir)%(Filename)%(Extension)"
+             CopyToPublishDirectory="PreserveNewest"
+             CopyToOutputDirectory="Never"/>
   </ItemGroup>
+
+  <Target Name="ValidateDotNetRuntimeLicenseAssets"
+          BeforeTargets="ComputeFilesToPublish"
+          Condition="'$(SelfContained)' == 'true' and '$(RuntimeIdentifier)' != ''">
+    <PropertyGroup>
+      <_DotNetRuntimePackDirectory>$(NuGetPackageRoot)microsoft.netcore.app.runtime.$(RuntimeIdentifier)/$(DotNetRuntimeVersion)</_DotNetRuntimePackDirectory>
+      <_AspNetCoreRuntimePackDirectory>$(NuGetPackageRoot)microsoft.aspnetcore.app.runtime.$(RuntimeIdentifier)/$(DotNetRuntimeVersion)</_AspNetCoreRuntimePackDirectory>
+    </PropertyGroup>
+    <Error Condition="!Exists('$(_DotNetRuntimePackDirectory)/THIRD-PARTY-NOTICES.TXT')"
+           Text="The .NET $(DotNetRuntimeVersion) $(RuntimeIdentifier) third-party notices are missing from the restored runtime pack."/>
+    <Error Condition="!Exists('$(_DotNetRuntimePackDirectory)/LICENSE.TXT')"
+           Text="The .NET $(DotNetRuntimeVersion) $(RuntimeIdentifier) MIT license is missing from the restored runtime pack."/>
+    <Error Condition="!Exists('$(_AspNetCoreRuntimePackDirectory)/THIRD-PARTY-NOTICES.TXT')"
+           Text="The ASP.NET Core $(DotNetRuntimeVersion) $(RuntimeIdentifier) third-party notices are missing from the restored runtime pack."/>
+    <Error Condition="!Exists('$(_AspNetCoreRuntimePackDirectory)/LICENSE.txt')"
+           Text="The ASP.NET Core $(DotNetRuntimeVersion) $(RuntimeIdentifier) MIT license is missing from the restored runtime pack."/>
+    <Error Condition="!Exists('$(MSBuildProjectDirectory)/../third-party/dotnet/DOTNET-LIBRARY-LICENSE.html')"
+           Text="The Windows .NET Library License disclosure file is missing."/>
+    <ItemGroup>
+      <ResolvedFileToPublish Include="$(_DotNetRuntimePackDirectory)/THIRD-PARTY-NOTICES.TXT">
+        <RelativePath>licenses/dotnet/DOTNET-RUNTIME-THIRD-PARTY-NOTICES.txt</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+      <ResolvedFileToPublish Include="$(_DotNetRuntimePackDirectory)/THIRD-PARTY-NOTICES.TXT">
+        <RelativePath>wwwroot/licenses/dotnet/DOTNET-RUNTIME-THIRD-PARTY-NOTICES.txt</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+      <ResolvedFileToPublish Include="$(_DotNetRuntimePackDirectory)/LICENSE.TXT">
+        <RelativePath>licenses/dotnet/DOTNET-RUNTIME-LICENSE.txt</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+      <ResolvedFileToPublish Include="$(_DotNetRuntimePackDirectory)/LICENSE.TXT">
+        <RelativePath>wwwroot/licenses/dotnet/DOTNET-RUNTIME-LICENSE.txt</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+      <ResolvedFileToPublish Include="$(_AspNetCoreRuntimePackDirectory)/THIRD-PARTY-NOTICES.TXT">
+        <RelativePath>licenses/dotnet/ASPNETCORE-RUNTIME-THIRD-PARTY-NOTICES.txt</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+      <ResolvedFileToPublish Include="$(_AspNetCoreRuntimePackDirectory)/THIRD-PARTY-NOTICES.TXT">
+        <RelativePath>wwwroot/licenses/dotnet/ASPNETCORE-RUNTIME-THIRD-PARTY-NOTICES.txt</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+      <ResolvedFileToPublish Include="$(_AspNetCoreRuntimePackDirectory)/LICENSE.txt">
+        <RelativePath>licenses/dotnet/ASPNETCORE-RUNTIME-LICENSE.txt</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+      <ResolvedFileToPublish Include="$(_AspNetCoreRuntimePackDirectory)/LICENSE.txt">
+        <RelativePath>wwwroot/licenses/dotnet/ASPNETCORE-RUNTIME-LICENSE.txt</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+      <ResolvedFileToPublish Include="$(MSBuildProjectDirectory)/../third-party/dotnet/DOTNET-LIBRARY-LICENSE.html"
+                             >
+        <RelativePath>licenses/dotnet/DOTNET-LIBRARY-LICENSE.html</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+      <ResolvedFileToPublish Include="$(MSBuildProjectDirectory)/../third-party/dotnet/DOTNET-LIBRARY-LICENSE.html">
+        <RelativePath>wwwroot/licenses/dotnet/DOTNET-LIBRARY-LICENSE.html</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
 
   <ItemGroup>
     <!-- Keep both flavor sources out of default content globbing so only the active one ships (renamed) below. -->
@@ -140,14 +198,10 @@
     <!--
       Only the active flavor's source is copied to output (renamed), so the artifact carries exactly one channel.
 
-      Always, NOT PreserveNewest, and that is load-bearing. publish/package-tester-win.ps1 injects the GitHub App
-      client ID by rewriting the COPY in the publish directory, which leaves the destination permanently newer than
-      its source. Under PreserveNewest the next publish then skipped the copy altogether and a previous run's baked
-      client ID survived into the new artifact — measured on Windows 11 2026-08-02, where it blocked a -SkipUpload
-      rehearsal build whose guard correctly refused a package carrying a stale Iv23… ID. The same mechanism could
-      carry a tester config into a main-channel build, which would break the invariant stated above that a tester
-      build can never point at the main repo. Always makes every publish overwrite the destination regardless of
-      timestamps, so the artifact's channel config is always the one this build selected.
+      Always, NOT PreserveNewest, and that is load-bearing. A prior publish can leave the renamed destination newer
+      than its flavor source; under PreserveNewest the next publish may silently retain the wrong repo or release track.
+      Always makes every publish overwrite the destination regardless of timestamps, so the artifact's source policy
+      is always the one this build selected.
     -->
     <Content Include="appsettings.AppUpdate.$(UpdateChannel).json"
              Condition="Exists('appsettings.AppUpdate.$(UpdateChannel).json')"

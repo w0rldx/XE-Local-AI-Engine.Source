@@ -11,7 +11,12 @@ Thanks for your interest in XE Local AI Engine. This is an early-stage, Apache-2
 ## Development setup
 
 - .NET SDK per [`global.json`](global.json).
-- Node + [pnpm](https://pnpm.io/) for the React client (`XE-Local-AI-Engine.Client.React/`).
+- .NET 8 runtime for the pinned SBOM and dependency-license tools.
+- Node compatible with the React [`package.json`](XE-Local-AI-Engine.Client.React/package.json) and pnpm through
+  Corepack or a local install.
+- Python 3 for repository validation and lifecycle scripts.
+- The Aspire CLI for AppHost development and integration checks.
+- On Linux/WSL, `setsid` (normally supplied by `util-linux`) for transactional `scripts/dev-start.sh` cleanup.
 
 ## Validating your change
 
@@ -20,29 +25,41 @@ These are the real gates — a change isn't done until they pass. **The `--confi
 Backend:
 
 ```bash
-dotnet restore XE-Local-AI-Engine.slnx
-dotnet build   XE-Local-AI-Engine.slnx --configuration Release --no-restore
-dotnet test    XE-Local-AI-Engine.slnx --configuration Release --no-build --max-parallel-test-modules 1
+scripts/with-build-lock.sh -- dotnet restore XE-Local-AI-Engine.slnx
+dotnet tool restore --tool-manifest dotnet-tools.json
+scripts/with-build-lock.sh -- dotnet build XE-Local-AI-Engine.slnx --configuration Release --no-restore
+scripts/with-build-lock.sh -- scripts/assembly-guard.sh guard --test-bins -- \
+  dotnet test XE-Local-AI-Engine.slnx --configuration Release --no-build --max-parallel-test-modules 1
 ```
 
-`scripts/run-tests-memory-safe.sh` wraps the heavy test run and guards against build/test contamination.
+Exit `69` means the build lock was not acquired. Exit `75` means the test result was contaminated and is void; rerun
+it. `scripts/run-tests-memory-safe.sh` is the lower-memory full-suite alternative.
 
-Frontend (from `XE-Local-AI-Engine.Client.React/`):
+Frontend CI gates (run `dotnet tool restore --tool-manifest dotnet-tools.json` once from the repository root, then run
+these commands from `XE-Local-AI-Engine.Client.React/`):
 
 ```bash
-pnpm install
-pnpm run lint      # the only frontend typecheck
-pnpm test
+pnpm install --frozen-lockfile
+pnpm run openapi:check
+pnpm run licenses:check
+pnpm run lint
+pnpm run test:coverage:check
 pnpm run build
+pnpm audit --prod --audit-level=high
 ```
 
-After any backend contract change, regenerate and check the API client:
+`pnpm run lint` is the frontend typecheck. `openapi:check` validates the generated client against the committed spec;
+after a backend contract change, follow the live-spec regeneration rules in [`AGENTS.md`](AGENTS.md#validation) before
+trusting that drift check.
+
+Release-script changes must also pass:
 
 ```bash
-pnpm openapi:check
+scripts/lint-release-scripts.sh
 ```
 
-End-to-end tests are opt-in and ask-gated: `scripts/run-e2e-local.sh`.
+That default run includes the Pester suite and fails if required linters are missing. End-to-end tests remain opt-in and
+ask-gated: `scripts/run-e2e-local.sh`.
 
 ## Pull requests
 

@@ -34,7 +34,7 @@ These suites landed with the 2026-06-24…27 subsystems and are confirmed presen
 - **Inference optimizer / per-machine tuning** (`XE-Local-AI-Engine.Tests`): `Inference/InferenceProfileResolverTests.cs`, `Inference/InferenceProfileServiceTests.cs`, `Inference/MachineKeyProviderTests.cs`, and the provider-side `Providers/LlamaServer/LlamaListDevicesProcessVramBudgetProbeTests.cs` and `Providers/LlamaServer/LlamaDeviceInventoryProbeTests.cs` (the two `--list-devices` consumers: the process VRAM-budget figure and the structured device inventory). See [Local Runtime & Providers](03-local-runtime-and-providers.md).
 - **Inference profile operator endpoints**: `Endpoints/ModelFit/V1/InferenceProfileEndpointTests.cs` (explore / benchmark / freeze). See [API & Hubs](09-api-and-hubs.md).
 - **GGUF quant recommendation / quant ladder**: `ModelFit/GgufVariantRecommenderTests.cs`, `ModelFit/QuantLadderTests.cs` (quality-tier + hardware-fit + recommended-variant logic). See [Model Fit](07-model-fit.md).
-- **Client voice runtime**: `Voice/VoiceManifestEndpointTests.cs` (config-only backend voice manifest; the TTS engine itself is browser-side). See [React Client](10-react-client.md).
+- **Client voice runtime**: frontend tests cover Web Speech capability detection, platform-voice selection, playback, and settings/preview behavior. The backend retains only node-settings coverage for the `VoiceFeatureEnabled` gate and legacy settings compatibility. See [React Client](10-react-client.md).
 - **Desktop hosting**: `Hosting/DesktopPortStoreTests.cs` (loopback port persistence across launches). See [Hosting & Deployment](11-hosting-and-deployment.md).
 - **Persistence** (`XE-Local-AI-Engine.Client.Persistence.Tests`): `ConversationUploadedFileStoreTests.cs` (encrypted chat file-upload store). See [Data & Persistence](08-data-and-persistence.md).
 
@@ -114,7 +114,9 @@ the coverage gate described below.
 
 ### The three standalone runners
 
-All three exist for local, CI-independent validation — the intended CI gate is `build-and-test.yml` (on `develop` PRs/pushes) and `release.yml` (on `v*` tags, which itself calls `build-and-test.yml` before packaging), but GitHub Actions must be enabled on the repository for either to run (see "Continuous integration" below). These standalone runners are how the same checks get exercised locally, before or independent of that.
+All three exist for local, CI-independent validation. The CI gate is `build-and-test.yml` (on `develop` PRs/pushes)
+and the immutable-tag-bound `release.yml` (on `v*` tags, which itself calls `build-and-test.yml` before packaging).
+These standalone runners exercise additional target-specific checks locally.
 
 - **[`scripts/run-e2e-local.sh`](../../scripts/run-e2e-local.sh)** — opt-in local runner for the Playwright suite. Nothing invokes it automatically; run it by hand before cutting a tester RC. It performs a frozen frontend install plus `pnpm run lint` before the fixture's intentionally bare Vite `build:e2e`, installs Playwright browsers (via `playwright.ps1`, so it needs `pwsh`), and rejects zero-test or missing-summary runs. `--list` enumerates without running; `--filter` accepts a TUnit/MTP tree-node expression. Exit codes: `0` pass, `1` tests failed or the run was vacuous, `2` a prerequisite/usage error, `75` build contamination (**void; rerun**). No external services needed — FakeOllama plus the in-process host, so no `llama-server` and no `scripts/dev-stop.sh`.
 - **[`scripts/lint-release-scripts.sh`](../../scripts/lint-release-scripts.sh)** — shellcheck + PSScriptAnalyzer over the packaging scripts. `publish/package-tester-win.ps1` and `publish/package-rc.sh` are deprecated, reference-only manual packagers now (the release path is the tag-triggered `release.yml`), but this script still gives them static analysis and runs `package-tester-win.ps1`'s [`publish/tests/package-tester-win.Tests.ps1`](../../publish/tests/package-tester-win.Tests.ps1) Pester suite on every default run. A **missing linter or test module exits 2** rather than passing silently.
@@ -128,33 +130,26 @@ All three exist for local, CI-independent validation — the intended CI gate is
 
 ## Continuous integration
 
-The intended CI gate is two workflows: **`build-and-test.yml`** (`pull_request`/`push` to `develop`, plus
+The CI gate is two workflows: **`build-and-test.yml`** (`pull_request`/`push` to `develop`, plus
 `workflow_dispatch` and `workflow_call`) and **`release.yml`** (a pushed `v*` tag, plus `workflow_dispatch`), which
 calls `build-and-test.yml` as a reusable workflow so the exact tagged commit re-runs the full gate set before
-packaging. **GitHub Actions must be enabled on the repository for either to run** — that is an owner-level repository
-setting, and this documentation does not track or assert its current state.
-
-> **Historical note (checked 2026-07-24, not recaptured since).** At that point both `build-and-test.yml` and the
-> then-current `release.yml` were registered as `disabled_manually`, with a combined six runs and six failures across
-> the two, and `e2e.yml` was not a registered workflow. `release.yml` has since been rewritten to publish to this
-> repo's GitHub Releases directly (win-x64 + linux-x64, built-in `GITHUB_TOKEN`) and to gate packaging on
-> `build-and-test.yml` via its `validate` job. Whether Actions is currently enabled was not re-verified for this page.
-
-The RC branch is `feature/agent-mode-foundation`; `build-and-test.yml` only triggers on `develop`, so a PR/push gate
-on this branch still depends on `workflow_dispatch` or a future merge to `develop`.
+packaging. The release workflow is immutable-tag-bound: the environment-protected `prepare-release-draft` job builds
+no assets, but uploads, merges, and remotely verifies the retained matrix output as a draft; a separately approved
+`publish-release` job re-verifies and promotes that same draft without rebuilding or replacing assets.
 
 The workflow files are tracked and are the design of record — read them for intent, and keep them accurate if you
 change the validation commands. Treat every gate below as **what runs on CI when Actions is enabled**, not as
 something necessarily protecting the branch you are on right now.
 
 **Where the release-time gates live:** `release.yml`'s `validate` job runs the full backend + frontend gate set via
-`build-and-test.yml` against the exact tagged commit before anything is packed or uploaded — `version` and `release`
-both `needs: validate`, so a failing gate blocks the release. The deprecated manual packager,
+`build-and-test.yml` against the exact tagged commit before anything is packed or uploaded — downstream `version`,
+`build-pack`, `prepare-release-draft`, and `publish-release` work cannot run past a failing validation. The deprecated
+manual packager,
 [`publish/package-tester-win.ps1`](../../publish/package-tester-win.ps1), ran the same shape of gate set (frontend:
 frozen install, lint, OpenAPI drift check, third-party license check, coverage-gated tests, production dependency
 audit, production build; backend: restore, transitive NuGet vulnerability audit, Release build, solution-wide serial
 tests with a hollow-gate guard) on the packaging machine by hand — it was the release path from `0.1.0-rc.4.0` through
-`0.1.0-rc.5.0` and is now reference-only. A gate belongs in `build-and-test.yml` (or the packaging scripts, for
+`0.1.0-rc.5.1` and is now reference-only. A gate belongs in `build-and-test.yml` (or the packaging scripts, for
 release-script lint) to be enforced; documentation describing a gate is not evidence it ran.
 
 Between releases, the enforcement is you: run the raw commands above (and the root [`AGENTS.md`](../../AGENTS.md#validation) Validation section) before you call a change done.
@@ -164,7 +159,11 @@ Between releases, the enforcement is you: run the raw commands above (and the ro
 **`build-and-test.yml`** — runs on `pull_request`/`push` to `develop` plus `workflow_dispatch`, and is `workflow_call`-reusable (`release.yml` calls it so the exact tagged commit re-runs these gates before packaging). Two jobs:
 
 - **`build-and-test` (ubuntu-latest)** — SDK from `global.json`, restore + `build -c Release --no-restore`, then a single auto-enrolled solution-wide `dotnet test XE-Local-AI-Engine.slnx -c Release --no-build --max-parallel-test-modules 1`. Solution-level `dotnet test` runs every MTP test project (name ends `.Tests` / contains `.Tests.`), so a new suite needs no workflow edit; output is piped through `tee` and a **hollow-gate guard** greps for a `Passed!`/`Failed!` summary, failing if none is found (catching a silent green where zero suites enrolled). The deprecated `package-tester-win.ps1` packager implements the same hollow-gate guard.
-- **`client-react` (ubuntu-latest)** — pnpm + Node 22, `install --frozen-lockfile`, then in order `openapi:check`, `licenses:check`, `lint`, `test:coverage:check`, `build`, and `pnpm audit --prod --audit-level=high`. The same set also runs in the deprecated packaging script's frontend leg.
+- **`client-react` (ubuntu-latest)** — pnpm + Node 22, the `global.json` SDK, a .NET 8 runtime, and the restored pinned
+  repository tools; then `install --frozen-lockfile`, `openapi:check`, `licenses:check`, `lint`,
+  `test:coverage:check`, `build`, and `pnpm audit --prod --audit-level=high` in order. The same set also runs in the
+  deprecated packaging script's frontend leg. A clean local clone must run
+  `dotnet tool restore --tool-manifest dotnet-tools.json` before `licenses:check`.
 
 Two design choices worth preserving in the file: **`--max-parallel-test-modules 1`** (concurrent modules time out / exhaust the WSL `inotify` watch limit on shared runners) and **`TZ=Europe/Berlin`** on the test step (a non-UTC zone deliberately exposes time-zone bugs; the comment cites `CapabilityReporterTests`). Note that `TZ` is a **Unix-only** mechanism in .NET (`TimeZoneInfo.Unix.NonAndroid.cs` reads it; the Windows implementation resolves the zone from `kernel32!GetDynamicTimeZoneInformation` and reads no environment variable). It therefore cannot be reproduced on a Windows packaging machine by setting a variable — the deprecated `package-tester-win.ps1` instead **required** the machine's own time zone to be non-UTC, throwing before the test leg if the current offset is `+00:00` and pointing at `tzutil /s`, with `-AllowUtcTestTimeZone` to accept the reduced coverage.
 
@@ -197,8 +196,9 @@ The README's "RC readiness status" section is the contract: **do not mark releas
 - the matching `v<version>` source tag on the exact packaged commit,
 - a real-Windows smoke transcript for the exact generated `Portable.zip`,
 - the generated release assets and their checksums, pushed source-tag verification, and
-- confirmation that the release was published to this repository's GitHub Releases (or, for a manual rehearsal,
-  the unchanged draft published in the retired `w0rldx/XE-Local-AI-Engine.Tester-App`).
+- confirmation that `prepare-release-draft` uploaded and remotely verified the Windows Portable ZIP, Linux AppImage,
+  both OS feeds, checksums, release manifest, and detached SPDX envelope in one draft, and that the protected
+  `publish-release` job re-verified and promoted that unchanged draft without rebuilding or replacing assets.
 
 This baseline documentation review does not assert that those release artifacts or transcripts exist,
 were retained, or are available to the recipient.

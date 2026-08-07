@@ -112,11 +112,13 @@ That closes the gap properly, and is good practice regardless.
 
 | Where | Why |
 |---|---|
-| **Hugging Face** | Downloading models and voice files |
+| **Hugging Face** | Discovering and downloading AI models |
 | **GitHub** | Downloading engine components, checking for app updates |
 
-That's the complete list on a fresh installation. **No conversation, document or usage data is
-transmitted to anything.**
+Those are the app-managed connections on a fresh installation. **No conversation, document or usage
+data is transmitted to them.** Voice output uses the browser/operating-system Web Speech service;
+available voices and whether a selected system voice uses the network are controlled by that
+platform implementation, not this repository.
 
 ### Only if you switch it on
 
@@ -148,9 +150,8 @@ Setup asks for an **email address and password**. This creates a login **on your
 - **There is no "forgot password" email** (no server to send one), but you can set a new password
   locally without losing data — [reset instructions](faq.md#i-forgot-my-password)
 
-**The GitHub sign-in is a separate thing.** It exists only so the in-app updater is authorised to check
-GitHub for new releases. The token is stored locally. One is your app login; the other is update
-permission.
+**Update checks do not require GitHub sign-in.** Official builds read the public release feed anonymously. No GitHub
+device login or update token is stored.
 
 ---
 
@@ -217,7 +218,8 @@ so it is not a free win.) **Assume the application-level protections above are a
 - **Keep backups.** This is beta software. Don't let it be the only place important data lives.
 - **The database only moves forward.** It upgrades when you update. Going back to an older build isn't
   guaranteed to work — back up the data folder first.
-- **The build is unsigned.** Windows will warn you.
+- **The build is unsigned because no signing certificate exists yet.** Windows and Linux security tools may warn you;
+  verify `CHECKSUMS.sha256` before running a release. Signing is planned.
   [Why](faq.md#why-does-this-happen-at-all)
 - **Logs may contain fragments of your activity.** They stay on your machine. If you send me a log for
   a bug report, skim it first — the in-app diagnostics export redacts secrets, but a raw log is raw.

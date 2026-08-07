@@ -21,6 +21,24 @@ env:
   DOTNET_CLI_TELEMETRY_OPTOUT: true
 
 jobs:
+  release-contracts:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          global-json-file: global.json
+
+      - name: Restore pinned release tools
+        run: dotnet tool restore --tool-manifest dotnet-tools.json
+
+      - name: Run auto-enrolled release contract tests
+        run: scripts/run-release-contract-tests.sh
+
   build-and-test:
     runs-on: ubuntu-latest
 
@@ -38,6 +56,23 @@ jobs:
 
       - name: Build solution
         run: dotnet build XE-Local-AI-Engine.slnx --configuration Release --no-restore
+
+      - name: Setup pnpm for live OpenAPI verification
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+
+      - name: Setup Node.js for live OpenAPI verification
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: XE-Local-AI-Engine.Client.React/pnpm-lock.yaml
+
+      - name: Install frontend dependencies for live OpenAPI verification
+        working-directory: XE-Local-AI-Engine.Client.React
+        run: pnpm install --frozen-lockfile
+
+      - name: Compare live backend OpenAPI with committed frontend contract
+        run: scripts/openapi-live-check.sh
 
       # Auto-enrolling backend test run: `dotnet test` on the solution runs EVERY MTP test project
       # (name ends with .Tests / contains .Tests.) so new suites need no workflow edit. E2E is excluded
@@ -82,6 +117,19 @@ jobs:
           cache: pnpm
           cache-dependency-path: XE-Local-AI-Engine.Client.React/pnpm-lock.yaml
 
+      - name: Setup .NET 8 runtime for pinned license tooling
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Setup pinned .NET SDK
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          global-json-file: global.json
+
+      - name: Restore pinned .NET license tools
+        run: dotnet tool restore --tool-manifest ../dotnet-tools.json
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -102,6 +150,9 @@ jobs:
 
       - name: Test
         run: pnpm run test:coverage:check
+
+      - name: Test build and compliance tooling
+        run: pnpm run test:tooling
 
       - name: Build
         run: pnpm run build

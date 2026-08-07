@@ -108,7 +108,7 @@ for _ in $(seq 1 "$((TIMEOUT_SECONDS * 4))"); do
   if [[ -n "${base_url}" ]]; then
     if BASE_URL="${base_url}" python3 -c '
 import os, urllib.request
-with urllib.request.urlopen(os.environ["BASE_URL"] + "/health/ready", timeout=1) as response:
+with urllib.request.urlopen(os.environ["BASE_URL"] + "/health/live", timeout=1) as response:
     raise SystemExit(0 if response.status == 200 else 1)
 ' >/dev/null 2>&1; then
       break
@@ -124,7 +124,7 @@ if [[ -z "${base_url}" ]]; then
 fi
 if ! BASE_URL="${base_url}" python3 -c '
 import os, urllib.request
-with urllib.request.urlopen(os.environ["BASE_URL"] + "/health/ready", timeout=2) as response:
+with urllib.request.urlopen(os.environ["BASE_URL"] + "/health/live", timeout=2) as response:
     raise SystemExit(0 if response.status == 200 else 1)
 ' >/dev/null 2>&1; then
   echo "[openapi-live] Backend did not become ready within ${TIMEOUT_SECONDS}s." >&2

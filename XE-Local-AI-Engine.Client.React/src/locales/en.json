@@ -475,7 +475,8 @@
 				"applyError": "Update failed. Please try again.",
 				"upToDate": "You are up to date.",
 				"availableVersion": "Available:",
-				"offline": "Update check is unavailable while offline.",
+				"offline": "Couldn't reach the update service. Check your connection and try again.",
+				"checkFailed": "Couldn't process the update information. Please try again later.",
 				"notConfigured": "Automatic updates aren't available in this build. To move to a newer version, install it manually.",
 				"copyCode": "Copy code",
 				"copied": "Copied"
@@ -3577,15 +3578,35 @@
 			"subtitle": "Create node-wide slash commands that send a configured prompt in the current chat. Commands can only be invoked by the user.",
 			"createButton": "New command",
 			"capacity": "The limit of 100 custom commands has been reached. Delete one before creating another.",
-			"list": { "loading": "Loading commands…", "empty": "No commands are available.", "command": "Command", "action": "Action", "builtIn": "Built-in" },
+			"list": {
+				"loading": "Loading commands…",
+				"empty": "No commands are available.",
+				"command": "Command",
+				"action": "Action",
+				"builtIn": "Built-in"
+			},
 			"editor": { "createTitle": "New command", "editTitle": "Edit command" },
 			"delete": { "title": "Delete command", "description": "Delete '/{{name}}'? This cannot be undone." },
-			"errors": { "load": "Could not load commands.", "save": "Could not save the command.", "delete": "Could not delete the command." },
+			"errors": {
+				"load": "Could not load commands.",
+				"save": "Could not save the command.",
+				"delete": "Could not delete the command."
+			},
 			"form": {
-				"name": { "label": "Command name", "description": "Lowercase letters, numbers, and single hyphens. Do not include /.", "placeholder": "review", "invalid": "Enter a valid lowercase command name." },
+				"name": {
+					"label": "Command name",
+					"description": "Lowercase letters, numbers, and single hyphens. Do not include /.",
+					"placeholder": "review",
+					"invalid": "Enter a valid lowercase command name."
+				},
 				"description": { "label": "Description", "placeholder": "Optional summary shown in autocomplete" },
 				"action": { "label": "Action", "sendPrompt": "Send prompt" },
-				"prompt": { "label": "Prompt", "description": "Sent to the agent in the current chat when you invoke the command.", "placeholder": "Review the current work and report issues by severity.", "required": "Prompt is required." }
+				"prompt": {
+					"label": "Prompt",
+					"description": "Sent to the agent in the current chat when you invoke the command.",
+					"placeholder": "Review the current work and report issues by severity.",
+					"required": "Prompt is required."
+				}
 			}
 		},
 		"skills": {
@@ -4199,19 +4220,13 @@
 			"play": "Read this answer aloud",
 			"stop": "Stop reading"
 		},
-		"notice": {
-			"downloading": "Downloading voice model…",
-			"downloadProgress": "{{loaded}} / {{total}} MB",
-			"downloadError": "The voice model could not be downloaded. Falling back to browser speech.",
-			"webSpeechFallback": "Using browser speech — WebGPU is unavailable."
-		},
 		"settings": {
 			"title": "Voice output (text-to-speech)",
 			"operatorGate": "Node voice feature:",
 			"gateOn": "Enabled",
 			"gateOff": "Disabled",
 			"enableLabel": "Read answers aloud on this device",
-			"enableDescription": "Stored in this browser only. Synthesis runs locally; no audio leaves the device.",
+			"enableDescription": "Stored in this browser only. Speech is handled by your browser or operating system.",
 			"autoPlayLabel": "Auto-play assistant answers",
 			"profileLabel": "Voice",
 			"rateLabel": "Speaking rate",
@@ -4223,7 +4238,6 @@
 			"operatorDefaultProfileDescription": "The voice new users start with on this node.",
 			"operatorSaveError": "Could not save the node voice setting.",
 			"previewLabel": "Preview voice",
-			"builtInVoicesGroupLabel": "Built-in voices",
 			"systemVoiceGroupLabel": "System voices ({{language}})"
 		}
 	},

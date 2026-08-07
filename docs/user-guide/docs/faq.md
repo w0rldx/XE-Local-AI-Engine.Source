@@ -14,7 +14,7 @@ fixing.
 
 ### The releases page shows nothing / I get a 404
 This repository is public, so you don't need to sign in or be invited to see it. A 404 here usually
-means a bad or outdated link — double-check you're using [the Releases page](https://github.com/w0rldx/XE-Local-AI-Engine.Source/releases/latest)
+means a bad or outdated link — double-check you're using [the Releases page](https://github.com/w0rldx/XE-Local-AI-Engine.Source/releases)
 directly. If it's still not loading, it may be a temporary GitHub outage; try again shortly, or
 [open an issue](https://github.com/w0rldx/XE-Local-AI-Engine.Source/issues/new/choose).
 
@@ -22,7 +22,7 @@ directly. If it's still not loading, it may be a temporary GitHub outage; try ag
 You almost certainly clicked the green **`<> Code`** button, which downloads this repository's
 **source code** rather than the packaged app.
 
-Go back to the [Releases page](https://github.com/w0rldx/XE-Local-AI-Engine.Source/releases/latest), expand **Assets**, and take
+Go back to the [Releases page](https://github.com/w0rldx/XE-Local-AI-Engine.Source/releases), expand **Assets**, and take
 `XE-Local-AI-Engine-win-Portable.zip`. → [Full walkthrough](download-from-github.md)
 
 ### Which file do I actually run?
@@ -90,9 +90,9 @@ doesn't appear until you click it.
 This catches almost everyone. → [Step-by-step with screenshots](install-windows.md#the-windows-smartscreen-warning)
 
 ### Why does this happen at all?
-The build is **not code-signed**. A signing certificate costs several hundred euros a year and I
-haven't bought one yet. Windows warns about any unfamiliar unsigned program — it is a
-statement about the certificate, not about the file being harmful.
+The build is **not code-signed** because the project does not yet have a signing certificate. Signing is planned.
+Windows warns about an unfamiliar unsigned program; this states that Windows cannot authenticate the publisher, not
+that it found malicious behavior.
 
 ### How do I avoid the warning entirely?
 Unblock the ZIP **before** extracting: right-click it → **Properties** → tick **Unblock** → **OK**.
@@ -116,7 +116,7 @@ Unsigned, brand-new, single-large-executable programs are a shape some scanners 
 You can add the folder to your antivirus exclusions **if you're comfortable doing that** — and it's
 entirely reasonable to decide you'd rather wait for a signed build. Verify the download first if you
 like: GitHub publishes a SHA-256 digest beside each release asset.
-→ [How to check](download-from-github.md#step-6--check-you-got-the-right-thing)
+→ [How to check](download-from-github.md#step-4--verify-sha-256)
 
 ### Windows Firewall is asking about a port I don't recognise
 
@@ -137,10 +137,10 @@ opened to the internet or your network.
 > only needs loopback, which the firewall doesn't gate. If something then fails to start, tell me.
 
 ### Is it safe?
-Straight answer: **you are trusting an unsigned build from one developer, and you can check the source
-yourself.** The build is unsigned, so Windows cannot tell you who made it. What you do have is the
-public source code in this repository, GitHub's SHA-256 digest confirming your download wasn't
-tampered with in transit, and the option to build it yourself instead of trusting the binary.
+Straight answer: **you are trusting an unsigned build, and you can inspect the source yourself.** The current release
+publishes `CHECKSUMS.sha256`, `RELEASE-MANIFEST.json`, and `RELEASE.spdx.json`; they help verify bytes, source binding,
+and inventory, but do not authenticate the publisher the way a trusted code signature would. You can also build from
+source instead of trusting the binary.
 
 It's also worth being clear about what running it means, because this is true of **any** desktop app
 you install: it runs **as you**, with access to your files and your network.
@@ -262,9 +262,10 @@ Paste that into the File Explorer address bar. It holds your account, chats, set
 models and the AI engine — often several GB.
 
 ### Does anything get sent to the internet?
-No conversations, no documents, no telemetry. The app connects out only to **Hugging Face** (models and
-voices) and **GitHub** (engine components and updates) — plus any cloud provider you deliberately
-configure. → [Full detail](privacy-and-data.md)
+No conversations, no documents, no telemetry. The app-managed connections are **Hugging Face**
+(models) and **GitHub** (engine components and updates) — plus any cloud provider you deliberately
+configure. Read-aloud uses your browser/operating-system speech service; its network behavior is
+outside the app's control. → [Full detail](privacy-and-data.md)
 
 ### Is my data encrypted?
 **Partly, and the distinction matters.** Chats, agent instructions, uploaded files and generated images
@@ -349,14 +350,19 @@ Prefer to wipe everything and start fresh instead? See
 [How do I completely reset the app?](#how-do-i-completely-reset-the-app) above.
 
 ### How do I uninstall it?
-There's no uninstaller. Three steps:
+There's no uninstaller.
+
+**Windows:**
 
 1. **Stop the app first** — close the console window. Deleting files while it's running can corrupt
    the database.
 2. Delete the folder you extracted.
 3. Delete `%LOCALAPPDATA%\XE-Local-AI-Engine`.
 
-Done — nothing is written to the registry or to Program Files.
+**Linux:** stop the app, delete the AppImage, then delete `~/.local/share/XE-Local-AI-Engine` (or
+`$XDG_DATA_HOME/XE-Local-AI-Engine` when `XDG_DATA_HOME` is set).
+
+Nothing is written to the Windows registry or installed into Program Files.
 
 ---
 
@@ -365,17 +371,15 @@ Done — nothing is written to the registry or to Program Files.
 ### How do I get new versions?
 Two ways:
 
-- **In-app:** the app checks for updates and can install them itself. This requires a one-time GitHub
-  sign-in so the updater is authorised to check GitHub for new releases.
-- **Manually:** download the new ZIP from Releases and extract it fresh. Your data folder is separate,
-  so chats and models carry over.
+- **In-app:** the app checks the public GitHub release feed anonymously and can install an available update itself.
+- **Manually:** download the new platform artifact from Releases: the Windows `Portable.zip` or Linux AppImage. Your
+  data folder is separate, so chats and models carry over.
 
 → [Updating guide](updating.md)
 
 ### Why does it want me to sign in to GitHub?
-The in-app updater needs its own authorisation to check GitHub for new releases and download them. This
-is **separate** from your local app profile — one is your login to the app, the other only lets the
-updater check for releases. The token is stored on your machine.
+The official updater does **not** require GitHub sign-in. It reads the public release feed anonymously. If a build
+shows an updater device-login prompt, it is an old or unofficial build; replace it with a verified current release.
 
 ### Can I go back to an older version?
 Yes — download an older release and run it. **But back up your data folder first:** the database
@@ -393,9 +397,8 @@ build it yourself, and redistribute it under that licence.
 Free to use today. No pricing decisions have been made about the future.
 
 ### macOS? ARM? Linux?
-**Windows and Linux, x64 only.** No macOS or ARM build exists. Linux is my main development
-environment and is published here as a portable ZIP — the one difference is that it **does not update
-itself**, so you replace it by hand → [Linux installation](install-linux.md).
+**Windows and Linux, x64 only.** No macOS or ARM build exists. Linux ships as a Velopack AppImage and can update
+itself by replacing that AppImage → [Linux installation](install-linux.md).
 
 ### Do I need Docker / Ollama / Python / .NET?
 **No.** Everything needed ships in the download. Ollama is optional and only if you already use it.

@@ -1,7 +1,7 @@
 import { ActionIcon, Tooltip } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { IconInfoCircle } from "@tabler/icons-react";
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 const AboutDialog = lazy(async () => {
@@ -18,17 +18,22 @@ const AboutDialog = lazy(async () => {
 export function AboutDialogButton() {
 	const { t } = useTranslation();
 	const [opened, { open, close }] = useDisclosure(false);
+	const [hasOpened, setHasOpened] = useState(false);
 	const label = t("pages.about.title", "About");
+	const handleOpen = () => {
+		setHasOpened(true);
+		open();
+	};
 
 	return (
 		<>
 			<Tooltip label={label}>
-				<ActionIcon onClick={open} variant="default" size="xl" radius="md" aria-label={label}>
+				<ActionIcon onClick={handleOpen} variant="default" size="xl" radius="md" aria-label={label}>
 					<IconInfoCircle stroke={1.5} />
 				</ActionIcon>
 			</Tooltip>
 
-			{opened ? (
+			{hasOpened ? (
 				<Suspense fallback={null}>
 					<AboutDialog opened={opened} onClose={close} />
 				</Suspense>

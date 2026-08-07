@@ -19,6 +19,11 @@ export interface IThirdPartyPackage {
 	source?: "frontend" | "backend";
 }
 
+export interface IRuntimeLegalDocument {
+	name: string;
+	href: string;
+}
+
 interface IGeneratedLicenseFile {
 	readonly packages: readonly IThirdPartyPackage[];
 }
@@ -42,3 +47,12 @@ export const applicationInfo: IApplicationInfo = {
  * third-party-licenses.generated.json. Do not hand-edit the generated file.
  */
 export const thirdPartyPackages: readonly IThirdPartyPackage[] = (generatedLicenses as IGeneratedLicenseFile).packages;
+
+/** Runtime terms copied byte-for-byte into every published app's served wwwroot. */
+export const runtimeLegalDocuments: readonly IRuntimeLegalDocument[] = [
+	{ name: ".NET runtime license", href: "/licenses/dotnet/DOTNET-RUNTIME-LICENSE.txt" },
+	{ name: ".NET runtime third-party notices", href: "/licenses/dotnet/DOTNET-RUNTIME-THIRD-PARTY-NOTICES.txt" },
+	{ name: "ASP.NET Core runtime license", href: "/licenses/dotnet/ASPNETCORE-RUNTIME-LICENSE.txt" },
+	{ name: "ASP.NET Core runtime third-party notices", href: "/licenses/dotnet/ASPNETCORE-RUNTIME-THIRD-PARTY-NOTICES.txt" },
+	{ name: "Windows single-file .NET Library License", href: "/licenses/dotnet/DOTNET-LIBRARY-LICENSE.html" },
+];

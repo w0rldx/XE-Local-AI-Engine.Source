@@ -7,8 +7,8 @@ import { useVoiceRuntime } from "@/features/voice/VoiceRuntimeContext";
 
 // "Audition this voice" affordance for the Node Settings voice pickers. Clicking it barges in and speaks a short fixed
 // sample with the given voice (runtime.previewVoice) so the user can hear a candidate before committing to it. It is
-// self-gating: disabled until the runtime exists (operator gate on + capabilities probed) and a voice is selected. The
-// busy state spans synthesis (which on the first English preview includes the one-time Kokoro model download).
+// self-gating: disabled until the Web Speech runtime exists and a voice is selected. The busy state spans the
+// browser's synthesis request.
 
 interface VoicePreviewButtonProps {
 	/** The voice to audition. Falsy → the button is inert (nothing selected yet). */

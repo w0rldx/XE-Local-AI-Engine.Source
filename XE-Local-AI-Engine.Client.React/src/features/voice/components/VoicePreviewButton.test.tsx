@@ -25,16 +25,9 @@ const fakeRuntime = {} as VoiceRuntimeContextValue["runtime"];
 
 function baseContext(overrides: Partial<VoiceRuntimeContextValue> = {}): VoiceRuntimeContextValue {
 	return {
-		manifest: { enabled: true, models: [], voices: [], defaultVoiceId: "af_heart" },
 		enabled: true,
-		capabilities: undefined,
+		defaultVoiceProfile: "af_heart",
 		runtime: fakeRuntime,
-		audioSuspended: false,
-		resumeAudio: () => Promise.resolve(),
-		downloadProgress: undefined,
-		downloadError: undefined,
-		dismissDownloadNotice: () => undefined,
-		lastError: undefined,
 		playingMessageId: undefined,
 		playMessage: () => Promise.resolve(),
 		previewVoice,

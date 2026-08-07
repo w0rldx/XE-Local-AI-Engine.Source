@@ -1,0 +1,3 @@
+Source: https://raw.githubusercontent.com/spdx/license-list-data/v3.28.0/text/BSD-3-Clause.txt
+Retrieved: 2026-08-07
+SHA-256: 5a93d5831e1297ab10fe643e1a631e83be392896da14ee2951285a79012df69d

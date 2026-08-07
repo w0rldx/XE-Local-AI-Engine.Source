@@ -2,22 +2,35 @@ XE Local AI Engine
 Copyright 2026 w0rldx
 
 Licensed under the Apache License, Version 2.0 (see LICENSE). This file records
-the third-party material the product depends on and points at where each one's
-terms are kept. It is deliberately a set of pointers rather than a copy: the
-package-level list is generated and drift-gated, so a hand-maintained duplicate
-here would go stale without anything catching it.
+the principal third-party material used by the product and points to the
+machine-generated inventories and exact license corpus shipped with each
+official binary. Those release artifacts, rather than this summary, define the
+components detected in a particular build.
 
-1. Bundled NuGet and npm packages
+1. Shipped component evidence and license corpus
 
-   The packages compiled into or shipped with the product are enumerated in
+   The application's About dialog uses the broad transitive dependency list in
    XE-Local-AI-Engine.Client.React/src/features/about/data/third-party-licenses.generated.json
-   with the name, version, license, and homepage of each. That file is the
-   authoritative list. It is produced by `pnpm run licenses:generate`
-   (XE-Local-AI-Engine.Client.React/scripts/GenerateLicenses.mjs), verified
-   against the current dependency set by `pnpm run licenses:check`, and rendered
-   to end users in the application's About dialog under "Licenses".
+   for convenient disclosure. It is generated and drift-gated, but it is not
+   the authoritative inventory of a particular binary.
 
-2. Inference runtimes obtained on the user's machine
+   Official release payloads instead carry build-derived component evidence,
+   exact license and notice files, and a per-platform SPDX document. The final
+   GitHub release also carries detached SPDX, manifest, and checksum metadata
+   generated from the verified draft assets. Release verification reconciles
+   detected shipped components with the curated license decisions in both
+   directions and fails on missing, unknown, or stale entries.
+
+2. Embedded .NET runtime
+
+   Official binaries are self-contained and include .NET runtime components.
+   Each payload carries the applicable Microsoft .NET license and the runtime
+   ThirdPartyNotices file under `licenses/dotnet/`. The Windows single-file
+   payload carries the .NET Library License; the Linux payload carries the .NET
+   MIT license. The repository records the reviewed source and checksum of the
+   separately maintained Windows license under `third-party/dotnet/`.
+
+3. Inference runtimes obtained on the user's machine
 
    These are not shipped inside the product's artifacts. The application
    downloads a prebuilt binary, or builds from pinned upstream source, at
@@ -28,7 +41,7 @@ here would go stale without anything catching it.
    - stable-diffusion.cpp — MIT — https://github.com/leejet/stable-diffusion.cpp
      Supervised as `sd-server` for local image generation.
 
-3. Vendored agent persona templates
+4. Vendored agent persona templates
 
    The seeded agent definitions derive from `msitarzewski/agency-agents`
    (MIT, Copyright (c) 2025 AgentLand Contributors). The upstream license copy,
@@ -36,7 +49,7 @@ here would go stale without anything catching it.
    XE-Local-AI-Engine.Client.Application/Services/Agents/Templates/ — see
    LICENSE-agency-agents and PROVENANCE.md in that folder.
 
-4. Model weights
+5. Model weights
 
    Model weights (for example GGUF files fetched from Hugging Face) are not
    distributed with the product. They are downloaded by the user, from the

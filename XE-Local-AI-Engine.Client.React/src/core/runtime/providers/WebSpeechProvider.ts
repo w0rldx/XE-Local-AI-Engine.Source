@@ -1,8 +1,8 @@
-// Web Speech API provider — the zero-download fallback floor.
+// Web Speech API provider — the only voice implementation, with no model download or app-owned audio resources.
 //
 // This is a self-playing provider (`producesPcm: false`): it renders audio through the OS speech engine rather than
-// emitting PCM, so `synthesize` queues an utterance and yields nothing. It is also the German (and any non-English)
-// path, since Kokoro-82M ships no German voice — for `de` content it picks an on-device (`localService`) OS voice.
+// emitting PCM, so `synthesize` queues an utterance and yields nothing. For a language hint it prefers an on-device
+// (`localService`) OS voice. An unmatched legacy voice id safely falls through to that language/default selection.
 
 import type { AudioChunk, TtsProvider, TtsProviderId, VoiceSynthesisOptions } from "../TtsProvider";
 
@@ -93,14 +93,10 @@ export class WebSpeechProvider implements TtsProvider {
 
 	// Picks the OS voice to speak with. "Selected voice always wins": when the caller supplies a concrete
 	// `voiceId` that maps to a real OS voice (by `voiceURI` or `name`), honor it exactly — even a network voice — so a
-	// user's explicit non-English pick takes effect. Manifest voices that are LOGICAL ids (e.g. "de_web_default") map
-	// to no OS voice and correctly fall through to the language-prefix pick, which prefers on-device (`localService`)
-	// voices so the fallback stays offline-capable. Returns undefined when nothing matches (engine picks its default).
-	private pickVoice(
-		synthesis: SpeechSynthesisLike,
-		language?: string,
-		voiceId?: string,
-	): SpeechSynthesisVoice | undefined {
+	// user's explicit non-English pick takes effect. Stale ids persisted by an older release map to no OS voice and
+	// correctly fall through to the language-prefix pick, which prefers on-device (`localService`) voices. Returns
+	// undefined when nothing matches (the browser engine picks its default).
+	private pickVoice(synthesis: SpeechSynthesisLike, language?: string, voiceId?: string): SpeechSynthesisVoice | undefined {
 		const voices = synthesis.getVoices();
 
 		if (voiceId) {

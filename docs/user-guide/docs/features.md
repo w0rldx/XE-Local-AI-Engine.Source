@@ -179,17 +179,13 @@ and an automatic timeout so a stuck run can't hang forever.
 
 ## Voice
 
-The app can **read replies aloud**, with two options:
+The app can **read replies aloud** through voices exposed by your browser and operating system. There
+is no voice model bundled with or downloaded by the app, and voice output does not use the app's GPU
+or model runtime.
 
-- **Your browser's built-in voices** — nothing to download
-- **Kokoro** — a higher-quality voice that runs locally in your browser. Uses your graphics card if
-  available (~326 MB), otherwise a smaller compressed version (~92 MB)
-
-Voice files are fetched from Hugging Face when first used; everything else runs locally.
-
-> **Kokoro uses the same VRAM as your chat model.** If you're running a model that fills your graphics
-> card, turning on the GPU voice can push it over the edge — and the failure shows up as *chat*
-> breaking, nowhere near the setting you changed. Use the browser voices instead in that case.
+The available voices, languages, quality, offline support, and network behavior depend on the browser
+and operating-system speech implementation. Those platform services are outside this repository's
+control, so the app cannot guarantee that a particular system voice works offline.
 
 > ⚠️ **No speech-to-text.** The app can talk, but it cannot listen — this is not two-way voice chat.
 

@@ -136,7 +136,11 @@ BeforeAll {
   <PropertyGroup>
 $prefixLine$suffixLine  </PropertyGroup>
 </Project>
-"@ | Set-Content -Path (Join-Path $dir 'Directory.Build.props') -Encoding utf8
+"@ | ForEach-Object {
+            $engDirectory = Join-Path $dir 'eng'
+            New-Item -ItemType Directory -Path $engDirectory -Force | Out-Null
+            Set-Content -Path (Join-Path $engDirectory 'ReleaseVersion.props') -Value $_ -Encoding utf8
+        }
         return $dir
     }
 
@@ -362,7 +366,7 @@ Describe 'Get-ProjectVersion' {
         finally { Pop-Location; Remove-Item $dir -Recurse -Force }
     }
 
-    It 'agrees with the repository''s own Directory.Build.props' {
+    It 'agrees with the repository''s own eng/ReleaseVersion.props' {
         Push-Location $script:RepoRoot
         try { Get-ProjectVersion | Should -Match $script:SemVerPattern }
         finally { Pop-Location }

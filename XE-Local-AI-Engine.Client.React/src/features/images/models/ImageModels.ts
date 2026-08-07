@@ -161,17 +161,17 @@ export type ImageModelFamily = (typeof imageModelFamilies)[number];
 export const imageModelPartRoles = ["Diffusion", "Vae", "ClipL", "ClipG", "T5", "Llm", "LlmVision"] as const;
 export type ImageModelPartRole = (typeof imageModelPartRoles)[number];
 
-export function toImageModelPartRole(raw: string | null | undefined): ImageModelPartRole {
+function toImageModelPartRole(raw: string | null | undefined): ImageModelPartRole {
 	return (imageModelPartRoles as readonly string[]).includes(raw ?? "") ? (raw as ImageModelPartRole) : "Diffusion";
 }
 
-export function toImageModelFamily(raw: string | null | undefined): ImageModelFamily {
+function toImageModelFamily(raw: string | null | undefined): ImageModelFamily {
 	return (imageModelFamilies as readonly string[]).includes(raw ?? "") ? (raw as ImageModelFamily) : "Sd15";
 }
 
 // How a catalog entry's weights compare to this box's measured memory budget. "Unknown" is a real answer, not a soft
 // yes: VRAM goes unmeasured on every non-NVIDIA GPU, and a badge that read "Fits" there would be a guess.
-export const imageModelFitVerdicts = ["Fits", "Tight", "WontFit", "Unknown"] as const;
+const imageModelFitVerdicts = ["Fits", "Tight", "WontFit", "Unknown"] as const;
 export type ImageModelFitVerdict = (typeof imageModelFitVerdicts)[number];
 
 function toImageModelFitVerdict(raw: string | null | undefined): ImageModelFitVerdict {
@@ -341,7 +341,7 @@ export const IMAGE_JOB_STATUS_CHANGED = "imageJob.statusChanged";
 // The fine phase inside "Generating", mirroring the backend ImageGenPhase values the runtime can observe. Only
 // "Sampling" has a measurable rate: loading and encoding run before step 1 and decoding runs after the last one, so
 // neither can honestly carry a countdown.
-export const imageGenerationPhases = ["Loading", "Encoding", "Sampling", "Decoding"] as const;
+const imageGenerationPhases = ["Loading", "Encoding", "Sampling", "Decoding"] as const;
 export type ImageGenerationPhase = (typeof imageGenerationPhases)[number];
 
 function toImageGenerationPhase(raw: string | null | undefined): ImageGenerationPhase | null {

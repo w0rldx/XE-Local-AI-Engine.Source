@@ -1,0 +1,3 @@
+Source: https://dotnet.microsoft.com/en-us/dotnet_library_license.htm
+Retrieved: 2026-08-07
+SHA-256: 0f69be2c8ac44c3980047664c3347ff22cba5842dc9d8b0a88a4f0914645a780

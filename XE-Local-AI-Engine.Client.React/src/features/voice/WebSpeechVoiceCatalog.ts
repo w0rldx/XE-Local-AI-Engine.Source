@@ -1,7 +1,6 @@
 // Catalog of every OS/browser speech voice, grouped by language, so the voice picker can offer ANY installed
-// voice — not just the manifest's Kokoro (English) + logical web-speech entries. `WebSpeechProvider.pickVoice`
-// already resolves a `voiceId` by `voiceURI`/`name` and falls back to a language-prefix match, so exposing the
-// full OS catalog here is enough to unlock every language the OS already supports — no backend change needed.
+// voice. `WebSpeechProvider.pickVoice` resolves a `voiceId` by `voiceURI`/`name` and falls back to a language-prefix
+// match, so exposing the full OS catalog here unlocks every language the OS already supports.
 //
 // Chrome (and some other browsers) populate `speechSynthesis.getVoices()` asynchronously: the first call right
 // after page load returns `[]`, and the real list arrives via the `voiceschanged` event. `useWebSpeechVoices`
@@ -96,7 +95,7 @@ export function groupOsVoicesByLanguage(entries: readonly OsVoiceEntry[]): OsVoi
 }
 
 /** Resolves the normalized language of a selected OS voice by its `voiceId` (`voiceURI`/name+lang composite), or
- * `undefined` when it does not match any currently-reported OS voice (e.g. a manifest voice id). */
+ * `undefined` when it does not match any currently-reported OS voice (including stale persisted ids). */
 export function resolveOsVoiceLanguage(voiceId: string, source?: VoiceEnumerationSource): string | undefined {
 	return listOsVoices(source).find((entry) => entry.id === voiceId)?.language;
 }

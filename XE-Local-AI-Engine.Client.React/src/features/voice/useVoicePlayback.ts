@@ -1,12 +1,12 @@
 import { useCallback, useRef } from "react";
 
 import { SentenceBuffer } from "@/core/runtime/SentenceBuffer";
-import { findVoiceById } from "@/core/runtime/VoiceManifest";
 import type { ChatStreamingState } from "@/features/chat/models/ChatModels";
 import { detectAnswerLanguage } from "@/features/voice/DetectAnswerLanguage";
 import { toSpeakableText } from "@/features/voice/SpeakableText";
 import { useVoicePreferencesStore } from "@/features/voice/VoicePreferencesStore";
 import { useVoiceRuntime } from "@/features/voice/VoiceRuntimeContext";
+import { resolveOsVoiceLanguage } from "@/features/voice/WebSpeechVoiceCatalog";
 
 // A fence delimiter LINE per CommonMark: up to 3 leading spaces/tabs, then 3+ backticks OR 3+ tildes. Line-anchored
 // (not a bare ```/~~~ substring match) so an inline code span or a run of backticks mid-sentence is never mistaken
@@ -40,7 +40,7 @@ export interface VoicePlaybackTap {
 }
 
 export function useVoicePlayback(): VoicePlaybackTap {
-	const { runtime, manifest, stopPlayback } = useVoiceRuntime();
+	const { runtime, defaultVoiceProfile, stopPlayback } = useVoiceRuntime();
 
 	// Lazy-initialized once at mount: useRef ignores all but its first argument, so passing `new SentenceBuffer()`
 	// directly would rebuild it on every render and throw the result away. The cast keeps `.current` typed as
@@ -79,18 +79,12 @@ export function useVoicePlayback(): VoicePlaybackTap {
 			}
 
 			const prefs = useVoicePreferencesStore.getState();
-			const voiceId = prefs.voiceProfile || manifest?.defaultVoiceId || undefined;
-			// "Selected voice always wins": drive the engine/ladder from the SELECTED voice's OWN language so
-			// auto-play matches the node-settings preview exactly — never re-route an English answer to Kokoro when the
-			// user picked a German voice. detectAnswerLanguage stays only as the fallback when no voice resolves (no
-			// selection AND no manifest default), where there is no chosen language to honor.
-			const selectedVoice = manifest ? findVoiceById(manifest, voiceId) : undefined;
-			const language = selectedVoice?.language ?? detectAnswerLanguage(fullText);
-			// Fire-and-forget: synthesis must not block the hot stream loop (decoupling). Errors degrade via the
-			// runtime's own fallback ladder + onError; swallow here so a TTS hiccup never breaks chat rendering.
+			const voiceId = prefs.voiceProfile || defaultVoiceProfile || undefined;
+			const language = (voiceId ? resolveOsVoiceLanguage(voiceId) : undefined) ?? detectAnswerLanguage(fullText);
+			// Fire-and-forget: synthesis must not block the hot stream loop; a browser speech failure must never break chat.
 			runtime.enqueue(speakable, { voiceId, rate: prefs.speakingRate, language }).catch(() => undefined);
 		},
-		[runtime, manifest],
+		[runtime, defaultVoiceProfile],
 	);
 
 	const onTurnStart = useCallback((): void => {

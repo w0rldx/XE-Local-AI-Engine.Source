@@ -11,7 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // Stub out the app-update section so the existing tests are not affected by the
 // QueryClient requirement it introduces.
 vi.mock("@/features/app-update/components/AppUpdateSection", () => ({
-	AppUpdateSection: () => null,
+	AppUpdateSection: () => <div data-testid="app-update-lifecycle" />,
 }));
 
 import { AboutDialog } from "@/features/about/components/AboutDialog/AboutDialog";
@@ -70,6 +70,15 @@ describe("AboutDialog", () => {
 		expect(within(dialog).getByText(/Local AI engine for running, managing, and chatting/)).toBeTruthy();
 	});
 
+	it("keeps the update lifecycle mounted while the dialog is hidden", () => {
+		const { rerender } = renderWithProviders(<AboutDialog opened={true} onClose={vi.fn()} />);
+		expect(screen.getByTestId("app-update-lifecycle")).toBeTruthy();
+
+		rerender(<AboutDialog opened={false} onClose={vi.fn()} />);
+
+		expect(screen.getByTestId("app-update-lifecycle")).toBeTruthy();
+	});
+
 	it("renders generated frontend and backend packages with a source type", () => {
 		renderWithProviders(<AboutDialog opened={true} onClose={vi.fn()} />);
 
@@ -81,6 +90,19 @@ describe("AboutDialog", () => {
 		expect(screen.getByText("Serilog")).toBeTruthy();
 		expect(screen.getAllByText("Frontend").length).toBeGreaterThan(0);
 		expect(screen.getAllByText("Backend").length).toBeGreaterThan(0);
+	});
+
+	it("links every bundled runtime license and notice from the Licenses tab", () => {
+		renderWithProviders(<AboutDialog opened={true} onClose={vi.fn()} />);
+
+		fireEvent.click(screen.getByRole("tab", { name: "Licenses" }));
+
+		expect(screen.getByRole("link", { name: ".NET runtime license" }).getAttribute("href"))
+			.toBe("/licenses/dotnet/DOTNET-RUNTIME-LICENSE.txt");
+		expect(screen.getByRole("link", { name: ".NET runtime third-party notices" })).toBeTruthy();
+		expect(screen.getByRole("link", { name: "ASP.NET Core runtime license" })).toBeTruthy();
+		expect(screen.getByRole("link", { name: "ASP.NET Core runtime third-party notices" })).toBeTruthy();
+		expect(screen.getByRole("link", { name: "Windows single-file .NET Library License" })).toBeTruthy();
 	});
 
 	it("filters the third-party license table by query", () => {

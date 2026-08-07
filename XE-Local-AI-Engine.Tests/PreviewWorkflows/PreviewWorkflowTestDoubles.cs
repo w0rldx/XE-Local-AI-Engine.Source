@@ -93,10 +93,10 @@ internal sealed class ScriptedPreviewRunSession : IPreviewWorkflowRunSession
 ///     model (so existing tests can still assert the node-local client is the one handed in); the raw resolver is also
 ///     captured for tests that exercise per-model resolution.
 /// </summary>
-internal sealed class FakePreviewWorkflowRunner(Func<PreviewWorkflowDefinition, IChatClient, ScriptedPreviewRunSession> factory)
+internal sealed class FakePreviewWorkflowRunner(Func<PreviewWorkflowDefinition, IChatClient, IPreviewWorkflowRunSession> factory)
     : IPreviewWorkflowRunner
 {
-    private readonly Func<PreviewWorkflowDefinition, IChatClient, ScriptedPreviewRunSession> _factory =
+    private readonly Func<PreviewWorkflowDefinition, IChatClient, IPreviewWorkflowRunSession> _factory =
         factory ?? throw new ArgumentNullException(nameof(factory));
 
     public IChatClient? LastChatClient { get; private set; }
@@ -118,6 +118,43 @@ internal sealed class FakePreviewWorkflowRunner(Func<PreviewWorkflowDefinition, 
         var chatClient = firstAgentModelId is not null ? resolveChatClient(firstAgentModelId) : null!;
         LastChatClient = chatClient;
         return Task.FromResult<IPreviewWorkflowRunSession>(_factory(definition, chatClient));
+    }
+}
+
+/// <summary>
+///     Holds one already-claimed update behind a non-cancellable gate. This reproduces a session that entered
+///     <see cref="IPreviewWorkflowRunSession.WatchAsync" /> before cancellation and returns the in-flight update only
+///     after cancellation has completed.
+/// </summary>
+internal sealed class GatedPreviewRunSession(PreviewWorkflowUpdate update) : IPreviewWorkflowRunSession
+{
+    private readonly TaskCompletionSource _moveNextEntered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource _releaseUpdate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    public Task MoveNextEntered => _moveNextEntered.Task;
+
+    public async IAsyncEnumerable<PreviewWorkflowUpdate> WatchAsync(
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        _moveNextEntered.TrySetResult();
+        await _releaseUpdate.Task.ConfigureAwait(false);
+        yield return update;
+    }
+
+    public Task ResumeAsync(string requestId, CancellationToken cancellationToken = default)
+    {
+        throw new NotSupportedException();
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        _releaseUpdate.TrySetResult();
+        return ValueTask.CompletedTask;
+    }
+
+    public void ReleaseUpdate()
+    {
+        _releaseUpdate.TrySetResult();
     }
 }
 

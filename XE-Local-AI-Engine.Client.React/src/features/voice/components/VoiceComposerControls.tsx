@@ -5,14 +5,16 @@ import { useTranslation } from "react-i18next";
 
 import { useVoicePreferencesStore, voicePreferencesRateBounds } from "@/features/voice/VoicePreferencesStore";
 import { useVoiceRuntime } from "@/features/voice/VoiceRuntimeContext";
+import { useWebSpeechVoices } from "@/features/voice/WebSpeechVoiceCatalog";
 
 // Composer voice controls: on/off toggle + (when on) a settings menu with the voice-profile picker, autoplay switch,
-// and speaking-rate slider. Self-gates on the runtime context `enabled` flag (dev-gate + manifest.Enabled)
-// so it renders nothing when voice is unavailable. State is the client VoicePreferencesStore + the manifest voices.
+// and speaking-rate slider. Self-gates on the runtime context `enabled` flag (developer mode + node setting) so it
+// renders nothing when voice is unavailable. Voice choices come from the browser/OS Web Speech catalog.
 
 export function VoiceComposerControls() {
 	const { t } = useTranslation();
-	const { enabled, manifest } = useVoiceRuntime();
+	const { enabled, defaultVoiceProfile } = useVoiceRuntime();
+	const osVoices = useWebSpeechVoices();
 	const voiceEnabled = useVoicePreferencesStore((state) => state.voiceEnabled);
 	const voiceProfile = useVoicePreferencesStore((state) => state.voiceProfile);
 	const speakingRate = useVoicePreferencesStore((state) => state.speakingRate);
@@ -22,15 +24,15 @@ export function VoiceComposerControls() {
 	);
 
 	const voiceOptions = useMemo(
-		() => (manifest?.voices ?? []).map((voice) => ({ value: voice.id, label: `${voice.name} (${voice.language})` })),
-		[manifest?.voices],
+		() => [...osVoices.values()].flatMap((voices) => voices.map((voice) => ({ value: voice.id, label: voice.name }))),
+		[osVoices],
 	);
 
 	if (!enabled) {
 		return null;
 	}
 
-	const selectedProfile = voiceProfile || manifest?.defaultVoiceId || null;
+	const selectedProfile = voiceProfile || defaultVoiceProfile || null;
 
 	return (
 		<Menu position="top-start" offset={8} withinPortal={true} closeOnItemClick={false}>

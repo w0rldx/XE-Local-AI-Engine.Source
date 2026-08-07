@@ -1,28 +1,23 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 /**
  * Generates the third-party license list rendered in the About dialog's Licenses tab.
  *
- * Frontend packages come from `pnpm licenses list --prod --json` (production tree only,
- * resolved versions + licenses read from the installed node_modules) and are then
- * narrowed to the DIRECT dependencies declared in package.json — the packages this
- * project actually references, not the full transitive tree. Backend NuGet packages
- * come from the `nuget-license` dotnet tool, which already reports only direct
- * (top-level) package references per project.
- *
- * The backend step is intentionally non-fatal: if dotnet, the tool, or restore is
- * unavailable (e.g. a frontend-only CI lane) it logs a warning and reuses the
- * previously generated backend entries instead of breaking the React build.
+ * Frontend packages come from the complete production tree reported by
+ * `pnpm licenses list --prod --json`. Backend NuGet packages come from the complete
+ * transitive Release tree reported by `nuget-license`. Missing tooling, restore
+ * failures, and unreviewable license metadata fail closed so a stale or partial list
+ * cannot be presented as release evidence.
  */
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const reactRoot = resolve(scriptDir, "..");
 const repoRoot = resolve(reactRoot, "..");
 const solutionPath = resolve(repoRoot, "XE-Local-AI-Engine.slnx");
-const packageJsonPath = resolve(reactRoot, "package.json");
+const nugetOverridePath = resolve(repoRoot, "scripts/compliance/nuget-license-overrides.json");
 const outputPath = resolve(reactRoot, "src/features/about/data/third-party-licenses.generated.json");
 
 const GENERATED_NOTICE =
@@ -60,30 +55,20 @@ function normalizeUrl(value) {
 }
 
 /** @returns {string} */
-function normalizeLicense(value) {
+export function normalizeLicense(value) {
 	const trimmed = typeof value === "string" ? value.trim() : "";
-	return trimmed === "" ? "Unknown" : trimmed;
+	if (trimmed === "") {
+		throw new Error("Package is missing license metadata");
+	}
+
+	return trimmed;
 }
 
 /**
- * Reads the names of the DIRECT production dependencies from package.json. These are the
- * packages the project explicitly references; everything else in the resolved prod tree is
- * transitive and intentionally hidden from the About dialog's Licenses tab.
- * @returns {Set<string>}
- */
-function readDirectFrontendDependencyNames() {
-	/** @type {{ dependencies?: Record<string, string> }} */
-	const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8"));
-	return new Set(Object.keys(packageJson.dependencies ?? {}));
-}
-
-/**
- * Collects the production frontend dependency tree via pnpm's own license reader, then
- * narrows it to the direct dependencies declared in package.json.
+ * Collects the complete production frontend dependency tree via pnpm's own license reader.
  * @returns {ThirdPartyPackage[]}
  */
 function collectFrontendPackages() {
-	const directDependencyNames = readDirectFrontendDependencyNames();
 	// On Windows pnpm is a .cmd shim; Node refuses to spawn .cmd/.bat directly (EINVAL) and
 	// won't resolve the bare name (ENOENT), so go through the shell there.
 	const isWindows = process.platform === "win32";
@@ -105,11 +90,6 @@ function collectFrontendPackages() {
 
 	for (const entries of Object.values(grouped)) {
 		for (const entry of entries) {
-			// Skip transitive packages — only surface the direct dependencies this project declares.
-			if (!directDependencyNames.has(entry.name)) {
-				continue;
-			}
-
 			const versions = Array.isArray(entry.versions) && entry.versions.length > 0 ? entry.versions : ["unknown"];
 
 			for (const version of versions) {
@@ -173,6 +153,10 @@ function collectBackendPackages() {
 		solutionPath,
 		"--output",
 		"Json",
+		"--include-transitive",
+		"--exclude-publish-false",
+		"--override-package-information",
+		nugetOverridePath,
 		"--exclude-projects-matching",
 		BACKEND_EXCLUDED_PROJECTS.join(";"),
 		"--ignored-packages",
@@ -213,32 +197,17 @@ function collectBackendPackages() {
 }
 
 /**
- * Reads backend entries from a previously generated file so the build stays green
- * when the backend tooling is unavailable.
- * @returns {ThirdPartyPackage[]}
- */
-function readPreviousBackendPackages() {
-	if (!existsSync(outputPath)) {
-		return [];
-	}
-
-	try {
-		/** @type {{ packages?: ThirdPartyPackage[] }} */
-		const previous = JSON.parse(readFileSync(outputPath, "utf8"));
-		return (previous.packages ?? []).filter((pkg) => pkg.source === "backend");
-	} catch {
-		return [];
-	}
-}
-
-/**
  * @param {ThirdPartyPackage[]} packages
  * @returns {ThirdPartyPackage[]}
  */
-function dedupeAndSort(packages) {
+export function dedupeAndSort(packages) {
 	/** @type {Map<string, ThirdPartyPackage>} */
 	const byId = new Map();
 	for (const pkg of packages) {
+		if (["UNKNOWN", "NOASSERTION"].includes(pkg.license.trim().toUpperCase())) {
+			throw new Error(`Package ${pkg.id} has license metadata that is not reviewable: ${pkg.license}`);
+		}
+
 		byId.set(pkg.id, pkg);
 	}
 
@@ -257,17 +226,8 @@ function main() {
 	const frontend = collectFrontendPackages();
 	process.stdout.write(`frontend packages: ${frontend.length}\n`);
 
-	let backend;
-	try {
-		backend = collectBackendPackages();
-		process.stdout.write(`backend packages: ${backend.length}\n`);
-	} catch (error) {
-		backend = readPreviousBackendPackages();
-		const reason = error instanceof Error ? error.message : String(error);
-		process.stderr.write(
-			`warning: backend license generation skipped (${reason}); reusing ${backend.length} previously generated backend entries\n`,
-		);
-	}
+	const backend = collectBackendPackages();
+	process.stdout.write(`backend packages: ${backend.length}\n`);
 
 	const packages = dedupeAndSort([...frontend, ...backend]);
 	const payload = {
@@ -280,4 +240,6 @@ function main() {
 	process.stdout.write(`wrote ${packages.length} packages to ${outputPath}\n`);
 }
 
-main();
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+	main();
+}
