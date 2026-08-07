@@ -62,6 +62,10 @@ public sealed class NodeEncryptionMaterializationInterceptor : IMaterializationI
                 resource.Content = NodePayloadProtector.Decrypt(resource.Content, context.NodeEncryptionKey.Span, resource.SkillId, resource.Id,
                     AgentSkillResource.ContentColumnName(resource.Name));
                 break;
+            case CustomTool customTool:
+                customTool.Description = NodePayloadProtector.Decrypt(customTool.Description, context.NodeEncryptionKey.Span, Guid.Empty, customTool.Id, "description");
+                customTool.ConfigJson = NodePayloadProtector.Decrypt(customTool.ConfigJson, context.NodeEncryptionKey.Span, Guid.Empty, customTool.Id, "custom_tool_config_json");
+                break;
             case PlaybookAction action:
                 action.Behavior = NodePayloadProtector.Decrypt(action.Behavior, context.NodeEncryptionKey.Span, Guid.Empty, action.Id, "behavior");
                 action.TriggerCondition = DecryptIfPresent(action.TriggerCondition, context.NodeEncryptionKey.Span, Guid.Empty, action.Id, "trigger_condition");

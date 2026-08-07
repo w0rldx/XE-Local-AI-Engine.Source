@@ -35,6 +35,10 @@ internal static class AddNodeWorkspaceAndAgentsExtensions
         // an agent's enabled, assigned skills and the factory attaches them via MAF progressive disclosure, while the
         // CRUD service owns operator authoring. Scoped to match the scoped, DbContext-backed store.
         builder.Services.AddScoped<IAgentSkillStore, AgentSkillStore>();
+        // Node-local user-defined custom tool library. The model-facing description and the kind-specific config (which
+        // carries the secret header/env values) are encrypted at rest; the store owns id/version/timestamp stamping and
+        // the content-affecting version-bump rule, while the CRUD service owns operator authoring and validation.
+        builder.Services.AddScoped<ICustomToolStore, CustomToolStore>();
         // Node-local playbook actions. Behavior and advisory trigger conditions are encrypted at rest; enabled actions
         // are folded into the agent prompt by the resolver, while the CRUD service owns operator authoring.
         builder.Services.AddScoped<IPlaybookActionStore, PlaybookActionStore>();
