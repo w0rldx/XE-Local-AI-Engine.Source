@@ -7,25 +7,6 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 
-internal sealed record DevelopmentReviewReport(
-    DevelopmentReviewDisposition Disposition,
-    string Summary,
-    IReadOnlyList<DevelopmentReviewFinding> Findings,
-    int ReviewRound,
-    string BaseCommit,
-    string SubjectHash,
-    string ManifestHash,
-    string ExpectedResultHash,
-    Guid ValidationArtifactId,
-    long CompletedAtUtc);
-
-internal sealed record DevelopmentReviewerAttemptResult(
-    Guid AttemptId,
-    Guid ArtifactId,
-    DevelopmentReviewDisposition Disposition,
-    DevelopmentTaskStatus TaskStatus,
-    string SubjectHash);
-
 internal interface IDevelopmentReviewerAttemptRunner
 {
     Task<DevelopmentReviewerAttemptResult> RunAsync(Guid attemptId,

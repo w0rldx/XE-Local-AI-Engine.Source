@@ -35,7 +35,7 @@ export interface UsageModelRow {
 
 // The canonical provider dimension emitted by the backend. `unknown` is the catch-all the backend assigns when a
 // run predates the provider dimension or its provider could not be resolved.
-export const KNOWN_PROVIDERS = ["local", "ollama", "codex", "azure", "unknown"] as const;
+const KNOWN_PROVIDERS = ["local", "ollama", "codex", "azure", "unknown"] as const;
 export type KnownProvider = (typeof KNOWN_PROVIDERS)[number];
 
 const MS_PER_DAY = 86_400_000;

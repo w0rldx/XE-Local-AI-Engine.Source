@@ -26,7 +26,7 @@ export function UsageProviderBreakdown({ byProvider }: { readonly byProvider: re
 	);
 
 	const rows = useMemo(
-		() => [...byProvider].sort((a, b) => b.totalTokens - a.totalTokens),
+		() => byProvider.toSorted((a, b) => b.totalTokens - a.totalTokens),
 		[byProvider],
 	);
 
