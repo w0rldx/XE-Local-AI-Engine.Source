@@ -115,6 +115,10 @@ public sealed class ToolCallCleanupServiceTests
         {
         }
 
+        public void CancelDetached(Guid invocationId)
+        {
+        }
+
         public void CancelAll()
         {
         }

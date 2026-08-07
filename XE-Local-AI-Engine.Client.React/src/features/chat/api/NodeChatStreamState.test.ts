@@ -93,6 +93,125 @@ describe("node chat stream state", () => {
 		]);
 	});
 
+	it("appends the delta and ignores a stale content field on an assistant-delta", () => {
+		const optimistic = appendOptimisticNodeChatSend(
+			conversation,
+			{ userMessageId: "user-1", assistantMessageId: "assistant-1", requestId: "request-1" },
+			"hello",
+			"2026-05-24T00:00:01.000Z",
+		);
+
+		const first = applyNodeChatStreamEvent(optimistic, streamEvent({ sequence: 1, delta: "he", content: null, contentOffset: 0 }));
+		// The direct regression test for the delta-only wire contract: a delta must NEVER read `content`. A
+		// server that still stamped the accumulated text there — or a stale replay of it — would clobber the
+		// accumulation instead of extending it, and reading it at all is what made every frame re-send the
+		// whole message.
+		const second = applyNodeChatStreamEvent(
+			first.conversation,
+			streamEvent({ sequence: 2, delta: "llo", content: "stale snapshot", contentOffset: 2 }),
+		);
+
+		expect(second.streamingMessage.content).toBe("hello");
+		expect(second.conversation.messages.find((message) => message.id === "assistant-1")?.content).toBe("hello");
+	});
+
+	it("replaces the accumulated content wholesale on an assistant-snapshot and keeps the turn live", () => {
+		const optimistic = appendOptimisticNodeChatSend(
+			conversation,
+			{ userMessageId: "user-1", assistantMessageId: "assistant-1", requestId: "request-1" },
+			"hello",
+			"2026-05-24T00:00:01.000Z",
+		);
+
+		const partial = applyNodeChatStreamEvent(optimistic, streamEvent({ sequence: 1, delta: "he", content: null, contentOffset: 0 }));
+		// A resume/gap/overflow repair replaces the client's text rather than extending it — the server is the
+		// authority on what the turn actually contains at this point.
+		const snapshot = applyNodeChatStreamEvent(
+			partial.conversation,
+			streamEvent({ type: nodeChatStreamEventTypes.assistantSnapshot, sequence: 2, delta: null, content: "hello there" }),
+		);
+
+		expect(snapshot.streamingMessage).toMatchObject({ content: "hello there", isActive: true });
+		// A snapshot is a mid-stream state replacement, never a terminal: the turn must stay live afterwards.
+		expect(snapshot.isTerminal).toBe(false);
+		expect(snapshot.conversation.messages.find((message) => message.id === "assistant-1")?.status).toBe("streaming");
+	});
+
+	it("merges reasoning by the same three rules: a delta appends, a snapshot replaces, a lifecycle event carries", () => {
+		const optimistic = appendOptimisticNodeChatSend(
+			conversation,
+			{ userMessageId: "user-1", assistantMessageId: "assistant-1", requestId: "request-1" },
+			"hello",
+			"2026-05-24T00:00:01.000Z",
+		);
+
+		const first = applyNodeChatStreamEvent(
+			optimistic,
+			streamEvent({ sequence: 1, delta: null, content: null, reasoningDelta: "let me ", reasoningOffset: 0 }),
+		);
+		const second = applyNodeChatStreamEvent(
+			first.conversation,
+			// A stale `reasoning` snapshot on a delta is ignored exactly like a stale `content`.
+			streamEvent({ sequence: 2, delta: null, content: null, reasoningDelta: "think", reasoning: "stale", reasoningOffset: 7 }),
+		);
+		expect(second.streamingMessage.reasoning).toBe("let me think");
+
+		const lifecycle = applyNodeChatStreamEvent(
+			second.conversation,
+			streamEvent({ type: nodeChatStreamEventTypes.assistantPhase, sequence: 3, delta: null, content: null }),
+		);
+		expect(lifecycle.streamingMessage.reasoning).toBe("let me think");
+
+		const snapshot = applyNodeChatStreamEvent(
+			second.conversation,
+			streamEvent({
+				type: nodeChatStreamEventTypes.assistantSnapshot,
+				sequence: 4,
+				delta: null,
+				content: "answer",
+				reasoning: "let me think it through",
+			}),
+		);
+		expect(snapshot.streamingMessage.reasoning).toBe("let me think it through");
+	});
+
+	it("keeps the ordered parts interleave and the accumulated content across a delta → tool → delta sequence", () => {
+		const optimistic = appendOptimisticNodeChatSend(
+			conversation,
+			{ userMessageId: "user-1", assistantMessageId: "assistant-1", requestId: "request-1" },
+			"what time is it",
+			"2026-05-24T00:00:01.000Z",
+		);
+
+		const firstDelta = applyNodeChatStreamEvent(
+			optimistic,
+			streamEvent({ sequence: 3, delta: "chec", content: null, contentOffset: 0, reasoningDelta: "checking" }),
+		);
+		const tool = applyNodeChatStreamEvent(
+			firstDelta.conversation,
+			streamEvent({
+				type: nodeChatStreamEventTypes.toolCallRequested,
+				sequence: 4,
+				toolCallId: "call-1",
+				toolName: "get_time",
+				arguments: "{}",
+				content: null,
+				delta: null,
+			}),
+		);
+		const secondDelta = applyNodeChatStreamEvent(
+			tool.conversation,
+			streamEvent({ sequence: 5, delta: "king", content: null, contentOffset: 4, reasoningDelta: " done" }),
+		);
+
+		// Content accumulates across the tool call, and the delta-only merge leaves the parts interleave exactly
+		// as before: the post-tool reasoning still opens its own segment rather than extending the pre-tool one.
+		expect(secondDelta.streamingMessage.content).toBe("checking");
+		expect(secondDelta.streamingMessage.parts?.map((part) => part.kind)).toEqual(["reasoning", "tool", "reasoning"]);
+		expect(secondDelta.streamingMessage.parts?.[0]).toMatchObject({ kind: "reasoning", text: "checking" });
+		expect(secondDelta.streamingMessage.parts?.[2]).toMatchObject({ kind: "reasoning", text: " done" });
+	});
+
 	it("marks the assistant turn queued, then clears the queued flag when streaming begins", () => {
 		const optimistic = appendOptimisticNodeChatSend(
 			conversation,
@@ -112,13 +231,15 @@ describe("node chat stream state", () => {
 
 		const streaming = applyNodeChatStreamEvent(
 			queued.conversation,
-			streamEvent({ type: nodeChatStreamEventTypes.assistantStreaming, status: "streaming", content: "hi", delta: "hi" }),
+			// A lifecycle event carries no text on the wire (only deltas, snapshots and terminals do), so the turn is
+			// still empty here — the flag flip is the whole assertion.
+			streamEvent({ type: nodeChatStreamEventTypes.assistantStreaming, status: "streaming", content: null, delta: null }),
 		);
 		expect(streaming.streamingMessage).toMatchObject({
 			messageId: "assistant-1",
 			isQueued: false,
 			isActive: true,
-			content: "hi",
+			content: "",
 		});
 		expect(streaming.conversation.messages.find((message) => message.id === "assistant-1")?.status).toBe("streaming");
 	});

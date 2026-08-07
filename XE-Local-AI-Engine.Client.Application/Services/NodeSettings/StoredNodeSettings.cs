@@ -93,6 +93,19 @@ public sealed partial record StoredNodeSettings
 
     public const int MaxMaxPendingToolCallAgeMinutes = 60;
 
+    /// <summary>
+    ///     Default grace, in seconds, before a run whose last client disconnected is cancelled. Generous on purpose:
+    ///     the clock starts when the STREAM tears down, so it must comfortably exceed the client's automatic-reconnect
+    ///     window — a resource-only argument would suggest 30–60 s.
+    /// </summary>
+    public const int DefaultDetachedGraceSeconds = 300;
+
+    /// <summary><c>0</c> disables the disconnect grace entirely: a detached run is bounded only by the whole-invocation watchdog.</summary>
+    public const int MinDetachedGraceSeconds = 0;
+
+    /// <summary>Upper guard for the disconnect grace (24 h); above this the knob is indistinguishable from disabling it.</summary>
+    public const int MaxDetachedGraceSeconds = 86400;
+
     /// <summary>Default chat-role <c>--cache-reuse</c> window (tokens); mirrors <c>LlamaServerSupervisorOptions.ChatCacheReuse</c>.</summary>
     public const int DefaultChatCacheReuse = 256;
 
@@ -239,6 +252,13 @@ public sealed partial record StoredNodeSettings
 
     /// <summary>Pending tool-call max age (minutes, developer-only). Seed: <c>WorkerNode:MaxPendingToolCallAgeMinutes</c> (10).</summary>
     public int? MaxPendingToolCallAgeMinutes { get; init; }
+
+    /// <summary>
+    ///     How long a run whose last client disconnected keeps going before it is cancelled, in seconds. Seed:
+    ///     <c>WorkerNode:DetachedGraceSeconds</c> (300). <c>0</c> means never cancel — today's behavior. Applies on the
+    ///     next reaper tick (read per tick, not cached).
+    /// </summary>
+    public int? DetachedGraceSeconds { get; init; }
 
     /// <summary>
     ///     Chat-role prompt-cache prefix-reuse window in tokens (<c>--cache-reuse</c>). Seed: 256; <c>0</c> disables.

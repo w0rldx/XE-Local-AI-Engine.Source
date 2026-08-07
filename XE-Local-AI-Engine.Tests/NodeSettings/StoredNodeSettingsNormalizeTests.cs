@@ -349,6 +349,33 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
         AssertEx.Null(loaded.UsageRates);
     }
 
+    [Test]
+    public async Task DetachedGraceSeconds_ClampsNegativesToZero_AndReSeedsAnAbsurdValue()
+    {
+        // Unlike every other numeric field, a NEGATIVE grace clamps to 0 instead of re-seeding: 0 is a meaningful value
+        // here (never cancel), so "the operator asked for no reaping, badly" beats "silently reap at 300 s anyway".
+        AssertEx.Equal(expected: 0, (await SaveAndReloadAsync(new StoredNodeSettings { DetachedGraceSeconds = -1 })).DetachedGraceSeconds);
+        AssertEx.Equal(expected: 0, (await SaveAndReloadAsync(new StoredNodeSettings { DetachedGraceSeconds = 0 })).DetachedGraceSeconds);
+        AssertEx.Equal(expected: 300, (await SaveAndReloadAsync(new StoredNodeSettings { DetachedGraceSeconds = 300 })).DetachedGraceSeconds);
+
+        // Above the guard it falls back to null like the rest, so the accessor re-seeds it.
+        AssertEx.Null((await SaveAndReloadAsync(new StoredNodeSettings
+        {
+            DetachedGraceSeconds = StoredNodeSettings.MaxDetachedGraceSeconds + 1
+        })).DetachedGraceSeconds);
+    }
+
+    [Test]
+    public async Task DetachedGraceSeconds_AbsentFromAnOldFile_StaysNull()
+    {
+        // A node-settings.json written before the field existed must deserialize to null — and then re-seed to 300 —
+        // not to a spurious 0 that would silently disable reaping on every upgraded node.
+        await WriteSettingsJsonAsync("{ \"maxMessageRequestTimeoutSeconds\": 120 }");
+        var loaded = await LoadAsync();
+
+        AssertEx.Null(loaded.DetachedGraceSeconds);
+    }
+
     private async Task<StoredNodeSettings> SaveAndReloadAsync(StoredNodeSettings settings)
     {
         using var store = NewStore();

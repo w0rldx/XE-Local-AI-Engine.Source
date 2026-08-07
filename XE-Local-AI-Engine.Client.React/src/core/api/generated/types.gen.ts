@@ -524,6 +524,9 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse = {
 	maxPendingToolCallAgeMinutes?: number | null;
 	minMaxPendingToolCallAgeMinutes?: number;
 	maxAllowedMaxPendingToolCallAgeMinutes?: number;
+	detachedGraceSeconds?: number | null;
+	minDetachedGraceSeconds?: number;
+	maxAllowedDetachedGraceSeconds?: number;
 	samplingDefaults?: XeLocalAiEngineClientModelsSamplingOptions | null;
 	voiceFeatureEnabled?: boolean | null;
 	allowedVoiceModels?: Array<string> | null;
@@ -580,6 +583,7 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest 
 	agentHomeMaxSelectedFolderBytes?: number | null;
 	agentHomeMaxPatchBytes?: number | null;
 	maxPendingToolCallAgeMinutes?: number | null;
+	detachedGraceSeconds?: number | null;
 	samplingDefaults?: XeLocalAiEngineClientModelsSamplingOptions | null;
 	voiceFeatureEnabled?: boolean | null;
 	allowedVoiceModels?: Array<string> | null;

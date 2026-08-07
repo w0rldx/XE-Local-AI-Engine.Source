@@ -3,6 +3,9 @@ namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
+using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Client.Common.Telemetry;
+using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Services.Events;
 
 /// <summary>
@@ -21,15 +24,20 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
 {
     private readonly ConcurrentDictionary<Guid, LiveInvocation> _live = new();
     private readonly ILogger<InvocationResumeRegistry> _logger;
+    private readonly ChatStreamBudgetOptions _options;
     private readonly TimeProvider _timeProvider;
 
+    // The budget is optional so the many direct constructions in tests keep the shipped defaults without threading
+    // options through, mirroring ChatInvocationStatePump.
     public InvocationResumeRegistry(IWorkerEventDispatcher eventDispatcher,
         TimeProvider timeProvider,
-        ILogger<InvocationResumeRegistry> logger)
+        ILogger<InvocationResumeRegistry> logger,
+        IOptions<ChatStreamBudgetOptions>? options = null)
     {
         ArgumentNullException.ThrowIfNull(eventDispatcher);
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _options = options?.Value ?? new ChatStreamBudgetOptions();
 
         // Subscribe for the process lifetime; the registry singleton lives as long as the dispatcher singleton,
         // so there is no unsubscribe path (mirrors WorkerEventDispatcher's CA1001 suppression rationale).
@@ -73,10 +81,20 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
         [EnumeratorCancellation]
         CancellationToken cancellationToken)
     {
-        var reader = live.Subscribe(out var snapshot, out var toolHistory, out var noticeHistory);
+        var subscriber = live.Subscribe(out var snapshot, out var toolHistory, out var noticeHistory);
         var lastContent = snapshot.StreamedContent;
         var lastReasoning = snapshot.StreamedThinkingContent;
         var sequence = 0L;
+
+        // A snapshot too large to replay reconciles instead: the client refetches the persisted conversation, which
+        // holds the same text, for one request. Deliberately not a TRUNCATED snapshot — truncating would invent a
+        // partial-replacement semantic the protocol does not have, and every reader of it would have to know.
+        if (lastContent.Length + lastReasoning.Length > _options.MaxReplaySnapshotChars)
+        {
+            live.Unsubscribe(subscriber);
+            yield return ReconcileEvent(snapshot, sequence, "replay_cap");
+            yield break;
+        }
 
         // The request ids of the pending prompts (question / tool approval) this resume stream has already emitted.
         // Every state publish carries the still-pending slot, so without this the prompt would be re-emitted on every
@@ -86,9 +104,11 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
 
         // Replay the tool-call timeline, then the notice timeline, accumulated so far, then the content accumulated
         // so far, so the reconnecting client renders the in-flight assistant message (tool cards and notices
-        // included) immediately before live items continue in order. The content replay is a pure SNAPSHOT event
+        // included) immediately before live items continue in order. The content replay is an AssistantSnapshot
         // (full Content/Reasoning, no delta fields): the client applies Content as a replacement, and a delta here
-        // would be appended to whatever the client already rendered before the reconnect, duplicating it.
+        // would be appended to whatever the client already rendered before the reconnect, duplicating it. It is also
+        // what resets the client's delta-offset counters, which is why the same event serves gap and overflow repair —
+        // both reach it by re-subscribing through this method.
         foreach (var toolCall in toolHistory)
         {
             yield return ToToolCallEvent(snapshot, toolCall, sequence++);
@@ -108,7 +128,13 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
             sequence++;
         }
 
-        yield return ToEvent(ChatStreamEventTypes.AssistantDelta, snapshot, sequence++);
+        yield return ChatStreamEventMapper.SnapshotEvent(snapshot.ConversationId,
+            snapshot.InvocationId,
+            snapshot.InvocationId,
+            lastContent,
+            string.IsNullOrEmpty(lastReasoning) ? null : lastReasoning,
+            _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
+            sequence++);
 
         try
         {
@@ -131,8 +157,16 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
                 yield break;
             }
 
-            await foreach (var item in reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
+            await foreach (var item in subscriber.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
             {
+                // This consumer's own queue overflowed, so its stream is no longer contiguous — an approval or a tool
+                // result may have been the item that fell off. Tell it to re-resume rather than guessing which kind
+                // was safe to lose.
+                if (subscriber.TryConsumeReconcile())
+                {
+                    yield return ReconcileEvent(live.LatestState, sequence++, "queue_overflow");
+                }
+
                 if (item.ToolCall is { } toolCall)
                 {
                     yield return ToToolCallEvent(live.LatestState, toolCall, sequence++);
@@ -155,12 +189,23 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
 
                 if (hasContentDelta || hasReasoningDelta)
                 {
-                    var contentDelta = hasContentDelta ? state.StreamedContent[lastContent.Length..] : null;
-                    var reasoningDelta = hasReasoningDelta ? state.StreamedThinkingContent[lastReasoning.Length..] : null;
+                    // The slice bases ARE the wire offsets: the client appends each delta at the offset it expected and
+                    // re-resumes if they do not line up. Both offsets ride every delta even when only one side
+                    // advanced, so a stalled side still confirms its position.
+                    var contentOffset = lastContent.Length;
+                    var reasoningOffset = lastReasoning.Length;
+                    var contentDelta = hasContentDelta ? state.StreamedContent[contentOffset..] : null;
+                    var reasoningDelta = hasReasoningDelta ? state.StreamedThinkingContent[reasoningOffset..] : null;
                     lastContent = state.StreamedContent;
                     lastReasoning = state.StreamedThinkingContent;
 
-                    yield return ToEvent(ChatStreamEventTypes.AssistantDelta, state, sequence++, contentDelta, reasoningDelta);
+                    yield return ChatStreamEventMapper.DeltaEvent(new NodeChatMessageCorrelation(state.ConversationId, state.InvocationId, state.InvocationId),
+                        _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
+                        sequence++,
+                        contentDelta,
+                        reasoningDelta,
+                        contentOffset,
+                        reasoningOffset);
                 }
 
                 // A prompt raised while this resume stream is attached arrives as a state publish (the dispatcher
@@ -188,8 +233,22 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
         }
         finally
         {
-            live.Unsubscribe(reader);
+            live.Unsubscribe(subscriber);
         }
+    }
+
+    /// <summary>
+    ///     Tells this consumer to resynchronize: dispose the subscription and re-enter through <c>ResumeMessage</c>,
+    ///     whose first frame is an authoritative snapshot. Raised when the consumer's own queue overflowed or when the
+    ///     replay snapshot was too large to send. Silent to the user by design — the counter is the only signal.
+    /// </summary>
+    private ChatStreamEvent ReconcileEvent(InvocationState state, long sequence, string reason)
+    {
+        NodeMetrics.ChatStreamReconcileTotal.Add(1, new KeyValuePair<string, object?>("reason", reason));
+
+        return ChatStreamEventMapper.ReconcileEvent(new NodeChatMessageCorrelation(state.ConversationId, state.InvocationId, state.InvocationId),
+            _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
+            sequence);
     }
 
     private void OnInvocationStateChanged(object? sender, InvocationStateChangedEventArgs args)
@@ -204,7 +263,9 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
             // allocate a capturing closure either.
             if (!_live.TryGetValue(state.InvocationId, out var live))
             {
-                live = _live.GetOrAdd(state.InvocationId, static (_, initialState) => new LiveInvocation(initialState), state);
+                live = _live.GetOrAdd(state.InvocationId,
+                    static (_, arg) => new LiveInvocation(arg.InitialState, arg.Options),
+                    (InitialState: state, Options: _options));
             }
 
             live.Publish(state);
@@ -245,11 +306,16 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
         }
     }
 
+    /// <summary>
+    ///     Builds a TERMINAL event from a live state — the only remaining use for a full-content event on this path.
+    ///     Content and reasoning are carried unconditionally: a terminal is one frame per turn, so its cost is
+    ///     irrelevant, and it doubles as the backstop that converges any client whose delta stream fell behind.
+    ///     Deltas go through <see cref="ChatStreamEventMapper.DeltaEvent" /> and the opening replay through
+    ///     <see cref="ChatStreamEventMapper.SnapshotEvent" />; neither may be built here.
+    /// </summary>
     private ChatStreamEvent ToEvent(string type,
         InvocationState state,
         long sequence,
-        string? delta = null,
-        string? reasoningDelta = null,
         string? status = null,
         int? inputTokens = null,
         int? outputTokens = null,
@@ -263,16 +329,14 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
             status ?? MapStatus(state.Status),
             sequence,
             _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
-            delta,
-            reasoningDelta,
-            state.StreamedContent,
-            string.IsNullOrEmpty(state.StreamedThinkingContent) ? null : state.StreamedThinkingContent,
-            state.Error,
-            state.ModelUsed,
-            inputTokens,
-            outputTokens,
-            totalTokens,
-            reasoningTokens);
+            Content: state.StreamedContent,
+            Reasoning: string.IsNullOrEmpty(state.StreamedThinkingContent) ? null : state.StreamedThinkingContent,
+            Error: state.Error,
+            Model: state.ModelUsed,
+            InputTokens: inputTokens,
+            OutputTokens: outputTokens,
+            TotalTokens: totalTokens,
+            ReasoningTokens: reasoningTokens);
     }
 
     private ChatStreamEvent ToToolCallEvent(InvocationState state,
@@ -438,11 +502,13 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
 
     /// <summary>
     ///     One live invocation: the latest snapshot, the tool-call timeline so far, and the set of attached resume
-    ///     consumers. Each consumer gets its own unbounded channel so a slow reader never blocks the dispatcher's
-    ///     publish path. History append and subscriber registration share one lock, so every tool event lands in a
-    ///     consumer's replayed history XOR on its channel — never both, never neither.
+    ///     consumers. Each consumer gets its own BOUNDED channel so a slow reader never blocks the dispatcher's
+    ///     publish path and never grows without limit either — a browser that reconnects but stops reading used to
+    ///     retain every state publish for the rest of the run. History append and subscriber registration share one
+    ///     lock, so every tool event lands in a consumer's replayed history XOR on its channel — never both, never
+    ///     neither.
     /// </summary>
-    private sealed class LiveInvocation(InvocationState initialState)
+    private sealed class LiveInvocation(InvocationState initialState, ChatStreamBudgetOptions options)
     {
         // Caps the replayed tool timeline for pathological turns; the iteration cap bounds real turns far below
         // this. When exceeded the oldest entries drop — the terminal-gated refetch restores the full persisted
@@ -455,7 +521,7 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
 
         private readonly List<ToolCallLifecyclePayload> _toolHistory = [];
         private readonly List<TurnNoticePayload> _noticeHistory = [];
-        private readonly List<Channel<ResumeItem>> _subscribers = [];
+        private readonly List<ResumeSubscriber> _subscribers = [];
         private readonly Lock _syncRoot = new();
 
         // Latched under _syncRoot when Complete() runs (the terminal state has been published and the then-attached
@@ -479,7 +545,7 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
 
                 foreach (var subscriber in _subscribers)
                 {
-                    _ = subscriber.Writer.TryWrite(ResumeItem.FromState(state));
+                    subscriber.Write(ResumeItem.FromState(state));
                 }
             }
         }
@@ -496,7 +562,7 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
 
                 foreach (var subscriber in _subscribers)
                 {
-                    _ = subscriber.Writer.TryWrite(ResumeItem.FromToolCall(toolCall));
+                    subscriber.Write(ResumeItem.FromToolCall(toolCall));
                 }
             }
         }
@@ -513,20 +579,25 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
 
                 foreach (var subscriber in _subscribers)
                 {
-                    _ = subscriber.Writer.TryWrite(ResumeItem.FromNotice(notice));
+                    subscriber.Write(ResumeItem.FromNotice(notice));
                 }
             }
         }
 
-        public ChannelReader<ResumeItem> Subscribe(out InvocationState snapshot,
+        /// <summary>
+        ///     Attaches a consumer, returning its own queue plus the history to replay ahead of it.
+        /// </summary>
+        /// <exception cref="InvalidOperationException">
+        ///     More than <c>MaxSubscribersPerInvocation</c> consumers are already attached. The cap REJECTS the new
+        ///     consumer rather than evicting an existing one: a runaway reconnect loop in one tab must never knock a
+        ///     working browser off its own stream. The rejected caller sees the same failure shape as "not resumable"
+        ///     and falls back to refetching the persisted conversation.
+        /// </exception>
+        public ResumeSubscriber Subscribe(out InvocationState snapshot,
             out IReadOnlyList<ToolCallLifecyclePayload> toolHistory,
             out IReadOnlyList<TurnNoticePayload> noticeHistory)
         {
-            var channel = Channel.CreateUnbounded<ResumeItem>(new UnboundedChannelOptions
-            {
-                SingleReader = true,
-                SingleWriter = false
-            });
+            var subscriber = new ResumeSubscriber(options.QueueCapacity);
 
             lock (_syncRoot)
             {
@@ -540,29 +611,29 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
                 // terminal state (Publish precedes Complete under this same lock), which ResumeCoreAsync emits directly.
                 if (_completed)
                 {
-                    channel.Writer.TryComplete();
+                    subscriber.Complete();
+                }
+                else if (_subscribers.Count >= options.MaxSubscribersPerInvocation)
+                {
+                    throw new InvalidOperationException($"Invocation {LatestState.InvocationId} already has the maximum of {options.MaxSubscribersPerInvocation} resume subscribers.");
                 }
                 else
                 {
-                    _subscribers.Add(channel);
+                    _subscribers.Add(subscriber);
                 }
             }
 
-            return channel.Reader;
+            return subscriber;
         }
 
-        public void Unsubscribe(ChannelReader<ResumeItem> reader)
+        public void Unsubscribe(ResumeSubscriber subscriber)
         {
             lock (_syncRoot)
             {
-                var index = _subscribers.FindIndex(channel => ReferenceEquals(channel.Reader, reader));
-                if (index < 0)
+                if (_subscribers.Remove(subscriber))
                 {
-                    return;
+                    subscriber.Complete();
                 }
-
-                _subscribers[index].Writer.TryComplete();
-                _subscribers.RemoveAt(index);
             }
         }
 
@@ -576,11 +647,56 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
 
                 foreach (var subscriber in _subscribers)
                 {
-                    subscriber.Writer.TryComplete();
+                    subscriber.Complete();
                 }
 
                 _subscribers.Clear();
             }
+        }
+    }
+
+    /// <summary>
+    ///     One attached resume consumer: its bounded queue plus the latch that records whether that queue overflowed.
+    ///     The queue drops rather than waiting, because it is written under <c>LiveInvocation</c>'s lock on the
+    ///     dispatcher's publish path — a wait there would stall every other consumer AND the run itself. What the drop
+    ///     costs is repaired at the stream level: the consumer is told to re-resume, exactly as an overflowing live
+    ///     stream is.
+    /// </summary>
+    private sealed class ResumeSubscriber
+    {
+        private readonly Channel<ResumeItem> _channel;
+
+        // Read-and-cleared atomically by the consumer, so a burst of drops yields exactly one reconcile.
+        private int _reconcileNeeded;
+
+        public ResumeSubscriber(int capacity)
+        {
+            _channel = Channel.CreateBounded<ResumeItem>(new BoundedChannelOptions(capacity)
+                {
+                    SingleReader = true,
+                    SingleWriter = false,
+                    FullMode = BoundedChannelFullMode.DropWrite
+                },
+                // TryWrite reports SUCCESS for a DropWrite drop, so this callback is the only place the overflow is
+                // observable.
+                _ => Interlocked.Exchange(ref _reconcileNeeded, value: 1));
+        }
+
+        public ChannelReader<ResumeItem> Reader => _channel.Reader;
+
+        public void Write(ResumeItem item)
+        {
+            _ = _channel.Writer.TryWrite(item);
+        }
+
+        public bool TryConsumeReconcile()
+        {
+            return Interlocked.Exchange(ref _reconcileNeeded, value: 0) == 1;
+        }
+
+        public void Complete()
+        {
+            _channel.Writer.TryComplete();
         }
     }
 }

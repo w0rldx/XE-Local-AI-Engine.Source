@@ -164,6 +164,16 @@ function isTerminalStreamEvent(event: NodeChatStreamEventDto): boolean {
 	return terminalStreamEventTypes.has(event.type);
 }
 
+// Wire-string literals for the delta-only protocol, mirroring nodeChatStreamEventTypes in NodeChatStreamState.ts.
+// Duplicated here for the same reason NodeChatStreamGuard duplicates its own: the transport layer stays free of
+// the stream-state module's import graph. Keep in sync with that source.
+const assistantDeltaEventType = "assistant-delta";
+// Replaces the client's accumulated text and re-bases the offset counters. Forwarded downstream.
+const assistantSnapshotEventType = "assistant-snapshot";
+// The server could not enqueue an event (bounded-queue overflow, oversized replay) and is asking the client to
+// resynchronize. Consumed HERE and never forwarded — it is repaired exactly like an offset gap.
+const assistantReconcileEventType = "assistant-reconcile";
+
 /** The opening hub call for a stream: a local send, a server-driven regenerate, or a re-attach to a run. */
 interface StreamOpening {
 	method: "SendMessage" | "RegenerateMessage" | "ResumeMessage" | "ResumeConversation";
@@ -213,10 +223,46 @@ function signalRStream(opening: StreamOpening, signal: AbortSignal): AsyncIterab
 			// resumed event (terminal included) as a stale duplicate and the message sticks with no error.
 			let lastPushedSequence = Number.NEGATIVE_INFINITY;
 
+			// Where the next delta must begin. A delta frame carries only its delta plus the offset that delta
+			// starts at, so a gap (a frame that never arrived) or an overlap (a replayed frame) is detectable
+			// from the offsets alone, without the adapter holding any text. Undefined until the first frame
+			// establishes a position; re-based by every snapshot/terminal, which carry the full text.
+			let nextContentOffset: number | undefined;
+			let nextReasoningOffset: number | undefined;
+
 			const pushEvent = (event: NodeChatStreamEventDto): void => {
 				// Latch ids from the first event when not known up front, so a reconnect can resume the run.
 				invocationId ??= event.requestId || undefined;
 				assistantMessageId ??= event.messageId || undefined;
+
+				// A server-side reconcile request is an adapter instruction, not a message mutation: consume it
+				// and re-enter through ResumeMessage. Nothing downstream ever sees this event type.
+				if (event.type === assistantReconcileEventType) {
+					repair();
+					return;
+				}
+
+				if (event.type === assistantSnapshotEventType || isTerminalStreamEvent(event)) {
+					nextContentOffset = event.content?.length ?? 0;
+					nextReasoningOffset = event.reasoning?.length ?? 0;
+				} else if (event.type === assistantDeltaEventType) {
+					const contentOffset = event.contentOffset ?? 0;
+					const reasoningOffset = event.reasoningOffset ?? 0;
+					// A mismatch in either direction is unrecoverable by appending, so drop the frame and repair.
+					// The frame's sequence is deliberately left unconsumed (lastPushedSequence is not advanced):
+					// the resumed stream rebases onto it, so the sequence-ordering guard downstream never stalls
+					// on the hole this drop would otherwise leave.
+					if (
+						(nextContentOffset !== undefined && contentOffset !== nextContentOffset) ||
+						(nextReasoningOffset !== undefined && reasoningOffset !== nextReasoningOffset)
+					) {
+						repair();
+						return;
+					}
+					nextContentOffset = contentOffset + (event.delta?.length ?? 0);
+					nextReasoningOffset = reasoningOffset + (event.reasoningDelta?.length ?? 0);
+				}
+
 				if (isTerminalStreamEvent(event)) {
 					reachedTerminal = true;
 				}
@@ -289,6 +335,25 @@ function signalRStream(opening: StreamOpening, signal: AbortSignal): AsyncIterab
 						notify();
 					},
 				});
+			};
+
+			/**
+			 * Resynchronizes a stream that can no longer be repaired by appending — an offset gap, an overlap, or
+			 * a server-sent reconcile. Re-entering through `ResumeMessage` is the whole repair: its first frame is
+			 * an `assistant-snapshot` that replaces the client's accumulated text and re-bases the offsets, and the
+			 * existing `resumeSequenceBase` rebase keeps its restarted numbering contiguous for the guard.
+			 *
+			 * Impossible before the invocation id is latched (the very first event latches it, and a delta can only
+			 * mismatch against a position a prior frame established). If it ever is, the offending event is simply
+			 * dropped and the turn's terminal — which carries the full text — converges the state.
+			 */
+			const repair = (): void => {
+				if (completed || reachedTerminal || signal.aborted || !invocationId) {
+					return;
+				}
+				activeSubscription?.dispose();
+				activeSubscription = undefined;
+				subscribe("ResumeMessage", [invocationId], true);
 			};
 
 			const resumeAfterReconnect = (): void => {

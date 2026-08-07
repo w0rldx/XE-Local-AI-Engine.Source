@@ -38,6 +38,7 @@ public sealed class NodeChatStreamService(
     IConversationSandboxStager conversationSandboxStager,
     IUntrustedContentFenceSeedProvider fenceSeedProvider,
     IOptions<KnowledgeBaseOptions> knowledgeOptions,
+    IOptions<ChatStreamBudgetOptions> streamBudgetOptions,
     IServiceScopeFactory scopeFactory,
     TimeProvider timeProvider,
     IToolApprovalPolicy toolApprovalPolicy,
@@ -174,16 +175,13 @@ public sealed class NodeChatStreamService(
             SingleReader = true,
             SingleWriter = false
         });
-        var eventChannel = Channel.CreateUnbounded<ChatStreamEvent>(new UnboundedChannelOptions
-        {
-            SingleReader = true,
-            // Six producers write this channel concurrently: the delta/terminal emits in the invocation-state pump,
-            // the streaming-transition emit in RunInvocationAsync (the run-transition), the tool-call lifecycle emits
-            // in OnToolCallLifecycleChanged, the turn-notice emits in OnTurnNoticeChanged, the pending-approval
-            // emits in OnApprovalRequestedChanged, and the pending-question emits in OnUserQuestionRequestedChanged.
-            // SingleWriter must be false.
-            SingleWriter = false
-        });
+        // Six producers write this sink concurrently: the delta/terminal emits in the invocation-state pump, the
+        // streaming-transition emit in RunInvocationAsync (the run-transition), the tool-call lifecycle emits in
+        // OnToolCallLifecycleChanged, the turn-notice emits in OnTurnNoticeChanged, the pending-approval emits in
+        // OnApprovalRequestedChanged, and the pending-question emits in OnUserQuestionRequestedChanged. It is BOUNDED
+        // and never makes a producer wait — on a client disconnect the SSE loop below exits while all six keep
+        // writing, which is exactly the case Detach() in this method's finally exists to stop retaining.
+        var eventSink = new ChatStreamEventSink(correlation, sequence, streamBudgetOptions.Value, timeProvider);
 
         void OnInvocationStateChanged(object? _, InvocationStateChangedEventArgs args)
         {
@@ -203,7 +201,7 @@ public sealed class NodeChatStreamService(
             {
                 var toolSequence = sequence.Next();
                 ChatStreamEventMapper.AccumulateToolPart(parts, args.Payload, toolSequence);
-                eventChannel.Writer.TryWrite(ChatStreamEventMapper.ToolCallEvent(correlation.ConversationId, correlation.MessageId, correlation.RequestId, args.Payload, NowUnixMilliseconds(),
+                eventSink.TryWrite(ChatStreamEventMapper.ToolCallEvent(correlation.ConversationId, correlation.MessageId, correlation.RequestId, args.Payload, NowUnixMilliseconds(),
                     toolSequence));
             }
         }
@@ -214,7 +212,7 @@ public sealed class NodeChatStreamService(
             {
                 var noticeSequence = sequence.Next();
                 ChatStreamEventMapper.AccumulateNotice(parts, args.Payload, noticeSequence);
-                eventChannel.Writer.TryWrite(ChatStreamEventMapper.NoticeEvent(correlation.ConversationId, correlation.MessageId, correlation.RequestId, args.Payload, NowUnixMilliseconds(),
+                eventSink.TryWrite(ChatStreamEventMapper.NoticeEvent(correlation.ConversationId, correlation.MessageId, correlation.RequestId, args.Payload, NowUnixMilliseconds(),
                     noticeSequence));
             }
         }
@@ -227,7 +225,7 @@ public sealed class NodeChatStreamService(
         {
             if (args.Payload.InvocationId == requestId)
             {
-                eventChannel.Writer.TryWrite(ChatStreamEventMapper.ApprovalRequestedEvent(correlation.ConversationId, correlation.MessageId, correlation.RequestId, args.Payload,
+                eventSink.TryWrite(ChatStreamEventMapper.ApprovalRequestedEvent(correlation.ConversationId, correlation.MessageId, correlation.RequestId, args.Payload,
                     NowUnixMilliseconds(), sequence.Next()));
             }
         }
@@ -240,7 +238,7 @@ public sealed class NodeChatStreamService(
         {
             if (args.Payload.InvocationId == requestId)
             {
-                eventChannel.Writer.TryWrite(ChatStreamEventMapper.QuestionRequestedEvent(correlation.ConversationId, correlation.MessageId, correlation.RequestId, args.Payload,
+                eventSink.TryWrite(ChatStreamEventMapper.QuestionRequestedEvent(correlation.ConversationId, correlation.MessageId, correlation.RequestId, args.Payload,
                     NowUnixMilliseconds(), sequence.Next()));
             }
         }
@@ -444,7 +442,7 @@ public sealed class NodeChatStreamService(
         Task runTask;
         using var invocationScope = sandboxPreparation?.EnterInvocationScope();
         pumpTask = invocationStatePump.PumpAsync(stateChannel.Reader,
-            eventChannel.Writer,
+            eventSink,
             correlation,
             // Stamp the FINAL persisted assistant-message model from the effective model (the pump terminalizes from
             // this requestedModel), so the stored attribution reflects the model that actually ran, not request.Model.
@@ -459,7 +457,7 @@ public sealed class NodeChatStreamService(
         runTask = RunInvocationAsync(package,
             assistantMessageId,
             stateChannel.Writer,
-            eventChannel.Writer,
+            eventSink,
             correlation,
             requestId,
             sequence,
@@ -476,13 +474,19 @@ public sealed class NodeChatStreamService(
             // Forward persisted events to the client. The client cancellationToken stops THIS loop only (e.g. the
             // browser/SignalR stream unsubscribed or disconnected). It does not cancel the run or the pump: those
             // keep going on runCancellation.Token so the runner reaches its real terminal and the pump persists it.
-            await foreach (var streamEvent in eventChannel.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
+            await foreach (var streamEvent in eventSink.ReadAllAsync(cancellationToken).ConfigureAwait(false))
             {
                 yield return streamEvent;
             }
         }
         finally
         {
+            // The SSE consumer is gone. Detach FIRST, before draining the tasks below: from here every producer's
+            // write is a no-op, so the abandoned stream retains nothing for the (possibly long) remainder of the run.
+            // Detach deliberately does not COMPLETE the queue — the pump reads a write fault as a persistence fault
+            // and would terminalize the row Failed.
+            eventSink.Detach();
+
             // Do NOT cancel runCancellation here on a client disconnect. Let runTask and pumpTask drain to the
             // runner's true terminal (Completed/Failed/Cancelled) so persistence follows the runner's lifecycle,
             // not the client connection's. A genuine user cancel already tripped runCancellation via the registry.
@@ -539,7 +543,7 @@ public sealed class NodeChatStreamService(
     private async Task RunInvocationAsync(RuntimePackage package,
         Guid messageId,
         ChannelWriter<InvocationState> stateWriter,
-        ChannelWriter<ChatStreamEvent> eventWriter,
+        IChatStreamEventSink eventSink,
         NodeChatMessageCorrelation correlation,
         Guid requestId,
         NodeChatStreamSequence sequence,
@@ -565,7 +569,7 @@ public sealed class NodeChatStreamService(
                 return;
             }
 
-            await eventWriter.WriteAsync(ToMessageEvent(ChatStreamEventTypes.AssistantStreaming, correlation, streamingMessage, sequence.Next()), cancellationToken).ConfigureAwait(false);
+            await eventSink.WriteAsync(ToMessageEvent(ChatStreamEventTypes.AssistantStreaming, correlation, streamingMessage, sequence.Next()), cancellationToken).ConfigureAwait(false);
 
             // A "Local runtime default" send that resolved no installed GGUF chat model fails BEFORE any provider
             // invocation with a dedicated category, so the client sees an actionable "pull a model" terminal rather
@@ -1016,14 +1020,12 @@ public sealed class NodeChatStreamService(
         NodeChatMessageCorrelation correlation,
         NodeChatPersistedMessageDto message,
         long sequence,
-        string? delta = null,
-        string? reasoningDelta = null,
         int? inputTokens = null,
         int? outputTokens = null,
         int? totalTokens = null,
         int? reasoningTokens = null)
     {
-        return ChatStreamEventMapper.MessageEvent(type, correlation, message, NowUnixMilliseconds(), sequence, delta, reasoningDelta, inputTokens, outputTokens, totalTokens, reasoningTokens);
+        return ChatStreamEventMapper.MessageEvent(type, correlation, message, NowUnixMilliseconds(), sequence, inputTokens, outputTokens, totalTokens, reasoningTokens);
     }
 
     private long NowUnixMilliseconds()

@@ -109,6 +109,106 @@ public sealed class ChatStreamEventMapperTests
     }
 
     [Test]
+    public void MessageEvent_OnATerminal_StillCarriesTheFullContent()
+    {
+        // A terminal is one frame per turn, so carrying the whole message on it costs nothing — and it is the backstop
+        // that converges a client whose delta stream fell behind. Only the DELTA path lost its content.
+        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        var message = NewMessage(correlation, content: "the whole answer", reasoning: "the whole reasoning", status: NodeChatMessageStatusValues.Completed, model: "model-x", inputCount: 1, outputCount: 2);
+
+        var terminal = ChatStreamEventMapper.MessageEvent(ChatStreamEventTypes.AssistantCompleted, correlation, message, Timestamp, sequence: 3);
+
+        AssertEx.Equal("the whole answer", terminal.Content);
+        AssertEx.Equal("the whole reasoning", terminal.Reasoning);
+        // A terminal is not a delta: it carries no increment and no offsets to continue from.
+        AssertEx.Null(terminal.Delta);
+        AssertEx.Null(terminal.ReasoningDelta);
+        AssertEx.Null(terminal.ContentOffset);
+        AssertEx.Null(terminal.ReasoningOffset);
+    }
+
+    [Test]
+    public void DeltaEvent_CarriesOnlyTheIncrementAndItsOffsets()
+    {
+        // The load-bearing assertion of the delta-only protocol: a live frame must never carry the accumulated text.
+        // Populating Content here is exactly what made the wire cost of a turn quadratic in its output length, and the
+        // client is built to APPEND this event rather than replace from it.
+        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+
+        var delta = ChatStreamEventMapper.DeltaEvent(correlation, Timestamp, sequence: 8, contentDelta: " world", reasoningDelta: "…therefore", contentOffset: 5, reasoningOffset: 12);
+
+        AssertEx.Equal(ChatStreamEventTypes.AssistantDelta, delta.Type);
+        AssertEx.Equal(NodeChatMessageStatusValues.Streaming, delta.Status);
+        AssertEx.Equal(correlation.ConversationId, delta.ConversationId);
+        AssertEx.Equal(correlation.MessageId, delta.MessageId);
+        AssertEx.Equal(correlation.RequestId, delta.RequestId);
+        AssertEx.Equal(expected: 8L, delta.Sequence);
+        AssertEx.Equal(Timestamp, delta.OccurredAtUtc);
+        AssertEx.Equal(" world", delta.Delta);
+        AssertEx.Equal("…therefore", delta.ReasoningDelta);
+        AssertEx.Equal(expected: 5L, delta.ContentOffset);
+        AssertEx.Equal(expected: 12L, delta.ReasoningOffset);
+
+        AssertEx.Null(delta.Content);
+        AssertEx.Null(delta.Reasoning);
+        // Nor any of the row-derived fields a delta no longer has a row to read.
+        AssertEx.Null(delta.Model);
+        AssertEx.Null(delta.InputTokens);
+        AssertEx.Null(delta.OutputTokens);
+        AssertEx.Null(delta.Error);
+    }
+
+    [Test]
+    public void DeltaEvent_WhenOnlyOneSideAdvanced_StillCarriesBothOffsets()
+    {
+        // A stalled side confirms its position rather than going silent, so the client's gap detector can tell
+        // "reasoning did not advance" apart from "a reasoning delta was lost".
+        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+
+        var delta = ChatStreamEventMapper.DeltaEvent(correlation, Timestamp, sequence: 1, contentDelta: "abc", reasoningDelta: null, contentOffset: 0, reasoningOffset: 40);
+
+        AssertEx.Equal("abc", delta.Delta);
+        AssertEx.Null(delta.ReasoningDelta);
+        AssertEx.Equal(expected: 0L, delta.ContentOffset);
+        AssertEx.Equal(expected: 40L, delta.ReasoningOffset);
+    }
+
+    [Test]
+    public void SnapshotEvent_CarriesTheFullTextAndOffsetsEqualToItsLengths()
+    {
+        // The snapshot is the repair primitive: it replaces the client's accumulated text AND tells it where the next
+        // delta will continue from, which is what lets one event serve resume replay, gap repair and overflow repair.
+        var conversationId = Guid.NewGuid();
+        var invocationId = Guid.NewGuid();
+
+        var snapshot = ChatStreamEventMapper.SnapshotEvent(conversationId, invocationId, invocationId, "Hello world", "I should greet them", Timestamp, sequence: 0);
+
+        AssertEx.Equal(ChatStreamEventTypes.AssistantSnapshot, snapshot.Type);
+        // Deliberately NOT terminal — the turn continues after a snapshot, so its status stays streaming.
+        AssertEx.Equal(NodeChatMessageStatusValues.Streaming, snapshot.Status);
+        AssertEx.Equal(conversationId, snapshot.ConversationId);
+        AssertEx.Equal(invocationId, snapshot.MessageId);
+        AssertEx.Equal(invocationId, snapshot.RequestId);
+        AssertEx.Equal("Hello world", snapshot.Content);
+        AssertEx.Equal("I should greet them", snapshot.Reasoning);
+        AssertEx.Equal((long)"Hello world".Length, snapshot.ContentOffset);
+        AssertEx.Equal((long)"I should greet them".Length, snapshot.ReasoningOffset);
+        // A snapshot replaces; it never appends.
+        AssertEx.Null(snapshot.Delta);
+        AssertEx.Null(snapshot.ReasoningDelta);
+    }
+
+    [Test]
+    public void SnapshotEvent_WithNoReasoning_ReportsAZeroReasoningOffset()
+    {
+        var snapshot = ChatStreamEventMapper.SnapshotEvent(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "Hi", reasoning: null, Timestamp, sequence: 0);
+
+        AssertEx.Null(snapshot.Reasoning);
+        AssertEx.Equal(expected: 0L, snapshot.ReasoningOffset);
+        AssertEx.Equal(expected: 2L, snapshot.ContentOffset);
+    }
+
+    [Test]
     public void NoticeEvent_MapsKindAndMessageOntoTheAssistantNoticeType()
     {
         var conversationId = Guid.NewGuid();

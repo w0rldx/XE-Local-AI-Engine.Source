@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
+using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
@@ -43,7 +44,8 @@ public sealed class ChatInvocationStatePumpFaultTests : IDisposable
         var pump = new ChatInvocationStatePump(faultingPump, TimeProvider.System);
 
         var stateChannel = Channel.CreateUnbounded<InvocationState>();
-        var eventChannel = Channel.CreateUnbounded<ChatStreamEvent>();
+        var sequence = new NodeChatStreamSequence();
+        var eventSink = new ChatStreamEventSink(correlation, sequence, new ChatStreamBudgetOptions(), TimeProvider.System);
         stateChannel.Writer.TryWrite(new InvocationState
         {
             InvocationId = correlation.RequestId,
@@ -57,7 +59,7 @@ public sealed class ChatInvocationStatePumpFaultTests : IDisposable
         var events = new List<ChatStreamEvent>();
         var collector = Task.Run(async () =>
         {
-            await foreach (var streamEvent in eventChannel.Reader.ReadAllAsync())
+            await foreach (var streamEvent in eventSink.ReadAllAsync())
             {
                 events.Add(streamEvent);
             }
@@ -65,10 +67,10 @@ public sealed class ChatInvocationStatePumpFaultTests : IDisposable
 
         // The original flush fault propagates so the caller learns of it and cancels the run.
         await AssertEx.ThrowsAsync<InvalidOperationException>(async () => await pump.PumpAsync(stateChannel.Reader,
-                          eventChannel.Writer,
+                          eventSink,
                           correlation,
                           "model-x",
-                          new NodeChatStreamSequence(),
+                          sequence,
                           new NodeChatPartAccumulator(),
                           onTerminal: null,
                           CancellationToken.None))
@@ -106,7 +108,8 @@ public sealed class ChatInvocationStatePumpFaultTests : IDisposable
         var pump = new ChatInvocationStatePump(faultingPump, TimeProvider.System);
 
         var stateChannel = Channel.CreateUnbounded<InvocationState>();
-        var eventChannel = Channel.CreateUnbounded<ChatStreamEvent>();
+        var sequence = new NodeChatStreamSequence();
+        var eventSink = new ChatStreamEventSink(correlation, sequence, new ChatStreamBudgetOptions(), TimeProvider.System);
         stateChannel.Writer.TryWrite(new InvocationState
         {
             InvocationId = correlation.RequestId,
@@ -120,17 +123,17 @@ public sealed class ChatInvocationStatePumpFaultTests : IDisposable
         var events = new List<ChatStreamEvent>();
         var collector = Task.Run(async () =>
         {
-            await foreach (var streamEvent in eventChannel.Reader.ReadAllAsync())
+            await foreach (var streamEvent in eventSink.ReadAllAsync())
             {
                 events.Add(streamEvent);
             }
         });
 
         await AssertEx.ThrowsAsync<InvalidOperationException>(async () => await pump.PumpAsync(stateChannel.Reader,
-                          eventChannel.Writer,
+                          eventSink,
                           correlation,
                           "model-x",
-                          new NodeChatStreamSequence(),
+                          sequence,
                           new NodeChatPartAccumulator(),
                           onTerminal: null,
                           CancellationToken.None))

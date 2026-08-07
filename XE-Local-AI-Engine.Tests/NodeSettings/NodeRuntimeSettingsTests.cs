@@ -98,6 +98,40 @@ public sealed class NodeRuntimeSettingsTests
     }
 
     [Test]
+    public async Task DetachedGraceSeconds_HonoursStoredThenSeedThenDefault()
+    {
+        // The disconnect grace is the one stream-budget knob an operator edits, so it follows the stored-node-setting
+        // chain rather than a plain options key — including the case that matters most: a stored 0 (never cancel) must
+        // WIN over a positive seed rather than being read as "unset" and re-seeded.
+        var empty = new Dictionary<string, string?>(StringComparer.Ordinal);
+        var seedWorkerNode = new WorkerNodeOptions { NodeName = "n", DetachedGraceSeconds = 600 };
+
+        var stored = CreateSut(new StoredNodeSettings { DetachedGraceSeconds = 45 }, empty, workerNode: seedWorkerNode);
+        AssertEx.Equal(expected: 45, await stored.GetDetachedGraceSecondsAsync());
+
+        var storedZero = CreateSut(new StoredNodeSettings { DetachedGraceSeconds = 0 }, empty, workerNode: seedWorkerNode);
+        AssertEx.Equal(expected: 0, await storedZero.GetDetachedGraceSecondsAsync());
+
+        var seeded = CreateSut(new StoredNodeSettings(), empty, workerNode: seedWorkerNode);
+        AssertEx.Equal(expected: 600, await seeded.GetDetachedGraceSecondsAsync());
+
+        var defaulted = CreateSut(new StoredNodeSettings(), empty);
+        AssertEx.Equal(StoredNodeSettings.DefaultDetachedGraceSeconds, await defaulted.GetDetachedGraceSecondsAsync());
+    }
+
+    // Deliberately a SYNC test: the sync twin exists because the reaper's timer callback is structurally synchronous,
+    // and asserting it from an async test trips the "await the async overload instead" analyzers (CA1849/S6966).
+    [Test]
+    public void DetachedGraceSeconds_SyncTwin_ResolvesTheSameValue()
+    {
+        var sut = CreateSut(new StoredNodeSettings { DetachedGraceSeconds = 45 },
+            new Dictionary<string, string?>(StringComparer.Ordinal),
+            workerNode: new WorkerNodeOptions { NodeName = "n", DetachedGraceSeconds = 600 });
+
+        AssertEx.Equal(expected: 45, sut.GetDetachedGraceSeconds());
+    }
+
+    [Test]
     public async Task StoredAndSeedAbsent_UsesHardcodedDefault()
     {
         // No stored value, no Ollama/HF seed in configuration, default Options instances.

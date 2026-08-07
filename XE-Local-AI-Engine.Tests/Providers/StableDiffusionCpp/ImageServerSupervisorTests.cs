@@ -10,7 +10,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Verifies the image supervisor's loaded cap + idle-LRU eviction (a new distinct model is rejected when the cap is
 ///     full of in-use daemons, admitted by evicting an idle LRU when one is past the TTL) and its reuse-path wedged-daemon
 ///     guard (a still-alive daemon that fails the rate-limited liveness probe N consecutive times is torn down and
-///     respawned instead of handed out forever).
+///     respawned instead of handed out forever), plus how far the admission gate reaches: it covers the cap decision
+///     and the port set only, never an evicted victim's tree-kill.
 /// </summary>
 public sealed class ImageServerSupervisorTests
 {
@@ -332,6 +333,43 @@ public sealed class ImageServerSupervisorTests
         AssertEx.True(handle.WasTreeKilled, "a daemon launched but not yet registered must be tree-killed on dispose (no orphan).");
     }
 
+    [Test]
+    public async Task Admission_SlowEvictionTreeKill_DoesNotHoldTheAdmissionGate()
+    {
+        // The admission gate covers the cap decision and the port set only. An evicted victim's tree-kill — seconds for
+        // a multi-GB image model — runs after the gate is released, so it cannot serialize an unrelated model's port
+        // allocation or release behind it.
+        using var victimKill = new ImageKillLatch();
+        var launcher = new LatchingImageLauncher(victimKill);
+        var time = new AdvanceableClock();
+        var ttl = TimeSpan.FromHours(1);
+        await using var supervisor = ImageSupervisorFactory.Create(launcher,
+            options: new StableDiffusionRuntimeOptions
+            {
+                IdleTimeToLive = ttl,
+                MaxLoadedProcesses = 2
+            },
+            timeProvider: time);
+
+        // sd15 becomes the idle-past-TTL victim; sdxl fills the cap and stays in-window.
+        await supervisor.EnsureRunningAsync("sd15", CancellationToken.None);
+        var victim = launcher.Victim!;
+        time.Advance(ttl + TimeSpan.FromMinutes(1));
+        await supervisor.EnsureRunningAsync("sdxl", CancellationToken.None);
+
+        // flux is admitted by evicting sd15, whose tree-kill then blocks for as long as this test wants.
+        var admitting = supervisor.EnsureRunningAsync("flux", CancellationToken.None);
+        await AssertEx.EventuallyAsync(() => victimKill.Entered, TimeSpan.FromSeconds(3), "The victim's tree-kill never started.");
+
+        // An unrelated model's teardown takes the same admission gate. Held across the tree-kill (as it was), this would
+        // block for the whole multi-GB kill; it must not.
+        await supervisor.EvictAsync("sdxl", CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(3));
+
+        victimKill.Release();
+        await admitting.WaitAsync(TimeSpan.FromSeconds(3));
+        AssertEx.True(victim.WasTreeKilled, "The evicted victim must still be torn down.");
+    }
+
     /// <summary>Readiness probe that signals when its wait is entered, then blocks until its (shutdown-linked) token cancels.</summary>
     private sealed class GatedImageReadinessProbe : IImageServerReadinessProbe
     {
@@ -349,6 +387,77 @@ public sealed class ImageServerSupervisorTests
         public Task<bool> CheckResponsiveAsync(Uri baseAddress, CancellationToken ct)
         {
             return Task.FromResult(true);
+        }
+    }
+
+    /// <summary>A tree-kill the test can hold open, standing in for the seconds a multi-GB image model takes to die.</summary>
+    private sealed class ImageKillLatch : IDisposable
+    {
+        private readonly ManualResetEventSlim _gate = new(initialState: false);
+        private int _entered;
+
+        public bool Entered => Volatile.Read(ref _entered) != 0;
+
+        public void Wait()
+        {
+            Interlocked.Exchange(ref _entered, value: 1);
+            _gate.Wait(TimeSpan.FromSeconds(10));
+        }
+
+        public void Release()
+        {
+            _gate.Set();
+        }
+
+        public void Dispose()
+        {
+            _gate.Dispose();
+        }
+    }
+
+    /// <summary>
+    ///     Hands the FIRST launch a handle whose tree-kill blocks on <paramref name="firstKill" />; the rest are
+    ///     ordinary. The shared <see cref="FakeImageProcessHandle" /> kills instantly and so cannot express a slow kill.
+    /// </summary>
+    private sealed class LatchingImageLauncher(ImageKillLatch firstKill) : IImageServerProcessLauncher
+    {
+        private int _nextPid;
+
+        /// <summary>The first launched daemon — the one this file's admission test evicts.</summary>
+        public LatchedImageProcessHandle? Victim { get; private set; }
+
+        public IImageServerProcessHandle Launch(ImageServerLaunchSpec spec)
+        {
+            var pid = Interlocked.Increment(ref _nextPid);
+#pragma warning disable CA2000 // Ownership of the handle transfers to the supervisor under test, which disposes it on teardown.
+            var handle = new LatchedImageProcessHandle(pid, pid == 1 ? firstKill : null);
+#pragma warning restore CA2000
+            Victim ??= handle;
+            return handle;
+        }
+    }
+
+    private sealed class LatchedImageProcessHandle(int pid, ImageKillLatch? killLatch) : IImageServerProcessHandle
+    {
+        private int _exited;
+        private int _killed;
+
+        public bool WasTreeKilled => Volatile.Read(ref _killed) != 0;
+
+        public int ProcessId { get; } = pid;
+
+        public bool HasExited => Volatile.Read(ref _exited) != 0;
+
+        public void TreeKill()
+        {
+            killLatch?.Wait();
+            Interlocked.Exchange(ref _killed, value: 1);
+            Interlocked.Exchange(ref _exited, value: 1);
+        }
+
+        public void Dispose()
+        {
+            // No unmanaged resources in the double.
         }
     }
 }

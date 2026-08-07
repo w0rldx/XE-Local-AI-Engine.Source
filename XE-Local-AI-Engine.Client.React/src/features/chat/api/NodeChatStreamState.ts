@@ -28,6 +28,10 @@ export const nodeChatStreamEventTypes = {
 	// runtime phase forward so the UI can show a "Loading model…" indicator during a local cold load.
 	assistantPhase: "assistant-phase",
 	assistantDelta: "assistant-delta",
+	// A mid-stream replacement of the accumulated text (resume replay, offset-gap repair, queue-overflow
+	// repair). Carries the full `content`/`reasoning` and no delta. It is NOT terminal — its wire status is
+	// `streaming` and the turn stays live — so it must never appear in `terminalStatusForEvent`.
+	assistantSnapshot: "assistant-snapshot",
 	assistantCompleted: "assistant-completed",
 	assistantCancelled: "assistant-cancelled",
 	assistantFailed: "assistant-failed",
@@ -397,6 +401,39 @@ function terminalStatusForEvent(eventType: string): MessageStatus | undefined {
 	}
 }
 
+/**
+ * How an assistant lifecycle event's text fields fold into the accumulated turn, under the delta-only wire
+ * contract: `append` for a delta (which carries ONLY its delta — its `content`/`reasoning` are never populated,
+ * and reading them is what made every frame re-send the whole message), `replace` for a snapshot or terminal
+ * (which carry the authoritative full text), `carry` for everything else (status/phase events touch no text).
+ */
+type StreamTextMerge = "append" | "replace" | "carry";
+
+function streamTextMergeFor(eventType: string, isTerminal: boolean): StreamTextMerge {
+	if (eventType === nodeChatStreamEventTypes.assistantDelta) {
+		return "append";
+	}
+
+	return isTerminal || eventType === nodeChatStreamEventTypes.assistantSnapshot ? "replace" : "carry";
+}
+
+/**
+ * Applies a `StreamTextMerge` to one text field. Returns undefined rather than "" when nothing is accumulated
+ * yet, so an event that carries no reasoning leaves `reasoning` absent instead of seeding an empty segment.
+ */
+function mergeStreamText(
+	merge: StreamTextMerge,
+	existing: string | undefined,
+	full: string | null | undefined,
+	delta: string | null | undefined,
+): string | undefined {
+	if (merge === "append") {
+		return delta ? `${existing ?? ""}${delta}` : existing;
+	}
+
+	return merge === "replace" ? (full ?? existing) : existing;
+}
+
 function maxSortOrder(messages: ChatMessageModel[]): number {
 	return messages.reduce((max, message) => Math.max(max, message.sortOrder), 0);
 }
@@ -638,9 +675,13 @@ export function applyNodeChatStreamEvent(
 		terminalStatus ?? (isQueued ? "queued" : event.type === nodeChatStreamEventTypes.assistantPending ? "pending" : "streaming");
 	const status = normalizeStatus(event.status, fallbackStatus);
 	const eventTime = isoFromUnixMilliseconds(event.occurredAtUtc);
-	const content = event.content ?? `${existing?.content ?? ""}${event.delta ?? ""}`;
-	const reasoning =
-		event.reasoning ?? (event.reasoningDelta ? `${existing?.reasoning ?? ""}${event.reasoningDelta}` : existing?.reasoning);
+	// The wire is delta-only: an `assistant-delta` carries ONLY its delta and its `content`/`reasoning` are
+	// never populated, so reading them on this branch would resurrect the full-snapshot-per-frame amplifier
+	// (and, once the server stops sending them, silently blank the turn). A snapshot or a terminal carries the
+	// authoritative full text and replaces the accumulation wholesale; every other event leaves the text alone.
+	const textMerge = streamTextMergeFor(event.type, isTerminal);
+	const content = mergeStreamText(textMerge, existing?.content, event.content, event.delta) ?? "";
+	const reasoning = mergeStreamText(textMerge, existing?.reasoning, event.reasoning, event.reasoningDelta);
 	const rebuiltParts = nextReasoningParts(existing, event, reasoning ?? undefined);
 	// On a terminal turn, clear any lingering pending-approval waiting card: an API-tool DENY leaves a waiting card
 	// with no completing tool-call event, and it must not survive the terminal into a dead "awaiting decision" prompt.

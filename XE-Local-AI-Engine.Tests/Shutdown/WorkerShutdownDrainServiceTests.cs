@@ -428,6 +428,10 @@ public sealed class WorkerShutdownDrainServiceTests
         {
         }
 
+        public void CancelDetached(Guid invocationId)
+        {
+        }
+
         public void CancelAll()
         {
         }

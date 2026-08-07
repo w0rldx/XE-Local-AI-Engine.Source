@@ -124,6 +124,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
     private readonly ConcurrentDictionary<Guid, TaskCompletionSource> _activeInvocationCompletions = new();
 
     private readonly IToolApprovalAuditRecorder _approvalAuditRecorder;
+    private readonly IInvocationAttachmentTracker _attachmentTracker;
     private readonly ICapabilityReporter _capabilityReporter;
     private readonly IConversationContextBudgeter _contextBudgeter;
     private readonly ConversationContextBudgetOptions _contextBudgetOptions;
@@ -201,6 +202,11 @@ public sealed partial class InvocationRunner : IInvocationRunner
     // (see SetInvocationDeadline). Written and read only under _syncRoot, alongside the source it arms.
     private TimeSpan _invocationTimeout;
 
+    // Whether the active turn is currently parked waiting on a human (a tool approval or an ask_user question).
+    // Written and read only under _syncRoot. It exists so the AttachmentChanged handler can re-apply the deadline for a
+    // park it did not itself start — a client re-attaching mid-park must get the full park budget back from that moment.
+    private bool _parkedOnHuman;
+
     // Why the active invocation was DELIBERATELY cancelled, recorded synchronously under _syncRoot by the requester
     // itself (Cancel / CancelAll). Unknown means nobody asked: the cancellation then came from the invocation's own
     // CancelAfter watchdog or from the linked caller token, and both are read off observable state at mapping time.
@@ -227,6 +233,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         IToolApprovalAuditRecorder approvalAuditRecorder,
         IToolApprovalPolicy approvalPolicy,
         UserQuestionAnswerStash userQuestionAnswerStash,
+        IInvocationAttachmentTracker attachmentTracker,
         ILogger<InvocationRunner> logger)
     {
         _hubSender = hubSender ?? throw new ArgumentNullException(nameof(hubSender));
@@ -271,6 +278,11 @@ public sealed partial class InvocationRunner : IInvocationRunner
         // implementation leaves session scope available (today's behaviour).
         ArgumentNullException.ThrowIfNull(approvalPolicy);
         _skillSessionScopeDisabled = approvalPolicy is NodeToolApprovalPolicy { SkillSessionScopeDisabled: true };
+
+        // Subscribe for the process lifetime; both are singletons, so there is no unsubscribe path (mirrors
+        // InvocationResumeRegistry's subscription to the same dispatcher).
+        _attachmentTracker = attachmentTracker ?? throw new ArgumentNullException(nameof(attachmentTracker));
+        _attachmentTracker.AttachmentChanged += OnAttachmentChanged;
     }
 
     public int ActiveInvocationCount => _activeInvocationCompletions.Count;
@@ -535,6 +547,16 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
     public void Cancel(Guid invocationId)
     {
+        CancelCore(invocationId, CancellationOrigin.User);
+    }
+
+    public void CancelDetached(Guid invocationId)
+    {
+        CancelCore(invocationId, CancellationOrigin.DetachedGraceExpired);
+    }
+
+    private void CancelCore(Guid invocationId, CancellationOrigin origin)
+    {
         CancellationTokenSource? invocationCancellationTokenSource = null;
 
         lock (_syncRoot)
@@ -542,7 +564,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             if (_currentInvocationId == invocationId)
             {
                 invocationCancellationTokenSource = _invocationCancellationTokenSource;
-                _requestedCancellationOrigin = CancellationOrigin.User;
+                _requestedCancellationOrigin = origin;
             }
         }
 
@@ -1757,6 +1779,12 @@ public sealed partial class InvocationRunner : IInvocationRunner
     ///         thinking time, instead of "whatever the model left over from its 300 s".
     ///     </para>
     ///     <para>
+    ///         The park extension applies only while a client is ATTACHED. A park whose watcher has gone away is
+    ///         waiting for an answer that cannot arrive, so it falls back to a plain <c>InvocationTimeout</c> backstop
+    ///         and <c>DetachedInvocationReaper</c>'s grace normally ends it first. A run that never attached over the
+    ///         hub at all — a scheduled run, a platform-hub run — is NOT detached and keeps today's full park budget.
+    ///     </para>
+    ///     <para>
     ///         Re-arming under <see cref="_syncRoot" /> is what makes it safe against a concurrent teardown:
     ///         <see cref="ClearActiveInvocation" /> nulls the field under the same lock BEFORE disposing the source, so a
     ///         non-null source observed here cannot already be disposed.
@@ -1766,14 +1794,38 @@ public sealed partial class InvocationRunner : IInvocationRunner
     {
         lock (_syncRoot)
         {
-            if (_invocationCancellationTokenSource is not { } invocationCancellationTokenSource)
-            {
-                return;
-            }
+            _parkedOnHuman = parkedOnHuman;
+            ApplyInvocationDeadline();
+        }
+    }
 
-            // The parked deadline keeps the model's own budget on top of the human cap purely as a backstop: if the
-            // re-arm below were ever skipped, the turn still gets its normal InvocationTimeout rather than none.
-            invocationCancellationTokenSource.CancelAfter(parkedOnHuman ? _maxPendingToolCallAge + _invocationTimeout : _invocationTimeout);
+    // Caller must hold _syncRoot.
+    private void ApplyInvocationDeadline()
+    {
+        if (_invocationCancellationTokenSource is not { } invocationCancellationTokenSource)
+        {
+            return;
+        }
+
+        // The parked deadline keeps the model's own budget on top of the human cap purely as a backstop: if the
+        // re-arm on release were ever skipped, the turn still gets its normal InvocationTimeout rather than none.
+        var extendPark = _parkedOnHuman
+                         && _currentInvocationId is { } invocationId
+                         && !_attachmentTracker.IsDetached(invocationId);
+        invocationCancellationTokenSource.CancelAfter(extendPark ? _maxPendingToolCallAge + _invocationTimeout : _invocationTimeout);
+    }
+
+    // A client attaching or detaching mid-park changes which deadline the park is entitled to, and neither park site is
+    // running code at that moment — so the re-arm has to come from here. Without it a reload during an approval park
+    // would inherit whatever budget the detached park left behind.
+    private void OnAttachmentChanged(object? sender, InvocationAttachmentChangedEventArgs args)
+    {
+        lock (_syncRoot)
+        {
+            if (_parkedOnHuman && _currentInvocationId == args.InvocationId)
+            {
+                ApplyInvocationDeadline();
+            }
         }
     }
 
@@ -1997,6 +2049,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         {
             CancellationOrigin.User => "user",
             CancellationOrigin.Watchdog => "watchdog",
+            CancellationOrigin.DetachedGraceExpired => "detached_grace",
             _ => "shutdown"
         };
     }
@@ -2085,6 +2138,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             invocationCancellationTokenSource = _invocationCancellationTokenSource;
             _invocationCancellationTokenSource = null;
             _invocationTimeout = TimeSpan.Zero;
+            _parkedOnHuman = false;
             _currentInvocationId = null;
             _requestedCancellationOrigin = CancellationOrigin.Unknown;
             _hostCancellationToken = CancellationToken.None;
@@ -2103,6 +2157,13 @@ public sealed partial class InvocationRunner : IInvocationRunner
         Unknown = 0,
         User = 1,
         Watchdog = 2,
-        Shutdown = 3
+        Shutdown = 3,
+
+        /// <summary>
+        ///     The disconnect grace elapsed with no client attached (<c>DetachedInvocationReaper</c>). Classified as a
+        ///     plain cancellation like a user stop — the turn was abandoned, not timed out — but kept distinct so the
+        ///     logs and the cancellation metric can tell an abandoned turn from one the operator stopped.
+        /// </summary>
+        DetachedGraceExpired = 4
     }
 }

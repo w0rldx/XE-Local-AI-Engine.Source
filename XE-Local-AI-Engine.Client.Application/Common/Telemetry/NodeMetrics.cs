@@ -39,6 +39,46 @@ public static class NodeMetrics
             description: "Number of stalled provider streams abandoned after ignoring cancellation within the watchdog grace.");
 
     /// <summary>
+    ///     Incremented when a chat stream event could not be buffered because the stream's bounded queue was full.
+    ///     Should stay at ZERO — the queue holds ~80 s of consumer lag at the live emit cadence — so a non-zero value
+    ///     means a real consumer stall rather than a merely slow browser. Content-free (a count only).
+    ///     Labels: reason (queue_capacity | queue_bytes).
+    /// </summary>
+    public static readonly Counter<long> ChatStreamEnqueueDroppedTotal =
+        Meter.CreateCounter<long>("chat_stream_enqueue_dropped_total",
+            description: "Number of chat stream events dropped because the stream's bounded queue was full, by which bound was reached.");
+
+    /// <summary>
+    ///     Incremented each time the server tells a client to resynchronize an in-flight turn (re-subscribe through
+    ///     <c>ResumeMessage</c> and take a fresh snapshot). The reconcile is silent to the user by design, so this
+    ///     counter is the only signal that it is happening.
+    ///     Labels: reason (queue_overflow | replay_cap). The third cause — a delta offset gap — is detected on the
+    ///     client and rides the frontend error-snapshot breadcrumb trail, not this meter.
+    /// </summary>
+    public static readonly Counter<long> ChatStreamReconcileTotal =
+        Meter.CreateCounter<long>("chat_stream_reconcile_total",
+            description: "Number of server-initiated chat stream resynchronizations, by cause.");
+
+    /// <summary>
+    ///     Runs currently in flight with NO client attached. Incremented when an invocation's last stream subscriber
+    ///     goes away and decremented when one re-attaches or the run terminalizes. This is the "leases held with nobody
+    ///     watching" gauge: a detached run still holds its collision slot and its llama-server process, so a value that
+    ///     stays above zero is what a disconnect-grace regression looks like. Content-free (a count only).
+    /// </summary>
+    public static readonly UpDownCounter<long> ChatStreamDetachedInvocations =
+        Meter.CreateUpDownCounter<long>("chat_stream_detached_invocations",
+            description: "Number of in-flight invocations with no client stream attached.");
+
+    /// <summary>
+    ///     Incremented when the disconnect grace expires and a detached run is cancelled. Answers "is the grace
+    ///     deadline actually firing", which the gauge above cannot — that falls back to zero whether the client
+    ///     returned or the run was reaped. Content-free (a count only).
+    /// </summary>
+    public static readonly Counter<long> ChatDetachedInvocationReapedTotal =
+        Meter.CreateCounter<long>("chat_detached_invocation_reaped_total",
+            description: "Number of detached invocations cancelled after their disconnect grace expired.");
+
+    /// <summary>
     ///     Incremented when an invocation fails before producing output.
     ///     Labels: source (failure category, e.g. timeout | agent_runtime | provider_unreachable | unexpected).
     /// </summary>

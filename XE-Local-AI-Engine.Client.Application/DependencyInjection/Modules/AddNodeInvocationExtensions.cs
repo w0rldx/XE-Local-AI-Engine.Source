@@ -80,7 +80,9 @@ internal static class AddNodeInvocationExtensions
         // IClientLocalToolHandler enumerable once at construction.
         builder.Services.AddSingleton<UserQuestionAnswerStash>();
         builder.Services.AddSingleton<IClientLocalToolHandler, AskUserToolHandler>();
+        builder.Services.AddSingleton<IInvocationAttachmentTracker, InvocationAttachmentTracker>();
         builder.Services.AddSingleton<IInvocationRunner, InvocationRunner>();
+        builder.Services.AddHostedService<DetachedInvocationReaper>();
         builder.Services.AddSingleton<IInvocationHistory, InvocationHistory>();
         builder.Services.AddSingleton<IWorkerEventDispatcher, WorkerEventDispatcher>();
         builder.Services.AddSingleton<ModelCapabilityProber>();

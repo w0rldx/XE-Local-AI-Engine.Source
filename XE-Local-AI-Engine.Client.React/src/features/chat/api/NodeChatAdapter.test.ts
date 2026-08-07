@@ -66,6 +66,8 @@ const streamRequest = {
 	requestId: "request-1",
 };
 
+// Defaults to a wire-accurate `assistant-delta`: delta plus the offset it begins at, and NO accumulated
+// `content` — the full text rides only on `assistant-snapshot` and the terminals.
 function streamEvent(overrides: Partial<NodeChatStreamEventDto> = {}): NodeChatStreamEventDto {
 	return {
 		type: "assistant-delta",
@@ -76,9 +78,20 @@ function streamEvent(overrides: Partial<NodeChatStreamEventDto> = {}): NodeChatS
 		sequence: 1,
 		occurredAtUtc: 1_700_000_001_000,
 		delta: "hi",
-		content: "hi",
+		contentOffset: 0,
 		...overrides,
 	};
+}
+
+// The frame a resumed stream opens with: the authoritative full text, no delta, offsets equal to its lengths.
+function snapshotEvent(content: string, overrides: Partial<NodeChatStreamEventDto> = {}): NodeChatStreamEventDto {
+	return streamEvent({
+		type: "assistant-snapshot",
+		delta: undefined,
+		content,
+		contentOffset: content.length,
+		...overrides,
+	});
 }
 
 async function settle(): Promise<void> {
@@ -174,9 +187,10 @@ describe("nodeChatAdapter SignalR streaming", () => {
 		const first = iterator.next();
 		await settle();
 
-		// First delta over the original SendMessage stream.
-		connectionMock.state.currentSubscriber?.next(streamEvent({ sequence: 1, content: "hi", delta: "hi" }));
-		await expect(first).resolves.toMatchObject({ value: { content: "hi" }, done: false });
+		// First delta over the original SendMessage stream. A delta carries only its delta plus the offset it
+		// begins at — never the accumulated content.
+		connectionMock.state.currentSubscriber?.next(streamEvent({ sequence: 1, delta: "hi", contentOffset: 0 }));
+		await expect(first).resolves.toMatchObject({ value: { delta: "hi" }, done: false });
 
 		// Connection drops mid-stream while reconnecting; the subscription errors but the send must not fail.
 		connectionMock.state.status = "reconnecting";
@@ -197,9 +211,7 @@ describe("nodeChatAdapter SignalR streaming", () => {
 		// the sequences past the delivered high-water mark — without the rebase the dedupe guard drops every
 		// resumed event (terminal included) as a stale duplicate and the message sticks with no error.
 		const resumed = iterator.next();
-		connectionMock.state.currentSubscriber?.next(
-			streamEvent({ messageId: "request-1", sequence: 0, content: "hi there", delta: undefined }),
-		);
+		connectionMock.state.currentSubscriber?.next(snapshotEvent("hi there", { messageId: "request-1", sequence: 0 }));
 		await expect(resumed).resolves.toMatchObject({
 			value: { messageId: "assistant-1", content: "hi there", sequence: 2 },
 			done: false,
@@ -221,7 +233,7 @@ describe("nodeChatAdapter SignalR streaming", () => {
 		const first = iterator.next();
 		await settle();
 
-		connectionMock.state.currentSubscriber?.next(streamEvent({ sequence: 0, content: "a", delta: "a" }));
+		connectionMock.state.currentSubscriber?.next(streamEvent({ sequence: 0, delta: "a", contentOffset: 0 }));
 		await expect(first).resolves.toMatchObject({ value: { sequence: 0 }, done: false });
 
 		// First drop: resume delivers its zero-based events rebased to 1, 2, ...
@@ -235,9 +247,7 @@ describe("nodeChatAdapter SignalR streaming", () => {
 		expect(connectionMock.state.lastMethod).toBe("ResumeMessage");
 
 		const second = iterator.next();
-		connectionMock.state.currentSubscriber?.next(
-			streamEvent({ messageId: "request-1", sequence: 0, content: "ab", delta: undefined }),
-		);
+		connectionMock.state.currentSubscriber?.next(snapshotEvent("ab", { messageId: "request-1", sequence: 0 }));
 		await expect(second).resolves.toMatchObject({ value: { sequence: 1, content: "ab" }, done: false });
 
 		// Second drop: the next resume restarts at zero again and must rebase past the new high-water mark.
@@ -250,9 +260,7 @@ describe("nodeChatAdapter SignalR streaming", () => {
 		await settle();
 
 		const third = iterator.next();
-		connectionMock.state.currentSubscriber?.next(
-			streamEvent({ messageId: "request-1", sequence: 0, content: "abc", delta: undefined }),
-		);
+		connectionMock.state.currentSubscriber?.next(snapshotEvent("abc", { messageId: "request-1", sequence: 0 }));
 		await expect(third).resolves.toMatchObject({ value: { sequence: 2, content: "abc" }, done: false });
 
 		const done = iterator.next();
@@ -345,9 +353,9 @@ describe("nodeChatAdapter SignalR streaming", () => {
 
 		// Latch the server-minted variant id + requestId from the first event.
 		connectionMock.state.currentSubscriber?.next(
-			streamEvent({ messageId: "variant-9", requestId: "request-9", sequence: 1, content: "draft", delta: "draft" }),
+			streamEvent({ messageId: "variant-9", requestId: "request-9", sequence: 1, delta: "draft", contentOffset: 0 }),
 		);
-		await expect(first).resolves.toMatchObject({ value: { messageId: "variant-9", content: "draft" }, done: false });
+		await expect(first).resolves.toMatchObject({ value: { messageId: "variant-9", delta: "draft" }, done: false });
 
 		// Drop + reconnect -> adapter re-attaches via ResumeMessage keyed by the latched requestId.
 		connectionMock.state.status = "reconnecting";
@@ -364,13 +372,150 @@ describe("nodeChatAdapter SignalR streaming", () => {
 		// Resume events stamp the invocation id as the message id and restart their numbering at zero; the
 		// adapter remaps to the latched variant id and rebases the sequence past the delivered high-water mark.
 		const resumed = iterator.next();
-		connectionMock.state.currentSubscriber?.next(
-			streamEvent({ messageId: "request-9", sequence: 0, content: "draft done", delta: undefined }),
-		);
+		connectionMock.state.currentSubscriber?.next(snapshotEvent("draft done", { messageId: "request-9", sequence: 0 }));
 		await expect(resumed).resolves.toMatchObject({
 			value: { messageId: "variant-9", content: "draft done", sequence: 2 },
 			done: false,
 		});
+	});
+
+	it("forwards a contiguous run of deltas without re-subscribing", async () => {
+		const iterator = nodeChatAdapter.sendMessage(streamRequest, new AbortController().signal)[Symbol.asyncIterator]();
+		const first = iterator.next();
+		await settle();
+
+		connectionMock.state.currentSubscriber?.next(streamEvent({ sequence: 0, delta: "ab", contentOffset: 0 }));
+		await expect(first).resolves.toMatchObject({ value: { delta: "ab" }, done: false });
+
+		const second = iterator.next();
+		connectionMock.state.currentSubscriber?.next(streamEvent({ sequence: 1, delta: "cd", contentOffset: 2 }));
+		await expect(second).resolves.toMatchObject({ value: { delta: "cd" }, done: false });
+
+		const third = iterator.next();
+		connectionMock.state.currentSubscriber?.next(streamEvent({ sequence: 2, delta: "ef", contentOffset: 4 }));
+		await expect(third).resolves.toMatchObject({ value: { delta: "ef" }, done: false });
+
+		// Each offset continued exactly where the previous delta ended, so nothing was lost and the original
+		// subscription is still the only one open.
+		expect(connectionMock.connection.stream).toHaveBeenCalledTimes(1);
+		expect(connectionMock.state.lastMethod).toBe("SendMessage");
+	});
+
+	it("re-enters via ResumeMessage when a delta's offset skips ahead, and never forwards the gapped frame", async () => {
+		const iterator = nodeChatAdapter.sendMessage(streamRequest, new AbortController().signal)[Symbol.asyncIterator]();
+		const first = iterator.next();
+		await settle();
+
+		connectionMock.state.currentSubscriber?.next(streamEvent({ sequence: 0, delta: "ab", contentOffset: 0 }));
+		await expect(first).resolves.toMatchObject({ value: { delta: "ab" }, done: false });
+
+		// A frame that begins at character 5 when the client holds only 2: a frame was lost, so appending this
+		// delta would silently corrupt the turn. Only a snapshot can repair it.
+		connectionMock.state.currentSubscriber?.next(streamEvent({ sequence: 1, delta: "cd", contentOffset: 5 }));
+		await settle();
+
+		expect(connectionMock.connection.stream).toHaveBeenCalledTimes(2);
+		expect(connectionMock.state.lastMethod).toBe("ResumeMessage");
+		expect(connectionMock.state.lastPayload).toBe("request-1");
+		expect(connectionMock.subscription.dispose).toHaveBeenCalled();
+
+		// The dropped frame's sequence was deliberately left unconsumed, so the resumed stream's restarted
+		// numbering rebases straight onto it and the ordering guard never stalls on the hole. The next event the
+		// caller sees is the snapshot — never the gapped delta.
+		const repaired = iterator.next();
+		connectionMock.state.currentSubscriber?.next(snapshotEvent("abcdef", { messageId: "request-1", sequence: 0 }));
+		await expect(repaired).resolves.toMatchObject({
+			value: { type: "assistant-snapshot", messageId: "assistant-1", content: "abcdef", sequence: 1 },
+			done: false,
+		});
+	});
+
+	it("re-enters via ResumeMessage when a delta's offset overlaps the previous frame", async () => {
+		const iterator = nodeChatAdapter.sendMessage(streamRequest, new AbortController().signal)[Symbol.asyncIterator]();
+		const first = iterator.next();
+		await settle();
+
+		connectionMock.state.currentSubscriber?.next(streamEvent({ sequence: 0, delta: "ab", contentOffset: 0 }));
+		await expect(first).resolves.toMatchObject({ value: { delta: "ab" }, done: false });
+
+		// A benign duplicate replay (offset 1 when the client holds 2) takes the SAME repair path as a gap
+		// rather than a partial-slice heuristic — one code path, and the snapshot settles the truth either way.
+		connectionMock.state.currentSubscriber?.next(streamEvent({ sequence: 1, delta: "b", contentOffset: 1 }));
+		await settle();
+
+		expect(connectionMock.connection.stream).toHaveBeenCalledTimes(2);
+		expect(connectionMock.state.lastMethod).toBe("ResumeMessage");
+	});
+
+	it("re-enters via ResumeMessage on a reasoning-offset mismatch as well", async () => {
+		const iterator = nodeChatAdapter.sendMessage(streamRequest, new AbortController().signal)[Symbol.asyncIterator]();
+		const first = iterator.next();
+		await settle();
+
+		connectionMock.state.currentSubscriber?.next(
+			streamEvent({ sequence: 0, delta: "", contentOffset: 0, reasoningDelta: "think", reasoningOffset: 0 }),
+		);
+		await expect(first).resolves.toMatchObject({ value: { reasoningDelta: "think" }, done: false });
+
+		// Content is still contiguous here — only the reasoning stream lost a frame, and that is equally fatal
+		// to an append-only merge.
+		connectionMock.state.currentSubscriber?.next(
+			streamEvent({ sequence: 1, delta: "", contentOffset: 0, reasoningDelta: "ing", reasoningOffset: 99 }),
+		);
+		await settle();
+
+		expect(connectionMock.state.lastMethod).toBe("ResumeMessage");
+	});
+
+	it("consumes an assistant-reconcile without forwarding it and re-enters via ResumeMessage", async () => {
+		const iterator = nodeChatAdapter.sendMessage(streamRequest, new AbortController().signal)[Symbol.asyncIterator]();
+		const first = iterator.next();
+		await settle();
+
+		connectionMock.state.currentSubscriber?.next(streamEvent({ sequence: 0, delta: "ab", contentOffset: 0 }));
+		await expect(first).resolves.toMatchObject({ value: { delta: "ab" }, done: false });
+
+		// The server could not enqueue an event and is asking the client to resynchronize. It is an adapter
+		// instruction, not a message mutation, so it must never reach the stream reducer.
+		connectionMock.state.currentSubscriber?.next(
+			streamEvent({ type: "assistant-reconcile", sequence: 1, delta: undefined, contentOffset: undefined }),
+		);
+		await settle();
+
+		expect(connectionMock.state.lastMethod).toBe("ResumeMessage");
+
+		const repaired = iterator.next();
+		connectionMock.state.currentSubscriber?.next(snapshotEvent("abcdef", { messageId: "request-1", sequence: 0 }));
+		await expect(repaired).resolves.toMatchObject({
+			value: { type: "assistant-snapshot", content: "abcdef", sequence: 1 },
+			done: false,
+		});
+	});
+
+	it("re-bases the offsets from a resume snapshot so the following delta is not mistaken for a gap", async () => {
+		const iterator = nodeChatAdapter.sendMessage(streamRequest, new AbortController().signal)[Symbol.asyncIterator]();
+		const first = iterator.next();
+		await settle();
+
+		connectionMock.state.currentSubscriber?.next(streamEvent({ sequence: 0, delta: "ab", contentOffset: 0 }));
+		await expect(first).resolves.toMatchObject({ value: { delta: "ab" }, done: false });
+
+		connectionMock.state.currentSubscriber?.next(streamEvent({ sequence: 1, delta: "cd", contentOffset: 5 }));
+		await settle();
+		expect(connectionMock.state.lastMethod).toBe("ResumeMessage");
+
+		const repaired = iterator.next();
+		connectionMock.state.currentSubscriber?.next(snapshotEvent("abcdef", { messageId: "request-1", sequence: 0 }));
+		await expect(repaired).resolves.toMatchObject({ value: { content: "abcdef", sequence: 1 }, done: false });
+
+		// The snapshot carried 6 characters, so a delta continuing at 6 is contiguous — one repair total, not a
+		// second one against the pre-resume position.
+		const next = iterator.next();
+		connectionMock.state.currentSubscriber?.next(
+			streamEvent({ messageId: "request-1", sequence: 1, delta: "gh", contentOffset: 6 }),
+		);
+		await expect(next).resolves.toMatchObject({ value: { delta: "gh", sequence: 2 }, done: false });
+		expect(connectionMock.connection.stream).toHaveBeenCalledTimes(2);
 	});
 
 	it("disposes the SignalR subscription when the send aborts", async () => {

@@ -115,6 +115,13 @@ public sealed record NodeSettingsResponse
 
     public int MaxAllowedMaxPendingToolCallAgeMinutes { get; init; }
 
+    /// <summary>Seconds a run with no attached client keeps going before it is cancelled. <c>0</c> never cancels.</summary>
+    public int? DetachedGraceSeconds { get; init; }
+
+    public int MinDetachedGraceSeconds { get; init; }
+
+    public int MaxAllowedDetachedGraceSeconds { get; init; }
+
     public SamplingOptions? SamplingDefaults { get; init; }
 
     // ── Client voice (TTS) feature ──
@@ -201,6 +208,9 @@ public sealed record SaveNodeSettingsRequest
     public long? AgentHomeMaxPatchBytes { get; init; }
 
     public int? MaxPendingToolCallAgeMinutes { get; init; }
+
+    /// <summary>Seconds a run with no attached client keeps going before it is cancelled. <c>0</c> never cancels.</summary>
+    public int? DetachedGraceSeconds { get; init; }
 
     public SamplingOptions? SamplingDefaults { get; init; }
 

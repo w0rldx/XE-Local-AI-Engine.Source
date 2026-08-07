@@ -55,6 +55,15 @@ export interface NodeChatStreamEventDto {
 	occurredAtUtc: number;
 	delta?: string | null;
 	reasoningDelta?: string | null;
+	// Character index (UTF-16 code units, the same space as JS `String.length`) in the accumulated content /
+	// reasoning at which this event's `delta` / `reasoningDelta` begins. Set on `assistant-delta` (where it is
+	// the gap/overlap check) and on `assistant-snapshot` (where it equals the carried text's length); absent
+	// everywhere else. `NodeChatAdapter` is the only reader — it repairs a mismatch via ResumeMessage.
+	contentOffset?: number | null;
+	reasoningOffset?: number | null;
+	// `content`/`reasoning` carry the FULL accumulated text and are populated only on `assistant-snapshot`,
+	// the terminals, and `user-message-persisted`. They are NEVER populated on `assistant-delta` — reading
+	// them there is what made every frame carry the whole message (the O(n^2) wire amplifier).
 	content?: string | null;
 	reasoning?: string | null;
 	error?: string | null;

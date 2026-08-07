@@ -38,6 +38,7 @@ public sealed class NodeChatRegenerationService(
     ILocalDefaultChatModelResolver localDefaultChatModelResolver,
     IMemoryExtractionDispatcher memoryExtractionDispatcher,
     IOptions<KnowledgeBaseOptions> knowledgeOptions,
+    IOptions<ChatStreamBudgetOptions> streamBudgetOptions,
     IServiceScopeFactory scopeFactory,
     TimeProvider timeProvider,
     IToolApprovalPolicy toolApprovalPolicy,
@@ -159,15 +160,13 @@ public sealed class NodeChatRegenerationService(
             SingleReader = true,
             SingleWriter = false
         });
-        var eventChannel = Channel.CreateUnbounded<ChatStreamEvent>(new UnboundedChannelOptions
-        {
-            SingleReader = true,
-            // Five producers write this channel concurrently: the streaming-transition emit in RunInvocationAsync,
-            // the delta/terminal emits in the invocation-state pump, the tool-call lifecycle emits in
-            // OnToolCallLifecycleChanged, the turn-notice emits in OnTurnNoticeChanged, and the pending-question emits
-            // in OnUserQuestionRequestedChanged. SingleWriter must be false.
-            SingleWriter = false
-        });
+        // Six producers write this sink concurrently: the streaming-transition emit in RunInvocationAsync, the
+        // delta/terminal emits in the invocation-state pump, the tool-call lifecycle emits in
+        // OnToolCallLifecycleChanged, the turn-notice emits in OnTurnNoticeChanged, the pending-approval emits in
+        // OnApprovalRequestedChanged, and the pending-question emits in OnUserQuestionRequestedChanged. It is BOUNDED
+        // and never makes a producer wait — on a client disconnect the SSE loop below exits while all six keep
+        // writing, which is exactly the case Detach() in this method's finally exists to stop retaining.
+        var eventSink = new ChatStreamEventSink(correlation, sequence, streamBudgetOptions.Value, timeProvider);
 
         void OnInvocationStateChanged(object? _, InvocationStateChangedEventArgs args)
         {
@@ -187,7 +186,7 @@ public sealed class NodeChatRegenerationService(
             {
                 var toolSequence = sequence.Next();
                 ChatStreamEventMapper.AccumulateToolPart(parts, args.Payload, toolSequence);
-                eventChannel.Writer.TryWrite(ChatStreamEventMapper.ToolCallEvent(correlation.ConversationId, correlation.MessageId, correlation.RequestId, args.Payload, NowUnixMilliseconds(),
+                eventSink.TryWrite(ChatStreamEventMapper.ToolCallEvent(correlation.ConversationId, correlation.MessageId, correlation.RequestId, args.Payload, NowUnixMilliseconds(),
                     toolSequence));
             }
         }
@@ -198,8 +197,23 @@ public sealed class NodeChatRegenerationService(
             {
                 var noticeSequence = sequence.Next();
                 ChatStreamEventMapper.AccumulateNotice(parts, args.Payload, noticeSequence);
-                eventChannel.Writer.TryWrite(ChatStreamEventMapper.NoticeEvent(correlation.ConversationId, correlation.MessageId, correlation.RequestId, args.Payload, NowUnixMilliseconds(),
+                eventSink.TryWrite(ChatStreamEventMapper.NoticeEvent(correlation.ConversationId, correlation.MessageId, correlation.RequestId, args.Payload, NowUnixMilliseconds(),
                     noticeSequence));
+            }
+        }
+
+        // A pending tool-approval, mirroring the send path (NodeChatStreamService). NOT accumulated into parts[]: the
+        // approval prompt is transient live state that the loopback resolve endpoint clears, and a reloaded terminal
+        // turn shows the executed/rejected tool result rather than a lingering prompt. A regenerated turn offers the
+        // same tools as a send, so without this subscription an approval-gated tool called here would park the run
+        // with no Approve/Deny card ever reaching the browser — the same defect the ask_user subscription below was
+        // added to fix, for the sibling event.
+        void OnApprovalRequestedChanged(object? _, ApprovalRequestedChangedEventArgs args)
+        {
+            if (args.Payload.InvocationId == requestId)
+            {
+                eventSink.TryWrite(ChatStreamEventMapper.ApprovalRequestedEvent(correlation.ConversationId, correlation.MessageId, correlation.RequestId, args.Payload,
+                    NowUnixMilliseconds(), sequence.Next()));
             }
         }
 
@@ -211,7 +225,7 @@ public sealed class NodeChatRegenerationService(
         {
             if (args.Payload.InvocationId == requestId)
             {
-                eventChannel.Writer.TryWrite(ChatStreamEventMapper.QuestionRequestedEvent(correlation.ConversationId, correlation.MessageId, correlation.RequestId, args.Payload,
+                eventSink.TryWrite(ChatStreamEventMapper.QuestionRequestedEvent(correlation.ConversationId, correlation.MessageId, correlation.RequestId, args.Payload,
                     NowUnixMilliseconds(), sequence.Next()));
             }
         }
@@ -236,6 +250,7 @@ public sealed class NodeChatRegenerationService(
         eventDispatcher.InvocationStateChanged += OnInvocationStateChanged;
         eventDispatcher.ToolCallLifecycleChanged += OnToolCallLifecycleChanged;
         eventDispatcher.TurnNoticeChanged += OnTurnNoticeChanged;
+        eventDispatcher.ApprovalRequestedChanged += OnApprovalRequestedChanged;
         eventDispatcher.UserQuestionRequestedChanged += OnUserQuestionRequestedChanged;
 
         try
@@ -330,7 +345,7 @@ public sealed class NodeChatRegenerationService(
                 : null;
 
             pumpTask = invocationStatePump.PumpAsync(stateChannel.Reader,
-                eventChannel.Writer,
+                eventSink,
                 correlation,
                 // Stamp the FINAL persisted variant model from the effective model (the pump terminalizes from this
                 // requestedModel) so the stored attribution reflects the model that actually reran, not original.Model.
@@ -345,7 +360,7 @@ public sealed class NodeChatRegenerationService(
             runTask = RunInvocationAsync(package,
                 placeholder.MessageId,
                 stateChannel.Writer,
-                eventChannel.Writer,
+                eventSink,
                 correlation,
                 requestId,
                 sequence,
@@ -360,13 +375,19 @@ public sealed class NodeChatRegenerationService(
             // Forward persisted events to the client. The client cancellationToken stops THIS loop only (browser/SignalR
             // disconnect); it does not cancel the run or the pump, which keep going on runCancellation.Token so the
             // runner reaches its real terminal and the pump persists it.
-            await foreach (var streamEvent in eventChannel.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
+            await foreach (var streamEvent in eventSink.ReadAllAsync(cancellationToken).ConfigureAwait(false))
             {
                 yield return streamEvent;
             }
         }
         finally
         {
+            // The SSE consumer is gone. Detach FIRST, before draining the tasks below: from here every producer's
+            // write is a no-op, so the abandoned stream retains nothing for the remainder of the run. Detach
+            // deliberately does not COMPLETE the queue — the pump reads a write fault as a persistence fault and
+            // would terminalize the variant Failed.
+            eventSink.Detach();
+
             // Do NOT cancel runCancellation here on a client disconnect: let runTask/pumpTask drain to the runner's true
             // terminal so persistence follows the runner's lifecycle, not the client connection's. A genuine user cancel
             // already tripped runCancellation via the registry.
@@ -409,6 +430,7 @@ public sealed class NodeChatRegenerationService(
             eventDispatcher.InvocationStateChanged -= OnInvocationStateChanged;
             eventDispatcher.ToolCallLifecycleChanged -= OnToolCallLifecycleChanged;
             eventDispatcher.TurnNoticeChanged -= OnTurnNoticeChanged;
+            eventDispatcher.ApprovalRequestedChanged -= OnApprovalRequestedChanged;
             eventDispatcher.UserQuestionRequestedChanged -= OnUserQuestionRequestedChanged;
         }
     }
@@ -416,7 +438,7 @@ public sealed class NodeChatRegenerationService(
     private async Task RunInvocationAsync(RuntimePackage package,
         Guid messageId,
         ChannelWriter<InvocationState> stateWriter,
-        ChannelWriter<ChatStreamEvent> eventWriter,
+        IChatStreamEventSink eventSink,
         NodeChatMessageCorrelation correlation,
         Guid requestId,
         NodeChatStreamSequence sequence,
@@ -440,7 +462,7 @@ public sealed class NodeChatRegenerationService(
                 return;
             }
 
-            await eventWriter.WriteAsync(ToMessageEvent(ChatStreamEventTypes.AssistantStreaming, correlation, streamingMessage, sequence.Next()), cancellationToken).ConfigureAwait(false);
+            await eventSink.WriteAsync(ToMessageEvent(ChatStreamEventTypes.AssistantStreaming, correlation, streamingMessage, sequence.Next()), cancellationToken).ConfigureAwait(false);
 
             // Symmetric with the send path: a regenerate of a "Local runtime default" turn that resolved no installed
             // GGUF chat model fails BEFORE any provider invocation with the dedicated ModelNotInstalled category.
@@ -760,14 +782,12 @@ public sealed class NodeChatRegenerationService(
         NodeChatMessageCorrelation correlation,
         NodeChatPersistedMessageDto message,
         long sequence,
-        string? delta = null,
-        string? reasoningDelta = null,
         int? inputTokens = null,
         int? outputTokens = null,
         int? totalTokens = null,
         int? reasoningTokens = null)
     {
-        return ChatStreamEventMapper.MessageEvent(type, correlation, message, NowUnixMilliseconds(), sequence, delta, reasoningDelta, inputTokens, outputTokens, totalTokens, reasoningTokens);
+        return ChatStreamEventMapper.MessageEvent(type, correlation, message, NowUnixMilliseconds(), sequence, inputTokens, outputTokens, totalTokens, reasoningTokens);
     }
 
     private long NowUnixMilliseconds()

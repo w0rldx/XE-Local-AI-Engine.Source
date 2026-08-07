@@ -22,6 +22,7 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
     private readonly string _hfQuantSeed;
     private readonly int _maxResponseSizeMbSeed;
     private readonly int _maxPendingToolCallAgeMinutesSeed;
+    private readonly int _detachedGraceSecondsSeed;
     private readonly long _agentHomeMaxPatchBytesSeed;
     private readonly long _agentHomeMaxSelectedFolderBytesSeed;
     private readonly int _agentHomeCommandTimeoutSeed;
@@ -56,6 +57,7 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
         _agentHomeMaxPatchBytesSeed = agentHome.MaxPatchBytes;
         _maxResponseSizeMbSeed = workerNode.MaxResponseSizeMb;
         _maxPendingToolCallAgeMinutesSeed = workerNode.MaxPendingToolCallAgeMinutes;
+        _detachedGraceSecondsSeed = workerNode.DetachedGraceSeconds;
 
         // Orchestration idle-timeout seed is read from configuration (not IOptions<OrchestrationAgentOptions>) to avoid a
         // DI cycle: OrchestrationAgentOptions is itself Configure-d FROM this accessor at the composition root (so the
@@ -157,6 +159,9 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
     public async Task<int> GetMaxPendingToolCallAgeMinutesAsync(CancellationToken cancellationToken = default) =>
         ResolveMaxPendingToolCallAgeMinutes(await LoadAsync(cancellationToken).ConfigureAwait(false));
 
+    public async Task<int> GetDetachedGraceSecondsAsync(CancellationToken cancellationToken = default) =>
+        ResolveDetachedGraceSeconds(await LoadAsync(cancellationToken).ConfigureAwait(false));
+
     public async Task<SamplingOptions?> GetSamplingDefaultsAsync(CancellationToken cancellationToken = default)
     {
         var stored = await LoadAsync(cancellationToken).ConfigureAwait(false);
@@ -212,6 +217,9 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
 
     public int GetMaxPendingToolCallAgeMinutes() =>
         ResolveMaxPendingToolCallAgeMinutes(LoadStored());
+
+    public int GetDetachedGraceSeconds() =>
+        ResolveDetachedGraceSeconds(LoadStored());
 
     public int GetChatCacheReuse() =>
         ResolveChatCacheReuse(LoadStored());
@@ -271,6 +279,9 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
 
     private int ResolveMaxPendingToolCallAgeMinutes(StoredNodeSettings stored) =>
         stored.MaxPendingToolCallAgeMinutes ?? _maxPendingToolCallAgeMinutesSeed;
+
+    private int ResolveDetachedGraceSeconds(StoredNodeSettings stored) =>
+        stored.DetachedGraceSeconds ?? _detachedGraceSecondsSeed;
 
     // The speculative-decoding + cache-reuse knobs have no appsettings section today: the seed IS the hardcoded default
     // (mirrors the llama.cpp supervisor cap/TTL), so these resolvers coalesce the stored value against the Default* const.

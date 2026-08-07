@@ -76,6 +76,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -110,6 +111,139 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var original = variants.Single(v => v.MessageId == originalId);
         AssertEx.Equal("four", original.Content);
         AssertEx.Equal(NodeChatMessageStatusValues.Completed, original.Status);
+    }
+
+    [Test]
+    public async Task RegenerateAsync_FansAPendingApprovalOutToTheStream()
+    {
+        // The regenerate path subscribed four dispatcher events and not ApprovalRequestedChanged, so a regenerated turn
+        // that called an approval-gated tool parked with no Approve/Deny card ever reaching the browser — the run then
+        // sat until its timeout. Same defect the ask_user subscription in this file was added to fix, sibling event.
+        await using var provider = await BuildProviderAsync("regeneration-approval.sqlite").ConfigureAwait(false);
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var (conversationId, originalId) = await SeedRegeneratableTurnAsync(persistence).ConfigureAwait(false);
+
+        var dispatcher = new RegenRecordingDispatcher();
+        var otherInvocationId = Guid.NewGuid();
+        var runner = new RegenCompletingRunner(dispatcher,
+            async invocationId =>
+            {
+                await dispatcher.ReportApprovalLifecycleAsync(new ApprovalLifecyclePayload
+                                {
+                                    InvocationId = invocationId,
+                                    RequestId = "approval-1",
+                                    CallId = "call-1",
+                                    ToolName = "run_command",
+                                    Description = "Run a command"
+                                })
+                                .ConfigureAwait(false);
+
+                // A concurrent turn's approval must not leak into this stream: the handler filters on the run's own
+                // request id, exactly as the other four do.
+                await dispatcher.ReportApprovalLifecycleAsync(new ApprovalLifecyclePayload
+                                {
+                                    InvocationId = otherInvocationId,
+                                    RequestId = "approval-other",
+                                    CallId = "call-9",
+                                    ToolName = "run_command",
+                                    Description = "Run a command for another turn"
+                                })
+                                .ConfigureAwait(false);
+            });
+
+        var service = CreateService(persistence, dispatcher, runner);
+
+        var events = new List<ChatStreamEvent>();
+        await foreach (var streamEvent in service.RegenerateAsync(conversationId, originalId).ConfigureAwait(false))
+        {
+            events.Add(streamEvent);
+        }
+
+        var approval = AssertEx.NotNull(events.SingleOrDefault(streamEvent => streamEvent.Type == ChatStreamEventTypes.ApprovalRequested));
+        AssertEx.Equal("approval-1", approval.ApprovalRequestId);
+        AssertEx.Equal("call-1", approval.ToolCallId);
+        AssertEx.Equal("run_command", approval.ToolName);
+
+        // The card is ordered before the terminal, so the browser can render it while the turn is still parked.
+        AssertEx.True(approval.Sequence < events.Single(streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantCompleted).Sequence,
+            "The approval must be sequenced before the terminal.");
+
+        AssertEx.False(dispatcher.HasApprovalSubscribers, "The approval handler must be detached once the stream ends.");
+    }
+
+    [Test]
+    public async Task RegenerateAsync_WhenTheTurnThrowsBeforeItsTasksExist_StillDetachesTheApprovalHandler()
+    {
+        // The handlers are attached before the first await inside the try, so a throw from the pre-task setup (a
+        // client disconnect during GetEnableToolsAsync, a settings failure) must still reach the finally. Leaving them
+        // attached leaks a handler on the singleton dispatcher for the whole process lifetime.
+        await using var provider = await BuildProviderAsync("regeneration-approval-throw.sqlite").ConfigureAwait(false);
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var (conversationId, originalId) = await SeedRegeneratableTurnAsync(persistence).ConfigureAwait(false);
+
+        var dispatcher = new RegenRecordingDispatcher();
+        var runtimeSettings = StubNodeRuntimeSettings.Create().Build();
+        runtimeSettings.GetEnableToolsAsync(Arg.Any<CancellationToken>())
+                       .Returns<Task<bool>>(_ => throw new InvalidOperationException("node settings unavailable"));
+
+        var service = CreateService(persistence, dispatcher, new RegenCompletingRunner(dispatcher), runtimeSettings);
+
+        await AssertEx.ThrowsAsync<InvalidOperationException>(async () =>
+        {
+            await foreach (var _ in service.RegenerateAsync(conversationId, originalId).ConfigureAwait(false))
+            {
+                // The throw lands before the pump/runner tasks are created, so only the pre-run lifecycle events flow.
+            }
+        }).ConfigureAwait(false);
+
+        AssertEx.False(dispatcher.HasApprovalSubscribers, "The approval handler must be detached even when the turn throws before its tasks exist.");
+    }
+
+    // Seeds a completed user + assistant turn and returns the ids needed to regenerate that assistant answer.
+    private static async Task<(Guid ConversationId, Guid OriginalMessageId)> SeedRegeneratableTurnAsync(NodeChatPersistenceService persistence)
+    {
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Regen", "node", CreatedAtUtc: 10)).ConfigureAwait(false);
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "what is 2+2?", CreatedAtUtc: 11)).ConfigureAwait(false);
+
+        var originalId = Guid.NewGuid();
+        var originalCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, originalId, Guid.NewGuid());
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, CreatedAtUtc: 12,
+                             "model-x"))
+                         .ConfigureAwait(false);
+        await persistence.TerminalizeAssistantMessageAsync(
+                             new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 13, "four", Model: "model-x"))
+                         .ConfigureAwait(false);
+
+        return (conversation.ConversationId, originalId);
+    }
+
+    private static NodeChatRegenerationService CreateService(NodeChatPersistenceService persistence,
+        RegenRecordingDispatcher dispatcher,
+        IInvocationRunner runner,
+        INodeRuntimeSettings? runtimeSettings = null)
+    {
+        return new NodeChatRegenerationService(persistence,
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
+            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
+                CreateGgufModelCapabilityResolver(), Substitute.For<IActiveCloudChatClientFactory>(), NullLogger<ChatTurnResolver>.Instance),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            runtimeSettings ?? StubNodeRuntimeSettings.Create().Build(),
+            new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
+            CreateDefaultAgentProvider(),
+            CreateNodeSettingsStore(),
+            CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
+            Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
+            CreateScopeFactory(),
+            TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
+            NullLogger<NodeChatRegenerationService>.Instance);
     }
 
     [Test]
@@ -265,6 +399,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateLocalDefaultChatModelResolver(resolved: null, echoPersistedDefault: false),
             CreateMemoryExtractionDispatcher(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -333,6 +468,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -411,6 +547,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -490,6 +627,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -572,6 +710,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -632,6 +771,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -687,6 +827,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -759,6 +900,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -822,6 +964,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -876,6 +1019,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -948,6 +1092,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -999,6 +1144,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -1042,6 +1188,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -1106,6 +1253,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -1294,6 +1442,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -1385,6 +1534,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             {
                 AllowCloudModelAccess = allowCloudModelAccess
             }),
+            Options.Create(new ChatStreamBudgetOptions()),
             scopeFactory,
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
@@ -1576,12 +1726,19 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         };
     }
 
-    private sealed class RegenCompletingRunner(RegenRecordingDispatcher dispatcher) : IInvocationRunner
+    // beforeStreaming lets a test raise dispatcher traffic (an approval, a notice) from INSIDE the run, which is the
+    // only point at which the service's handlers are subscribed. Optional, so every existing construction is unchanged.
+    private sealed class RegenCompletingRunner(RegenRecordingDispatcher dispatcher, Func<Guid, Task>? beforeStreaming = null) : IInvocationRunner
     {
         public int ActiveInvocationCount => 0;
 
         public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
         {
+            if (beforeStreaming is not null)
+            {
+                await beforeStreaming(context.Package.InvocationId).ConfigureAwait(false);
+            }
+
             await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "regenerated answer").ConfigureAwait(false);
             await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 5, outputTokens: 2, totalTokens: 7, reasoningTokens: 0).ConfigureAwait(false);
         }
@@ -1597,6 +1754,10 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         }
 
         public void Cancel(Guid invocationId)
+        {
+        }
+
+        public void CancelDetached(Guid invocationId)
         {
         }
 
@@ -1672,6 +1833,10 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         {
         }
 
+        public void CancelDetached(Guid invocationId)
+        {
+        }
+
         public void CancelAll()
         {
         }
@@ -1732,6 +1897,10 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         }
 
         public void Cancel(Guid invocationId)
+        {
+        }
+
+        public void CancelDetached(Guid invocationId)
         {
         }
 
@@ -1799,6 +1968,10 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         {
         }
 
+        public void CancelDetached(Guid invocationId)
+        {
+        }
+
         public void CancelAll()
         {
         }
@@ -1831,6 +2004,10 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         public event EventHandler<ApprovalRequestedChangedEventArgs>? ApprovalRequestedChanged;
 
         public event EventHandler<UserQuestionRequestedChangedEventArgs>? UserQuestionRequestedChanged;
+
+        // The dispatcher is a SINGLETON in the app, so a handler left attached leaks for the process lifetime and
+        // keeps firing into a stream nobody reads. Tests assert this is false on every exit path.
+        public bool HasApprovalSubscribers => ApprovalRequestedChanged is not null;
 
         public InvocationState? CurrentInvocation { get; private set; }
 

@@ -28,6 +28,7 @@ const nodeSettingsFieldBounds = {
 	orchestrationIdleTimeoutSeconds: { min: 1, max: 3600 },
 	agentHomeTimeoutSeconds: { min: 1, max: 86400 },
 	maxPendingToolCallAgeMinutes: { min: 1, max: 60 },
+	detachedGraceSeconds: { min: 0, max: 86400 },
 	chatCacheReuse: { min: 0, max: 8192 },
 	speculativeDraftMaxTokens: { min: 0, max: 16 },
 } as const satisfies Record<string, NumericBounds>;
@@ -281,6 +282,7 @@ export interface NodeSettingsFieldsForm {
 	agentHomeMaxSelectedFolderBytes: number | string;
 	agentHomeMaxPatchBytes: number | string;
 	maxPendingToolCallAgeMinutes: number | string;
+	detachedGraceSeconds: number | string;
 }
 
 // Defaults used when the response omits a field. These mirror the backend seed defaults (the `Default*` consts in
@@ -310,6 +312,7 @@ export const nodeSettingsFieldDefaults: NodeSettingsFieldsForm = {
 	agentHomeMaxSelectedFolderBytes: 536870912,
 	agentHomeMaxPatchBytes: 52428800,
 	maxPendingToolCallAgeMinutes: 10,
+	detachedGraceSeconds: 300,
 };
 
 // Coalesces a nullable numeric response field into a form value, falling back to the provided default when absent.
@@ -369,6 +372,7 @@ export function toNodeSettingsFieldsForm(response: NodeSettingsResponse | undefi
 			response.maxPendingToolCallAgeMinutes,
 			nodeSettingsFieldDefaults.maxPendingToolCallAgeMinutes,
 		),
+		detachedGraceSeconds: numberOr(response.detachedGraceSeconds, nodeSettingsFieldDefaults.detachedGraceSeconds),
 	};
 }
 
@@ -390,6 +394,7 @@ export interface NodeSettingsFieldBounds {
 	readonly orchestrationIdleTimeoutSeconds: NumericBounds;
 	readonly agentHomeTimeoutSeconds: NumericBounds;
 	readonly maxPendingToolCallAgeMinutes: NumericBounds;
+	readonly detachedGraceSeconds: NumericBounds;
 }
 
 export function toNodeSettingsFieldBounds(response: NodeSettingsResponse | undefined): NodeSettingsFieldBounds {
@@ -438,6 +443,11 @@ export function toNodeSettingsFieldBounds(response: NodeSettingsResponse | undef
 			response?.minMaxPendingToolCallAgeMinutes,
 			response?.maxAllowedMaxPendingToolCallAgeMinutes,
 			nodeSettingsFieldBounds.maxPendingToolCallAgeMinutes,
+		),
+		detachedGraceSeconds: boundsOf(
+			response?.minDetachedGraceSeconds,
+			response?.maxAllowedDetachedGraceSeconds,
+			nodeSettingsFieldBounds.detachedGraceSeconds,
 		),
 	};
 }
@@ -678,6 +688,17 @@ export function buildNodeSettingsRequest(
 			errors,
 			(v) => {
 				body.maxPendingToolCallAgeMinutes = v;
+			},
+		);
+		collectBoundedInt(
+			form.detachedGraceSeconds,
+			baseline.detachedGraceSeconds,
+			bounds.detachedGraceSeconds,
+			"detachedGraceSeconds",
+			body,
+			errors,
+			(v) => {
+				body.detachedGraceSeconds = v;
 			},
 		);
 		collectPositiveLong(

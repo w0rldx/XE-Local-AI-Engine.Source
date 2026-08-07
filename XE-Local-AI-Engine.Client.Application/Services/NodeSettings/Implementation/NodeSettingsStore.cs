@@ -187,6 +187,7 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
             AgentHomeMaxPatchBytes = ClampPositiveLong(settings.AgentHomeMaxPatchBytes),
             MaxPendingToolCallAgeMinutes = ClampToRange(settings.MaxPendingToolCallAgeMinutes,
                 StoredNodeSettings.MinMaxPendingToolCallAgeMinutes, StoredNodeSettings.MaxMaxPendingToolCallAgeMinutes),
+            DetachedGraceSeconds = NormalizeDetachedGraceSeconds(settings.DetachedGraceSeconds),
             ChatCacheReuse = ClampToRange(settings.ChatCacheReuse,
                 StoredNodeSettings.MinChatCacheReuse, StoredNodeSettings.MaxChatCacheReuse),
             SpeculativeMode = NormalizeSpeculativeMode(settings.SpeculativeMode),
@@ -239,6 +240,23 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
     private static string? TrimToNull(string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    /// <summary>
+    ///     Unlike every other numeric field, a NEGATIVE disconnect grace clamps to <c>0</c> rather than re-seeding:
+    ///     <c>0</c> is a meaningful value here (never cancel), so "the operator asked for no reaping, badly" is a
+    ///     clearer reading of a negative than "fall back to 300 s and reap anyway". An absurdly LARGE value still
+    ///     re-seeds like the rest.
+    /// </summary>
+    private static int? NormalizeDetachedGraceSeconds(int? value)
+    {
+        return value switch
+        {
+            null => null,
+            < StoredNodeSettings.MinDetachedGraceSeconds => StoredNodeSettings.MinDetachedGraceSeconds,
+            > StoredNodeSettings.MaxDetachedGraceSeconds => null,
+            _ => value
+        };
     }
 
     private static int? ClampToRange(int? value, int min, int max)

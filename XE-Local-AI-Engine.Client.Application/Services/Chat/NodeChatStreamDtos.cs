@@ -19,7 +19,32 @@ public static class ChatStreamEventTypes
     /// </summary>
     public const string AssistantPhase = "assistant-phase";
 
+    /// <summary>
+    ///     One live increment of the assistant's content and/or reasoning. Carries ONLY
+    ///     <see cref="ChatStreamEvent.Delta" />/<see cref="ChatStreamEvent.ReasoningDelta" /> plus the character offset
+    ///     each begins at — never the accumulated text. Sending the full snapshot on every frame is what made the wire
+    ///     cost of a turn quadratic in its output length, so <see cref="ChatStreamEvent.Content" /> and
+    ///     <see cref="ChatStreamEvent.Reasoning" /> are never populated on this type and the client must append rather
+    ///     than replace. The client repairs a discontinuity by re-subscribing through <c>ResumeMessage</c>, whose first
+    ///     frame is an <see cref="AssistantSnapshot" />.
+    /// </summary>
     public const string AssistantDelta = "assistant-delta";
+
+    /// <summary>
+    ///     An authoritative REPLACEMENT of the accumulated content/reasoning, carrying the full text and the offsets
+    ///     the next delta will continue from. Emitted on resume replay, on gap repair, and on queue overflow — never
+    ///     mid-stream on the happy path. Deliberately NOT terminal: its status stays <c>streaming</c> and the turn
+    ///     continues after it.
+    /// </summary>
+    public const string AssistantSnapshot = "assistant-snapshot";
+
+    /// <summary>
+    ///     A "resynchronize" marker: the server could not deliver a contiguous stream (the consumer's queue overflowed,
+    ///     or a replay snapshot was too large to send). Carries no payload beyond the correlation and a sequence; the
+    ///     client re-subscribes through <c>ResumeMessage</c> and consumes it without surfacing anything to the user.
+    /// </summary>
+    public const string AssistantReconcile = "assistant-reconcile";
+
     public const string AssistantCompleted = "assistant-completed";
     public const string AssistantCancelled = "assistant-cancelled";
     public const string AssistantFailed = "assistant-failed";
@@ -127,4 +152,16 @@ public sealed record ChatStreamEvent(
     // UserQuestionSpec[]. Rides as a JSON STRING for the same reason Arguments does: the event record stays a flat
     // wire shape and the client parses the payload it renders. Trailing optional so every existing event type's wire
     // shape is unchanged.
-    string? Questions = null);
+    string? Questions = null,
+    // The character index in the accumulated content at which Delta begins (AssistantDelta), or the length of the
+    // carried Content (AssistantSnapshot). Null on every other event type. The client uses it to detect a gap: a delta
+    // whose ContentOffset is not where the previous one ended means the stream is discontinuous, and it repairs by
+    // re-subscribing through ResumeMessage.
+    //
+    // These are .NET string indices, i.e. UTF-16 code units — deliberately the same index space as JavaScript's
+    // String.length, so client and server agree on the index without any conversion. A delta may therefore split a
+    // surrogate pair; it already could, and rendering concatenates before display, so nothing changes.
+    //
+    // Trailing optional so every existing event type's wire shape is unchanged.
+    long? ContentOffset = null,
+    long? ReasoningOffset = null);

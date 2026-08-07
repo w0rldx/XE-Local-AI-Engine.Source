@@ -1,10 +1,12 @@
 namespace XE_Local_AI_Engine.Client.Hubs;
 
+using System.Runtime.CompilerServices;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Invocation;
 
 /// <summary>
 ///     Represents local chat hub.
@@ -13,13 +15,14 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 public sealed class LocalChatHub(
     INodeChatStreamService streamService,
     INodeChatRegenerationService regenerationService,
-    IInvocationResumeRegistry resumeRegistry) : Hub
+    IInvocationResumeRegistry resumeRegistry,
+    IInvocationAttachmentTracker attachmentTracker) : Hub
 {
     public IAsyncEnumerable<ChatStreamEvent> SendMessage(NodeChatStreamRequest request,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
-        return streamService.SendMessageAsync(request, cancellationToken);
+        return TrackAttachment(streamService.SendMessageAsync(request, cancellationToken), cancellationToken);
     }
 
     /// <summary>
@@ -36,7 +39,8 @@ public sealed class LocalChatHub(
         IReadOnlyDictionary<Guid, Guid>? selectedPath,
         CancellationToken cancellationToken)
     {
-        return regenerationService.RegenerateAsync(conversationId, originalMessageId, reasoningEffort, useLocalTools, useKnowledgeBase, selectedPath, cancellationToken);
+        return TrackAttachment(regenerationService.RegenerateAsync(conversationId, originalMessageId, reasoningEffort, useLocalTools, useKnowledgeBase, selectedPath, cancellationToken),
+            cancellationToken);
     }
 
     /// <summary>
@@ -48,7 +52,7 @@ public sealed class LocalChatHub(
     public IAsyncEnumerable<ChatStreamEvent> ResumeMessage(Guid invocationId,
         CancellationToken cancellationToken)
     {
-        return resumeRegistry.ResumeAsync(invocationId, cancellationToken);
+        return TrackAttachment(resumeRegistry.ResumeAsync(invocationId, cancellationToken), cancellationToken);
     }
 
     /// <summary>
@@ -71,6 +75,57 @@ public sealed class LocalChatHub(
         var invocationId = resumeRegistry.TryGetLiveInvocationIdForConversation(conversationId);
         return invocationId is null
             ? AsyncEnumerable.Empty<ChatStreamEvent>()
-            : resumeRegistry.ResumeAsync(invocationId.Value, cancellationToken);
+            : TrackAttachment(resumeRegistry.ResumeAsync(invocationId.Value, cancellationToken), cancellationToken);
+    }
+
+    /// <summary>
+    ///     Marks the invocation as WATCHED for as long as this stream is being consumed, so
+    ///     <c>DetachedInvocationReaper</c> can end a run whose client went away and never came back.
+    ///     <para>
+    ///         This hub is the only attach site because all four stream entry points return from this one file. The
+    ///         invocation id is latched off the FIRST event's <see cref="ChatStreamEvent.RequestId" /> rather than taken
+    ///         from the arguments — <see cref="SendMessage" /> and <see cref="ResumeMessage" /> know it up front, but
+    ///         <see cref="RegenerateMessage" /> and <see cref="ResumeConversation" /> mint it server-side, and latching
+    ///         uniformly means an entry point added later is covered without touching this method.
+    ///     </para>
+    ///     <para>
+    ///         The release is driven by <paramref name="cancellationToken" /> — the token SignalR cancels when the
+    ///         client unsubscribes or disconnects — and NOT by the source enumerable completing. That distinction is the
+    ///         whole feature: <c>NodeChatStreamService.SendMessageCoreAsync</c> deliberately awaits its pump and runner
+    ///         tasks in the <c>finally</c> after its SSE loop exits, so the enumerable does not return until the entire
+    ///         run is over. Releasing only from this method's <c>finally</c> therefore recorded the detach *after* the
+    ///         run had already terminalized, leaving <c>DetachedInvocationReaper</c> with nothing to reap and the grace
+    ///         silently dead. The <c>finally</c> stays as the normal-completion path; the handle is idempotent.
+    ///     </para>
+    /// </summary>
+    private async IAsyncEnumerable<ChatStreamEvent> TrackAttachment(IAsyncEnumerable<ChatStreamEvent> source,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        IDisposable? attachment = null;
+        await using var registration = cancellationToken.Register(() => attachment?.Dispose()).ConfigureAwait(false);
+
+        try
+        {
+            await foreach (var streamEvent in source.WithCancellation(cancellationToken).ConfigureAwait(false))
+            {
+                if (attachment is null)
+                {
+                    attachment = attachmentTracker.Attach(streamEvent.RequestId);
+
+                    // Closes the one gap the callback cannot: a cancellation that fired while we were latching has
+                    // already run its callback against a still-null field and will never run again.
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        attachment.Dispose();
+                    }
+                }
+
+                yield return streamEvent;
+            }
+        }
+        finally
+        {
+            attachment?.Dispose();
+        }
     }
 }
