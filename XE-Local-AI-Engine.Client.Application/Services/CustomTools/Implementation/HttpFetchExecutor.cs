@@ -99,7 +99,9 @@ internal sealed class HttpFetchExecutor : ICustomToolExecutor
         return new SecretValueRedactor(config.Headers.Where(static header => header.IsSecret).Select(static header => header.Value));
     }
 
-    private static HttpRequestMessage BuildRequest(HttpFetchConfig config,
+    // internal (not private) so a test can assert request assembly directly: the SSRF guard denies loopback by design,
+    // so a custom fetch tool cannot be exercised end-to-end against a local test server.
+    internal static HttpRequestMessage BuildRequest(HttpFetchConfig config,
         IReadOnlyList<CustomToolParameter> parameters,
         string jsonArguments)
     {
@@ -127,7 +129,11 @@ internal sealed class HttpFetchExecutor : ICustomToolExecutor
 
             foreach (var header in config.Headers)
             {
-                AddHeader(request, header.Name, header.Value);
+                // Header values support {param} placeholders (accepted at author-time validation) — substitute them
+                // verbatim (a header is not a URL, so no URL-encoding), failing closed on any undeclared placeholder,
+                // exactly like the body. Without this a template such as "Bearer {token}" would be sent literally.
+                var value = CustomToolTemplate.Substitute(header.Value, bound, declaredNames);
+                AddHeader(request, header.Name, value);
             }
 
             return request;

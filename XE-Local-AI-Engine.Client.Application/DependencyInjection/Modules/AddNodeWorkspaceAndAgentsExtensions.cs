@@ -53,6 +53,11 @@ internal static class AddNodeWorkspaceAndAgentsExtensions
                {
                    AllowAutoRedirect = false,
                    UseCookies = false,
+                   // Never route through an ambient/system HTTP proxy: with a proxy the ConnectCallback would validate and
+                   // dial the PROXY endpoint while the proxy resolves the request hostname, letting a name the proxy maps
+                   // to a private/loopback address bypass the SSRF denylist. UseProxy=false keeps the validated address the
+                   // address actually contacted.
+                   UseProxy = false,
                    ConnectCallback = CustomToolSsrfGuard.CreatePinnedConnectCallback(),
                    // Short pooled lifetime so a pinned validated address is not reused indefinitely across DNS changes.
                    PooledConnectionLifetime = TimeSpan.FromMinutes(1)
