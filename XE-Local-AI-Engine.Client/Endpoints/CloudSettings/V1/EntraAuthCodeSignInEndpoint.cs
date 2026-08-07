@@ -34,8 +34,12 @@ public sealed class EntraAuthCodeSignInEndpoint(IEntraAuthCodeSignInCoordinator 
                 ExpiresAtUtc = handle.ExpiresAtUtc
             }, ct).ConfigureAwait(false);
         }
-        catch (InvalidOperationException exception)
+        catch (EntraConnectionNotConfiguredException exception)
         {
+            // Only the user-actionable "no Entra connection configured" precondition is surfaced as a 400 with its
+            // (path-free, safe) message. Every other failure flows to the global handlers for a clean 500 — the
+            // previous catch of the base InvalidOperationException swallowed unexpected faults and leaked their raw
+            // messages.
             AddError(exception.Message);
             await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
         }

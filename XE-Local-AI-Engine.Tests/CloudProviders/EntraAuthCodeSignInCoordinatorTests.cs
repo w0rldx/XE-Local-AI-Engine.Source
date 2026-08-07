@@ -25,29 +25,31 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class EntraAuthCodeSignInCoordinatorTests
 {
     [Test]
-    public async Task StartAsync_WhenNoEntraConnectionIsStored_ThrowsInvalidOperationException()
+    public async Task StartAsync_WhenNoEntraConnectionIsStored_ThrowsConnectionNotConfigured()
     {
         using var coordinator = CreateCoordinator(new FakeCloudCredentialStore(config: null));
 
-        await AssertEx.ThrowsAsync<InvalidOperationException>(() => coordinator.StartAsync(CancellationToken.None));
+        // The precondition is a typed EntraConnectionNotConfiguredException so the sign-in endpoint can surface it as a
+        // 400 while letting every other InvalidOperationException from the flow fall through to the global 500 handler.
+        await AssertEx.ThrowsAsync<EntraConnectionNotConfiguredException>(() => coordinator.StartAsync(CancellationToken.None));
     }
 
     [Test]
-    public async Task StartAsync_WhenSignInMethodIsNotAuthorizationCode_ThrowsInvalidOperationException()
+    public async Task StartAsync_WhenSignInMethodIsNotAuthorizationCode_ThrowsConnectionNotConfigured()
     {
         var config = CreateConfig(signInMethod: EntraSignInMethod.DeviceCode);
         using var coordinator = CreateCoordinator(new FakeCloudCredentialStore(config));
 
-        await AssertEx.ThrowsAsync<InvalidOperationException>(() => coordinator.StartAsync(CancellationToken.None));
+        await AssertEx.ThrowsAsync<EntraConnectionNotConfiguredException>(() => coordinator.StartAsync(CancellationToken.None));
     }
 
     [Test]
-    public async Task StartAsync_WhenNoClientSecretIsStored_ThrowsInvalidOperationException()
+    public async Task StartAsync_WhenNoClientSecretIsStored_ThrowsConnectionNotConfigured()
     {
         var config = CreateConfig(clientSecret: null);
         using var coordinator = CreateCoordinator(new FakeCloudCredentialStore(config));
 
-        await AssertEx.ThrowsAsync<InvalidOperationException>(() => coordinator.StartAsync(CancellationToken.None));
+        await AssertEx.ThrowsAsync<EntraConnectionNotConfiguredException>(() => coordinator.StartAsync(CancellationToken.None));
     }
 
     [Test]
