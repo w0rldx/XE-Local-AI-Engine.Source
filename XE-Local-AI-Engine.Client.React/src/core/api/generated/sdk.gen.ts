@@ -131,6 +131,9 @@ import type {
 	CreateSkillData,
 	CreateSkillErrors,
 	CreateSkillResponses,
+	CreateSlashCommandData,
+	CreateSlashCommandErrors,
+	CreateSlashCommandResponses,
 	CreateWorkspaceData,
 	CreateWorkspaceErrors,
 	CreateWorkspaceResponses,
@@ -173,6 +176,9 @@ import type {
 	DeleteSkillData,
 	DeleteSkillErrors,
 	DeleteSkillResponses,
+	DeleteSlashCommandData,
+	DeleteSlashCommandErrors,
+	DeleteSlashCommandResponses,
 	DeleteWorkspaceData,
 	DeleteWorkspaceErrors,
 	DeleteWorkspaceResponses,
@@ -365,6 +371,9 @@ import type {
 	GetSkillResourceErrors,
 	GetSkillResourceResponses,
 	GetSkillResponses,
+	GetSlashCommandData,
+	GetSlashCommandErrors,
+	GetSlashCommandResponses,
 	GetStableDiffusionCppSourceBuildPrerequisitesData,
 	GetStableDiffusionCppSourceBuildPrerequisitesErrors,
 	GetStableDiffusionCppSourceBuildPrerequisitesResponses,
@@ -485,6 +494,9 @@ import type {
 	ListSkillsData,
 	ListSkillsErrors,
 	ListSkillsResponses,
+	ListSlashCommandsData,
+	ListSlashCommandsErrors,
+	ListSlashCommandsResponses,
 	ListWorkspacesData,
 	ListWorkspacesErrors,
 	ListWorkspacesResponses,
@@ -669,6 +681,9 @@ import type {
 	UpdateSkillData,
 	UpdateSkillErrors,
 	UpdateSkillResponses,
+	UpdateSlashCommandData,
+	UpdateSlashCommandErrors,
+	UpdateSlashCommandResponses,
 	UpdateSuggestedPlaybookActionData,
 	UpdateSuggestedPlaybookActionErrors,
 	UpdateSuggestedPlaybookActionResponses,
@@ -763,6 +778,8 @@ import {
 	zCreateScheduledJobResponse,
 	zCreateSkillBody,
 	zCreateSkillResponse,
+	zCreateSlashCommandBody,
+	zCreateSlashCommandResponse,
 	zCreateWorkspaceBody,
 	zCreateWorkspaceResponse,
 	zDeleteAgentDefinitionPath,
@@ -792,6 +809,8 @@ import {
 	zDeleteScheduledJobResponse,
 	zDeleteSkillPath,
 	zDeleteSkillResponse,
+	zDeleteSlashCommandPath,
+	zDeleteSlashCommandResponse,
 	zDeleteWorkspacePath,
 	zDeleteWorkspaceResponse,
 	zDetectDevelopmentRepositoryProfilePath,
@@ -893,6 +912,8 @@ import {
 	zGetSkillResourcePath,
 	zGetSkillResourceResponse,
 	zGetSkillResponse,
+	zGetSlashCommandPath,
+	zGetSlashCommandResponse,
 	zGetStableDiffusionCppSourceBuildPrerequisitesQuery,
 	zGetStableDiffusionCppSourceBuildPrerequisitesResponse,
 	zGetStableDiffusionCppSourceBuildStatusResponse,
@@ -953,6 +974,7 @@ import {
 	zListSkillResourcesPath,
 	zListSkillResourcesResponse,
 	zListSkillsResponse,
+	zListSlashCommandsResponse,
 	zListWorkspacesResponse,
 	zNodeAuthStatusResponse,
 	zNodeChangePasswordBody,
@@ -1077,6 +1099,9 @@ import {
 	zUpdateSkillBody,
 	zUpdateSkillPath,
 	zUpdateSkillResponse,
+	zUpdateSlashCommandBody,
+	zUpdateSlashCommandPath,
+	zUpdateSlashCommandResponse,
 	zUpdateSuggestedPlaybookActionBody,
 	zUpdateSuggestedPlaybookActionPath,
 	zUpdateSuggestedPlaybookActionResponse,
@@ -1106,6 +1131,69 @@ export type Options<
 	 */
 	meta?: Record<string, unknown>;
 };
+
+export const listWorkspaces = <ThrowOnError extends boolean = false>(options?: Options<ListWorkspacesData, ThrowOnError>) =>
+	(options?.client ?? client).get<ListWorkspacesResponses, ListWorkspacesErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListWorkspacesResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/workspaces",
+		...options,
+	});
+
+export const createWorkspace = <ThrowOnError extends boolean = false>(options: Options<CreateWorkspaceData, ThrowOnError>) =>
+	(options.client ?? client).post<CreateWorkspaceResponses, CreateWorkspaceErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zCreateWorkspaceBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zCreateWorkspaceResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/workspaces",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const deleteWorkspace = <ThrowOnError extends boolean = false>(options: Options<DeleteWorkspaceData, ThrowOnError>) =>
+	(options.client ?? client).delete<DeleteWorkspaceResponses, DeleteWorkspaceErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zDeleteWorkspacePath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseValidator: async (data) => await zDeleteWorkspaceResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/workspaces/{workspaceId}",
+		...options,
+	});
 
 export const getVoiceManifest = <ThrowOnError extends boolean = false>(options?: Options<GetVoiceManifestData, ThrowOnError>) =>
 	(options?.client ?? client).get<GetVoiceManifestResponses, GetVoiceManifestErrors, ThrowOnError>({
@@ -5245,6 +5333,119 @@ export const codexStatus = <ThrowOnError extends boolean = false>(options?: Opti
 		...options,
 	});
 
+export const listSlashCommands = <ThrowOnError extends boolean = false>(options?: Options<ListSlashCommandsData, ThrowOnError>) =>
+	(options?.client ?? client).get<ListSlashCommandsResponses, ListSlashCommandsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListSlashCommandsResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/automation/commands",
+		...options,
+	});
+
+export const createSlashCommand = <ThrowOnError extends boolean = false>(
+	options: Options<CreateSlashCommandData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<CreateSlashCommandResponses, CreateSlashCommandErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zCreateSlashCommandBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zCreateSlashCommandResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/automation/commands",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const deleteSlashCommand = <ThrowOnError extends boolean = false>(
+	options: Options<DeleteSlashCommandData, ThrowOnError>,
+) =>
+	(options.client ?? client).delete<DeleteSlashCommandResponses, DeleteSlashCommandErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zDeleteSlashCommandPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseValidator: async (data) => await zDeleteSlashCommandResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/automation/commands/{commandId}",
+		...options,
+	});
+
+export const getSlashCommand = <ThrowOnError extends boolean = false>(options: Options<GetSlashCommandData, ThrowOnError>) =>
+	(options.client ?? client).get<GetSlashCommandResponses, GetSlashCommandErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zGetSlashCommandPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetSlashCommandResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/automation/commands/{commandId}",
+		...options,
+	});
+
+export const updateSlashCommand = <ThrowOnError extends boolean = false>(
+	options: Options<UpdateSlashCommandData, ThrowOnError>,
+) =>
+	(options.client ?? client).put<UpdateSlashCommandResponses, UpdateSlashCommandErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zUpdateSlashCommandBody,
+					path: zUpdateSlashCommandPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zUpdateSlashCommandResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/automation/commands/{commandId}",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
 export const nodeAuthStatus = <ThrowOnError extends boolean = false>(options?: Options<NodeAuthStatusData, ThrowOnError>) =>
 	(options?.client ?? client).get<NodeAuthStatusResponses, unknown, ThrowOnError>({
 		requestValidator: async (data) =>
@@ -6164,67 +6365,4 @@ export const updateSuggestedPlaybookAction = <ThrowOnError extends boolean = fal
 			"Content-Type": "application/json",
 			...options.headers,
 		},
-	});
-
-export const listWorkspaces = <ThrowOnError extends boolean = false>(options?: Options<ListWorkspacesData, ThrowOnError>) =>
-	(options?.client ?? client).get<ListWorkspacesResponses, ListWorkspacesErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: z.never().optional(),
-					path: z.never().optional(),
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zListWorkspacesResponse.parseAsync(data),
-		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
-		],
-		url: "/api/local/v1/workspaces",
-		...options,
-	});
-
-export const createWorkspace = <ThrowOnError extends boolean = false>(options: Options<CreateWorkspaceData, ThrowOnError>) =>
-	(options.client ?? client).post<CreateWorkspaceResponses, CreateWorkspaceErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: zCreateWorkspaceBody,
-					path: z.never().optional(),
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zCreateWorkspaceResponse.parseAsync(data),
-		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
-		],
-		url: "/api/local/v1/workspaces",
-		...options,
-		headers: {
-			"Content-Type": "application/json",
-			...options.headers,
-		},
-	});
-
-export const deleteWorkspace = <ThrowOnError extends boolean = false>(options: Options<DeleteWorkspaceData, ThrowOnError>) =>
-	(options.client ?? client).delete<DeleteWorkspaceResponses, DeleteWorkspaceErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: z.never().optional(),
-					path: zDeleteWorkspacePath,
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseValidator: async (data) => await zDeleteWorkspaceResponse.parseAsync(data),
-		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
-		],
-		url: "/api/local/v1/workspaces/{workspaceId}",
-		...options,
 	});

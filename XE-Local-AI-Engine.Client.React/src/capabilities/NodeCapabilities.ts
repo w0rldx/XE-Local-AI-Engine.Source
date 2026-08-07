@@ -143,6 +143,9 @@ export const nodeRoutePaths = {
 	usage: "/usage",
 	// local tools catalog page — extension seam: MCP tools will populate the same list later
 	tools: "/tools",
+	// Node-wide user-authored slash commands. This belongs to Automation but is not an agent capability: only the
+	// human composer resolves commands, and every authenticated node exposes the management surface.
+	commands: "/commands",
 	// agent definition management page (agent-management) — gated on nodeCapabilities.agentManagement
 	agents: "/agents",
 	// node skill library page (agent-skills) — gated on nodeCapabilities.agentManagement (an agent-mode feature)

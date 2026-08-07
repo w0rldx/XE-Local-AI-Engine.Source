@@ -63,6 +63,7 @@ describe("nodeCapabilities", () => {
 			tools: "/tools",
 			agents: "/agents",
 			skills: "/skills",
+			commands: "/commands",
 			mcp: "/mcp",
 			scheduler: "/scheduler",
 			modelRecommendations: "/model-recommendations",

@@ -23,6 +23,7 @@ using XE_Local_AI_Engine.Client.Common.Extensions;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.DependencyInjection;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
+using XE_Local_AI_Engine.Client.Endpoints.Automation.V1;
 using XE_Local_AI_Engine.Client.ExceptionHandling;
 using XE_Local_AI_Engine.Client.HealthChecks;
 using XE_Local_AI_Engine.Client.Hosting;
@@ -425,6 +426,11 @@ public static class ConfigureServices
         options.PropertyNameCaseInsensitive = true;
         options.DefaultIgnoreCondition = JsonIgnoreCondition.Never;
         options.TypeInfoResolver ??= new DefaultJsonTypeInfoResolver();
+
+        if (!options.Converters.OfType<SlashCommandActionTypeDtoJsonConverter>().Any())
+        {
+            options.Converters.Insert(index: 0, new SlashCommandActionTypeDtoJsonConverter());
+        }
 
         if (!options.Converters.OfType<JsonStringEnumConverter>().Any())
         {

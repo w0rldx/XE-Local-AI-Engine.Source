@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import type { ChatCommandOption } from "@/features/chat/models/SlashCommandModels";
 
 // Re-exported so chat's own call sites keep importing from here; the type itself lives in core because `agents` also
 // depends on it (see ReasoningEffort.ts for the effort-level doc comment).
@@ -377,6 +378,7 @@ export interface ChatDisplayShellProps {
 	agentModeEnabled?: boolean;
 	selectedAgentId?: string;
 	agentOptions?: readonly AgentOption[];
+	commandOptions?: readonly ChatCommandOption[];
 	// Single merged agent control: "" => Default Assistant (agent mode off); any other id => enable mode + stamp it.
 	onSelectAgent?: (agentId: string) => void;
 	// Conversation file attachments (chip row + upload picker in the composer). Wired from Chat.tsx via

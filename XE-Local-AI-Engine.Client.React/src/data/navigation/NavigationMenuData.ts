@@ -116,6 +116,7 @@ const allNavigationLinks: INavigationLink[] = [
 		icon: IconRobot,
 		translationKey: "navigation.automationGroup",
 		links: [
+			{ translationKey: "navigation.commands", to: nodeRoutePaths.commands },
 			{ translationKey: "navigation.agents", to: nodeRoutePaths.agents, capability: "agentManagement" },
 			{ translationKey: "navigation.skills", to: nodeRoutePaths.skills, capability: "agentManagement" },
 			{ translationKey: "navigation.mcp", to: nodeRoutePaths.mcp, capability: "mcpServers" },

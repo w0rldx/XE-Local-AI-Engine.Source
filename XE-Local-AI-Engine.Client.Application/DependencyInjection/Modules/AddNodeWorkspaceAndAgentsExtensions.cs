@@ -5,6 +5,8 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
+using XE_Local_AI_Engine.Client.Services.Automation;
+using XE_Local_AI_Engine.Client.Services.Automation.Implementation;
 using XE_Local_AI_Engine.Client.Services.Insights;
 using XE_Local_AI_Engine.Client.Services.Insights.Implementation;
 using XE_Local_AI_Engine.Client.Services.Workspace;
@@ -42,6 +44,8 @@ internal static class AddNodeWorkspaceAndAgentsExtensions
         // Node-local MCP registrations. Secret-bearing args/env/description columns are encrypted at rest; the
         // connection manager reads enabled rows and the CRUD service owns registration changes.
         builder.Services.AddScoped<IMcpServerStore, McpServerStore>();
+        builder.Services.AddScoped<ISlashCommandStore, SlashCommandStore>();
+        builder.Services.AddScoped<ISlashCommandService, SlashCommandService>();
         // The single INBOUND-MCP bearer credential (opposite direction to the registrations above): the key an external
         // MCP client presents to this node's own MCP server endpoint. Material is encrypted at rest.
         builder.Services.AddScoped<IMcpServerApiKeyStore, McpServerApiKeyStore>();

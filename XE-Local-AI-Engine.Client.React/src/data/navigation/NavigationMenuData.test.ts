@@ -101,6 +101,7 @@ describe("navigationLinks", () => {
 			nodeRoutePaths.diagnostics,
 		]);
 		expect(automation?.links?.map((nestedLink) => nestedLink.to)).toEqual([
+			nodeRoutePaths.commands,
 			nodeRoutePaths.agents,
 			nodeRoutePaths.skills,
 			nodeRoutePaths.mcp,
@@ -131,11 +132,13 @@ describe("navigationLinks", () => {
 		const automation = gatedLinks.find((link) => link.id === "automation");
 
 		expect(automation?.links?.map((nestedLink) => nestedLink.to)).toEqual([
+			nodeRoutePaths.commands,
 			nodeRoutePaths.mcp,
 			nodeRoutePaths.scheduler,
 			nodeRoutePaths.tools,
 		]);
 		expect(automation?.links?.some((nestedLink) => nestedLink.to === nodeRoutePaths.skills)).toBe(false);
+		expect(automation?.links?.some((nestedLink) => nestedLink.to === nodeRoutePaths.commands)).toBe(true);
 	});
 
 	it("drops the mcp child from Automation when mcpServers is off", async () => {

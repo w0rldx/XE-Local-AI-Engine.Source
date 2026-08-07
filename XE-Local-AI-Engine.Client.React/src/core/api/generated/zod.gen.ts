@@ -2,6 +2,28 @@
 
 import * as z from "zod";
 
+export const zXeLocalAiEngineClientEndpointsWorkspacesV1WorkspaceResponse = z.object({
+	workspaceId: z.string(),
+	alias: z.string(),
+	mode: z.string().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsWorkspacesV1CreateWorkspaceRequest = z.object({
+	alias: z.string().nullish(),
+	hostPath: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsWorkspacesV1WorkspaceConflictResponse = z.object({
+	code: z.string().optional(),
+	message: z.string(),
+});
+
+export const zXeLocalAiEngineClientEndpointsWorkspacesV1DeleteWorkspaceRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsWorkspacesV1ListWorkspacesResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsWorkspacesV1WorkspaceResponse).optional(),
+});
+
 export const zXeLocalAiEngineClientEndpointsVoiceV1VoiceManifestModelFileDto = z.object({
 	dtype: z.string(),
 	file: z.string(),
@@ -2780,6 +2802,39 @@ export const zXeLocalAiEngineClientEndpointsCloudCodexV1CodexStatusResponse = z.
 	loginPending: z.boolean(),
 });
 
+export const zXeLocalAiEngineClientEndpointsAutomationV1SlashCommandActionTypeDto = z.enum(["sendPrompt"]);
+
+export const zXeLocalAiEngineClientEndpointsAutomationV1SlashCommandActionDto = z.object({
+	type: zXeLocalAiEngineClientEndpointsAutomationV1SlashCommandActionTypeDto,
+	prompt: z.string(),
+});
+
+export const zXeLocalAiEngineClientEndpointsAutomationV1SlashCommandResponse = z.object({
+	id: z.guid().nullish(),
+	name: z.string(),
+	description: z.string().nullish(),
+	source: z.string(),
+	action: zXeLocalAiEngineClientEndpointsAutomationV1SlashCommandActionDto,
+});
+
+export const zXeLocalAiEngineClientEndpointsAutomationV1ListSlashCommandsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsAutomationV1SlashCommandResponse),
+});
+
+export const zXeLocalAiEngineClientEndpointsAutomationV1SlashCommandByIdRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsAutomationV1CreateSlashCommandRequest = z.object({
+	name: z.string(),
+	description: z.string().nullish(),
+	action: zXeLocalAiEngineClientEndpointsAutomationV1SlashCommandActionDto,
+});
+
+export const zXeLocalAiEngineClientEndpointsAutomationV1UpdateSlashCommandRequest = z.object({
+	name: z.string(),
+	description: z.string().nullish(),
+	action: zXeLocalAiEngineClientEndpointsAutomationV1SlashCommandActionDto,
+});
+
 export const zXeLocalAiEngineClientEndpointsAuthV1NodeAuthStatusResponse = z.object({
 	setupRequired: z.boolean(),
 	authenticated: z.boolean(),
@@ -3405,22 +3460,26 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActio
 		.optional(),
 });
 
-export const zXeLocalAiEngineClientEndpointsWorkspacesV1WorkspaceResponse = z.object({
+/**
+ * Success
+ */
+export const zListWorkspacesResponse = zXeLocalAiEngineClientEndpointsWorkspacesV1ListWorkspacesResponse;
+
+export const zCreateWorkspaceBody = zXeLocalAiEngineClientEndpointsWorkspacesV1CreateWorkspaceRequest;
+
+/**
+ * Success
+ */
+export const zCreateWorkspaceResponse = zXeLocalAiEngineClientEndpointsWorkspacesV1WorkspaceResponse;
+
+export const zDeleteWorkspacePath = z.object({
 	workspaceId: z.string(),
-	alias: z.string(),
-	mode: z.string().optional(),
 });
 
-export const zXeLocalAiEngineClientEndpointsWorkspacesV1CreateWorkspaceRequest = z.object({
-	alias: z.string().nullish(),
-	hostPath: z.string().nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsWorkspacesV1DeleteWorkspaceRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsWorkspacesV1ListWorkspacesResponse = z.object({
-	items: z.array(zXeLocalAiEngineClientEndpointsWorkspacesV1WorkspaceResponse).optional(),
-});
+/**
+ * No Content
+ */
+export const zDeleteWorkspaceResponse = z.void();
 
 /**
  * Success
@@ -4821,6 +4880,47 @@ export const zCodexStatusResponse = zXeLocalAiEngineClientEndpointsCloudCodexV1C
 /**
  * Success
  */
+export const zListSlashCommandsResponse = zXeLocalAiEngineClientEndpointsAutomationV1ListSlashCommandsResponse;
+
+export const zCreateSlashCommandBody = zXeLocalAiEngineClientEndpointsAutomationV1CreateSlashCommandRequest;
+
+/**
+ * Created
+ */
+export const zCreateSlashCommandResponse = zXeLocalAiEngineClientEndpointsAutomationV1SlashCommandResponse;
+
+export const zDeleteSlashCommandPath = z.object({
+	commandId: z.guid(),
+});
+
+/**
+ * No Content
+ */
+export const zDeleteSlashCommandResponse = z.void();
+
+export const zGetSlashCommandPath = z.object({
+	commandId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zGetSlashCommandResponse = zXeLocalAiEngineClientEndpointsAutomationV1SlashCommandResponse;
+
+export const zUpdateSlashCommandBody = zXeLocalAiEngineClientEndpointsAutomationV1UpdateSlashCommandRequest;
+
+export const zUpdateSlashCommandPath = z.object({
+	commandId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zUpdateSlashCommandResponse = zXeLocalAiEngineClientEndpointsAutomationV1SlashCommandResponse;
+
+/**
+ * Success
+ */
 export const zNodeAuthStatusResponse = zXeLocalAiEngineClientEndpointsAuthV1NodeAuthStatusResponse;
 
 export const zNodeSetupBody = zXeLocalAiEngineClientEndpointsAuthV1NodeSetupRequest;
@@ -5177,24 +5277,3 @@ export const zUpdateSuggestedPlaybookActionPath = z.object({
  * Success
  */
 export const zUpdateSuggestedPlaybookActionResponse = zXeLocalAiEngineClientEndpointsAgentsV1PlaybookActionResponse;
-
-/**
- * Success
- */
-export const zListWorkspacesResponse = zXeLocalAiEngineClientEndpointsWorkspacesV1ListWorkspacesResponse;
-
-export const zCreateWorkspaceBody = zXeLocalAiEngineClientEndpointsWorkspacesV1CreateWorkspaceRequest;
-
-/**
- * Success
- */
-export const zCreateWorkspaceResponse = zXeLocalAiEngineClientEndpointsWorkspacesV1WorkspaceResponse;
-
-export const zDeleteWorkspacePath = z.object({
-	workspaceId: z.string(),
-});
-
-/**
- * No Content
- */
-export const zDeleteWorkspaceResponse = z.void();
