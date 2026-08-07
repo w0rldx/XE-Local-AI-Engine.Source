@@ -95,9 +95,15 @@ public sealed class NodeSelectedFolderStoreTests : IDisposable
             _ = await store.AddAsync("secret-folder", hostPath, SelectedFolderMode.Copy);
         }
 
-        var fileBytes = await SqliteFileProbe.ReadAllBytesAsync(databasePath);
-        AssertEx.False(ContainsSubsequence(fileBytes, Encoding.UTF8.GetBytes(hostPath)),
-            "The SQLite file should not contain the plaintext host path.");
+        SqliteFileProbe.ReleasePooledHandles();
+        var databaseFamily = Directory.EnumerateFiles(Path.GetDirectoryName(databasePath)!, Path.GetFileName(databasePath) + "*").ToArray();
+        AssertEx.True(databaseFamily.Length > 0, "The plaintext probe must inspect at least the SQLite database file.");
+        foreach (var file in databaseFamily)
+        {
+            var fileBytes = await File.ReadAllBytesAsync(file);
+            AssertEx.False(ContainsSubsequence(fileBytes, Encoding.UTF8.GetBytes(hostPath)),
+                $"The SQLite database family member '{Path.GetFileName(file)}' should not contain the plaintext host path.");
+        }
     }
 
     [Test]
@@ -115,6 +121,54 @@ public sealed class NodeSelectedFolderStoreTests : IDisposable
 
         _ = AssertEx.Throws<DbUpdateException>(() => store.AddAsync("repo-one", "/trusted/b", SelectedFolderMode.Copy).GetAwaiter().GetResult(),
             "Duplicate alias should violate the unique index.");
+    }
+
+    [Test]
+    public async Task RevokeAsync_HidesFolderFromEveryActiveRead_AndIsIdempotent()
+    {
+        var databasePath = GetDatabasePath("revoke.sqlite");
+        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+
+        await using var context = CreateContext(databasePath, keyHolder);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new NodeSelectedFolderStore(context, TimeProvider.System);
+        var added = await store.AddAsync("repo-one", HostPath, SelectedFolderMode.ReadOnlyMount);
+
+        AssertEx.True(await store.RevokeAsync(added.Id), "The first revocation should update the active row.");
+        AssertEx.False(await store.RevokeAsync(added.Id), "A repeated revocation should be an idempotent no-op.");
+        AssertEx.Null(await store.GetByIdAsync(added.Id), "A revoked id must be indistinguishable from an unknown id.");
+        AssertEx.Null(await store.GetByAliasAsync(added.Alias), "A revoked alias must not resolve.");
+        AssertEx.Equal(expected: 0, (await store.ListAsync()).Count);
+
+        await using var connection = new SqliteConnection($"Data Source={databasePath}");
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*), revoked_at_utc FROM selected_folders WHERE id = $id GROUP BY revoked_at_utc;";
+        command.Parameters.AddWithValue("$id", added.Id);
+        await using var reader = await command.ExecuteReaderAsync();
+        AssertEx.True(await reader.ReadAsync(), "Soft revocation must retain the selected-folder row.");
+        AssertEx.Equal(expected: 1L, reader.GetInt64(0));
+        AssertEx.False(await reader.IsDBNullAsync(1), "Soft revocation must stamp revoked_at_utc.");
+    }
+
+    [Test]
+    public async Task AddAsync_AfterAliasWasRevoked_AllowsNewOpaqueRegistration()
+    {
+        var databasePath = GetDatabasePath("reuse-alias.sqlite");
+        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+
+        await using var context = CreateContext(databasePath, keyHolder);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new NodeSelectedFolderStore(context, TimeProvider.System);
+        var first = await store.AddAsync("repo-one", HostPath, SelectedFolderMode.ReadOnlyMount);
+        _ = await store.RevokeAsync(first.Id);
+
+        var replacement = await store.AddAsync("repo-one", "/trusted/host/projects/replacement", SelectedFolderMode.ReadOnlyMount);
+
+        AssertEx.True(first.Id != replacement.Id, "Re-registration must mint a new opaque id.");
+        AssertEx.Equal("repo-one", replacement.Alias);
     }
 
     [Test]
@@ -163,11 +217,12 @@ public sealed class NodeSelectedFolderStoreTests : IDisposable
                 "alias",
                 "host_path",
                 "mode",
-                "created_at_utc"
+                "created_at_utc",
+                "revoked_at_utc"
             }),
             "selected_folders should expose the mapped columns.");
-        AssertEx.True(await HasUniqueAliasIndexAsync(connection),
-            "selected_folders.alias should have a unique index.");
+        AssertEx.True(await HasActiveUniqueAliasIndexAsync(connection),
+            "selected_folders.alias should be unique only among active rows.");
     }
 
     private static async Task TamperHostPathAsync(string databasePath)
@@ -204,12 +259,14 @@ public sealed class NodeSelectedFolderStoreTests : IDisposable
                          .ToHashSet(StringComparer.Ordinal);
     }
 
-    private static async Task<bool> HasUniqueAliasIndexAsync(SqliteConnection connection)
+    private static async Task<bool> HasActiveUniqueAliasIndexAsync(SqliteConnection connection)
     {
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT sql FROM sqlite_master WHERE type = 'index' AND name = 'IX_selected_folders_alias';";
         var sql = await command.ExecuteScalarAsync() as string;
-        return sql is not null && sql.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase);
+        return sql is not null
+               && sql.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase)
+               && sql.Contains("revoked_at_utc IS NULL", StringComparison.OrdinalIgnoreCase);
     }
 
     private static NodeChatDbContext CreateContext(string databasePath, INodeSqliteKeyHolder keyHolder)

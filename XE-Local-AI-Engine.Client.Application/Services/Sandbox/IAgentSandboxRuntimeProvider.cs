@@ -22,4 +22,11 @@ namespace XE_Local_AI_Engine.Client.Services.Sandbox;
 ///         allocates its jail root once per instance.
 ///     </para>
 /// </summary>
-public interface IAgentSandboxRuntimeProvider : ISandboxRuntimeProvider;
+public interface IAgentSandboxRuntimeProvider : ISandboxRuntimeProvider
+{
+    /// <summary>
+    ///     Replaces a sandbox directory with a known-empty directory. Implementations must reject escapes and links;
+    ///     returning successfully is the proof that no file from a prior AgentHome selection remains below the path.
+    /// </summary>
+    Task ResetDirectoryAsync(SandboxHandle handle, string sandboxPath, CancellationToken cancellationToken = default);
+}

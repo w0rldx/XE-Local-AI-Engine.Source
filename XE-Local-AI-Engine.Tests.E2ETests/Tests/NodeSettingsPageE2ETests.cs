@@ -12,6 +12,8 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 [Category("Page")]
 public sealed class NodeSettingsPageE2ETests : XEE2ETestBase
 {
+    private const string TestWorkspacePrefix = "xe-e2e-mcp-workspace-";
+
     [Test]
     public async Task NodeSettings_Page_Renders_Heading_And_Card()
     {
@@ -81,5 +83,121 @@ public sealed class NodeSettingsPageE2ETests : XEE2ETestBase
 
         // The component sets a green alert on successful save.
         await Expect(Page.GetByText("Node settings saved.").First).ToBeVisibleAsync();
+    }
+
+    [Test]
+    public async Task NodeSettings_McpWorkspace_Create_RendersOpaqueReadOnlyRow_Then_Revoke_RemovesIt()
+    {
+        var workspaceDirectory = Directory.CreateTempSubdirectory(TestWorkspacePrefix);
+        var alias = $"e2e-workspace-{Guid.NewGuid():N}";
+        var pageErrors = new List<string>();
+        Page.PageError += (_, error) => pageErrors.Add(error);
+
+        try
+        {
+            await Page.GotoAsync($"{NodeAppUrl}/node-settings", new PageGotoOptions
+            {
+                WaitUntil = WaitUntilState.NetworkIdle
+            });
+
+            await Expect(Page.GetByTestId("mcp-workspaces-card")).ToBeVisibleAsync();
+            await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions
+            {
+                Name = "MCP workspace access"
+            }))
+                .ToBeVisibleAsync();
+            await Expect(Page.GetByText("Could not load workspace access.")).ToHaveCountAsync(0);
+
+            var aliasInput = Page.GetByTestId("mcp-workspace-alias");
+            var pathInput = Page.GetByTestId("mcp-workspace-path");
+            await aliasInput.FillAsync(alias);
+            await pathInput.FillAsync(workspaceDirectory.FullName);
+
+            var createResponse = await Page.RunAndWaitForResponseAsync(async () =>
+                {
+                    await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
+                    {
+                        Name = "Add read-only workspace"
+                    }).ClickAsync();
+                    await Expect(pathInput).ToHaveValueAsync("");
+                },
+                response => response.Url.EndsWith("/api/local/v1/workspaces", StringComparison.OrdinalIgnoreCase)
+                            && string.Equals(response.Request.Method, "POST", StringComparison.OrdinalIgnoreCase),
+                new PageRunAndWaitForResponseOptions
+                {
+                    Timeout = 10_000
+                });
+
+            await Assert.That(createResponse.Status).IsEqualTo(200);
+
+            var aliasCell = Page.GetByRole(AriaRole.Cell, new PageGetByRoleOptions
+            {
+                Name = alias,
+                Exact = true
+            });
+            await Expect(aliasCell).ToBeVisibleAsync();
+            var row = aliasCell.Locator("..");
+            var cells = await row.GetByRole(AriaRole.Cell).AllInnerTextsAsync();
+            await Assert.That(cells.Count).IsEqualTo(4);
+            await Assert.That(cells[0]).IsEqualTo(alias);
+            await Assert.That(Guid.TryParse(cells[1], out _)).IsTrue();
+            await Assert.That(string.Equals(cells[2], "Read only", StringComparison.OrdinalIgnoreCase)).IsTrue();
+            await Assert.That(string.Join(' ', cells).Contains(workspaceDirectory.FullName, StringComparison.Ordinal)).IsFalse();
+
+            var deleteResponse = await Page.RunAndWaitForResponseAsync(async () =>
+                {
+                    await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
+                    {
+                        Name = $"Revoke access to {alias}",
+                        Exact = true
+                    }).ClickAsync();
+                    await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
+                    {
+                        Name = "Revoke",
+                        Exact = true
+                    }).ClickAsync();
+                },
+                response => response.Url.Contains("/api/local/v1/workspaces/", StringComparison.OrdinalIgnoreCase)
+                            && string.Equals(response.Request.Method, "DELETE", StringComparison.OrdinalIgnoreCase),
+                new PageRunAndWaitForResponseOptions
+                {
+                    Timeout = 10_000
+                });
+
+            await Assert.That(deleteResponse.Status).IsEqualTo(204);
+            await Expect(aliasCell).ToHaveCountAsync(0, new LocatorAssertionsToHaveCountOptions
+            {
+                Timeout = 5000
+            });
+            await Assert.That(pageErrors.Count).IsEqualTo(0);
+        }
+        finally
+        {
+            TryDeleteTestWorkspaceDirectory(workspaceDirectory);
+        }
+    }
+
+    private static void TryDeleteTestWorkspaceDirectory(DirectoryInfo workspaceDirectory)
+    {
+        try
+        {
+            var tempRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(Path.GetTempPath()));
+            var ownedPath = Path.TrimEndingDirectorySeparator(Path.GetFullPath(workspaceDirectory.FullName));
+            var isOwnedTempDirectory = string.Equals(Path.GetDirectoryName(ownedPath), tempRoot, StringComparison.Ordinal)
+                                       && Path.GetFileName(ownedPath).StartsWith(TestWorkspacePrefix, StringComparison.Ordinal);
+            workspaceDirectory.Refresh();
+            if (isOwnedTempDirectory && workspaceDirectory.Exists)
+            {
+                workspaceDirectory.Delete(recursive: true);
+            }
+        }
+        catch (IOException)
+        {
+            // Best-effort E2E cleanup; the assertion result remains authoritative.
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Best-effort E2E cleanup; the assertion result remains authoritative.
+        }
     }
 }

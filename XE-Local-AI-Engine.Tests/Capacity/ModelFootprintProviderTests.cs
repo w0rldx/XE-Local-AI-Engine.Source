@@ -69,6 +69,79 @@ public sealed class ModelFootprintProviderTests
             Arg.Any<CancellationToken>());
     }
 
+    [Test]
+    public async Task Footprint_AdmissionDownTierProjectsExactAdjustedAllocation()
+    {
+        var initial = new ProcessContextAllocation(ProcessContextTokens: 65536,
+            ModelTrainContextTokens: 131072,
+            ProcessContextAllocationSource.HardwareTier,
+            ProcessPlacementMode.GpuResident,
+            new ResourceFootprint(20 * Gb, 0),
+            ContentIdentity: "sha256",
+            CacheKey: "cache");
+        var adjusted = initial with
+        {
+            ProcessContextTokens = 32768,
+            Footprint = new ResourceFootprint(16 * Gb, 0)
+        };
+        var (provider, allocationResolver) = BuildProvider(initial);
+        allocationResolver.TryDownTierForAdmission(initial, out Arg.Any<ProcessContextAllocation>())
+                          .Returns(call =>
+                          {
+                              call[1] = adjusted;
+                              return true;
+                          });
+        var footprint = await provider.ResolveFootprintAsync(Model, ModelRole.Chat, GpuProfile(), CancellationToken.None);
+
+        AssertEx.True(provider.TryDownTierForAdmission(footprint, out var downTiered));
+        AssertEx.Equal(adjusted.Footprint, downTiered.Resources);
+        var adjustedAdmission = AssertEx.NotNull(downTiered.Admission);
+        AssertEx.Equal(Model, adjustedAdmission.ModelName);
+        AssertEx.Equal(ModelRole.Chat, adjustedAdmission.Role);
+        AssertEx.Equal(GpuVariant.Cuda, adjustedAdmission.Variant);
+        AssertEx.True(adjustedAdmission.ResolvedArguments.ExploreMode);
+        AssertEx.Equal(adjusted, adjustedAdmission.Allocation);
+        var committedAllocation = adjusted with
+        {
+            ProcessContextTokens = 16384,
+            Footprint = new ResourceFootprint(14 * Gb, 0)
+        };
+        allocationResolver.TryCommitAdmissionAllocation(adjusted, out Arg.Any<ProcessContextAllocation>())
+                          .Returns(call =>
+                          {
+                              call[1] = committedAllocation;
+                              return true;
+                          });
+
+        AssertEx.True(provider.TryCommitAdmissionFootprint(downTiered, out var committed));
+        AssertEx.Equal(committedAllocation.Footprint, committed.Resources);
+    }
+
+    [Test]
+    [Arguments(ProcessContextAllocationSource.FrozenProfile)]
+    [Arguments(ProcessContextAllocationSource.DeterministicOverride)]
+    public async Task Footprint_CommitFittingImmutableAllocation_PassesThrough(ProcessContextAllocationSource source)
+    {
+        var allocation = new ProcessContextAllocation(ProcessContextTokens: 8192,
+            ModelTrainContextTokens: 131072,
+            source,
+            ProcessPlacementMode.GpuResident,
+            new ResourceFootprint(8 * Gb, 0),
+            ContentIdentity: "sha256",
+            CacheKey: "cache");
+        var (provider, allocationResolver) = BuildProvider(allocation);
+        allocationResolver.TryCommitAdmissionAllocation(allocation, out Arg.Any<ProcessContextAllocation>())
+                          .Returns(call =>
+                          {
+                              call[1] = allocation;
+                              return true;
+                          });
+        var footprint = await provider.ResolveFootprintAsync(Model, ModelRole.Chat, GpuProfile(), CancellationToken.None);
+
+        AssertEx.True(provider.TryCommitAdmissionFootprint(footprint, out var committed));
+        AssertEx.Equal(allocation.Footprint, committed.Resources);
+    }
+
     private static (ModelFootprintProvider Provider, IProcessContextAllocationResolver AllocationResolver) BuildProvider(ProcessContextAllocation? allocation,
         ResolvedLaunchArguments? resolved = null,
         GpuVariant variant = GpuVariant.Cuda)

@@ -9,9 +9,9 @@ using XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
 /// <summary>
 ///     workspace copy <see cref="IAgentHomeWorkspaceService" />. For each trusted selected folder it walks the real host
 ///     tree once to plan the copy (applying the sensitive-file exclusions, resolving symlinks/reparse points against
-///     the canonical root, and summing surviving bytes), blocks a folder that exceeds the byte budget, then copies the
-///     survivors into <c>/agent-home/workspace/selected/&lt;alias&gt;</c> through the sandbox provider. After at least
-///     one folder copies it creates a temporary in-sandbox git baseline that patch export diffs against. The
+///     the canonical root, and summing surviving bytes), rejects the preparation if a folder exceeds the byte budget,
+///     then copies the survivors into <c>/agent-home/workspace/selected/&lt;alias&gt;</c> through the sandbox provider. After
+///     at least one folder copies it creates a temporary in-sandbox git baseline that patch export diffs against. The
 ///     model-facing result carries aliases and counts only — never host paths.
 /// </summary>
 internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
@@ -20,16 +20,19 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
     private const string BaselineUserName = "AgentHome";
 
     private readonly ISensitiveFileExclusionService _exclusionService;
+    private readonly IAgentHomeWorkspaceIsolation _isolation;
     private readonly ILogger<AgentHomeWorkspaceService> _logger;
     private readonly IAgentSandboxRuntimeProvider _provider;
     private readonly INodeRuntimeSettings _runtimeSettings;
 
     public AgentHomeWorkspaceService(IAgentSandboxRuntimeProvider provider,
+        IAgentHomeWorkspaceIsolation isolation,
         ISensitiveFileExclusionService exclusionService,
         INodeRuntimeSettings runtimeSettings,
         ILogger<AgentHomeWorkspaceService> logger)
     {
         _provider = provider ?? throw new ArgumentNullException(nameof(provider));
+        _isolation = isolation ?? throw new ArgumentNullException(nameof(isolation));
         _exclusionService = exclusionService ?? throw new ArgumentNullException(nameof(exclusionService));
         _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -42,70 +45,81 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
         ArgumentNullException.ThrowIfNull(handle);
         ArgumentNullException.ThrowIfNull(resolvedFolders);
 
-        if (resolvedFolders.Count == 0)
+        var key = new AgentHomeExecutionLeaseKey(handle.AttachKey.OwnerUserId, handle.AttachKey.NodeId);
+        var requiresCleanup = false;
+        try
         {
-            return [];
-        }
+            // Replacement is unconditional, including an empty selection. A successful return from the provider is the
+            // proof that no prior project or attachment remains visible to the next inference.
+            var clearResult = await _isolation.ClearAsync(handle, key, cancellationToken).ConfigureAwait(false);
+            if (clearResult == AgentHomeWorkspaceClearResult.SandboxKilled)
+            {
+                throw new AgentHomeRequestRejectedException("the AgentHome sandbox was reset and must be recreated before use.");
+            }
+            if (resolvedFolders.Count == 0)
+            {
+                return [];
+            }
 
-        // The folders own a non-thread-safe walk over distinct host roots; copy them sequentially and honor cancel
-        // between folders (the await-loop is S3267-exempt — there is no LINQ projection of an asynchronous copy).
-        var snapshots = new List<SelectedFolderSnapshot>(resolvedFolders.Count);
-        var anyFileCopied = false;
-        foreach (var folder in resolvedFolders)
+            var maxSelectedFolderBytes = await _runtimeSettings.GetAgentHomeMaxSelectedFolderBytesAsync(cancellationToken).ConfigureAwait(false);
+            var plans = new List<PlannedFolderCopy>(resolvedFolders.Count);
+            foreach (var folder in resolvedFolders)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var plan = PlanFolderCopy(folder, cancellationToken);
+                if (plan.CopyPlan.TotalBytes > maxSelectedFolderBytes)
+                {
+                    throw new AgentHomeRequestRejectedException($"selected folder '{folder.Alias}' exceeds the copy budget.");
+                }
+
+                plans.Add(plan);
+            }
+
+            // Copy the complete accepted set before creating one baseline. No agent inference can begin between these
+            // steps because the caller holds the owner-node execution lease for the full lifecycle.
+            var snapshots = new List<SelectedFolderSnapshot>(plans.Count);
+            var anyFileCopied = false;
+            requiresCleanup = true;
+            foreach (var plan in plans)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var snapshot = await CopyFolderAsync(handle, plan, cancellationToken).ConfigureAwait(false);
+                snapshots.Add(snapshot);
+                anyFileCopied |= snapshot.CopiedFileCount > 0;
+            }
+
+            if (anyFileCopied)
+            {
+                await CreateGitBaselineAsync(handle, cancellationToken).ConfigureAwait(false);
+            }
+
+            requiresCleanup = false;
+            return snapshots;
+        }
+        catch
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            var snapshot = await CopyFolderAsync(handle, folder, cancellationToken).ConfigureAwait(false);
-            snapshots.Add(snapshot);
-            anyFileCopied |= snapshot is { Status: SelectedFolderCopyStatus.Copied, CopiedFileCount: > 0 };
-        }
+            if (requiresCleanup)
+            {
+                try
+                {
+                    _ = await _isolation.ClearAsync(handle, key, CancellationToken.None).ConfigureAwait(false);
+                }
+                catch (AgentHomeWorkspacePoisonedException)
+                {
+                    // The helper recorded the poison before throwing; preserve the preparation failure.
+                }
+            }
 
-        if (anyFileCopied)
-        {
-            await CreateGitBaselineAsync(handle, cancellationToken).ConfigureAwait(false);
+            throw;
         }
-
-        return snapshots;
     }
 
     private async Task<SelectedFolderSnapshot> CopyFolderAsync(SandboxHandle handle,
-        ResolvedSelectedFolder folder,
+        PlannedFolderCopy planned,
         CancellationToken cancellationToken)
     {
-        var root = HostPathSafety.TryResolveTrustedRoot(folder.HostPath)
-                   ?? throw new AgentHomeRequestRejectedException($"selected folder '{folder.Alias}' could not be resolved to a safe host path.");
-
-        if (folder.Mode == SelectedFolderMode.ReadOnlyMount)
-        {
-            // The current sandbox providers do not support read-only mounts; copy instead.
-            _logger.LogInformation("Selected folder {Alias} requested a read-only mount; copying instead (no provider mount support).",
-                folder.Alias);
-        }
-
-        var plan = BuildCopyPlan(root, folder.Alias, cancellationToken);
-        var workspacePath = RelativeWorkspacePath(folder.Alias);
-
-        var maxSelectedFolderBytes = await _runtimeSettings.GetAgentHomeMaxSelectedFolderBytesAsync(cancellationToken).ConfigureAwait(false);
-        if (plan.TotalBytes > maxSelectedFolderBytes)
-        {
-            _logger.LogWarning("Selected folder {Alias} is {Bytes} bytes, over the {Budget}-byte budget; copy blocked.",
-                folder.Alias,
-                plan.TotalBytes,
-                maxSelectedFolderBytes);
-
-            return new SelectedFolderSnapshot
-            {
-                Alias = folder.Alias,
-                Status = SelectedFolderCopyStatus.BlockedQuota,
-                CopiedFileCount = 0,
-                ExcludedFileCount = plan.ExcludedFileCount,
-                ExcludedDirectoryCount = plan.ExcludedDirectoryCount,
-                CopiedBytes = 0,
-                WorkspacePath = workspacePath
-            };
-        }
-
-        var sandboxDestinationRoot = $"{AgentHomeGit.WorkspaceSelectedRoot}/{folder.Alias}";
-        foreach (var file in plan.Files)
+        var sandboxDestinationRoot = $"{AgentHomeGit.WorkspaceSelectedRoot}/{planned.Folder.Alias}";
+        foreach (var file in planned.CopyPlan.Files)
         {
             cancellationToken.ThrowIfCancellationRequested();
             var destination = $"{sandboxDestinationRoot}/{file.RelativePosixPath}";
@@ -119,22 +133,36 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
         }
 
         _logger.LogInformation("Copied selected folder {Alias}: {CopiedFiles} file(s), {CopiedBytes} byte(s); excluded {ExcludedFiles} file(s) and {ExcludedDirs} directory(ies).",
-            folder.Alias,
-            plan.Files.Count,
-            plan.TotalBytes,
-            plan.ExcludedFileCount,
-            plan.ExcludedDirectoryCount);
+            planned.Folder.Alias,
+            planned.CopyPlan.Files.Count,
+            planned.CopyPlan.TotalBytes,
+            planned.CopyPlan.ExcludedFileCount,
+            planned.CopyPlan.ExcludedDirectoryCount);
 
         return new SelectedFolderSnapshot
         {
-            Alias = folder.Alias,
+            Alias = planned.Folder.Alias,
             Status = SelectedFolderCopyStatus.Copied,
-            CopiedFileCount = plan.Files.Count,
-            ExcludedFileCount = plan.ExcludedFileCount,
-            ExcludedDirectoryCount = plan.ExcludedDirectoryCount,
-            CopiedBytes = plan.TotalBytes,
-            WorkspacePath = workspacePath
+            CopiedFileCount = planned.CopyPlan.Files.Count,
+            ExcludedFileCount = planned.CopyPlan.ExcludedFileCount,
+            ExcludedDirectoryCount = planned.CopyPlan.ExcludedDirectoryCount,
+            CopiedBytes = planned.CopyPlan.TotalBytes,
+            WorkspacePath = RelativeWorkspacePath(planned.Folder.Alias)
         };
+    }
+
+    private PlannedFolderCopy PlanFolderCopy(ResolvedSelectedFolder folder, CancellationToken cancellationToken)
+    {
+        var root = HostPathSafety.TryResolveTrustedRoot(folder.HostPath)
+                   ?? throw new AgentHomeRequestRejectedException($"selected folder '{folder.Alias}' could not be resolved to a safe host path.");
+
+        if (folder.Mode == SelectedFolderMode.ReadOnlyMount)
+        {
+            _logger.LogInformation("Selected folder {Alias} requested a read-only mount; copying instead (no provider mount support).",
+                folder.Alias);
+        }
+
+        return new PlannedFolderCopy(folder, BuildCopyPlan(root, folder.Alias, cancellationToken));
     }
 
     private CopyPlan BuildCopyPlan(string root, string alias, CancellationToken cancellationToken)
@@ -290,4 +318,6 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
         long TotalBytes,
         int ExcludedFileCount,
         int ExcludedDirectoryCount);
+
+    private sealed record PlannedFolderCopy(ResolvedSelectedFolder Folder, CopyPlan CopyPlan);
 }

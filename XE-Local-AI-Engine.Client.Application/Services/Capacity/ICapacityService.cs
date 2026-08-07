@@ -11,7 +11,8 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 ///     Cloud models bypass the byte/process probe entirely (no local cost). A local model already running for the same
 ///     <c>(model, role)</c> queues on that process (no second load). Otherwise the model is admitted only when it fits
 ///     the free byte budget AND leaves process-count headroom; an admitted local model reserves its footprint in the
-///     pending-footprint ledger (released by the caller on child exit via <see cref="CapacityDecision.Reservation" />).
+///     pending-footprint ledger and publishes its exact llama.cpp launch identity (both released by the caller on child
+///     exit via <see cref="CapacityDecision.Reservation" />).
 ///     Unknown footprint or unknown budget with no RAM fallback rejects (conservative on uncertainty).
 /// </remarks>
 public interface ICapacityService

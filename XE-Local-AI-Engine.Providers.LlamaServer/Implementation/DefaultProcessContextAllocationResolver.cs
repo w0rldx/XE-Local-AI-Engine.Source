@@ -40,7 +40,36 @@ internal sealed class DefaultProcessContextAllocationResolver(LlamaServerLaunchP
 
     public bool TryDownTierAfterOutOfMemory(ProcessContextAllocation current, out ProcessContextAllocation downTiered)
     {
+        return RejectDownTier(current, out downTiered, DownTierReason.OutOfMemory);
+    }
+
+    public bool TryDownTierForAdmission(ProcessContextAllocation current, out ProcessContextAllocation downTiered)
+    {
+        return RejectDownTier(current, out downTiered, DownTierReason.Admission);
+    }
+
+    public bool TryCommitAdmissionAllocation(ProcessContextAllocation candidate, out ProcessContextAllocation committed)
+    {
+        committed = candidate;
+        return true;
+    }
+
+    private static bool RejectDownTier(ProcessContextAllocation current,
+        out ProcessContextAllocation downTiered,
+        DownTierReason reason)
+    {
+        if (reason is not DownTierReason.OutOfMemory and not DownTierReason.Admission)
+        {
+            throw new ArgumentOutOfRangeException(nameof(reason));
+        }
+
         downTiered = current;
         return false;
+    }
+
+    private enum DownTierReason
+    {
+        OutOfMemory,
+        Admission
     }
 }

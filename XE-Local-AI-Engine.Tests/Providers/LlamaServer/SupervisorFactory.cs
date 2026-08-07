@@ -24,7 +24,8 @@ internal static class SupervisorFactory
         ILlamaCppSourceBuildActivity? sourceBuildActivity = null,
         ILlamaFitParamsRunner? fitParamsRunner = null,
         ILlamaLayerPlacementReport? layerPlacementReport = null,
-        IProcessContextAllocationResolver? allocationResolver = null)
+        IProcessContextAllocationResolver? allocationResolver = null,
+        IProcessLaunchAdmissionRegistry? launchAdmissions = null)
     {
         return new LlamaServerProcessSupervisor(new FakeBinaryManager(),
             variantSelector ?? new FakeVariantSelector(),
@@ -47,6 +48,7 @@ internal static class SupervisorFactory
             sourceBuildActivity: sourceBuildActivity,
             fitParamsRunner: fitParamsRunner,
             allocationResolver: allocationResolver,
-            layerPlacementReport: layerPlacementReport);
+            layerPlacementReport: layerPlacementReport,
+            launchAdmissions: launchAdmissions);
     }
 }

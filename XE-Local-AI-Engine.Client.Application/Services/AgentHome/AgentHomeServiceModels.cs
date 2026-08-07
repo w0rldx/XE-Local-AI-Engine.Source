@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 
-/// <summary>Inputs for <see cref="IAgentHomeService.PrepareAsync" /> (already validated by the tool handler).</summary>
+/// <summary>Internal preparation inputs for the lease-owned AgentHome lifecycle.</summary>
 internal sealed record AgentHomePrepareRequest
 {
     /// <summary>The selected-folder ids the model referenced; each is resolved (existence-checked), not copied, in AgentHome gateway.</summary>
@@ -19,7 +19,7 @@ internal sealed record AgentHomePrepareRequest
     public Guid? ConversationId { get; init; }
 }
 
-/// <summary>Outcome of <see cref="IAgentHomeService.PrepareAsync" />; consumed by <see cref="IAgentHomeService.RunAsync" />.</summary>
+/// <summary>Internal preparation outcome consumed before the lifecycle lease is released.</summary>
 internal sealed record AgentHomePrepareResult
 {
     /// <summary>The recovered worker-local layout (root + manifest).</summary>
@@ -48,7 +48,7 @@ internal sealed record AgentHomePrepareResult
     public IReadOnlyList<string> StagedAttachmentRelativePaths { get; init; } = [];
 }
 
-/// <summary>Inputs for <see cref="IAgentHomeService.RunAsync" />.</summary>
+/// <summary>Internal run-phase inputs for the lease-owned AgentHome lifecycle.</summary>
 internal sealed record AgentHomeRunRequest
 {
     /// <summary>The completed preparation result.</summary>
@@ -87,7 +87,7 @@ internal sealed record AgentHomeRunLifecycleRequest
     public required IReadOnlyList<string> AllowedActions { get; init; }
 }
 
-/// <summary>Compact result of <see cref="IAgentHomeService.RunAsync" /> returned to the model.</summary>
+/// <summary>Compact lifecycle result returned to the model.</summary>
 internal sealed record AgentHomeRunResult
 {
     /// <summary>The run id; run outputs live under <c>/agent-home/runs/&lt;run-id&gt;</c>.</summary>
@@ -178,8 +178,8 @@ internal sealed class AgentHomeRequestRejectedException : InvalidOperationExcept
 }
 
 /// <summary>
-///     Thrown when a second AgentHome run is requested for the same owner-node while one is already in flight (AgentHome
-///     The run-level single-flight guard rejects rather than queues; the gateway maps it to a compact
+///     Thrown when an AgentHome run is requested while another operation holds the owner-node execution lease. The lease
+///     rejects rather than queues; the gateway maps it to a compact
 ///     model-facing "already in progress" rejection.
 /// </summary>
 internal sealed class AgentHomeBusyException : InvalidOperationException

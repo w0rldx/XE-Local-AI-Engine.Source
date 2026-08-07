@@ -27,6 +27,15 @@ internal sealed class PreOwnershipTerminalizationGuard(
         _ownershipEstablished = true;
     }
 
+    /// <summary>
+    ///     Disarms interruption cleanup after the caller has already persisted a deliberate pre-ownership terminal.
+    ///     This preserves that winning Failed/Cancelled status instead of attempting a second Interrupted write.
+    /// </summary>
+    public void TerminalizationHandled()
+    {
+        _ownershipEstablished = true;
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (_ownershipEstablished)

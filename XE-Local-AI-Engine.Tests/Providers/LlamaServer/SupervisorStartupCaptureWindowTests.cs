@@ -81,6 +81,53 @@ public sealed class SupervisorStartupCaptureWindowTests
     }
 
     [Test]
+    public async Task EnsureRunning_AdmittedOomDownTier_RemainsLowerAcrossOuterRestart()
+    {
+        const string modelName = "qwen3-14b";
+        var initial = new ProcessContextAllocation(16384,
+            ModelTrainContextTokens: 131072,
+            ProcessContextAllocationSource.HardwareTier,
+            ProcessPlacementMode.GpuResident,
+            ResourceFootprint.Zero,
+            ContentIdentity: $"{modelName}:0",
+            CacheKey: "cache:qwen3-14b");
+        var resolver = new SingleDownTierAllocationResolver(initial);
+        var registry = new ProcessLaunchAdmissionRegistry();
+        AssertEx.True(registry.TryAcquire(new ProcessLaunchAdmission(modelName,
+            ModelRole.Chat,
+            GpuVariant.Cuda,
+            ResolvedLaunchArguments.Explore(),
+            initial), out var consumer));
+        var launcher = new FakeProcessLauncher
+        {
+            StartupLines = [CudaOutOfMemoryLine]
+        };
+        var health = new ReadyOnAttemptHealthProbe(readyAttempt: 4);
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            healthProbe: health,
+            variantSelector: new FakeVariantSelector(GpuVariant.Cuda),
+            allocationResolver: resolver,
+            launchAdmissions: registry);
+
+        await supervisor.EnsureRunningAsync(modelName, ModelRole.Chat, CancellationToken.None);
+
+        var contexts = launcher.Launches.Select(static spec =>
+        {
+            var index = spec.Arguments.ToList().IndexOf("-c");
+            return int.Parse(spec.Arguments[index + 1], CultureInfo.InvariantCulture);
+        }).ToArray();
+        AssertEx.True(contexts.Length >= 4);
+        for (var index = 1; index < contexts.Length; index++)
+        {
+            AssertEx.True(contexts[index] <= contexts[index - 1],
+                $"context increased across retry: {string.Join(", ", contexts)}");
+        }
+
+        AssertEx.Equal(8192, contexts[^1]);
+        consumer!.Dispose();
+    }
+
+    [Test]
     public async Task EnsureRunning_FailureWithNoOomEvidence_DoesNotDownTier()
     {
         // The window keeping the LAST lines must not make the classifier trigger-happy: an ordinary failure with no
@@ -122,6 +169,86 @@ public sealed class SupervisorStartupCaptureWindowTests
         {
             DownTierAttempts++;
             return _inner.TryDownTierAfterOutOfMemory(current, out downTiered);
+        }
+
+        public bool TryDownTierForAdmission(ProcessContextAllocation current, out ProcessContextAllocation downTiered)
+        {
+            return _inner.TryDownTierForAdmission(current, out downTiered);
+        }
+
+        public bool TryCommitAdmissionAllocation(ProcessContextAllocation candidate, out ProcessContextAllocation committed)
+        {
+            return _inner.TryCommitAdmissionAllocation(candidate, out committed);
+        }
+    }
+
+    private sealed class SingleDownTierAllocationResolver(ProcessContextAllocation initial) : IProcessContextAllocationResolver
+    {
+        private ProcessContextAllocation _effective = initial;
+        private int _downTiered;
+
+        public Task<ProcessContextAllocation?> ResolveAsync(string modelName,
+            ModelRole role,
+            GpuVariant variant,
+            ResolvedLaunchArguments resolved,
+            CancellationToken ct)
+        {
+            return Task.FromResult<ProcessContextAllocation?>(_effective);
+        }
+
+        public bool TryDownTierForAdmission(ProcessContextAllocation current, out ProcessContextAllocation downTiered)
+        {
+            downTiered = current;
+            return false;
+        }
+
+        public bool TryCommitAdmissionAllocation(ProcessContextAllocation candidate, out ProcessContextAllocation committed)
+        {
+            committed = candidate;
+            return true;
+        }
+
+        public bool TryGetEffectiveCommittedAllocation(ProcessContextAllocation admitted, out ProcessContextAllocation effective)
+        {
+            effective = _effective;
+            return string.Equals(effective.CacheKey, admitted.CacheKey, StringComparison.Ordinal)
+                   && string.Equals(effective.ContentIdentity, admitted.ContentIdentity, StringComparison.Ordinal);
+        }
+
+        public bool TryDownTierAfterOutOfMemory(ProcessContextAllocation current, out ProcessContextAllocation downTiered)
+        {
+            if (Interlocked.Exchange(ref _downTiered, value: 1) != 0)
+            {
+                downTiered = _effective;
+                return false;
+            }
+
+            _effective = current with
+            {
+                ProcessContextTokens = 8192
+            };
+            downTiered = _effective;
+            return true;
+        }
+    }
+
+    private sealed class ReadyOnAttemptHealthProbe(int readyAttempt) : ILlamaServerHealthProbe
+    {
+        private int _attempt;
+
+        public Task<bool> WaitForReadyAsync(Uri baseAddress, TimeSpan readinessTimeout, CancellationToken ct)
+        {
+            return Task.FromResult(Interlocked.Increment(ref _attempt) >= readyAttempt);
+        }
+
+        public Task<bool> CheckResponsiveAsync(Uri baseAddress, CancellationToken ct)
+        {
+            return Task.FromResult(true);
+        }
+
+        public Task<int?> TryReadEffectiveContextTokensAsync(Uri baseAddress, CancellationToken ct)
+        {
+            return Task.FromResult<int?>(null);
         }
     }
 

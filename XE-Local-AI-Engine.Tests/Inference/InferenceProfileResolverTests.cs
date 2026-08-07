@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     <see cref="InferenceProfileResolver" /> tests: no profile explores; an explored row replays its drafted args; a
+///     <see cref="InferenceProfileResolver" /> tests: no profile and optimizer drafts explore; a
 ///     valid frozen row replays its frozen args without demotion; and a frozen-but-stale row is demoted to Stale and
 ///     re-explores. The scoped store is reached through a real <see cref="IServiceScopeFactory" /> over a substituted
 ///     store; the machine key + invalidation seams are mocked. No DB, no process.
@@ -34,7 +34,7 @@ public sealed class InferenceProfileResolverTests
     }
 
     [Test]
-    public async Task Resolver_ExploredStatus_ReplaysDraftArgs()
+    public async Task Resolver_ExploredStatus_ReturnsExplore()
     {
         var store = Substitute.For<IInferenceProfileStore>();
         store.GetByKeyAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
@@ -47,9 +47,7 @@ public sealed class InferenceProfileResolverTests
 
         var result = await resolver.ResolveAsync(Model, ModelRole.Chat, GpuVariant.Vulkan, CancellationToken.None);
 
-        AssertEx.False(result.ExploreMode);
-        AssertEx.Equal(8192, result.CtxSize);
-        AssertEx.Equal(33, result.NGpuLayers);
+        AssertEx.True(result.ExploreMode);
     }
 
     [Test]

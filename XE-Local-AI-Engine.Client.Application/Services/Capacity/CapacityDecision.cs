@@ -20,8 +20,8 @@ public enum CapacityVerdict
 ///     sanitized, user-safe constant (no paths/secrets/tokens) handed back to the calling agent on a reject;
 ///     <see cref="OllamaEvictionWarning" /> flags that admitting/serializing this spawn on the best-effort Ollama
 ///     provider may evict a different running model. On an <see cref="CapacityVerdict.Allow" /> for a LOCAL model the
-///     decision also carries a <see cref="Reservation" /> that has already reserved this model's footprint in the
-///     pending-footprint ledger — the caller MUST dispose it when the spawned child exits to release the reservation.
+///     decision also carries a <see cref="Reservation" /> that owns both the exact llama.cpp launch admission and this
+///     model's pending-footprint ledger reservation — the caller MUST dispose it when the spawned child exits.
 ///     For cloud Allow, QueueSameModel and every reject, <see cref="Reservation" /> is <see langword="null" /> (nothing
 ///     to release).
 /// </summary>
@@ -29,8 +29,8 @@ public enum CapacityVerdict
 /// <param name="Reason">Sanitized, user-safe reason string (constant; never a path/secret).</param>
 /// <param name="OllamaEvictionWarning">Whether loading this model on Ollama may evict a different running model.</param>
 /// <param name="Reservation">
-///     The ledger reservation to release on child exit (local Allow only); <see langword="null" /> otherwise. Disposing
-///     it is idempotent.
+///     The composite launch-admission/ledger reservation to release on child exit (local Allow only);
+///     <see langword="null" /> otherwise. Disposing it is idempotent.
 /// </param>
 public sealed record CapacityDecision(
     CapacityVerdict Verdict,

@@ -188,7 +188,7 @@ public sealed class AgentHomeServiceTests : IDisposable
     }
 
     [Test]
-    public async Task PrepareAsync_WhenFolderIdUnknown_ThrowsBeforeAnyProviderCall()
+    public async Task PrepareAsync_WhenFolderIdUnknown_ClearsPriorWorkspaceBeforeRejecting()
     {
         var clock = new FixedClock(FixedNow);
         var provider = new FakeSandboxRuntimeProvider(clock);
@@ -196,15 +196,26 @@ public sealed class AgentHomeServiceTests : IDisposable
 
         using var harness = CreateHarness(clock, provider, resolver);
 
+        var stale = await provider.CreateOrAttachAsync(new SandboxCreateRequest
+        {
+            AttachKey = AnyKey(),
+            RuntimeProfile = "dotnet-agent-home"
+        });
+        provider.WriteHostFile("stale", "old");
+        await provider.CopyIntoAsync(stale, new SandboxCopyRequest
+        {
+            SourcePath = "stale",
+            DestinationPath = AgentHomeGit.WorkspaceSelectedRoot + "/old/stale.txt"
+        });
+
         await AssertEx.ThrowsAsync<SelectedFolderValidationException>(() =>
             harness.Service.PrepareAsync(new AgentHomePrepareRequest
             {
                 SelectedFolderIds = [Guid.NewGuid().ToString()]
             }));
 
-        // Resolution precedes manifest/provider work, so no sandbox was created for any key.
-        await AssertEx.ThrowsAsync<SandboxHandleInvalidException>(() =>
-            provider.ConnectAsync(AnyKey()));
+        var after = await provider.ConnectAsync(AnyKey());
+        AssertEx.Empty(provider.SnapshotSandboxPaths(after));
     }
 
     [Test]
@@ -248,11 +259,11 @@ public sealed class AgentHomeServiceTests : IDisposable
 
         using var cancellation = new CancellationTokenSource();
         var runTask = harness.Service.RunAsync(new AgentHomeRunRequest
-            {
-                Prepared = prepared,
-                Goal = "g",
-                AllowedActions = ["run_commands"]
-            },
+        {
+            Prepared = prepared,
+            Goal = "g",
+            AllowedActions = ["run_commands"]
+        },
             cancellation.Token);
 
         await cancellation.CancelAsync();
@@ -299,7 +310,7 @@ public sealed class AgentHomeServiceTests : IDisposable
 
         using var harness = CreateHarness(clock, provider, resolver);
 
-        // First run holds the guard on its blocking command; the second run for the SAME owner-node must be rejected
+        // First run holds the owner-node lease on its blocking command; the second run for the SAME owner-node must be rejected
         // (not queued) while the first is in flight.
         using var firstCancellation = new CancellationTokenSource();
         var first = harness.Service.RunLifecycleAsync(NewLifecycle(folderId), firstCancellation.Token);
@@ -353,6 +364,53 @@ public sealed class AgentHomeServiceTests : IDisposable
         await secondCancellation.CancelAsync();
         await SwallowAsync(first);
         await SwallowAsync(second);
+    }
+
+    [Test]
+    public async Task RunLifecycleAsync_WhenOwnerNodeIsPoisoned_RefusesBeforeProviderUse()
+    {
+        var clock = new FixedClock(FixedNow);
+        var provider = new FakeSandboxRuntimeProvider(clock);
+        var resolver = new FakeSelectedFolderResolver();
+        var leases = new AgentHomeExecutionLeaseManager();
+        leases.MarkPoisoned(new AgentHomeExecutionLeaseKey("owner-a", "node-1"));
+        using var harness = CreateHarness(clock, provider, resolver, leaseManager: leases);
+
+        await AssertEx.ThrowsAsync<AgentHomeRequestRejectedException>(() =>
+            harness.Service.RunLifecycleAsync(NewLifecycle(Guid.NewGuid())));
+        AssertEx.False(await HasLiveSandboxAsync(provider));
+    }
+
+    [Test]
+    public async Task RunLifecycleAsync_WhenManifestInitializationFails_ClearsPriorSelection()
+    {
+        var clock = new FixedClock(FixedNow);
+        var provider = new FakeSandboxRuntimeProvider(clock);
+        var stale = await SeedStaleSelectionAsync(provider);
+        using var harness = CreateHarness(clock,
+            provider,
+            new FakeSelectedFolderResolver(),
+            manifestOverride: new ThrowingManifestService());
+
+        await AssertEx.ThrowsAsync<InvalidOperationException>(() =>
+            harness.Service.RunLifecycleAsync(NewLifecycle(Guid.NewGuid())));
+
+        AssertEx.Empty(provider.SnapshotSandboxPaths(stale));
+    }
+
+    [Test]
+    public async Task RunLifecycleAsync_WhenCreateOrAttachFails_ClearsPriorSelection()
+    {
+        var clock = new FixedClock(FixedNow);
+        var inner = new FakeSandboxRuntimeProvider(clock);
+        var stale = await SeedStaleSelectionAsync(inner);
+        var provider = new CancelRecordingProvider(inner) { FailCreateOrAttach = true };
+        using var harness = CreateHarness(clock, provider, new FakeSelectedFolderResolver());
+
+        await AssertEx.ThrowsAsync<InvalidOperationException>(() =>
+            harness.Service.RunLifecycleAsync(NewLifecycle(Guid.NewGuid())));
+
+        AssertEx.Empty(inner.SnapshotSandboxPaths(stale));
     }
 
     [Test]
@@ -665,38 +723,54 @@ public sealed class AgentHomeServiceTests : IDisposable
         // decrypted snapshot is staged.
         using var harness = CreateHarness(clock, provider, resolver, uploadedFileStore: store);
 
-        var staged = await harness.Service.PrepareConversationAttachmentsAsync(conversationId);
+        await using var staged = await harness.Service.PrepareConversationAttachmentsAsync(conversationId);
 
-        AssertEx.Empty(staged);
+        AssertEx.Empty(staged.StagedPaths);
         AssertEx.Equal(expected: 0, store.CreatedSnapshotPaths.Count);
         AssertEx.False(await HasLiveSandboxAsync(provider), "Agent Mode disabled must not create a sandbox.");
     }
 
     [Test]
-    public async Task PrepareConversationAttachmentsAsync_WhenConversationHasNoFiles_LeavesExistingSandboxUntouched()
+    public async Task PrepareConversationAttachmentsAsync_WhenConversationHasNoFiles_ReplacesPriorSelectionWithEmpty()
     {
         var clock = new FixedClock(FixedNow);
         var provider = new FakeSandboxRuntimeProvider(clock);
         var resolver = new FakeSelectedFolderResolver();
         var store = new FakeConversationUploadedFileStore();
+        var leases = new AgentHomeExecutionLeaseManager();
 
-        using var harness = CreateHarness(clock, provider, resolver, uploadedFileStore: store, enabled: true);
+        using var harness = CreateHarness(clock, provider, resolver, uploadedFileStore: store, enabled: true, leaseManager: leases);
 
-        // A pre-existing sandbox (e.g. from a separate project-workspace prepare) must not be recreated by an
-        // attachment-free chat turn.
+        // A pre-existing project selection must be removed even when the new attachment set is empty.
         var existing = await provider.CreateOrAttachAsync(new SandboxCreateRequest
         {
             AttachKey = AnyKey(),
             RuntimeProfile = "dotnet-agent-home",
             NetworkPolicy = SandboxNetworkPolicy.None
         });
+        provider.WriteHostFile("stale", "old project");
+        await provider.CopyIntoAsync(existing, new SandboxCopyRequest
+        {
+            SourcePath = "stale",
+            DestinationPath = AgentHomeGit.WorkspaceSelectedRoot + "/old/stale.txt"
+        });
 
         var staged = await harness.Service.PrepareConversationAttachmentsAsync(Guid.NewGuid());
 
-        AssertEx.Empty(staged);
+        AssertEx.Empty(staged.StagedPaths);
         var after = await provider.ConnectAsync(AnyKey());
         AssertEx.Equal(existing.SandboxId, after.SandboxId);
+        AssertEx.Empty(provider.SnapshotSandboxPaths(after));
         AssertEx.Equal(expected: 0, store.CreatedSnapshotPaths.Count);
+
+        Task<IAgentHomeExecutionLease?> contender;
+        using (ExecutionContext.SuppressFlow())
+        {
+            contender = Task.Run(() => leases.TryAcquire(new AgentHomeExecutionLeaseKey("owner-a", "node-1")));
+        }
+
+        AssertEx.Null(await contender);
+        await staged.DisposeAsync();
     }
 
     [Test]
@@ -712,10 +786,10 @@ public sealed class AgentHomeServiceTests : IDisposable
 
         using var harness = CreateHarness(clock, provider, resolver, uploadedFileStore: store, enabled: true);
 
-        var staged = await harness.Service.PrepareConversationAttachmentsAsync(conversationId);
+        await using var staged = await harness.Service.PrepareConversationAttachmentsAsync(conversationId);
 
         // The returned workspace-relative path points the model straight at the staged file.
-        AssertEx.Contains(staged, path => string.Equals(path, "attachments/spec.md", StringComparison.Ordinal));
+        AssertEx.Contains(staged.StagedPaths, path => string.Equals(path, "attachments/spec.md", StringComparison.Ordinal));
 
         var handle = await provider.ConnectAsync(AnyKey());
         var copied = provider.SnapshotSandboxPaths(handle);
@@ -737,12 +811,16 @@ public sealed class AgentHomeServiceTests : IDisposable
 
         using var harness = CreateHarness(clock, provider, resolver, uploadedFileStore: store, enabled: true);
 
-        await harness.Service.PrepareConversationAttachmentsAsync(conversationA);
-        var stagedB = await harness.Service.PrepareConversationAttachmentsAsync(conversationB);
+        await using (var stagedA = await harness.Service.PrepareConversationAttachmentsAsync(conversationA))
+        {
+            AssertEx.Contains(stagedA.StagedPaths, path => string.Equals(path, "attachments/alpha.md", StringComparison.Ordinal));
+        }
+
+        await using var stagedB = await harness.Service.PrepareConversationAttachmentsAsync(conversationB);
 
         // The second re-stage reports only conversation B's file.
-        AssertEx.Contains(stagedB, path => string.Equals(path, "attachments/bravo.md", StringComparison.Ordinal));
-        AssertEx.True(stagedB.All(path => !string.Equals(path, "attachments/alpha.md", StringComparison.Ordinal)),
+        AssertEx.Contains(stagedB.StagedPaths, path => string.Equals(path, "attachments/bravo.md", StringComparison.Ordinal));
+        AssertEx.True(stagedB.StagedPaths.All(path => !string.Equals(path, "attachments/alpha.md", StringComparison.Ordinal)),
             "the re-stage for conversation B must not report conversation A's file.");
 
         // The per-node sandbox is shared across conversations, so the second re-stage must leave only conversation B's
@@ -847,7 +925,9 @@ public sealed class AgentHomeServiceTests : IDisposable
         IAgentHomeIdentityProvider? identity = null,
         int commandTimeoutSeconds = 300,
         IConversationUploadedFileStore? uploadedFileStore = null,
-        bool enabled = false)
+        bool enabled = false,
+        IAgentHomeExecutionLeaseManager? leaseManager = null,
+        IAgentHomeManifestService? manifestOverride = null)
     {
         var root = Path.Combine(Path.GetTempPath(), "agenthome-svc-" + Guid.NewGuid().ToString("N"));
         _tempRoots.Add(root);
@@ -872,7 +952,10 @@ public sealed class AgentHomeServiceTests : IDisposable
 
         var memoryProposalService = new AgentHomeMemoryProposalService(NullLogger<AgentHomeMemoryProposalService>.Instance);
 
+        var leases = leaseManager ?? new AgentHomeExecutionLeaseManager();
+        var isolation = new AgentHomeWorkspaceIsolation(provider, leases, NullLogger<AgentHomeWorkspaceIsolation>.Instance);
         var workspaceService = new AgentHomeWorkspaceService(provider,
+            isolation,
             new SensitiveFileExclusionService(),
             runtimeSettings,
             NullLogger<AgentHomeWorkspaceService>.Instance);
@@ -881,9 +964,11 @@ public sealed class AgentHomeServiceTests : IDisposable
             runtimeSettings,
             NullLogger<AgentHomePatchService>.Instance);
 
-        var service = new AgentHomeService(manifestService,
+        var service = new AgentHomeService(manifestOverride ?? manifestService,
             provider,
             identity ?? new MutableIdentityProvider("owner-a", "node-1"),
+            leases,
+            isolation,
             workspaceService,
             patchService,
             memoryProposalService,
@@ -909,12 +994,19 @@ public sealed class AgentHomeServiceTests : IDisposable
 
         public int CancelCommandCallCount => Volatile.Read(ref _cancelCommandCallCount);
 
+        public bool FailCreateOrAttach { get; init; }
+
         public string ProviderName => _inner.ProviderName;
 
         public SandboxProviderCapabilities Capabilities => _inner.Capabilities;
 
         public Task<SandboxHandle> CreateOrAttachAsync(SandboxCreateRequest request, CancellationToken cancellationToken = default)
         {
+            if (FailCreateOrAttach)
+            {
+                throw new InvalidOperationException("injected create failure");
+            }
+
             return _inner.CreateOrAttachAsync(request, cancellationToken);
         }
 
@@ -931,6 +1023,11 @@ public sealed class AgentHomeServiceTests : IDisposable
         public Task CopyIntoAsync(SandboxHandle handle, SandboxCopyRequest request, CancellationToken cancellationToken = default)
         {
             return _inner.CopyIntoAsync(handle, request, cancellationToken);
+        }
+
+        public Task ResetDirectoryAsync(SandboxHandle handle, string sandboxPath, CancellationToken cancellationToken = default)
+        {
+            return _inner.ResetDirectoryAsync(handle, sandboxPath, cancellationToken);
         }
 
         public Task<string> ReadFileAsync(SandboxHandle handle, string sandboxPath, CancellationToken cancellationToken = default)
@@ -1040,4 +1137,66 @@ public sealed class AgentHomeServiceTests : IDisposable
             return _utcNow;
         }
     }
+
+    private sealed class ThrowingManifestService : IAgentHomeManifestService
+    {
+        public Task<AgentHomeLayout> InitializeAsync(SandboxAttachKey attachKey, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("injected manifest failure");
+    }
+
+    private static async Task<SandboxHandle> SeedStaleSelectionAsync(FakeSandboxRuntimeProvider provider)
+    {
+        var handle = await provider.CreateOrAttachAsync(new SandboxCreateRequest
+        {
+            AttachKey = AnyKey(),
+            RuntimeProfile = "dotnet-agent-home"
+        });
+        provider.WriteHostFile("stale-selection", "old");
+        await provider.CopyIntoAsync(handle, new SandboxCopyRequest
+        {
+            SourcePath = "stale-selection",
+            DestinationPath = AgentHomeGit.WorkspaceSelectedRoot + "/old/stale.txt"
+        });
+        return handle;
+    }
+}
+
+internal static class AgentHomeServicePhaseTestAccess
+{
+    private static readonly System.Reflection.MethodInfo PrepareMethod = typeof(AgentHomeService)
+        .GetMethod("PrepareUnderLeaseAsync", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+    private static readonly System.Reflection.MethodInfo RunMethod = typeof(AgentHomeService)
+        .GetMethod("RunAsync", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+
+    public static async Task<AgentHomePrepareResult> PrepareAsync(this AgentHomeService service,
+        AgentHomePrepareRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var identityField = typeof(AgentHomeService).GetField("_identityProvider", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        var providerField = typeof(AgentHomeService).GetField("_provider", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        var identityProvider = (IAgentHomeIdentityProvider)identityField.GetValue(service)!;
+        var provider = (IAgentSandboxRuntimeProvider)providerField.GetValue(service)!;
+        var identity = await identityProvider.GetAsync(cancellationToken);
+        if (request.RuntimeProfile is not null
+            && !string.Equals(request.RuntimeProfile, "dotnet-agent-home", StringComparison.Ordinal))
+        {
+            throw new AgentHomeRequestRejectedException("the requested runtime profile is not enabled for this worker.");
+        }
+
+        var profile = string.IsNullOrWhiteSpace(request.RuntimeProfile) ? "dotnet-agent-home" : request.RuntimeProfile;
+        var attachKey = new SandboxAttachKey
+        {
+            OwnerUserId = identity.OwnerUserId,
+            NodeId = identity.NodeId,
+            ProviderName = provider.ProviderName,
+            RuntimeProfile = profile,
+            ManifestVersion = AgentHomeManifest.CurrentVersion
+        };
+        return await (Task<AgentHomePrepareResult>)PrepareMethod.Invoke(service, [request, attachKey, profile, cancellationToken])!;
+    }
+
+    public static Task<AgentHomeRunResult> RunAsync(this AgentHomeService service,
+        AgentHomeRunRequest request,
+        CancellationToken cancellationToken = default) =>
+        (Task<AgentHomeRunResult>)RunMethod.Invoke(service, [request, cancellationToken])!;
 }

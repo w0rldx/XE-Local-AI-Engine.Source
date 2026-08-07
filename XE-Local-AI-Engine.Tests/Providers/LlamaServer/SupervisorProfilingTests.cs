@@ -15,6 +15,46 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class SupervisorProfilingTests
 {
     [Test]
+    public async Task Profiling_AdmittedConflict_ReleasesCapturedLaunchTicket()
+    {
+        const string modelName = "llama3";
+        var registry = new ProcessLaunchAdmissionRegistry();
+        var allocation = new ProcessContextAllocation(8192,
+            ModelTrainContextTokens: 131072,
+            ProcessContextAllocationSource.HardwareTier,
+            ProcessPlacementMode.GpuResident,
+            ResourceFootprint.Zero,
+            ContentIdentity: $"{modelName}:0",
+            CacheKey: $"cache:{modelName}");
+        using var consumer = registry.Acquire(new ProcessLaunchAdmission(modelName,
+            ModelRole.Chat,
+            GpuVariant.Cuda,
+            ResolvedLaunchArguments.Explore(),
+            allocation));
+        AssertEx.NotNull(consumer);
+        await using var supervisor = SupervisorFactory.Create(launchAdmissions: registry);
+
+        await AssertEx.ThrowsAsync<LlamaRuntimeException>(() =>
+            supervisor.RunExclusiveProfilingAsync(modelName,
+                ModelRole.Chat,
+                ResolvedLaunchArguments.Explore(),
+                enableMetrics: false,
+                (_, _) => Task.FromResult(result: true),
+                CancellationToken.None));
+
+        consumer!.Dispose();
+        var released = registry.Snapshot(modelName, ModelRole.Chat);
+        AssertEx.False(released.HasRequestedKey);
+        AssertEx.False(released.HasGlobalBlocker);
+        AssertEx.True(registry.TryAcquire(new ProcessLaunchAdmission(modelName,
+            ModelRole.Chat,
+            GpuVariant.Cuda,
+            ResolvedLaunchArguments.Explore(),
+            allocation), out var next));
+        next!.Dispose();
+    }
+
+    [Test]
     public async Task MutationLease_First_BlocksProfilingUntilDisposed()
     {
         var launcher = new FakeProcessLauncher();
@@ -55,6 +95,32 @@ public sealed class SupervisorProfilingTests
         var after = await supervisor.TryAcquireRuntimeMutationLeaseAsync(CancellationToken.None);
         AssertEx.NotNull(after);
         await after!.DisposeAsync();
+    }
+
+    [Test]
+    public async Task DisposeAsync_CancelsProfilingDelayedBeforeRuntimeGate()
+    {
+        var launcher = new FakeProcessLauncher();
+        var supervisor = SupervisorFactory.Create(launcher);
+        var blocker = await supervisor.TryAcquireRuntimeMutationLeaseAsync(CancellationToken.None);
+        AssertEx.NotNull(blocker);
+        var profiling = supervisor.RunExclusiveProfilingAsync("llama3",
+            ModelRole.Chat,
+            ResolvedLaunchArguments.Explore(),
+            enableMetrics: false,
+            (_, _) => Task.FromResult(result: true),
+            CancellationToken.None);
+        await Task.Delay(50);
+        AssertEx.False(profiling.IsCompleted);
+
+        var disposal = supervisor.DisposeAsync().AsTask();
+        await Task.Delay(50);
+        await blocker!.DisposeAsync();
+
+        await AssertEx.ThrowsAsync<ObjectDisposedException>(() => profiling);
+        await disposal;
+        AssertEx.Equal(0, launcher.LaunchCount);
+        AssertEx.Equal(expected: 0, supervisor.CountInflightSpawns());
     }
 
     [Test]

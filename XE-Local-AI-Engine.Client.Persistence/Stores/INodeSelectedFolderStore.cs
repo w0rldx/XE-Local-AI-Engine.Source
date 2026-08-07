@@ -11,12 +11,18 @@ public interface INodeSelectedFolderStore
     /// <summary>Persists a new selected folder and returns the stored record (host path decrypted).</summary>
     Task<SelectedFolderRecord> AddAsync(string folderAlias, string hostPath, SelectedFolderMode mode, CancellationToken cancellationToken = default);
 
-    /// <summary>Returns the record for <paramref name="id" />, or <c>null</c> when no folder is registered.</summary>
+    /// <summary>Returns the active record for <paramref name="id" />, or <c>null</c> when it is unknown or revoked.</summary>
     Task<SelectedFolderRecord?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
 
-    /// <summary>Returns the record for <paramref name="folderAlias" />, or <c>null</c> when no folder uses that alias.</summary>
+    /// <summary>Returns the active record for <paramref name="folderAlias" />, or <c>null</c> when it is unknown or revoked.</summary>
     Task<SelectedFolderRecord?> GetByAliasAsync(string folderAlias, CancellationToken cancellationToken = default);
 
-    /// <summary>Returns every registered selected folder, oldest first.</summary>
+    /// <summary>Returns every active selected folder, oldest first.</summary>
     Task<IReadOnlyList<SelectedFolderRecord>> ListAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Soft-revokes an active folder. Returns <c>false</c> when the id is unknown or already revoked, without
+    ///     distinguishing those cases.
+    /// </summary>
+    Task<bool> RevokeAsync(Guid id, CancellationToken cancellationToken = default);
 }

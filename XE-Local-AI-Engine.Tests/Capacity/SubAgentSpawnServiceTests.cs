@@ -306,6 +306,342 @@ public sealed class SubAgentSpawnServiceTests
     }
 
     [Test]
+    public async Task SpawnForMcp_WhenBareBindingRuns_UsesNoModelVisibleTools()
+    {
+        using var harness = new Harness();
+        harness.AllowLocal();
+        harness.ResolveMcpBinding(new McpExecutionBinding("fingerprint",
+            Model,
+            "bare instructions",
+            AgentDefinitionId: null,
+            AgentDefinitionVersion: null,
+            AllowedTools: [],
+            ReasoningEffort: null,
+            SupportsThinking: false));
+        var service = harness.Build();
+
+        using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
+        var outcome = await service.SpawnForMcpAsync(new McpExecutionBindingRequest
+        {
+            ModelId = Model
+        }, "inspect", expectedBindingFingerprint: null, CancellationToken.None);
+
+        AssertEx.Equal(SpawnOutcomeKind.Success, outcome.Kind);
+        AssertEx.Empty(harness.ChatClient.LastToolNames);
+        AssertEx.Equal(0, harness.WorkspaceSessionFactory.OpenCallCount);
+    }
+
+    [Test]
+    public async Task SpawnForMcp_WhenGeneralSavedBindingRuns_SuppressesToolsSkillsAndContextProviders()
+    {
+        using var harness = new Harness();
+        harness.AllowLocal();
+        harness.ResolveMcpBinding(new McpExecutionBinding("fingerprint",
+            Model,
+            "general instructions without skill discovery",
+            AgentDefinitionId: Guid.NewGuid(),
+            AgentDefinitionVersion: 4,
+            AllowedTools: [],
+            ReasoningEffort: null,
+            SupportsThinking: false));
+        var service = harness.Build();
+
+        using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
+        var outcome = await service.SpawnForMcpAsync(new McpExecutionBindingRequest
+        {
+            AgentKey = "General"
+        }, "inspect", expectedBindingFingerprint: null, CancellationToken.None);
+
+        AssertEx.Equal(SpawnOutcomeKind.Success, outcome.Kind);
+        AssertEx.Empty(harness.ChatClient.LastToolNames);
+        AssertEx.Equal("general instructions without skill discovery", harness.ChatClient.LastInstructions);
+        AssertEx.Equal(0, harness.WorkspaceSessionFactory.OpenCallCount);
+    }
+
+    [Test]
+    public async Task SpawnForMcp_WhenAuthorizedWorkspaceCoderBindingRuns_UsesExactlyThreeReadOnlyExecutables()
+    {
+        using var harness = new Harness();
+        harness.AllowLocal();
+        harness.ResolveMcpBinding(new McpExecutionBinding("fingerprint",
+            Model,
+            "coder instructions",
+            AgentDefinitionId: Guid.NewGuid(),
+            AgentDefinitionVersion: 2,
+            AllowedTools:
+            [
+                McpTool("list_files"),
+                McpTool("read_file"),
+                McpTool("search_text")
+            ],
+            ReasoningEffort: null,
+            SupportsThinking: false));
+        using var workspaceSession = new TrackingWorkspaceSession();
+        harness.WorkspaceSessionFactory.Result = McpWorkspaceExecutionSessionOpenResult.Success(workspaceSession);
+        var service = harness.Build();
+
+        using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
+        var outcome = await service.SpawnForMcpAsync(new McpExecutionBindingRequest
+        {
+            AgentKey = "Coder (read-only)",
+            ModelOverrideId = Model
+        }, "inspect", expectedBindingFingerprint: null, CancellationToken.None, Guid.NewGuid());
+
+        AssertEx.Equal(SpawnOutcomeKind.Success, outcome.Kind);
+        AssertEx.True(harness.ChatClient.LastToolNames.OrderBy(static name => name, StringComparer.Ordinal)
+                                  .SequenceEqual(["list_files", "read_file", "search_text"], StringComparer.Ordinal),
+            "the final MCP Coder agent must expose exactly the three read-only workspace executables.");
+        AssertEx.True(workspaceSession.IsDisposed, "the successful workspace session must be released after inference.");
+    }
+
+    [Test]
+    public async Task SpawnForMcp_WhenWorkspaceCoderHasNoWorkspace_RejectsBeforeCapacityOrInference()
+    {
+        using var harness = new Harness();
+        harness.ResolveMcpBinding(WorkspaceCoderBinding());
+        var service = harness.Build();
+
+        using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
+        var outcome = await service.SpawnForMcpAsync(new McpExecutionBindingRequest { AgentKey = "Coder" },
+            "inspect",
+            expectedBindingFingerprint: null,
+            CancellationToken.None);
+
+        AssertEx.Equal(McpExecutionFailureCodes.WorkspaceNotAuthorized, outcome.FailureCode!);
+        AssertEx.Equal(0, harness.ChatClient.CallCount);
+        AssertEx.Equal(0, harness.WorkspaceSessionFactory.OpenCallCount);
+        await harness.Capacity.DidNotReceiveWithAnyArgs().DecideAsync(default!, default, default);
+    }
+
+    [Test]
+    public async Task SpawnForMcp_WhenCoderExecutableIsUnregistered_RejectsBindingWithoutRunning()
+    {
+        using var harness = new Harness(includeSearchText: false);
+        harness.AllowLocal();
+        harness.ResolveMcpBinding(new McpExecutionBinding("fingerprint",
+            Model,
+            "coder instructions",
+            AgentDefinitionId: Guid.NewGuid(),
+            AgentDefinitionVersion: 2,
+            AllowedTools:
+            [
+                McpTool("list_files"),
+                McpTool("read_file"),
+                McpTool("search_text")
+            ],
+            ReasoningEffort: null,
+            SupportsThinking: false));
+        var service = harness.Build();
+
+        using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
+        var outcome = await service.SpawnForMcpAsync(new McpExecutionBindingRequest
+        {
+            AgentKey = "Coder (read-only)",
+            ModelOverrideId = Model
+        }, "inspect", expectedBindingFingerprint: null, CancellationToken.None);
+
+        AssertEx.Equal(SpawnOutcomeKind.Rejected, outcome.Kind);
+        AssertEx.Equal(0, harness.ChatClient.CallCount);
+    }
+
+    [Test]
+    public async Task SpawnForMcp_WhenCoderBindingDuplicatesToolName_RejectsBindingWithoutRunning()
+    {
+        using var harness = new Harness();
+        harness.AllowLocal();
+        harness.ResolveMcpBinding(new McpExecutionBinding("fingerprint",
+            Model,
+            "coder instructions",
+            AgentDefinitionId: Guid.NewGuid(),
+            AgentDefinitionVersion: 2,
+            AllowedTools:
+            [
+                McpTool("list_files"),
+                McpTool("list_files"),
+                McpTool("read_file"),
+                McpTool("search_text")
+            ],
+            ReasoningEffort: null,
+            SupportsThinking: false));
+        var service = harness.Build();
+
+        using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
+        var outcome = await service.SpawnForMcpAsync(new McpExecutionBindingRequest
+        {
+            AgentKey = "Coder (read-only)",
+            ModelOverrideId = Model
+        }, "inspect", expectedBindingFingerprint: null, CancellationToken.None);
+
+        AssertEx.Equal(SpawnOutcomeKind.Rejected, outcome.Kind);
+        AssertEx.Equal(0, harness.ChatClient.CallCount);
+    }
+
+    [Test]
+    public async Task SpawnForMcp_WhenCapacityRejectsWorkspace_DoesNotResolveOrLeaseWorkspace()
+    {
+        using var harness = new Harness();
+        harness.RejectInsufficient();
+        harness.ResolveMcpBinding(WorkspaceCoderBinding());
+        var service = harness.Build();
+
+        using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
+        var outcome = await service.SpawnForMcpAsync(new McpExecutionBindingRequest { AgentKey = "Coder" },
+            "inspect",
+            expectedBindingFingerprint: null,
+            CancellationToken.None,
+            Guid.NewGuid());
+
+        AssertEx.Equal(McpExecutionFailureCodes.CapacityDeclined, outcome.FailureCode!);
+        AssertEx.Equal(0, harness.WorkspaceSessionFactory.OpenCallCount);
+    }
+
+    [Test]
+    public async Task SpawnForMcp_WhileCapacityDecisionIsPending_DoesNotResolveOrLeaseWorkspace()
+    {
+        using var harness = new Harness();
+        var decisionEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var decision = new TaskCompletionSource<CapacityDecision>(TaskCreationOptions.RunContinuationsAsynchronously);
+        harness.DelayCapacity(decisionEntered, decision);
+        harness.ResolveMcpBinding(WorkspaceCoderBinding());
+        var service = harness.Build();
+
+        using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
+        var pending = service.SpawnForMcpAsync(new McpExecutionBindingRequest { AgentKey = "Coder" },
+            "inspect",
+            expectedBindingFingerprint: null,
+            CancellationToken.None,
+            Guid.NewGuid());
+        await decisionEntered.Task.ConfigureAwait(false);
+
+        AssertEx.Equal(0, harness.WorkspaceSessionFactory.OpenCallCount);
+        decision.SetResult(new CapacityDecision(CapacityVerdict.RejectInsufficient, "Insufficient capacity.", OllamaEvictionWarning: false));
+        _ = await pending.ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task SpawnForMcp_WhenWorkspaceIsRevokedAfterAdmission_FailsBeforeInference()
+    {
+        using var harness = new Harness();
+        harness.AllowLocal();
+        harness.ResolveMcpBinding(WorkspaceCoderBinding());
+        harness.WorkspaceSessionFactory.Result = McpWorkspaceExecutionSessionOpenResult.Rejected(McpExecutionFailureCodes.WorkspaceNotAuthorized,
+            "Cannot run: the selected workspace is not authorized.");
+        var service = harness.Build();
+
+        using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
+        var outcome = await service.SpawnForMcpAsync(new McpExecutionBindingRequest { AgentKey = "Coder" },
+            "inspect",
+            expectedBindingFingerprint: null,
+            CancellationToken.None,
+            Guid.NewGuid());
+
+        AssertEx.Equal(McpExecutionFailureCodes.WorkspaceNotAuthorized, outcome.FailureCode!);
+        AssertEx.Equal(0, harness.ChatClient.CallCount);
+        AssertEx.True(harness.ReservationDisposed, "capacity reservation must be released when authorization changed.");
+        AssertEx.Equal(1, harness.WorkspaceSessionFactory.OpenCallCount);
+    }
+
+    [Test]
+    public async Task SpawnForMcp_WhenWorkspaceAllowed_HoldsSessionThroughInferenceAndReleasesBeforeReturn()
+    {
+        using var harness = new Harness();
+        harness.AllowLocal();
+        harness.ResolveMcpBinding(WorkspaceCoderBinding());
+        var workspaceId = Guid.NewGuid();
+        using var session = new TrackingWorkspaceSession();
+        var ambientDisposed = false;
+        session.AmbientFactory = () => new TrackingDisposable(() => ambientDisposed = true);
+        harness.WorkspaceSessionFactory.Result = McpWorkspaceExecutionSessionOpenResult.Success(session);
+        var service = harness.Build();
+
+        using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
+        var outcome = await service.SpawnForMcpAsync(new McpExecutionBindingRequest { AgentKey = "Coder" },
+            "inspect",
+            expectedBindingFingerprint: null,
+            CancellationToken.None,
+            workspaceId);
+
+        AssertEx.Equal(SpawnOutcomeKind.Success, outcome.Kind);
+        AssertEx.True(ambientDisposed, "ambient access must end before the MCP execution call returns.");
+        AssertEx.True(session.IsDisposed, "the owner-node lease must be released before the MCP execution call returns.");
+        AssertEx.True(harness.ReservationDisposed, "the capacity reservation must be released on the same return path.");
+        AssertEx.Equal(1, session.EnterAmbientScopeCallCount);
+    }
+
+    [Test]
+    public async Task SpawnForMcp_WhenWorkspaceLeaseIsBusy_ReturnsStableBusyCodeWithoutInference()
+    {
+        using var harness = new Harness();
+        harness.QueueSameModel();
+        harness.ResolveMcpBinding(WorkspaceCoderBinding());
+        var workspaceId = Guid.NewGuid();
+        harness.WorkspaceSessionFactory.Result = McpWorkspaceExecutionSessionOpenResult.Rejected(McpExecutionFailureCodes.WorkspaceBusy,
+            "Cannot run: the selected workspace is busy.");
+        var service = harness.Build();
+
+        using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
+        var outcome = await service.SpawnForMcpAsync(new McpExecutionBindingRequest { AgentKey = "Coder" },
+            "inspect",
+            expectedBindingFingerprint: null,
+            CancellationToken.None,
+            workspaceId);
+
+        AssertEx.Equal(McpExecutionFailureCodes.WorkspaceBusy, outcome.FailureCode!);
+        AssertEx.Equal(0, harness.ChatClient.CallCount);
+        AssertEx.False(outcome.DisplayMessage.Contains("/not-observable", StringComparison.Ordinal), "busy response must not expose host paths.");
+    }
+
+    [Test]
+    public async Task SpawnForMcp_WhenWorkspaceRecoveryCannotProveClean_RefusesInferenceAndReleasesCapacity()
+    {
+        using var harness = new Harness();
+        harness.AllowLocal();
+        harness.ResolveMcpBinding(WorkspaceCoderBinding());
+        harness.WorkspaceSessionFactory.Result = McpWorkspaceExecutionSessionOpenResult.Rejected(
+            McpExecutionFailureCodes.WorkspacePreparationFailed,
+            "Cannot run: the selected workspace could not be prepared safely.");
+        var service = harness.Build();
+
+        using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
+        var outcome = await service.SpawnForMcpAsync(new McpExecutionBindingRequest { AgentKey = "Coder" },
+            "inspect",
+            expectedBindingFingerprint: null,
+            CancellationToken.None,
+            Guid.NewGuid());
+
+        AssertEx.Equal(McpExecutionFailureCodes.WorkspacePreparationFailed, outcome.FailureCode!);
+        AssertEx.Equal(0, harness.ChatClient.CallCount);
+        AssertEx.True(harness.ReservationDisposed, "capacity must release after workspace isolation fails closed.");
+    }
+
+    [Test]
+    public async Task SpawnForMcp_WhenQueuedWorkspaceRuns_HoldsSessionUntilInferenceCompletes()
+    {
+        using var harness = new Harness();
+        harness.QueueSameModel();
+        harness.ResolveMcpBinding(WorkspaceCoderBinding());
+        var workspaceId = Guid.NewGuid();
+        var inferenceGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        harness.ChatClient.HoldUntil(inferenceGate.Task);
+        using var session = new TrackingWorkspaceSession();
+        harness.WorkspaceSessionFactory.Result = McpWorkspaceExecutionSessionOpenResult.Success(session);
+        var service = harness.Build();
+
+        using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
+        var pending = service.SpawnForMcpAsync(new McpExecutionBindingRequest { AgentKey = "Coder" },
+            "inspect",
+            expectedBindingFingerprint: null,
+            CancellationToken.None,
+            workspaceId);
+        await harness.ChatClient.WaitUntilRunningAsync().ConfigureAwait(false);
+
+        AssertEx.False(session.IsDisposed, "queued execution must retain the workspace lease through inference.");
+        inferenceGate.SetResult();
+        _ = await pending.ConfigureAwait(false);
+        AssertEx.True(session.IsDisposed, "queued execution must release the workspace lease before returning.");
+    }
+
+    [Test]
     public async Task Spawn_WhenModelIdOnlyWithNoCustomInstructions_ComposesScaffoldAheadOfDefaultPersona()
     {
         // A model-id-only child has no persisted definition to opt out with, so it always gets the same scaffold
@@ -518,6 +854,29 @@ public sealed class SubAgentSpawnServiceTests
         };
     }
 
+    private static AllowedToolDto McpTool(string name)
+    {
+        return new AllowedToolDto
+        {
+            Id = Guid.NewGuid(),
+            Name = name,
+            Location = ToolLocation.ClientLocal,
+            ParameterSchema = "{\"type\":\"object\"}",
+            RequiresApproval = false,
+            Category = ToolCategory.ReadLocal
+        };
+    }
+
+    private static McpExecutionBinding WorkspaceCoderBinding() =>
+        new("fingerprint",
+            Model,
+            "coder instructions",
+            Guid.NewGuid(),
+            AgentDefinitionVersion: 1,
+            AllowedTools: [McpTool("list_files"), McpTool("read_file"), McpTool("search_text")],
+            ReasoningEffort: null,
+            SupportsThinking: false);
+
     // Assembles the spawn service over a mocked capacity verdict + a real SpawnSerializer + a gateable RecordingChatClient.
     private sealed class Harness : IDisposable
     {
@@ -527,13 +886,16 @@ public sealed class SubAgentSpawnServiceTests
         private readonly IAgentDefinitionStore _definitionStore = Substitute.For<IAgentDefinitionStore>();
         private readonly IModelCapabilityResolver _modelCapabilityResolver = Substitute.For<IModelCapabilityResolver>();
         private readonly FakeAgentInstructionProvider _instructionProvider = new();
-        private readonly IAgentToolRegistry _toolRegistry = new FakeAgentToolRegistry();
+        private readonly IAgentToolRegistry _toolRegistry;
+        private readonly IMcpExecutionBindingResolver _mcpExecutionBindingResolver = Substitute.For<IMcpExecutionBindingResolver>();
+        private readonly FakeMcpWorkspaceExecutionSessionFactory _mcpWorkspaceSessionFactory = new();
         private readonly CapturingLogger<SubAgentSpawnService> _logger = new();
         private bool _reservationDisposed;
 
-        public Harness(TimeSpan? delayBeforeResponse = null)
+        public Harness(TimeSpan? delayBeforeResponse = null, bool includeSearchText = true)
         {
             _chatClient = new GateableChatClient(delayBeforeResponse: delayBeforeResponse);
+            _toolRegistry = new FakeAgentToolRegistry(includeSearchText);
             // Default: the child model advertises the thinking capability, so a resolved reasoning effort is honored on
             // the Ollama think key. A test can flip this to prove a non-thinking model omits the field.
             _modelCapabilityResolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
@@ -550,7 +912,12 @@ public sealed class SubAgentSpawnServiceTests
 
         public GateableChatClient ChatClient => _chatClient;
 
+        public ICapacityService Capacity => _capacity;
+
         public IAgentDefinitionResolver Resolver => _resolver;
+
+        public FakeMcpWorkspaceExecutionSessionFactory WorkspaceSessionFactory => _mcpWorkspaceSessionFactory;
+
 
         public bool ReservationDisposed => _reservationDisposed;
 
@@ -725,11 +1092,27 @@ public sealed class SubAgentSpawnServiceTests
                      .Returns(_ => new CapacityDecision(CapacityVerdict.RejectInsufficient, "Insufficient capacity: not enough free memory for another model.", OllamaEvictionWarning: false));
         }
 
+        public void DelayCapacity(TaskCompletionSource entered, TaskCompletionSource<CapacityDecision> decision)
+        {
+            _capacity.DecideAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<CancellationToken>())
+                     .Returns(async _ =>
+                     {
+                         entered.TrySetResult();
+                         return await decision.Task.ConfigureAwait(false);
+                     });
+        }
+
         // Configures the base scaffold text the default sub-agent instructions are composed with. Unconfigured
         // (the default) returns null/empty, which BaseInstructionComposer treats as a no-op.
         public void WithScaffold(string scaffoldText)
         {
             _instructionProvider.BaseScaffold = scaffoldText;
+        }
+
+        public void ResolveMcpBinding(McpExecutionBinding binding)
+        {
+            _mcpExecutionBindingResolver.ResolveAsync(Arg.Any<McpExecutionBindingRequest>(), Arg.Any<CancellationToken>())
+                                        .Returns(McpExecutionBindingResolution.Success(binding));
         }
 
         public SubAgentSpawnService Build()
@@ -748,6 +1131,8 @@ public sealed class SubAgentSpawnServiceTests
                 }),
                 _instructionProvider,
                 _modelCapabilityResolver,
+                _mcpExecutionBindingResolver,
+                _mcpWorkspaceSessionFactory,
                 NullLoggerFactory.Instance,
                 _logger);
         }
@@ -762,16 +1147,27 @@ public sealed class SubAgentSpawnServiceTests
     // out of the child set even when the profile lists it.
     private sealed class FakeAgentToolRegistry : IAgentToolRegistry
     {
-        private static readonly IReadOnlyList<AITool> Tools =
-        [
-            AIFunctionFactory.Create((string input) => input, "spawn_subagent"),
-            AIFunctionFactory.Create((string input) => input, "read_file"),
-            AIFunctionFactory.Create((string input) => input, "list_files")
-        ];
+        private readonly IReadOnlyList<AITool> _tools;
+
+        public FakeAgentToolRegistry(bool includeSearchText)
+        {
+            var tools = new List<AITool>
+            {
+                AIFunctionFactory.Create((string input) => input, "spawn_subagent"),
+                AIFunctionFactory.Create((string input) => input, "read_file"),
+                AIFunctionFactory.Create((string input) => input, "list_files")
+            };
+            if (includeSearchText)
+            {
+                tools.Add(AIFunctionFactory.Create((string input) => input, "search_text"));
+            }
+
+            _tools = tools;
+        }
 
         public IReadOnlyList<AITool> GetLocalChatTools()
         {
-            return Tools;
+            return _tools;
         }
 
         public IReadOnlyList<LocalChatToolDescriptor> GetLocalChatToolDescriptors()
@@ -805,6 +1201,49 @@ public sealed class SubAgentSpawnServiceTests
         public void ReplaceSnapshot(IReadOnlyList<McpRegisteredTool> tools)
         {
             // Not used by the spawn tests.
+        }
+    }
+
+    private sealed class FakeMcpWorkspaceExecutionSessionFactory : IMcpWorkspaceExecutionSessionFactory
+    {
+        public int OpenCallCount { get; private set; }
+
+        public McpWorkspaceExecutionSessionOpenResult? Result { get; set; }
+
+        public Task<McpWorkspaceExecutionSessionOpenResult> OpenAsync(Guid workspaceId,
+            CancellationToken cancellationToken)
+        {
+            if (workspaceId == Guid.Empty)
+            {
+                throw new ArgumentException("Workspace id must be opaque and non-empty.", nameof(workspaceId));
+            }
+            cancellationToken.ThrowIfCancellationRequested();
+            OpenCallCount++;
+            return Task.FromResult(Result ?? throw new InvalidOperationException("No workspace session result was configured for this test."));
+        }
+    }
+
+    private sealed class TrackingWorkspaceSession : IMcpWorkspaceExecutionSession
+    {
+        private int _disposed;
+
+        public Func<IDisposable> AmbientFactory { get; set; } = static () => new TrackingDisposable(static () => { });
+
+        public int EnterAmbientScopeCallCount { get; private set; }
+
+        public bool IsDisposed => Volatile.Read(ref _disposed) != 0;
+
+        public IDisposable EnterAmbientScope()
+        {
+            ObjectDisposedException.ThrowIf(IsDisposed, this);
+
+            EnterAmbientScopeCallCount++;
+            return AmbientFactory();
+        }
+
+        public void Dispose()
+        {
+            _ = Interlocked.Exchange(ref _disposed, 1);
         }
     }
 

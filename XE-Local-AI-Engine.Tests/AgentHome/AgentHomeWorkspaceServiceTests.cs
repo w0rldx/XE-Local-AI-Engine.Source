@@ -203,7 +203,7 @@ public sealed class AgentHomeWorkspaceServiceTests : IDisposable
     }
 
     [Test]
-    public async Task PrepareSelectedFoldersAsync_WhenOverByteBudget_BlocksBeforeCopy()
+    public async Task PrepareSelectedFoldersAsync_WhenOverByteBudget_ClearsAndRejectsBeforeCopy()
     {
         var source = NewTempDir();
         await File.WriteAllTextAsync(Path.Combine(source, "big.bin"), new string(c: 'a', count: 4096));
@@ -212,10 +212,8 @@ public sealed class AgentHomeWorkspaceServiceTests : IDisposable
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
         var service = CreateService(provider, maxBytes: 100);
 
-        var snapshots = await service.PrepareSelectedFoldersAsync(handle, [Folder("proj", source)]);
-
-        AssertEx.Equal(SelectedFolderCopyStatus.BlockedQuota, snapshots[0].Status);
-        AssertEx.Equal(expected: 0, snapshots[0].CopiedFileCount);
+        await AssertEx.ThrowsAsync<AgentHomeRequestRejectedException>(() =>
+            service.PrepareSelectedFoldersAsync(handle, [Folder("proj", source)]));
         AssertEx.Empty(provider.SnapshotSandboxPaths(handle));
     }
 
@@ -268,6 +266,66 @@ public sealed class AgentHomeWorkspaceServiceTests : IDisposable
 
         await AssertEx.ThrowsAsync<AgentHomeRequestRejectedException>(() =>
             service.PrepareSelectedFoldersAsync(handle, [Folder("proj", source)]));
+        AssertEx.Empty(provider.SnapshotSandboxPaths(handle));
+    }
+
+    [Test]
+    public async Task PrepareSelectedFoldersAsync_ReplacesSelectionAWithBWithoutResidue()
+    {
+        var sourceA = NewTempDir();
+        var sourceB = NewTempDir();
+        await File.WriteAllTextAsync(Path.Combine(sourceA, "alpha.txt"), "a");
+        await File.WriteAllTextAsync(Path.Combine(sourceB, "bravo.txt"), "b");
+        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var handle = await provider.CreateOrAttachAsync(CreateRequest());
+        var service = CreateService(provider);
+
+        await service.PrepareSelectedFoldersAsync(handle, [Folder("a", sourceA)]);
+        await service.PrepareSelectedFoldersAsync(handle, [Folder("b", sourceB)]);
+
+        var paths = provider.SnapshotSandboxPaths(handle);
+        AssertEx.Contains(paths, path => path.EndsWith("/b/bravo.txt", StringComparison.Ordinal));
+        AssertEx.True(paths.All(path => !path.Contains("/a/", StringComparison.Ordinal)), "selection A must be removed before B is copied");
+    }
+
+    [Test]
+    public async Task PrepareSelectedFoldersAsync_ReplacesSelectionWithEmptyRoot()
+    {
+        var source = NewTempDir();
+        await File.WriteAllTextAsync(Path.Combine(source, "alpha.txt"), "a");
+        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var handle = await provider.CreateOrAttachAsync(CreateRequest());
+        var service = CreateService(provider);
+
+        await service.PrepareSelectedFoldersAsync(handle, [Folder("a", source)]);
+        var snapshots = await service.PrepareSelectedFoldersAsync(handle, []);
+
+        AssertEx.Empty(snapshots);
+        AssertEx.Empty(provider.SnapshotSandboxPaths(handle));
+    }
+
+    [Test]
+    public async Task PrepareSelectedFoldersAsync_WhenResetCannotProveEmpty_KillsPoisonedSandbox()
+    {
+        var inner = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var handle = await inner.CreateOrAttachAsync(CreateRequest());
+        var service = CreateService(new ResetFailingProvider(inner));
+
+        await AssertEx.ThrowsAsync<AgentHomeRequestRejectedException>(() => service.PrepareSelectedFoldersAsync(handle, []));
+        await AssertEx.ThrowsAsync<SandboxHandleInvalidException>(() => inner.ConnectAsync(CreateRequest().AttachKey));
+    }
+
+    [Test]
+    public async Task PrepareSelectedFoldersAsync_WhenResetAndKillFail_MarksOwnerNodePoisoned()
+    {
+        var inner = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var handle = await inner.CreateOrAttachAsync(CreateRequest());
+        var leases = new AgentHomeExecutionLeaseManager();
+        var service = CreateService(new ResetFailingProvider(inner, failKill: true), leaseManager: leases);
+
+        await AssertEx.ThrowsAsync<AgentHomeWorkspacePoisonedException>(() => service.PrepareSelectedFoldersAsync(handle, []));
+
+        AssertEx.True(leases.IsPoisoned(new AgentHomeExecutionLeaseKey("owner", "node")));
     }
 
     private static string BaselineCommandKey(params string[] tail)
@@ -310,12 +368,17 @@ public sealed class AgentHomeWorkspaceServiceTests : IDisposable
         AssertEx.True(snapshots[0].CopiedFileCount > 0, "a read-only mount folder is still copied in the MVP");
     }
 
-    private static AgentHomeWorkspaceService CreateService(FakeSandboxRuntimeProvider provider, long maxBytes = 536870912)
+    private static AgentHomeWorkspaceService CreateService(IAgentSandboxRuntimeProvider provider,
+        long maxBytes = 536870912,
+        IAgentHomeExecutionLeaseManager? leaseManager = null)
     {
         var runtimeSettings = StubNodeRuntimeSettings.Create()
                                                      .WithAgentHomeMaxSelectedFolderBytes(maxBytes)
                                                      .Build();
+        var leases = leaseManager ?? new AgentHomeExecutionLeaseManager();
+        var isolation = new AgentHomeWorkspaceIsolation(provider, leases, NullLogger<AgentHomeWorkspaceIsolation>.Instance);
         return new AgentHomeWorkspaceService(provider,
+            isolation,
             new SensitiveFileExclusionService(),
             runtimeSettings,
             NullLogger<AgentHomeWorkspaceService>.Instance);
@@ -364,5 +427,48 @@ public sealed class AgentHomeWorkspaceServiceTests : IDisposable
         {
             return _utcNow;
         }
+    }
+
+    private sealed class ResetFailingProvider : IAgentSandboxRuntimeProvider
+    {
+        private readonly FakeSandboxRuntimeProvider _inner;
+        private readonly bool _failKill;
+
+        public ResetFailingProvider(FakeSandboxRuntimeProvider inner, bool failKill = false)
+        {
+            _inner = inner;
+            _failKill = failKill;
+        }
+
+        public string ProviderName => _inner.ProviderName;
+
+        public SandboxProviderCapabilities Capabilities => _inner.Capabilities;
+
+        public Task<SandboxHandle> CreateOrAttachAsync(SandboxCreateRequest request, CancellationToken cancellationToken = default) =>
+            _inner.CreateOrAttachAsync(request, cancellationToken);
+
+        public Task<SandboxHandle> ConnectAsync(SandboxAttachKey attachKey, CancellationToken cancellationToken = default) =>
+            _inner.ConnectAsync(attachKey, cancellationToken);
+
+        public Task<SandboxCommandResult> ExecuteAsync(SandboxHandle handle, SandboxCommandRequest request, CancellationToken cancellationToken = default) =>
+            _inner.ExecuteAsync(handle, request, cancellationToken);
+
+        public Task CopyIntoAsync(SandboxHandle handle, SandboxCopyRequest request, CancellationToken cancellationToken = default) =>
+            _inner.CopyIntoAsync(handle, request, cancellationToken);
+
+        public Task ResetDirectoryAsync(SandboxHandle handle, string sandboxPath, CancellationToken cancellationToken = default) =>
+            throw new IOException("injected reset failure");
+
+        public Task<string> ReadFileAsync(SandboxHandle handle, string sandboxPath, CancellationToken cancellationToken = default) =>
+            _inner.ReadFileAsync(handle, sandboxPath, cancellationToken);
+
+        public Task CopyOutAsync(SandboxHandle handle, SandboxCopyRequest request, CancellationToken cancellationToken = default) =>
+            _inner.CopyOutAsync(handle, request, cancellationToken);
+
+        public Task CancelCommandAsync(SandboxHandle handle, string executionId, CancellationToken cancellationToken = default) =>
+            _inner.CancelCommandAsync(handle, executionId, cancellationToken);
+
+        public Task KillAsync(SandboxHandle handle, CancellationToken cancellationToken = default) =>
+            _failKill ? throw new IOException("injected kill failure") : _inner.KillAsync(handle, cancellationToken);
     }
 }

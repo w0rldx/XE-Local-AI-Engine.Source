@@ -8,6 +8,8 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
+using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -49,6 +51,35 @@ public sealed class CapacityServiceTests
     }
 
     [Test]
+    public async Task Capacity_WhenLlamaModelUsesExternalEndpoint_AllowsRepeatedlyWithoutLocalReservation()
+    {
+        var harness = new Harness
+        {
+            ExternalEndpoints = new LlamaServerExternalEndpointOptions
+            {
+                ChatEndpointsByModel = new Dictionary<string, Uri>(StringComparer.OrdinalIgnoreCase)
+                {
+                    [Model] = new Uri("http://127.0.0.1:18080/v1")
+                }
+            }
+        };
+        var service = harness.Build();
+
+        var first = await service.DecideAsync(Model, ModelRole.Chat, CancellationToken.None);
+        var second = await service.DecideAsync(Model, ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.Equal(CapacityVerdict.Allow, first.Verdict);
+        AssertEx.Equal(CapacityVerdict.Allow, second.Verdict);
+        AssertEx.Null(first.Reservation);
+        AssertEx.Null(second.Reservation);
+        AssertEx.Equal(ResourceFootprint.Zero, harness.Ledger.Reserved);
+        AssertEx.False(harness.LaunchAdmissions.Snapshot(Model, ModelRole.Chat).HasRequestedKey);
+        await harness.RuntimeAudit.DidNotReceive().GetAuditAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>());
+        await harness.FootprintProvider.DidNotReceive()
+                     .ResolveFootprintAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<HardwareProfile>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task Capacity_WhenLocalFitsAndProcessHeadroom_ReturnsAllow()
     {
         var harness = new Harness
@@ -64,6 +95,11 @@ public sealed class CapacityServiceTests
         AssertEx.NotNull(decision.Reservation);
         // The footprint was reserved in the ledger so a concurrent decision sees the in-flight load.
         AssertEx.Equal(4 * Gb, harness.Ledger.Reserved.GpuBytes);
+        AssertEx.True(harness.LaunchAdmissions.Snapshot(Model, ModelRole.Chat).HasRequestedKey);
+        decision.Reservation!.Dispose();
+        decision.Reservation.Dispose();
+        AssertEx.Equal(ResourceFootprint.Zero, harness.Ledger.Reserved);
+        AssertEx.False(harness.LaunchAdmissions.Snapshot(Model, ModelRole.Chat).HasRequestedKey);
     }
 
     [Test]
@@ -87,6 +123,86 @@ public sealed class CapacityServiceTests
 
         AssertEx.Equal(CapacityVerdict.RejectInsufficient, decision.Verdict);
         AssertEx.Equal(0, harness.Ledger.Reserved.GpuBytes);
+    }
+
+    [Test]
+    public async Task Capacity_PendingAdmissionCountsTowardProcessCap()
+    {
+        var harness = new Harness
+        {
+            Profile = GpuProfile(64 * Gb),
+            Footprint = GpuFootprint(1 * Gb),
+            MaxLoadedProcesses = 1
+        };
+        var service = harness.Build();
+        var first = await service.DecideAsync(Model, ModelRole.Chat, CancellationToken.None);
+
+        var second = await service.DecideAsync("model/b", ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.Equal(CapacityVerdict.Allow, first.Verdict);
+        AssertEx.Equal(CapacityVerdict.RejectInsufficient, second.Verdict);
+        first.Reservation!.Dispose();
+    }
+
+    [Test]
+    public async Task Capacity_RegistryConflictRejectsWithoutTentativeReservation()
+    {
+        var harness = new Harness
+        {
+            Profile = GpuProfile(64 * Gb),
+            Footprint = GpuFootprint(1 * Gb)
+        };
+        var admission = AssertEx.NotNull(AdmissionFootprint(1 * Gb, 8192).Admission);
+        AssertEx.True(harness.LaunchAdmissions.TryAcquire(admission, out var existing));
+        var service = harness.Build();
+
+        var decision = await service.DecideAsync(Model, ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.Equal(CapacityVerdict.RejectInsufficient, decision.Verdict);
+        AssertEx.Equal(ResourceFootprint.Zero, harness.Ledger.Reserved);
+        existing!.Dispose();
+    }
+
+    [Test]
+    public async Task Capacity_RegistryPublishRace_DisposesTentativeFootprintReservation()
+    {
+        var registry = Substitute.For<IProcessLaunchAdmissionRegistry>();
+        registry.Snapshot(Arg.Any<string>(), Arg.Any<ModelRole>())
+                .Returns(new ProcessLaunchAdmissionSnapshot(new HashSet<ProcessLaunchAdmissionKey>(),
+                    HasRequestedKey: false,
+                    HasGlobalBlocker: false));
+        registry.Acquire(Arg.Any<ProcessLaunchAdmission>())
+                .Returns((IProcessLaunchAdmissionLease?)null);
+        var harness = new Harness
+        {
+            Profile = GpuProfile(64 * Gb),
+            Footprint = GpuFootprint(1 * Gb),
+            LaunchAdmissions = registry
+        };
+        var service = harness.Build();
+
+        var decision = await service.DecideAsync(Model, ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.Equal(CapacityVerdict.RejectInsufficient, decision.Verdict);
+        AssertEx.Equal(ResourceFootprint.Zero, harness.Ledger.Reserved);
+    }
+
+    [Test]
+    public async Task Capacity_OllamaFitDoesNotPublishLlamaLaunchAdmission()
+    {
+        var harness = new Harness
+        {
+            ProviderName = OllamaLocalModelProvider.OllamaProviderName,
+            Profile = GpuProfile(64 * Gb),
+            Footprint = GpuFootprint(1 * Gb)
+        };
+        var service = harness.Build();
+
+        var decision = await service.DecideAsync(Model, ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.Equal(CapacityVerdict.Allow, decision.Verdict);
+        AssertEx.False(harness.LaunchAdmissions.Snapshot(Model, ModelRole.Chat).HasRequestedKey);
+        decision.Reservation!.Dispose();
     }
 
     [Test]
@@ -123,6 +239,45 @@ public sealed class CapacityServiceTests
         AssertEx.True(decision.Reason.Length > 0);
         // Sanitized reason carries no model identity, path, or byte figure.
         AssertEx.False(decision.Reason.Contains(Model, StringComparison.Ordinal));
+        harness.FootprintProvider.DidNotReceive()
+               .TryCommitAdmissionFootprint(Arg.Any<ModelFootprint>(), out Arg.Any<ModelFootprint>());
+    }
+
+    [Test]
+    public async Task Capacity_WhenLowerHardwareTierFits_AdmitsAndReservesSelectedFootprint()
+    {
+        var initial = AdmissionFootprint(20 * Gb, 65536);
+        var middle = AdmissionFootprint(12 * Gb, 32768);
+        var adjusted = AdmissionFootprint(6 * Gb, 16384);
+        var committed = AdmissionFootprint(5 * Gb, 8192);
+        var candidates = new Queue<ModelFootprint>([middle, adjusted]);
+        var harness = new Harness
+        {
+            Profile = GpuProfile(8 * Gb),
+            Footprint = initial
+        };
+        harness.FootprintProvider.TryDownTierForAdmission(Arg.Any<ModelFootprint>(), out Arg.Any<ModelFootprint>())
+               .Returns(call =>
+               {
+                   call[1] = candidates.Dequeue();
+                   return true;
+               });
+        var service = harness.Build();
+        harness.FootprintProvider.TryCommitAdmissionFootprint(adjusted, out Arg.Any<ModelFootprint>())
+               .Returns(call =>
+               {
+                   call[1] = committed;
+                   return true;
+               });
+
+        var decision = await service.DecideAsync(Model, ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.Equal(CapacityVerdict.Allow, decision.Verdict);
+        AssertEx.Equal(committed.Resources, harness.Ledger.Reserved);
+        harness.FootprintProvider.Received(2)
+               .TryDownTierForAdmission(Arg.Any<ModelFootprint>(), out Arg.Any<ModelFootprint>());
+        harness.FootprintProvider.Received(1)
+               .TryCommitAdmissionFootprint(adjusted, out Arg.Any<ModelFootprint>());
     }
 
     [Test]
@@ -382,6 +537,33 @@ public sealed class CapacityServiceTests
     private static ModelFootprint CpuFootprint(long ramBytes) =>
         ModelFootprint.Known(new ResourceFootprint(GpuBytes: 0, ramBytes));
 
+    private static ModelFootprint AdmissionFootprint(long gpuBytes, int contextTokens, string modelName = Model)
+    {
+        return AdmissionFootprint(new ResourceFootprint(gpuBytes, RamBytes: 0),
+            contextTokens,
+            modelName,
+            GpuVariant.Cuda);
+    }
+
+    private static ModelFootprint AdmissionFootprint(ResourceFootprint resources,
+        int contextTokens,
+        string modelName,
+        GpuVariant variant)
+    {
+        var allocation = new ProcessContextAllocation(contextTokens,
+            ModelTrainContextTokens: 131072,
+            ProcessContextAllocationSource.HardwareTier,
+            variant == GpuVariant.Cpu ? ProcessPlacementMode.Cpu : ProcessPlacementMode.GpuResident,
+            resources,
+            ContentIdentity: $"{modelName}:0",
+            CacheKey: $"capacity-test:{modelName}");
+        return ModelFootprint.Known(new ProcessLaunchAdmission(modelName,
+            ModelRole.Chat,
+            variant,
+            ResolvedLaunchArguments.Explore(),
+            allocation));
+    }
+
     // An empty-GPU profile: the measured free-VRAM baseline equals total, so existing fit expectations are unchanged.
     private static HardwareProfile GpuProfile(long vramBytes)
     {
@@ -431,10 +613,12 @@ public sealed class CapacityServiceTests
         public ModelFootprint Footprint { get; init; } = ModelFootprint.Unknown;
         public IReadOnlyList<LlamaServerProcessHealth> RunningLlama { get; init; } = [];
         public IReadOnlyList<RunningModelSnapshot> RunningOllama { get; init; } = [];
+        public LlamaServerExternalEndpointOptions ExternalEndpoints { get; init; } = new();
 
         public IRuntimeDeviceAudit RuntimeAudit { get; } = Substitute.For<IRuntimeDeviceAudit>();
         public ILlamaServerProcessSupervisor Supervisor { get; } = Substitute.For<ILlamaServerProcessSupervisor>();
         public IModelFootprintProvider FootprintProvider { get; } = Substitute.For<IModelFootprintProvider>();
+        public IProcessLaunchAdmissionRegistry LaunchAdmissions { get; init; } = new ProcessLaunchAdmissionRegistry();
         public PendingFootprintLedger Ledger { get; } = new();
 
         public CapacityService Build()
@@ -461,13 +645,39 @@ public sealed class CapacityServiceTests
             Supervisor.CheckHealthAsync(Arg.Any<CancellationToken>())
                       .Returns(Task.FromResult(RunningLlama));
             FootprintProvider.ResolveFootprintAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<HardwareProfile>(), Arg.Any<CancellationToken>())
-                             .Returns(Task.FromResult(Footprint));
+                             .Returns(call =>
+                             {
+                                 if (!string.Equals(ProviderName, Llamacpp, StringComparison.OrdinalIgnoreCase)
+                                     || Footprint is not { IsKnown: true, Admission: null })
+                                 {
+                                     return Task.FromResult(Footprint);
+                                 }
+
+                                 return Task.FromResult(AdmissionFootprint(Footprint.Resources,
+                                     contextTokens: 8192,
+                                     call.ArgAt<string>(0),
+                                     Profile.GpuAccelAvailable ? GpuVariant.Cuda : GpuVariant.Cpu));
+                             });
+            FootprintProvider.TryCommitAdmissionFootprint(Arg.Any<ModelFootprint>(), out Arg.Any<ModelFootprint>())
+                             .Returns(call =>
+                             {
+                                 call[1] = call[0];
+                                 return true;
+                             });
 
             var ollama = Substitute.For<IOllamaModelService>();
             ollama.ListRunningModelsAsync(Arg.Any<CancellationToken>())
                   .Returns(Task.FromResult(RunningOllama));
 
-            return new CapacityService(cloud, resolver, RuntimeAudit, Supervisor, ollama, FootprintProvider, Ledger);
+            return new CapacityService(cloud,
+                resolver,
+                RuntimeAudit,
+                Supervisor,
+                ollama,
+                FootprintProvider,
+                Ledger,
+                LaunchAdmissions,
+                ExternalEndpoints);
         }
     }
 }

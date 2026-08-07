@@ -32,11 +32,14 @@ function installJsdomEnvironmentMocks(): void {
 	});
 }
 
-function renderWithProviders(ui: ReactElement) {
+async function renderWithProviders(ui: ReactElement) {
+	const { ConfirmProvider } = await import("@/core/ui/components/ConfirmProvider/ConfirmProvider");
 	const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 	return render(
 		<QueryClientProvider client={qc}>
-			<MantineProvider>{ui}</MantineProvider>
+			<MantineProvider>
+				<ConfirmProvider>{ui}</ConfirmProvider>
+			</MantineProvider>
 		</QueryClientProvider>,
 	);
 }
@@ -51,6 +54,10 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 		queryKey: ["local-models"],
 		queryFn: () => Promise.resolve({ items: [], isAvailable: false }),
 	}),
+	listWorkspacesOptions: () => ({ queryKey: ["mcp-workspaces"], queryFn: () => Promise.resolve({ items: [] }) }),
+	listWorkspacesQueryKey: () => ["mcp-workspaces"],
+	createWorkspaceMutation: () => ({ mutationFn: vi.fn() }),
+	deleteWorkspaceMutation: () => ({ mutationFn: vi.fn() }),
 	// Local-runtime cards relocated from the model-fit advisor. The HF token status returns "no token" so the card
 	// renders without a backend; the llama.cpp runtime card is driven by getLlamaCppRuntimeOptions below.
 	ensureLlamaCppBinaryMutation: () => ({ mutationFn: vi.fn() }),
@@ -111,7 +118,7 @@ describe("NodeSettings developer-mode switch", () => {
 	it("renders the developer-mode switch", async () => {
 		const { NodeSettings } = await import("@/features/node-settings/pages/NodeSettings");
 
-		renderWithProviders(<NodeSettings />);
+		await renderWithProviders(<NodeSettings />);
 
 		expect(screen.getByTestId("developer-mode-switch")).toBeDefined();
 	});
@@ -120,7 +127,7 @@ describe("NodeSettings developer-mode switch", () => {
 		localStorage.setItem("xe-developer-mode", "false");
 		const { NodeSettings } = await import("@/features/node-settings/pages/NodeSettings");
 
-		renderWithProviders(<NodeSettings />);
+		await renderWithProviders(<NodeSettings />);
 
 		const switchEl = screen.getByTestId("developer-mode-switch");
 		// Mantine Switch renders a checkbox role input
@@ -132,7 +139,7 @@ describe("NodeSettings developer-mode switch", () => {
 		localStorage.setItem("xe-developer-mode", "true");
 		const { NodeSettings } = await import("@/features/node-settings/pages/NodeSettings");
 
-		renderWithProviders(<NodeSettings />);
+		await renderWithProviders(<NodeSettings />);
 
 		const switchEl = screen.getByTestId("developer-mode-switch");
 		const checkbox = switchEl.querySelector("input[type='checkbox']") ?? switchEl;
@@ -143,7 +150,7 @@ describe("NodeSettings developer-mode switch", () => {
 		const { NodeSettings } = await import("@/features/node-settings/pages/NodeSettings");
 		const { useDeveloperModeStore } = await import("@/core/dev-tools/stores/DeveloperModeStore");
 
-		renderWithProviders(<NodeSettings />);
+		await renderWithProviders(<NodeSettings />);
 
 		const switchEl = screen.getByTestId("developer-mode-switch");
 		const checkbox = switchEl.querySelector("input[type='checkbox']") ?? switchEl;

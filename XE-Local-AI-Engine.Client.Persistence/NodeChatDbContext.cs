@@ -49,6 +49,10 @@ public sealed class NodeChatDbContext : DbContext
     /// <summary>The singleton inbound-MCP bearer credential. See <see cref="McpServerApiKey" /> for the direction split.</summary>
     internal DbSet<McpServerApiKey> McpServerApiKeys => Set<McpServerApiKey>();
 
+    internal DbSet<McpAgentRun> McpAgentRuns => Set<McpAgentRun>();
+
+    internal DbSet<McpAgentRunLedger> McpAgentRunLedger => Set<McpAgentRunLedger>();
+
     internal DbSet<ModelClassification> ModelClassifications => Set<ModelClassification>();
 
     internal DbSet<ModelProviderMap> ModelProviderMaps => Set<ModelProviderMap>();
@@ -314,6 +318,8 @@ public sealed class NodeChatDbContext : DbContext
         modelBuilder.ApplyConfiguration(new GoldenConversationConfiguration());
         modelBuilder.ApplyConfiguration(new McpServerRegistrationConfiguration());
         modelBuilder.ApplyConfiguration(new McpServerApiKeyConfiguration());
+        modelBuilder.ApplyConfiguration(new McpAgentRunConfiguration());
+        modelBuilder.ApplyConfiguration(new McpAgentRunLedgerConfiguration());
         modelBuilder.ApplyConfiguration(new ModelClassificationConfiguration());
         modelBuilder.ApplyConfiguration(new ModelProviderMapConfiguration());
         modelBuilder.ApplyConfiguration(new ScheduledJobDefinitionConfiguration());

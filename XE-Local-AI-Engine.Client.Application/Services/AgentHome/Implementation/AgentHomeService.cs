@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 
-using System.Collections.Concurrent;
 using System.Globalization;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
@@ -12,7 +11,7 @@ using XE_Local_AI_Engine.Client.Services.Workspace;
 /// <summary>
 ///     AgentHome gateway <see cref="IAgentHomeService" />. Drives the real orchestration end-to-end against the configured
 ///     provider (the deterministic fake by default): <see cref="RunLifecycleAsync" /> resolves owner/node identity once,
-///     acquires a run-level single-flight guard keyed by that owner-node, then runs Prepare + Run under it. Prepare
+///     acquires the shared exclusive execution lease keyed by that owner-node, then runs Prepare + Run under it. Prepare
 ///     builds the attach key, recovers the worker-local layout, attaches/creates the sandbox, resolves and copies
 ///     the selected folders, and creates the git baseline. Run executes one bounded, profile-driven command — with the
 ///     copied workspace as its working directory so the post-run patch export diffs the real CWD — classifies
@@ -50,6 +49,8 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         };
 
     private readonly IAgentHomeIdentityProvider _identityProvider;
+    private readonly IAgentHomeExecutionLeaseManager _leaseManager;
+    private readonly IAgentHomeWorkspaceIsolation _isolation;
     private readonly ILogger<AgentHomeService> _logger;
     private readonly IAgentHomeManifestService _manifestService;
     private readonly IAgentHomeMemoryProposalService _memoryProposalService;
@@ -59,10 +60,6 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
     private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly IConversationUploadedFileStore _uploadedFileStore;
 
-    // Run-level single-flight guard: one semaphore per owner-node, created on demand. A second run for
-    // the same owner-node while one is in flight is rejected (non-blocking Wait(0)), not queued. Keyed by a string so
-    // the guard does not couple to SandboxAttachKey value-equality (which folds in ManifestVersion/RuntimeProfile).
-    private readonly ConcurrentDictionary<string, SemaphoreSlim> _runGuards = new(StringComparer.Ordinal);
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly TimeProvider _timeProvider;
     private readonly IAgentHomeWorkspaceService _workspaceService;
@@ -71,6 +68,8 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
     public AgentHomeService(IAgentHomeManifestService manifestService,
         IAgentSandboxRuntimeProvider provider,
         IAgentHomeIdentityProvider identityProvider,
+        IAgentHomeExecutionLeaseManager leaseManager,
+        IAgentHomeWorkspaceIsolation isolation,
         IAgentHomeWorkspaceService workspaceService,
         IAgentHomePatchService patchService,
         IAgentHomeMemoryProposalService memoryProposalService,
@@ -84,6 +83,8 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         _manifestService = manifestService ?? throw new ArgumentNullException(nameof(manifestService));
         _provider = provider ?? throw new ArgumentNullException(nameof(provider));
         _identityProvider = identityProvider ?? throw new ArgumentNullException(nameof(identityProvider));
+        _leaseManager = leaseManager ?? throw new ArgumentNullException(nameof(leaseManager));
+        _isolation = isolation ?? throw new ArgumentNullException(nameof(isolation));
         _workspaceService = workspaceService ?? throw new ArgumentNullException(nameof(workspaceService));
         _patchService = patchService ?? throw new ArgumentNullException(nameof(patchService));
         _memoryProposalService = memoryProposalService ?? throw new ArgumentNullException(nameof(memoryProposalService));
@@ -101,67 +102,65 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
 
-        // Resolve identity FIRST so the guard key exists before Prepare. A second run for the same owner-node while one
+        // Resolve identity first so the lease key exists before Prepare. A second run for the same owner-node while one
         // is in flight is rejected, not queued.
         var identity = await _identityProvider.GetAsync(cancellationToken).ConfigureAwait(false);
-        var guardKey = string.Create(CultureInfo.InvariantCulture, $"{identity.OwnerUserId} {identity.NodeId}");
-        var guard = _runGuards.GetOrAdd(guardKey, static _ => new SemaphoreSlim(initialCount: 1, maxCount: 1));
+        var key = LeaseKey(identity);
+        if (_leaseManager.IsPoisoned(key))
+        {
+            throw new AgentHomeRequestRejectedException("the AgentHome workspace is unavailable until isolation recovery succeeds.");
+        }
 
-        // Non-blocking try-acquire: a zero timeout returns immediately rather than queueing a second concurrent run.
-        if (!await guard.WaitAsync(TimeSpan.Zero, CancellationToken.None).ConfigureAwait(false))
+        using var lease = _leaseManager.TryAcquire(key);
+        if (lease is null)
         {
             throw new AgentHomeBusyException("an AgentHome run is already in progress for this node.");
         }
 
+        var prepareRequest = new AgentHomePrepareRequest
+        {
+            SelectedFolderIds = request.SelectedFolderIds,
+            RuntimeProfile = request.RuntimeProfile,
+            ConversationId = request.ConversationId
+        };
+        var effectiveProfile = _options.DefaultRuntimeProfile;
+        var attachKey = CreateAttachKey(identity, effectiveProfile);
+
         try
         {
-            var prepared = await PrepareAsync(new AgentHomePrepareRequest
-                {
-                    SelectedFolderIds = request.SelectedFolderIds,
-                    RuntimeProfile = request.RuntimeProfile,
-                    ConversationId = request.ConversationId
-                },
-                cancellationToken).ConfigureAwait(false);
+            effectiveProfile = ResolveRuntimeProfile(prepareRequest.RuntimeProfile);
+            attachKey = CreateAttachKey(identity, effectiveProfile);
+            var prepared = await PrepareUnderLeaseAsync(prepareRequest, attachKey, effectiveProfile, cancellationToken).ConfigureAwait(false);
+            var result = await RunAsync(new AgentHomeRunRequest
+            {
+                Prepared = prepared,
+                Goal = request.Goal,
+                AllowedActions = request.AllowedActions
+            },
+            cancellationToken).ConfigureAwait(false);
+            if (!result.Completed || result.TimedOut)
+            {
+                _ = await _isolation.ClearAsync(prepared.Handle, key, CancellationToken.None).ConfigureAwait(false);
+            }
 
-            return await RunAsync(new AgentHomeRunRequest
-                {
-                    Prepared = prepared,
-                    Goal = request.Goal,
-                    AllowedActions = request.AllowedActions
-                },
-                cancellationToken).ConfigureAwait(false);
+            return result;
         }
-        finally
+        catch
         {
-            // Release covers success, timeout, cancel, and kill so the owner-node is not left permanently busy.
-            guard.Release();
+            await RecoverAfterFailureAsync(attachKey, key).ConfigureAwait(false);
+            throw;
         }
     }
 
-    public async Task<AgentHomePrepareResult> PrepareAsync(AgentHomePrepareRequest request, CancellationToken cancellationToken = default)
+    private async Task<AgentHomePrepareResult> PrepareUnderLeaseAsync(AgentHomePrepareRequest request,
+        SandboxAttachKey attachKey,
+        string effectiveProfile,
+        CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(request);
-        cancellationToken.ThrowIfCancellationRequested();
-
         var prepareTimeoutSeconds = await _runtimeSettings.GetAgentHomePrepareTimeoutSecondsAsync(cancellationToken).ConfigureAwait(false);
         using var prepareCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         prepareCts.CancelAfter(TimeSpan.FromSeconds(prepareTimeoutSeconds));
         var prepareToken = prepareCts.Token;
-
-        // Policy gates first: a disallowed runtime profile or an unknown/invalid selected-folder id is rejected before
-        // any manifest or provider call.
-        var effectiveProfile = ResolveRuntimeProfile(request.RuntimeProfile);
-        var resolvedFolders = await ResolveFoldersAsync(request.SelectedFolderIds, prepareToken).ConfigureAwait(false);
-
-        var identity = await _identityProvider.GetAsync(prepareToken).ConfigureAwait(false);
-        var attachKey = new SandboxAttachKey
-        {
-            OwnerUserId = identity.OwnerUserId,
-            NodeId = identity.NodeId,
-            ProviderName = _provider.ProviderName,
-            RuntimeProfile = effectiveProfile,
-            ManifestVersion = AgentHomeManifest.CurrentVersion
-        };
 
         var layout = await _manifestService.InitializeAsync(attachKey, prepareToken).ConfigureAwait(false);
 
@@ -183,6 +182,21 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
             NetworkPolicy = ResolveNetworkPolicy()
         };
         var handle = await _provider.CreateOrAttachAsync(createRequest, prepareToken).ConfigureAwait(false);
+
+        // Clear before resolution so preparation never reasons over a prior selection. The workspace service resets
+        // again immediately before copying; the lifecycle catch performs final recovery on every failure.
+        await _workspaceService.PrepareSelectedFoldersAsync(handle, [], prepareToken).ConfigureAwait(false);
+        return await PrepareAttachedAsync(request, effectiveProfile, attachKey, layout, handle, prepareToken).ConfigureAwait(false);
+    }
+
+    private async Task<AgentHomePrepareResult> PrepareAttachedAsync(AgentHomePrepareRequest request,
+        string effectiveProfile,
+        SandboxAttachKey attachKey,
+        AgentHomeLayout layout,
+        SandboxHandle handle,
+        CancellationToken prepareToken)
+    {
+        var resolvedFolders = await ResolveFoldersAsync(request.SelectedFolderIds, prepareToken).ConfigureAwait(false);
 
         // Stage this conversation's uploaded attachments (the extracted, decrypted Markdown) as a synthetic read-only
         // "attachments" folder so the agent's existing file tools (list_files/read_file/search_text) discover them.
@@ -241,7 +255,8 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         };
     }
 
-    public async Task<IReadOnlyList<string>> PrepareConversationAttachmentsAsync(Guid conversationId, CancellationToken cancellationToken = default)
+    public async Task<ConversationSandboxPreparation> PrepareConversationAttachmentsAsync(Guid conversationId,
+        CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -249,73 +264,75 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         // entirely rather than create a sandbox that nothing can read.
         if (!_options.Enabled)
         {
-            return [];
-        }
-
-        // Fast path: no extracted attachments to stage → leave any existing sandbox untouched, so an attachment-free
-        // chat turn never disturbs a separately-prepared project workspace.
-        var files = await _uploadedFileStore.ListAsync(conversationId, cancellationToken).ConfigureAwait(false);
-        if (files.Count == 0)
-        {
-            return [];
+            return new ConversationSandboxPreparation([], lease: null);
         }
 
         var identity = await _identityProvider.GetAsync(cancellationToken).ConfigureAwait(false);
-        var guardKey = string.Create(CultureInfo.InvariantCulture, $"{identity.OwnerUserId} {identity.NodeId}");
-        var guard = _runGuards.GetOrAdd(guardKey, static _ => new SemaphoreSlim(initialCount: 1, maxCount: 1));
+        var key = LeaseKey(identity);
+        if (_leaseManager.IsPoisoned(key))
+        {
+            return new ConversationSandboxPreparation([], lease: null, isBusy: true);
+        }
 
-        // Share the run-level single-flight guard with RunLifecycleAsync so an in-flight run_in_agent_home run and a
-        // chat-mode re-stage cannot race on the same owner-node sandbox. Non-blocking: if a run already holds the guard,
-        // skip the re-stage (the coder tools will report no workspace) rather than block the chat turn.
-        if (!await guard.WaitAsync(TimeSpan.Zero, CancellationToken.None).ConfigureAwait(false))
+        var lease = _leaseManager.TryAcquire(key);
+
+        // Share the owner-node execution lease with RunLifecycleAsync so an in-flight run_in_agent_home run and a
+        // chat-mode re-stage cannot race on the same owner-node sandbox. Non-blocking: if another operation holds the
+        // lease, skip the re-stage (the coder tools will report no workspace) rather than block the chat turn.
+        if (lease is null)
         {
             _logger.LogDebug("AgentHome attachment staging for node {NodeId} skipped: a run is already in progress.", identity.NodeId);
-            return [];
+            return new ConversationSandboxPreparation([], lease: null, isBusy: true);
         }
 
         try
         {
-            // The owner-node sandbox is shared across conversations (the attach key carries no conversation id) and the
-            // workspace copy appends rather than replaces, so recreate the sandbox first — it must hold ONLY this
-            // conversation's attachments, never another conversation's files. Chat agent mode selects no project
-            // folders, so the recreate cost is just the (small) attachment copy.
-            await ResetOwnerNodeSandboxAsync(identity, cancellationToken).ConfigureAwait(false);
-            var prepared = await PrepareAsync(new AgentHomePrepareRequest
-                {
-                    SelectedFolderIds = [],
-                    RuntimeProfile = null,
-                    ConversationId = conversationId
-                },
-                cancellationToken).ConfigureAwait(false);
-            return prepared.StagedAttachmentRelativePaths;
+            // PrepareSelectedFoldersAsync unconditionally replaces the selected root, so this staging leaves only the
+            // current conversation's attachments without tearing down the owner-node sandbox.
+            var effectiveProfile = ResolveRuntimeProfile(requestedProfile: null);
+            var attachKey = CreateAttachKey(identity, effectiveProfile);
+            var prepared = await PrepareUnderLeaseAsync(new AgentHomePrepareRequest
+            {
+                SelectedFolderIds = [],
+                RuntimeProfile = null,
+                ConversationId = conversationId
+            }, attachKey, effectiveProfile, cancellationToken).ConfigureAwait(false);
+            return new ConversationSandboxPreparation(prepared.StagedAttachmentRelativePaths, lease);
         }
-        finally
+        catch
         {
-            guard.Release();
+            await RecoverAfterFailureAsync(CreateAttachKey(identity, ResolveRuntimeProfile(requestedProfile: null)), key).ConfigureAwait(false);
+            lease.Dispose();
+            throw;
         }
     }
 
-    // Recreates the owner-node sandbox by killing any live one so the next PrepareAsync stages into a clean workspace.
-    // No-op when no live sandbox matches the key.
-    private async Task ResetOwnerNodeSandboxAsync(AgentHomeOwnerIdentity identity, CancellationToken cancellationToken)
+    private static AgentHomeExecutionLeaseKey LeaseKey(AgentHomeOwnerIdentity identity)
     {
-        var attachKey = new SandboxAttachKey
+        return new AgentHomeExecutionLeaseKey(identity.OwnerUserId, identity.NodeId);
+    }
+
+    private SandboxAttachKey CreateAttachKey(AgentHomeOwnerIdentity identity, string effectiveProfile)
+    {
+        return new SandboxAttachKey
         {
             OwnerUserId = identity.OwnerUserId,
             NodeId = identity.NodeId,
             ProviderName = _provider.ProviderName,
-            RuntimeProfile = _options.DefaultRuntimeProfile,
+            RuntimeProfile = effectiveProfile,
             ManifestVersion = AgentHomeManifest.CurrentVersion
         };
+    }
 
+    private async Task RecoverAfterFailureAsync(SandboxAttachKey attachKey, AgentHomeExecutionLeaseKey key)
+    {
         try
         {
-            var handle = await _provider.ConnectAsync(attachKey, cancellationToken).ConfigureAwait(false);
-            await _provider.KillAsync(handle, cancellationToken).ConfigureAwait(false);
+            await _isolation.RecoverExistingAsync(attachKey, key, CancellationToken.None).ConfigureAwait(false);
         }
-        catch (SandboxHandleInvalidException)
+        catch (AgentHomeWorkspacePoisonedException exception)
         {
-            // No live sandbox to clear — the next PrepareAsync creates a fresh one.
+            _logger.LogError(exception, "AgentHome failure cleanup could not prove workspace isolation for node {NodeId}.", attachKey.NodeId);
         }
     }
 
@@ -352,7 +369,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         return snapshot;
     }
 
-    public async Task<AgentHomeRunResult> RunAsync(AgentHomeRunRequest request, CancellationToken cancellationToken = default)
+    private async Task<AgentHomeRunResult> RunAsync(AgentHomeRunRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
@@ -515,10 +532,10 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         }
 
         var collected = await _memoryProposalService.CollectAsync(new MemoryProposalCollectRequest
-            {
-                RunId = runId,
-                HostRunDirectory = runDirectory
-            },
+        {
+            RunId = runId,
+            HostRunDirectory = runDirectory
+        },
             cancellationToken).ConfigureAwait(false);
 
         await AppendEventSafelyAsync(runLogger, "memory_collected",
@@ -548,13 +565,13 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         try
         {
             await runLogger.OpenAsync(new AgentHomeRunLogContext
-                {
-                    RunId = runId,
-                    HostLogDirectory = logDirectory,
-                    NodeId = identity.NodeId,
-                    OwnerUserId = identity.OwnerUserId,
-                    ProviderName = _provider.ProviderName
-                },
+            {
+                RunId = runId,
+                HostLogDirectory = logDirectory,
+                NodeId = identity.NodeId,
+                OwnerUserId = identity.OwnerUserId,
+                ProviderName = _provider.ProviderName
+            },
                 cancellationToken).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
@@ -595,16 +612,16 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         try
         {
             await runLogger.AppendCommandAsync(new AgentHomeCommandLogRecord
-                {
-                    TimestampUtc = _timeProvider.GetUtcNow(),
-                    ExecutionId = runId,
-                    Executable = descriptor.Executable,
-                    Arguments = descriptor.Arguments,
-                    Completed = completed,
-                    ExitCode = exitCode,
-                    DurationMs = (long)elapsed.TotalMilliseconds,
-                    ErrorClass = errorClass
-                },
+            {
+                TimestampUtc = _timeProvider.GetUtcNow(),
+                ExecutionId = runId,
+                Executable = descriptor.Executable,
+                Arguments = descriptor.Arguments,
+                Completed = completed,
+                ExitCode = exitCode,
+                DurationMs = (long)elapsed.TotalMilliseconds,
+                ErrorClass = errorClass
+            },
                 cancellationToken).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)

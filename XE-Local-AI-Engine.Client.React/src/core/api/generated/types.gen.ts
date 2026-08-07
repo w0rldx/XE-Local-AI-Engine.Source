@@ -2882,6 +2882,25 @@ export type XeLocalAiEngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActionR
 	priority?: number;
 };
 
+export type XeLocalAiEngineClientEndpointsWorkspacesV1WorkspaceResponse = {
+	workspaceId: string;
+	alias: string;
+	mode?: string;
+};
+
+export type XeLocalAiEngineClientEndpointsWorkspacesV1CreateWorkspaceRequest = {
+	alias?: string | null;
+	hostPath?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsWorkspacesV1DeleteWorkspaceRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsWorkspacesV1ListWorkspacesResponse = {
+	items?: Array<XeLocalAiEngineClientEndpointsWorkspacesV1WorkspaceResponse>;
+};
+
 export type GetVoiceManifestData = {
 	body?: never;
 	path?: never;
@@ -9302,3 +9321,86 @@ export type UpdateSuggestedPlaybookActionResponses = {
 
 export type UpdateSuggestedPlaybookActionResponse =
 	UpdateSuggestedPlaybookActionResponses[keyof UpdateSuggestedPlaybookActionResponses];
+
+export type ListWorkspacesData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/workspaces";
+};
+
+export type ListWorkspacesErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListWorkspacesResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsWorkspacesV1ListWorkspacesResponse;
+};
+
+export type ListWorkspacesResponse = ListWorkspacesResponses[keyof ListWorkspacesResponses];
+
+export type CreateWorkspaceData = {
+	body: XeLocalAiEngineClientEndpointsWorkspacesV1CreateWorkspaceRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/workspaces";
+};
+
+export type CreateWorkspaceErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type CreateWorkspaceResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsWorkspacesV1WorkspaceResponse;
+};
+
+export type CreateWorkspaceResponse = CreateWorkspaceResponses[keyof CreateWorkspaceResponses];
+
+export type DeleteWorkspaceData = {
+	body?: never;
+	path: {
+		workspaceId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/workspaces/{workspaceId}";
+};
+
+export type DeleteWorkspaceErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type DeleteWorkspaceResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type DeleteWorkspaceResponse = DeleteWorkspaceResponses[keyof DeleteWorkspaceResponses];

@@ -177,17 +177,14 @@ public sealed class AgentHomeToolGatewayTests
 
         public Task<AgentHomePrepareResult> PrepareAsync(AgentHomePrepareRequest request, CancellationToken cancellationToken = default)
         {
+            _ = request;
+            _ = cancellationToken;
             if (_prepareError is not null)
             {
                 return Task.FromException<AgentHomePrepareResult>(_prepareError);
             }
 
             return Task.FromResult(BuildPrepareResult());
-        }
-
-        public Task<AgentHomeRunResult> RunAsync(AgentHomeRunRequest request, CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(_runResult!);
         }
 
         public async Task<AgentHomeRunResult> RunLifecycleAsync(AgentHomeRunLifecycleRequest request, CancellationToken cancellationToken = default)
