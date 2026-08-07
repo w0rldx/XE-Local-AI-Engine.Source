@@ -76,6 +76,11 @@ public sealed class NodeEncryptionMaterializationInterceptor : IMaterializationI
                 registration.EnvJson = DecryptIfPresent(registration.EnvJson, context.NodeEncryptionKey.Span, Guid.Empty, registration.Id, "env");
                 registration.Description = DecryptIfPresent(registration.Description, context.NodeEncryptionKey.Span, Guid.Empty, registration.Id, "description");
                 break;
+            case SlashCommand command:
+                command.Description = DecryptIfPresent(command.Description, context.NodeEncryptionKey.Span, Guid.Empty, command.Id, SlashCommand.DescriptionColumnName(command.Name));
+                command.ActionConfiguration = NodePayloadProtector.Decrypt(command.ActionConfiguration, context.NodeEncryptionKey.Span, Guid.Empty, command.Id,
+                    SlashCommand.ActionConfigurationColumnName(command.Name));
+                break;
             case McpServerApiKey apiKey:
                 apiKey.KeyHash = NodePayloadProtector.Decrypt(apiKey.KeyHash, context.NodeEncryptionKey.Span, Guid.Empty, apiKey.Id, "mcp_api_key_hash");
                 break;

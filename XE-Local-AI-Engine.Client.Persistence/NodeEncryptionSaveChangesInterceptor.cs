@@ -175,6 +175,13 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
             EncryptOptionalProperty(entry, entry.Property(entity => entity.Description), Guid.Empty, entry.Entity.Id, "description", trackedProperties);
         }
 
+        foreach (var entry in nodeContext.ChangeTracker.Entries<SlashCommand>())
+        {
+            EncryptOptionalProperty(entry, entry.Property(entity => entity.Description), Guid.Empty, entry.Entity.Id, SlashCommand.DescriptionColumnName(entry.Entity.Name), trackedProperties);
+            EncryptRequiredProperty(entry, entry.Property(entity => entity.ActionConfiguration), Guid.Empty, entry.Entity.Id,
+                SlashCommand.ActionConfigurationColumnName(entry.Entity.Name), trackedProperties);
+        }
+
         // The inbound-MCP bearer credential is node-scoped, so the AAD binds the empty conversation id to the row's own
         // (constant, singleton) id plus the column name. The stored value is a one-way SHA-256 digest, not the key, so
         // this is not protecting a secret from a reader — it is protecting the digest from a WRITER. Without the

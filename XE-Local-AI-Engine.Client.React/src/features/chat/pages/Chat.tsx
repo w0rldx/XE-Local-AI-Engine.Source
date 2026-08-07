@@ -4,6 +4,8 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useCommands } from "@/features/commands/queries/useCommands";
+import { toChatCommandOption } from "@/features/chat/models/SlashCommandModels";
 
 import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
@@ -171,6 +173,8 @@ export function Chat() {
 	const { t } = useTranslation();
 	const { confirm } = useConfirm();
 	const queryClient = useQueryClient();
+	const commandsQuery = useCommands();
+	const commandOptions = useMemo(() => (commandsQuery.data ?? []).map(toChatCommandOption), [commandsQuery.data]);
 	const activeStream = useRef<ActiveChatStream | null>(null);
 	// Conversations deleted while a stream was in flight. The streaming loops consult this set so an aborted
 	// turn cannot re-cache or refetch (404 / resurrect) a thread the operator just removed.
@@ -1592,6 +1596,7 @@ export function Chat() {
 				agentModeEnabled={agentModeEnabled}
 				selectedAgentId={selectedAgentId}
 				agentOptions={agentOptions}
+				commandOptions={commandOptions}
 				onSelectAgent={handleSelectAgent}
 				attachments={attachments}
 				pendingUploads={pendingUploads}

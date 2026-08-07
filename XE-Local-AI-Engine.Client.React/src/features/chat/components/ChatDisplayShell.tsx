@@ -16,6 +16,7 @@ const EMPTY_TIMELINE_ENTRIES: ChatDisplayShellProps["timelineEntries"] = [];
 // Stable empty default for the optional agentOptions prop — a fresh `[]` default would allocate a new array
 // reference every render (same reasoning as EMPTY_TIMELINE_ENTRIES above).
 const EMPTY_AGENT_OPTIONS: ChatDisplayShellProps["agentOptions"] = [];
+const EMPTY_COMMAND_OPTIONS: ChatDisplayShellProps["commandOptions"] = [];
 
 /* eslint-disable react-doctor/no-inline-exhaustive-style -- A few responsive Mantine styles depend on live pane state; extracting them would not make them static. */
 
@@ -50,6 +51,7 @@ export function ChatDisplayShell({
 	agentModeEnabled = false,
 	selectedAgentId = "",
 	agentOptions = EMPTY_AGENT_OPTIONS,
+	commandOptions = EMPTY_COMMAND_OPTIONS,
 	onSelectAgent,
 	attachments,
 	pendingUploads,
@@ -275,6 +277,7 @@ export function ChatDisplayShell({
 					agentModeEnabled={agentModeEnabled}
 					selectedAgentId={selectedAgentId}
 					agentOptions={agentOptions}
+					commandOptions={commandOptions}
 					attachments={attachments}
 					pendingUploads={pendingUploads}
 					onUploadFiles={onUploadFiles}

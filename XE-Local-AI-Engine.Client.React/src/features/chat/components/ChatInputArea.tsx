@@ -16,11 +16,15 @@ import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
 import { AgentSelectorCard } from "@/features/chat/components/AgentSelectorCard";
 import { ChatAttachmentChips } from "@/features/chat/components/ChatAttachmentChips";
 import { ChatSamplingOptionsDialog } from "@/features/chat/components/ChatSamplingOptionsDialog";
+import { SlashCommandAutocomplete } from "@/features/chat/components/SlashCommandAutocomplete";
 import { CompactButton } from "@/features/chat/components/CompactButton";
 import { ContextUsageBadge } from "@/features/chat/components/ContextUsageBadge";
 import { ModelSelectorCard } from "@/features/chat/components/ModelSelectorCard";
 import type { ChatAttachment, PendingAttachmentUpload } from "@/features/chat/models/ChatAttachmentModels";
 import { defaultChatUiCapabilities } from "@/features/chat/models/ChatCapabilityGates";
+import type { ChatCommandOption } from "@/features/chat/models/SlashCommandModels";
+import { resolveSlashCommand } from "@/features/chat/models/SlashCommandResolver";
+import { useSlashCommandAutocomplete } from "@/features/chat/hooks/useSlashCommandAutocomplete";
 import type {
 	AgentOption,
 	ChatUiCapabilities,
@@ -48,6 +52,7 @@ const EMPTY_AGENT_OPTIONS: readonly AgentOption[] = [];
 // Stable empty defaults for the optional attachment props (same referential-stability reasoning as above).
 const EMPTY_ATTACHMENTS: readonly ChatAttachment[] = [];
 const EMPTY_PENDING_UPLOADS: readonly PendingAttachmentUpload[] = [];
+const EMPTY_COMMAND_OPTIONS: readonly ChatCommandOption[] = [];
 
 // File-picker hint for the OS dialog. The server's extractor allowlist is the source of truth (it rejects
 // anything unsupported); this only nudges the picker toward the common document/text/code formats we extract.
@@ -82,6 +87,7 @@ interface ChatInputAreaProps {
 	agentModeEnabled?: boolean;
 	selectedAgentId?: string;
 	agentOptions?: readonly AgentOption[];
+	commandOptions?: readonly ChatCommandOption[];
 	// Conversation file attachments. The chip row + paperclip picker only render when the capability gate
 	// (showFileAttachmentControls) is on; the handlers are wired from Chat.tsx via useConversationAttachments.
 	attachments?: readonly ChatAttachment[];
@@ -122,6 +128,7 @@ export function ChatInputArea({
 	agentModeEnabled = false,
 	selectedAgentId = "",
 	agentOptions = EMPTY_AGENT_OPTIONS,
+	commandOptions = EMPTY_COMMAND_OPTIONS,
 	attachments = EMPTY_ATTACHMENTS,
 	pendingUploads = EMPTY_PENDING_UPLOADS,
 	onUploadFiles,
@@ -136,6 +143,10 @@ export function ChatInputArea({
 }: ChatInputAreaProps) {
 	const { t } = useTranslation();
 	const [content, setContent] = useState("");
+	const [selection, setSelection] = useState({ start: 0, end: 0 });
+	const [isComposing, setIsComposing] = useState(false);
+	const inputRef = useRef<HTMLTextAreaElement>(null);
+	const pendingFocusCaret = useRef<number | null>(null);
 	const [samplingDialogOpen, setSamplingDialogOpen] = useState(false);
 	// Drag-over highlight for the file drop target (only meaningful when file attachments are enabled).
 	const [isDragActive, setDragActive] = useState(false);
@@ -162,6 +173,30 @@ export function ChatInputArea({
 	const showVoiceControls = developerMode && capabilities.showVoiceControls;
 	const { width } = useWindowDimensions();
 	const showContextUsage = Boolean(contextUsage) && width >= CONTEXT_USAGE_HIDE_WIDTH;
+	const autocomplete = useSlashCommandAutocomplete({
+		content,
+		selectionStart: selection.start,
+		selectionEnd: selection.end,
+		interactive: !disabled && !isSending,
+		isComposing,
+		options: commandOptions,
+		onSelect: (option) => {
+			const canonical = `/${option.name}`;
+			setContent(canonical);
+			setSelection({ start: canonical.length, end: canonical.length });
+			pendingFocusCaret.current = canonical.length;
+		},
+	});
+
+	useEffect(() => {
+		const caret = pendingFocusCaret.current;
+		if (caret === null || content.length !== caret) {
+			return;
+		}
+		pendingFocusCaret.current = null;
+		inputRef.current?.focus();
+		inputRef.current?.setSelectionRange(caret, caret);
+	}, [content]);
 
 	// Measures the toolbar's actual rendered height (it wraps to 2-3 rows on narrow panes) so the Textarea's
 	// fixed-height bottomSection and its own bottom padding can be kept in sync with however tall the toolbar
@@ -244,8 +279,10 @@ export function ChatInputArea({
 		const safeEffort = isEffortAvailable(reasoningEffort, availableReasoningEfforts)
 			? reasoningEffort
 			: (availableReasoningEfforts[0] ?? "none");
-		onSend(trimmed, safeEffort, selectedModel);
+		const command = resolveSlashCommand(trimmed, commandOptions);
+		onSend(command?.prompt ?? trimmed, safeEffort, selectedModel);
 		setContent("");
+		setSelection({ start: 0, end: 0 });
 	};
 
 	// The toolbar is hosted in the Textarea's bottomSection (rendered inside the input border, pointer-events:all —
@@ -448,13 +485,37 @@ export function ChatInputArea({
 				/>
 			) : null}
 			{showVoiceControls ? <VoiceStatusNotice /> : null}
-			<Textarea
+			<SlashCommandAutocomplete
+				store={autocomplete.combobox}
+				options={autocomplete.matches}
+				activeDescendantId={autocomplete.activeDescendantId}
+				onSelect={autocomplete.select}
+				target={<Textarea
+				ref={inputRef}
 				data-testid="chat-input"
 				placeholder={t("pages.chat.inputPlaceholder", "Message the local node")}
 				value={content}
-				onChange={(event) => setContent(event.currentTarget.value)}
+				onChange={(event) => {
+					const target = event.currentTarget;
+					setContent(target.value);
+					setSelection({ start: target.selectionStart, end: target.selectionEnd });
+				}}
+				onSelect={(event) => setSelection({ start: event.currentTarget.selectionStart, end: event.currentTarget.selectionEnd })}
+				onClick={(event) => setSelection({ start: event.currentTarget.selectionStart, end: event.currentTarget.selectionEnd })}
+				onKeyUp={(event) => setSelection({ start: event.currentTarget.selectionStart, end: event.currentTarget.selectionEnd })}
+				onCompositionStart={() => setIsComposing(true)}
+				onCompositionEnd={(event) => {
+					setIsComposing(false);
+					setSelection({ start: event.currentTarget.selectionStart, end: event.currentTarget.selectionEnd });
+				}}
 				onKeyDown={(event) => {
+					if (autocomplete.onKeyDown(event)) {
+						return;
+					}
 					if (event.key === "Enter" && !event.shiftKey) {
+						if (event.nativeEvent.isComposing || isComposing) {
+							return;
+						}
 						event.preventDefault();
 						submit();
 					}
@@ -466,6 +527,7 @@ export function ChatInputArea({
 				disabled={disabled || isSending}
 				bottomSection={toolbar}
 				styles={composerStyles}
+			/>}
 			/>
 		</Box>
 	);

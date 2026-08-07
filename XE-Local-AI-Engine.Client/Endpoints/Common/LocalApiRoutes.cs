@@ -628,6 +628,12 @@ public static class LocalApiRoutes
         public const string ServerEndpoint = "mcp/server";
     }
 
+    public static class Automation
+    {
+        public const string Commands = "automation/commands";
+        public const string CommandById = "automation/commands/{commandId}";
+    }
+
     /// <summary>Operator-managed opaque workspace allowlist for inbound MCP delegation.</summary>
     public static class Workspaces
     {

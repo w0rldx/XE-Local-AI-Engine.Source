@@ -63,6 +63,7 @@
 		"recommendations": "Recommendations",
 		"loadedModels": "Loaded",
 		"tools": "Tools",
+		"commands": "Commands",
 		"agents": "Agents",
 		"mcp": "MCP",
 		"scheduler": "Scheduler",
@@ -484,6 +485,7 @@
 			"windowTitle": "Chat window",
 			"lockedState": "This conversation is locked. Unlock it to view messages.",
 			"inputPlaceholder": "Type your message",
+			"commands": { "menuLabel": "Slash commands" },
 			"send": "Send",
 			"modelLabel": "Model",
 			"modelPlaceholder": "Select model",
@@ -3567,6 +3569,23 @@
 				"firstName": "First Name",
 				"lastName": "Last Name",
 				"email": "Email"
+			}
+		},
+		"commands": {
+			"eyebrow": "Worker Node",
+			"title": "Commands",
+			"subtitle": "Create node-wide slash commands that send a configured prompt in the current chat. Commands can only be invoked by the user.",
+			"createButton": "New command",
+			"capacity": "The limit of 100 custom commands has been reached. Delete one before creating another.",
+			"list": { "loading": "Loading commands…", "empty": "No commands are available.", "command": "Command", "action": "Action", "builtIn": "Built-in" },
+			"editor": { "createTitle": "New command", "editTitle": "Edit command" },
+			"delete": { "title": "Delete command", "description": "Delete '/{{name}}'? This cannot be undone." },
+			"errors": { "load": "Could not load commands.", "save": "Could not save the command.", "delete": "Could not delete the command." },
+			"form": {
+				"name": { "label": "Command name", "description": "Lowercase letters, numbers, and single hyphens. Do not include /.", "placeholder": "review", "invalid": "Enter a valid lowercase command name." },
+				"description": { "label": "Description", "placeholder": "Optional summary shown in autocomplete" },
+				"action": { "label": "Action", "sendPrompt": "Send prompt" },
+				"prompt": { "label": "Prompt", "description": "Sent to the agent in the current chat when you invoke the command.", "placeholder": "Review the current work and report issues by severity.", "required": "Prompt is required." }
 			}
 		},
 		"skills": {

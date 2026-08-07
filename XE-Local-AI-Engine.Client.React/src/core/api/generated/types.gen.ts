@@ -4,6 +4,30 @@ export type ClientOptions = {
 	baseURL: `${string}://${string}` | (string & {});
 };
 
+export type XeLocalAiEngineClientEndpointsWorkspacesV1WorkspaceResponse = {
+	workspaceId: string;
+	alias: string;
+	mode?: string;
+};
+
+export type XeLocalAiEngineClientEndpointsWorkspacesV1CreateWorkspaceRequest = {
+	alias?: string | null;
+	hostPath?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsWorkspacesV1WorkspaceConflictResponse = {
+	code?: string;
+	message: string;
+};
+
+export type XeLocalAiEngineClientEndpointsWorkspacesV1DeleteWorkspaceRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsWorkspacesV1ListWorkspacesResponse = {
+	items?: Array<XeLocalAiEngineClientEndpointsWorkspacesV1WorkspaceResponse>;
+};
+
 export type XeLocalAiEngineClientEndpointsVoiceV1VoiceManifestResponse = {
 	enabled: boolean;
 	models: Array<XeLocalAiEngineClientEndpointsVoiceV1VoiceManifestModelDto>;
@@ -2387,6 +2411,41 @@ export type XeLocalAiEngineClientEndpointsCloudCodexV1CodexStatusResponse = {
 	loginPending: boolean;
 };
 
+export type XeLocalAiEngineClientEndpointsAutomationV1ListSlashCommandsResponse = {
+	items: Array<XeLocalAiEngineClientEndpointsAutomationV1SlashCommandResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsAutomationV1SlashCommandResponse = {
+	id?: string | null;
+	name: string;
+	description?: string | null;
+	source: string;
+	action: XeLocalAiEngineClientEndpointsAutomationV1SlashCommandActionDto;
+};
+
+export type XeLocalAiEngineClientEndpointsAutomationV1SlashCommandActionDto = {
+	type: XeLocalAiEngineClientEndpointsAutomationV1SlashCommandActionTypeDto;
+	prompt: string;
+};
+
+export type XeLocalAiEngineClientEndpointsAutomationV1SlashCommandActionTypeDto = "sendPrompt";
+
+export type XeLocalAiEngineClientEndpointsAutomationV1SlashCommandByIdRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsAutomationV1CreateSlashCommandRequest = {
+	name: string;
+	description?: string | null;
+	action: XeLocalAiEngineClientEndpointsAutomationV1SlashCommandActionDto;
+};
+
+export type XeLocalAiEngineClientEndpointsAutomationV1UpdateSlashCommandRequest = {
+	name: string;
+	description?: string | null;
+	action: XeLocalAiEngineClientEndpointsAutomationV1SlashCommandActionDto;
+};
+
 export type XeLocalAiEngineClientEndpointsAuthV1NodeAuthStatusResponse = {
 	setupRequired: boolean;
 	authenticated: boolean;
@@ -2882,24 +2941,91 @@ export type XeLocalAiEngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActionR
 	priority?: number;
 };
 
-export type XeLocalAiEngineClientEndpointsWorkspacesV1WorkspaceResponse = {
-	workspaceId: string;
-	alias: string;
-	mode?: string;
+export type ListWorkspacesData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/workspaces";
 };
 
-export type XeLocalAiEngineClientEndpointsWorkspacesV1CreateWorkspaceRequest = {
-	alias?: string | null;
-	hostPath?: string | null;
+export type ListWorkspacesErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
 };
 
-export type XeLocalAiEngineClientEndpointsWorkspacesV1DeleteWorkspaceRequest = {
-	[key: string]: never;
+export type ListWorkspacesResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsWorkspacesV1ListWorkspacesResponse;
 };
 
-export type XeLocalAiEngineClientEndpointsWorkspacesV1ListWorkspacesResponse = {
-	items?: Array<XeLocalAiEngineClientEndpointsWorkspacesV1WorkspaceResponse>;
+export type ListWorkspacesResponse = ListWorkspacesResponses[keyof ListWorkspacesResponses];
+
+export type CreateWorkspaceData = {
+	body: XeLocalAiEngineClientEndpointsWorkspacesV1CreateWorkspaceRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/workspaces";
 };
+
+export type CreateWorkspaceErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type CreateWorkspaceResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsWorkspacesV1WorkspaceResponse;
+};
+
+export type CreateWorkspaceResponse = CreateWorkspaceResponses[keyof CreateWorkspaceResponses];
+
+export type DeleteWorkspaceData = {
+	body?: never;
+	path: {
+		workspaceId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/workspaces/{workspaceId}";
+};
+
+export type DeleteWorkspaceErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	409: XeLocalAiEngineClientEndpointsWorkspacesV1WorkspaceConflictResponse;
+};
+
+export type DeleteWorkspaceError = DeleteWorkspaceErrors[keyof DeleteWorkspaceErrors];
+
+export type DeleteWorkspaceResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type DeleteWorkspaceResponse = DeleteWorkspaceResponses[keyof DeleteWorkspaceResponses];
 
 export type GetVoiceManifestData = {
 	body?: never;
@@ -8137,6 +8263,173 @@ export type CodexStatusResponses = {
 
 export type CodexStatusResponse = CodexStatusResponses[keyof CodexStatusResponses];
 
+export type ListSlashCommandsData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/automation/commands";
+};
+
+export type ListSlashCommandsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListSlashCommandsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsAutomationV1ListSlashCommandsResponse;
+};
+
+export type ListSlashCommandsResponse = ListSlashCommandsResponses[keyof ListSlashCommandsResponses];
+
+export type CreateSlashCommandData = {
+	body: XeLocalAiEngineClientEndpointsAutomationV1CreateSlashCommandRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/automation/commands";
+};
+
+export type CreateSlashCommandErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	409: FastEndpointsProblemDetails;
+};
+
+export type CreateSlashCommandError = CreateSlashCommandErrors[keyof CreateSlashCommandErrors];
+
+export type CreateSlashCommandResponses = {
+	/**
+	 * Created
+	 */
+	201: XeLocalAiEngineClientEndpointsAutomationV1SlashCommandResponse;
+};
+
+export type CreateSlashCommandResponse = CreateSlashCommandResponses[keyof CreateSlashCommandResponses];
+
+export type DeleteSlashCommandData = {
+	body?: never;
+	path: {
+		commandId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/automation/commands/{commandId}";
+};
+
+export type DeleteSlashCommandErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+};
+
+export type DeleteSlashCommandResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type DeleteSlashCommandResponse = DeleteSlashCommandResponses[keyof DeleteSlashCommandResponses];
+
+export type GetSlashCommandData = {
+	body?: never;
+	path: {
+		commandId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/automation/commands/{commandId}";
+};
+
+export type GetSlashCommandErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+};
+
+export type GetSlashCommandResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsAutomationV1SlashCommandResponse;
+};
+
+export type GetSlashCommandResponse = GetSlashCommandResponses[keyof GetSlashCommandResponses];
+
+export type UpdateSlashCommandData = {
+	body: XeLocalAiEngineClientEndpointsAutomationV1UpdateSlashCommandRequest;
+	path: {
+		commandId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/automation/commands/{commandId}";
+};
+
+export type UpdateSlashCommandErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: FastEndpointsProblemDetails;
+};
+
+export type UpdateSlashCommandError = UpdateSlashCommandErrors[keyof UpdateSlashCommandErrors];
+
+export type UpdateSlashCommandResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsAutomationV1SlashCommandResponse;
+};
+
+export type UpdateSlashCommandResponse = UpdateSlashCommandResponses[keyof UpdateSlashCommandResponses];
+
 export type NodeAuthStatusData = {
 	body?: never;
 	path?: never;
@@ -9321,86 +9614,3 @@ export type UpdateSuggestedPlaybookActionResponses = {
 
 export type UpdateSuggestedPlaybookActionResponse =
 	UpdateSuggestedPlaybookActionResponses[keyof UpdateSuggestedPlaybookActionResponses];
-
-export type ListWorkspacesData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/workspaces";
-};
-
-export type ListWorkspacesErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type ListWorkspacesResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsWorkspacesV1ListWorkspacesResponse;
-};
-
-export type ListWorkspacesResponse = ListWorkspacesResponses[keyof ListWorkspacesResponses];
-
-export type CreateWorkspaceData = {
-	body: XeLocalAiEngineClientEndpointsWorkspacesV1CreateWorkspaceRequest;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/workspaces";
-};
-
-export type CreateWorkspaceErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type CreateWorkspaceResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsWorkspacesV1WorkspaceResponse;
-};
-
-export type CreateWorkspaceResponse = CreateWorkspaceResponses[keyof CreateWorkspaceResponses];
-
-export type DeleteWorkspaceData = {
-	body?: never;
-	path: {
-		workspaceId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/workspaces/{workspaceId}";
-};
-
-export type DeleteWorkspaceErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type DeleteWorkspaceResponses = {
-	/**
-	 * No Content
-	 */
-	204: void;
-};
-
-export type DeleteWorkspaceResponse = DeleteWorkspaceResponses[keyof DeleteWorkspaceResponses];
