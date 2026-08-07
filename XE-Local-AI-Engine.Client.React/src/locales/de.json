@@ -1632,6 +1632,10 @@
 					"label": "Tools aktivieren",
 					"description": "Lokale Chat-Agenten dürfen Tools aufrufen. Änderungen werden ohne Neustart des Knotens wirksam."
 				},
+				"customToolsEnabled": {
+					"label": "Benutzerdefinierte Tools aktivieren",
+					"description": "Erlaubt Agenten, benutzerdefinierte Tools auszuführen, die Host-Befehle ausführen, Programme starten und Netzwerkanfragen stellen. Standardmäßig deaktiviert. Jeder Aufruf erfordert weiterhin Ihre Genehmigung."
+				},
 				"toolCapableModels": {
 					"label": "Tool-fähige Modelle",
 					"description": "Modellnamen, die Tool-Aufrufe unterstützen. Enter drücken, um jeden Namen hinzuzufügen. Änderungen werden ohne Neustart des Knotens wirksam."

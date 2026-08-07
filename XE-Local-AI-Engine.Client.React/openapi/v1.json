@@ -12296,6 +12296,10 @@
             "type": "boolean",
             "nullable": true
           },
+          "customToolsEnabled": {
+            "type": "boolean",
+            "nullable": true
+          },
           "toolCapableModels": {
             "type": "array",
             "nullable": true,
@@ -12609,6 +12613,10 @@
             "nullable": true
           },
           "enableTools": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "customToolsEnabled": {
             "type": "boolean",
             "nullable": true
           },
