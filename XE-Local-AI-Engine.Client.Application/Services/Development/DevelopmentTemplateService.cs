@@ -5,18 +5,6 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
-/// <summary>A registered template as the API sees it: never a host path.</summary>
-public sealed record DevelopmentTemplateReference(string Id, string Alias, string Availability);
-
-/// <summary>
-///     The result of materializing a template: the repository reference the project form will bind to, plus the
-///     template commit that produced it.
-/// </summary>
-public sealed record DevelopmentTemplateMaterializationResult(
-    DevelopmentRepositoryReference Repository,
-    string TemplateAlias,
-    string TemplateCommit);
-
 /// <summary>
 ///     Public so tests can substitute it, matching the other Development seams: this assembly is not strong-named, so
 ///     Castle DynamicProxy cannot proxy an internal interface.
@@ -346,9 +334,4 @@ internal sealed class DevelopmentTemplateService(
     private const string CommitAuthorEmail = "development@xe-local-ai-engine.invalid";
 
     private static StringComparison PathComparison => OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
-}
-
-public sealed class DevelopmentTemplateMaterializationException : InvalidOperationException
-{
-    public DevelopmentTemplateMaterializationException(string message) : base(message) { }
 }
