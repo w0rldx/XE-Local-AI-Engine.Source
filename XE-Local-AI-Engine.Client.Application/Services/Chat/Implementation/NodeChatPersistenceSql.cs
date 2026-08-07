@@ -141,25 +141,67 @@ internal static class NodeChatPersistenceSql
             CompactionSummaryUpdatedAtUtc: await reader.IsDBNullAsync(ordinal: 14, cancellationToken).ConfigureAwait(false) ? null : reader.GetInt64(14));
     }
 
+    /// <summary>
+    ///     Reads a single message. Filters in SQL rather than materializing the whole conversation and picking one out of
+    ///     it: this sits on the streaming partial-flush path (<c>UpdateCorrelatedMessageAsync</c>, ~10 calls a second for
+    ///     the length of a turn), where the previous shape AEAD-decrypted and JSON-parsed EVERY message in the
+    ///     conversation to return one — making each flush cost grow with conversation length.
+    ///     <para>
+    ///         Precisely: the decrypt/deserialize work drops to a single row. The row SCAN is still bounded by the
+    ///         conversation's <c>IX_messages_conversation_id</c> range rather than seeking the primary key, because the
+    ///         shared query's <c>$message_id IS NULL OR …</c> guard is not sargable. That is deliberate — reusing one
+    ///         query is what keeps the two reads projection-identical, and the scan was never the expensive part.
+    ///     </para>
+    /// </summary>
     internal static async Task<NodeChatPersistedMessageDto?> ReadMessageAsync(NodeChatDbContext dbContext, Guid conversationId, Guid messageId, CancellationToken cancellationToken)
     {
-        var messages = await ReadMessagesAsync(dbContext, conversationId, cancellationToken).ConfigureAwait(false);
-        return messages.SingleOrDefault(message => message.MessageId == messageId);
+        var messages = await ReadMessagesAsync(dbContext, conversationId, cancellationToken, filterMessageId: messageId).ConfigureAwait(false);
+        return messages.Count > 0 ? messages[0] : null;
     }
 
-    internal static async Task<IReadOnlyList<NodeChatPersistedMessageDto>> ReadMessagesAsync(NodeChatDbContext dbContext, Guid conversationId, CancellationToken cancellationToken)
+    /// <summary>
+    ///     Reads every message of a conversation, ordered by sequence.
+    /// </summary>
+    /// <param name="omitNonUserPayloadsAtOrBelowSequence">
+    ///     Load-side cap for the chat-turn read (see <c>NodeChatReadModel.GetConversationForTurnAsync</c>). When set, the
+    ///     encrypted <c>content</c> and <c>metadata_json</c> blobs of every NON-user message at or below this sequence are
+    ///     selected as NULL, so they are neither transferred, AEAD-decrypted, nor JSON-parsed; their content surfaces as
+    ///     <see cref="string.Empty" /> and their metadata-derived fields as null. Structure (id, sequence, role, variant
+    ///     group, timestamps) is always loaded in full, so selected-path resolution is unaffected. <c>null</c> — the
+    ///     default every other caller uses — loads everything, exactly as before.
+    /// </param>
+    /// <param name="filterMessageId">
+    ///     When set, restricts the read to that one message (see <see cref="ReadMessageAsync" />). Sharing this method
+    ///     rather than writing a second query is what guarantees the single-message read projects an identical DTO.
+    /// </param>
+    internal static async Task<IReadOnlyList<NodeChatPersistedMessageDto>> ReadMessagesAsync(NodeChatDbContext dbContext,
+        Guid conversationId,
+        CancellationToken cancellationToken,
+        int? omitNonUserPayloadsAtOrBelowSequence = null,
+        Guid? filterMessageId = null)
     {
         await using var command = dbContext.Database.GetDbConnection().CreateCommand();
         // LEFT JOIN the node-local feedback row so the conversation read carries each message's feedback state
         // (rating/comment) inline — the client derives feedback from the message instead of a per-message GET.
+        // The two CASE expressions apply the optional load-side payload cap documented above; with the parameter null
+        // (every caller but the chat turn) both collapse to a plain column read. `lower(role)` is the conservative
+        // direction: an unexpected casing keeps the payload rather than dropping it.
         command.CommandText = """
-                              SELECT m.message_id, m.conversation_id, m.request_id, m.sequence, m.role, m.content, m.metadata_json, m.status, m.created_at_utc, m.updated_at_utc, m.error, m.origin, m.parent_message_id, m.variant_group_id, f.rating, f.comment
+                              SELECT m.message_id, m.conversation_id, m.request_id, m.sequence, m.role,
+                                     CASE WHEN $omit_payloads_at_or_below IS NOT NULL AND m.sequence <= $omit_payloads_at_or_below AND lower(m.role) <> 'user'
+                                          THEN NULL ELSE m.content END,
+                                     CASE WHEN $omit_payloads_at_or_below IS NOT NULL AND m.sequence <= $omit_payloads_at_or_below AND lower(m.role) <> 'user'
+                                          THEN NULL ELSE m.metadata_json END,
+                                     m.status, m.created_at_utc, m.updated_at_utc, m.error, m.origin, m.parent_message_id, m.variant_group_id, f.rating, f.comment
                               FROM messages m
                               LEFT JOIN message_feedback f ON f.message_id = m.message_id
                               WHERE m.conversation_id = $conversation_id
+                                AND ($message_id IS NULL OR m.message_id = $message_id)
                               ORDER BY m.sequence ASC;
                               """;
         AddParameter(command, "$conversation_id", conversationId);
+        AddParameter(command, "$omit_payloads_at_or_below", omitNonUserPayloadsAtOrBelowSequence);
+        AddParameter(command, "$message_id", filterMessageId);
 
         await OpenIfNeededAsync(command.Connection, cancellationToken).ConfigureAwait(false);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
@@ -172,7 +214,11 @@ internal static class NodeChatPersistenceSql
                 ? null
                 : dbContext.DecryptMessageMetadata(await reader.GetFieldValueAsync<byte[]>(ordinal: 6, cancellationToken).ConfigureAwait(false), messageConversationId, messageId);
             var metadata = DeserializeMetadata(metadataJson);
-            var content = dbContext.DecryptMessageContent(await reader.GetFieldValueAsync<byte[]>(ordinal: 5, cancellationToken).ConfigureAwait(false), messageConversationId, messageId);
+            // The column is NOT NULL in the schema, so a null here can only be the load-side payload cap above electing
+            // not to transfer this message's content — which the cap's callers have proven they never read.
+            var content = await reader.IsDBNullAsync(ordinal: 5, cancellationToken).ConfigureAwait(false)
+                ? string.Empty
+                : dbContext.DecryptMessageContent(await reader.GetFieldValueAsync<byte[]>(ordinal: 5, cancellationToken).ConfigureAwait(false), messageConversationId, messageId);
             messages.Add(new NodeChatPersistedMessageDto(messageId,
                 messageConversationId,
                 await reader.IsDBNullAsync(ordinal: 2, cancellationToken).ConfigureAwait(false) ? null : Guid.Parse(reader.GetString(2)),

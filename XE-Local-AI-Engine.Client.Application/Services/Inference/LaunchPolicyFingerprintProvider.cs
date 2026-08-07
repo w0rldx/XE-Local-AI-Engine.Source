@@ -319,17 +319,28 @@ public sealed class LaunchPolicyFingerprintProvider(
             };
         }
 
-        if (!speculative.IsDraftMode)
+        if (!speculative.RequiresExternalDraftModel)
         {
+            // No second GGUF to identify: ngram-* self-speculates and draft-mtp drafts from heads in the main model.
+            // draft-mtp does still honour --spec-draft-n-max, so that knob stays part of the launch identity for it.
+            var draftMaxTokens = speculative.DraftMaxTokens > 0 ? speculative.DraftMaxTokens : (int?)null;
+            object identity = speculative.ModeClass is SpeculativeModeClass.MainModelHeads
+                ? new
+                {
+                    mode,
+                    draftMaxTokens
+                }
+                : new
+                {
+                    mode
+                };
+
             return new
             {
                 cacheReuseTokens = _supervisorOptions.ChatCacheReuse > 0
                     ? _supervisorOptions.ChatCacheReuse
                     : (int?)null,
-                speculative = new
-                {
-                    mode
-                }
+                speculative = identity
             };
         }
 

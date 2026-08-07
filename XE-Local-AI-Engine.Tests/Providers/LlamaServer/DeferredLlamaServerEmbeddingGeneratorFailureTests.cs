@@ -86,6 +86,65 @@ public sealed class DeferredLlamaServerEmbeddingGeneratorFailureTests
         AssertEx.Equal(expected: 3, embeddings[0].Vector.Length);
     }
 
+    [Test]
+    public async Task GenerateAsync_CachesTheAdapter_UntilTheServerIsGone_ThenReEnsuresOnTheNextCall()
+    {
+        // The generator binds ONE endpoint for its lifetime. That is safe today only because all four callers scope it to
+        // a single document/search; without a self-heal seam a longer-lived caller would retry a dead address forever.
+        // Mirrors DeferredLlamaServerChatClient.InvalidateInner — see DeferredLlamaServerChatClientServerGoneTests.
+        // The two stub servers answer with DIFFERENT vector widths, which is how each assertion identifies the endpoint
+        // that actually served the call without reaching into the generator's private state.
+        var original = StubServer.Returning(HttpStatusCode.OK, EmbeddingResponseWith("[0.25,-0.5,0.75]"));
+        using var replacement = StubServer.Returning(HttpStatusCode.OK, EmbeddingResponseWith("[0.5,-0.25]"));
+        var supervisor = new FakeProcessSupervisor
+        {
+            EnsureEndpoint = original.BaseAddress
+        };
+
+        using var generator = new DeferredLlamaServerEmbeddingGenerator(supervisor, "nomic-embed-text-v1.5", TimeSpan.FromSeconds(30));
+
+        AssertEx.Equal(expected: 3, (await generator.GenerateAsync(["chunk"]))[0].Vector.Length);
+
+        // Move the endpoint the supervisor hands out. A call that still lands on the ORIGINAL server proves the adapter
+        // is cached — the deferred start is per generator, not a per-call endpoint resolution.
+        supervisor.EnsureEndpoint = replacement.BaseAddress;
+        AssertEx.Equal(expected: 3, (await generator.GenerateAsync(["chunk"]))[0].Vector.Length);
+
+        // The process behind the cached endpoint goes away.
+        original.Dispose();
+        await AssertEx.ThrowsAsync<HttpRequestException>(() => generator.GenerateAsync(["chunk"]));
+
+        // That failure must have dropped the adapter, so this call re-ensures and lands on the replacement.
+        AssertEx.Equal(expected: 2, (await generator.GenerateAsync(["chunk"]))[0].Vector.Length);
+    }
+
+    [Test]
+    public async Task GenerateAsync_WhenTheServerRejectsTheRequest_KeepsTheCachedAdapter()
+    {
+        // A non-2xx means the server ANSWERED: it is alive and its endpoint is still correct. Invalidating here would
+        // turn every oversized-batch rejection into a needless respawn round-trip.
+        using var rejecting = StubServer.Returning(HttpStatusCode.InternalServerError, OversizedInputBody);
+        using var healthy = StubServer.Returning(HttpStatusCode.OK, EmbeddingResponseWith("[0.5,-0.25]"));
+        var supervisor = new FakeProcessSupervisor
+        {
+            EnsureEndpoint = rejecting.BaseAddress
+        };
+
+        using var generator = new DeferredLlamaServerEmbeddingGenerator(supervisor, "nomic-embed-text-v1.5", TimeSpan.FromSeconds(30));
+
+        await AssertEx.ThrowsAsync<HttpRequestException>(() => generator.GenerateAsync(["chunk"]));
+
+        // Even with a healthy endpoint now on offer, the retained adapter must still be talking to the rejecting server —
+        // a success here would mean the 500 had wrongly invalidated it.
+        supervisor.EnsureEndpoint = healthy.BaseAddress;
+        await AssertEx.ThrowsAsync<HttpRequestException>(() => generator.GenerateAsync(["chunk"]));
+    }
+
+    private static string EmbeddingResponseWith(string vector)
+    {
+        return $$"""{"object":"list","model":"m","usage":{"prompt_tokens":4,"total_tokens":4},"data":[{"object":"embedding","index":0,"embedding":{{vector}}}]}""";
+    }
+
     private static FakeProcessSupervisor SupervisorFor(StubServer server)
     {
         return new FakeProcessSupervisor

@@ -161,9 +161,11 @@ public sealed partial record StoredNodeSettings
     }
 
     /// <summary>
-    ///     Returns <see langword="true" /> when <paramref name="mode" /> is a <c>draft-*</c> speculative mode that REQUIRES
-    ///     a draft model. Delegates to <see cref="SpeculativeDecodingSettings.ModeRequiresDraftModel" /> so the boundary
-    ///     validator + save-endpoint cross-field guard share one authority for the draft-family test.
+    ///     Returns <see langword="true" /> when <paramref name="mode" /> is an EXTERNAL-DRAFT speculative mode — one that
+    ///     runs a second GGUF and so REQUIRES a draft model. <c>draft-mtp</c> drafts from heads inside the main model and
+    ///     is false here despite the name prefix. Delegates to
+    ///     <see cref="SpeculativeDecodingSettings.ModeRequiresDraftModel" /> so the boundary validator + save-endpoint
+    ///     cross-field guard share one authority for the classification.
     /// </summary>
     public static bool SpeculativeModeRequiresDraftModel(string? mode)
     {

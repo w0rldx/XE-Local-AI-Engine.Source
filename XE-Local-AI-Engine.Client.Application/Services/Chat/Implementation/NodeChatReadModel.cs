@@ -22,7 +22,43 @@ internal sealed class NodeChatReadModel(NodeChatPersistenceWriter writer)
             : await ListActiveConversationsAsync(request, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<NodeChatConversationDto?> GetConversationAsync(Guid conversationId, CancellationToken cancellationToken = default)
+    public Task<NodeChatConversationDto?> GetConversationAsync(Guid conversationId, CancellationToken cancellationToken = default)
+    {
+        return ReadConversationAsync(conversationId, capPayloadsToCompactionBoundary: false, cancellationToken);
+    }
+
+    /// <summary>
+    ///     The chat-turn read: identical to <see cref="GetConversationAsync" /> except that when the conversation carries
+    ///     a compaction synopsis, the content and metadata blobs of NON-user messages at or below the covered sequence are
+    ///     not transferred, decrypted or parsed.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         Compaction shapes what a turn SENDS, not what it LOADS, so a long conversation paid a full decrypt +
+    ///         JSON-parse of its entire history before every first token — including the messages the synopsis had already
+    ///         replaced. This is a load-side cap on exactly that dead work.
+    ///     </para>
+    ///     <para>
+    ///         <strong>Why it is output-equivalent.</strong> Only two consumers read a turn conversation's messages, and
+    ///         each provably ignores the omitted payloads: <c>BuildConversationContext</c> drops every message at or below
+    ///         the covered sequence outright (that IS the compaction filter), and <c>CollectUserTurns</c> keeps only
+    ///         <c>role == "user"</c> messages, which the cap never touches at any sequence. Message STRUCTURE — id,
+    ///         sequence, role, variant group, timestamps — is always loaded in full, so
+    ///         <see cref="SelectedPathResolver" /> still sees every branch and resolves the identical selected path;
+    ///         a variant group whose siblings straddle the boundary is therefore still resolved from the complete sibling
+    ///         set, and only then filtered by sequence.
+    ///     </para>
+    ///     <para>
+    ///         Use <see cref="GetConversationAsync" /> for anything that renders or re-persists a conversation (the UI
+    ///         load, regeneration, branching, compaction itself) — those need every payload.
+    ///     </para>
+    /// </remarks>
+    public Task<NodeChatConversationDto?> GetConversationForTurnAsync(Guid conversationId, CancellationToken cancellationToken = default)
+    {
+        return ReadConversationAsync(conversationId, capPayloadsToCompactionBoundary: true, cancellationToken);
+    }
+
+    private async Task<NodeChatConversationDto?> ReadConversationAsync(Guid conversationId, bool capPayloadsToCompactionBoundary, CancellationToken cancellationToken)
     {
         return await _writer.ExecuteConversationSharedAsync(conversationId,
             async (dbContext, token) =>
@@ -48,13 +84,30 @@ internal sealed class NodeChatReadModel(NodeChatPersistenceWriter writer)
                     ? null
                     : await conversationReader.GetFieldValueAsync<byte[]>(ordinal: 1, token).ConfigureAwait(false);
 
+                // compaction_summary is an encrypted BLOB; decrypt via the same db-context gateway used for the title.
+                var compactionSummary = dbContext.DecryptConversationCompactionSummary(
+                    await conversationReader.IsDBNullAsync(ordinal: 13, token).ConfigureAwait(false)
+                        ? null
+                        : await conversationReader.GetFieldValueAsync<byte[]>(ordinal: 13, token).ConfigureAwait(false),
+                    conversationId);
+                var compactionCoversToSequence = await conversationReader.IsDBNullAsync(ordinal: 14, token).ConfigureAwait(false)
+                    ? (int?)null
+                    : conversationReader.GetInt32(14);
+
+                // The cap fires only under the SAME condition BuildConversationContext uses to drop the covered
+                // messages — a non-empty synopsis AND a covered sequence — so a conversation that has never been
+                // compacted loads byte-for-byte what it always did.
+                var omitNonUserPayloadsAtOrBelowSequence = capPayloadsToCompactionBoundary && compactionSummary is { Length: > 0 }
+                    ? compactionCoversToSequence
+                    : null;
+
                 var dto = new NodeChatConversationDto(Guid.Parse(conversationReader.GetString(0)),
                     DecryptTitle(titleBytes, dbContext, conversationId),
                     await conversationReader.IsDBNullAsync(ordinal: 2, token).ConfigureAwait(false) ? null : conversationReader.GetString(2),
                     conversationReader.GetInt64(3),
                     conversationReader.GetInt64(4),
                     conversationReader.GetBoolean(5),
-                    await ReadMessagesAsync(dbContext, conversationId, token).ConfigureAwait(false),
+                    await ReadMessagesAsync(dbContext, conversationId, token, omitNonUserPayloadsAtOrBelowSequence).ConfigureAwait(false),
                     conversationReader.GetString(6),
                     conversationReader.GetBoolean(7),
                     conversationReader.GetBoolean(8),
@@ -62,12 +115,8 @@ internal sealed class NodeChatReadModel(NodeChatPersistenceWriter writer)
                     DeserializeSelectedPath(await conversationReader.IsDBNullAsync(ordinal: 10, token).ConfigureAwait(false) ? null : conversationReader.GetString(10)),
                     await conversationReader.IsDBNullAsync(ordinal: 11, token).ConfigureAwait(false) ? null : Guid.Parse(conversationReader.GetString(11)),
                     conversationReader.GetBoolean(12),
-                    // compaction_summary is an encrypted BLOB; decrypt via the same db-context gateway used for the title.
-                    dbContext.DecryptConversationCompactionSummary(await conversationReader.IsDBNullAsync(ordinal: 13, token).ConfigureAwait(false)
-                            ? null
-                            : await conversationReader.GetFieldValueAsync<byte[]>(ordinal: 13, token).ConfigureAwait(false),
-                        conversationId),
-                    await conversationReader.IsDBNullAsync(ordinal: 14, token).ConfigureAwait(false) ? null : conversationReader.GetInt32(14),
+                    compactionSummary,
+                    compactionCoversToSequence,
                     await conversationReader.IsDBNullAsync(ordinal: 15, token).ConfigureAwait(false) ? null : conversationReader.GetInt64(15));
 
                 return dto;

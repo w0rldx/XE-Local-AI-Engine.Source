@@ -346,13 +346,20 @@ describe("buildNodeSettingsRequest", () => {
 		expect(errors["speculativeMode"]).toBe("mode");
 	});
 
-	it("requires a draft model for a draft-* mode", () => {
+	it("requires a draft model for an external-draft mode", () => {
 		const form = { ...baseline, speculativeMode: "draft-simple", speculativeDraftModelName: "" };
 		const { body, errors } = buildNodeSettingsRequest(form, baseline, bounds, false);
 		expect(errors["speculativeDraftModelName"]).toBe("required");
 		// The mode itself is still valid, so no mode error — only the missing draft model blocks the save.
 		expect(errors["speculativeMode"]).toBeUndefined();
 		expect(body.speculativeDraftModelName).toBeUndefined();
+	});
+
+	it("does NOT require a draft model for draft-mtp, whose drafter lives in the main model", () => {
+		const form = { ...baseline, speculativeMode: "draft-mtp", speculativeDraftModelName: "" };
+		const { body, errors } = buildNodeSettingsRequest(form, baseline, bounds, false);
+		expect(errors).toEqual({});
+		expect(body.speculativeMode).toBe("draft-mtp");
 	});
 
 	it("does NOT require a draft model for an ngram-* mode with no draft model", () => {

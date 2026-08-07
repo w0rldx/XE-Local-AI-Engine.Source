@@ -2230,6 +2230,141 @@ public sealed class InvocationRunnerTests
             && payload.Message.Contains("test-tool", StringComparison.Ordinal)));
     }
 
+    [Test]
+    public async Task RunAsync_WhenTheProviderRepeatsTheSameToolCall_EmitsOneRequestedEventPerDistinctCall()
+    {
+        // A re-emitted FunctionCallContent used to pay a fresh JsonSerializer.Serialize + dispatch + SignalR frame every
+        // time. Downstream absorbed the duplicates (the frontend reducer keys tool cards on the call id), but each repeat
+        // also displaced a real event from InvocationResumeRegistry's capped tool history.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(sender, eventDispatcher: dispatcher, agentUpdates: RepeatedToolCallUpdates());
+        var package = RuntimePackageBuilder.Valid().WithAllowedTool("test-tool").Build();
+
+        await RunAsync(runner, package);
+
+        // Three emissions of call-1 (the same instance twice, then an equal-but-distinct arguments dictionary — the two
+        // shapes a provider can re-emit) collapse to one event.
+        await dispatcher.Received(1).ReportToolCallLifecycleAsync(Arg.Is<ToolCallLifecyclePayload>(payload =>
+            payload.Phase == ToolCallLifecyclePhase.Requested
+            && payload.ToolCallId == "call-1"
+            && payload.Arguments != null
+            && payload.Arguments.Contains("README.md", StringComparison.Ordinal)));
+
+        // A genuinely distinct call still reports — the dedup is per call id, not per tool.
+        await dispatcher.Received(1).ReportToolCallLifecycleAsync(Arg.Is<ToolCallLifecyclePayload>(payload =>
+            payload.Phase == ToolCallLifecyclePhase.Requested
+            && payload.ToolCallId == "call-2"));
+
+        // The Completed side still resolves the tool name from what the Requested side recorded.
+        await dispatcher.Received(1).ReportToolCallLifecycleAsync(Arg.Is<ToolCallLifecyclePayload>(payload =>
+            payload.Phase == ToolCallLifecyclePhase.Completed
+            && payload.ToolCallId == "call-1"
+            && payload.ToolName == "test-tool"));
+    }
+
+    [Test]
+    public async Task RunAsync_WhenARepeatedToolCallChangesItsArguments_EmitsBothRequestedEvents()
+    {
+        // The guard must never swallow a payload change: the second event is genuinely different on the wire, and the
+        // frontend reducer takes the newest arguments for a card.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(sender, eventDispatcher: dispatcher, agentUpdates: ChangedArgumentsToolCallUpdates());
+        var package = RuntimePackageBuilder.Valid().WithAllowedTool("test-tool").Build();
+
+        await RunAsync(runner, package);
+
+        await dispatcher.Received(2).ReportToolCallLifecycleAsync(Arg.Is<ToolCallLifecyclePayload>(payload =>
+            payload.Phase == ToolCallLifecyclePhase.Requested
+            && payload.ToolCallId == "call-1"));
+    }
+
+    private static async IAsyncEnumerable<AgentResponseUpdate> RepeatedToolCallUpdates()
+    {
+        var repeated = new FunctionCallContent("call-1",
+            "test-tool",
+            new Dictionary<string, object?>(StringComparer.Ordinal)
+            {
+                ["path"] = "README.md"
+            });
+
+        yield return new AgentResponseUpdate(ChatRole.Assistant, new List<AIContent>
+        {
+            repeated
+        });
+        await Task.Yield();
+
+        yield return new AgentResponseUpdate(ChatRole.Assistant, new List<AIContent>
+        {
+            repeated
+        });
+        await Task.Yield();
+
+        yield return new AgentResponseUpdate(ChatRole.Assistant, new List<AIContent>
+        {
+            new FunctionCallContent("call-1",
+                "test-tool",
+                new Dictionary<string, object?>(StringComparer.Ordinal)
+                {
+                    ["path"] = "README.md"
+                })
+        });
+        await Task.Yield();
+
+        yield return new AgentResponseUpdate(ChatRole.Assistant, new List<AIContent>
+        {
+            new FunctionResultContent("call-1", "ok")
+        });
+        await Task.Yield();
+
+        yield return new AgentResponseUpdate(ChatRole.Assistant, new List<AIContent>
+        {
+            new FunctionCallContent("call-2",
+                "test-tool",
+                new Dictionary<string, object?>(StringComparer.Ordinal)
+                {
+                    ["path"] = "CHANGELOG.md"
+                })
+        });
+        await Task.Yield();
+
+        yield return new AgentResponseUpdate(ChatRole.Assistant, new List<AIContent>
+        {
+            new FunctionResultContent("call-2", "ok")
+        });
+        await Task.Yield();
+
+        yield return new AgentResponseUpdate(ChatRole.Assistant, "done");
+    }
+
+    private static async IAsyncEnumerable<AgentResponseUpdate> ChangedArgumentsToolCallUpdates()
+    {
+        yield return new AgentResponseUpdate(ChatRole.Assistant, new List<AIContent>
+        {
+            new FunctionCallContent("call-1",
+                "test-tool",
+                new Dictionary<string, object?>(StringComparer.Ordinal)
+                {
+                    ["path"] = "README.md"
+                })
+        });
+        await Task.Yield();
+
+        yield return new AgentResponseUpdate(ChatRole.Assistant, new List<AIContent>
+        {
+            new FunctionCallContent("call-1",
+                "test-tool",
+                new Dictionary<string, object?>(StringComparer.Ordinal)
+                {
+                    ["path"] = "CHANGELOG.md"
+                })
+        });
+        await Task.Yield();
+
+        yield return new AgentResponseUpdate(ChatRole.Assistant, "done");
+    }
+
     // Two rounds of the SAME tool (matching call ids) both returning ToolArgumentRepairAIFunction's structured
     // "tool_disabled" marker — the real trigger is 3 consecutive invalid calls inside AI.Agent, but the runner's
     // notice logic only inspects the wire shape of the result, so a hand-built marker exercises it without depending
