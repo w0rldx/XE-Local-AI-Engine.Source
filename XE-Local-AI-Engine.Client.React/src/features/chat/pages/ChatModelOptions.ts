@@ -68,7 +68,7 @@ export function resolveLocalDefaultModel(models: LocalModelDto[]): LocalModelDto
 	const chatModels = models.filter((model) => model.kind === "Chat" && !CLOUD_PROVIDERS.has(model.provider ?? ""));
 	return (
 		chatModels.find((model) => model.isSelected) ??
-		[...chatModels].sort((a, b) => {
+		chatModels.toSorted((a, b) => {
 			// Mirror backend fallback: newest modified first, then name ascending. Treat a missing modifiedAtUtc as
 			// oldest (-Infinity) so it sorts last under the descending order.
 			const am = a.modifiedAtUtc ?? Number.NEGATIVE_INFINITY;

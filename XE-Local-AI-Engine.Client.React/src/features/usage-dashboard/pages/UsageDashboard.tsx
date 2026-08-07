@@ -70,8 +70,13 @@ export function UsageDashboard() {
 	const { t } = useTranslation();
 
 	// Freeze "now" at mount so the range math (defaults, retention floor, clamping) is stable across renders.
-	const nowRef = useRef(Date.now());
-	const [range, setRange] = useState<UsageDateRange>(() => defaultDateRange(nowRef.current));
+	// Lazy-initialized once at mount: useRef ignores all but its first argument, so passing Date.now() directly would
+	// re-evaluate it on every render and throw the result away. Initialize to null and stamp "now" once.
+	const nowRef = useRef<number | null>(null);
+	if (nowRef.current === null) {
+		nowRef.current = Date.now();
+	}
+	const [range, setRange] = useState<UsageDateRange>(() => defaultDateRange(nowRef.current ?? Date.now()));
 	const userAdjustedRef = useRef(false);
 	const retentionAppliedRef = useRef(false);
 
@@ -98,13 +103,13 @@ export function UsageDashboard() {
 		}
 		retentionAppliedRef.current = true;
 		if (summary.retentionDays < FALLBACK_RETENTION_DAYS) {
-			setRange(defaultDateRange(nowRef.current, summary.retentionDays));
+			setRange(defaultDateRange(nowRef.current ?? Date.now(), summary.retentionDays));
 		}
 	}, [summary]);
 
 	const handleRangeChange = (next: UsageDateRange): void => {
 		userAdjustedRef.current = true;
-		setRange(clampDateRange(next, nowRef.current, retentionDays));
+		setRange(clampDateRange(next, nowRef.current ?? Date.now(), retentionDays));
 	};
 
 	const daily = useMemo(() => aggregateByDay(summary?.items ?? []), [summary]);
@@ -133,8 +138,8 @@ export function UsageDashboard() {
 
 				<UsageDateRangeControl
 					range={range}
-					minMs={retentionFloorMs(nowRef.current, retentionDays)}
-					maxMs={startOfUtcDay(nowRef.current)}
+					minMs={retentionFloorMs(nowRef.current ?? Date.now(), retentionDays)}
+					maxMs={startOfUtcDay(nowRef.current ?? Date.now())}
 					onChange={handleRangeChange}
 				/>
 

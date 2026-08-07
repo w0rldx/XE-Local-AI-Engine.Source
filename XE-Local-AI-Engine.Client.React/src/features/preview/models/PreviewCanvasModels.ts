@@ -79,8 +79,8 @@ function emptyToUndefined(value: string | undefined): string | undefined {
 // Nodes are keyed by id; edges by source→target. Used to decide whether an opened workflow has unsaved edits
 // (a dirty canvas executes its CURRENT graph instead of the persisted one).
 function normalizeGraph(graph: PreviewWorkflowGraph): string {
-	const nodes = [...graph.nodes]
-		.sort((a, b) => a.id.localeCompare(b.id))
+	const nodes = graph.nodes
+		.toSorted((a, b) => a.id.localeCompare(b.id))
 		.map((node) => ({
 			id: node.id,
 			kind: node.kind,
