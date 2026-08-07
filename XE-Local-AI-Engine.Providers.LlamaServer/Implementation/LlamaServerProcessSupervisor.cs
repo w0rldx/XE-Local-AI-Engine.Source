@@ -1081,10 +1081,11 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             var servingWindow = new DiagnosticVerbosityWindow();
             try
             {
-                var spec = BuildLaunchSpec(key, binary.ServerExecutablePath, modelFilePath, port, variant, resolved,
-                    _options.ChatCacheReuse, speculative, candidate, _options.ChatCacheRamMiB);
+                var spec = BuildLaunchSpec(key, binary.ServerExecutablePath, modelFilePath, port, variant, candidate.Resolved,
+                    _options.ChatCacheReuse, speculative, candidate.Plan, _options.ChatCacheRamMiB);
 
-                // Benchmark replay spawns need /metrics (explore already carries --metrics); only append when missing.
+                // Benchmark spawns need /metrics on ANY variant. Both GPU modes emit it themselves, so this now only
+                // fills in the CPU case — and guards against a future spec shape that omits it.
                 if (ensureMetrics && !spec.Arguments.Contains("--metrics", StringComparer.Ordinal))
                 {
                     spec = spec with
@@ -1131,7 +1132,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                 }
 
                 IReadOnlyList<string>? fittedArgsForSuccessfulAttempt = null;
-                if (fitParamsCapture is not null && resolved.ExploreMode && variant != GpuVariant.Cpu)
+                if (fitParamsCapture is not null && candidate.Resolved.ExploreMode && variant != GpuVariant.Cpu)
                 {
                     // The fit helper (observed on b9692) leaves -ngl at its automatic sentinel when the initial
                     // placement already fits. Verbose
@@ -1165,7 +1166,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
 
                 handle = _launcher.Launch(spec);
                 _logger.LogInformation("llama-server spawned for model {ModelName} role {Role} (pid {ProcessId}, port {Port}){LaunchPlan}.",
-                    key.ModelName, key.Role, handle.ProcessId, port, DescribeLaunchPlan(candidate));
+                    key.ModelName, key.Role, handle.ProcessId, port, DescribeLaunchPlan(candidate.Plan));
 
                 var readyStartedUtc = _timeProvider.GetUtcNow();
                 await WaitForReadyOrExitAsync(handle, spec.BaseAddress, readinessTimeout, ct).ConfigureAwait(false);
@@ -1246,10 +1247,13 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                     {
                         Allocation = downTiered
                     };
-                    var downTierPlan = await _launchPolicy.ResolveAsync(key.Role, variant, resolved, downTiered, ct).ConfigureAwait(false);
-                    planCandidates.Add(candidate is { UseKvCacheQuantization: false }
-                        ? downTierPlan.WithoutKvCacheQuantization()
-                        : downTierPlan);
+                    var downTierPlan = await _launchPolicy.ResolveAsync(key.Role, variant, candidate.Resolved, downTiered, ct).ConfigureAwait(false);
+                    planCandidates.Add(candidate with
+                    {
+                        Plan = candidate.Plan is { UseKvCacheQuantization: false }
+                            ? downTierPlan.WithoutKvCacheQuantization()
+                            : downTierPlan
+                    });
                     _logger.LogWarning("llama-server automatic context allocation encountered a classified startup OOM; retrying at context tier {ContextTokens}.",
                         downTiered.ProcessContextTokens);
                     continue;
@@ -1278,7 +1282,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     {
         if (!applyLaunchPolicy)
         {
-            return new LaunchPlanSet(null, [null]);
+            return new LaunchPlanSet(null, [new(resolved, null)]);
         }
 
         ProcessContextAllocation allocation;
@@ -1304,13 +1308,27 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
 
         var plan = await _launchPolicy.ResolveAsync(key.Role, variant, resolved, allocation, ct).ConfigureAwait(false);
 
-        return new LaunchPlanSet(allocation,
-            plan.UseKvCacheQuantization
-                ? [plan, plan.WithoutKvCacheQuantization()]
-                : [plan]);
+        // The optimized (KV-quant + fused flash-attention) config reaches the launch line from two independent sources,
+        // and each gets the same one-shot safe retry: the policy plan on an explore spawn, and the frozen profile's own
+        // -ctk/-ctv on a GPU replay. A CPU spawn emits no replay KV args at all, so its "safe" variant would be a
+        // byte-identical second launch — no candidate there.
+        if (plan.UseKvCacheQuantization)
+        {
+            return new LaunchPlanSet(allocation, [new(resolved, plan), new(resolved, plan.WithoutKvCacheQuantization())]);
+        }
+
+        if (variant != GpuVariant.Cpu && !resolved.ExploreMode && !string.IsNullOrWhiteSpace(resolved.KvTypeK))
+        {
+            return new LaunchPlanSet(allocation, [new(resolved, plan), new(resolved.WithoutKvCacheQuantization(), plan)]);
+        }
+
+        return new LaunchPlanSet(allocation, [new(resolved, plan)]);
     }
 
-    private sealed record LaunchPlanSet(ProcessContextAllocation? Allocation, List<LlamaServerLaunchPlan?> Candidates);
+    /// <summary>One ordered launch attempt: the explore/replay args to emit and the policy plan to emit them under.</summary>
+    private sealed record LaunchCandidate(ResolvedLaunchArguments Resolved, LlamaServerLaunchPlan? Plan);
+
+    private sealed record LaunchPlanSet(ProcessContextAllocation? Allocation, List<LaunchCandidate> Candidates);
 
     /// <summary>
     ///     Publishes a sniffed layer-placement observation once the process is genuinely serving. Recording only after
@@ -1779,8 +1797,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
 
         // Context (-c), placement, KV-cache/flash-attention, and CPU threads. The variant selects the llama.cpp BUILD
         // (Cuda/Vulkan vs pure CPU). Precedence lives in the launch policy that produced `plan`; here we just emit:
-        //  - GPU explore: --fit on + --metrics (auto-fit places layers/experts around the explicit -c), plus the policy
-        //    -c and the KV-quant + flash-attention optimization; GPU replay: the frozen profile args verbatim.
+        //  - GPU explore: --fit on (auto-fit places layers/experts around the explicit -c), plus the policy -c and the
+        //    KV-quant + flash-attention optimization; GPU replay: the frozen profile args verbatim. Both carry --metrics.
         //  - CPU: the policy -c (explore) or the frozen -c (replay), plus the CPU thread policy; NO --fit/--metrics/-ngl,
         //    KV stays f16 and flash-attention stays auto.
         // A null plan (replay profiling) reproduces the supplied replay vector byte-for-byte.
@@ -1867,15 +1885,19 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     {
         if (variant != GpuVariant.Cpu)
         {
+            // --metrics on BOTH GPU modes. The /metrics gauges (KV bytes, slot state, cache-reused tokens) are the only
+            // in-app view of what a spawn actually did, and a frozen-profile replay — the steady state on a machine
+            // that has been tuned once — was previously the one GPU path that exposed none of them.
+            args.Add("--metrics");
+
             if (resolved.ExploreMode)
             {
-                // Let llama.cpp auto-fit choose + print placement; --metrics exposes the gauges the benchmark reads.
-                // The explicit -c is RESPECTED by --fit (it fits ngl/batch around it) and the KV/FA flags are not
-                // placement flags, so auto-fit stays active (verified against b9692; b10201 --help confirms --fit
-                // adjusts only UNSET arguments, so the explicit -c is respected).
+                // Let llama.cpp auto-fit choose + print placement. The explicit -c is RESPECTED by --fit (it fits
+                // ngl/batch around it) and the KV/FA flags are not placement flags, so auto-fit stays active (verified
+                // against b9692; b10201 --help confirms --fit adjusts only UNSET arguments, so the explicit -c is
+                // respected).
                 args.Add("--fit");
                 args.Add("on");
-                args.Add("--metrics");
                 AppendPolicyContextArgs(args, plan);
                 AppendPolicyKvCacheAndFlashAttentionArgs(args, plan);
             }

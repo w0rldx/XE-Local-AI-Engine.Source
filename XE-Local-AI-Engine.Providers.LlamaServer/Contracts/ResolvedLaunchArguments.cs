@@ -106,4 +106,19 @@ public sealed record ResolvedLaunchArguments
             FlashAttn = flashAttn
         };
     }
+
+    /// <summary>
+    ///     This replay with its explicit KV cache types stripped (and flash attention with them, since the two are
+    ///     coupled by the invariants above) — the safe retry candidate for a frozen profile whose quantized-KV config
+    ///     cannot reach readiness on the current backend. Placement (<c>-c/-ngl/-ts/-ot</c>) is untouched.
+    /// </summary>
+    public ResolvedLaunchArguments WithoutKvCacheQuantization()
+    {
+        return this with
+        {
+            KvTypeK = null,
+            KvTypeV = null,
+            FlashAttn = false
+        };
+    }
 }

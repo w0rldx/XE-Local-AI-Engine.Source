@@ -78,4 +78,33 @@ public sealed class ProviderMessageTokenEstimatorTests
                 $"U+{(int)character:X4} must carry the CJK weight.");
         }
     }
+
+    [Test]
+    public void EstimateTools_CountsTheToolDefinition_AndIsStableAcrossRepeatedRounds()
+    {
+        AITool[] tools = [AIFunctionFactory.Create((string value) => value, "sample_tool", new string('d', 40))];
+
+        var first = ProviderMessageTokenEstimator.EstimateTools(tools);
+
+        AssertEx.True(first > OverheadTokens, "a tool's name, description and schema must all count against the round.");
+
+        // The per-tool character profile is memoized by tool instance because this hop re-estimates the whole tool list
+        // on EVERY provider round; a second pass over the same instance must produce the identical estimate.
+        AssertEx.Equal(first, ProviderMessageTokenEstimator.EstimateTools(tools));
+    }
+
+    [Test]
+    public void EstimateTools_AppliesTheDivisorOutsideTheMemo_SoACalibrationChangeStillTakesEffect()
+    {
+        // The memo holds the raw character profile, not the divided estimate. Were the divided value cached instead,
+        // the same tool instance would keep returning its first round's number after a per-model calibration changed
+        // the divisor — the same property the per-message memo deliberately preserves.
+        AITool[] tools = [AIFunctionFactory.Create((string value) => value, "calibrated_tool", new string('d', 400))];
+
+        var atFour = ProviderMessageTokenEstimator.EstimateTools(tools, charsPerToken: 4);
+        var atEight = ProviderMessageTokenEstimator.EstimateTools(tools, charsPerToken: 8);
+
+        AssertEx.True(atEight < atFour, "a larger divisor must yield a smaller estimate for the same tool instance.");
+        AssertEx.Equal(atFour, ProviderMessageTokenEstimator.EstimateTools(tools, charsPerToken: 4));
+    }
 }

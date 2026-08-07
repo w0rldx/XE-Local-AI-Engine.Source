@@ -199,7 +199,14 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
 
         if (!terminal)
         {
-            var live = _live.GetOrAdd(state.InvocationId, _ => new LiveInvocation(state));
+            // TryGetValue first: this runs once per streamed token, and every publish after the first finds the entry
+            // already there. The GetOrAdd fallback takes the state as a factory ARGUMENT so the miss path does not
+            // allocate a capturing closure either.
+            if (!_live.TryGetValue(state.InvocationId, out var live))
+            {
+                live = _live.GetOrAdd(state.InvocationId, static (_, initialState) => new LiveInvocation(initialState), state);
+            }
+
             live.Publish(state);
             return;
         }

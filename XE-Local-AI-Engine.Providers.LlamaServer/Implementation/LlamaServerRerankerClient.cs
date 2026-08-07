@@ -24,18 +24,30 @@ public sealed class LlamaServerRerankerClient : IRerankerClient
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
     /// <summary>
-    ///     Bounds a single <c>/v1/rerank</c> scoring round-trip so a reranker that accepts the request then hangs
-    ///     mid-scoring degrades fast instead of stalling knowledge search for the shared <see cref="HttpClient.Timeout" />.
-    ///     5s comfortably fits a real rerank of the ~20-document candidate pool of short chunks the KB search sends, while
-    ///     capping a hang. A timeout is a linked-token cancellation (not the caller's), so it degrades to null like the
-    ///     other failure modes rather than surfacing to the caller.
+    ///     Floor of the scoring budget, and the whole budget for a degenerate empty pool. Covers the fixed cost of the
+    ///     round-trip plus the first document.
     /// </summary>
-    private static readonly TimeSpan DefaultRerankRequestTimeout = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan RerankTimeoutFloor = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    ///     Per-document allowance. A cross-encoder scores the pool SEQUENTIALLY on a <c>--parallel 1</c> server, so the
+    ///     budget has to grow with the pool — the caller sends <c>max(20, 4 x limit)</c> ~500-token chunks, which a
+    ///     CPU-only box cannot finish inside a flat 5s, and the reranker then degrades to fusion order on every search
+    ///     while looking configured. 500ms/document is roughly double a measured CPU pass on a chunk that size, so the
+    ///     budget is generous enough to stop punishing slow hardware without being a licence to hang.
+    /// </summary>
+    private static readonly TimeSpan RerankTimeoutPerDocument = TimeSpan.FromMilliseconds(500);
+
+    /// <summary>
+    ///     Hard ceiling regardless of pool size: past this the search has stalled long enough that fusion order now beats
+    ///     waiting, whatever the reranker is doing.
+    /// </summary>
+    private static readonly TimeSpan RerankTimeoutCeiling = TimeSpan.FromSeconds(30);
 
     private readonly ILlamaServerProcessSupervisor _supervisor;
     private readonly HttpClient _httpClient;
     private readonly ILogger<LlamaServerRerankerClient> _logger;
-    private readonly TimeSpan _requestTimeout;
+    private readonly TimeSpan? _requestTimeoutOverride;
 
     public LlamaServerRerankerClient(ILlamaServerProcessSupervisor supervisor,
         HttpClient httpClient,
@@ -45,7 +57,24 @@ public sealed class LlamaServerRerankerClient : IRerankerClient
         _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _requestTimeout = requestTimeout ?? DefaultRerankRequestTimeout;
+        _requestTimeoutOverride = requestTimeout;
+    }
+
+    /// <summary>
+    ///     Scoring budget for a pool of <paramref name="documentCount" /> documents: a floor plus a per-document
+    ///     allowance, capped. Bounds a reranker that accepts the request then hangs mid-scoring, without stalling
+    ///     knowledge search for the shared <see cref="HttpClient.Timeout" />. A fired timeout is a linked-token
+    ///     cancellation (not the caller's), so it degrades to null like the other failure modes.
+    /// </summary>
+    internal static TimeSpan ResolveRequestTimeout(int documentCount)
+    {
+        if (documentCount <= 0)
+        {
+            return RerankTimeoutFloor;
+        }
+
+        var scaled = RerankTimeoutFloor + (RerankTimeoutPerDocument * documentCount);
+        return scaled > RerankTimeoutCeiling ? RerankTimeoutCeiling : scaled;
     }
 
     public async Task<IReadOnlyList<double>?> RerankAsync(string modelName,
@@ -58,6 +87,10 @@ public sealed class LlamaServerRerankerClient : IRerankerClient
             return null;
         }
 
+        // Scale the scoring budget with the pool the caller actually sent; an explicit override (tests, callers with
+        // their own budget) wins outright.
+        var requestTimeout = _requestTimeoutOverride ?? ResolveRequestTimeout(documents.Count);
+
         try
         {
             var endpoint = await _supervisor.EnsureRunningAsync(modelName, ModelRole.Reranker, cancellationToken).ConfigureAwait(false);
@@ -66,10 +99,10 @@ public sealed class LlamaServerRerankerClient : IRerankerClient
             var requestUri = new Uri($"{endpoint.BaseAddress.AbsoluteUri}/rerank");
 
             // Bound the scoring round-trip on its own linked token so a reranker that accepts then hangs mid-scoring
-            // degrades fast rather than stalling for the whole HttpClient.Timeout. A fired timeout cancels timeoutCts
+            // degrades rather than stalling for the whole HttpClient.Timeout. A fired timeout cancels timeoutCts
             // (NOT the caller token), so it lands in the degrade catch below; a real caller cancellation still propagates.
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeoutCts.CancelAfter(_requestTimeout);
+            timeoutCts.CancelAfter(requestTimeout);
 
             using var response = await _httpClient
                                        .PostAsJsonAsync(requestUri, new RerankRequest(query, documents), SerializerOptions, timeoutCts.Token)
@@ -77,13 +110,18 @@ public sealed class LlamaServerRerankerClient : IRerankerClient
 
             if (!response.IsSuccessStatusCode)
             {
-                _logger.LogWarning("Knowledge reranking returned a non-success status; keeping fusion order. Status: {StatusCode}.",
-                    (int)response.StatusCode);
+                LogDegrade("status", documents.Count, requestTimeout, $"HTTP {(int)response.StatusCode}");
                 return null;
             }
 
             var payload = await response.Content.ReadFromJsonAsync<RerankResponse>(SerializerOptions, timeoutCts.Token).ConfigureAwait(false);
-            return ProjectScores(payload, documents.Count);
+            var scores = ProjectScores(payload, documents.Count);
+            if (scores is null)
+            {
+                LogDegrade("malformed", documents.Count, requestTimeout, nameof(RerankResponse));
+            }
+
+            return scores;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -92,12 +130,29 @@ public sealed class LlamaServerRerankerClient : IRerankerClient
         }
         catch (Exception exception) when (exception is LlamaRuntimeException or HttpRequestException or IOException or JsonException or OperationCanceledException)
         {
-            // Model not installed / cap reached / server down / transport error / server timeout / malformed body:
-            // degrade to the existing fusion order. Log the exception TYPE only — never the query or document text.
-            _logger.LogWarning("Knowledge reranking unavailable; keeping fusion order. Exception type: {ExceptionType}.",
+            // Model not installed / cap reached / server down / transport error / scoring timeout / malformed body:
+            // degrade to the existing fusion order. The reason separates "the reranker ran out of time on this pool"
+            // (raise the budget, or shrink the pool, or the box is too slow for this model) from "there is no reranker"
+            // — without it both present identically as fusion-ordered results.
+            LogDegrade(exception is OperationCanceledException ? "timeout" : "unavailable",
+                documents.Count,
+                requestTimeout,
                 exception.GetType().Name);
             return null;
         }
+    }
+
+    // The single degrade-logging site. Carries the reason as its own structured field so a log query can separate a
+    // budget-exhausted rerank from an absent one; the detail is an exception/status NAME only — never the query or
+    // document text.
+    private void LogDegrade(string reason, int documentCount, TimeSpan requestTimeout, string detail)
+    {
+        _logger.LogWarning(
+            "Knowledge reranking degraded to fusion order. Reason: {Reason}. Documents: {DocumentCount}. Budget: {RerankTimeoutMs}ms. Detail: {Detail}.",
+            reason,
+            documentCount,
+            (long)requestTimeout.TotalMilliseconds,
+            detail);
     }
 
     // Reprojects the server's (index, score) results back into an input-aligned score array. The server may return the

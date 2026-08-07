@@ -862,7 +862,11 @@ public sealed partial class InvocationRunner : IInvocationRunner
         // many rounds trim, and throws (see ApplyContextBudgetAsync) the first time truncation still leaves history
         // over budget.
         var budgetGate = new ContextBudgetNoticeGate();
-        var seededMessages = await ApplyContextBudgetAsync(BuildChatMessages(package), package, resolvedModel, "initial-assembly", turnPolicy, transport, budgetGate).ConfigureAwait(false);
+
+        // Built once for the whole turn: the offer list is fixed for the invocation, and the budgeter's framing memo is
+        // keyed on these string instances (see ApplyContextBudgetAsync).
+        var toolBudgetDefinitions = BuildToolBudgetDefinitions(package);
+        var seededMessages = await ApplyContextBudgetAsync(BuildChatMessages(package), package, toolBudgetDefinitions, resolvedModel, "initial-assembly", turnPolicy, transport, budgetGate).ConfigureAwait(false);
 
         var definition = BuildInvocationDefinition(package, resolvedModel, seededMessages, effectiveContextTokens);
         // Coarse span over the MAF agent build (AUD4-23) — another pre-first-token stage. Disposed right after the
@@ -907,10 +911,14 @@ public sealed partial class InvocationRunner : IInvocationRunner
         var isFirstSegment = true;
 
         // The per-segment update list below is retained ONLY to replay a folded segment when a tool-approval request
-        // surfaces. That can happen only when the package offered tools: InvocationToolResolver yields no executable
-        // tools for an empty offer list, so a tool-less turn can never wrap a tool in ApprovalRequiredAIFunction and
-        // thus never surfaces a ToolApprovalRequestContent. Skip retaining every streamed update of a plain answer.
-        var approvalPossible = package.AllowedTools.Count > 0;
+        // surfaces. A ToolApprovalRequestContent can originate from nothing but an ApprovalRequiredAIFunction, and
+        // InvocationToolResolver's effective policy for a resolved tool is "registry pre-wrap OR offer flag" — where the
+        // registry pre-wrap (ClientLocalToolRegistry's handler default, MCP's always-on default) is already ORed into
+        // this DTO flag by the resolver's node-policy compose, which is tighten-only. So an offer of ClientLocal tools
+        // that all carry RequiresApproval=false can never wrap one, and every streamed update of that (common) turn is
+        // retained for nothing. Any OTHER location reaches the resolver as a bridged function carrying no approval
+        // metadata, which the resolver treats as fail-closed — so it counts as possible here too.
+        var approvalPossible = package.AllowedTools.Any(static tool => tool.RequiresApproval || tool.Location != ToolLocation.ClientLocal);
 
         do
         {
@@ -918,7 +926,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // iteration this is a cheap passthrough (the seed was already budgeted); on an approval resume it bounds the
             // folded tool-call + approval history. The protected recent turns — which carry the in-flight round — are
             // never trimmed, so a budgeted list is still valid to send.
-            var budgetedMessages = await ApplyContextBudgetAsync(currentMessages, package, resolvedModel, "tool-loop", turnPolicy, transport, budgetGate).ConfigureAwait(false);
+            var budgetedMessages = await ApplyContextBudgetAsync(currentMessages, package, toolBudgetDefinitions, resolvedModel, "tool-loop", turnPolicy, transport, budgetGate).ConfigureAwait(false);
             if (!ReferenceEquals(budgetedMessages, currentMessages))
             {
                 currentMessages = budgetedMessages as List<ChatMessage> ?? [.. budgetedMessages];
@@ -1152,7 +1160,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         // any participant is launched with. Previously unbudgeted — the workflow ran on the raw seed regardless of
         // length.
         var budgetGate = new ContextBudgetNoticeGate();
-        var seed = await ApplyContextBudgetAsync(BuildChatMessages(package), package, resolvedModel, "orchestration-seed", turnPolicy, transport, budgetGate).ConfigureAwait(false);
+        var seed = await ApplyContextBudgetAsync(BuildChatMessages(package), package, BuildToolBudgetDefinitions(package), resolvedModel, "orchestration-seed", turnPolicy, transport, budgetGate).ConfigureAwait(false);
 
         await using var session = await _orchestrationAgentFactory.CreateAsync(definition, seed, invocationToken).ConfigureAwait(false);
 

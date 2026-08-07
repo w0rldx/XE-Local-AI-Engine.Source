@@ -269,9 +269,16 @@ public sealed partial class InvocationRunner
     ///     HARD STOP: it throws <see cref="ContextBudgetExceededException" /> (a classified, pre-inference failure —
     ///     see <see cref="MapFailure" />) instead of proceeding with an over-budget send. Returns the input unchanged
     ///     (reference-equal) when nothing was trimmed.
+    ///     <para>
+    ///         <paramref name="toolBudgetDefinitions" /> is built ONCE per turn by the caller rather than here: the
+    ///         budgeter measures each definition as a framed message and memoizes that framing by string instance, so
+    ///         rebuilding the (identical) strings on every call would both re-concatenate them and guarantee a memo miss
+    ///         that re-scans every tool schema.
+    ///     </para>
     /// </summary>
     private async Task<IReadOnlyList<ChatMessage>> ApplyContextBudgetAsync(IReadOnlyList<ChatMessage> messages,
         RuntimePackage package,
+        IReadOnlyList<string> toolBudgetDefinitions,
         string resolvedModel,
         string stage,
         TurnPolicy turnPolicy,
@@ -286,7 +293,7 @@ public sealed partial class InvocationRunner
             turnPolicy.ContextCapacityTokens,
             turnPolicy.ReservedOutputTokens,
             package.ResolvedSystemPrompt,
-            BuildToolBudgetDefinitions(package),
+            toolBudgetDefinitions,
             resolvedModel);
 
         if (!result.Trimmed && !result.ExceedsBudget)

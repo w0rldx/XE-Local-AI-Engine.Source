@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Invocation.Context;
 
+using System.Runtime.CompilerServices;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 
@@ -14,6 +15,15 @@ using Microsoft.Extensions.Options;
 /// </summary>
 public sealed class ConversationContextBudgeter : IConversationContextBudgeter
 {
+    /// <summary>
+    ///     The framed <see cref="ChatMessage" /> each fixed-overhead text is measured as, memoized by TEXT INSTANCE.
+    ///     <see cref="ITokenEstimator" />'s own character-profile memo is keyed on the message instance, so building a
+    ///     fresh wrapper per call guaranteed a miss and re-scanned the whole system prompt (tens of KB once skills are
+    ///     attached) on every call. The callers pass the same string instances for the life of an invocation, so this
+    ///     turns the repeated scans into lookups. No leak: an entry dies with its key string.
+    /// </summary>
+    private static readonly ConditionalWeakTable<string, ChatMessage> FixedOverheadFramingCache = new();
+
     private readonly ITokenEstimator _estimator;
     private readonly ConversationContextBudgetOptions _options;
 
@@ -166,7 +176,7 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
 
         if (!string.IsNullOrEmpty(systemPrompt))
         {
-            overhead += _estimator.EstimateTokensWithDivisor(new ChatMessage(ChatRole.System, systemPrompt), divisor);
+            overhead += _estimator.EstimateTokensWithDivisor(AsFramedMessage(systemPrompt), divisor);
         }
 
         if (toolDefinitions is { Count: > 0 })
@@ -180,11 +190,17 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
 
                 // One framed message per tool mirrors the inner estimator's per-tool framing overhead, so a tool-heavy
                 // agent's schema footprint is counted rather than silently ignored.
-                overhead += _estimator.EstimateTokensWithDivisor(new ChatMessage(ChatRole.System, definition), divisor);
+                overhead += _estimator.EstimateTokensWithDivisor(AsFramedMessage(definition), divisor);
             }
         }
 
         return overhead;
+    }
+
+    /// <summary>Frames one fixed-overhead text as the System message it is measured as, reusing the instance per text.</summary>
+    private static ChatMessage AsFramedMessage(string text)
+    {
+        return FixedOverheadFramingCache.GetValue(text, static value => new ChatMessage(ChatRole.System, value));
     }
 
     /// <summary>

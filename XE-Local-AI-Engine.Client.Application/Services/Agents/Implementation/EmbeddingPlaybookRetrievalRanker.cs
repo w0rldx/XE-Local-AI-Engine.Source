@@ -1,9 +1,9 @@
 namespace XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 
-using System.Collections.Concurrent;
 using System.Numerics.Tensors;
 using Microsoft.Extensions.Options;
 using OllamaSharp.Models.Exceptions;
+using XE_Local_AI_Engine.Client.Common.Caching;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Providers.Abstractions;
@@ -23,12 +23,19 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 /// </summary>
 public sealed class EmbeddingPlaybookRetrievalRanker : IPlaybookRetrievalRanker
 {
+    // Byte ceiling on the candidate-vector cache, alongside the configured entry bound. 4 MiB holds well over the
+    // default 512 entries at 768 dimensions and caps a 4096-dimension model at ~256 — the entry bound alone would let
+    // the same configuration retain 8 MB.
+    private const long EmbeddingCacheMaxBytes = 4L * 1024 * 1024;
+
+    // Flat allowance per entry for the key struct plus dictionary node — the budget bounds RAM, it does not measure it.
+    private const long EntryOverheadBytes = 64;
+
     // RAM-only candidate-embedding cache keyed by (action id, version, embedding model). Version invalidates an edited
     // action automatically; the model name guards against cosine'ing a stale-dimension vector against a new model's
-    // query. Insertion order is tracked separately so the bound evicts the oldest-inserted entries first.
-    private readonly ConcurrentDictionary<EmbeddingCacheKey, ReadOnlyMemory<float>> _cache = new();
-    private readonly Lock _cacheLock = new();
-    private readonly Queue<EmbeddingCacheKey> _insertionOrder = new();
+    // query. Eviction is coldest-first within both bounds, and concurrent sends missing on the same candidate share one
+    // embedding round-trip rather than each paying the single-slot embedding server.
+    private readonly ByteBudgetedCache<EmbeddingCacheKey, ReadOnlyMemory<float>> _cache;
     private readonly LexicalPlaybookRetrievalRanker _lexical;
     private readonly ILogger<EmbeddingPlaybookRetrievalRanker> _logger;
     private readonly PlaybookRetrievalOptions _options;
@@ -48,6 +55,9 @@ public sealed class EmbeddingPlaybookRetrievalRanker : IPlaybookRetrievalRanker
         _options = options.Value;
         _lexical = lexical;
         _logger = logger;
+        _cache = new ByteBudgetedCache<EmbeddingCacheKey, ReadOnlyMemory<float>>(EmbeddingCacheMaxBytes,
+            _options.EmbeddingCacheMaxEntries,
+            static (key, vector) => (vector.Length * sizeof(float)) + (key.Model.Length * sizeof(char)) + EntryOverheadBytes);
     }
 
     /// <inheritdoc />
@@ -111,29 +121,6 @@ public sealed class EmbeddingPlaybookRetrievalRanker : IPlaybookRetrievalRanker
         string model,
         CancellationToken cancellationToken)
     {
-        // Resolve each candidate's cached vector; collect the misses (with their text) plus the query into one ordered
-        // batch so the whole send costs a single embedding round-trip. The query is always re-embedded (never cached).
-        var candidateVectors = new ReadOnlyMemory<float>[candidates.Count];
-        var missIndexes = new List<int>();
-        var batchTexts = new List<string>();
-
-        for (var index = 0; index < candidates.Count; index++)
-        {
-            var candidate = candidates[index];
-            var key = new EmbeddingCacheKey(candidate.Id, candidate.Version, model);
-            if (_cache.TryGetValue(key, out var cached))
-            {
-                candidateVectors[index] = cached;
-                continue;
-            }
-
-            missIndexes.Add(index);
-            batchTexts.Add(CandidateText(candidate));
-        }
-
-        var queryBatchIndex = batchTexts.Count;
-        batchTexts.Add(query);
-
         // Route the embedding model to the runtime named by EmbeddingProviderName (ollama or llamacpp). For "llamacpp"
         // the provider stands up a non-none-pooling embedding process on first use; an unavailable process throws a
         // caught transport type (the deferred generator wraps LlamaRuntimeException -> IOException) so retrieval still
@@ -146,25 +133,24 @@ public sealed class EmbeddingPlaybookRetrievalRanker : IPlaybookRetrievalRanker
             ProviderName = _options.EmbeddingProviderName
         });
 
-        var generated = await generator.GenerateAsync(batchTexts, options: null, cancellationToken).ConfigureAwait(false);
-
-        // A well-behaved generator returns exactly one embedding per input, in order. A short/partial response would
-        // make the positional indexing below throw ArgumentOutOfRangeException (outside the narrow catch); degrade to
-        // lexical instead so the send never breaks. No playbook/query text is logged.
-        if (generated.Count != batchTexts.Count)
+        var keys = new EmbeddingCacheKey[candidates.Count];
+        var textByKey = new Dictionary<EmbeddingCacheKey, string>(candidates.Count);
+        for (var index = 0; index < candidates.Count; index++)
         {
-            return await FallBackToLexicalAsync(query, candidates, k, exception: null, cancellationToken).ConfigureAwait(false);
+            var candidate = candidates[index];
+            keys[index] = new EmbeddingCacheKey(candidate.Id, candidate.Version, model);
+            textByKey[keys[index]] = CandidateText(candidate);
         }
 
-        var queryVector = generated[queryBatchIndex].Vector;
-        for (var missPosition = 0; missPosition < missIndexes.Count; missPosition++)
-        {
-            var candidateIndex = missIndexes[missPosition];
-            var vector = generated[missPosition].Vector;
-            candidateVectors[candidateIndex] = vector;
+        // The cache resolves what it can (and waits on a concurrent send already embedding the same candidate); the
+        // remaining misses plus the query go out as ONE batch, so a send still costs a single embedding round-trip. The
+        // query is always re-embedded and never cached.
+        var queryVector = ReadOnlyMemory<float>.Empty;
+        var candidateVectors = await _cache.GetOrAddManyAsync(keys, EmbedMissingCandidatesAsync, cancellationToken).ConfigureAwait(false);
 
-            var candidate = candidates[candidateIndex];
-            StoreInCache(new EmbeddingCacheKey(candidate.Id, candidate.Version, model), vector);
+        if (candidateVectors is null)
+        {
+            return await FallBackToLexicalAsync(query, candidates, k, exception: null, cancellationToken).ConfigureAwait(false);
         }
 
         return candidates
@@ -175,6 +161,37 @@ public sealed class EmbeddingPlaybookRetrievalRanker : IPlaybookRetrievalRanker
                .Take(k)
                .Select(scored => scored.Action)
                .ToList();
+
+        async Task<IReadOnlyList<ReadOnlyMemory<float>>?> EmbedMissingCandidatesAsync(IReadOnlyList<EmbeddingCacheKey> missing,
+            CancellationToken token)
+        {
+            var batchTexts = new List<string>(missing.Count + 1);
+            foreach (var key in missing)
+            {
+                batchTexts.Add(textByKey[key]);
+            }
+
+            batchTexts.Add(query);
+
+            var generated = await generator.GenerateAsync(batchTexts, options: null, token).ConfigureAwait(false);
+
+            // A well-behaved generator returns exactly one embedding per input, in order. A short/partial response would
+            // make the positional indexing throw ArgumentOutOfRangeException (outside the narrow catch); signal a degrade
+            // instead so the send never breaks. No playbook/query text is logged.
+            if (generated.Count != batchTexts.Count)
+            {
+                return null;
+            }
+
+            queryVector = generated[^1].Vector;
+            var vectors = new ReadOnlyMemory<float>[missing.Count];
+            for (var position = 0; position < missing.Count; position++)
+            {
+                vectors[position] = generated[position].Vector;
+            }
+
+            return vectors;
+        }
     }
 
     private static string CandidateText(PlaybookActionRecord candidate)
@@ -193,27 +210,6 @@ public sealed class EmbeddingPlaybookRetrievalRanker : IPlaybookRetrievalRanker
 
         var score = TensorPrimitives.CosineSimilarity(query.Span, candidate.Span);
         return float.IsNaN(score) ? 0f : score;
-    }
-
-    private void StoreInCache(EmbeddingCacheKey key, ReadOnlyMemory<float> vector)
-    {
-        var bound = _options.EmbeddingCacheMaxEntries;
-        lock (_cacheLock)
-        {
-            if (!_cache.TryAdd(key, vector))
-            {
-                return;
-            }
-
-            _insertionOrder.Enqueue(key);
-
-            // Evict oldest-inserted entries until the cache is back within its RAM-only bound.
-            while (_cache.Count > bound && _insertionOrder.Count > 0)
-            {
-                var evicted = _insertionOrder.Dequeue();
-                _cache.TryRemove(evicted, out _);
-            }
-        }
     }
 
     private readonly record struct EmbeddingCacheKey(Guid ActionId, int Version, string Model);
