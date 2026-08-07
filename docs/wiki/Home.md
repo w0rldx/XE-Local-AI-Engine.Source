@@ -90,6 +90,7 @@ action, never implicit. Prebuilt download stays the default. If you read anywher
 | 13 | [Testing & Validation](13-testing-and-validation.md) | Test topology, validation commands, E2E, RC evidence |
 | 14 | [Image Generation](14-image-generation.md) | Local stable-diffusion.cpp: `sd-server` supervisor, serialized job coordinator, encrypted image store |
 | 15 | [Knowledge Base / RAG](15-knowledge-base.md) | Offline document KB: ingestion pipeline, hybrid FTS+vector search, reranker, agent tools |
+| 16 | [Code Organization Conventions](16-code-conventions.md) | Where a type/file goes: `*ServiceModels.cs`, DTO aggregation, mapper colocation, feature-folder rules, load-bearing suppressions, reconciliation with the generic `.opencode` standards |
 
 ## Conventions in this wiki
 
