@@ -199,6 +199,53 @@ public sealed class NodeAuthService : INodeAuthService
         return new NodePasswordChangeResult(Succeeded: true, []);
     }
 
+    public async Task<NodePasswordChangeResult> ResetAdminPasswordAsync(string newPassword, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(newPassword);
+
+        // No email on a recovery reset: resolve the single completed-setup admin, exactly as login does when the UI omits
+        // the email (single-user model). Nothing to reset if first-run setup never happened.
+        var user = await ResolveLoginUserAsync(email: null, cancellationToken).ConfigureAwait(false);
+        if (user is null)
+        {
+            return new NodePasswordChangeResult(Succeeded: false,
+                ["No administrator account exists. Complete first-run setup before resetting the password."]);
+        }
+
+        // RemovePassword + AddPassword is the no-old-password reset primitive (Identity has no token-less ResetPassword,
+        // and no reset-token provider is registered). Wrap both in a serializable transaction — mirroring SetupAsync — so a
+        // policy-rejected new password rolls back and never leaves the account in the passwordless intermediate state.
+        await using var transaction = await _dbContext.Database
+                                                      .BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken)
+                                                      .ConfigureAwait(false);
+
+        var removeResult = await _userManager.RemovePasswordAsync(user).ConfigureAwait(false);
+        if (!removeResult.Succeeded)
+        {
+            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            return new NodePasswordChangeResult(Succeeded: false, ToErrorList(removeResult));
+        }
+
+        var addResult = await _userManager.AddPasswordAsync(user, newPassword).ConfigureAwait(false);
+        if (!addResult.Succeeded)
+        {
+            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            return new NodePasswordChangeResult(Succeeded: false, ToErrorList(addResult));
+        }
+
+        // A forgotten password is often preceded by failed attempts that tripped the 5-strike lockout; clear it so the
+        // operator can sign in immediately with the new password.
+        await _userManager.ResetAccessFailedCountAsync(user).ConfigureAwait(false);
+        await _userManager.SetLockoutEndDateAsync(user, lockoutEnd: null).ConfigureAwait(false);
+
+        await RevokeActiveTokensAsync(user.Id, cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+
+        _logger.LogWarning("Node admin password reset for user {UserId}; refresh tokens revoked and the rotated security "
+                           + "stamp invalidates existing access tokens.", user.Id);
+        return new NodePasswordChangeResult(Succeeded: true, []);
+    }
+
     public async Task<NodeCurrentUser?> GetCurrentUserAsync(ClaimsPrincipal principal, CancellationToken cancellationToken)
     {
         var user = await _userManager.GetUserAsync(principal).ConfigureAwait(false);

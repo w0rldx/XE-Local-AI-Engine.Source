@@ -109,6 +109,12 @@ public sealed class TutorialStateEndpointTests
 
         var result = await userManager.CreateAsync(user).ConfigureAwait(false);
         AssertEx.True(result.Succeeded);
+
+        // CreateAsync rotates the security stamp to a random value; pin it to the fixed stamp the synthetic bearer token
+        // carries (TestingWebAppFactory.CreateNodeAccessToken) so the JWT validator's fail-closed stamp check matches.
+        user.SecurityStamp = TestingWebAppFactory.NodeAdminTestSecurityStamp;
+        var stampResult = await userManager.UpdateAsync(user).ConfigureAwait(false);
+        AssertEx.True(stampResult.Succeeded);
     }
 
     private static async Task SaveAsync(TestingWebAppFactory factory, HttpClient client, string key, string status)

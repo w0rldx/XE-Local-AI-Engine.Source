@@ -78,9 +78,9 @@ you click it, check the list — one unmet rule is usually why.
 
 > ### ⚠️ Write this password down somewhere safe
 >
-> There is **no "forgot password" email**, because there is no server that could send one. If you lose
-> it, the only way back in is to reset the app and start over.
-> → [How to reset](faq.md#how-do-i-completely-reset-the-app)
+> There is **no "forgot password" email**, because there is no server that could send one. If you do
+> lose it, you can set a new one with a short one-line command **without losing your data**.
+> → [I forgot my password](faq.md#i-forgot-my-password)
 
 **After this, signing in asks for the password only** — not the email. The email is not your username;
 it is just stored with the account.

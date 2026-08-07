@@ -145,8 +145,8 @@ Setup asks for an **email address and password**. This creates a login **on your
 - Nothing is sent anywhere; no server is contacted
 - The email is never verified or used to contact you
 - A made-up address is fine
-- **There is no password recovery**, because there's nothing to recover it from —
-  [reset instructions](faq.md#i-forgot-my-password)
+- **There is no "forgot password" email** (no server to send one), but you can set a new password
+  locally without losing data — [reset instructions](faq.md#i-forgot-my-password)
 
 **The GitHub sign-in is a separate thing.** It exists only so the in-app updater is authorised to check
 GitHub for new releases. The token is stored locally. One is your app login; the other is update
