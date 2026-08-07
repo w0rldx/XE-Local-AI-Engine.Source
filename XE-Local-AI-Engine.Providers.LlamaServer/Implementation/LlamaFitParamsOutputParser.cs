@@ -11,8 +11,9 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// <remarks>
 ///     The grammar is emitted by llama.cpp's dedicated tool, not scraped from variable startup logs:
 ///     <c>-c N -ngl N [-ts N0,N1,...] [-ot "pattern=buffer,..."]</c>. Both <c>-c</c> and <c>-ngl</c> are required.
-///     A missing placement field therefore fails the parse instead of silently producing a context-only profile. At
-///     b9692 the helper can return unchanged defaults when the initial parameters already fit: <c>-c 0</c> means the
+///     A missing placement field therefore fails the parse instead of silently producing a context-only profile.
+///     The helper can return unchanged defaults when the initial parameters already fit (observed on b9692; the
+///     parser tolerates it on any pin): <c>-c 0</c> means the
 ///     model-trained context and <c>-ngl -1</c> means automatic placement. Context zero is never concrete. Automatic
 ///     placement is normalized to explicit all-layers (<c>-2</c>) only when verbose startup output proves full offload.
 /// </remarks>

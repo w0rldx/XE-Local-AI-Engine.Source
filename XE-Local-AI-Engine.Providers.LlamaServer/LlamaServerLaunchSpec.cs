@@ -11,8 +11,8 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer;
 ///         <c>--host 127.0.0.1</c>, a chat process always carries <c>--jinja</c> (tool calling), an
 ///         embedding process always carries <c>--embeddings</c> plus a non-<c>none</c> <c>--pooling</c> value, and a
 ///         reranker process always carries <c>--rerank</c> plus <c>--pooling rank</c> (mutually exclusive with
-///         <c>--embeddings</c>) — all verified against llama.cpp release <c>b9692</c>. The spawn-args unit test asserts
-///         these directly.
+///         <c>--embeddings</c>) — all verified against llama.cpp release <c>b9692</c> and re-confirmed against the
+///         pinned <c>b10201</c> <c>--help</c>. The spawn-args unit test asserts these directly.
 ///     </para>
 ///     <para>
 ///         <see cref="WorkingDirectory" /> is the binary's own directory so that co-located runtime libraries (for
