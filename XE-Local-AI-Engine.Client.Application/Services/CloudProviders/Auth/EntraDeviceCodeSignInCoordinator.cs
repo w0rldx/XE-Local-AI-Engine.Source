@@ -224,7 +224,7 @@ public sealed class EntraDeviceCodeSignInCoordinator : IEntraDeviceCodeSignInCoo
             || string.IsNullOrWhiteSpace(connection.EntraTenantId)
             || string.IsNullOrWhiteSpace(connection.EntraClientId))
         {
-            throw new InvalidOperationException("No Entra ID connection with a tenant id and client id is stored. Save Cloud Settings with auth mode EntraId first.");
+            throw new EntraConnectionNotConfiguredException("No Entra ID connection with a tenant id and client id is stored. Save Cloud Settings with auth mode EntraId first.");
         }
 
         return connection;

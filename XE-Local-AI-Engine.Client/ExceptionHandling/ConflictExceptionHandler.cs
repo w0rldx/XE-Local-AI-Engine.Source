@@ -6,6 +6,7 @@ using XE_Local_AI_Engine.Client.Common.Extensions;
 using XE_Local_AI_Engine.Client.Common.ProblemDetailModels;
 using XE_Local_AI_Engine.Client.Common.ProblemDetailModels.Enums;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
 
 /// <summary>
@@ -22,6 +23,8 @@ public class ConflictExceptionHandler(ILogger<ConflictExceptionHandler> logger) 
         {
             NodeChatReadOnlyConversationException => NodeConflictProblemType.ReadOnlyConversation,
             ImageModelInUseException => NodeConflictProblemType.ImageModelInUse,
+            WorkerNotPairedException => NodeConflictProblemType.WorkerNotPaired,
+            WorkerTokenExpiredException => NodeConflictProblemType.WorkerTokenExpired,
             _ => (NodeConflictProblemType?)null
         };
 
