@@ -73,6 +73,7 @@
 		"schedule": "Schedule",
 		"user": "User",
 		"skills": "Skills",
+		"customTools": "Custom Tools",
 		"preview": "Open Canvas",
 		"images": "Image Generation"
 	},

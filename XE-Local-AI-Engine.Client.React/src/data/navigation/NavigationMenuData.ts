@@ -119,6 +119,7 @@ const allNavigationLinks: INavigationLink[] = [
 			{ translationKey: "navigation.commands", to: nodeRoutePaths.commands },
 			{ translationKey: "navigation.agents", to: nodeRoutePaths.agents, capability: "agentManagement" },
 			{ translationKey: "navigation.skills", to: nodeRoutePaths.skills, capability: "agentManagement" },
+			{ translationKey: "navigation.customTools", to: nodeRoutePaths.customTools, capability: "agentManagement" },
 			{ translationKey: "navigation.mcp", to: nodeRoutePaths.mcp, capability: "mcpServers" },
 			{ translationKey: "navigation.scheduler", to: nodeRoutePaths.scheduler, capability: "scheduler" },
 			{ translationKey: "navigation.tools", to: nodeRoutePaths.tools },
