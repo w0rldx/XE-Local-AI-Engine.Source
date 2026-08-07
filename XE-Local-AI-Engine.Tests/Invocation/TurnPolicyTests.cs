@@ -100,4 +100,92 @@ public sealed class TurnPolicyTests
         AssertEx.Equal(expected: 6000, policy.ContextCapacityTokens);
         AssertEx.Equal(expected: 500, policy.ReservedOutputTokens);
     }
+
+    [Test]
+    public void WithEffectiveContext_WhenLaunchedWindowExceedsTheDefault_RaisesCapacityToTheRealWindow()
+    {
+        // The regression: a model launched with a 64k window was pinned to the 8k default, so a 7k conversation failed
+        // with ContextBudgetExceededException while the process had room for eight times as much.
+        var policy = ResolveWithDefaults(new ConversationContextBudgetOptions { DefaultContextTokens = 8192 });
+
+        var folded = policy.WithEffectiveContext(effectiveContextTokens: 65536);
+
+        AssertEx.Equal(expected: 65536, folded.ContextCapacityTokens);
+    }
+
+    [Test]
+    public void WithEffectiveContext_WhenLaunchedWindowIsBelowTheDefault_LowersCapacityToTheRealWindow()
+    {
+        var policy = ResolveWithDefaults(new ConversationContextBudgetOptions { DefaultContextTokens = 8192 });
+
+        var folded = policy.WithEffectiveContext(effectiveContextTokens: 2048);
+
+        AssertEx.Equal(expected: 2048, folded.ContextCapacityTokens);
+    }
+
+    [Test]
+    public void WithEffectiveContext_WhenOverrideIsSmallerThanTheLaunchedWindow_KeepsTheOverride()
+    {
+        var policy = ResolveWithNumCtxOverride(numCtx: 4096);
+
+        var folded = policy.WithEffectiveContext(effectiveContextTokens: 65536);
+
+        AssertEx.Equal(expected: 4096, folded.ContextCapacityTokens);
+    }
+
+    [Test]
+    public void WithEffectiveContext_WhenOverrideExceedsTheLaunchedWindow_ClampsToTheLaunchedWindow()
+    {
+        var policy = ResolveWithNumCtxOverride(numCtx: 131072);
+
+        var folded = policy.WithEffectiveContext(effectiveContextTokens: 65536);
+
+        AssertEx.Equal(expected: 65536, folded.ContextCapacityTokens);
+    }
+
+    [Test]
+    public void WithEffectiveContext_WhenTheLaunchedWindowIsUnknown_LeavesThePolicyUnchanged()
+    {
+        // Cloud, Ollama, or a failed read: nothing better than the configured default is known.
+        var policy = ResolveWithDefaults(new ConversationContextBudgetOptions { DefaultContextTokens = 8192 });
+
+        AssertEx.Equal(expected: 8192, policy.WithEffectiveContext(effectiveContextTokens: null).ContextCapacityTokens);
+        AssertEx.Equal(expected: 8192, policy.WithEffectiveContext(effectiveContextTokens: 0).ContextCapacityTokens);
+    }
+
+    [Test]
+    public void WithEffectiveContext_WhenReservedOutputExceedsTheLaunchedWindow_ClampsItDown()
+    {
+        var policy = ResolveWithDefaults(new ConversationContextBudgetOptions
+        {
+            DefaultContextTokens = 8192,
+            ReservedOutputTokenFloor = 4096
+        });
+
+        var folded = policy.WithEffectiveContext(effectiveContextTokens: 2048);
+
+        AssertEx.Equal(expected: 2048, folded.ReservedOutputTokens);
+    }
+
+    private static TurnPolicy ResolveWithDefaults(ConversationContextBudgetOptions budgetOptions)
+    {
+        return TurnPolicy.Resolve(RuntimePackageBuilder.Valid().Build(),
+            budgetOptions,
+            new ProviderResilienceOptions(),
+            new AgentToolPipelineOptions(),
+            TimeSpan.FromMinutes(5));
+    }
+
+    private static TurnPolicy ResolveWithNumCtxOverride(int numCtx)
+    {
+        var package = RuntimePackageBuilder.Valid()
+                                           .WithSamplingOptions(new SamplingOptions { NumCtx = numCtx })
+                                           .Build();
+
+        return TurnPolicy.Resolve(package,
+            new ConversationContextBudgetOptions { DefaultContextTokens = 8192 },
+            new ProviderResilienceOptions(),
+            new AgentToolPipelineOptions(),
+            TimeSpan.FromMinutes(5));
+    }
 }
