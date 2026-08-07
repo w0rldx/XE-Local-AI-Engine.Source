@@ -61,8 +61,10 @@ export function useImageJobHub(activeJobIds: readonly string[]): void {
 	const queryClient = useQueryClient();
 
 	// Latest desired active-job set, read inside the effect's reconcile without re-running the (connection-owning)
-	// effect on every list change. Updated synchronously below so a reconcile always sees the current set.
-	const desiredJobIdsRef = useRef<ReadonlySet<string>>(new Set(activeJobIds));
+	// effect on every list change. Updated synchronously below so a reconcile always sees the current set. The
+	// initializer below is a type-only cast (zero-cost) rather than `new Set(...)`, since `.current` is
+	// unconditionally reassigned to the current set two lines down on every render anyway.
+	const desiredJobIdsRef = useRef<ReadonlySet<string>>(undefined as unknown as ReadonlySet<string>);
 	// Per-job highest seq seen, so a replayed/duplicated push (same seq) is ignored. Lives across the connection.
 	const lastSeqByJob = useRef<Map<string, number>>(new Map());
 	// Per-job last coarse status pushed, so the list is refetched on a real transition rather than on every step.

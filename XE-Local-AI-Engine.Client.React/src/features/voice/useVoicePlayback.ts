@@ -42,7 +42,13 @@ export interface VoicePlaybackTap {
 export function useVoicePlayback(): VoicePlaybackTap {
 	const { runtime, manifest, stopPlayback } = useVoiceRuntime();
 
-	const bufferRef = useRef(new SentenceBuffer());
+	// Lazy-initialized once at mount: useRef ignores all but its first argument, so passing `new SentenceBuffer()`
+	// directly would rebuild it on every render and throw the result away. The cast keeps `.current` typed as
+	// non-nullable so downstream reads don't need optional chaining.
+	const bufferRef = useRef<SentenceBuffer>(undefined as unknown as SentenceBuffer);
+	if (!bufferRef.current) {
+		bufferRef.current = new SentenceBuffer();
+	}
 	const seenLengthRef = useRef(0);
 	const messageIdRef = useRef<string | undefined>(undefined);
 	// The message id whose remainder has already been flushed; guards the terminal flush against re-running (Chat.tsx
