@@ -83,7 +83,11 @@ public sealed class NodeChatStreamService(
         // authoritative; throwing here propagates to the hub caller.
         await mutationGuard.EnsureMutableAsync(request.ConversationId, cancellationToken).ConfigureAwait(false);
 
-        var conversation = await persistence.GetConversationAsync(request.ConversationId, cancellationToken).ConfigureAwait(false)
+        // Turn-scoped read: same message structure, minus the content/metadata blobs of the non-user messages this
+        // conversation's compaction synopsis has already replaced — BuildConversationContext drops them by sequence and
+        // CollectUserTurns keeps only user roles, so decrypting them was always dead work. Never use this variant for a
+        // conversation that will be rendered or re-persisted.
+        var conversation = await persistence.GetConversationForTurnAsync(request.ConversationId, cancellationToken).ConfigureAwait(false)
                            ?? throw new InvalidOperationException("The node chat conversation was not found.");
 
         // A selection map on the request is the authoritative, just-clicked path: persist it before building

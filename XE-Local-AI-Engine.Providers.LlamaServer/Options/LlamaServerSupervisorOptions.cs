@@ -66,26 +66,28 @@ public sealed class LlamaServerSupervisorOptions
 
     /// <summary>
     ///     Chat-role speculative-decoding <c>--spec-type</c>. Ships <see cref="SpeculativeDecodingSettings.DisabledMode" />
-    ///     (<c>none</c>, off) — operator opt-in. Validated against the pinned build's accepted set; <c>draft-*</c> modes
-    ///     also need <see cref="SpeculativeDraftModelPath" />, <c>ngram-*</c> modes self-speculate with no draft model.
+    ///     (<c>none</c>, off) — operator opt-in. Validated against the pinned build's accepted set; only the external-draft
+    ///     modes (see <see cref="SpeculativeModeClass" />) also need <see cref="SpeculativeDraftModelPath" />, while
+    ///     <c>draft-mtp</c> drafts from heads in the main model and <c>ngram-*</c> modes self-speculate from context.
     ///     Applies to the chat role only (embedding servers have nothing to draft) and, like <see cref="ChatCacheReuse" />,
     ///     is a launch flag independent of any frozen inference profile — changing it never invalidates a stored profile.
     /// </summary>
     public string SpeculativeMode { get; init; } = SpeculativeDecodingSettings.DisabledMode;
 
     /// <summary>
-    ///     Installed draft model NAME for <c>draft-*</c> speculative modes, resolved to its on-disk GGUF on the spawn path
+    ///     Installed draft model NAME for external-draft speculative modes, resolved to its on-disk GGUF on the spawn path
     ///     via <see cref="XE_Local_AI_Engine.Providers.Abstractions.Gguf.IGgufModelStore.ResolveModelFilePathAsync" /> —
     ///     the same resolution the target model uses — so the operator UI can offer installed model names without knowing
-    ///     file paths. Ignored by <c>ngram-*</c> modes. When <see cref="SpeculativeDraftModelPath" /> is also set, the
-    ///     explicit path wins and this name is not resolved.
+    ///     file paths. Ignored by every other <see cref="SpeculativeModeClass" />, including <c>draft-mtp</c>. When
+    ///     <see cref="SpeculativeDraftModelPath" /> is also set, the explicit path wins and this name is not resolved.
     /// </summary>
     public string? SpeculativeDraftModelName { get; init; }
 
     /// <summary>
-    ///     Explicit path to the draft GGUF for <c>draft-*</c> speculative modes (must share the target model's tokenizer
+    ///     Explicit path to the draft GGUF for external-draft speculative modes (must share the target model's tokenizer
     ///     family). An escape hatch that takes precedence over <see cref="SpeculativeDraftModelName" /> when set; normally
-    ///     left unset so the name is resolved on the spawn path. Ignored by <c>ngram-*</c> modes. The draft model loads
+    ///     left unset so the name is resolved on the spawn path. Ignored by every other
+    ///     <see cref="SpeculativeModeClass" />, including <c>draft-mtp</c>. The draft model loads
     ///     inside the chat process and is never separately ledgered or footprint-estimated; on the primary NVIDIA path its
     ///     resident VRAM is still reflected in <c>CapacityService</c>'s free-VRAM baseline (<c>nvidia-smi memory.free</c>),
     ///     but on the non-NVIDIA total-minus-ledger fallback it stays uncounted (see supervisor spawn path).
@@ -94,13 +96,15 @@ public sealed class LlamaServerSupervisorOptions
 
     /// <summary>
     ///     Draft tokens proposed per step (<c>--spec-draft-n-max</c>, upstream default 3). <c>0</c> omits the flag.
-    ///     Only meaningful for <c>draft-*</c> modes.
+    ///     Honoured by external-draft AND <c>draft-mtp</c> modes; <c>ngram-*</c> modes size their drafts from their own
+    ///     <c>--spec-ngram-*</c> knobs instead.
     /// </summary>
     public int SpeculativeDraftMaxTokens { get; init; } = 3;
 
     /// <summary>
     ///     GPU layers to offload for the draft model (<c>--spec-draft-ngl</c>). <c>null</c> omits the flag (draft model
-    ///     placement left to the runtime default). Only meaningful for <c>draft-*</c> modes.
+    ///     placement left to the runtime default). Only meaningful for external-draft modes — it sizes a draft-model load,
+    ///     which <c>draft-mtp</c> never performs.
     /// </summary>
     public int? SpeculativeDraftGpuLayers { get; init; }
 

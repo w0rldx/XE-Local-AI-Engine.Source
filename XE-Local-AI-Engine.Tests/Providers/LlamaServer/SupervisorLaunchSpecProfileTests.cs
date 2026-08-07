@@ -212,11 +212,68 @@ public sealed class SupervisorLaunchSpecProfileTests
     {
         // 0 is the "omit" sentinel: the flag must be absent, not "--spec-draft-n-max 0".
         var spec = BuildGpuSpec(ResolvedLaunchArguments.Explore(),
-            speculative: new SpeculativeDecodingSettings("draft-mtp", DraftModelPath: "/fake/models/draft.gguf", DraftMaxTokens: 0, DraftGpuLayers: null));
+            speculative: new SpeculativeDecodingSettings("draft-simple", DraftModelPath: "/fake/models/draft.gguf", DraftMaxTokens: 0, DraftGpuLayers: null));
 
         AssertEx.Contains(spec.Arguments, "--spec-draft-model");
         AssertEx.False(spec.Arguments.Contains("--spec-draft-n-max"), "DraftMaxTokens=0 must omit --spec-draft-n-max.");
         AssertEx.False(spec.Arguments.Contains("--spec-draft-ngl"), "null DraftGpuLayers must omit --spec-draft-ngl.");
+    }
+
+    [Test]
+    public void LaunchSpec_WhenMtpSpeculative_EmitsTypeAndNMax_ButNeverADraftModel()
+    {
+        // draft-mtp drafts from MTP heads in the MAIN model GGUF — there is no second model, so --spec-draft-model must
+        // never appear (nor --spec-draft-ngl, which sizes a draft-model load that never happens). --spec-draft-n-max IS
+        // honoured by MTP in the pinned build, so it stays.
+        var spec = BuildGpuSpec(ResolvedLaunchArguments.Explore(),
+            speculative: new SpeculativeDecodingSettings("draft-mtp", DraftModelPath: null, DraftMaxTokens: 4, DraftGpuLayers: 16));
+
+        AssertEx.Equal("draft-mtp", spec.Arguments[IndexOf(spec.Arguments, "--spec-type") + 1]);
+        AssertEx.Equal("4", spec.Arguments[IndexOf(spec.Arguments, "--spec-draft-n-max") + 1]);
+        AssertEx.False(spec.Arguments.Contains("--spec-draft-model"), "draft-mtp must never emit --spec-draft-model.");
+        AssertEx.False(spec.Arguments.Contains("--spec-draft-ngl"), "draft-mtp has no draft model to offload.");
+    }
+
+    [Test]
+    public void LaunchSpec_WhenMtpSpeculativeWithDraftPath_IgnoresIt()
+    {
+        // Settings saved before the contract was corrected were REQUIRED to carry a draft model for draft-mtp. Such a
+        // path is ignored, not rejected, so those installs keep launching — and it must not leak into the args.
+        var spec = BuildGpuSpec(ResolvedLaunchArguments.Explore(),
+            speculative: new SpeculativeDecodingSettings("draft-mtp", DraftModelPath: "/fake/models/draft.gguf", DraftMaxTokens: 3, DraftGpuLayers: null));
+
+        AssertEx.Equal("draft-mtp", spec.Arguments[IndexOf(spec.Arguments, "--spec-type") + 1]);
+        AssertEx.False(spec.Arguments.Contains("--spec-draft-model"), "A draft path configured for draft-mtp must be ignored.");
+        AssertEx.False(spec.Arguments.Contains("/fake/models/draft.gguf"), "The ignored draft path must not reach the launch args.");
+    }
+
+    [Test]
+    public void SpeculativeSettings_MtpValidatesWithoutADraftPath_AndIsNotAnExternalDraftMode()
+    {
+        // The classification the whole contract hangs on: draft-mtp is MainModelHeads, so no boundary — validator, save
+        // endpoint, or launch — may demand a draft model for it, while draft-simple still must.
+        var mtp = new SpeculativeDecodingSettings("draft-mtp", DraftModelPath: null, DraftMaxTokens: 3, DraftGpuLayers: null);
+        AssertEx.True(mtp.TryValidate(out var mtpError), "draft-mtp must validate with no draft model path.");
+        AssertEx.Null(mtpError);
+        AssertEx.False(mtp.RequiresExternalDraftModel, "draft-mtp drafts from the main model, not a second GGUF.");
+        AssertEx.Equal<SpeculativeModeClass?>(SpeculativeModeClass.MainModelHeads, mtp.ModeClass);
+        AssertEx.False(SpeculativeDecodingSettings.ModeRequiresDraftModel("draft-mtp"),
+            "The settings boundary must not require a draft model for draft-mtp.");
+
+        var external = new SpeculativeDecodingSettings("draft-simple", DraftModelPath: null, DraftMaxTokens: 3, DraftGpuLayers: null);
+        AssertEx.False(external.TryValidate(out _), "draft-simple still requires a draft model path.");
+        AssertEx.True(SpeculativeDecodingSettings.ModeRequiresDraftModel("DRAFT-SIMPLE"), "Classification is case-insensitive.");
+        AssertEx.Equal<SpeculativeModeClass?>(SpeculativeModeClass.ExternalDraft, external.ModeClass);
+
+        // Draftless and unknown modes keep their existing answers.
+        AssertEx.Equal<SpeculativeModeClass?>(SpeculativeModeClass.Draftless,
+            new SpeculativeDecodingSettings("ngram-mod", DraftModelPath: null, DraftMaxTokens: 0, DraftGpuLayers: null).ModeClass);
+        AssertEx.Null(SpeculativeDecodingSettings.ClassOf("draft-bogus"));
+        AssertEx.False(SpeculativeDecodingSettings.IsAllowedMode("draft-bogus"));
+
+        // b10201 also accepts these, but the app allowlist is a deliberate subset — they must stay rejected.
+        AssertEx.False(SpeculativeDecodingSettings.IsAllowedMode("draft-dflash"));
+        AssertEx.False(SpeculativeDecodingSettings.IsAllowedMode("draft-dspark"));
     }
 
     [Test]
@@ -328,6 +385,31 @@ public sealed class SupervisorLaunchSpecProfileTests
         {
             File.Delete(draftFile);
         }
+    }
+
+    [Test]
+    public async Task SpawnPath_WhenMtpMode_LaunchesWithoutADraftFile_EvenWhenOneIsConfigured()
+    {
+        // draft-mtp needs no draft GGUF, so the spawn path must neither resolve one nor hard-fail on a missing file.
+        // A leftover draft-model NAME (settings saved when draft-* still demanded one) is ignored, not fatal — the fake
+        // store resolves to a path that does not exist, which the old contract turned into a non-retryable launch error.
+        var launcher = new FakeProcessLauncher();
+        var options = new LlamaServerSupervisorOptions
+        {
+            IdleTimeToLive = TimeSpan.FromHours(1),
+            MaxLoadedProcesses = 3,
+            SpeculativeMode = "draft-mtp",
+            SpeculativeDraftModelName = "my-draft"
+        };
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            variantSelector: new FakeVariantSelector(GpuVariant.Cuda),
+            options: options);
+
+        await supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.True(launcher.Launches.TryDequeue(out var spec));
+        AssertEx.Equal("draft-mtp", spec!.Arguments[IndexOf(spec.Arguments, "--spec-type") + 1]);
+        AssertEx.False(spec.Arguments.Contains("--spec-draft-model"), "draft-mtp must never emit --spec-draft-model.");
     }
 
     [Test]

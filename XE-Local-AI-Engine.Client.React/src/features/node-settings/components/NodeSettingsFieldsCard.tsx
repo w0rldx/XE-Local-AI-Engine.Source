@@ -17,13 +17,14 @@ import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
-	isDraftSpeculativeMode,
 	type NodeSettingsFieldBounds,
 	type NodeSettingsFieldsForm,
 	newUsageRateRow,
+	requiresExternalDraftModel,
 	SPECULATIVE_DISABLED_MODE,
 	speculativeModeSelectValues,
 	type UsageRateRow,
+	usesDraftTokensPerStep,
 } from "@/features/node-settings/models/NodeSettingsFieldsModel";
 
 // A chat-capable installed model offered as a draft-model choice (value = model name, resolved server-side to a path).
@@ -111,7 +112,10 @@ export function NodeSettingsFieldsCard({
 		[t],
 	);
 
-	const isDraftMode = isDraftSpeculativeMode(form.speculativeMode);
+	// The draft-model picker is only meaningful for modes that load a second GGUF; draft-mtp drafts from the main model's
+	// own heads, so it shows the tokens-per-step knob without the picker.
+	const needsDraftModel = requiresExternalDraftModel(form.speculativeMode);
+	const showsDraftTokensPerStep = usesDraftTokensPerStep(form.speculativeMode);
 
 	// Usage-rate row editing: every mutation replaces the whole array via the generic onChange so the page's single
 	// form-state reducer stays the source of truth (no local row state to drift).
@@ -299,35 +303,35 @@ export function NodeSettingsFieldsCard({
 						error={fieldError(t, errors, "speculativeMode")}
 						data-testid="node-settings-speculative-mode"
 					/>
-					{isDraftMode ? (
-						<>
-							<Select
-								label={t("pages.nodeSettings.fields.speculativeDraftModel.label", "Draft model")}
-								description={t(
-									"pages.nodeSettings.fields.speculativeDraftModel.description",
-									"An installed chat-capable model used as the drafter. Must share the target model's tokenizer family. Applies after the node restarts.",
-								)}
-								placeholder={t("pages.nodeSettings.fields.speculativeDraftModel.placeholder", "Select a draft model")}
-								data={[...draftModelOptions]}
-								value={form.speculativeDraftModelName === "" ? null : form.speculativeDraftModelName}
-								onChange={(value) => onChange("speculativeDraftModelName", value ?? "")}
-								searchable={true}
-								nothingFoundMessage={t("pages.nodeSettings.fields.speculativeDraftModel.empty", "No installed chat models")}
-								error={fieldError(t, errors, "speculativeDraftModelName")}
-								data-testid="node-settings-speculative-draft-model"
-							/>
-							<NumberInput
-								label={t("pages.nodeSettings.fields.speculativeDraftMaxTokens.label", "Draft tokens per step")}
-								description={`${t("pages.nodeSettings.fields.allowedRange", "Allowed range")}: ${bounds.speculativeDraftMaxTokens.min}–${bounds.speculativeDraftMaxTokens.max}. ${t("pages.nodeSettings.fields.speculativeDraftMaxTokens.description", "Applies after the node restarts.")}`}
-								min={bounds.speculativeDraftMaxTokens.min}
-								max={bounds.speculativeDraftMaxTokens.max}
-								allowDecimal={false}
-								value={form.speculativeDraftMaxTokens}
-								onChange={(value) => onChange("speculativeDraftMaxTokens", value)}
-								error={fieldError(t, errors, "speculativeDraftMaxTokens")}
-								data-testid="node-settings-speculative-draft-max-tokens"
-							/>
-						</>
+					{needsDraftModel ? (
+						<Select
+							label={t("pages.nodeSettings.fields.speculativeDraftModel.label", "Draft model")}
+							description={t(
+								"pages.nodeSettings.fields.speculativeDraftModel.description",
+								"An installed chat-capable model used as the drafter. Must share the target model's tokenizer family. Applies after the node restarts.",
+							)}
+							placeholder={t("pages.nodeSettings.fields.speculativeDraftModel.placeholder", "Select a draft model")}
+							data={[...draftModelOptions]}
+							value={form.speculativeDraftModelName === "" ? null : form.speculativeDraftModelName}
+							onChange={(value) => onChange("speculativeDraftModelName", value ?? "")}
+							searchable={true}
+							nothingFoundMessage={t("pages.nodeSettings.fields.speculativeDraftModel.empty", "No installed chat models")}
+							error={fieldError(t, errors, "speculativeDraftModelName")}
+							data-testid="node-settings-speculative-draft-model"
+						/>
+					) : null}
+					{showsDraftTokensPerStep ? (
+						<NumberInput
+							label={t("pages.nodeSettings.fields.speculativeDraftMaxTokens.label", "Draft tokens per step")}
+							description={`${t("pages.nodeSettings.fields.allowedRange", "Allowed range")}: ${bounds.speculativeDraftMaxTokens.min}–${bounds.speculativeDraftMaxTokens.max}. ${t("pages.nodeSettings.fields.speculativeDraftMaxTokens.description", "Applies after the node restarts.")}`}
+							min={bounds.speculativeDraftMaxTokens.min}
+							max={bounds.speculativeDraftMaxTokens.max}
+							allowDecimal={false}
+							value={form.speculativeDraftMaxTokens}
+							onChange={(value) => onChange("speculativeDraftMaxTokens", value)}
+							error={fieldError(t, errors, "speculativeDraftMaxTokens")}
+							data-testid="node-settings-speculative-draft-max-tokens"
+						/>
 					) : null}
 					<NumberInput
 						label={t("pages.nodeSettings.fields.chatCacheReuse.label", "Prompt cache reuse")}

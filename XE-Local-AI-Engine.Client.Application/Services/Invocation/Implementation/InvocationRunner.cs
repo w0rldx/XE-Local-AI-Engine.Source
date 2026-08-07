@@ -875,9 +875,10 @@ public sealed partial class InvocationRunner : IInvocationRunner
         await using var agentContext = await _invocationAgentFactory.CreateAsync(definition, invocationToken).ConfigureAwait(false);
         buildAgentActivity?.Dispose();
 
-        // Maps callId → toolName so FunctionResultContent (which has no Name) can resolve the tool name
-        // from the earlier FunctionCallContent with the matching CallId.
-        var pendingLocalToolCallNames = new Dictionary<string, string>(StringComparer.Ordinal);
+        // Maps callId → the tool name plus what its Requested event already carried, so FunctionResultContent (which has
+        // no Name) can resolve the tool name from the earlier FunctionCallContent with the matching CallId, and so a
+        // re-emitted FunctionCallContent can be recognised as a repeat before it pays another serialize + dispatch.
+        var pendingLocalToolCalls = new Dictionary<string, (string Name, object? Arguments, string? SerializedArguments)>(StringComparer.Ordinal);
 
         // Tracks which tools this turn has already surfaced a ToolDisabled notice for, so a model that keeps calling a
         // disabled tool (each further call short-circuits to the same "tool_disabled" result — see
@@ -987,7 +988,35 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
                             case FunctionCallContent functionCall:
                                 var callId = ResolveToolCallCardId(functionCall.CallId, functionCall.Name);
-                                pendingLocalToolCallNames[callId] = functionCall.Name;
+
+                                // A provider that re-emits the SAME call across streamed chunks would otherwise pay a
+                                // fresh Serialize + dispatch + SignalR frame per repeat — and, worse, each repeat is
+                                // appended to InvocationResumeRegistry's CAPPED tool history, where it evicts a real
+                                // event. Both guards below are conservative: a genuinely distinct call, or the same call
+                                // id whose arguments changed, still reports exactly as before.
+                                var isRepeatedCall = pendingLocalToolCalls.TryGetValue(callId, out var alreadyRequested)
+                                                     && string.Equals(alreadyRequested.Name, functionCall.Name, StringComparison.Ordinal);
+
+                                // Same content instance re-emitted: identical by construction, so skip the serialize too.
+                                if (isRepeatedCall && ReferenceEquals(alreadyRequested.Arguments, functionCall.Arguments))
+                                {
+                                    break;
+                                }
+
+                                var serializedArguments = functionCall.Arguments is not null
+                                    ? JsonSerializer.Serialize(functionCall.Arguments)
+                                    : null;
+
+                                // Distinct instance, byte-identical payload: the event would be indistinguishable from
+                                // the one already on the wire. Cache the new instance so the next repeat takes the
+                                // cheaper reference check above.
+                                if (isRepeatedCall && string.Equals(alreadyRequested.SerializedArguments, serializedArguments, StringComparison.Ordinal))
+                                {
+                                    pendingLocalToolCalls[callId] = (alreadyRequested.Name, functionCall.Arguments, alreadyRequested.SerializedArguments);
+                                    break;
+                                }
+
+                                pendingLocalToolCalls[callId] = (functionCall.Name, functionCall.Arguments, serializedArguments);
 
                                 await transport.Dispatcher.ReportToolCallLifecycleAsync(new ToolCallLifecyclePayload
                                 {
@@ -995,17 +1024,15 @@ public sealed partial class InvocationRunner : IInvocationRunner
                                     ToolCallId = callId,
                                     ToolName = functionCall.Name,
                                     Phase = ToolCallLifecyclePhase.Requested,
-                                    Arguments = functionCall.Arguments is not null
-                                        ? JsonSerializer.Serialize(functionCall.Arguments)
-                                        : null,
+                                    Arguments = serializedArguments,
                                     RequiresApproval = false
                                 }).ConfigureAwait(false);
                                 break;
 
                             case FunctionResultContent functionResult:
                                 var resultCallId = functionResult.CallId ?? string.Empty;
-                                var toolName = pendingLocalToolCallNames.TryGetValue(resultCallId, out var name)
-                                    ? name
+                                var toolName = pendingLocalToolCalls.TryGetValue(resultCallId, out var requested)
+                                    ? requested.Name
                                     : resultCallId;
                                 var toolResultText = functionResult.Result?.ToString();
 

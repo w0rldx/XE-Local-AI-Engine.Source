@@ -59,20 +59,47 @@ internal sealed class DeferredLlamaServerEmbeddingGenerator : IEmbeddingGenerato
         {
             return await inner.GenerateAsync(values, options, cancellationToken).ConfigureAwait(false);
         }
-        catch (ClientResultException exception)
+        catch (Exception exception) when (exception is ClientResultException or HttpRequestException or IOException)
         {
+            // Self-heal seam, mirroring DeferredLlamaServerChatClient.InvalidateInner: the cached adapter is bound to
+            // ONE endpoint for this generator's whole lifetime, so once the embedding process behind it is gone
+            // (ejected, respawned on a new port, crashed) every later call would retry a dead address forever. Drop the
+            // adapter and the next call re-ensures the process through the supervisor and re-resolves its endpoint.
+            // No caller can reach that state today — all four scope this generator to a single document/search — so
+            // this is latent-only; it exists so a future long-lived caller degrades instead of failing permanently.
+            if (DeferredLlamaServerChatClient.IsServerGone(exception))
+            {
+                InvalidateInner();
+            }
+
             // The MEAI OpenAI adapter reports a non-2xx from llama-server as System.ClientModel's ClientResultException,
             // which is in NOBODY's catch set upstream: it escaped the ranker's lexical-fallback set AND the knowledge
             // ingestion pipeline's, surfacing as a bare "Ingestion failed unexpectedly" whose log line recorded only the
             // type name. That made a deterministic, fully-reproducible server rejection undiagnosable from logs.
             // Translate it at the provider boundary — the same job the LlamaRuntimeException wrap below does — so the
-            // SDK type never reaches the application layer and callers keep one transport-failure catch set.
-            throw new HttpRequestException(DescribeFailure(exception), exception, exception.Status switch
+            // SDK type never reaches the application layer and callers keep one transport-failure catch set. The
+            // already-conforming HttpRequestException/IOException shapes rethrow unchanged.
+            if (exception is not ClientResultException clientResult)
+            {
+                throw;
+            }
+
+            throw new HttpRequestException(DescribeFailure(clientResult), clientResult, clientResult.Status switch
             {
                 > 0 and var status => (HttpStatusCode)status,
                 _ => null
             });
         }
+    }
+
+    /// <summary>
+    ///     Drops the cached adapter so the next <see cref="GenerateAsync" /> re-resolves the endpoint and re-ensures the
+    ///     embedding process via the supervisor. Idempotent and safe under concurrency (the loser of the swap disposes
+    ///     nothing). Mirrors <c>DeferredLlamaServerChatClient.InvalidateInner</c>.
+    /// </summary>
+    private void InvalidateInner()
+    {
+        Interlocked.Exchange(ref _inner, null)?.Dispose();
     }
 
     /// <summary>

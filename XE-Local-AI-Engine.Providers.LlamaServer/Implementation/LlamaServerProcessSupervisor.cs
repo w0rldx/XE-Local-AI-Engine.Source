@@ -53,7 +53,14 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
 
     // Guards the loaded-cap admission decision + port-set mutation so the cap can never be exceeded by a race.
     private readonly SemaphoreSlim _admissionGate = new(initialCount: 1, maxCount: 1);
-    private readonly SemaphoreSlim _runtimeMutationGate = new(initialCount: 1, maxCount: 1);
+
+    // Orders ordinary ensures against the rare operator runtime MUTATION (runtime install/remove, source build,
+    // exclusive profiling). Ensures take it SHARED and proceed concurrently; a mutation takes it EXCLUSIVE. What an
+    // exclusive holder relies on is unchanged from the single semaphore this replaces — a mutation waits for every
+    // in-flight ensure DECISION, and no new decision starts while it holds the gate — but an ensure no longer
+    // head-of-line blocks an unrelated role behind its liveness probe (up to ReuseLivenessProbeTimeout, 2 s).
+    // Single-flight per process is NOT this gate's job: _ensureGates already provides it per (model, role).
+    private readonly AsyncSharedExclusiveGate _runtimeMutationGate = new();
     private readonly Lock _runtimeOperationSync = new();
     private readonly HashSet<int> _allocatedPorts = [];
     private readonly ILlamaCppBinaryManager _binaryManager;
@@ -178,7 +185,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
 
         // No new operation can enter after _disposed is set, and the separate operation barrier above proves every
         // admitted operation has finished. Own the runtime gate exclusively through teardown and dispose it in-place.
-        await _runtimeMutationGate.WaitAsync().ConfigureAwait(false);
+        await _runtimeMutationGate.EnterExclusiveAsync(CancellationToken.None).ConfigureAwait(false);
         var inflightSpawns = _inflightSpawns.Values.Select(static inflight => inflight.Task).ToArray();
 
         try
@@ -194,7 +201,10 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
 
         foreach (var (key, running) in _processes.ToArray())
         {
-            TeardownProcess(key, running);
+            if (DetachProcess(key, running) is { } detached)
+            {
+                KillDetachedProcess(detached);
+            }
         }
 
         _admissionGate.Dispose();
@@ -215,7 +225,12 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         try
         {
             EnsureDecision decision;
-            await EnterRuntimeMutationGateAsync(ct).ConfigureAwait(false);
+
+            // SHARED: this section orders against operator runtime mutations, not against other ensures. Everything it
+            // touches is already safe under concurrency — the reuse probe claim is a CAS, the spawn decision runs under
+            // the per-key _ensureGates single-flight, and the process/spawn tables are concurrent — so two ensures for
+            // different roles run side by side instead of queueing behind each other's liveness probe.
+            await EnterSharedRuntimeGateAsync(ct).ConfigureAwait(false);
             try
             {
                 // Hybrid attach: a configured external endpoint short-circuits spawn/supervision entirely.
@@ -253,7 +268,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             }
             finally
             {
-                _runtimeMutationGate.Release();
+                _runtimeMutationGate.ExitShared();
             }
 
             // DecideEnsureAsync has now registered the detached task in _inflightSpawns. Release the mutation ordering gate
@@ -276,11 +291,13 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         Interlocked.Increment(ref _runtimeMutationActivityCount);
         try
         {
-            await EnterRuntimeMutationGateAsync(ct).ConfigureAwait(false);
+            // EXCLUSIVE: the mutation about to run replaces the runtime binaries under the supervisor, so it must see a
+            // quiet supervisor — every in-flight ensure decision has finished and no new one can start.
+            await EnterExclusiveRuntimeGateAsync(ct).ConfigureAwait(false);
 
             if (_processes.Values.Any(static process => !process.Handle.HasExited) || !_inflightSpawns.IsEmpty)
             {
-                _runtimeMutationGate.Release();
+                _runtimeMutationGate.ExitExclusive();
                 return null;
             }
 
@@ -339,13 +356,35 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         }
     }
 
-    private async Task EnterRuntimeMutationGateAsync(CancellationToken ct)
+    /// <summary>
+    ///     Enters the runtime gate SHARED for an ordinary ensure: concurrent with other ensures, excluded by (and
+    ///     excluding) an operator runtime mutation. Pairs with <see cref="AsyncSharedExclusiveGate.ExitShared" />.
+    /// </summary>
+    private Task EnterSharedRuntimeGateAsync(CancellationToken ct)
+    {
+        return EnterRuntimeGateAsync(shared: true, ct);
+    }
+
+    /// <summary>
+    ///     Enters the runtime gate EXCLUSIVE for an operator runtime mutation or an exclusive profiling spawn: waits
+    ///     for every in-flight ensure decision to finish and holds off every new one. Pairs with
+    ///     <see cref="AsyncSharedExclusiveGate.ExitExclusive" />.
+    /// </summary>
+    private Task EnterExclusiveRuntimeGateAsync(CancellationToken ct)
+    {
+        return EnterRuntimeGateAsync(shared: false, ct);
+    }
+
+    private async Task EnterRuntimeGateAsync(bool shared, CancellationToken ct)
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
         using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(ct, _shutdownCts.Token);
         try
         {
-            await _runtimeMutationGate.WaitAsync(linkedCancellation.Token).ConfigureAwait(false);
+            var entering = shared
+                ? _runtimeMutationGate.EnterSharedAsync(linkedCancellation.Token)
+                : _runtimeMutationGate.EnterExclusiveAsync(linkedCancellation.Token);
+            await entering.ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
@@ -357,7 +396,15 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             return;
         }
 
-        _runtimeMutationGate.Release();
+        if (shared)
+        {
+            _runtimeMutationGate.ExitShared();
+        }
+        else
+        {
+            _runtimeMutationGate.ExitExclusive();
+        }
+
         throw new ObjectDisposedException(GetType().FullName);
     }
 
@@ -369,7 +416,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
 
     internal int CountInflightSpawns() => _inflightSpawns.Count;
 
-    private sealed class RuntimeMutationLease(SemaphoreSlim gate, Action onDisposed) : ILlamaServerRuntimeMutationLease
+    private sealed class RuntimeMutationLease(AsyncSharedExclusiveGate gate, Action onDisposed) : ILlamaServerRuntimeMutationLease
     {
         private int _disposed;
 
@@ -377,7 +424,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         {
             if (Interlocked.Exchange(ref _disposed, 1) == 0)
             {
-                gate.Release();
+                gate.ExitExclusive();
                 onDisposed();
             }
 
@@ -983,14 +1030,15 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         // missing/unreadable size (0) falls back to the base timeout.
         var readinessTimeout = _options.ResolveReadinessTimeout(TryGetFileSizeBytes(modelFilePath));
 
-        // A chat-role draft-* speculative mode needs its draft GGUF present before launch — a missing file would
+        // A chat-role EXTERNAL-DRAFT speculative mode needs its draft GGUF present before launch — a missing file would
         // otherwise start a server that dies cryptically. Deterministic misconfiguration → non-retryable (mirrors the
-        // model-not-installed guard above). ngram-* and disabled modes never reach this (IsDraftMode is false).
+        // model-not-installed guard above). draft-mtp, ngram-*, and disabled modes never reach this: MTP drafts from
+        // heads inside the main model, so there is no second GGUF to find (RequiresExternalDraftModel is false).
         // The operator selects a draft model by NAME (installed chat model); resolve it to its on-disk GGUF the same way
         // the target model is resolved above so the effective launch args carry a real path. An explicit path override
         // (SpeculativeDraftModelPath), when set, wins and skips resolution.
         var speculative = _options.Speculative;
-        if (key.Role == ModelRole.Chat && speculative.IsDraftMode)
+        if (key.Role == ModelRole.Chat && speculative.RequiresExternalDraftModel)
         {
             var draftModelPath = speculative.DraftModelPath;
             if (string.IsNullOrWhiteSpace(draftModelPath) && !string.IsNullOrWhiteSpace(_options.SpeculativeDraftModelName))
@@ -1006,6 +1054,22 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             {
                 throw NonRetryable("Speculative decoding is set to a draft model, but the configured draft model file was not found. Check the draft model or disable speculative decoding.");
             }
+        }
+        else if (key.Role == ModelRole.Chat
+                 && speculative.ModeClass is SpeculativeModeClass.MainModelHeads
+                 && (!string.IsNullOrWhiteSpace(speculative.DraftModelPath) || !string.IsNullOrWhiteSpace(_options.SpeculativeDraftModelName)))
+        {
+            // Ignored, not rejected: settings saved before this contract was corrected were REQUIRED to name a draft
+            // model for draft-mtp, so rejecting would turn every such install into a non-retryable launch failure on
+            // upgrade. Clearing the path keeps the launch spec honest — nothing downstream can emit a stale draft flag.
+            speculative = speculative with
+            {
+                DraftModelPath = null
+            };
+
+            _logger.LogInformation(
+                "Speculative mode {Mode} drafts from the main model's own MTP heads; the configured draft model is ignored.",
+                speculative.NormalizedMode);
         }
 
         var variant = await _variantSelector.SelectVariantAsync(ct).ConfigureAwait(false);
@@ -1120,11 +1184,22 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                 // Operator profiling spawns capture both pipes; the normal path leaves the sink null (spec unchanged).
                 if (startupCapture is not null || automaticCapture is not null || placementSniffer is not null)
                 {
+                    // The sink is wired for the process's LIFETIME, but the two automatic buffers behind it are
+                    // startup-only: the placement banner is read at readiness and the failure-classifier window is only
+                    // ever read from this attempt's catch block, which readiness has ruled out. Detaching them at
+                    // readiness turns every serving-time forwarded line from a Lock + string copy into one volatile
+                    // read. The operator profiling sink is NOT detached — that output was explicitly requested.
+                    var isServing = servingWindow.IsServing;
                     spec = spec with
                     {
                         StartupCapture = line =>
                         {
                             startupCapture?.Invoke(line);
+                            if (isServing())
+                            {
+                                return;
+                            }
+
                             automaticCapture?.Add(line);
                             placementSniffer?.Add(line);
                         }
@@ -1175,8 +1250,11 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
 
                 RecordObservedLayerPlacement(key, variant, placementSniffer);
 
-                // The load window is over and the banner has been read. From here the child's raised-verbosity output
-                // is per-request chatter nobody asked to persist, so drop it to Debug.
+                // The load window is over and the banner has been read. From here the child's raised-verbosity output is
+                // per-request chatter nobody asked to persist: drop it to Debug AND detach the automatic startup
+                // capture (same latch, see the StartupCapture wiring above). Deliberately after
+                // RecordObservedLayerPlacement, and never reached on a spawn that failed to become ready — both
+                // buffers must stay live for the whole load window.
                 servingWindow.MarkServing();
 
                 // Publish helper output only for the candidate that actually reached readiness. If the optimized
@@ -1597,7 +1675,9 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         BeginRuntimeOperation();
         try
         {
-            await EnterRuntimeMutationGateAsync(ct).ConfigureAwait(false);
+            // EXCLUSIVE: a profiling spawn must be the only model loading on the box for its measurement to mean
+            // anything, so it excludes every ensure for its whole eviction + spawn window.
+            await EnterExclusiveRuntimeGateAsync(ct).ConfigureAwait(false);
             var runtimeGateHeld = true;
             try
             {
@@ -1673,7 +1753,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
 
                         // The profiling process is registered, so mutation attempts now observe it and return null. Release
                         // the ordering gate while retaining the separate operation barrier through body cleanup.
-                        _runtimeMutationGate.Release();
+                        _runtimeMutationGate.ExitExclusive();
                         runtimeGateHeld = false;
 
                         // Pin against idle eviction for the whole benchmark — the process is never marked-used during the body,
@@ -1712,7 +1792,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             {
                 if (runtimeGateHeld)
                 {
-                    _runtimeMutationGate.Release();
+                    _runtimeMutationGate.ExitExclusive();
                 }
             }
         }
@@ -1735,13 +1815,15 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     /// </remarks>
     private async Task<int> AdmitAndAllocatePortAsync(CancellationToken ct)
     {
+        // Processes detached from the table under the gate, tree-killed after it is released (see KillDetachedProcesses).
+        var detached = new List<RunningProcess>();
         await _admissionGate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
             // Drop any process that has already exited so its slot/port is reclaimed before the cap check.
-            PruneExitedProcesses();
+            PruneExitedProcesses(detached);
 
-            if (_allocatedPorts.Count >= _options.MaxLoadedProcesses && !TryEvictIdleLeastRecentlyUsed())
+            if (_allocatedPorts.Count >= _options.MaxLoadedProcesses && !TryEvictIdleLeastRecentlyUsed(detached))
             {
                 throw CapReached();
             }
@@ -1751,6 +1833,11 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         finally
         {
             _admissionGate.Release();
+
+            // The gate is free BEFORE any child is killed: tree-killing a multi-GB model is slow, and under the gate it
+            // serialized every unrelated model's port allocation and release behind it. This spawn still waits for its
+            // own victim to die before it proceeds to launch, so the VRAM the victim held is genuinely released first.
+            KillDetachedProcesses(detached);
         }
     }
 
@@ -2052,14 +2139,29 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     }
 
     /// <summary>
-    ///     Appends the chat-role speculative-decoding flags. Disabled/default (<c>none</c>) emits nothing. A configured
-    ///     mode is validated first (unknown mode, or a <c>draft-*</c> mode with no draft path, is a deterministic
-    ///     misconfiguration surfaced as a NON-RETRYABLE error rather than a server that dies cryptically on launch).
-    ///     <c>draft-*</c> modes emit <c>--spec-draft-model</c> (the drafter loads inside the chat process and is never
-    ///     separately ledgered or footprint-estimated; on the primary NVIDIA path its resident VRAM is still reflected in
-    ///     <c>CapacityService</c>'s free-VRAM baseline — <c>nvidia-smi memory.free</c> — so a later sub-agent admission
-    ///     accounts for it, but on the non-NVIDIA total-minus-ledger fallback it stays invisible) plus
-    ///     <c>--spec-draft-n-max</c>/<c>-ngl</c> when set; <c>ngram-*</c> modes self-speculate and emit only <c>--spec-type</c>.
+    ///     Appends the chat-role speculative-decoding flags, one branch per <see cref="SpeculativeModeClass" />.
+    ///     Disabled/default (<c>none</c>) emits nothing. A configured mode is validated first (unknown mode, or an
+    ///     external-draft mode with no draft path, is a deterministic misconfiguration surfaced as a NON-RETRYABLE error
+    ///     rather than a server that dies cryptically on launch). Then:
+    ///     <list type="bullet">
+    ///         <item>
+    ///             <see cref="SpeculativeModeClass.Draftless" /> (<c>ngram-*</c>) self-speculates from context: only
+    ///             <c>--spec-type</c>.
+    ///         </item>
+    ///         <item>
+    ///             <see cref="SpeculativeModeClass.MainModelHeads" /> (<c>draft-mtp</c>) drafts from MTP heads in the main
+    ///             GGUF, so NO <c>--spec-draft-model</c> and no <c>--spec-draft-ngl</c> (that knob sizes a draft-model load
+    ///             that never happens). <c>--spec-draft-n-max</c> IS honoured — b10201's <c>common_speculative_n_max</c>
+    ///             reads <c>draft.n_max</c> for <c>DRAFT_MTP</c> — so it is still emitted.
+    ///         </item>
+    ///         <item>
+    ///             <see cref="SpeculativeModeClass.ExternalDraft" /> additionally emits <c>--spec-draft-model</c> and
+    ///             <c>--spec-draft-ngl</c>. That drafter loads inside the chat process and is never separately ledgered or
+    ///             footprint-estimated; on the primary NVIDIA path its resident VRAM is still reflected in
+    ///             <c>CapacityService</c>'s free-VRAM baseline (<c>nvidia-smi memory.free</c>) so a later sub-agent
+    ///             admission accounts for it, but on the non-NVIDIA total-minus-ledger fallback it stays invisible.
+    ///         </item>
+    ///     </list>
     /// </summary>
     private static void AppendSpeculativeArgs(List<string> args, in SpeculativeDecodingSettings speculative)
     {
@@ -2076,14 +2178,17 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         args.Add("--spec-type");
         args.Add(speculative.NormalizedMode);
 
-        if (!speculative.IsDraftMode)
+        if (speculative.ModeClass is SpeculativeModeClass.Draftless)
         {
             return;
         }
 
-        // Validated non-empty above; the file's existence on disk is enforced on the spawn path before launch.
-        args.Add("--spec-draft-model");
-        args.Add(speculative.DraftModelPath!);
+        if (speculative.RequiresExternalDraftModel)
+        {
+            // Validated non-empty above; the file's existence on disk is enforced on the spawn path before launch.
+            args.Add("--spec-draft-model");
+            args.Add(speculative.DraftModelPath!);
+        }
 
         if (speculative.DraftMaxTokens > 0)
         {
@@ -2091,7 +2196,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             args.Add(speculative.DraftMaxTokens.ToString(CultureInfo.InvariantCulture));
         }
 
-        if (speculative.DraftGpuLayers is { } draftGpuLayers)
+        if (speculative.RequiresExternalDraftModel && speculative.DraftGpuLayers is { } draftGpuLayers)
         {
             args.Add("--spec-draft-ngl");
             args.Add(draftGpuLayers.ToString(CultureInfo.InvariantCulture));
@@ -2151,8 +2256,12 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         }
     }
 
-    /// <summary>Evicts the least-recently-used process that is currently idle (caller holds the admission gate).</summary>
-    private bool TryEvictIdleLeastRecentlyUsed()
+    /// <summary>
+    ///     Evicts the least-recently-used process that is currently idle (caller holds the admission gate). The victim
+    ///     is detached here — its slot and port are free the moment this returns <see langword="true" /> — and appended
+    ///     to <paramref name="detached" /> for the caller to tree-kill once the gate is released.
+    /// </summary>
+    private bool TryEvictIdleLeastRecentlyUsed(List<RunningProcess> detached)
     {
         var now = _timeProvider.GetUtcNow();
         ProcessKey? victimKey = null;
@@ -2219,21 +2328,28 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             return false;
         }
 
+        // Free the slot/port under the gate so the new admission proceeds immediately; the kill follows outside it.
+        // A lost removal race (a concurrent eject/reap already detached this victim) frees no slot of OUR doing, so
+        // report no admission rather than letting the cap be overrun on someone else's teardown.
+        if (DetachProcess(victimKey.Value, victim) is not { } evicted)
+        {
+            return false;
+        }
+
         _logger.LogWarning("Loaded-model cap ({Cap}) reached; evicting {Idleness} llama-server for model {ModelName} role {Role} to admit a new one.",
             _options.MaxLoadedProcesses, victimRank == 0 ? "idle" : "in-window pooled", victimKey.Value.ModelName, victimKey.Value.Role);
 
-        // Synchronous teardown under the admission gate: free the slot/port before the new admission proceeds.
-        TeardownProcess(victimKey.Value, victim);
+        detached.Add(evicted);
         return true;
     }
 
-    private void PruneExitedProcesses()
+    private void PruneExitedProcesses(List<RunningProcess> detached)
     {
         foreach (var (key, running) in _processes)
         {
-            if (running.Handle.HasExited)
+            if (running.Handle.HasExited && DetachProcess(key, running) is { } exited)
             {
-                TeardownProcess(key, running);
+                detached.Add(exited);
             }
         }
     }
@@ -2241,40 +2357,69 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     private async Task RemoveProcessAsync(ProcessKey key, RunningProcess running)
     {
         // Teardown must complete even during shutdown, so it is not bound to a caller cancellation token.
+        RunningProcess? detached;
         await _admissionGate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
         try
         {
-            TeardownProcess(key, running);
+            detached = DetachProcess(key, running);
         }
         finally
         {
             _admissionGate.Release();
         }
+
+        // Killed OUTSIDE the gate so a multi-GB tree-kill does not serialize unrelated admissions — but still awaited
+        // by this caller, because callers (notably the profiling path's ambient-VRAM baseline) rely on the child being
+        // gone when this returns.
+        if (detached is not null)
+        {
+            KillDetachedProcess(detached);
+        }
     }
 
     /// <summary>
-    ///     Tree-kills + disposes a process, retires its measured layer placement, and releases its port. Caller holds
-    ///     the admission gate.
+    ///     Removes a process from the table, retires its measured layer placement, and releases its port reservation —
+    ///     everything that makes the slot available to the next admission — WITHOUT touching the child. Caller holds
+    ///     the admission gate. Returns the process when this call won the removal race (the caller then owes it a
+    ///     <see cref="KillDetachedProcess" />), or <see langword="null" /> when a concurrent path already removed it.
     /// </summary>
     /// <remarks>
-    ///     This is the ONLY place a process leaves <see cref="_processes" />, so it is also the only place the layer
-    ///     placement has to be retired: cap-admission eviction, the idle reaper, exited-process pruning, operator
-    ///     eject (drained and forced), wedged-process respawn, the pre-respawn reap of a dead entry, the profiling
-    ///     teardown, and shutdown all funnel through here.
+    ///     <para>
+    ///         This is the ONLY place a process leaves <see cref="_processes" />, so it is also the only place the layer
+    ///         placement has to be retired: cap-admission eviction, the idle reaper, exited-process pruning, operator
+    ///         eject (drained and forced), wedged-process respawn, the pre-respawn reap of a dead entry, the profiling
+    ///         teardown, and shutdown all funnel through here.
+    ///     </para>
+    ///     <para>
+    ///         The measured placement described THIS process. Once it is gone the reading is history — and because the
+    ///         report ranks any partial reading above every full one, leaving it behind would keep telling an operator
+    ///         that a model they unloaded is running partly from system RAM, for the rest of the app's lifetime and
+    ///         even while the model actually loaded is fully GPU-resident.
+    ///     </para>
+    ///     <para>
+    ///         INVARIANT: the port reservation is dropped here, before the child is killed, so the reservation set
+    ///         (which is what bounds the loaded-model CAP) never counts a process that is on its way out. That does not
+    ///         hand the next spawn a port the dying child still holds: <see cref="AllocatePort" /> bind-probes every
+    ///         candidate (<see cref="IsPortFree" />) and skips one that is still bound. The bind probe was always the
+    ///         real guard — <c>TreeKill</c> (<c>kill(-pgid)</c> / closing the Windows job) returns before the OS
+    ///         reclaims the socket, so releasing the port after the kill never proved availability either.
+    ///     </para>
     /// </remarks>
-    private void TeardownProcess(ProcessKey key, RunningProcess running)
+    private RunningProcess? DetachProcess(ProcessKey key, RunningProcess running)
     {
         if (!_processes.TryRemove(new KeyValuePair<ProcessKey, RunningProcess>(key, running)))
         {
-            return; // Already removed by a concurrent path.
+            return null; // Already removed by a concurrent path.
         }
 
-        // The measured placement described THIS process. Once it is gone the reading is history — and because the
-        // report ranks any partial reading above every full one, leaving it behind would keep telling an operator that
-        // a model they unloaded is running partly from system RAM, for the rest of the app's lifetime and even while
-        // the model actually loaded is fully GPU-resident.
         _layerPlacementReport.Remove(key.Role, key.ModelName);
+        ReleasePort(running.Port);
+        return running;
+    }
 
+    /// <summary>Tree-kills + disposes a detached process. Never called while the admission gate is held.</summary>
+    private static void KillDetachedProcess(RunningProcess running)
+    {
         try
         {
             running.Handle.TreeKill();
@@ -2282,7 +2427,27 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         finally
         {
             running.Handle.Dispose();
-            ReleasePort(running.Port);
+        }
+    }
+
+    /// <summary>
+    ///     Tree-kills every process detached during an admission decision. A teardown failure is logged, never
+    ///     rethrown: the admission it trails has already succeeded (or failed with its own cap error), and turning a
+    ///     kill failure into the caller's exception would both mask that error and skip the remaining victims.
+    /// </summary>
+    private void KillDetachedProcesses(List<RunningProcess> detached)
+    {
+        foreach (var running in detached)
+        {
+            try
+            {
+                KillDetachedProcess(running);
+            }
+            catch (Exception exception)
+            {
+                _logger.LogWarning(exception, "Tearing down an evicted llama-server (pid {ProcessId}) failed; its slot and port were already released.",
+                    running.Handle.ProcessId);
+            }
         }
     }
 

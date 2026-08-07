@@ -942,7 +942,18 @@ public sealed class NodeChatStreamServiceTests
             }
         });
 
-        await disconnected.Task.ConfigureAwait(false);
+        // `disconnected` is only ever signalled from INSIDE the enumeration loop, so if the stream faults before its
+        // first delta this wait never completes and the whole batch deadlocks instead of failing (a null from an
+        // unstubbed GetConversationForTurnAsync did exactly that, for 26 minutes, because the catch below only covers
+        // OperationCanceledException). Race the signal against the task so a fault surfaces as a normal failure.
+        await Task.WhenAny(disconnected.Task, enumerationTask).ConfigureAwait(false);
+        if (enumerationTask.IsCompleted)
+        {
+            // Rethrows whatever the enumeration actually failed with; completing early is itself a failure here.
+            await enumerationTask.ConfigureAwait(false);
+            AssertEx.True(condition: false, "The enumeration ended before the stream produced its first delta.");
+        }
+
         AssertEx.Equal(expected: 0, lease.DisposeCount);
         AssertEx.False(enumerationTask.IsCompleted, "The disconnected stream must await the detached run before releasing its workspace.");
 
@@ -3604,6 +3615,9 @@ public sealed class NodeChatStreamServiceTests
         var assistantPending = CreateAssistantMessage(conversationId, assistantMessageId, requestId, NodeChatMessageStatusValues.Pending, string.Empty, reasoning: null);
 
         persistence.GetConversationAsync(conversationId, Arg.Any<CancellationToken>()).Returns(conversation);
+        // The send path reads through GetConversationForTurnAsync. An unstubbed substitute returns null there, and the
+        // service then throws "conversation was not found" before any behaviour under test runs.
+        persistence.GetConversationForTurnAsync(conversationId, Arg.Any<CancellationToken>()).Returns(conversation);
         persistence.SetSelectedPathAsync(Arg.Any<NodeChatSetSelectedPathRequest>(), Arg.Any<CancellationToken>())
                    .Returns(callInfo => callInfo.ArgAt<NodeChatSetSelectedPathRequest>(0).SelectedPath ?? new Dictionary<Guid, Guid>());
         persistence.PersistUserMessageAsync(Arg.Any<NodeChatPersistUserMessageRequest>(), Arg.Any<CancellationToken>()).Returns(newUserMessage);
@@ -3673,6 +3687,10 @@ public sealed class NodeChatStreamServiceTests
         };
 
         persistence.GetConversationAsync(conversationId, Arg.Any<CancellationToken>())
+                   .Returns(conversation);
+        // The send path reads through GetConversationForTurnAsync. An unstubbed substitute returns null there, and the
+        // service then throws "conversation was not found" before any behaviour under test runs.
+        persistence.GetConversationForTurnAsync(conversationId, Arg.Any<CancellationToken>())
                    .Returns(conversation);
         persistence.PersistUserMessageAsync(Arg.Any<NodeChatPersistUserMessageRequest>(), Arg.Any<CancellationToken>())
                    .Returns(userMessage);

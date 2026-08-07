@@ -18,6 +18,16 @@ public interface INodeChatPersistenceService
     Task<NodeChatConversationDto?> GetConversationAsync(Guid conversationId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    ///     The chat-turn read. Returns the same conversation as <see cref="GetConversationAsync" /> with the same message
+    ///     STRUCTURE, but skips transferring, decrypting and parsing the content and metadata blobs of non-user messages
+    ///     the conversation's compaction synopsis has already replaced — work the turn always threw away. Output-equivalent
+    ///     for the turn's two consumers only (context assembly and memory extraction); the implementation's remarks carry
+    ///     the equivalence argument. Anything that RENDERS or RE-PERSISTS a conversation must use
+    ///     <see cref="GetConversationAsync" />.
+    /// </summary>
+    Task<NodeChatConversationDto?> GetConversationForTurnAsync(Guid conversationId, CancellationToken cancellationToken = default);
+
+    /// <summary>
     ///     Lightweight origin lookup (no messages loaded). Returns the conversation's origin ("Local"/"Remote"), or
     ///     null when the conversation does not exist. Used by the Origin=Remote mutation guard.
     /// </summary>
