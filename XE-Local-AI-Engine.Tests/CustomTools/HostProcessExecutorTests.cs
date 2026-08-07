@@ -98,6 +98,41 @@ public sealed class HostProcessExecutorTests : IDisposable
         AssertEx.Contains(result, "[REDACTED]");
     }
 
+    [Test]
+    public async Task ExecuteAsync_ParameterizedFlagValue_DoesNotInjectEndOfOptionsMarker()
+    {
+        if (!OperatingSystem.IsLinux() || !File.Exists("/bin/sh"))
+        {
+            return;
+        }
+
+        // printf one arg per line so we can see the exact argv the child received.
+        var script = await CreateScriptAsync("#!/bin/sh\nprintf '%s\\n' \"$@\"\n");
+        var config = $$"""{"executable":"{{script}}","argsTemplate":["--output","{path}"],"timeoutSeconds":10,"env":[]}""";
+        const string parametersJson = """[{"name":"path","type":"string","description":"","required":true}]""";
+        var tool = new CustomToolRecord(Guid.NewGuid(),
+            "custom__test_tool",
+            "A test tool.",
+            CustomToolKind.Command,
+            CustomToolMode.Parameterized,
+            parametersJson,
+            config,
+            Enabled: true,
+            Acknowledged: true,
+            Version: 1,
+            CreatedAtUtc: 0,
+            UpdatedAtUtc: 0);
+        var executor = CreateExecutor();
+
+        var result = await executor.ExecuteAsync(tool, """{"path":"VALUE_a1b2"}""", CancellationToken.None);
+
+        // argv must be exactly ["--output", "VALUE_a1b2"] — no synthetic "--" between the flag and its value (which
+        // would appear as its own line and make a parser read "--" as --output's value).
+        AssertEx.Contains(result, "--output");
+        AssertEx.Contains(result, "VALUE_a1b2");
+        AssertEx.False(result.Contains("\n--\n", StringComparison.Ordinal), $"No synthetic -- end-of-options marker should be inserted. Output: {result}");
+    }
+
     private HostProcessExecutor CreateExecutor()
     {
         return new HostProcessExecutor(_limiter, NullLogger<HostProcessExecutor>.Instance);

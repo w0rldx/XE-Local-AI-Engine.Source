@@ -133,25 +133,15 @@ internal sealed class HostProcessExecutor : ICustomToolExecutor
         var bound = CustomToolTemplate.BindAndEnforce(jsonArguments, parameters);
         var declaredNames = parameters.Select(static parameter => parameter.Name).ToHashSet(StringComparer.Ordinal);
 
-        var arguments = new List<string>(argsTemplate.Count + 1);
-        var endOfOptionsInserted = false;
+        var arguments = new List<string>(argsTemplate.Count);
         foreach (var template in argsTemplate)
         {
-            var isModelFilledPositional = !template.StartsWith('-') && CustomToolTemplate.ReferencedPlaceholders(template).Count > 0;
-            if (isModelFilledPositional && !endOfOptionsInserted)
-            {
-                // M3: put a "--" end-of-options marker before the first model-filled positional so a substituted value
-                // that happens to start with '-' is treated as a value, not a flag, by a POSIX-style parser. Each value
-                // is already a single argv element (BindAndEnforce + Substitute never split), so this only guards the
-                // flag-vs-value ambiguity, not argument-count injection.
-                // ponytail: '--' can alter semantics for a tool that reads it as a pathspec separator (e.g. `git log --`).
-                // The operator authors the fixed executable + template and can shape the arg order around it; the forced
-                // per-call approval is the backstop.
-                arguments.Add("--");
-                endOfOptionsInserted = true;
-            }
-
-            // Each template element expands into exactly ONE argv element (no encoding — argv is not a URL).
+            // Each template element expands into exactly ONE argv element (no encoding — argv is not a URL, and
+            // BindAndEnforce + Substitute never split a value across argv). That single-argv guarantee is the injection
+            // control. We deliberately do NOT inject a synthetic "--" end-of-options marker: it corrupts the common
+            // ["--flag", "{value}"] shape (the value is not a positional, so "--flag -- value" makes the parser read
+            // "--" as the flag's value), and it is not needed for the security property. An operator who wants
+            // end-of-options handling authors it in the template itself.
             arguments.Add(CustomToolTemplate.Substitute(template, bound, declaredNames));
         }
 
