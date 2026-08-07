@@ -277,8 +277,8 @@ public sealed class EntraAuthCodeSignInCoordinator : IEntraAuthCodeSignInCoordin
             || string.IsNullOrWhiteSpace(connection.EntraClientId)
             || string.IsNullOrWhiteSpace(connection.EntraClientSecret))
         {
-            throw new InvalidOperationException("No Entra ID connection configured for authorization-code sign-in (tenant id, client id, and client secret) is stored. " +
-                                                "Save Cloud Settings with auth mode EntraId and sign-in method AuthorizationCode first.");
+            throw new EntraConnectionNotConfiguredException("No Entra ID connection configured for authorization-code sign-in (tenant id, client id, and client secret) is stored. " +
+                                                            "Save Cloud Settings with auth mode EntraId and sign-in method AuthorizationCode first.");
         }
 
         return connection;

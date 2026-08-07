@@ -91,6 +91,45 @@ public sealed class ConnectionEndpointTests
         await hubConnection.Received(1).DisconnectAsync(Arg.Any<CancellationToken>());
     }
 
+    [Test]
+    public async Task Connect_WhenWorkerNotPaired_ReturnsConflictFromGlobalHandlerNotFlattened400()
+    {
+        // Regression: the Connect endpoint no longer wraps the call in a catch-all that flattened every fault into a
+        // 400 and leaked the raw message. A WorkerNotPairedException now flows to the global ConflictExceptionHandler,
+        // which maps it to a 409 carrying the discriminating conflictType and the exception's user-safe message.
+        var tokenStore = MockTokenStore.PairedWithAutoConnectDisabled();
+        var connectionState = new ConnectionState();
+        var hubConnection = Substitute.For<IWorkerHubConnection>();
+        hubConnection.ConnectAsync(Arg.Any<CancellationToken>()).Returns<Task>(_ => throw new WorkerNotPairedException());
+        await using var factory = CreateFactory(tokenStore, connectionState, hubConnection);
+        using var client = factory.CreateClient();
+
+        using var connectRequest = CreateRequest(factory, HttpMethod.Post, "/api/local/v1/connection/connect");
+        using var connectResponse = await client.SendAsync(connectRequest).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.Conflict, connectResponse.StatusCode);
+        using var document = JsonDocument.Parse(await connectResponse.Content.ReadAsStringAsync().ConfigureAwait(false));
+        AssertEx.Equal("WorkerNotPaired", document.RootElement.GetProperty("conflictType").GetString());
+    }
+
+    [Test]
+    public async Task Connect_WhenWorkerTokenExpired_ReturnsConflictFromGlobalHandler()
+    {
+        var tokenStore = MockTokenStore.PairedWithAutoConnectDisabled();
+        var connectionState = new ConnectionState();
+        var hubConnection = Substitute.For<IWorkerHubConnection>();
+        hubConnection.ConnectAsync(Arg.Any<CancellationToken>()).Returns<Task>(_ => throw new WorkerTokenExpiredException());
+        await using var factory = CreateFactory(tokenStore, connectionState, hubConnection);
+        using var client = factory.CreateClient();
+
+        using var connectRequest = CreateRequest(factory, HttpMethod.Post, "/api/local/v1/connection/connect");
+        using var connectResponse = await client.SendAsync(connectRequest).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.Conflict, connectResponse.StatusCode);
+        using var document = JsonDocument.Parse(await connectResponse.Content.ReadAsStringAsync().ConfigureAwait(false));
+        AssertEx.Equal("WorkerTokenExpired", document.RootElement.GetProperty("conflictType").GetString());
+    }
+
     private static TestingWebAppFactory CreateFactory(MockTokenStore tokenStore, ConnectionState connectionState, IWorkerHubConnection hubConnection)
     {
         return new TestingWebAppFactory
