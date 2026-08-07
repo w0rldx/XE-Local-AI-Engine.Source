@@ -2,11 +2,11 @@ namespace XE_Local_AI_Engine.Client.Endpoints.LocalChat.V1;
 
 using FastEndpoints;
 using Microsoft.Extensions.Options;
+using SecurityOptions = XE_Local_AI_Engine.Client.Configuration.SecurityOptions;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.LocalChat.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
-using SecurityOptions = XE_Local_AI_Engine.Client.Configuration.SecurityOptions;
 
 /// <summary>
 ///     FastEndpoints handler for uploading one file attachment to a conversation (POST multipart). Enforces the

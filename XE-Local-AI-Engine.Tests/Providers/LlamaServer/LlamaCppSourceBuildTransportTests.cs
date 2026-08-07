@@ -9,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1;
 using XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.Mappers;
+using XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.Validators;
 using XE_Local_AI_Engine.Client.Hubs;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.LlamaServer;
