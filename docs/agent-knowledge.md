@@ -439,7 +439,7 @@ A startup reaper (`StaleLlamaServerReaper`, in `XE-Local-AI-Engine.Providers.Lla
 
 ### Per-node state must never be written to the install directory
 
-Route every writer of per-node state (settings, encrypted credential stores, hardware-profile cache) through **`INodeDataDirectory`** (`XE-Local-AI-Engine.Providers.Abstractions/INodeDataDirectory.cs`), which resolves to `LocalApplicationData` in desktop mode. Writing to `ContentRootPath` breaks on a self-contained desktop build where that directory may not be writable.
+Route every writer of per-node state (settings, encrypted credential stores, hardware-profile cache) through **`INodeDataDirectory`** (`XE-Local-AI-Engine.Providers.Abstractions/INodeDataDirectory.cs`), which resolves to `LocalApplicationData` in desktop mode. Writing to `ContentRootPath` breaks on a packaged desktop build where the portable application directory may not be writable and is replaced during updates.
 
 > **The bug this prevents, because it's a good one:** a stale dev `node-settings.json` got committed, the Web SDK auto-globbed it into the publish output as Content, and every fresh install was silently pinned to a nonexistent default model — first-run provisioning skipped its download with no error, just a permanently empty model store.
 
@@ -491,7 +491,11 @@ Diagnosing it: confirm `OTEL_EXPORTER_OTLP_ENDPOINT` is on the process (`tr '\0'
 - **Desktop mode must treat Ollama as absent, not error-worthy.** Any Ollama call path (`/api/show`, `IOllamaApiClient`) must be provider-gated or tolerate connection-refused gracefully. Repeated source of chat failures and noisy stack traces in desktop mode, where no Ollama daemon runs.
 - **The desktop loopback port is persisted on purpose** (`DesktopPortStore`, `desktop-port.txt`) so browser-origin-scoped `localStorage` prefs survive a relaunch. Don't revert to a random port per launch.
 - Desktop shutdown needs explicit **SIGHUP** (Linux) and **CTRL_CLOSE_EVENT** (Windows, via `SetConsoleCtrlHandler`, blocking ~4s for graceful `ApplicationStopped`) handlers — .NET's default ConsoleLifetime covers neither, and without them console-close orphans `llama-server` again.
-- Desktop publish is self-contained single-file but **explicitly not trimmed** (`PublishTrimmed=false`) — trimming breaks EF Core / Serilog / FastEndpoints / MEAI reflection wiring.
+- Desktop publishing is asymmetric: Linux remains self-contained single-file; Windows publishes the client as
+  framework-dependent DLL/deps/runtimeconfig files and overlays the framework-dependent
+  `XE-Local-AI-Engine.WindowsLauncher` C# apphost. Windows requires x64 ASP.NET Core Runtime 10.0.10+ and must not ship
+  `coreclr.dll`, `hostfxr.dll`, `hostpolicy.dll`, or the .NET Library License. The client stays explicitly untrimmed —
+  trimming breaks EF Core / Serilog / FastEndpoints / MEAI reflection wiring.
 - Desktop mode is opt-in via `XE_LAUNCH_MODE=desktop`; off-flag behaviour (headless/Aspire/CI) must stay byte-identical.
 
 ### The node is an MCP server too, and four things about it will bite you

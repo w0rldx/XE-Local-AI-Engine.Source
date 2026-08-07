@@ -88,6 +88,7 @@ RELEASE_CONTRACT_RUNNER="scripts/run-release-contract-tests.sh"
 PS_TARGETS=(
   "publish/package-tester-win.ps1"
   "publish/windows/uninstall-xe-local-ai-engine.ps1"
+  "scripts/tests/windows-framework-launcher-smoke.ps1"
   "scripts/assembly-guard.ps1"
   "scripts/with-build-lock.ps1"
 )

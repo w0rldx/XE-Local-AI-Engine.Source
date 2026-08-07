@@ -17,11 +17,19 @@ def load_bundle_packages(path: Path, runtime_identifier: str) -> dict[tuple[str,
         raise ValueError(f"{path} is not a supported bundle-input evidence document")
     if document.get("runtimeIdentifier") != runtime_identifier:
         raise ValueError("bundle-input evidence runtime identifier does not match the payload")
-    if document.get("publishSingleFile") is not True or document.get("selfContained") is not True:
-        raise ValueError("bundle-input evidence must describe a self-contained single-file publish")
+    expected_modes = {"linux-x64": (True, True), "win-x64": (False, False)}
+    try:
+        expected_single_file, expected_self_contained = expected_modes[runtime_identifier]
+    except KeyError as error:
+        raise ValueError(f"unsupported runtime identifier: {runtime_identifier}") from error
+    if (document.get("publishSingleFile"), document.get("selfContained")) != (
+        expected_single_file,
+        expected_self_contained,
+    ):
+        raise ValueError("bundle-input evidence publish mode does not match the RID contract")
     inputs = document.get("inputs")
     if not isinstance(inputs, list) or not inputs:
-        raise ValueError("bundle-input evidence has no FilesToBundle inputs")
+        raise ValueError("bundle-input evidence has no publish inputs")
 
     packages: dict[tuple[str, str], dict] = {}
     seen_inputs: set[tuple[str, str, str]] = set()

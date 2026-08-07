@@ -19,25 +19,40 @@ public sealed class RuntimeLicensePackagingTests
     }
 
     [Test]
-    public void SelfContainedProfiles_UseThePinnedRuntimeVersion()
+    public void PublishProfiles_KeepLinuxSelfContainedButMakeWindowsFrameworkDependent()
     {
-        foreach (var runtimeIdentifier in new[]
-                 {
-                     "win-x64",
-                     "linux-x64"
-                 })
-        {
-            var profile = XDocument.Load(RepositoryPaths.ClientProject("Properties", "PublishProfiles", $"{runtimeIdentifier}.pubxml"));
+        var windows = XDocument.Load(RepositoryPaths.ClientProject("Properties", "PublishProfiles", "win-x64.pubxml"));
+        AssertEx.Equal("false", Property(windows, "SelfContained"));
+        AssertEx.Equal("false", Property(windows, "PublishSingleFile"));
+        AssertEx.Equal("false", Property(windows, "UseAppHost"));
+        AssertEx.Equal("LatestPatch", Property(windows, "RollForward"));
+        AssertEx.Equal("$(DotNetRuntimeVersion)", Property(windows, "RuntimeFrameworkVersion"));
 
-            AssertEx.True(string.Equals(Property(profile, "SelfContained"), "true", StringComparison.OrdinalIgnoreCase));
-            AssertEx.Equal("$(DotNetRuntimeVersion)", Property(profile, "RuntimeFrameworkVersion"));
-        }
+        var windowsLauncher = XDocument.Load(RepositoryPaths.Combine(
+            "XE-Local-AI-Engine.WindowsLauncher", "Properties", "PublishProfiles", "win-x64.pubxml"));
+        AssertEx.Equal("false", Property(windowsLauncher, "SelfContained"));
+        AssertEx.Equal("false", Property(windowsLauncher, "PublishSingleFile"));
+        AssertEx.Equal("true", Property(windowsLauncher, "UseAppHost"));
+        AssertEx.Equal("LatestPatch", Property(windowsLauncher, "RollForward"));
+        AssertEx.Equal("$(DotNetRuntimeVersion)", Property(windowsLauncher, "RuntimeFrameworkVersion"));
+
+        var linux = XDocument.Load(RepositoryPaths.ClientProject(
+            "Properties", "PublishProfiles", "linux-x64.pubxml"));
+        AssertEx.Equal("true", Property(linux, "SelfContained"));
+        AssertEx.Equal("true", Property(linux, "PublishSingleFile"));
+        AssertEx.Equal("$(DotNetRuntimeVersion)", Property(linux, "RuntimeFrameworkVersion"));
     }
 
     [Test]
     public void ClientPublish_CarriesThePerRidDotNetLicenseAndThirdPartyNotices()
     {
         var project = XDocument.Load(RepositoryPaths.ClientProject("XE-Local-AI-Engine.Client.csproj"));
+        var runtimeTarget = project.Descendants("Target")
+                                   .Single(target => string.Equals((string?)target.Attribute("Name"),
+                                       "ValidateDotNetRuntimeLicenseAssets",
+                                       StringComparison.Ordinal));
+        AssertEx.Contains((string?)runtimeTarget.Attribute("Condition") ?? string.Empty,
+            "'$(SelfContained)' == 'true'");
         var linkedPublishFiles = project.Descendants("ResolvedFileToPublish")
                                         .Select(static item => (string?)item.Element("RelativePath"))
                                         .Where(static path => path is not null)
@@ -48,12 +63,12 @@ public sealed class RuntimeLicensePackagingTests
         AssertEx.Contains(linkedPublishFiles, "licenses/dotnet/DOTNET-RUNTIME-THIRD-PARTY-NOTICES.txt");
         AssertEx.Contains(linkedPublishFiles, "licenses/dotnet/ASPNETCORE-RUNTIME-LICENSE.txt");
         AssertEx.Contains(linkedPublishFiles, "licenses/dotnet/ASPNETCORE-RUNTIME-THIRD-PARTY-NOTICES.txt");
-        AssertEx.Contains(linkedPublishFiles, "licenses/dotnet/DOTNET-LIBRARY-LICENSE.html");
         AssertEx.Contains(linkedPublishFiles, "wwwroot/licenses/dotnet/DOTNET-RUNTIME-LICENSE.txt");
         AssertEx.Contains(linkedPublishFiles, "wwwroot/licenses/dotnet/DOTNET-RUNTIME-THIRD-PARTY-NOTICES.txt");
         AssertEx.Contains(linkedPublishFiles, "wwwroot/licenses/dotnet/ASPNETCORE-RUNTIME-LICENSE.txt");
         AssertEx.Contains(linkedPublishFiles, "wwwroot/licenses/dotnet/ASPNETCORE-RUNTIME-THIRD-PARTY-NOTICES.txt");
-        AssertEx.Contains(linkedPublishFiles, "wwwroot/licenses/dotnet/DOTNET-LIBRARY-LICENSE.html");
+        AssertEx.False(linkedPublishFiles.Contains("licenses/dotnet/DOTNET-LIBRARY-LICENSE.html"));
+        AssertEx.False(linkedPublishFiles.Contains("wwwroot/licenses/dotnet/DOTNET-LIBRARY-LICENSE.html"));
 
         var curatedLicenseLinks = project.Descendants("Content")
                                          .Select(static content => (string?)content.Attribute("Link"))
@@ -62,6 +77,22 @@ public sealed class RuntimeLicensePackagingTests
                                          .ToArray();
         AssertEx.Contains(curatedLicenseLinks,
             "licenses/nuget/%(RecursiveDir)%(Filename)%(Extension)");
+    }
+
+    [Test]
+    public void WindowsLauncherPublish_CarriesTheApphostMitLicenseAndNotices()
+    {
+        var project = XDocument.Load(RepositoryPaths.Combine(
+            "XE-Local-AI-Engine.WindowsLauncher", "XE-Local-AI-Engine.WindowsLauncher.csproj"));
+        var linkedPublishFiles = project.Descendants("ResolvedFileToPublish")
+                                        .Select(static item => (string?)item.Element("RelativePath"))
+                                        .Where(static path => path is not null)
+                                        .Select(static path => path!)
+                                        .ToHashSet(StringComparer.Ordinal);
+
+        AssertEx.Contains(linkedPublishFiles, "licenses/dotnet/DOTNET-APPHOST-LICENSE.txt");
+        AssertEx.Contains(linkedPublishFiles, "licenses/dotnet/DOTNET-APPHOST-THIRD-PARTY-NOTICES.txt");
+        AssertEx.False(linkedPublishFiles.Contains("licenses/dotnet/DOTNET-LIBRARY-LICENSE.html"));
     }
 
     [Test]

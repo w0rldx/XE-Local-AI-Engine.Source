@@ -43,11 +43,17 @@ class ReleaseArtifactVerifierTests(unittest.TestCase):
         files = {
             "current/LICENSE": (REPOSITORY_ROOT / "LICENSE").read_bytes(),
             "current/NOTICE": (REPOSITORY_ROOT / "NOTICE").read_bytes(),
-            "current/licenses/dotnet/DOTNET-LIBRARY-LICENSE.html": b"Microsoft .NET Library terms",
-            "current/licenses/dotnet/DOTNET-RUNTIME-LICENSE.txt": b"MIT terms",
-            "current/licenses/dotnet/DOTNET-RUNTIME-THIRD-PARTY-NOTICES.txt": b"runtime notices",
-            "current/licenses/dotnet/ASPNETCORE-RUNTIME-LICENSE.txt": b"MIT terms",
-            "current/licenses/dotnet/ASPNETCORE-RUNTIME-THIRD-PARTY-NOTICES.txt": b"ASP.NET Core notices",
+            "current/XE-Local-AI-Engine.WindowsLauncher.exe": b"Microsoft MIT apphost",
+            "current/XE-Local-AI-Engine.WindowsLauncher.dll": b"repository-owned C# launcher",
+            "current/XE-Local-AI-Engine.WindowsLauncher.deps.json": b"{}",
+            "current/XE-Local-AI-Engine.WindowsLauncher.runtimeconfig.json": b"{}",
+            "current/XE-Local-AI-Engine.Client.dll": b"managed application",
+            "current/XE-Local-AI-Engine.Client.deps.json": b"{}",
+            "current/XE-Local-AI-Engine.Client.runtimeconfig.json": b"{}",
+            "current/licenses/dotnet/DOTNET-APPHOST-LICENSE.txt": b"MIT terms",
+            "current/licenses/dotnet/DOTNET-APPHOST-THIRD-PARTY-NOTICES.txt": b"apphost notices",
+            "current/wwwroot/licenses/dotnet/DOTNET-APPHOST-LICENSE.txt": b"MIT terms",
+            "current/wwwroot/licenses/dotnet/DOTNET-APPHOST-THIRD-PARTY-NOTICES.txt": b"apphost notices",
             "current/_manifest/spdx_2.2/manifest.spdx.json": b"{}",
             "current/wwwroot/component-manifest.json": b'{"components":[{"purl":"pkg:npm/react@19.2.7"}]}',
             "current/wwwroot/licenses/frontend/FRONTEND-COMPONENTS.json": json.dumps(
@@ -71,8 +77,6 @@ class ReleaseArtifactVerifierTests(unittest.TestCase):
             "current/THIRD-PARTY-NOTICES.md": b"Backend notices",
             "current/licenses/nuget/packages/Example.Package@1.0.0/LICENSE": license_bytes,
         }
-        for name in MODULE.DOTNET_DOCUMENT_NAMES:
-            files[f"current/wwwroot/licenses/dotnet/{name}"] = files[f"current/licenses/dotnet/{name}"]
         return files
 
     def make_archive(self, root: Path, files: dict[str, bytes]) -> Path:
@@ -96,12 +100,10 @@ class ReleaseArtifactVerifierTests(unittest.TestCase):
             "wwwroot/licenses/frontend/third-party-notices.md",
             "backend-components.json",
             "third-party-notices.md",
-            "licenses/dotnet/DOTNET-LIBRARY-LICENSE.html",
             "wwwroot/licenses/dotnet/DOTNET-RUNTIME-LICENSE.txt",
             "wwwroot/licenses/dotnet/DOTNET-RUNTIME-THIRD-PARTY-NOTICES.txt",
             "wwwroot/licenses/dotnet/ASPNETCORE-RUNTIME-LICENSE.txt",
             "wwwroot/licenses/dotnet/ASPNETCORE-RUNTIME-THIRD-PARTY-NOTICES.txt",
-            "wwwroot/licenses/dotnet/DOTNET-LIBRARY-LICENSE.html",
         ]
 
         MODULE.assert_required_paths(paths, "linux-x64", "linux payload")
@@ -176,16 +178,36 @@ class ReleaseArtifactVerifierTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "forbidden release payload"):
             MODULE.assert_stream_has_no_forbidden_markers("large-single-file", stream, "payload")
 
-    def test_missing_runtime_license_fails(self) -> None:
+    def test_windows_framework_dependent_payload_rejects_embedded_runtime_or_library_terms(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
-            files = self.windows_compliance_files()
-            del files["current/licenses/dotnet/DOTNET-LIBRARY-LICENSE.html"]
-            archive = self.make_archive(
-                Path(temporary_directory),
-                files,
-            )
-            with self.assertRaisesRegex(ValueError, "DOTNET-LIBRARY-LICENSE"):
-                MODULE.verify_zip_archive(archive, "win-x64")
+            for path in (
+                "current/coreclr.dll",
+                "current/hostfxr.dll",
+                "current/licenses/dotnet/DOTNET-LIBRARY-LICENSE.html",
+            ):
+                with self.subTest(path=path):
+                    files = self.windows_compliance_files()
+                    files[path] = b"must not ship"
+                    archive = self.make_archive(Path(temporary_directory), files)
+                    with self.assertRaisesRegex(ValueError, "framework-dependent Windows payload"):
+                        MODULE.verify_zip_archive(archive, "win-x64")
+
+    def test_windows_framework_dependent_payload_requires_launcher_and_managed_entrypoint(self) -> None:
+        for path in (
+            "current/XE-Local-AI-Engine.WindowsLauncher.exe",
+            "current/XE-Local-AI-Engine.WindowsLauncher.dll",
+            "current/XE-Local-AI-Engine.WindowsLauncher.deps.json",
+            "current/XE-Local-AI-Engine.WindowsLauncher.runtimeconfig.json",
+            "current/XE-Local-AI-Engine.Client.dll",
+            "current/XE-Local-AI-Engine.Client.deps.json",
+            "current/XE-Local-AI-Engine.Client.runtimeconfig.json",
+        ):
+            with self.subTest(path=path), tempfile.TemporaryDirectory() as temporary_directory:
+                files = self.windows_compliance_files()
+                del files[path]
+                archive = self.make_archive(Path(temporary_directory), files)
+                with self.assertRaisesRegex(ValueError, "missing required"):
+                    MODULE.verify_zip_archive(archive, "win-x64")
 
     def test_backend_corpus_file_hash_must_match_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -228,13 +250,14 @@ class ReleaseArtifactVerifierTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, f"project {document} differs"):
                     MODULE.verify_zip_archive(archive, "win-x64")
 
-    def test_served_dotnet_document_must_match_the_bundled_corpus(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary_directory:
-            files = self.windows_compliance_files()
-            files["current/wwwroot/licenses/dotnet/DOTNET-RUNTIME-LICENSE.txt"] = b"different"
-            archive = self.make_archive(Path(temporary_directory), files)
-            with self.assertRaisesRegex(ValueError, "differs from bundled corpus"):
-                MODULE.verify_zip_archive(archive, "win-x64")
+    def test_served_linux_dotnet_document_must_match_the_bundled_corpus(self) -> None:
+        contents = {}
+        for name in MODULE.DOTNET_RUNTIME_DOCUMENT_NAMES:
+            contents[f"licenses/dotnet/{name}"] = b"same"
+            contents[f"wwwroot/licenses/dotnet/{name}"] = b"same"
+        contents["wwwroot/licenses/dotnet/DOTNET-RUNTIME-LICENSE.txt"] = b"different"
+        with self.assertRaisesRegex(ValueError, "differs from bundled corpus"):
+            MODULE.assert_dotnet_documents_are_served(contents, "linux-x64", "linux payload")
 
     def test_empty_frontend_component_detection_fails(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:

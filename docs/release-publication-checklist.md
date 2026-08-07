@@ -45,9 +45,14 @@ installer, signing certificate, or signed stable artifact exists.
 
 ## Target-OS and public-equivalent rehearsal
 
-- [ ] Retain a real Windows transcript for the exact generated Velopack `Portable.zip`: extract to a writable local
-      directory, launch the top-level executable, authenticate, verify the displayed version and runtime-license links,
-      apply an anonymous RC.1 → RC.2 update, confirm relaunch, then remove the extracted app and user data as documented.
+- [ ] Retain a real Windows transcript for the exact generated Velopack `Portable.zip`: install ASP.NET Core Runtime
+      10.0.10+ (x64), extract to a writable local directory, launch the top-level executable, authenticate, verify the
+      displayed version/apphost-license links, apply an anonymous RC.1 → RC.2 update, confirm relaunch, then remove the
+      extracted app and user data as documented.
+- [ ] On a disposable Windows host without .NET, verify the C# apphost produces Microsoft's missing-runtime message; on
+      a host with .NET but without ASP.NET Core 10.0.10+, verify the launcher names the requirement and download page.
+- [ ] Inspect the Windows `Portable.zip` and full package: require the C# launcher DLL/apphost/runtimeconfig and reject
+      `coreclr.dll`, `hostfxr.dll`, `hostpolicy.dll`, `System.Private.CoreLib.dll`, and the .NET Library License.
 - [ ] Retain a real Linux transcript for the exact generated AppImage: verify checksum, mark executable, launch from a
       writable local directory, authenticate, verify the displayed version and runtime-license links, apply an anonymous
       RC.1 → RC.2 update, confirm in-place replacement/relaunch, then remove the AppImage and user data as documented.

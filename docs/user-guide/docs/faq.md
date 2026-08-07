@@ -29,11 +29,12 @@ Go back to the [Releases page](https://github.com/w0rldx/XE-Local-AI-Engine.Sour
 **`XE-Local-AI-Engine.exe`** in the **top-level** folder — the one sitting *next to* the `current`
 folder.
 
-**Not** `current\XE-Local-AI-Engine.Client.exe`. That second file is much larger, so people assume it's
-the real one. **It will not start properly** — launching it directly skips the desktop setup entirely,
-so it won't find your data folder and won't open your browser.
+Do not start `current\XE-Local-AI-Engine.WindowsLauncher.exe` or the adjacent client DLL directly. Velopack's
+top-level entry selects the current version and preserves the portable update context.
 
 ### Nothing happens when I run it — the window flashes and disappears
+- **Check the .NET prerequisite.** Windows needs the x64 ASP.NET Core Runtime 10.0.10 or a newer .NET 10 servicing
+  patch. The launcher prints the missing/outdated runtime in the console and opens Microsoft's download page.
 - **Is it already running?** Only one copy can run at a time. A second launch prints *"Another
   instance ... is already running"* and closes immediately. Check your taskbar for an existing console
   window. Remember that **closing the browser tab does not stop the app**.
@@ -326,8 +327,7 @@ your own computer.
 3. Paste the two lines below, change the password to the one you want, and press **Enter**:
 
    ```powershell
-   $env:XE_LAUNCH_MODE = "desktop"
-   & ".\current\XE-Local-AI-Engine.Client.exe" --reset-admin-password "YourNewPassw0rd!"
+   & ".\XE-Local-AI-Engine.exe" --reset-admin-password "YourNewPassw0rd!"
    ```
 
 **On Linux**

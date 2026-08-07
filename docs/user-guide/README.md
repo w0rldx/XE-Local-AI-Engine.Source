@@ -75,6 +75,9 @@ you to guess.*
 
 A graphics card is **optional**. Without one the app still works; answers just arrive more slowly.
 
+> **Windows prerequisite:** install the x64 ASP.NET Core Runtime 10.0.10 or a newer .NET 10 servicing patch. The
+> Windows Portable ZIP does not bundle .NET. Linux remains self-contained and needs no system .NET installation.
+
 > **Windows and Linux, both x64.** Both official downloads are portable Velopack applications and can update
 > themselves. Windows ships as a Portable ZIP; Linux ships as an AppImage. There is no macOS or ARM build.
 

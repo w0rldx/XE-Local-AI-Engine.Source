@@ -1,7 +1,7 @@
 name: release
 
 # Builds the official Velopack-managed portable artifacts:
-#   Windows: VPK Portable.zip only (`--noInst`), never Setup.exe.
+#   Windows: framework-dependent VPK Portable.zip (`--noInst`) with a repository-owned C# prerequisite launcher.
 #   Linux:   AppImage (Velopack's portable Linux format).
 # Matrix jobs build and retain assets; protected serialized jobs prepare/verify the draft, then promote it separately.
 # Artifacts are currently unsigned. Publication therefore requires the dated
@@ -112,7 +112,7 @@ jobs:
           - rid: win-x64
             os: windows-latest
             vpk-channel: win
-            main-exe: XE-Local-AI-Engine.Client.exe
+            main-exe: XE-Local-AI-Engine.WindowsLauncher.exe
             publish-dir: XE-Local-AI-Engine.Client/bin/Release/net10.0/win-x64/publish
             pack-args: "--noInst"
             icon-args: ""
@@ -189,6 +189,16 @@ jobs:
             --raw "$RAW_BUNDLE_INPUTS" \
             --output "${{ matrix.publish-dir }}/bundle-inputs.json"
 
+      - name: Build and test Windows framework launcher
+        if: matrix.rid == 'win-x64'
+        shell: pwsh
+        run: |
+          dotnet publish XE-Local-AI-Engine.WindowsLauncher/XE-Local-AI-Engine.WindowsLauncher.csproj `
+            --configuration Release `
+            -p:PublishProfile=win-x64 `
+            --output '${{ matrix.publish-dir }}'
+          scripts/tests/windows-framework-launcher-smoke.ps1 -PublishDirectory '${{ matrix.publish-dir }}'
+
       - name: Verify packaged update release track
         shell: bash
         run: |
@@ -248,6 +258,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          WINDOWS_APPHOST_ARGS=()
+          if [[ "${{ matrix.rid }}" == "win-x64" ]]; then
+            WINDOWS_APPHOST_ARGS+=(
+              --windows-apphost-version "$(python scripts/read-release-version.py --dotnet-runtime)"
+              --windows-apphost-license "${{ matrix.publish-dir }}/licenses/dotnet/DOTNET-APPHOST-LICENSE.txt"
+              --windows-apphost-notices "${{ matrix.publish-dir }}/licenses/dotnet/DOTNET-APPHOST-THIRD-PARTY-NOTICES.txt"
+            )
+          fi
           scripts/compliance/sbom-tool.sh Generate \
             -b "${{ matrix.publish-dir }}" \
             -bc "${{ matrix.publish-dir }}" \
@@ -256,13 +274,6 @@ jobs:
             -ps "XE Local AI Engine contributors" \
             -pm true \
             -D true
-          LIBRARY_LICENSE_ARGS=()
-          if [[ "${{ matrix.rid }}" == "win-x64" ]]; then
-            LIBRARY_LICENSE_ARGS+=(
-              --dotnet-library-license
-              "${{ matrix.publish-dir }}/licenses/dotnet/DOTNET-LIBRARY-LICENSE.html"
-            )
-          fi
           python scripts/compliance/reconcile_payload_spdx.py \
             --rid "${{ matrix.rid }}" \
             --spdx "${{ matrix.publish-dir }}/_manifest/spdx_2.2/manifest.spdx.json" \
@@ -270,7 +281,7 @@ jobs:
             --bundle-input-manifest "${{ matrix.publish-dir }}/bundle-inputs.json" \
             --backend-manifest "${{ matrix.publish-dir }}/backend-components.json" \
             --frontend-manifest "${{ matrix.publish-dir }}/wwwroot/component-manifest.json" \
-            "${LIBRARY_LICENSE_ARGS[@]}"
+            "${WINDOWS_APPHOST_ARGS[@]}"
           scripts/compliance/sbom-tool.sh Validate \
             -b "${{ matrix.publish-dir }}" \
             -n true \
@@ -675,7 +686,7 @@ jobs:
             echo "## Portable release published"
             echo "- Tag: v${{ needs.version.outputs.pack-version }}"
             echo "- Source: $GITHUB_SHA"
-            echo "- Windows: Velopack Portable.zip (no Setup.exe)"
+            echo "- Windows: framework-dependent Velopack Portable.zip (ASP.NET Core Runtime 10.0.10+ x64 required; no Setup.exe)"
             echo "- Linux: Velopack AppImage"
             echo "- Signing: unsigned; approved risk record required by publication gate"
           } >> "$GITHUB_STEP_SUMMARY"

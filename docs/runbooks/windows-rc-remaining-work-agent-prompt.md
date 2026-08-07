@@ -7,6 +7,10 @@ packaged tester build available.
 *remaining* work after the 2026-08-02 and 2026-08-03 sessions closed most of that runbook — it does not repeat
 what those sessions already proved.
 
+> **Historical handoff:** commands and process names below describe the former self-contained Windows package. The
+> current official design is framework-dependent and uses `XE-Local-AI-Engine.WindowsLauncher.exe` plus
+> `dotnet.exe XE-Local-AI-Engine.Client.dll`. Use the companion runbook's current process helper and prerequisite checks.
+
 ## Why this file exists
 
 The nine-check runbook is now mostly green. What is left splits into three kinds of work, and only one of them

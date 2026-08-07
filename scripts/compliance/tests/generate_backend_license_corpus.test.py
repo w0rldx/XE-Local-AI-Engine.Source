@@ -166,8 +166,8 @@ class BackendLicenseCorpusTests(unittest.TestCase):
             {
                 "schemaVersion": 2,
                 "runtimeIdentifier": rid,
-                "publishSingleFile": True,
-                "selfContained": True,
+                "publishSingleFile": rid == "linux-x64",
+                "selfContained": rid == "linux-x64",
                 "inputs": bundle_inputs,
             },
         )

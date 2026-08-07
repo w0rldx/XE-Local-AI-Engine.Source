@@ -142,8 +142,6 @@
            Text="The ASP.NET Core $(DotNetRuntimeVersion) $(RuntimeIdentifier) third-party notices are missing from the restored runtime pack."/>
     <Error Condition="!Exists('$(_AspNetCoreRuntimePackDirectory)/LICENSE.txt')"
            Text="The ASP.NET Core $(DotNetRuntimeVersion) $(RuntimeIdentifier) MIT license is missing from the restored runtime pack."/>
-    <Error Condition="!Exists('$(MSBuildProjectDirectory)/../third-party/dotnet/DOTNET-LIBRARY-LICENSE.html')"
-           Text="The Windows .NET Library License disclosure file is missing."/>
     <ItemGroup>
       <ResolvedFileToPublish Include="$(_DotNetRuntimePackDirectory)/THIRD-PARTY-NOTICES.TXT">
         <RelativePath>licenses/dotnet/DOTNET-RUNTIME-THIRD-PARTY-NOTICES.txt</RelativePath>
@@ -175,15 +173,6 @@
       </ResolvedFileToPublish>
       <ResolvedFileToPublish Include="$(_AspNetCoreRuntimePackDirectory)/LICENSE.txt">
         <RelativePath>wwwroot/licenses/dotnet/ASPNETCORE-RUNTIME-LICENSE.txt</RelativePath>
-        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-      </ResolvedFileToPublish>
-      <ResolvedFileToPublish Include="$(MSBuildProjectDirectory)/../third-party/dotnet/DOTNET-LIBRARY-LICENSE.html"
-                             >
-        <RelativePath>licenses/dotnet/DOTNET-LIBRARY-LICENSE.html</RelativePath>
-        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-      </ResolvedFileToPublish>
-      <ResolvedFileToPublish Include="$(MSBuildProjectDirectory)/../third-party/dotnet/DOTNET-LIBRARY-LICENSE.html">
-        <RelativePath>wwwroot/licenses/dotnet/DOTNET-LIBRARY-LICENSE.html</RelativePath>
         <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       </ResolvedFileToPublish>
     </ItemGroup>

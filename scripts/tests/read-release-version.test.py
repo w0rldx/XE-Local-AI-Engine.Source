@@ -45,6 +45,21 @@ class ReleaseVersionReaderTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "invalid SemVer"):
             MODULE.read_version(path)
 
+    def test_dotnet_runtime_version_comes_from_the_same_manifest(self) -> None:
+        path = self.manifest(
+            "<Project><PropertyGroup><VersionPrefix>1.2.3</VersionPrefix>"
+            "<DotNetRuntimeVersion>10.0.10</DotNetRuntimeVersion></PropertyGroup></Project>"
+        )
+        self.assertEqual("10.0.10", MODULE.read_dotnet_runtime_version(path))
+
+    def test_invalid_dotnet_runtime_version_fails_closed(self) -> None:
+        path = self.manifest(
+            "<Project><PropertyGroup><VersionPrefix>1.2.3</VersionPrefix>"
+            "<DotNetRuntimeVersion>10.0</DotNetRuntimeVersion></PropertyGroup></Project>"
+        )
+        with self.assertRaisesRegex(ValueError, "invalid DotNetRuntimeVersion"):
+            MODULE.read_dotnet_runtime_version(path)
+
 
 if __name__ == "__main__":
     unittest.main()

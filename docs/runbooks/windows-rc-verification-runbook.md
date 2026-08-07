@@ -1,6 +1,7 @@
 # Windows 11 RC verification runbook
 
-Target: a tester RC portable build (Velopack, `--noInst`) on real Windows 11. Nine checks, risk-ordered.
+Target: a tester RC portable build (Velopack, `--noInst`) on real Windows 11 with x64 ASP.NET Core Runtime
+10.0.10 or a newer .NET 10 servicing patch installed. Nine checks, risk-ordered.
 Budget ~1 hour. Everything below covers a code path that **cannot be exercised on the Linux/WSL dev box**, which
 is why it is here at all.
 
@@ -11,7 +12,11 @@ Useful once, up front:
 ```powershell
 $XE   = "$env:LOCALAPPDATA\XE-Local-AI-Engine"
 $LOGS = "$XE\logs\*.log"
-function xe-proc { Get-Process | Where-Object ProcessName -like 'XE-Local-AI-Engine*' | Select-Object Id,ProcessName,Path }
+function xe-proc {
+  Get-CimInstance Win32_Process |
+    Where-Object { $_.Name -like 'XE-Local-AI-Engine*' -or $_.CommandLine -like '*XE-Local-AI-Engine.Client.dll*' } |
+    Select-Object ProcessId,Name,ExecutablePath,CommandLine
+}
 function llama  { Get-Process llama-server -ErrorAction SilentlyContinue | Select-Object Id,Path }
 ```
 
@@ -140,10 +145,10 @@ step 3 (single-digit MiB on a headless GPU; a few GiB on a box whose desktop run
 > - **VRAM falls before the process disappears.** At +1 s the process was still listed while its VRAM had
 >   already dropped from 31741 to 2857 MiB. Sampling only `nvidia-smi` would say "done" a second early;
 >   sampling only the process table would say "still there". Check both, and give it the full 5 s.
-> - **The "parent" is `XE-Local-AI-Engine.Client.exe`, not the exe you launched.** The root
->   `XE-Local-AI-Engine.exe` is the Velopack stub: it starts `current\XE-Local-AI-Engine.Client.exe` and
->   **exits**, so by the time you look there is exactly one `XE-Local-AI-Engine*` process and it is the Client.
->   That is the one that owns the Job Object and the one to end. `xe-proc` finds it correctly.
+> - **Historical process note:** that 0.1.0-rc.4.2 measurement used the old self-contained
+>   `XE-Local-AI-Engine.Client.exe`. Current Windows packages keep a C# launcher process alive and run the host as
+>   `dotnet.exe XE-Local-AI-Engine.Client.dll`. For a current RC, the `dotnet.exe` process identified by that command
+>   line owns the Job Object and is the process to end; the updated `xe-proc` helper shows both launcher and host.
 
 **Fail looks like / next step.** A surviving `llama-server` process and VRAM still pinned. Record its PID and
 `Path` (must be under `%LOCALAPPDATA%\XE-Local-AI-Engine\llama.cpp\`), kill it manually, and go straight to

@@ -66,6 +66,31 @@ class ReleaseWorkflowContractTests(unittest.TestCase):
         self.assertNotIn("--noPortable", self.source)
         self.assertRegex(self.source, r"icon-args: .+\.png")
 
+    def test_windows_publishes_csharp_launcher_for_framework_dependent_payload(self) -> None:
+        build_job = re.search(
+            r"\n  build-pack:\n(?P<body>.*?)(?=\n  prepare-release-draft:)", self.source, re.DOTALL
+        )
+        self.assertIsNotNone(build_job)
+        body = build_job.group("body")
+        publish = body.index("name: Publish (${{ matrix.rid }})")
+        launcher = body.index("name: Build and test Windows framework launcher")
+        compliance = body.index("name: Generate exact backend NuGet legal corpus")
+        self.assertLess(publish, launcher)
+        self.assertLess(launcher, compliance)
+        self.assertIn("XE-Local-AI-Engine.WindowsLauncher/XE-Local-AI-Engine.WindowsLauncher.csproj", body)
+        self.assertIn("scripts/tests/windows-framework-launcher-smoke.ps1", body)
+        self.assertIn('main-exe: XE-Local-AI-Engine.WindowsLauncher.exe', body)
+        self.assertIn('--mainExe "${{ matrix.main-exe }}"', body)
+        self.assertNotIn("--framework", body)
+        self.assertIn("scripts/read-release-version.py --dotnet-runtime", body)
+        self.assertIn("--windows-apphost-version", body)
+        self.assertIn("--windows-apphost-license", body)
+        self.assertIn("--windows-apphost-notices", body)
+
+    def test_windows_payload_does_not_claim_the_dotnet_library_license(self) -> None:
+        self.assertNotIn("--dotnet-library-license", self.source)
+        self.assertNotIn("DOTNET-LIBRARY-LICENSE.html", self.source)
+
     def test_prerelease_seed_download_is_explicit(self) -> None:
         download_block = re.search(
             r"name: Download previous release.*?(?=\n\s+- name:)", self.source, re.DOTALL

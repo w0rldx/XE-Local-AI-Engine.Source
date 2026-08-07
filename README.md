@@ -153,12 +153,17 @@ fallback and cleanup contract.
 key next to dev data written under a *different* secret, it says so and names what to delete — that
 data cannot be decrypted and the node will otherwise crash on the first read.
 
-## Self-contained desktop run
+## Desktop publishing
 
-The host can be published as a **single self-contained executable** (the .NET runtime is bundled — no prerequisite
-install) that runs as a "double-click" desktop app: a console window opens showing live logs, the default browser opens
-on the running site, and **closing the console window shuts the whole app down** — including the spawned `llama-server`
-child, so there is no orphan process. Closing the browser does *not* stop the app.
+The desktop package is deliberately asymmetric. Linux remains a **self-contained single-file AppImage**. Windows is a
+**framework-dependent Velopack Portable ZIP**: it contains a small C# launcher apphost plus the managed application DLL,
+but no .NET runtime. Windows users install the x64 **ASP.NET Core Runtime 10.0.10 or a newer .NET 10 servicing patch**.
+If the base .NET runtime is absent, Microsoft's apphost reports the missing framework; if ASP.NET Core is absent or too
+old, the launcher prints the exact requirement and opens the official .NET 10 download page.
+
+Both packages run as double-click desktop apps: a console window opens with live logs, the default browser opens on the
+running site, and **closing the console window shuts the whole app down** — including the spawned `llama-server` child,
+so there is no orphan process. Closing the browser does *not* stop the app.
 
 Desktop mode is **opt-in** via the launcher (env `XE_LAUNCH_MODE=desktop` or the `--desktop` flag); headless, Aspire,
 and CI runs are unaffected. In desktop mode the host binds **HTTP on a free loopback port** (`127.0.0.1`) and skips the
@@ -176,24 +181,29 @@ Build the React app first; the publish target rejects a missing `dist/index.html
   pnpm run build
 )
 
-# Linux
+# Linux: self-contained single-file payload
 dotnet publish XE-Local-AI-Engine.Client -c Release -r linux-x64 -p:PublishProfile=linux-x64
-# Windows
-dotnet publish XE-Local-AI-Engine.Client -c Release -r win-x64 -p:PublishProfile=win-x64
+
+# Windows: framework-dependent app plus the C# launcher, overlaid into one payload directory
+WIN_OUT="$PWD/.tmp/publish/win-x64"
+dotnet publish XE-Local-AI-Engine.Client -c Release -r win-x64 -p:PublishProfile=win-x64 --output "$WIN_OUT"
+dotnet publish XE-Local-AI-Engine.WindowsLauncher -c Release -r win-x64 -p:PublishProfile=win-x64 --output "$WIN_OUT"
 ```
 
-The profiles set `SelfContained`, `PublishSingleFile`, and `IncludeNativeLibrariesForSelfExtract=true` (so `e_sqlite3`
-and libsodium extract and load from the bundle); trimming stays **off** (EF Core / Serilog / FastEndpoints / MEAI are
-reflection-heavy). Output lands in `XE-Local-AI-Engine.Client/bin/Release/net10.0/<rid>/publish/`.
+The Linux profile sets `SelfContained=true`, `PublishSingleFile=true`, and
+`IncludeNativeLibrariesForSelfExtract=true`. The Windows application and launcher both set `SelfContained=false`; only
+the launcher sets `UseAppHost=true`, producing the MIT-licensed Microsoft apphost while keeping `coreclr`, `hostfxr`,
+and the runtime out of the artifact. Trimming stays **off** for the reflection-heavy application.
 
 ### Run
 
-Copy the matching launcher from [`publish/`](publish/) next to the published binary and start it:
+Start the matching published entry point:
 
 - **Linux:** `publish/linux/run-xe-local-ai-engine.sh` — `exec`s the binary in the foreground so the terminal owns it
   (terminal close → `SIGHUP` → graceful shutdown).
-- **Windows:** `publish/windows/run-xe-local-ai-engine.cmd` — runs the exe in the current console window so closing that
-  window fires `CTRL_CLOSE_EVENT` → graceful shutdown (the Job Object is the hard-kill safety net).
+- **Windows:** run `XE-Local-AI-Engine.WindowsLauncher.exe` from the combined payload. It validates the adjacent files
+  and ASP.NET Core runtime, sets desktop mode, forwards Velopack arguments, launches the managed DLL, and propagates its
+  exit code. `publish/windows/run-xe-local-ai-engine.cmd` is retained only for the deprecated self-contained manual flow.
 
 See [`publish/README.md`](publish/README.md) for the expected layout. **Run one instance at a time** against the same
 user-data directory — a second instance races on the SQLite database.

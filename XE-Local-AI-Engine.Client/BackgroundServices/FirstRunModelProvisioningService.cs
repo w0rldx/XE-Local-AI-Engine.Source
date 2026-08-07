@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     First-run provisioning for the self-contained desktop launch: ensures a small node-local GGUF chat model is
+///     First-run provisioning for the packaged desktop launch: ensures a small node-local GGUF chat model is
 ///     installed (via the bundled llama.cpp runtime) and selected, so a fresh double-click install can chat without the
 ///     operator first downloading a model or running Ollama.
 /// </summary>
