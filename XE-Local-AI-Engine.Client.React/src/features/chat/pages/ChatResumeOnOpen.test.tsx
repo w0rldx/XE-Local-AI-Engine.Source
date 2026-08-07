@@ -210,7 +210,7 @@ describe("Chat cold-load resume", () => {
 			configuredDefaultModelName: null,
 			error: null,
 		});
-		adapter.listConversations.mockResolvedValue([parkedConversation()]);
+		adapter.listConversations.mockResolvedValue({ conversations: [parkedConversation()] });
 		adapter.getConversation.mockImplementation(async (conversationId: string) => parkedConversation(conversationId));
 		adapter.cancelMessage.mockResolvedValue(undefined);
 	});
@@ -266,7 +266,7 @@ describe("Chat cold-load resume", () => {
 	});
 
 	it("does not re-attach while a send already owns the turn", async () => {
-		adapter.listConversations.mockResolvedValue([parkedConversation(), parkedConversation("conversation-2")]);
+		adapter.listConversations.mockResolvedValue({ conversations: [parkedConversation(), parkedConversation("conversation-2")] });
 		adapter.resumeConversation.mockImplementation(() => emptyResumeStream());
 		// The send stays open, so its stream owns the turn for the rest of the test.
 		adapter.sendMessage.mockImplementation((_request, signal) => ({

@@ -286,6 +286,15 @@ export interface ChatInputStatus {
 	sendDisabled?: boolean;
 }
 
+// The conversation-list fetch, envelope and all: the list itself plus the node-level chat facts the endpoint reports
+// beside it. It is the chat page's unconditional first GET, which is why the composer's message-size limit rides it
+// (see ComposerSizeLimit). `maxMessageSizeKb` is absent when the node reports none; the composer then runs no
+// pre-check and an oversized send is rejected by the hub exactly as before.
+export interface ChatConversationListModel {
+	conversations: ChatConversationModel[];
+	maxMessageSizeKb?: number;
+}
+
 // Result of a manual, non-destructive compaction. `outcome` mirrors the backend ConversationCompactionOutcome names
 // ("Compacted", "NothingToCompact", "NoLocalModel", "SummarizerReturnedNothing", "ConversationNotFound"); the remaining
 // fields are populated only when a synopsis was produced.
@@ -360,6 +369,8 @@ export interface ChatDisplayShellProps {
 	// (an empty corpus disables it with a "no documents" tooltip). Defaults to true when absent.
 	knowledgeBaseHasDocuments?: boolean;
 	contextUsage?: ContextUsageModel;
+	// The node's message-size cap in KB, forwarded to the composer's size pre-check. Absent → no pre-check.
+	maxMessageSizeKb?: number;
 	streamingMessage?: ChatStreamingState;
 	timelineEntries?: ChatTimelineEntry[];
 	capabilities: ChatUiCapabilities;

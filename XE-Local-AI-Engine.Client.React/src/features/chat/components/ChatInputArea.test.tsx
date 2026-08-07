@@ -325,3 +325,68 @@ describe("ChatInputArea Enter-key send gating", () => {
 		expect(onSend).toHaveBeenCalledWith("hello", "medium", "local-default");
 	});
 });
+
+describe("ChatInputArea message-size pre-check", () => {
+	// 10 KB cap keeps the fixtures small; the component only ever sees the resolved limit.
+	const limitKb = 10;
+
+	beforeEach(() => {
+		installJsdomEnvironmentMocks();
+	});
+
+	afterEach(() => {
+		cleanup();
+	});
+
+	function typeDraft(value: string): void {
+		fireEvent.change(screen.getByTestId("chat-input"), { target: { value } });
+	}
+
+	// The suite runs without an initialized i18next, so `t` yields the inline default with its `{{...}}`
+	// placeholders intact — assertions below key off the static parts of each string, and the byte/KB arithmetic
+	// itself is covered by ComposerSizeLimit.test.ts.
+	function noticeText(): string {
+		return screen.getByTestId("composer-size-notice").textContent ?? "";
+	}
+
+	it("shows no size notice while the draft is well under the limit", () => {
+		renderWithProviders(<ChatInputArea {...baseProps()} maxMessageSizeKb={limitKb} />);
+		typeDraft("hello");
+
+		expect(screen.queryByTestId("composer-size-notice")).toBeNull();
+	});
+
+	it("shows the size readout once the draft passes 80 percent of the limit", () => {
+		renderWithProviders(<ChatInputArea {...baseProps()} maxMessageSizeKb={limitKb} />);
+		typeDraft("a".repeat(9000));
+
+		expect(noticeText()).toContain("KB /");
+		expect(noticeText()).not.toContain("attach the text as a file");
+		expect(screen.getByTestId<HTMLButtonElement>("chat-send-button").disabled).toBe(false);
+	});
+
+	it("warns and disables sending when the draft is over the limit", () => {
+		const onSend = vi.fn();
+		renderWithProviders(<ChatInputArea {...baseProps()} onSend={onSend} maxMessageSizeKb={limitKb} />);
+		typeDraft("a".repeat(20_480));
+
+		expect(noticeText()).toContain("attach the text as a file");
+		expect(screen.getByTestId<HTMLButtonElement>("chat-send-button").disabled).toBe(true);
+
+		// The Enter path calls submit() directly, so it must be gated by the same check as the button.
+		fireEvent.keyDown(screen.getByTestId("chat-input"), { key: "Enter" });
+		expect(onSend).not.toHaveBeenCalled();
+	});
+
+	it("runs no pre-check at all until the node reports its limit", () => {
+		const onSend = vi.fn();
+		renderWithProviders(<ChatInputArea {...baseProps()} onSend={onSend} />);
+		typeDraft("a".repeat(20_480));
+
+		expect(screen.queryByTestId("composer-size-notice")).toBeNull();
+		expect(screen.getByTestId<HTMLButtonElement>("chat-send-button").disabled).toBe(false);
+
+		fireEvent.keyDown(screen.getByTestId("chat-input"), { key: "Enter" });
+		expect(onSend).toHaveBeenCalledTimes(1);
+	});
+});
