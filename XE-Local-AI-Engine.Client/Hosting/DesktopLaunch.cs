@@ -21,6 +21,13 @@ internal static class DesktopLaunch
     internal const string DesktopArgument = "--desktop";
 
     /// <summary>
+    ///     The CLI argument that requests a local, operator-run reset of the administrator password without the current
+    ///     one (the "forgot password" recovery path). The new password follows either as the next token
+    ///     (<c>--reset-admin-password &lt;NEW&gt;</c>) or after an equals sign (<c>--reset-admin-password=&lt;NEW&gt;</c>).
+    /// </summary>
+    internal const string ResetAdminPasswordArgument = "--reset-admin-password";
+
+    /// <summary>
     ///     The loopback URL desktop mode binds (port 0 lets the OS pick a free port). Composed from parts rather than a
     ///     literal so it reads as a bind specification, not a fixed endpoint.
     /// </summary>
@@ -79,5 +86,42 @@ internal static class DesktopLaunch
     internal static bool IsDesktopMode(string[] args, bool isManagedInstall)
     {
         return IsDesktopMode(args, Environment.GetEnvironmentVariable, isManagedInstall);
+    }
+
+    /// <summary>
+    ///     Detects the <see cref="ResetAdminPasswordArgument" /> flag and extracts the requested new password. Returns
+    ///     <see langword="true" /> when the flag is present (so the caller runs the reset-then-exit path rather than
+    ///     starting the web host), with <paramref name="newPassword" /> set to the supplied value or <see langword="null" />
+    ///     when the operator forgot to pass one (the caller then prints a usage error). Accepts both the space-separated
+    ///     and <c>=</c> forms so a <c>--reset-admin-password=secret</c> is never mistaken for a normal launch.
+    /// </summary>
+    /// <param name="args">The process command-line arguments.</param>
+    /// <param name="newPassword">The new password to set, or <see langword="null" /> when the flag carried no value.</param>
+    internal static bool TryGetResetAdminPassword(string[] args, out string? newPassword)
+    {
+        ArgumentNullException.ThrowIfNull(args);
+
+        newPassword = null;
+        const string equalsPrefix = ResetAdminPasswordArgument + "=";
+
+        for (var index = 0; index < args.Length; index++)
+        {
+            var argument = args[index];
+
+            if (argument.StartsWith(equalsPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                var value = argument[equalsPrefix.Length..];
+                newPassword = value.Length == 0 ? null : value;
+                return true;
+            }
+
+            if (string.Equals(argument, ResetAdminPasswordArgument, StringComparison.OrdinalIgnoreCase))
+            {
+                newPassword = index + 1 < args.Length ? args[index + 1] : null;
+                return true;
+            }
+        }
+
+        return false;
     }
 }

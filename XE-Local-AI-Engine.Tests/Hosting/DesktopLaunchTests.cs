@@ -63,6 +63,41 @@ public sealed class DesktopLaunchTests
     }
 
     [Test]
+    public void ResetAdminPassword_WhenFlagAbsent_IsNotRequested()
+    {
+        var requested = DesktopLaunch.TryGetResetAdminPassword(["--desktop"], out var password);
+
+        AssertEx.False(requested, "Without the flag the reset path must not run; the web host starts normally.");
+        AssertEx.Null(password);
+    }
+
+    [Test]
+    public void ResetAdminPassword_ReadsValueFromEitherSpaceOrEqualsForm()
+    {
+        var viaSpace = DesktopLaunch.TryGetResetAdminPassword(["--reset-admin-password", "N3w!Passw0rd123"], out var spaceValue);
+        var viaEquals = DesktopLaunch.TryGetResetAdminPassword(["--reset-admin-password=N3w!Passw0rd123"], out var equalsValue);
+
+        AssertEx.True(viaSpace);
+        AssertEx.Equal("N3w!Passw0rd123", spaceValue);
+        AssertEx.True(viaEquals, "The =form must be recognized so it is never mistaken for a normal launch.");
+        AssertEx.Equal("N3w!Passw0rd123", equalsValue);
+    }
+
+    [Test]
+    public void ResetAdminPassword_WhenFlagHasNoValue_IsRequestedButPasswordless()
+    {
+        // Flag present but no password supplied (trailing flag, or bare =): requested=true so Program.cs prints a usage
+        // error and exits rather than silently booting the server with a half-typed command.
+        var trailing = DesktopLaunch.TryGetResetAdminPassword(["--reset-admin-password"], out var trailingValue);
+        var bareEquals = DesktopLaunch.TryGetResetAdminPassword(["--reset-admin-password="], out var bareEqualsValue);
+
+        AssertEx.True(trailing);
+        AssertEx.Null(trailingValue);
+        AssertEx.True(bareEquals);
+        AssertEx.Null(bareEqualsValue);
+    }
+
+    [Test]
     public void BrowserLaunchCommand_PerOs_UsesExplorerOrXdgOpen()
     {
         const string url = "http://127.0.0.1:5001/";
