@@ -917,6 +917,10 @@
 			},
 			"composer": {
 				"samplingOptions": "Erweiterte Sampling-Optionen",
+				"size": {
+					"usage": "{{used}} KB / {{limit}} KB",
+					"overLimit": "Diese Nachricht ist {{used}} KB groß — über dem Limit von {{limit}} KB pro Nachricht. Kürzen Sie sie oder hängen Sie den Text als Datei an."
+				},
 				"attach": "Datei anhängen",
 				"dropToAttach": "Dateien zum Anhängen ablegen",
 				"image": "Bild anhängen",

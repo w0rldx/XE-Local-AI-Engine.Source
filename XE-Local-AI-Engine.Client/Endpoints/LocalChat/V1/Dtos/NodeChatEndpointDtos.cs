@@ -26,6 +26,18 @@ public sealed class ListNodeChatConversationsRequest
 public sealed class ListNodeChatConversationsResponse
 {
     public required IReadOnlyList<NodeChatConversationSummaryResponse> Items { get; init; }
+
+    /// <summary>
+    ///     The node's EFFECTIVE <c>Security:MaxMessageSizeKb</c> (an operator can override the 256 KB default), so the
+    ///     composer can warn — and refuse to send — before firing a request the hub is guaranteed to reject. Advisory
+    ///     only: <c>LocalChatHub.EnsureMessageWithinSizeCap</c> remains the sole enforcement point.
+    ///     <para>
+    ///         It rides this response because the conversation list is the chat page's unconditional first GET (no
+    ///         capability gate, no selected conversation required), so the limit is in hand before the composer can
+    ///         accept a keystroke — and it carries the same <c>Operator</c> policy as the hub that enforces it.
+    ///     </para>
+    /// </summary>
+    public required int MaxMessageSizeKb { get; init; }
 }
 
 public sealed class GetNodeChatConversationRequest

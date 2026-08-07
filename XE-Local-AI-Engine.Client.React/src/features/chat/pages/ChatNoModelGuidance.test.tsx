@@ -135,7 +135,7 @@ describe("Chat no-installed-model guidance", () => {
 		installJsdomEnvironmentMocks();
 		vi.clearAllMocks();
 		useNodeChatPreferencesStore.getState().actions.setSelectedConversationId("");
-		adapter.listConversations.mockResolvedValue([]);
+		adapter.listConversations.mockResolvedValue({ conversations: [] });
 	});
 
 	afterEach(() => {

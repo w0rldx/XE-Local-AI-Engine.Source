@@ -1,4 +1,4 @@
-import { ActionIcon, Box, Button, FileButton, Group, Menu, Textarea, Tooltip } from "@mantine/core";
+import { ActionIcon, Box, Button, FileButton, Group, Menu, Text, Textarea, Tooltip } from "@mantine/core";
 import {
 	IconAdjustments,
 	IconBooks,
@@ -8,7 +8,7 @@ import {
 	IconPlayerStopFilled,
 	IconSend,
 } from "@tabler/icons-react";
-import { type DragEvent, useEffect, useRef, useState } from "react";
+import { type DragEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
@@ -22,6 +22,7 @@ import { ContextUsageBadge } from "@/features/chat/components/ContextUsageBadge"
 import { ModelSelectorCard } from "@/features/chat/components/ModelSelectorCard";
 import type { ChatAttachment, PendingAttachmentUpload } from "@/features/chat/models/ChatAttachmentModels";
 import { defaultChatUiCapabilities } from "@/features/chat/models/ChatCapabilityGates";
+import { evaluateComposerSize, toDisplayKb } from "@/features/chat/models/ComposerSizeLimit";
 import type { ChatCommandOption } from "@/features/chat/models/SlashCommandModels";
 import { resolveSlashCommand } from "@/features/chat/models/SlashCommandResolver";
 import { useSlashCommandAutocomplete } from "@/features/chat/hooks/useSlashCommandAutocomplete";
@@ -61,6 +62,9 @@ interface ChatInputAreaProps {
 	availableReasoningEfforts: ReasoningEffort[];
 	capabilities?: ChatUiCapabilities;
 	contextUsage?: ContextUsageModel;
+	// The node's effective Security:MaxMessageSizeKb. Drives the pre-send size check below; absent (not loaded yet, or
+	// a node that omits it) means no pre-check at all — the hub still enforces the cap.
+	maxMessageSizeKb?: number;
 	disabled?: boolean;
 	isSending: boolean;
 	modelOptions: ModelOption[];
@@ -111,6 +115,7 @@ export function ChatInputArea({
 	availableReasoningEfforts,
 	capabilities = defaultChatUiCapabilities,
 	contextUsage,
+	maxMessageSizeKb,
 	disabled = false,
 	isSending,
 	modelOptions,
@@ -160,7 +165,13 @@ export function ChatInputArea({
 	// The knowledge-base grounding toggle shows for plain chat only: agent mode reaches the knowledge base through the
 	// search_knowledge_base tool, so an extra inline-grounding toggle there would be redundant and confusing.
 	const showKnowledgeBaseControls = capabilities.showKnowledgeBaseControls && !agentModeEnabled;
-	const sendDisabled = isSending ? false : disabled || sendDisabledProp || !trimmed;
+	// Pre-send mirror of the node's message-size cap. Measured against `trimmed` — the string the send path actually
+	// puts on the wire — so the byte count matches what LocalChatHub.EnsureMessageWithinSizeCap will measure. (A draft
+	// that resolves to a slash command sends the command's prompt instead, but such a draft is a few characters long,
+	// so this can never raise a FALSE warning; the server still enforces that case.)
+	const sizeState = useMemo(() => evaluateComposerSize(trimmed, maxMessageSizeKb), [trimmed, maxMessageSizeKb]);
+	const overSizeLimit = sizeState?.overLimit === true;
+	const sendDisabled = isSending ? false : disabled || sendDisabledProp || !trimmed || overSizeLimit;
 	// Agent selector is disabled while sending or when there are no agents to pick from.
 	const agentSelectorDisabled = disabled || isSending || agentOptions.length === 0;
 	// File attachments are offered only behind the capability gate, with a wired upload handler, and while the
@@ -271,7 +282,7 @@ export function ChatInputArea({
 		// respects `sendDisabled`, but the Textarea's onKeyDown calls submit() directly — so without this guard the
 		// keyboard path bypasses `sendDisabledProp` (selected-conversation still loading, remote view-only thread)
 		// and can fire a send the button would have refused.
-		if (!trimmed || disabled || sendDisabledProp || isSending) {
+		if (!trimmed || disabled || sendDisabledProp || isSending || overSizeLimit) {
 			return;
 		}
 
@@ -482,6 +493,31 @@ export function ChatInputArea({
 					onRemove={onRemoveAttachment ?? (() => undefined)}
 					disabled={attachmentControlsDisabled}
 				/>
+			) : null}
+			{/* Size pre-check notice. One row covers both states: a dimmed readout once the draft passes 80% of the cap,
+			    turning into the red over-limit sentence past it. It sits above the input (beside the attachment chips)
+			    rather than in the bottomSection toolbar — that toolbar is already fighting for width and wraps, and the
+			    over-limit sentence needs a full line to stay legible. Same tabular-nums readout style as the
+			    context-usage badge, and the same <output aria-live> so a screen reader hears the state change. */}
+			{sizeState ? (
+				<output
+					aria-live="polite"
+					data-testid="composer-size-notice"
+					style={{ display: "block", marginBottom: 4, textAlign: "right" }}
+				>
+					<Text component="span" size="xs" c={overSizeLimit ? "red" : "dimmed"} style={{ fontVariantNumeric: "tabular-nums" }}>
+						{overSizeLimit
+							? t(
+									"pages.chat.composer.size.overLimit",
+									"This message is {{used}} KB — over the {{limit}} KB limit for a single message. Shorten it, or attach the text as a file.",
+									{ used: toDisplayKb(sizeState.bytes), limit: toDisplayKb(sizeState.limitBytes) },
+								)
+							: t("pages.chat.composer.size.usage", "{{used}} KB / {{limit}} KB", {
+									used: toDisplayKb(sizeState.bytes),
+									limit: toDisplayKb(sizeState.limitBytes),
+								})}
+					</Text>
+				</output>
 			) : null}
 			<SlashCommandAutocomplete
 				store={autocomplete.combobox}

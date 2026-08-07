@@ -27,7 +27,6 @@ public sealed class CentralPlatformOptionsValidator : IValidateOptions<CentralPl
                                    "CentralPlatform:ReconnectBackoffMaxMs must be greater than or equal to ReconnectBackoffBaseMs.")
                                .AppendIf(options.ReconnectBackoffJitterMs is < 0 or > 10000, "CentralPlatform:ReconnectBackoffJitterMs must be between 0 and 10000.")
                                .AppendIf(options.ReconnectMaxAttempts is < 0 or > 100, "CentralPlatform:ReconnectMaxAttempts must be between 0 and 100.")
-                               .AppendIf(options.MaxSignalRMessageSizeKb is < 16 or > 1024, "CentralPlatform:MaxSignalRMessageSizeKb must be between 16 and 1024.")
                                .AppendIf(options.ToolCallTimeoutSeconds is < 5 or > 600, "CentralPlatform:ToolCallTimeoutSeconds must be between 5 and 600.")
                                .AppendIf(options.InvocationTimeoutSeconds is < 10 or > 3600, "CentralPlatform:InvocationTimeoutSeconds must be between 10 and 3600.")
                                .ToArray();

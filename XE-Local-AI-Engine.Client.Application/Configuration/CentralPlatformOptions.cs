@@ -36,9 +36,6 @@ public sealed class CentralPlatformOptions
     [Range(minimum: 0, maximum: 100)]
     public int ReconnectMaxAttempts { get; set; } = 0;
 
-    [Range(minimum: 16, maximum: 1024)]
-    public int MaxSignalRMessageSizeKb { get; set; } = 128;
-
     [Range(minimum: 5, maximum: 600)]
     public int ToolCallTimeoutSeconds { get; set; } = 30;
 

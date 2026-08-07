@@ -15132,7 +15132,8 @@
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "items"
+          "items",
+          "maxMessageSizeKb"
         ],
         "properties": {
           "items": {
@@ -15140,6 +15141,10 @@
             "items": {
               "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatConversationSummaryResponse"
             }
+          },
+          "maxMessageSizeKb": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },

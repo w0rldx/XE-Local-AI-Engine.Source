@@ -188,7 +188,7 @@ describe("Chat send-conversation resolution", () => {
 	it("sends to the newly-selected conversation, never the placeholder one, when Enter fires before its fetch resolves", async () => {
 		const conversationA = makeConversation("conversation-a", "Thread A");
 		const conversationB = makeConversation("conversation-b", "Thread B");
-		adapter.listConversations.mockResolvedValue([conversationA, conversationB]);
+		adapter.listConversations.mockResolvedValue({ conversations: [conversationA, conversationB] });
 
 		// Conversation B's full payload is deferred so that selecting B keeps A on screen via keepPreviousData
 		// (isPlaceholderData), reproducing the fast-switch-then-Enter window.
@@ -234,7 +234,7 @@ describe("Chat send-conversation resolution", () => {
 
 	it("invalidates the local-model-details query after a completed turn so the context meter re-reads the effective window", async () => {
 		const conversation = makeConversation("conversation-1", "Thread");
-		adapter.listConversations.mockResolvedValue([conversation]);
+		adapter.listConversations.mockResolvedValue({ conversations: [conversation] });
 		adapter.getConversation.mockResolvedValue(conversation);
 		adapter.sendMessage.mockImplementation(() => ({
 			async *[Symbol.asyncIterator](): AsyncIterator<NodeChatStreamEventDto> {
