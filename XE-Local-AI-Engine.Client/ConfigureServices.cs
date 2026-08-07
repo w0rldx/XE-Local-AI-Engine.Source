@@ -286,6 +286,32 @@ public static class ConfigureServices
                            }
 
                            return Task.CompletedTask;
+                       },
+                       // Stateless JWTs carry no revocation state, so enforce the user's current ASP.NET Identity security
+                       // stamp here: password resets and changes rotate the stamp, which must immediately invalidate every
+                       // access token minted before the change rather than letting it live out its lifetime. Every token
+                       // NodeTokenService issues for a persisted user binds that user's stamp, so this runs one indexed
+                       // lookup per authenticated request — negligible for a single-operator local node. Two cases are
+                       // deliberately let through: a token with NO stamp claim (the only way to hold a validly-signed
+                       // stampless token is to possess the node signing key, i.e. full compromise where forging a matching
+                       // stamp is trivial anyway), and a subject with no persisted user row. Both keep synthetic test
+                       // tokens working exactly as before while still invalidating real, stamp-bound sessions on reset.
+                       OnTokenValidated = static async context =>
+                       {
+                           var tokenStamp = context.Principal?.FindFirst(NodeAuthorizationPolicies.SecurityStampClaimType)?.Value;
+                           var userId = context.Principal?.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+                           if (string.IsNullOrEmpty(tokenStamp) || string.IsNullOrEmpty(userId))
+                           {
+                               return;
+                           }
+
+                           var userManager = context.HttpContext.RequestServices.GetRequiredService<UserManager<NodeUser>>();
+                           var user = await userManager.FindByIdAsync(userId).ConfigureAwait(false);
+                           if (user is not null
+                               && !string.Equals(await userManager.GetSecurityStampAsync(user).ConfigureAwait(false), tokenStamp, StringComparison.Ordinal))
+                           {
+                               context.Fail("Access token security stamp is stale.");
+                           }
                        }
                    };
                });

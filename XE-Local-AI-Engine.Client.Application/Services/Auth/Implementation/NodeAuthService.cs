@@ -241,7 +241,8 @@ public sealed class NodeAuthService : INodeAuthService
         await RevokeActiveTokensAsync(user.Id, cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 
-        _logger.LogWarning("Node admin password reset via local CLI for user {UserId}; all refresh tokens revoked.", user.Id);
+        _logger.LogWarning("Node admin password reset for user {UserId}; refresh tokens revoked and the rotated security "
+                           + "stamp invalidates existing access tokens.", user.Id);
         return new NodePasswordChangeResult(Succeeded: true, []);
     }
 

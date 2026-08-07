@@ -93,6 +93,13 @@ public sealed class NodeTokenService : INodeTokenService
             new(JwtRegisteredClaimNames.Name, userName)
         };
 
+        // Bind the token to the user's current security stamp so a password reset/change (which rotates the stamp)
+        // invalidates every already-issued access token at validation time, not merely on expiry.
+        if (!string.IsNullOrEmpty(user.SecurityStamp))
+        {
+            claims.Add(new Claim(NodeAuthorizationPolicies.SecurityStampClaimType, user.SecurityStamp));
+        }
+
         claims.AddRange(roles.Where(static role => !string.IsNullOrWhiteSpace(role))
                              .Distinct(StringComparer.Ordinal)
                              .Select(static role => new Claim(NodeAuthorizationPolicies.RoleClaimType, role)));
