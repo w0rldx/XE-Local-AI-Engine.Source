@@ -1,12 +1,16 @@
 namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 
+using System.Net.Http;
 using Microsoft.Extensions.Caching.Memory;
+using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Automation;
 using XE_Local_AI_Engine.Client.Services.Automation.Implementation;
+using XE_Local_AI_Engine.Client.Services.CustomTools;
+using XE_Local_AI_Engine.Client.Services.CustomTools.Implementation;
 using XE_Local_AI_Engine.Client.Services.Insights;
 using XE_Local_AI_Engine.Client.Services.Insights.Implementation;
 using XE_Local_AI_Engine.Client.Services.Workspace;
@@ -39,6 +43,24 @@ internal static class AddNodeWorkspaceAndAgentsExtensions
         // carries the secret header/env values) are encrypted at rest; the store owns id/version/timestamp stamping and
         // the content-affecting version-bump rule, while the CRUD service owns operator authoring and validation.
         builder.Services.AddScoped<ICustomToolStore, CustomToolStore>();
+        // Custom-tool executors + catalog (P2 SECURITY CORE). The catalog reads the store live per turn (no cache) and
+        // hands the resolver an executable already floored in ApprovalRequiredAIFunction. HttpFetch goes out through a
+        // dedicated named client whose SocketsHttpHandler pins the connection to an SSRF-validated address and refuses
+        // redirects; Command runs on the host under a scrubbed environment, wall-clock timeout, tree-kill, output cap,
+        // and a process-wide concurrency ceiling.
+        builder.Services.AddHttpClient(HttpFetchExecutor.HttpClientName)
+               .ConfigurePrimaryHttpMessageHandler(static () => new SocketsHttpHandler
+               {
+                   AllowAutoRedirect = false,
+                   UseCookies = false,
+                   ConnectCallback = CustomToolSsrfGuard.CreatePinnedConnectCallback(),
+                   // Short pooled lifetime so a pinned validated address is not reused indefinitely across DNS changes.
+                   PooledConnectionLifetime = TimeSpan.FromMinutes(1)
+               });
+        builder.Services.AddSingleton(static _ => new CustomToolConcurrencyLimiter());
+        builder.Services.AddScoped<ICustomToolExecutor, HttpFetchExecutor>();
+        builder.Services.AddScoped<ICustomToolExecutor, HostProcessExecutor>();
+        builder.Services.AddScoped<ICustomToolCatalog, CustomToolCatalog>();
         // Node-local playbook actions. Behavior and advisory trigger conditions are encrypted at rest; enabled actions
         // are folded into the agent prompt by the resolver, while the CRUD service owns operator authoring.
         builder.Services.AddScoped<IPlaybookActionStore, PlaybookActionStore>();
