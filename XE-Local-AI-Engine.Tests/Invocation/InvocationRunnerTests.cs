@@ -1127,6 +1127,41 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
+    public async Task RunAsync_WhenAClientLocalToolRequiresApproval_StillFoldsTheSegmentAndResumes()
+    {
+        // Companion to the test above (whose offer is ApiSide, i.e. carries no approval metadata to the tool resolver
+        // and so counts as approval-possible by fail-closed). This is the OTHER branch of the retention predicate: a
+        // ClientLocal offer is judged on its own RequiresApproval flag, so a true one must still retain and fold the
+        // segment. A predicate that narrowed to "any tool offered" vs "any tool that can be approval-wrapped" must not
+        // lose this case — dropping the retention here would replay an approval resume without its assistant tool-call.
+        var sender = new MockHubMessageSender();
+        var segment = 0;
+        var factory = CreateFactory(_ =>
+        {
+            segment++;
+            return segment == 1 ? ApprovalRequestUpdates() : CreateUpdates("done");
+        });
+        var runner = CreateRunner(sender, factory);
+
+        var package = RuntimePackageBuilder.Valid().Build();
+        package.AllowedTools.Add(new AllowedToolDto
+        {
+            Id = Guid.NewGuid(),
+            Name = "run_in_agent_home",
+            Location = ToolLocation.ClientLocal,
+            RequiresApproval = true
+        });
+
+        var runTask = RunAsync(runner, package);
+        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
+
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals.Single().RequestId, Approved: true));
+        await runTask;
+
+        AssertEx.Equal(expected: 2, segment, "an approval-required ClientLocal tool must still drive the fold-and-resume segment");
+    }
+
+    [Test]
     public async Task ResolveApprovalResult_WhenRequestIdIsUnmatched_DoesNotResumeThePendingApproval()
     {
         var sender = new MockHubMessageSender();

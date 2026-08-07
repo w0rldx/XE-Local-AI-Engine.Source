@@ -7,6 +7,7 @@ using NSubstitute;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
+using XE_Local_AI_Engine.Tests.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -106,6 +107,51 @@ public sealed class LlamaServerRerankerClientTests
 
         AssertEx.Null(scores, "A hung reranker must degrade to null once the bounded timeout fires.");
         AssertEx.False(callerCts.IsCancellationRequested, "The caller token must not be cancelled by the internal timeout.");
+    }
+
+    [Test]
+    public void ResolveRequestTimeout_ScalesWithThePool_FlooredAtTheSingleRequestBudget_AndCapped()
+    {
+        // A cross-encoder scores the pool sequentially on a --parallel 1 server, so a flat budget silently degrades
+        // reranking on any box slow enough to need more than it.
+        AssertEx.Equal(TimeSpan.FromSeconds(5), LlamaServerRerankerClient.ResolveRequestTimeout(documentCount: 0),
+            "An empty pool gets the floor, not zero.");
+        AssertEx.Equal(TimeSpan.FromSeconds(5.5), LlamaServerRerankerClient.ResolveRequestTimeout(documentCount: 1),
+            "The floor still applies with the per-document allowance on top.");
+        AssertEx.Equal(TimeSpan.FromSeconds(15), LlamaServerRerankerClient.ResolveRequestTimeout(documentCount: 20),
+            "The default max(20, 4 x limit) pool gets a budget that scales with it.");
+        AssertEx.Equal(TimeSpan.FromSeconds(30), LlamaServerRerankerClient.ResolveRequestTimeout(documentCount: 500),
+            "The budget is capped however large the pool grows.");
+    }
+
+    [Test]
+    public async Task RerankAsync_WhenScoringExceedsTheBudget_RecordsTheTimeoutReason()
+    {
+        using var handler = new CapturingHandler(_ => JsonOk("""{"results":[]}"""), TimeSpan.FromSeconds(30));
+        using var http = new HttpClient(handler, disposeHandler: false);
+        var logger = new CapturingLogger<LlamaServerRerankerClient>();
+        var client = new LlamaServerRerankerClient(ReadySupervisor(), http, logger, requestTimeout: TimeSpan.FromMilliseconds(50));
+
+        var scores = await client.RerankAsync(ModelName, "the query", ["a", "b"], CancellationToken.None);
+
+        AssertEx.Null(scores, "An over-budget rerank degrades to fusion order.");
+        AssertEx.Contains(logger.AllText, "Reason: timeout",
+            message: "A budget-exhausted rerank must be distinguishable from an absent reranker.");
+    }
+
+    [Test]
+    public async Task RerankAsync_WhenTheServerIsDown_RecordsTheUnavailableReason()
+    {
+        using var handler = new CapturingHandler(_ => throw new HttpRequestException("Connection refused."));
+        using var http = new HttpClient(handler, disposeHandler: false);
+        var logger = new CapturingLogger<LlamaServerRerankerClient>();
+        var client = new LlamaServerRerankerClient(ReadySupervisor(), http, logger);
+
+        var scores = await client.RerankAsync(ModelName, "the query", ["a", "b"], CancellationToken.None);
+
+        AssertEx.Null(scores, "A transport failure degrades to fusion order.");
+        AssertEx.Contains(logger.AllText, "Reason: unavailable",
+            message: "An absent reranker must be distinguishable from one that ran out of time.");
     }
 
     [Test]

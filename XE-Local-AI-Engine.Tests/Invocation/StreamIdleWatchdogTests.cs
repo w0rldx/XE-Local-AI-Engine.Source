@@ -126,6 +126,20 @@ public sealed class StreamIdleWatchdogTests
     }
 
     [Test]
+    public async Task WithIdleTimeout_WhenProviderFaultsWithTimeoutException_KeepsItAProviderFaultNotAnIdleTimeout()
+    {
+        // The wait surfaces the pull's own exception unchanged, so the watchdog tells its own deadline apart from a
+        // provider fault by identity, not by type. A provider TimeoutException must stay the provider's: the runner
+        // classifies the two to different messages (StreamIdleTimeoutException is forwarded verbatim, a bare
+        // TimeoutException is collapsed to the generic constant).
+        var exception = await AssertEx.ThrowsAsync<TimeoutException>(() =>
+            CollectAsync(StreamIdleWatchdog.WithIdleTimeout(OneThenFaultWithTimeout, TimeSpan.FromSeconds(30), "should not fire", CancellationToken.None)));
+
+        AssertEx.False(exception is StreamIdleTimeoutException, "the provider's own TimeoutException must not be reported as an idle timeout");
+        AssertEx.Contains(exception.Message, "provider gave up");
+    }
+
+    [Test]
     public async Task WithIdleTimeout_WhenOuterTokenCancelled_ThrowsOperationCanceledNotIdleTimeout()
     {
         using var cancellationTokenSource = new CancellationTokenSource();
@@ -176,6 +190,15 @@ public sealed class StreamIdleWatchdogTests
         yield return 1;
         await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
         yield return 2;
+    }
+
+    // Yields one chunk, then faults the NEXT pull asynchronously (so it goes through the wall-clock-bounded wait rather
+    // than the synchronous fast path) with a bare TimeoutException of its own.
+    private static async IAsyncEnumerable<int> OneThenFaultWithTimeout([EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        yield return 1;
+        await Task.Yield();
+        throw new TimeoutException("provider gave up");
     }
 
     // Yields one chunk, then blocks the next MoveNextAsync on an uncancelled gate — deliberately IGNORING the token, so

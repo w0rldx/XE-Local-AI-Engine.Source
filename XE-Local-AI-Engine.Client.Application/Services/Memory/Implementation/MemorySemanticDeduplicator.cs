@@ -1,10 +1,9 @@
 namespace XE_Local_AI_Engine.Client.Services.Memory.Implementation;
 
-using System.Collections.Concurrent;
 using System.Numerics.Tensors;
-using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 using OllamaSharp.Models.Exceptions;
+using XE_Local_AI_Engine.Client.Common.Caching;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
@@ -24,13 +23,20 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 /// </summary>
 internal sealed class MemorySemanticDeduplicator : IMemorySemanticDeduplicator
 {
+    // Byte ceiling on the existing-memory vector cache, alongside the configured entry bound. 4 MiB holds well over the
+    // default 512 entries at 768 dimensions and caps a 4096-dimension model at ~256 — the entry bound alone would let
+    // the same configuration retain 8 MB. Mirrors the playbook ranker's ceiling.
+    private const long EmbeddingCacheMaxBytes = 4L * 1024 * 1024;
+
+    // Flat allowance per entry for the key struct plus dictionary node — the budget bounds RAM, it does not measure it.
+    private const long EntryOverheadBytes = 64;
+
     // RAM-only existing-memory embedding cache keyed by (memory id, version, embedding model). Version invalidates an
     // edited memory; the model name guards against cosine'ing a stale-dimension vector against a new model's candidate.
-    // Insertion order is tracked separately so the bound evicts the oldest-inserted entries first.
-    private readonly ConcurrentDictionary<EmbeddingCacheKey, ReadOnlyMemory<float>> _cache = new();
-    private readonly Lock _cacheLock = new();
+    // Eviction is coldest-first within both bounds, and concurrent extraction runs missing on the same memory share one
+    // embedding round-trip rather than each paying the single-slot embedding server.
+    private readonly ByteBudgetedCache<EmbeddingCacheKey, ReadOnlyMemory<float>> _cache;
     private readonly IEmbeddingModelResolver _embeddingModelResolver;
-    private readonly Queue<EmbeddingCacheKey> _insertionOrder = new();
     private readonly ILogger<MemorySemanticDeduplicator> _logger;
     private readonly MemoryExtractionOptions _options;
     private readonly ILocalModelProviderResolver _providerResolver;
@@ -49,6 +55,9 @@ internal sealed class MemorySemanticDeduplicator : IMemorySemanticDeduplicator
         _embeddingModelResolver = embeddingModelResolver;
         _options = options.Value;
         _logger = logger;
+        _cache = new ByteBudgetedCache<EmbeddingCacheKey, ReadOnlyMemory<float>>(EmbeddingCacheMaxBytes,
+            _options.SemanticDedupEmbeddingCacheMaxEntries,
+            static (key, vector) => (vector.Length * sizeof(float)) + (key.Model.Length * sizeof(char)) + EntryOverheadBytes);
     }
 
     /// <inheritdoc />
@@ -109,82 +118,95 @@ internal sealed class MemorySemanticDeduplicator : IMemorySemanticDeduplicator
 
         var model = resolution.Name;
 
-        // Resolve each existing memory's cached vector (keyed by id+version+model); collect the misses (with their text)
-        // plus every candidate into one ordered batch so the whole run costs a single embedding round-trip. Candidates
-        // are always re-embedded (they have no stable identity yet) and never cached.
-        var existingVectors = new ReadOnlyMemory<float>[existing.Count];
-        var missIndexes = new List<int>();
-        var batchTexts = new List<string>();
-
-        for (var index = 0; index < existing.Count; index++)
-        {
-            var key = new EmbeddingCacheKey(existing[index].Id, existing[index].Version, model);
-            if (_cache.TryGetValue(key, out var cached))
-            {
-                existingVectors[index] = cached;
-                continue;
-            }
-
-            missIndexes.Add(index);
-            batchTexts.Add(existing[index].Behavior);
-        }
-
-        var candidateBatchStart = batchTexts.Count;
-        foreach (var candidate in candidates)
-        {
-            batchTexts.Add(candidate.Behavior);
-        }
-
         using var generator = provider.CreateEmbeddingGenerator(new LocalModelSelection
         {
             ModelName = model,
             ProviderName = providerName
         });
 
-        var generated = await generator.GenerateAsync(batchTexts, options: null, cancellationToken).ConfigureAwait(false);
-
-        // A well-behaved generator returns exactly one embedding per input, in order. A short/partial response would make
-        // the positional indexing below throw; degrade to lexical-only instead so the run never drops candidates on a
-        // misbehaving embedder. No candidate/memory text is logged.
-        if (generated.Count != batchTexts.Count)
+        var keys = new EmbeddingCacheKey[existing.Count];
+        var textByKey = new Dictionary<EmbeddingCacheKey, string>(existing.Count);
+        for (var index = 0; index < existing.Count; index++)
         {
-            _logger.LogWarning("Semantic memory dedup received a short embedding response; falling back to lexical-only dedup for this run.");
+            keys[index] = new EmbeddingCacheKey(existing[index].Id, existing[index].Version, model);
+            textByKey[keys[index]] = existing[index].Behavior;
+        }
+
+        // The cache resolves the existing memories it can (and waits on a concurrent run already embedding the same
+        // memory); the remaining misses plus every candidate go out as ONE batch, so a run still costs a single
+        // embedding round-trip. Candidates are always re-embedded (they have no stable identity yet) and never cached.
+        var candidateVectors = new ReadOnlyMemory<float>[candidates.Count];
+        var existingVectors = await _cache.GetOrAddManyAsync(keys, EmbedMissingExistingAsync, cancellationToken).ConfigureAwait(false);
+
+        if (existingVectors is null)
+        {
+            // A short/partial embedding response, here or in a concurrent run this one coalesced onto. No
+            // candidate/memory text is logged.
+            _logger.LogWarning("Semantic memory dedup could not resolve every existing-memory vector; falling back to lexical-only dedup for this run.");
             return MemorySemanticDedupResult.NotApplied;
         }
 
-        // Fill the missed existing vectors into their slots and cache them (RAM-only, bounded).
-        for (var missPosition = 0; missPosition < missIndexes.Count; missPosition++)
-        {
-            var existingIndex = missIndexes[missPosition];
-            var vector = generated[missPosition].Vector;
-            existingVectors[existingIndex] = vector;
-            StoreInCache(new EmbeddingCacheKey(existing[existingIndex].Id, existing[existingIndex].Version, model), vector);
-        }
+        return ClassifyCandidates(existing, candidates, existingVectors, candidateVectors);
 
-        return ClassifyCandidates(existing, candidates, existingVectors, generated, candidateBatchStart);
+        async Task<IReadOnlyList<ReadOnlyMemory<float>>?> EmbedMissingExistingAsync(IReadOnlyList<EmbeddingCacheKey> missing,
+            CancellationToken token)
+        {
+            var batchTexts = new List<string>(missing.Count + candidates.Count);
+            foreach (var key in missing)
+            {
+                batchTexts.Add(textByKey[key]);
+            }
+
+            foreach (var candidate in candidates)
+            {
+                batchTexts.Add(candidate.Behavior);
+            }
+
+            var generated = await generator.GenerateAsync(batchTexts, options: null, token).ConfigureAwait(false);
+
+            // A well-behaved generator returns exactly one embedding per input, in order. A short/partial response would
+            // make the positional indexing throw; signal a degrade instead so the run never drops candidates on a
+            // misbehaving embedder.
+            if (generated.Count != batchTexts.Count)
+            {
+                return null;
+            }
+
+            for (var index = 0; index < candidates.Count; index++)
+            {
+                candidateVectors[index] = generated[missing.Count + index].Vector;
+            }
+
+            var vectors = new ReadOnlyMemory<float>[missing.Count];
+            for (var position = 0; position < missing.Count; position++)
+            {
+                vectors[position] = generated[position].Vector;
+            }
+
+            return vectors;
+        }
     }
 
     private MemorySemanticDedupResult ClassifyCandidates(IReadOnlyList<MemoryDedupExisting> existing,
         IReadOnlyList<MemoryDedupCandidate> candidates,
         ReadOnlyMemory<float>[] existingVectors,
-        GeneratedEmbeddings<Embedding<float>> generated,
-        int candidateBatchStart)
+        ReadOnlyMemory<float>[] candidateVectors)
     {
         var threshold = _options.SemanticDedupSimilarityThreshold;
         var duplicateIndexes = new HashSet<int>();
 
-        // Batch positions of candidates accepted so far (not flagged duplicate). Comparing a later candidate against
-        // earlier accepted candidates collapses two paraphrases proposed in the same run; a flagged duplicate is never a
+        // Indexes of candidates accepted so far (not flagged duplicate). Comparing a later candidate against earlier
+        // accepted candidates collapses two paraphrases proposed in the same run; a flagged duplicate is never a
         // comparison target (it will not be persisted).
-        var acceptedCandidatePositions = new List<int>(candidates.Count);
+        var acceptedCandidateIndexes = new List<int>(candidates.Count);
 
         for (var candidateIndex = 0; candidateIndex < candidates.Count; candidateIndex++)
         {
             var candidate = candidates[candidateIndex];
-            var candidateVector = generated[candidateBatchStart + candidateIndex].Vector;
+            var candidateVector = candidateVectors[candidateIndex];
 
             var isDuplicate = MatchesExisting(existing, existingVectors, candidate, candidateVector, threshold)
-                              || MatchesAcceptedCandidate(candidates, generated, candidateBatchStart, acceptedCandidatePositions, candidate, candidateVector, threshold);
+                              || MatchesAcceptedCandidate(candidates, candidateVectors, acceptedCandidateIndexes, candidate, candidateVector, threshold);
 
             if (isDuplicate)
             {
@@ -192,7 +214,7 @@ internal sealed class MemorySemanticDeduplicator : IMemorySemanticDeduplicator
             }
             else
             {
-                acceptedCandidatePositions.Add(candidateBatchStart + candidateIndex);
+                acceptedCandidateIndexes.Add(candidateIndex);
             }
         }
 
@@ -222,21 +244,20 @@ internal sealed class MemorySemanticDeduplicator : IMemorySemanticDeduplicator
     }
 
     private static bool MatchesAcceptedCandidate(IReadOnlyList<MemoryDedupCandidate> candidates,
-        GeneratedEmbeddings<Embedding<float>> generated,
-        int candidateBatchStart,
-        List<int> acceptedCandidatePositions,
+        ReadOnlyMemory<float>[] candidateVectors,
+        List<int> acceptedCandidateIndexes,
         MemoryDedupCandidate candidate,
         ReadOnlyMemory<float> candidateVector,
         double threshold)
     {
-        foreach (var acceptedPosition in acceptedCandidatePositions)
+        foreach (var acceptedIndex in acceptedCandidateIndexes)
         {
-            if (candidates[acceptedPosition - candidateBatchStart].Scope != candidate.Scope)
+            if (candidates[acceptedIndex].Scope != candidate.Scope)
             {
                 continue;
             }
 
-            if (CosineScore(candidateVector, generated[acceptedPosition].Vector) >= threshold)
+            if (CosineScore(candidateVector, candidateVectors[acceptedIndex]) >= threshold)
             {
                 return true;
             }
@@ -256,27 +277,6 @@ internal sealed class MemorySemanticDeduplicator : IMemorySemanticDeduplicator
 
         var score = TensorPrimitives.CosineSimilarity(left.Span, right.Span);
         return float.IsNaN(score) ? 0f : score;
-    }
-
-    private void StoreInCache(EmbeddingCacheKey key, ReadOnlyMemory<float> vector)
-    {
-        var bound = _options.SemanticDedupEmbeddingCacheMaxEntries;
-        lock (_cacheLock)
-        {
-            if (!_cache.TryAdd(key, vector))
-            {
-                return;
-            }
-
-            _insertionOrder.Enqueue(key);
-
-            // Evict oldest-inserted entries until the cache is back within its RAM-only bound.
-            while (_cache.Count > bound && _insertionOrder.Count > 0)
-            {
-                var evicted = _insertionOrder.Dequeue();
-                _cache.TryRemove(evicted, out _);
-            }
-        }
     }
 
     private readonly record struct EmbeddingCacheKey(Guid MemoryId, int Version, string Model);

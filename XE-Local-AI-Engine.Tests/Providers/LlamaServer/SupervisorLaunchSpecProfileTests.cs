@@ -10,7 +10,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Keystone coverage for the profile-driven launch-spec seam: the supervisor no longer forces
 ///     <c>--n-gpu-layers 999</c>. A GPU spawn with no frozen profile emits <c>--fit on</c> + <c>--metrics</c> (auto-fit);
 ///     a replay profile emits its explicit <c>-c/-ngl/-ts/-ot</c> (and matched <c>-ctk/-ctv</c> + <c>--flash-attn</c>)
-///     verbatim with NO <c>--fit</c>; the CPU variant emits no gpu/fit args at all. Flag names verified against the
+///     verbatim with NO <c>--fit</c> but WITH <c>--metrics</c>, and gets the same one-shot KV-stripped retry an explore
+///     spawn gets when its optimized config cannot launch; the CPU variant emits no gpu/fit args at all. Flag names verified against the
 ///     pinned llama.cpp release <c>b9692</c> (<c>--fit</c>, <c>--metrics</c>, <c>-c</c>, <c>--n-gpu-layers</c>,
 ///     <c>-ts</c>, <c>-ot</c>, <c>-ctk/-ctv</c>, <c>--flash-attn</c>).
 /// </summary>
@@ -52,6 +53,17 @@ public sealed class SupervisorLaunchSpecProfileTests
         // Replay and auto-fit are mutually exclusive per run — never emit --fit when replaying frozen args.
         AssertEx.False(spec.Arguments.Contains("--fit"), "A replayed profile must not emit --fit.");
         AssertEx.False(spec.Arguments.Contains("999"), "A replayed profile must not carry the old forced -ngl 999.");
+    }
+
+    [Test]
+    public void LaunchSpec_WhenReplayProfile_StillEmitsMetrics()
+    {
+        // A frozen-profile replay is the steady state on a tuned machine, so it must expose the same /metrics gauges
+        // an explore spawn does — otherwise the machines that have a profile are exactly the ones with no observability.
+        var replay = BuildGpuSpec(ResolvedLaunchArguments.Replay(ctxSize: 8192, nGpuLayers: 24));
+
+        AssertEx.Contains(replay.Arguments, "--metrics");
+        AssertEx.Equal(expected: 1, replay.Arguments.Count(a => string.Equals(a, "--metrics", StringComparison.Ordinal)));
     }
 
     [Test]
@@ -317,6 +329,66 @@ public sealed class SupervisorLaunchSpecProfileTests
             File.Delete(draftFile);
         }
     }
+
+    [Test]
+    public async Task SpawnPath_WhenQuantizedKvReplayFailsFirstLaunch_RetriesOnceWithKvStripped()
+    {
+        var launches = 0;
+        // Fail the FIRST launch only. MaxRestartAttempts=1 removes the outer restart loop, so a second launch can only
+        // come from an in-spawn fallback candidate.
+        var launcher = new FakeProcessLauncher(_ => Interlocked.Increment(ref launches) == 1
+            ? throw new InvalidOperationException("simulated launch failure")
+            : new FakeProcessHandle(pid: 4242));
+        var fallbackStore = new FakeLaunchFallbackStore();
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            options: SingleAttemptOptions,
+            variantSelector: new FakeVariantSelector(GpuVariant.Cuda),
+            profileResolver: new FakeInferenceProfileResolver(ResolvedLaunchArguments.Replay(ctxSize: 4096,
+                nGpuLayers: 32,
+                kvTypeK: "q8_0",
+                kvTypeV: "q8_0",
+                flashAttn: true)),
+            launchFallbackStore: fallbackStore);
+
+        await supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.Equal(expected: 2, launcher.LaunchCount);
+        AssertEx.True(launcher.Launches.TryDequeue(out var optimized));
+        AssertEx.Contains(optimized!.Arguments, "-ctk", "the first replay attempt emits the frozen KV-cache quant.");
+        AssertEx.True(launcher.Launches.TryDequeue(out var safe));
+        AssertEx.False(safe!.Arguments.Contains("-ctk"), "the safe retry strips the frozen KV-cache quant.");
+        AssertEx.False(safe.Arguments.Contains("-ctv"), "the safe retry strips both KV-cache types (they are coupled).");
+        AssertEx.False(safe.Arguments.Contains("--flash-attn"), "the safe retry drops flash attention with the KV quant.");
+        // Placement is untouched — only the KV config is the suspect.
+        AssertEx.Equal("4096", safe.Arguments[IndexOf(safe.Arguments, "-c") + 1]);
+        AssertEx.Equal("32", safe.Arguments[IndexOf(safe.Arguments, "--n-gpu-layers") + 1]);
+
+        // Same store the explore-mode fallback uses: the backend, not the model, is the culprit.
+        AssertEx.True(await fallbackStore.IsOptimizedConfigDisabledAsync(GpuVariant.Cuda, CancellationToken.None),
+            "a successful safe retry must record the optimized-config fallback for the backend.");
+    }
+
+    [Test]
+    public async Task SpawnPath_WhenUnquantizedReplayFailsLaunch_HasNoSecondCandidate()
+    {
+        var launcher = new FakeProcessLauncher(_ => throw new InvalidOperationException("simulated launch failure"));
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            options: SingleAttemptOptions,
+            variantSelector: new FakeVariantSelector(GpuVariant.Cuda),
+            profileResolver: new FakeInferenceProfileResolver(ResolvedLaunchArguments.Replay(ctxSize: 4096, nGpuLayers: 32)));
+
+        await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None));
+
+        // Nothing to strip means nothing to retry: a replay with no frozen KV quant gets exactly one launch attempt.
+        AssertEx.Equal(expected: 1, launcher.LaunchCount);
+    }
+
+    /// <summary>Options with the outer restart loop reduced to a single attempt, so every launch is an in-spawn candidate.</summary>
+    private static LlamaServerSupervisorOptions SingleAttemptOptions => new()
+    {
+        MaxRestartAttempts = 1,
+        IdleTimeToLive = TimeSpan.FromHours(1)
+    };
 
     private static LlamaServerLaunchSpec BuildGpuSpec(ResolvedLaunchArguments resolved,
         int chatCacheReuse = 256,

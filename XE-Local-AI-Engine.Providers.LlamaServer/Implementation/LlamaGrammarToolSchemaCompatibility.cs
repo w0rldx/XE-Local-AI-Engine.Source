@@ -72,16 +72,40 @@ internal static partial class LlamaGrammarToolSchemaCompatibility
     /// <summary>
     ///     True when <paramref name="schema" /> carries at least one bound above <see cref="MaxGrammarRepetitionBound" />
     ///     anywhere in its tree. This is the allocation-free pre-check <see cref="Sanitize" /> and the chat client's
-    ///     per-tool scan both run first.
+    ///     per-tool scan both run first — hence the manual <c>foreach</c> over the struct enumerators rather than LINQ
+    ///     <c>Any</c>, which would box one enumerator per schema node on every tool of every round.
     /// </summary>
     internal static bool RequiresSanitizing(JsonElement schema)
     {
-        return schema.ValueKind switch
+        switch (schema.ValueKind)
         {
-            JsonValueKind.Object => schema.EnumerateObject().Any(static property => ExceedsBound(property) || RequiresSanitizing(property.Value)),
-            JsonValueKind.Array => schema.EnumerateArray().Any(static item => RequiresSanitizing(item)),
-            _ => false
-        };
+            case JsonValueKind.Object:
+                foreach (var property in schema.EnumerateObject())
+                {
+                    var offending = ExceedsBound(property) || RequiresSanitizing(property.Value);
+                    if (offending)
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+
+            case JsonValueKind.Array:
+                foreach (var item in schema.EnumerateArray())
+                {
+                    var offending = RequiresSanitizing(item);
+                    if (offending)
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+
+            default:
+                return false;
+        }
     }
 
     // Matches a regex repetition quantifier — {n}, {n,m} or {n,} — that is not itself escaped. The digit runs are

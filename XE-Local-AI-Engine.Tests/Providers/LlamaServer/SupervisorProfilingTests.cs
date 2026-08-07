@@ -381,7 +381,7 @@ public sealed class SupervisorProfilingTests
         await using var supervisor = SupervisorFactory.Create(launcher,
             variantSelector: new FakeVariantSelector(GpuVariant.Cuda));
 
-        // A replay profile carries no --metrics; enableMetrics must append it so the benchmark can read /metrics.
+        // GPU replay specs now emit --metrics natively; enableMetrics stays the guarantee (and appends it for CPU replays).
         await supervisor.RunExclusiveProfilingAsync("llama3",
             ModelRole.Chat,
             ResolvedLaunchArguments.Replay(ctxSize: 4096, nGpuLayers: 20),

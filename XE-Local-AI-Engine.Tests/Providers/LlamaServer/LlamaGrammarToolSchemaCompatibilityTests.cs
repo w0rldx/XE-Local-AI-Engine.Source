@@ -298,6 +298,35 @@ public sealed class LlamaGrammarToolSchemaCompatibilityTests
             "run_in_agent_home");
     }
 
+    [Test]
+    public void RequiresSanitizing_FindsABoundNestedUnderArraysAndObjects_AndClearsAnAllSafeTree()
+    {
+        // The scan descends through BOTH enumerator kinds (object properties and array items). This pins its result
+        // across the foreach rewrite of what used to be a boxing LINQ Any.
+        const string nested = """
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "outer": {
+                                    "type": "array",
+                                    "items": {
+                                      "anyOf": [
+                                        { "type": "object", "properties": { "leaf": { "type": "string", "maxLength": BOUND } } }
+                                      ]
+                                    }
+                                  }
+                                }
+                              }
+                              """;
+
+        AssertEx.True(
+            LlamaGrammarToolSchemaCompatibility.RequiresSanitizing(ParseDetached(nested.Replace("BOUND", "8000", StringComparison.Ordinal))),
+            "a bound buried under an array-of-anyOf must still be found.");
+        AssertEx.False(
+            LlamaGrammarToolSchemaCompatibility.RequiresSanitizing(ParseDetached(nested.Replace("BOUND", "1024", StringComparison.Ordinal))),
+            "an all-safe tree must scan clean however deeply it nests.");
+    }
+
     private static JsonElement ParseDetached(string json)
     {
         using var document = JsonDocument.Parse(json);

@@ -32,6 +32,8 @@ internal static class ProviderMessageTokenEstimator
 {
     private static readonly ConditionalWeakTable<ChatMessage, TokenCharacterProfile> PerMessageCharacterProfileCache = new();
 
+    private static readonly ConditionalWeakTable<AITool, TokenCharacterProfile> PerToolCharacterProfileCache = new();
+
     private const int CharsPerToken = TokenEstimatorCalibrationStore.DefaultCharsPerToken;
     private const int PerMessageOverheadTokens = 4;
 
@@ -88,6 +90,16 @@ internal static class ProviderMessageTokenEstimator
     ///     description and JSON schema all count against the input window, so a tool-heavy agent must reserve room for
     ///     them. Ignored entirely, they under-count the round and let an over-window request through. Uses the same
     ///     weighted-char divisor and per-item framing overhead as message content.
+    ///     <para>
+    ///         Memoized by tool instance in the same shape as the per-message memo, because the tool list is strictly
+    ///         immutable for the life of an invocation (the agent's <c>ChatOptions.Tools</c> is built once by the
+    ///         invocation factory and the function-invocation loop re-sends the SAME instances every round) while this
+    ///         hop runs on EVERY round. Without it each round paid a full <c>GetRawText()</c> materialization plus a
+    ///         char scan of every tool's schema. Correct for the same reason the message memo is: an
+    ///         <see cref="AIFunction" />'s name, description and schema do not change after construction, so the
+    ///         memoized profile equals a fresh computation. The divisor is applied outside the memo so a per-model
+    ///         calibration change re-divides without rescanning.
+    ///     </para>
     /// </summary>
     public static int EstimateTools(IEnumerable<AITool>? tools, int charsPerToken = CharsPerToken)
     {
@@ -100,18 +112,24 @@ internal static class ProviderMessageTokenEstimator
         var total = 0;
         foreach (var tool in tools)
         {
-            var profile = new TokenCharacterProfile();
-            profile.Add(tool.Name);
-            profile.Add(tool.Description);
-            if (tool is AIFunction function && function.JsonSchema.ValueKind != JsonValueKind.Undefined)
-            {
-                profile.Add(function.JsonSchema.GetRawText());
-            }
-
+            var profile = PerToolCharacterProfileCache.GetValue(tool, ComputeToolCharacterProfile);
             total += (profile.WeightedLength(divisor) / divisor) + PerMessageOverheadTokens;
         }
 
         return total;
+    }
+
+    private static TokenCharacterProfile ComputeToolCharacterProfile(AITool tool)
+    {
+        var profile = new TokenCharacterProfile();
+        profile.Add(tool.Name);
+        profile.Add(tool.Description);
+        if (tool is AIFunction function && function.JsonSchema.ValueKind != JsonValueKind.Undefined)
+        {
+            profile.Add(function.JsonSchema.GetRawText());
+        }
+
+        return profile;
     }
 
     private static void AddContent(TokenCharacterProfile profile, AIContent content)

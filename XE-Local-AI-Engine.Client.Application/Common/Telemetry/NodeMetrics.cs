@@ -268,6 +268,16 @@ public static class NodeMetrics
             description: "Knowledge-search query-embedding cache lookups by result (hit | miss).");
 
     /// <summary>
+    ///     Bytes reclaimed by the query-embedding cache's eviction passes. Read against the lookup hit ratio: sustained
+    ///     eviction with a falling hit ratio means the cache is thrashing its budget rather than serving repeats.
+    ///     Content-free — a byte count only.
+    /// </summary>
+    public static readonly Counter<long> KnowledgeQueryEmbeddingCacheEvictedBytesTotal =
+        Meter.CreateCounter<long>("knowledge_query_embedding_cache_evicted_bytes_total",
+            unit: "By",
+            description: "Bytes reclaimed by knowledge-search query-embedding cache evictions.");
+
+    /// <summary>
     ///     Registers the observable gauge that reports the current depth of the bounded knowledge-ingestion queue on the
     ///     shared <c>XE.Node</c> meter. The queue owner (the singleton dispatcher) supplies the live count callback and
     ///     holds the returned instrument for its lifetime. Kept as a factory (rather than a static instrument) because the
