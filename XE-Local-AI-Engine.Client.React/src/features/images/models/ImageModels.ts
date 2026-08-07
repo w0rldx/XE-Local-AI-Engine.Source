@@ -472,3 +472,31 @@ export function toProgressDisplay(progress: ImageJobProgressView | null): ImageP
 	}
 	return { kind: "preparing" };
 }
+
+/** One declared file of a multi-part download draft, as edited in the manual download form. */
+export interface PartDraft {
+	// Stable identity for the row, so removing a middle row does not remount the ones after it.
+	id: string;
+	role: ImageModelPartRole;
+	fileName: string;
+	// Blank = the set's repo. A file-set is not always published in one place: a Qwen-Image install takes its diffusion
+	// weights and VAE from one repo and the Qwen2.5-VL text encoder from another.
+	repoId: string;
+	// Blank = unknown. A declared size is what makes the free-disk pre-flight run at all and what lets the backend
+	// compute one aggregate percentage instead of a bar that restarts per part — on an 18 GB set that is the difference
+	// between a usable progress display and a mystery.
+	sizeBytes: string;
+	sha256: string;
+}
+
+/** The manual download form's in-progress draft: a model name/repo/family plus its declared file-set. */
+export interface DownloadDraft {
+	repoId: string;
+	fileName: string;
+	modelName: string;
+	family: ImageModelFamily;
+	// The simple form sends a single Diffusion part (correct and sufficient for SD1.5); the advanced one sends the
+	// whole declared file-set.
+	isAdvanced: boolean;
+	parts: readonly PartDraft[];
+}
