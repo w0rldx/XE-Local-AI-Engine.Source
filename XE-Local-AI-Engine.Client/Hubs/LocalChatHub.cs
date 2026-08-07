@@ -1,9 +1,13 @@
 namespace XE_Local_AI_Engine.Client.Hubs;
 
+using System.Globalization;
 using System.Runtime.CompilerServices;
+using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Invocation;
@@ -16,13 +20,51 @@ public sealed class LocalChatHub(
     INodeChatStreamService streamService,
     INodeChatRegenerationService regenerationService,
     IInvocationResumeRegistry resumeRegistry,
-    IInvocationAttachmentTracker attachmentTracker) : Hub
+    IInvocationAttachmentTracker attachmentTracker,
+    IOptions<SecurityOptions> securityOptions) : Hub
 {
     public IAsyncEnumerable<ChatStreamEvent> SendMessage(NodeChatStreamRequest request,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
+        EnsureMessageWithinSizeCap(request.Content);
         return TrackAttachment(streamService.SendMessageAsync(request, cancellationToken), cancellationToken);
+    }
+
+    /// <summary>
+    ///     The message-size cap's ONLY enforcement point for a local send, and deliberately here rather than deeper:
+    ///     <c>NodeChatStreamService.SendMessageCoreAsync</c> persists the user turn before anything downstream can
+    ///     inspect its content, so a check any later leaves the oversized row in the conversation for every subsequent
+    ///     turn to trip over.
+    ///     <para>
+    ///         Thrown as a <see cref="HubException" /> because that is the only exception type whose MESSAGE SignalR
+    ///         forwards to the client at all (without detailed errors enabled, any other type reaches the browser as
+    ///         the bare "An unexpected error occurred invoking 'SendMessage' on the server."). Note SignalR still
+    ///         PREPENDS that generic sentence plus "HubException:" to the forwarded text — the chat page's
+    ///         <c>errorMessage</c> helper strips that wrapper so the user reads this sentence first. The text names
+    ///         both sizes and points at the attachment route, and carries no content, path or internal detail.
+    ///     </para>
+    /// </summary>
+    private void EnsureMessageWithinSizeCap(string? content)
+    {
+        if (content is null)
+        {
+            return;
+        }
+
+        var maxSizeKb = securityOptions.Value.MaxMessageSizeKb;
+        var sizeBytes = Encoding.UTF8.GetByteCount(content);
+        if (sizeBytes <= maxSizeKb * 1024)
+        {
+            return;
+        }
+
+        // Rounded UP so a message reported as "N KB" is never at or below the stated limit.
+        var sizeKb = (sizeBytes + 1023) / 1024;
+        throw new HubException(string.Format(CultureInfo.InvariantCulture,
+            "Your message is too large ({0} KB, limit {1} KB). Attach large documents as files instead.",
+            sizeKb,
+            maxSizeKb));
     }
 
     /// <summary>
