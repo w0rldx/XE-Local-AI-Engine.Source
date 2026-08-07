@@ -56,10 +56,10 @@
     and "not globbed" are different guarantees.
   -->
   <ItemGroup>
-    <Compile Remove="development/**;generated-images/**;logs/**;backups/**;dp-keys/**;models/**"/>
-    <Content Remove="development/**;generated-images/**;logs/**;backups/**;dp-keys/**;models/**"/>
-    <None Remove="development/**;generated-images/**;logs/**;backups/**;dp-keys/**;models/**"/>
-    <EmbeddedResource Remove="development/**;generated-images/**;logs/**;backups/**;dp-keys/**;models/**"/>
+    <Compile Remove="development/**;generated-images/**;logs/**;backups/**;dp-keys/**;models/**;uploaded-files/**;agent-home-state/**;knowledge-base/**"/>
+    <Content Remove="development/**;generated-images/**;logs/**;backups/**;dp-keys/**;models/**;uploaded-files/**;agent-home-state/**;knowledge-base/**"/>
+    <None Remove="development/**;generated-images/**;logs/**;backups/**;dp-keys/**;models/**;uploaded-files/**;agent-home-state/**;knowledge-base/**"/>
+    <EmbeddedResource Remove="development/**;generated-images/**;logs/**;backups/**;dp-keys/**;models/**;uploaded-files/**;agent-home-state/**;knowledge-base/**"/>
   </ItemGroup>
 
   <ItemGroup>
