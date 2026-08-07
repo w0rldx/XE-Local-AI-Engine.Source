@@ -39,7 +39,11 @@ public sealed class CustomToolServiceTests
     public async Task Create_RejectsNameCollisionWithKnownTool()
     {
         var service = BuildService(out _, out var offerProvider);
+        // CustomToolService validates built-in/MCP collisions against the SYNC known-names view by design (the async view
+        // also lists custom tools, which would self-collide on update), so the mock configures the sync method.
+#pragma warning disable CA1849, S6966
         offerProvider.GetKnownToolNames().Returns(["custom__weather"]);
+#pragma warning restore CA1849, S6966
 
         // The normalized name collides with an existing built-in/MCP tool name.
         await AssertEx.ThrowsAsync<CustomToolValidationException>(() =>

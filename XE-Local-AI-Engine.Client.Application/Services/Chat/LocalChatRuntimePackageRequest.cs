@@ -19,4 +19,5 @@ public sealed record LocalChatRuntimePackageRequest(
     bool SupportsThinking = true,
     SamplingOptions? SamplingOptions = null,
     IReadOnlyList<ResolvedSkill>? Skills = null,
-    bool IsUnattended = false);
+    bool IsUnattended = false,
+    IReadOnlyList<ResolvedCustomTool>? CustomTools = null);

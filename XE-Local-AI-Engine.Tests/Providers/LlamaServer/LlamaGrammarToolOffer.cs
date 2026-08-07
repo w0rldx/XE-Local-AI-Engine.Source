@@ -39,6 +39,7 @@ internal static class LlamaGrammarToolOffer
         var provider = new LocalToolOfferProvider(new NodeCatalogAgentToolRegistry(),
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
             runtimeSettings,
+            XE_Local_AI_Engine.Tests.Testing.NullCustomToolScopeFactory.Instance,
             allowCloudKnowledgeAccess: false);
 
         // The profile pool is the widest offer (it adds spawn_subagent, whose 8000-char bounds are the largest we ship).

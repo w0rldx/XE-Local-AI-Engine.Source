@@ -56,6 +56,10 @@ public sealed class LocalChatRuntimePackageBuilder : ILocalChatRuntimePackageBui
             // Normalize an empty assigned-skill set to null so the no-skills loopback package carries no skill payload
             // and the config hash below stays byte-identical to the pre-skills digest (the cross-repo round-trip guard).
             Skills = skills,
+            // Resolved custom tools ride the package for the session-approval memo only; they are NOT folded into the
+            // config hash (their schema/name/approval already ride AllowedTools, which IS hashed). Empty → null so the
+            // no-custom-tool package stays byte-identical to before this feature.
+            CustomTools = request.CustomTools is { Count: > 0 } resolvedCustomTools ? resolvedCustomTools : null,
             // UNLIKE SupportsThinking/Sampling above, the resolved skill set IS fed into the config hash: skill bodies
             // ride MAF progressive disclosure (NOT in ResolvedSystemPrompt), so a body edit/rename/picklist change would
             // not move the prompt — folding the set (body HASHED, WhenWritingNull) is what invalidates resume.

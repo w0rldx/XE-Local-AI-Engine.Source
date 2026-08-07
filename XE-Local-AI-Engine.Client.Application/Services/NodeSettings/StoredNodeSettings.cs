@@ -124,6 +124,14 @@ public sealed partial record StoredNodeSettings
     public const bool DefaultVoiceFeatureEnabled = false;
 
     /// <summary>
+    ///     Node kill-switch for the user-defined custom tools feature. Default (absent) is OFF: custom tools execute host
+    ///     processes / outbound fetches, so the whole feature is opt-in at the node level (the per-agent allow-list and the
+    ///     forced per-call approval remain the second and third gates). When off, no custom tool is OFFERED to any model and
+    ///     <c>ICustomToolCatalog.TryResolveAsync</c> refuses to resolve one.
+    /// </summary>
+    public const bool DefaultCustomToolsEnabled = false;
+
+    /// <summary>
     ///     The canonical Kokoro ONNX model id the client may load by default. Mirrors the authoritative metadata source
     ///     <c>KokoroVoiceCatalog.ModelId</c> (kept as a literal here to keep the settings record free of a runtime-catalog
     ///     dependency).
@@ -284,6 +292,13 @@ public sealed partial record StoredNodeSettings
     ///     <see cref="DefaultVoiceFeatureEnabled" /> (off). The voice manifest endpoint surfaces this as <c>Enabled</c>.
     /// </summary>
     public bool? VoiceFeatureEnabled { get; init; }
+
+    /// <summary>
+    ///     Node kill-switch for the user-defined custom tools feature. <see langword="null" /> (absent) reads as
+    ///     <see cref="DefaultCustomToolsEnabled" /> (off). A bool needs no clamping, so <c>NodeSettingsStore.Normalize</c>
+    ///     passes it through untouched.
+    /// </summary>
+    public bool? CustomToolsEnabled { get; init; }
 
     /// <summary>
     ///     Allow-list of voice model ids the client may load. <see langword="null" /> (absent) reads as

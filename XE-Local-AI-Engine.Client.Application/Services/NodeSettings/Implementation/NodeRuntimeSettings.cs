@@ -89,6 +89,13 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
         return stored.EnableTools ?? _enableToolsSeed;
     }
 
+    public async Task<bool> GetCustomToolsEnabledAsync(CancellationToken cancellationToken = default)
+    {
+        var stored = await LoadAsync(cancellationToken).ConfigureAwait(false);
+        // No appsettings seed: a host-execution feature has no config-file default, so the fallback IS the hardcoded off.
+        return stored.CustomToolsEnabled ?? StoredNodeSettings.DefaultCustomToolsEnabled;
+    }
+
     public async Task<IReadOnlyList<string>> GetToolCapableModelsAsync(CancellationToken cancellationToken = default) =>
         ResolveToolCapableModels(await LoadAsync(cancellationToken).ConfigureAwait(false));
 

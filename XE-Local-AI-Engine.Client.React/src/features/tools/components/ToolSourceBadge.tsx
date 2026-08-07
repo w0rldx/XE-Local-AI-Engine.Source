@@ -21,6 +21,16 @@ export function ToolSourceBadge({ source }: ToolSourceBadgeProps) {
 		);
 	}
 
+	// A user-defined custom tool runs a host command or an outbound fetch, so it is badged in the danger color (filled,
+	// not light) to keep its elevated risk visible everywhere the pickers list it.
+	if (source.kind === "custom") {
+		return (
+			<Badge size="xs" variant="filled" color="red" data-testid="tool-source-badge-custom">
+				{t("components.toolSourceBadge.custom", "custom")}
+			</Badge>
+		);
+	}
+
 	const label = source.serverSlug
 		? t("components.toolSourceBadge.mcpServer", "MCP · {{server}}", { server: source.serverSlug })
 		: t("components.toolSourceBadge.mcp", "MCP");

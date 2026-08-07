@@ -2,10 +2,11 @@
 // single source the tool pickers consume — built-in node tools plus the tools discovered from enabled MCP
 // servers. It replaces the static localToolCatalog const that the chat/agent surfaces previously rendered.
 
-// Where a catalog entry originates. The backend `source` string is "builtin" for node built-ins (time/calc)
-// or the qualified form "mcp:{serverSlug}" for a tool discovered from a specific MCP server — the slug lets
-// the UI group/badge tools by their originating server. ToolCatalogSourceKind is the coarse classification.
-export type ToolCatalogSourceKind = "builtin" | "mcp";
+// Where a catalog entry originates. The backend `source` string is "builtin" for node built-ins (time/calc),
+// the qualified form "mcp:{serverSlug}" for a tool discovered from a specific MCP server (the slug lets the UI
+// group/badge tools by their originating server), or "custom" for a user-defined custom tool (host command /
+// outbound fetch — rendered with a danger badge). ToolCatalogSourceKind is the coarse classification.
+export type ToolCatalogSourceKind = "builtin" | "mcp" | "custom";
 
 // Parsed source: a coarse kind plus, for MCP tools, the originating server slug (null for built-ins).
 export interface ToolCatalogSource {
@@ -21,6 +22,9 @@ const MCP_SOURCE_PREFIX = "mcp:";
 export function parseToolCatalogSource(raw: string): ToolCatalogSource {
 	if (raw === "builtin") {
 		return { kind: "builtin", serverSlug: null };
+	}
+	if (raw === "custom") {
+		return { kind: "custom", serverSlug: null };
 	}
 	if (raw.startsWith(MCP_SOURCE_PREFIX)) {
 		const slug = raw.slice(MCP_SOURCE_PREFIX.length);

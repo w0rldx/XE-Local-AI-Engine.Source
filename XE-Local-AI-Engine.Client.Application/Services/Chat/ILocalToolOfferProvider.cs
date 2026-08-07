@@ -33,6 +33,17 @@ public interface ILocalToolOfferProvider
     IReadOnlyList<AllowedToolDto> GetOfferedTools(string? activeModelId, bool isCloudModel = false);
 
     /// <summary>
+    ///     The FULL offer for the given active model — the synchronous built-in + MCP offer
+    ///     (<see cref="GetOfferedTools" />) PLUS the node's enabled, acknowledged user-defined CUSTOM tools. Custom tools
+    ///     read from a DbContext-backed store, so this is asynchronous; the synchronous overload stays the built-in + MCP
+    ///     core. Custom tools are merged ONLY in the tool-capable branch and ONLY for a node-LOCAL model (a custom
+    ///     command/fetch tool can reach local data and the host, so it is never offered to a cloud model) and only when the
+    ///     node kill-switch <c>NodeSettings.CustomToolsEnabled</c> is on (default off). When off / cloud / non-capable, the
+    ///     result is byte-identical to <see cref="GetOfferedTools" />.
+    /// </summary>
+    Task<IReadOnlyList<AllowedToolDto>> GetOfferedToolsAsync(string? activeModelId, bool isCloudModel, CancellationToken cancellationToken = default);
+
+    /// <summary>
     ///     The offer pool an EXPLICIT agent profile may intersect against (<c>offered ∩ AllowedToolNames</c>). Identical
     ///     to <see cref="GetOfferedTools" /> EXCEPT it also includes <c>spawn_subagent</c> (still capability-gated), so a
     ///     profile that lists <c>spawn_subagent</c> in its <c>AllowedToolNames</c> on a tool-capable model resolves it,
@@ -41,6 +52,14 @@ public interface ILocalToolOfferProvider
     ///     <see cref="GetOfferedTools" /> applies.
     /// </summary>
     IReadOnlyList<AllowedToolDto> GetOfferedToolsForProfile(string? activeModelId, bool isCloudModel = false);
+
+    /// <summary>
+    ///     The profile intersection pool (<see cref="GetOfferedToolsForProfile" />) PLUS the node's enabled, acknowledged
+    ///     custom tools, under the same capability / node-local / kill-switch gate as <see cref="GetOfferedToolsAsync" />.
+    ///     A profile that lists a <c>custom__…</c> tool in its <c>AllowedToolNames</c> resolves it only through this async
+    ///     pool; the synchronous overload never carries custom tools.
+    /// </summary>
+    Task<IReadOnlyList<AllowedToolDto>> GetOfferedToolsForProfileAsync(string? activeModelId, bool isCloudModel, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     The names of every catalog tool, independent of model capability gating. This is the canonical set of tool
@@ -52,6 +71,13 @@ public interface ILocalToolOfferProvider
     IReadOnlyList<string> GetKnownToolNames();
 
     /// <summary>
+    ///     <see cref="GetKnownToolNames" /> PLUS the names of every enabled, acknowledged custom tool. UNGATED by model
+    ///     capability AND by the node kill-switch (an authored custom tool exists on the node whether or not the feature is
+    ///     currently switched on), so CRUD collision validation and the agent tool picker see the full name space.
+    /// </summary>
+    Task<IReadOnlyList<string>> GetKnownToolNamesAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
     ///     The full tool catalog as rich entries (name + description + approval flag + source), independent of model
     ///     capability gating. This is the single source the tool-catalog endpoint and the React tool pickers consume:
     ///     it lists every built-in tool plus every tool discovered from an enabled MCP server, so the agent form can
@@ -60,4 +86,11 @@ public interface ILocalToolOfferProvider
     ///     <see cref="GetKnownToolNames" /> remains the names-only view used by CRUD validation.
     /// </summary>
     IReadOnlyList<LocalToolCatalogEntry> GetKnownTools();
+
+    /// <summary>
+    ///     <see cref="GetKnownTools" /> PLUS a rich entry for every enabled, acknowledged custom tool, tagged
+    ///     <see cref="LocalToolCatalogEntry.Source" /> <c>"custom"</c> so the React pickers render a danger badge. UNGATED
+    ///     by model capability AND by the node kill-switch, mirroring <see cref="GetKnownToolNamesAsync" />.
+    /// </summary>
+    Task<IReadOnlyList<LocalToolCatalogEntry>> GetKnownToolsAsync(CancellationToken cancellationToken = default);
 }

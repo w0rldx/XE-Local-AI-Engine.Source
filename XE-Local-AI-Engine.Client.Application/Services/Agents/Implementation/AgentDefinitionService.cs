@@ -96,7 +96,7 @@ internal sealed class AgentDefinitionService(
 
         // Unknown tool names are a warning, not a failure: a name that is not currently in the catalog may belong to a
         // tool that is reinstalled later, and the resolver already drops anything not in the live offer at runtime.
-        var knownToolNames = new HashSet<string>(_localToolOfferProvider.GetKnownToolNames(), StringComparer.Ordinal);
+        var knownToolNames = new HashSet<string>(await _localToolOfferProvider.GetKnownToolNamesAsync(cancellationToken).ConfigureAwait(false), StringComparer.Ordinal);
         var unknownToolNames = allowedToolNames
                                .Where(name => !knownToolNames.Contains(name))
                                .ToArray();
