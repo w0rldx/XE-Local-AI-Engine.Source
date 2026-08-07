@@ -1,11 +1,11 @@
 namespace XE_Local_AI_Engine.Client.Services.CustomTools;
 
 /// <summary>
-///     A global ceiling on how many custom-tool host commands may run at once. The host runner deliberately drops the
-///     agent sandbox's cgroup/netns wrapper (a custom Command reaches the host by design), so this cap plus the
-///     per-command wall-clock timeout and output byte-cap are the affordable containment against a fan-out of
-///     concurrent host processes exhausting the box. Registered as a singleton so the limit is process-wide, not
-///     per-request.
+///     A global ceiling on how many custom-tool runs — host commands AND HTTP fetches — may be in flight at once. The
+///     host runner deliberately drops the agent sandbox's cgroup/netns wrapper (a custom Command reaches the host by
+///     design), so this cap plus the per-run wall-clock timeout and output/body byte-cap are the affordable containment
+///     against a fan-out of concurrent runs exhausting the box or its outbound connections. Registered as a singleton
+///     so the limit is process-wide, not per-request.
 ///     <para>
 ///         ponytail: this is the concurrency-only ceiling. A per-process resource ceiling (Linux <c>rlimit</c>
 ///         AS/NPROC/CPU, Windows Job Object) is the stronger control the plan names as the upgrade path; it needs a

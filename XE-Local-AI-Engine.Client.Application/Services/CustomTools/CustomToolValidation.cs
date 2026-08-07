@@ -12,14 +12,20 @@ internal static partial class CustomToolValidation
     /// <summary>The reserved MAF/OpenAI tool-name prefix every custom tool carries (<c>custom__{slug}</c>).</summary>
     public const string ToolNamePrefix = "custom__";
 
-    // Shell/interpreter basenames (case-insensitive, ".exe" stripped) that must never be a command tool's executable:
-    // running one turns the fixed-executable + single-argv guarantees into "run an arbitrary script", reopening shell
-    // arg-injection (and the .NET BatBadBut cmd.exe hole). "python" is matched by prefix (python3, python3.12, …).
+    // Shell/interpreter/exec-capable basenames (case-insensitive, ".exe" stripped) rejected as a command tool's
+    // executable. This is a best-effort blocklist, not a sandbox: it closes the obvious "run an arbitrary script"
+    // reopening of shell arg-injection (and the .NET BatBadBut cmd.exe hole), but it cannot enumerate every binary that
+    // can spawn, interpret, or exec something else — a name not on this list is not thereby proven safe. The durable
+    // control is the forced per-call approval plus the deferred rlimit sandbox (see CustomToolConcurrencyLimiter); this
+    // list narrows the easy cases, it does not guarantee a command tool "cannot run an arbitrary script."
+    // "python" is matched by prefix (python3, python3.12, …).
     private static readonly HashSet<string> InterpreterBasenames = new(StringComparer.OrdinalIgnoreCase)
     {
         "sh", "bash", "dash", "zsh", "csh", "ksh", "fish",
         "cmd", "powershell", "pwsh",
-        "node", "perl", "ruby", "env", "sudo", "ssh", "xargs", "awk"
+        "node", "perl", "ruby", "env", "sudo", "ssh", "xargs", "awk",
+        "find", "busybox", "tar", "git", "make", "gdb", "nc", "ncat", "socat",
+        "lua", "php", "deno", "bun", "rscript", "osascript", "tclsh"
     };
 
     // Script extensions the OS may execute through an interpreter (cmd.exe / Windows Script Host / PowerShell), so a
@@ -49,8 +55,10 @@ internal static partial class CustomToolValidation
     }
 
     /// <summary>
-    ///     True when <paramref name="executablePath" />'s basename is a known shell/interpreter or its extension is a
-    ///     script extension — either of which must be rejected as a command tool's executable (C1/M4).
+    ///     True when <paramref name="executablePath" />'s basename is a known shell/interpreter/exec-capable binary or
+    ///     its extension is a script extension — either of which must be rejected as a command tool's executable
+    ///     (C1/M4). A best-effort blocklist (see <see cref="InterpreterBasenames" />): a <c>false</c> result means the
+    ///     name is not on the list, not that the executable is safe.
     /// </summary>
     public static bool IsInterpreterOrShell(string? executablePath)
     {

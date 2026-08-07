@@ -38,6 +38,8 @@ public sealed class CustomToolSsrfGuardTests
     [Arguments("::")] // unspecified
     [Arguments("::ffff:127.0.0.1")] // IPv4-mapped loopback → re-tested as v4
     [Arguments("::ffff:169.254.169.254")] // IPv4-mapped metadata
+    [Arguments("::169.254.169.254")] // deprecated IPv4-compatible metadata → re-tested as v4
+    [Arguments("::127.0.0.1")] // deprecated IPv4-compatible loopback → re-tested as v4
     public async Task IsDeniedAddress_ForReservedRange_ReturnsTrue(string address)
     {
         AssertEx.True(CustomToolSsrfGuard.IsDeniedAddress(IPAddress.Parse(address)),
