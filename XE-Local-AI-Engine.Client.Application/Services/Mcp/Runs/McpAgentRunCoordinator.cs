@@ -310,7 +310,8 @@ internal sealed class McpAgentRunCoordinator : IMcpAgentRunCoordinator
     private static McpAgentRunStartResult Reject(string failureCode, string displayMessage) =>
         new(McpAgentRunStartKind.Rejected, null, failureCode, displayMessage);
 
-    private static string? NullIfWhiteSpace(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
+    private static string? NullIfWhiteSpace(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value;
 
     private void RecordStoreFailure(string operation, Exception exception)
     {

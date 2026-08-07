@@ -319,11 +319,9 @@ public sealed class LlamaGrammarToolSchemaCompatibilityTests
                               }
                               """;
 
-        AssertEx.True(
-            LlamaGrammarToolSchemaCompatibility.RequiresSanitizing(ParseDetached(nested.Replace("BOUND", "8000", StringComparison.Ordinal))),
+        AssertEx.True(LlamaGrammarToolSchemaCompatibility.RequiresSanitizing(ParseDetached(nested.Replace("BOUND", "8000", StringComparison.Ordinal))),
             "a bound buried under an array-of-anyOf must still be found.");
-        AssertEx.False(
-            LlamaGrammarToolSchemaCompatibility.RequiresSanitizing(ParseDetached(nested.Replace("BOUND", "1024", StringComparison.Ordinal))),
+        AssertEx.False(LlamaGrammarToolSchemaCompatibility.RequiresSanitizing(ParseDetached(nested.Replace("BOUND", "1024", StringComparison.Ordinal))),
             "an all-safe tree must scan clean however deeply it nests.");
     }
 

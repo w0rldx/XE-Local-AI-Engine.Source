@@ -107,7 +107,8 @@ internal sealed class McpAgentRunMetrics : IDisposable
     public void RecordRecovery(string outcome, long count = 1) =>
         _recovery.Add(count, new KeyValuePair<string, object?>("outcome", outcome));
 
-    public void RecordClaimAge(long milliseconds) => _claimAge.Record(Math.Max(0, milliseconds));
+    public void RecordClaimAge(long milliseconds) =>
+        _claimAge.Record(Math.Max(0, milliseconds));
 
     public void Dispose()
     {

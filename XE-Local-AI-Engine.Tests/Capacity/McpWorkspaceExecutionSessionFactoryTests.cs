@@ -50,11 +50,11 @@ public sealed class McpWorkspaceExecutionSessionFactoryTests
 
         var result = await harness.Factory.OpenAsync(harness.Workspace.Id, CancellationToken.None).ConfigureAwait(false);
         using (result.Session)
-        using (result.Session!.EnterAmbientScope())
-        {
-            AssertEx.True(order.SequenceEqual(["identity", "lease", "manifest", "sandbox", "resolve", "workspace"], StringComparer.Ordinal),
-                "workspace session must follow the established identity/lease/sandbox/preparation order.");
-        }
+            using (result.Session!.EnterAmbientScope())
+            {
+                AssertEx.True(order.SequenceEqual(["identity", "lease", "manifest", "sandbox", "resolve", "workspace"], StringComparer.Ordinal),
+                    "workspace session must follow the established identity/lease/sandbox/preparation order.");
+            }
 
         AssertEx.Equal(1, harness.WorkspaceService.PrepareCallCount);
         AssertEx.Equal(harness.Handle, harness.WorkspaceService.LastHandle!);
@@ -169,11 +169,11 @@ public sealed class McpWorkspaceExecutionSessionFactoryTests
         harness.Isolation.OnRecover = () => order.Add("recover");
         lease.OnDispose = () => order.Add("release");
         harness.Provider.CreateOrAttachAsync(Arg.Any<SandboxCreateRequest>(), Arg.Any<CancellationToken>())
-            .Returns<Task<SandboxHandle>>(_ =>
-            {
-                order.Add("create");
-                throw new IOException("create refused");
-            });
+               .Returns<Task<SandboxHandle>>(_ =>
+               {
+                   order.Add("create");
+                   throw new IOException("create refused");
+               });
 
         var result = await harness.Factory.OpenAsync(harness.Workspace.Id, CancellationToken.None).ConfigureAwait(false);
 
@@ -195,11 +195,11 @@ public sealed class McpWorkspaceExecutionSessionFactoryTests
         harness.Isolation.OnRecover = () => order.Add("recover");
         lease.OnDispose = () => order.Add("release");
         harness.Resolver.ResolveAsync(harness.Workspace.Id.ToString("D"), Arg.Any<CancellationToken>())
-            .Returns<Task<ResolvedSelectedFolder>>(_ =>
-            {
-                order.Add("resolve");
-                throw new SelectedFolderValidationException("revoked");
-            });
+               .Returns<Task<ResolvedSelectedFolder>>(_ =>
+               {
+                   order.Add("resolve");
+                   throw new SelectedFolderValidationException("revoked");
+               });
 
         var result = await harness.Factory.OpenAsync(harness.Workspace.Id, CancellationToken.None).ConfigureAwait(false);
 
@@ -365,15 +365,19 @@ public sealed class McpWorkspaceExecutionSessionFactoryTests
             return Lease;
         }
 
-        public IAgentHomeExecutionLease? TryAcquireForRecovery(AgentHomeExecutionLeaseKey key) => Lease;
+        public IAgentHomeExecutionLease? TryAcquireForRecovery(AgentHomeExecutionLeaseKey key) =>
+            Lease;
 
-        public bool IsPoisoned(AgentHomeExecutionLeaseKey key) => IsPoisonedValue;
+        public bool IsPoisoned(AgentHomeExecutionLeaseKey key) =>
+            IsPoisonedValue;
 
         public bool IsPoisonedValue { get; set; }
 
-        public void MarkPoisoned(AgentHomeExecutionLeaseKey key) => IsPoisonedValue = true;
+        public void MarkPoisoned(AgentHomeExecutionLeaseKey key) =>
+            IsPoisonedValue = true;
 
-        public void ClearPoison(AgentHomeExecutionLeaseKey key) => IsPoisonedValue = false;
+        public void ClearPoison(AgentHomeExecutionLeaseKey key) =>
+            IsPoisonedValue = false;
     }
 
     private sealed class FakeWorkspaceIsolation : IAgentHomeWorkspaceIsolation
@@ -494,7 +498,8 @@ public sealed class McpWorkspaceExecutionSessionFactoryTests
             where TState : notnull =>
             null;
 
-        public bool IsEnabled(LogLevel logLevel) => true;
+        public bool IsEnabled(LogLevel logLevel) =>
+            true;
 
         public void Log<TState>(LogLevel logLevel,
             EventId eventId,

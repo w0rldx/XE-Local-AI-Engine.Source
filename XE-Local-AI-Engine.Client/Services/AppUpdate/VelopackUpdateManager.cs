@@ -109,8 +109,7 @@ public sealed class VelopackUpdateManager : IVelopackUpdateManager
         };
     }
 
-    private static (VelopackCheckOutcome Outcome, AppUpdateFailureReason Reason) ClassifyHttpFailure(
-        HttpRequestException exception)
+    private static (VelopackCheckOutcome Outcome, AppUpdateFailureReason Reason) ClassifyHttpFailure(HttpRequestException exception)
     {
         if (exception.StatusCode is HttpStatusCode.RequestTimeout or HttpStatusCode.GatewayTimeout)
         {
@@ -128,7 +127,6 @@ public sealed class VelopackUpdateManager : IVelopackUpdateManager
             _ => (VelopackCheckOutcome.Failed, AppUpdateFailureReason.Http)
         };
     }
-
 }
 
 /// <summary>

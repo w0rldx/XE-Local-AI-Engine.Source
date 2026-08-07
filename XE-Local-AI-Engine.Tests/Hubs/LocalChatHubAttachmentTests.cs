@@ -125,7 +125,8 @@ public sealed class LocalChatHubAttachmentTests
     // the exact shape of SendMessageCoreAsync's finally awaiting pumpTask/runTask.
     private static async IAsyncEnumerable<ChatStreamEvent> RunThatOutlivesTheClient(Guid invocationId,
         Task runFinished,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        [EnumeratorCancellation]
+        CancellationToken cancellationToken = default)
     {
         try
         {

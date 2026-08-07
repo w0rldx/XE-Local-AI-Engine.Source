@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Mcp;
 
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -80,10 +81,16 @@ public sealed class McpInboundProtocolTests
 
         await using var connectionB = await CreateClientAsync(factory);
         var get = await connectionB.CallToolAsync("get_agent_run",
-            new Dictionary<string, object?> { ["request_id"] = requestId.ToString("D") }).ConfigureAwait(false);
+            new Dictionary<string, object?>
+            {
+                ["request_id"] = requestId.ToString("D")
+            }).ConfigureAwait(false);
         var list = await connectionB.CallToolAsync("list_agent_runs").ConfigureAwait(false);
         var cancel = await connectionB.CallToolAsync("cancel_agent_run",
-            new Dictionary<string, object?> { ["request_id"] = requestId.ToString("D") }).ConfigureAwait(false);
+            new Dictionary<string, object?>
+            {
+                ["request_id"] = requestId.ToString("D")
+            }).ConfigureAwait(false);
 
         AssertEx.Contains(GetText(get), requestId.ToString("D"));
         AssertEx.Contains(GetText(list), requestId.ToString("D"));
@@ -113,7 +120,10 @@ public sealed class McpInboundProtocolTests
         AssertEx.Equal(0, coordinator.CancelCallCount);
         await using var connectionB = await CreateClientAsync(factory);
         var get = await connectionB.CallToolAsync("get_agent_run",
-            new Dictionary<string, object?> { ["request_id"] = requestId.ToString("D") }).ConfigureAwait(false);
+            new Dictionary<string, object?>
+            {
+                ["request_id"] = requestId.ToString("D")
+            }).ConfigureAwait(false);
 
         AssertEx.Contains(GetText(get), "queued");
         AssertEx.Equal(0, coordinator.CancelCallCount);
@@ -136,23 +146,23 @@ public sealed class McpInboundProtocolTests
         };
     }
 
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
+    [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
         Justification = "McpClient takes ownership of the transport on success; the exceptional path disposes it explicitly.")]
     private static async Task<McpClient> CreateClientAsync(TestingWebAppFactory factory)
     {
         var httpClient = factory.CreateClient();
         var endpoint = new Uri(httpClient.BaseAddress!, EndpointRoute);
         var transport = new HttpClientTransport(new HttpClientTransportOptions
-        {
-            Name = $"xe-engine-test-{Guid.NewGuid():N}",
-            Endpoint = endpoint,
-            TransportMode = HttpTransportMode.StreamableHttp,
-            EnableStandaloneGetStream = false,
-            AdditionalHeaders = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
-                ["Authorization"] = $"Bearer {ValidKey}"
-            }
-        },
+                Name = $"xe-engine-test-{Guid.NewGuid():N}",
+                Endpoint = endpoint,
+                TransportMode = HttpTransportMode.StreamableHttp,
+                EnableStandaloneGetStream = false,
+                AdditionalHeaders = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["Authorization"] = $"Bearer {ValidKey}"
+                }
+            },
             httpClient,
             NullLoggerFactory.Instance,
             ownsHttpClient: true);

@@ -680,8 +680,7 @@ public sealed class PreviewWorkflowExecutionServiceTests
         await using var service = CreateService(runner, publisher, provider, options);
         _ = await service.StartAsync(PreviewGraphBuilder.Linear(), connectionId: null).ConfigureAwait(false);
         _ = await service.StartAsync(PreviewGraphBuilder.Linear(), connectionId: null).ConfigureAwait(false);
-        await WaitForAsync(
-                () => service.ListRuns().Count(run => run.IsLive && run.State == PreviewRunState.Paused) == 2,
+        await WaitForAsync(() => service.ListRuns().Count(run => run.IsLive && run.State == PreviewRunState.Paused) == 2,
                 TimeSpan.FromSeconds(5))
             .ConfigureAwait(false);
 

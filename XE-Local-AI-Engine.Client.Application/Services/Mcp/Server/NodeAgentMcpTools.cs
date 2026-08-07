@@ -32,6 +32,7 @@ public sealed class NodeAgentMcpTools
     ///     with no indication of why. Bounding here means the caller gets a clean, explicit marker instead.
     /// </summary>
     private const string TruncationMarker = "\n\n[output truncated by the XE Local AI Engine MCP server]";
+
     private const string InvalidRequestCode = "invalid_request";
     private const string InvalidStatusCode = "invalid_status";
     private const string ResultExpiredCode = "result_expired";
@@ -105,7 +106,8 @@ public sealed class NodeAgentMcpTools
         "Accept a durable background agent run and return immediately. Supply a globally unique UUID request_id plus exactly one of agent or model. The run continues across MCP disconnects, can be polled from a later connection, and never grants write access: bare/general runs are tool-less and the seeded Coder is limited to operator-authorized read-only workspace tools.")]
 #pragma warning disable CA1707, IDE1006 // MCP's public JSON contract intentionally uses snake_case.
     public async Task<McpAgentRunStartResponse> StartAgentRunAsync(
-        [Description("A globally unique UUID in canonical lowercase-or-uppercase hyphenated form. Reusing it with the same request returns the existing run; reusing it for a different request is rejected.")]
+        [Description(
+            "A globally unique UUID in canonical lowercase-or-uppercase hyphenated form. Reusing it with the same request returns the existing run; reusing it for a different request is rejected.")]
         string request_id,
         [Description("The bounded task for the background local agent to carry out.")]
         string task,
@@ -160,9 +162,7 @@ public sealed class NodeAgentMcpTools
     [Description(
         "Poll a durable background run by its globally unique request UUID, including from a later MCP connection. Returns bounded lifecycle metadata and at most 24,000 result characters with an explicit result_truncated flag. Expired or compacted payloads are reported truthfully; task, instructions, and host paths are never returned.")]
 #pragma warning disable CA1707, IDE1006 // MCP's public JSON contract intentionally uses snake_case.
-    public async Task<McpAgentRunGetResponse> GetAgentRunAsync(
-        [Description("The canonical hyphenated UUID supplied to start_agent_run.")]
-        string request_id,
+    public async Task<McpAgentRunGetResponse> GetAgentRunAsync([Description("The canonical hyphenated UUID supplied to start_agent_run.")] string request_id,
         CancellationToken cancellationToken)
 #pragma warning restore CA1707, IDE1006
     {
@@ -201,9 +201,7 @@ public sealed class NodeAgentMcpTools
     [Description(
         "Durably request cancellation of a background run by UUID. The cancellation marker survives MCP disconnects and process restart. Expected races such as an already-terminal or already-requested run are returned as structured results, and no write-capable workspace access is introduced.")]
 #pragma warning disable CA1707, IDE1006 // MCP's public JSON contract intentionally uses snake_case.
-    public async Task<McpAgentRunCancelResponse> CancelAgentRunAsync(
-        [Description("The canonical hyphenated UUID supplied to start_agent_run.")]
-        string request_id,
+    public async Task<McpAgentRunCancelResponse> CancelAgentRunAsync([Description("The canonical hyphenated UUID supplied to start_agent_run.")] string request_id,
         CancellationToken cancellationToken)
 #pragma warning restore CA1707, IDE1006
     {
@@ -223,8 +221,7 @@ public sealed class NodeAgentMcpTools
     [Description(
         "List bounded content-free lifecycle metadata for durable background runs, including runs started by earlier MCP connections. An optional case-insensitive status filter may be supplied. Results never contain task text, instructions, model output, or host paths, and all workspace execution remains read-only.")]
 #pragma warning disable CA1707, IDE1006 // MCP's public JSON contract intentionally uses snake_case.
-    public async Task<McpAgentRunListResponse> ListAgentRunsAsync(
-        CancellationToken cancellationToken,
+    public async Task<McpAgentRunListResponse> ListAgentRunsAsync(CancellationToken cancellationToken,
         [Description("Maximum runs to return. Values are clamped to the server's configured bounded range.")]
         int? limit = null,
         [Description("Optional lifecycle status: queued, running, succeeded, failed, cancelled, or interrupted.")]
@@ -382,35 +379,40 @@ public sealed class NodeAgentMcpTools
     private static McpAgentRunStartResponse RejectedStart(string failureCode, string displayMessage) =>
         new("rejected", null, failureCode, displayMessage);
 
-    private static string MapStartStatus(McpAgentRunStartKind kind) => kind switch
-    {
-        McpAgentRunStartKind.Accepted => "accepted",
-        McpAgentRunStartKind.Existing => "existing",
-        McpAgentRunStartKind.ResultExpired => ResultExpiredCode,
-        McpAgentRunStartKind.RequestIdConflict => "conflict",
-        McpAgentRunStartKind.CapacityExceeded => "capacity",
-        _ => "rejected"
-    };
+    private static string MapStartStatus(McpAgentRunStartKind kind) =>
+        kind switch
+        {
+            McpAgentRunStartKind.Accepted => "accepted",
+            McpAgentRunStartKind.Existing => "existing",
+            McpAgentRunStartKind.ResultExpired => ResultExpiredCode,
+            McpAgentRunStartKind.RequestIdConflict => "conflict",
+            McpAgentRunStartKind.CapacityExceeded => "capacity",
+            _ => "rejected"
+        };
 
-    private static string MapCancelStatus(McpAgentRunCancelKind kind) => kind switch
-    {
-        McpAgentRunCancelKind.Requested => "requested",
-        McpAgentRunCancelKind.AlreadyRequested => "already",
-        McpAgentRunCancelKind.AlreadyTerminal => "terminal",
-        McpAgentRunCancelKind.NotFound => "not_found",
-        _ => "conflict"
-    };
+    private static string MapCancelStatus(McpAgentRunCancelKind kind) =>
+        kind switch
+        {
+            McpAgentRunCancelKind.Requested => "requested",
+            McpAgentRunCancelKind.AlreadyRequested => "already",
+            McpAgentRunCancelKind.AlreadyTerminal => "terminal",
+            McpAgentRunCancelKind.NotFound => "not_found",
+            _ => "conflict"
+        };
 
-    private static string? MapCancelFailureCode(McpAgentRunCancelKind kind) => kind switch
-    {
-        McpAgentRunCancelKind.NotFound => RunNotFoundCode,
-        McpAgentRunCancelKind.Conflict => "state_conflict",
-        _ => null
-    };
+    private static string? MapCancelFailureCode(McpAgentRunCancelKind kind) =>
+        kind switch
+        {
+            McpAgentRunCancelKind.NotFound => RunNotFoundCode,
+            McpAgentRunCancelKind.Conflict => "state_conflict",
+            _ => null
+        };
 
-    private int ClampListLimit(int? limit) => Math.Clamp(limit ?? _runOptions.DefaultListLimit, 1, _runOptions.MaxListLimit);
+    private int ClampListLimit(int? limit) =>
+        Math.Clamp(limit ?? _runOptions.DefaultListLimit, 1, _runOptions.MaxListLimit);
 
-    private static string? NullIfWhiteSpace(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
+    private static string? NullIfWhiteSpace(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value;
 
     /// <summary>One saved agent, as offered to an external MCP client. Ids are stringified for a JSON-schema-friendly shape.</summary>
     public sealed record AgentSummary(string Id, string Name, string? Description);

@@ -146,22 +146,22 @@ public sealed class StreamingTextTests
 
         var readers = Enumerable.Range(start: 0, count: 3)
                                 .Select(_ => Task.Run(async () =>
-                                 {
-                                     while (!producer.IsCompleted || !snapshots.IsEmpty)
-                                     {
-                                         if (!snapshots.TryDequeue(out var snapshot))
-                                         {
-                                             await Task.Yield();
-                                             continue;
-                                         }
+                                {
+                                    while (!producer.IsCompleted || !snapshots.IsEmpty)
+                                    {
+                                        if (!snapshots.TryDequeue(out var snapshot))
+                                        {
+                                            await Task.Yield();
+                                            continue;
+                                        }
 
-                                         var value = snapshot.Value;
-                                         if (!string.Equals(value, expected[..snapshot.Length], StringComparison.Ordinal))
-                                         {
-                                             failures.Enqueue($"a snapshot of length {snapshot.Length} materialized \"{value}\"");
-                                         }
-                                     }
-                                 }))
+                                        var value = snapshot.Value;
+                                        if (!string.Equals(value, expected[..snapshot.Length], StringComparison.Ordinal))
+                                        {
+                                            failures.Enqueue($"a snapshot of length {snapshot.Length} materialized \"{value}\"");
+                                        }
+                                    }
+                                }))
                                 .ToArray();
 
         var tail = await producer;

@@ -32,7 +32,8 @@ public enum AppUpdateFailureReason
 /// <summary>The result of <see cref="IVelopackUpdateManager.CheckForUpdateAsync" />.</summary>
 /// <param name="Outcome">The check outcome.</param>
 /// <param name="AvailableVersion">The newer version when <see cref="Outcome" /> is <see cref="VelopackCheckOutcome.UpdateAvailable" />; otherwise <see langword="null" />.</param>
-public sealed record VelopackCheckResult(VelopackCheckOutcome Outcome,
+public sealed record VelopackCheckResult(
+    VelopackCheckOutcome Outcome,
     string? AvailableVersion,
     AppUpdateFailureReason FailureReason = AppUpdateFailureReason.None);
 

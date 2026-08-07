@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Development.V1.Mappers;
 
-using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container;

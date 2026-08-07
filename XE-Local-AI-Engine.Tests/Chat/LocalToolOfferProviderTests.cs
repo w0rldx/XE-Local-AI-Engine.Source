@@ -5,8 +5,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Tools;
-using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
+using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Tools;
 using XE_Local_AI_Engine.Client.Services.Capacity.Tools;
@@ -79,7 +79,7 @@ public sealed class LocalToolOfferProviderTests
             ]),
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
             runtimeSettings,
-            XE_Local_AI_Engine.Tests.Testing.NullCustomToolScopeFactory.Instance,
+            NullCustomToolScopeFactory.Instance,
             allowCloudKnowledgeAccess: false);
 
         var beforeEdit = provider.GetOfferedTools("unsloth/gemma-4-12b-it-GGUF:Q5_K_M");
@@ -115,7 +115,7 @@ public sealed class LocalToolOfferProviderTests
             ]),
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
             runtimeSettings,
-            XE_Local_AI_Engine.Tests.Testing.NullCustomToolScopeFactory.Instance,
+            NullCustomToolScopeFactory.Instance,
             allowCloudKnowledgeAccess: false);
 
         AssertEx.False(provider.GetOfferedToolsForProfile("some-model").Any(tool => tool.Name == SpawnSubAgentToolDefinition.ToolName),
@@ -396,7 +396,7 @@ public sealed class LocalToolOfferProviderTests
         var provider = new LocalToolOfferProvider(new LocalAgentToolRegistry(),
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
             StubNodeRuntimeSettings.Create().WithToolCapableModels("qwen3:8b").Build(),
-            XE_Local_AI_Engine.Tests.Testing.NullCustomToolScopeFactory.Instance,
+            NullCustomToolScopeFactory.Instance,
             allowCloudKnowledgeAccess: false);
 
         var offered = provider.GetOfferedTools("some-other-model");
@@ -452,7 +452,7 @@ public sealed class LocalToolOfferProviderTests
         var provider = new LocalToolOfferProvider(new LocalAgentToolRegistry(),
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
             StubNodeRuntimeSettings.Create().WithToolCapableModels("qwen3:8b").Build(),
-            XE_Local_AI_Engine.Tests.Testing.NullCustomToolScopeFactory.Instance,
+            NullCustomToolScopeFactory.Instance,
             allowCloudKnowledgeAccess: false);
 
         var offered = provider.GetOfferedToolsForProfile("qwen3:8b");
@@ -526,9 +526,9 @@ public sealed class LocalToolOfferProviderTests
         ]);
 
         var scopeFactory = new ServiceCollection()
-            .AddSingleton<ICustomToolCatalog>(new StubCustomToolCatalog(customDescriptors))
-            .BuildServiceProvider()
-            .GetRequiredService<IServiceScopeFactory>();
+                           .AddSingleton<ICustomToolCatalog>(new StubCustomToolCatalog(customDescriptors))
+                           .BuildServiceProvider()
+                           .GetRequiredService<IServiceScopeFactory>();
 
         return new LocalToolOfferProvider(registry,
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
@@ -570,7 +570,7 @@ public sealed class LocalToolOfferProviderTests
         return new LocalToolOfferProvider(registry,
             mcpToolRegistry,
             StubNodeRuntimeSettings.Create().WithToolCapableModels(toolCapableModels).Build(),
-            XE_Local_AI_Engine.Tests.Testing.NullCustomToolScopeFactory.Instance,
+            NullCustomToolScopeFactory.Instance,
             allowCloudKnowledgeAccess);
     }
 

@@ -1,8 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Implementation;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using System.Text.Json;
-using System.Diagnostics.CodeAnalysis;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -31,9 +31,13 @@ public sealed class SlashCommandStore(NodeChatDbContext dbContext, TimeProvider 
             var now = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
             var entity = new SlashCommand
             {
-                Id = Guid.NewGuid(), Name = input.Name, Description = EncodeOptional(input.Description),
-                ActionType = (int)input.ActionType, ActionConfiguration = SerializeAction(input.Prompt),
-                CreatedAtUtc = now, UpdatedAtUtc = now
+                Id = Guid.NewGuid(),
+                Name = input.Name,
+                Description = EncodeOptional(input.Description),
+                ActionType = (int)input.ActionType,
+                ActionConfiguration = SerializeAction(input.Prompt),
+                CreatedAtUtc = now,
+                UpdatedAtUtc = now
             };
             _ = _dbContext.SlashCommands.Add(entity);
             _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
@@ -55,6 +59,7 @@ public sealed class SlashCommandStore(NodeChatDbContext dbContext, TimeProvider 
         {
             return null;
         }
+
         entity.Name = input.Name;
         entity.Description = EncodeOptional(input.Description);
         entity.ActionType = (int)input.ActionType;
@@ -71,6 +76,7 @@ public sealed class SlashCommandStore(NodeChatDbContext dbContext, TimeProvider 
         {
             return false;
         }
+
         _ = _dbContext.SlashCommands.Remove(entity);
         _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         return true;
@@ -88,15 +94,24 @@ public sealed class SlashCommandStore(NodeChatDbContext dbContext, TimeProvider 
         return entities.Select(ToRecord).ToArray();
     }
 
-    private static byte[]? EncodeOptional(string? value) => value is null ? null : Encoding.UTF8.GetBytes(value);
+    private static byte[]? EncodeOptional(string? value) =>
+        value is null ? null : Encoding.UTF8.GetBytes(value);
 
     private static byte[] SerializeAction(string prompt)
     {
         using var stream = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = false }))
+        using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions
+               {
+                   Indented = false
+               }))
         {
-            writer.WriteStartObject(); writer.WriteString("type", "sendPrompt"); writer.WriteNumber("version", 1); writer.WriteString("prompt", prompt); writer.WriteEndObject();
+            writer.WriteStartObject();
+            writer.WriteString("type", "sendPrompt");
+            writer.WriteNumber("version", 1);
+            writer.WriteString("prompt", prompt);
+            writer.WriteEndObject();
         }
+
         return stream.ToArray();
     }
 
@@ -122,20 +137,22 @@ public sealed class SlashCommandStore(NodeChatDbContext dbContext, TimeProvider 
         {
             throw new InvalidDataException("Invalid slash command prompt.");
         }
+
         var description = entity.Description is null ? null : Encoding.UTF8.GetString(entity.Description);
         if (description is not null && (description.Length == 0 || !string.Equals(description, description.Trim(), StringComparison.Ordinal)
-            || Encoding.UTF8.GetByteCount(description) > 1_024))
+                                                                || Encoding.UTF8.GetByteCount(description) > 1_024))
         {
             throw new InvalidDataException("Invalid slash command description.");
         }
+
         return new SlashCommandRecord(entity.Id, entity.Name, description, SlashCommandActionType.SendPrompt, prompt, entity.CreatedAtUtc, entity.UpdatedAtUtc);
     }
 
     private static void ValidatePersistedName(string name)
     {
         if (name.Length is < 1 or > 64 || string.Equals(name, "ping", StringComparison.OrdinalIgnoreCase)
-            || name[0] == '-' || name[^1] == '-' || name.Contains("--", StringComparison.Ordinal)
-            || name.Any(static character => character is not (>= 'a' and <= 'z') and not (>= '0' and <= '9') and not '-'))
+                                       || name[0] == '-' || name[^1] == '-' || name.Contains("--", StringComparison.Ordinal)
+                                       || name.Any(static character => character is not (>= 'a' and <= 'z') and not (>= '0' and <= '9') and not '-'))
         {
             throw new InvalidDataException("Invalid persisted slash command name.");
         }
@@ -193,5 +210,6 @@ public sealed class SlashCommandStore(NodeChatDbContext dbContext, TimeProvider 
 
     [SuppressMessage("Performance", "CA1849:Call async methods when in an async method",
         Justification = "Microsoft.Data.Sqlite has no async transaction overload that preserves BEGIN IMMEDIATE serialization.")]
-    private static SqliteTransaction BeginImmediateTransaction(SqliteConnection connection) => connection.BeginTransaction(deferred: false);
+    private static SqliteTransaction BeginImmediateTransaction(SqliteConnection connection) =>
+        connection.BeginTransaction(deferred: false);
 }

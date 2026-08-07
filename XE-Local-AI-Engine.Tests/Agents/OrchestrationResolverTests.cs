@@ -252,7 +252,7 @@ public sealed class OrchestrationResolverTests
         var offerProvider = new LocalToolOfferProvider(new LocalAgentToolRegistry(),
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
             StubNodeRuntimeSettings.Create().WithToolCapableModels(ToolCapableModel, CloudParticipantModel).Build(),
-            XE_Local_AI_Engine.Tests.Testing.NullCustomToolScopeFactory.Instance,
+            NullCustomToolScopeFactory.Instance,
             allowCloudKnowledgeAccess);
         var runtimeSettings = StubNodeRuntimeSettings.Create().WithToolCapableModels(ToolCapableModel, CloudParticipantModel).Build();
 

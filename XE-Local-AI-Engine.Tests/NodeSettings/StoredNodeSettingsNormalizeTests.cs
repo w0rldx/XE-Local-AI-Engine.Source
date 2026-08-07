@@ -45,14 +45,13 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
     [Test]
     public async Task OldFileWithNeuralVoiceFields_LoadsAndPreservesLegacySelection()
     {
-        await WriteSettingsJsonAsync(
-            """
-            {
-              "voiceFeatureEnabled": true,
-              "allowedVoiceModels": ["onnx-community/Kokoro-82M-v1.0-ONNX"],
-              "defaultVoiceProfile": "af_heart"
-            }
-            """);
+        await WriteSettingsJsonAsync("""
+                                     {
+                                       "voiceFeatureEnabled": true,
+                                       "allowedVoiceModels": ["onnx-community/Kokoro-82M-v1.0-ONNX"],
+                                       "defaultVoiceProfile": "af_heart"
+                                     }
+                                     """);
 
         var loaded = await LoadAsync();
 
@@ -373,9 +372,18 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
     {
         // Unlike every other numeric field, a NEGATIVE grace clamps to 0 instead of re-seeding: 0 is a meaningful value
         // here (never cancel), so "the operator asked for no reaping, badly" beats "silently reap at 300 s anyway".
-        AssertEx.Equal(expected: 0, (await SaveAndReloadAsync(new StoredNodeSettings { DetachedGraceSeconds = -1 })).DetachedGraceSeconds);
-        AssertEx.Equal(expected: 0, (await SaveAndReloadAsync(new StoredNodeSettings { DetachedGraceSeconds = 0 })).DetachedGraceSeconds);
-        AssertEx.Equal(expected: 300, (await SaveAndReloadAsync(new StoredNodeSettings { DetachedGraceSeconds = 300 })).DetachedGraceSeconds);
+        AssertEx.Equal(expected: 0, (await SaveAndReloadAsync(new StoredNodeSettings
+        {
+            DetachedGraceSeconds = -1
+        })).DetachedGraceSeconds);
+        AssertEx.Equal(expected: 0, (await SaveAndReloadAsync(new StoredNodeSettings
+        {
+            DetachedGraceSeconds = 0
+        })).DetachedGraceSeconds);
+        AssertEx.Equal(expected: 300, (await SaveAndReloadAsync(new StoredNodeSettings
+        {
+            DetachedGraceSeconds = 300
+        })).DetachedGraceSeconds);
 
         // Above the guard it falls back to null like the rest, so the accessor re-seeds it.
         AssertEx.Null((await SaveAndReloadAsync(new StoredNodeSettings

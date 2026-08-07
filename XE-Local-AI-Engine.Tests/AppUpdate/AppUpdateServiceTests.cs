@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.AppUpdate;
 
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
@@ -332,7 +333,7 @@ public sealed class AppUpdateServiceTests
     private static AppUpdateService CreateService(IVelopackUpdateManagerFactory factory,
         bool isDesktop,
         string repoUrl = "https://github.com/example/public-repo",
-        Microsoft.Extensions.Logging.ILogger<AppUpdateService>? logger = null,
+        ILogger<AppUpdateService>? logger = null,
         AppUpdateState? state = null)
     {
         var options = Options.Create(new AppUpdateChannelOptions

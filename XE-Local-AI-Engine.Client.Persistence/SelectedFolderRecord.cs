@@ -5,7 +5,8 @@ namespace XE_Local_AI_Engine.Client.Persistence;
 ///     (decrypted on materialization) and is for worker-internal use only — the model-facing surface never sees the
 ///     host path. See <c>SelectedFolderReference</c> in the application layer for the model-facing shape.
 /// </summary>
-public sealed record SelectedFolderRecord(Guid Id,
+public sealed record SelectedFolderRecord(
+    Guid Id,
     string Alias,
     string HostPath,
     SelectedFolderMode Mode,

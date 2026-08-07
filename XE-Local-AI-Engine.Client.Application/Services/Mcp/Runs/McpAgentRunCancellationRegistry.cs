@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Mcp.Runs;
 
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 
 /// <summary>Process-local cancellation handles keyed by the durable claim identity.</summary>
 internal sealed class McpAgentRunCancellationRegistry
@@ -8,7 +9,7 @@ internal sealed class McpAgentRunCancellationRegistry
     private readonly ConcurrentDictionary<Guid, Entry> _entries = new();
     private int _stopping;
 
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
+    [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
         Justification = "A successful dictionary registration transfers CancellationTokenSource ownership to Remove; failed registration disposes it here.")]
     public McpAgentRunRegistrationKind TryRegister(Guid requestId, Guid claimToken, long version, out CancellationToken token)
     {
@@ -51,8 +52,8 @@ internal sealed class McpAgentRunCancellationRegistry
 
     private IReadOnlyList<McpAgentRunCancellationHandle> Snapshot() =>
         _entries.Select(static pair => new McpAgentRunCancellationHandle(pair.Key,
-                pair.Value.ClaimToken,
-                pair.Value.Version))
+                    pair.Value.ClaimToken,
+                    pair.Value.Version))
                 .ToArray();
 
     public void Remove(Guid requestId, Guid claimToken)

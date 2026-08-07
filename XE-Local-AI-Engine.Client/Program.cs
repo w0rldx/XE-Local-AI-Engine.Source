@@ -9,7 +9,6 @@ using Scalar.AspNetCore;
 using Serilog;
 using Serilog.Events;
 using Velopack;
-using XE_Local_AI_Engine.AI.Agent.DependencyInjection;
 using XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Client.Common.Extensions;
 using XE_Local_AI_Engine.Client.Endpoints.Common;

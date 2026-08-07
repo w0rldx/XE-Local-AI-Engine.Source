@@ -57,7 +57,10 @@ public sealed class UpdateSlashCommandRequest
     public required SlashCommandActionDto Action { get; init; }
 }
 
-public sealed class SlashCommandByIdRequest { public Guid CommandId { get; init; } }
+public sealed class SlashCommandByIdRequest
+{
+    public Guid CommandId { get; init; }
+}
 
 public sealed class SlashCommandResponse
 {
@@ -68,4 +71,7 @@ public sealed class SlashCommandResponse
     public required SlashCommandActionDto Action { get; init; }
 }
 
-public sealed class ListSlashCommandsResponse { public required IReadOnlyList<SlashCommandResponse> Items { get; init; } }
+public sealed class ListSlashCommandsResponse
+{
+    public required IReadOnlyList<SlashCommandResponse> Items { get; init; }
+}

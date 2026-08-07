@@ -21,18 +21,50 @@ internal static partial class CustomToolValidation
     // "python" is matched by prefix (python3, python3.12, …).
     private static readonly HashSet<string> InterpreterBasenames = new(StringComparer.OrdinalIgnoreCase)
     {
-        "sh", "bash", "dash", "zsh", "csh", "ksh", "fish",
-        "cmd", "powershell", "pwsh",
-        "node", "perl", "ruby", "env", "sudo", "ssh", "xargs", "awk",
-        "find", "busybox", "tar", "git", "make", "gdb", "nc", "ncat", "socat",
-        "lua", "php", "deno", "bun", "rscript", "osascript", "tclsh"
+        "sh",
+        "bash",
+        "dash",
+        "zsh",
+        "csh",
+        "ksh",
+        "fish",
+        "cmd",
+        "powershell",
+        "pwsh",
+        "node",
+        "perl",
+        "ruby",
+        "env",
+        "sudo",
+        "ssh",
+        "xargs",
+        "awk",
+        "find",
+        "busybox",
+        "tar",
+        "git",
+        "make",
+        "gdb",
+        "nc",
+        "ncat",
+        "socat",
+        "lua",
+        "php",
+        "deno",
+        "bun",
+        "rscript",
+        "osascript",
+        "tclsh"
     };
 
     // Script extensions the OS may execute through an interpreter (cmd.exe / Windows Script Host / PowerShell), so a
     // path ending in one is a shell surface regardless of its basename.
     private static readonly HashSet<string> ScriptExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
-        ".bat", ".cmd", ".ps1", ".vbs"
+        ".bat",
+        ".cmd",
+        ".ps1",
+        ".vbs"
     };
 
     [GeneratedRegex(@"^custom__[a-z0-9](?:[a-z0-9_]{0,48}[a-z0-9])?$", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 1000)]

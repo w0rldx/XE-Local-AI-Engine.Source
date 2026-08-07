@@ -17,7 +17,10 @@ public sealed class CustomToolServiceTests
 
         // M2: the danger acknowledgement is enforced server-side, so a client that skips the checkbox cannot author.
         await AssertEx.ThrowsAsync<CustomToolValidationException>(() =>
-            service.CreateAsync(ValidHttpFetch() with { Acknowledged = false })).ConfigureAwait(false);
+            service.CreateAsync(ValidHttpFetch() with
+            {
+                Acknowledged = false
+            })).ConfigureAwait(false);
     }
 
     [Test]
@@ -28,7 +31,10 @@ public sealed class CustomToolServiceTests
         // C1: a shell/interpreter executable reopens arbitrary-script execution and is rejected.
         var definition = ValidCommand() with
         {
-            Command = ValidCommand().Command! with { Executable = "/bin/bash" }
+            Command = ValidCommand().Command! with
+            {
+                Executable = "/bin/bash"
+            }
         };
 
         await AssertEx.ThrowsAsync<CustomToolValidationException>(() =>
@@ -47,7 +53,10 @@ public sealed class CustomToolServiceTests
 
         // The normalized name collides with an existing built-in/MCP tool name.
         await AssertEx.ThrowsAsync<CustomToolValidationException>(() =>
-            service.CreateAsync(ValidHttpFetch() with { Name = "weather" })).ConfigureAwait(false);
+            service.CreateAsync(ValidHttpFetch() with
+            {
+                Name = "weather"
+            })).ConfigureAwait(false);
     }
 
     [Test]
@@ -58,7 +67,10 @@ public sealed class CustomToolServiceTests
         // A Fixed tool declares no parameters, so any {token} in a template is undeclared and fails closed.
         var definition = ValidCommand() with
         {
-            Command = ValidCommand().Command! with { ArgsTemplate = ["{city}"] }
+            Command = ValidCommand().Command! with
+            {
+                ArgsTemplate = ["{city}"]
+            }
         };
 
         await AssertEx.ThrowsAsync<CustomToolValidationException>(() =>
@@ -74,7 +86,15 @@ public sealed class CustomToolServiceTests
         var definition = ValidHttpFetch() with
         {
             Mode = CustomToolMode.Parameterized,
-            Parameters = [new CustomToolParameterModel { Name = "host", Type = "string", Required = true }],
+            Parameters =
+            [
+                new CustomToolParameterModel
+                {
+                    Name = "host",
+                    Type = "string",
+                    Required = true
+                }
+            ],
             Http = new HttpFetchDefinition
             {
                 Method = "GET",
@@ -123,8 +143,18 @@ public sealed class CustomToolServiceTests
                 UrlTemplate = "https://api.example.com/data",
                 Headers =
                 [
-                    new CustomToolHeaderModel { Name = "Authorization", Value = "Bearer topsecret", IsSecret = true },
-                    new CustomToolHeaderModel { Name = "Accept", Value = "application/json", IsSecret = false }
+                    new CustomToolHeaderModel
+                    {
+                        Name = "Authorization",
+                        Value = "Bearer topsecret",
+                        IsSecret = true
+                    },
+                    new CustomToolHeaderModel
+                    {
+                        Name = "Accept",
+                        Value = "application/json",
+                        IsSecret = false
+                    }
                 ],
                 AllowedHosts = []
             }
@@ -148,12 +178,23 @@ public sealed class CustomToolServiceTests
         // so this guards the invariant the assertion depends on (a length/range/format bound breaks the llama.cpp sampler).
         var parameters = new List<CustomToolParameterModel>
         {
-            new() { Name = "city", Type = "string", Description = "The city", Required = true },
-            new() { Name = "days", Type = "integer", Description = "Forecast horizon", Required = false }
+            new()
+            {
+                Name = "city",
+                Type = "string",
+                Description = "The city",
+                Required = true
+            },
+            new()
+            {
+                Name = "days",
+                Type = "integer",
+                Description = "Forecast horizon",
+                Required = false
+            }
         };
 
-        var schema = CustomToolSchemaCompiler.Compile(
-            CustomToolMode.Parameterized,
+        var schema = CustomToolSchemaCompiler.Compile(CustomToolMode.Parameterized,
             [.. parameters.Select(static p => new CustomToolParameter(p.Name, p.Type, p.Description, p.Required))]);
 
         foreach (var banned in CustomToolSchemaCompiler.BannedSchemaKeywords)
@@ -199,8 +240,7 @@ public sealed class CustomToolServiceTests
 
     private static CustomToolRecord ToRecord(CustomToolInput input)
     {
-        return new CustomToolRecord(
-            Guid.NewGuid(),
+        return new CustomToolRecord(Guid.NewGuid(),
             input.Name,
             input.Description,
             input.Kind,

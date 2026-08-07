@@ -121,13 +121,13 @@ public sealed class McpServerInboundAuthTests
         var toolNames = Regex.Matches(body, "\\\"name\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"")
                              .Select(static match => match.Groups[1].Value)
                              .Where(static name => name is "list_agents"
-                                                   or "list_models"
-                                                   or "run_agent"
-                                                   or "list_workspaces"
-                                                   or "start_agent_run"
-                                                   or "get_agent_run"
-                                                   or "cancel_agent_run"
-                                                   or "list_agent_runs")
+                                 or "list_models"
+                                 or "run_agent"
+                                 or "list_workspaces"
+                                 or "start_agent_run"
+                                 or "get_agent_run"
+                                 or "cancel_agent_run"
+                                 or "list_agent_runs")
                              .OrderBy(static name => name, StringComparer.Ordinal)
                              .ToArray();
 

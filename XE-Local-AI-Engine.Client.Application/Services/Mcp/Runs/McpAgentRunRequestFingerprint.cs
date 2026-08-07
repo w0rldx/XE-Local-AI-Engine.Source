@@ -39,5 +39,6 @@ internal sealed class McpAgentRunRequestFingerprint(McpAgentRunPayloadProtector 
         return _protector.ComputeRequestFingerprint(canonical.WrittenSpan);
     }
 
-    private static string? NullIfWhiteSpace(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
+    private static string? NullIfWhiteSpace(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value;
 }

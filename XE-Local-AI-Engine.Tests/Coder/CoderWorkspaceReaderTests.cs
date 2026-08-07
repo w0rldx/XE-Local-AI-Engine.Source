@@ -575,7 +575,10 @@ public sealed class CoderWorkspaceReaderTests : IDisposable
         Task<string> read;
         using (ExecutionContext.SuppressFlow())
         {
-            read = Task.Run(() => reader.ReadFileAsync(new ReadFileToolRequest { Path = "private/source.cs" }));
+            read = Task.Run(() => reader.ReadFileAsync(new ReadFileToolRequest
+            {
+                Path = "private/source.cs"
+            }));
         }
 
         var response = await read;
@@ -591,7 +594,10 @@ public sealed class CoderWorkspaceReaderTests : IDisposable
         leases.MarkPoisoned(new AgentHomeExecutionLeaseKey(Owner, Node));
         var reader = CreateReader(provider, leases);
 
-        var response = await reader.ReadFileAsync(new ReadFileToolRequest { Path = "private/source.cs" });
+        var response = await reader.ReadFileAsync(new ReadFileToolRequest
+        {
+            Path = "private/source.cs"
+        });
 
         AssertEx.Contains(response, "workspace is busy", StringComparison.OrdinalIgnoreCase);
         AssertEx.False(response.Contains("private/source.cs", StringComparison.Ordinal));

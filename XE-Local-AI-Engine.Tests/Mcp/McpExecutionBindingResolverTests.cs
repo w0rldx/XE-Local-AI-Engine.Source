@@ -101,14 +101,14 @@ public sealed class McpExecutionBindingResolverTests
         var binding = AssertEx.NotNull(result.Binding);
         AssertEx.Equal(3, binding.AllowedTools.Count);
         AssertEx.True(binding.AllowedTools.Select(static tool => tool.Name)
-                                  .SequenceEqual(["list_files", "read_file", "search_text"], StringComparer.Ordinal),
+                             .SequenceEqual(["list_files", "read_file", "search_text"], StringComparer.Ordinal),
             "the MCP Coder binding must expose the exact ordinal three-tool allow-list.");
         AssertEx.True(binding.AllowedTools.All(static tool => tool.Category == ToolCategory.ReadLocal
-                                                               && tool.Location == ToolLocation.ClientLocal
-                                                               && !tool.RequiresApproval),
+                                                              && tool.Location == ToolLocation.ClientLocal
+                                                              && !tool.RequiresApproval),
             "every retained Coder tool must be local, read-only, and unattended-safe.");
         AssertEx.True(binding.AllowedTools.Select(static tool => tool.Id)
-                                  .SequenceEqual(expected.Select(static tool => tool.Id)),
+                             .SequenceEqual(expected.Select(static tool => tool.Id)),
             "the canonical Coder projection must retain the three resolved tool identities.");
         AssertEx.Equal(Model, binding.ModelId);
     }
@@ -132,7 +132,7 @@ public sealed class McpExecutionBindingResolverTests
 
         var binding = AssertEx.NotNull(result.Binding);
         AssertEx.True(binding.AllowedTools.Select(static tool => tool.Name)
-                                  .SequenceEqual(["list_files", "read_file", "search_text"], StringComparer.Ordinal),
+                             .SequenceEqual(["list_files", "read_file", "search_text"], StringComparer.Ordinal),
             "the production ask_user offer must be ignored at the unattended MCP boundary.");
     }
 
@@ -158,7 +158,7 @@ public sealed class McpExecutionBindingResolverTests
 
         var binding = AssertEx.NotNull(result.Binding);
         AssertEx.True(binding.AllowedTools.Select(static tool => tool.Name)
-                                  .SequenceEqual(["list_files", "read_file", "search_text"], StringComparer.Ordinal),
+                             .SequenceEqual(["list_files", "read_file", "search_text"], StringComparer.Ordinal),
             "unrelated tools must be ignored rather than exposed or allowed to invalidate the safe Coder binding.");
     }
 

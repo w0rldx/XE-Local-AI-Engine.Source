@@ -72,11 +72,11 @@ public sealed class AgentHomeExecutionLeaseManagerTests
         AssertEx.Null(manager.TryAcquire(KeyA));
 
         using (owner.EnterAmbientScope())
-        using (var borrowed = manager.TryAcquire(KeyA))
-        {
-            AssertEx.NotNull(borrowed);
-            AssertEx.True(borrowed!.IsBorrowed);
-        }
+            using (var borrowed = manager.TryAcquire(KeyA))
+            {
+                AssertEx.NotNull(borrowed);
+                AssertEx.True(borrowed!.IsBorrowed);
+            }
     }
 
     private static async Task<IAgentHomeExecutionLease> AcquireAfterYieldAsync(IAgentHomeExecutionLeaseManager manager)

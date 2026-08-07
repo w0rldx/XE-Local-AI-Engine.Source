@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.CustomTools;
 
+using System.Text;
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence;
 
@@ -86,7 +87,7 @@ internal static class CustomToolSchemaCompiler
             writer.WriteEndObject();
         }
 
-        return System.Text.Encoding.UTF8.GetString(stream.ToArray());
+        return Encoding.UTF8.GetString(stream.ToArray());
     }
 
     private static string MapType(string declaredType)

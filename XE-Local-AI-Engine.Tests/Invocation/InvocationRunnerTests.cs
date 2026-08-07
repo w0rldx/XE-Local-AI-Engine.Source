@@ -2493,7 +2493,10 @@ public sealed class InvocationRunnerTests
                 ReservedOutputTokenFloor = 0
             });
         var package = RuntimePackageBuilder.Valid()
-                                           .WithSamplingOptions(new SamplingOptions { NumCtx = 1 })
+                                           .WithSamplingOptions(new SamplingOptions
+                                           {
+                                               NumCtx = 1
+                                           })
                                            .Build();
 
         await RunAsync(runner, package);

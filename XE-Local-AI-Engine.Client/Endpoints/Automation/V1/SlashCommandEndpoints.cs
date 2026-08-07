@@ -14,8 +14,12 @@ public sealed class ListSlashCommandsEndpoint(ISlashCommandService service) : En
         Policies(NodeAuthorizationPolicies.Operator);
         Description(builder => builder.Produces<ListSlashCommandsResponse>(StatusCodes.Status200OK));
     }
+
     public override async Task HandleAsync(CancellationToken ct) =>
-        await Send.OkAsync(new ListSlashCommandsResponse { Items = [.. (await service.ListAsync(ct).ConfigureAwait(false)).Select(item => item.ToResponse())] }, ct).ConfigureAwait(false);
+        await Send.OkAsync(new ListSlashCommandsResponse
+        {
+            Items = [.. (await service.ListAsync(ct).ConfigureAwait(false)).Select(item => item.ToResponse())]
+        }, ct).ConfigureAwait(false);
 }
 
 public sealed class GetSlashCommandEndpoint(ISlashCommandService service) : Endpoint<SlashCommandByIdRequest, SlashCommandResponse>
@@ -26,10 +30,16 @@ public sealed class GetSlashCommandEndpoint(ISlashCommandService service) : Endp
         Policies(NodeAuthorizationPolicies.Operator);
         Description(builder => builder.Produces<SlashCommandResponse>(StatusCodes.Status200OK).Produces(StatusCodes.Status404NotFound));
     }
+
     public override async Task HandleAsync(SlashCommandByIdRequest req, CancellationToken ct)
     {
         var item = await service.GetByIdAsync(req.CommandId, ct).ConfigureAwait(false);
-        if (item is null) { await Send.NotFoundAsync(ct).ConfigureAwait(false); return; }
+        if (item is null)
+        {
+            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            return;
+        }
+
         await Send.OkAsync(item.ToResponse(), ct).ConfigureAwait(false);
     }
 }
@@ -44,14 +54,22 @@ public sealed class CreateSlashCommandEndpoint(ISlashCommandService service) : E
                                       .ProducesProblemDetails(StatusCodes.Status400BadRequest)
                                       .ProducesProblemDetails(StatusCodes.Status409Conflict));
     }
+
     public override async Task HandleAsync(CreateSlashCommandRequest req, CancellationToken ct)
     {
         try
         {
             var item = await service.CreateAsync(req.ToInput(), ct).ConfigureAwait(false);
-            await Send.CreatedAtAsync<GetSlashCommandEndpoint>(new { commandId = item.Id }, item.ToResponse(), cancellation: ct).ConfigureAwait(false);
+            await Send.CreatedAtAsync<GetSlashCommandEndpoint>(new
+            {
+                commandId = item.Id
+            }, item.ToResponse(), cancellation: ct).ConfigureAwait(false);
         }
-        catch (SlashCommandValidationException exception) { AddError(exception.Message); await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false); }
+        catch (SlashCommandValidationException exception)
+        {
+            AddError(exception.Message);
+            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+        }
         catch (SlashCommandConflictException exception)
         {
             await Send.ResultAsync(Results.Problem(statusCode: StatusCodes.Status409Conflict, title: exception.Message)).ConfigureAwait(false);
@@ -70,15 +88,25 @@ public sealed class UpdateSlashCommandEndpoint(ISlashCommandService service) : E
                                       .Produces(StatusCodes.Status404NotFound)
                                       .ProducesProblemDetails(StatusCodes.Status409Conflict));
     }
+
     public override async Task HandleAsync(UpdateSlashCommandRequest req, CancellationToken ct)
     {
         try
         {
             var item = await service.UpdateAsync(req.CommandId, req.ToInput(), ct).ConfigureAwait(false);
-            if (item is null) { await Send.NotFoundAsync(ct).ConfigureAwait(false); return; }
+            if (item is null)
+            {
+                await Send.NotFoundAsync(ct).ConfigureAwait(false);
+                return;
+            }
+
             await Send.OkAsync(item.ToResponse(), ct).ConfigureAwait(false);
         }
-        catch (SlashCommandValidationException exception) { AddError(exception.Message); await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false); }
+        catch (SlashCommandValidationException exception)
+        {
+            AddError(exception.Message);
+            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+        }
         catch (SlashCommandConflictException exception)
         {
             await Send.ResultAsync(Results.Problem(statusCode: StatusCodes.Status409Conflict, title: exception.Message)).ConfigureAwait(false);
@@ -94,9 +122,15 @@ public sealed class DeleteSlashCommandEndpoint(ISlashCommandService service) : E
         Policies(NodeAuthorizationPolicies.Operator);
         Description(builder => builder.Produces(StatusCodes.Status204NoContent).Produces(StatusCodes.Status404NotFound));
     }
+
     public override async Task HandleAsync(SlashCommandByIdRequest req, CancellationToken ct)
     {
-        if (!await service.DeleteAsync(req.CommandId, ct).ConfigureAwait(false)) { await Send.NotFoundAsync(ct).ConfigureAwait(false); return; }
+        if (!await service.DeleteAsync(req.CommandId, ct).ConfigureAwait(false))
+        {
+            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            return;
+        }
+
         await Send.NoContentAsync(ct).ConfigureAwait(false);
     }
 }

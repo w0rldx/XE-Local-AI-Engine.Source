@@ -148,7 +148,7 @@ public sealed class AdaptiveMemoryConfigHashTests
         return new AgentDefinitionResolver(store,
             playbookStore,
             skillStore,
-            Substitute.For<XE_Local_AI_Engine.Client.Persistence.Stores.ICustomToolStore>(),
+            Substitute.For<ICustomToolStore>(),
             offerProvider,
             new LexicalPlaybookRetrievalRanker(),
             Options.Create(new PlaybookRetrievalOptions()),

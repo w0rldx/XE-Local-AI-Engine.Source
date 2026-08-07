@@ -10,8 +10,8 @@ using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
-using XE_Local_AI_Engine.Client.Services.Coder.Tools;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Coder.Tools;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 /// <summary>
@@ -22,6 +22,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 internal sealed class McpExecutionBindingResolver : IMcpExecutionBindingResolver
 {
     private const int FingerprintVersion = 1;
+
     private const string DefaultSubAgentPersonaInstructions =
         "You are a focused sub-agent. Complete the delegated task and return a concise result.";
 
@@ -113,11 +114,11 @@ internal sealed class McpExecutionBindingResolver : IMcpExecutionBindingResolver
 
         var (supportsThinking, supportsTools, _) = await _modelCapabilityResolver.ResolveAsync(modelId, cancellationToken).ConfigureAwait(false);
         var resolved = await _agentDefinitionResolver.ResolveAsync(definition.Id,
-                           modelId,
-                           supportsTools: supportsTools,
-                           honorModelProfile: !string.IsNullOrWhiteSpace(definition.ModelProfile),
-                           cancellationToken: cancellationToken)
-                           .ConfigureAwait(false);
+                                                         modelId,
+                                                         supportsTools: supportsTools,
+                                                         honorModelProfile: !string.IsNullOrWhiteSpace(definition.ModelProfile),
+                                                         cancellationToken: cancellationToken)
+                                                     .ConfigureAwait(false);
         if (resolved is null || resolved.AgentDefinitionVersion != definition.Version)
         {
             return Reject(McpExecutionFailureCodes.AgentConfigChanged, "Cannot run: the saved agent configuration changed while it was being resolved.");
@@ -160,18 +161,18 @@ internal sealed class McpExecutionBindingResolver : IMcpExecutionBindingResolver
 
         var toolsByName = coderTools.ToDictionary(static tool => tool.Name, StringComparer.Ordinal);
         projectedTools = Array.AsReadOnly(CoderToolDefinition.Descriptors
-                                                              .OrderBy(static descriptor => descriptor.Name, StringComparer.Ordinal)
-                                                              .Select(descriptor => new AllowedToolDto
-                                                              {
-                                                                  Id = toolsByName[descriptor.Name].Id,
-                                                                  Name = descriptor.Name,
-                                                                  Location = ToolLocation.ClientLocal,
-                                                                  Description = descriptor.Description,
-                                                                  ParameterSchema = descriptor.ParameterSchema,
-                                                                  RequiresApproval = false,
-                                                                  Category = ToolCategory.ReadLocal
-                                                              })
-                                                              .ToArray());
+                                                             .OrderBy(static descriptor => descriptor.Name, StringComparer.Ordinal)
+                                                             .Select(descriptor => new AllowedToolDto
+                                                             {
+                                                                 Id = toolsByName[descriptor.Name].Id,
+                                                                 Name = descriptor.Name,
+                                                                 Location = ToolLocation.ClientLocal,
+                                                                 Description = descriptor.Description,
+                                                                 ParameterSchema = descriptor.ParameterSchema,
+                                                                 RequiresApproval = false,
+                                                                 Category = ToolCategory.ReadLocal
+                                                             })
+                                                             .ToArray());
         return true;
     }
 

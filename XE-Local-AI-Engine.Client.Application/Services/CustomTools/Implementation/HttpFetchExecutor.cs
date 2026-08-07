@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Client.Services.CustomTools.Implementation;
 using System.Globalization;
 using System.Net.Http.Headers;
 using System.Text;
-using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
@@ -30,12 +29,21 @@ internal sealed class HttpFetchExecutor : ICustomToolExecutor
     // Response headers that carry credentials/session material must never be surfaced to the model.
     private static readonly HashSet<string> StrippedResponseHeaders = new(StringComparer.OrdinalIgnoreCase)
     {
-        "Set-Cookie", "Set-Cookie2", "WWW-Authenticate", "Proxy-Authenticate", "Authorization"
+        "Set-Cookie",
+        "Set-Cookie2",
+        "WWW-Authenticate",
+        "Proxy-Authenticate",
+        "Authorization"
     };
 
     private static readonly HashSet<string> AllowedMethods = new(StringComparer.OrdinalIgnoreCase)
     {
-        "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE",
+        "HEAD"
     };
 
     private readonly IHttpClientFactory _httpClientFactory;

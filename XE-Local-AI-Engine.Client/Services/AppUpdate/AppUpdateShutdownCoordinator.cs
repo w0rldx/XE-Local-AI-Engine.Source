@@ -8,8 +8,7 @@ namespace XE_Local_AI_Engine.Client.Services.AppUpdate;
 public sealed class AppUpdateShutdownCoordinator(IHostApplicationLifetime applicationLifetime)
 {
     private readonly IHostApplicationLifetime _applicationLifetime = applicationLifetime
-                                                                      ?? throw new ArgumentNullException(
-                                                                          nameof(applicationLifetime));
+                                                                     ?? throw new ArgumentNullException(nameof(applicationLifetime));
 
     public void StopAfterResponseCompleted(HttpResponse response)
     {

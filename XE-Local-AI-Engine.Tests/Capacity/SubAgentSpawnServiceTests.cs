@@ -389,7 +389,7 @@ public sealed class SubAgentSpawnServiceTests
 
         AssertEx.Equal(SpawnOutcomeKind.Success, outcome.Kind);
         AssertEx.True(harness.ChatClient.LastToolNames.OrderBy(static name => name, StringComparer.Ordinal)
-                                  .SequenceEqual(["list_files", "read_file", "search_text"], StringComparer.Ordinal),
+                             .SequenceEqual(["list_files", "read_file", "search_text"], StringComparer.Ordinal),
             "the final MCP Coder agent must expose exactly the three read-only workspace executables.");
         AssertEx.True(workspaceSession.IsDisposed, "the successful workspace session must be released after inference.");
     }
@@ -402,7 +402,10 @@ public sealed class SubAgentSpawnServiceTests
         var service = harness.Build();
 
         using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
-        var outcome = await service.SpawnForMcpAsync(new McpExecutionBindingRequest { AgentKey = "Coder" },
+        var outcome = await service.SpawnForMcpAsync(new McpExecutionBindingRequest
+            {
+                AgentKey = "Coder"
+            },
             "inspect",
             expectedBindingFingerprint: null,
             CancellationToken.None);
@@ -485,7 +488,10 @@ public sealed class SubAgentSpawnServiceTests
         var service = harness.Build();
 
         using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
-        var outcome = await service.SpawnForMcpAsync(new McpExecutionBindingRequest { AgentKey = "Coder" },
+        var outcome = await service.SpawnForMcpAsync(new McpExecutionBindingRequest
+            {
+                AgentKey = "Coder"
+            },
             "inspect",
             expectedBindingFingerprint: null,
             CancellationToken.None,
@@ -506,7 +512,10 @@ public sealed class SubAgentSpawnServiceTests
         var service = harness.Build();
 
         using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
-        var pending = service.SpawnForMcpAsync(new McpExecutionBindingRequest { AgentKey = "Coder" },
+        var pending = service.SpawnForMcpAsync(new McpExecutionBindingRequest
+            {
+                AgentKey = "Coder"
+            },
             "inspect",
             expectedBindingFingerprint: null,
             CancellationToken.None,
@@ -529,7 +538,10 @@ public sealed class SubAgentSpawnServiceTests
         var service = harness.Build();
 
         using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
-        var outcome = await service.SpawnForMcpAsync(new McpExecutionBindingRequest { AgentKey = "Coder" },
+        var outcome = await service.SpawnForMcpAsync(new McpExecutionBindingRequest
+            {
+                AgentKey = "Coder"
+            },
             "inspect",
             expectedBindingFingerprint: null,
             CancellationToken.None,
@@ -555,7 +567,10 @@ public sealed class SubAgentSpawnServiceTests
         var service = harness.Build();
 
         using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
-        var outcome = await service.SpawnForMcpAsync(new McpExecutionBindingRequest { AgentKey = "Coder" },
+        var outcome = await service.SpawnForMcpAsync(new McpExecutionBindingRequest
+            {
+                AgentKey = "Coder"
+            },
             "inspect",
             expectedBindingFingerprint: null,
             CancellationToken.None,
@@ -580,7 +595,10 @@ public sealed class SubAgentSpawnServiceTests
         var service = harness.Build();
 
         using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
-        var outcome = await service.SpawnForMcpAsync(new McpExecutionBindingRequest { AgentKey = "Coder" },
+        var outcome = await service.SpawnForMcpAsync(new McpExecutionBindingRequest
+            {
+                AgentKey = "Coder"
+            },
             "inspect",
             expectedBindingFingerprint: null,
             CancellationToken.None,
@@ -597,13 +615,15 @@ public sealed class SubAgentSpawnServiceTests
         using var harness = new Harness();
         harness.AllowLocal();
         harness.ResolveMcpBinding(WorkspaceCoderBinding());
-        harness.WorkspaceSessionFactory.Result = McpWorkspaceExecutionSessionOpenResult.Rejected(
-            McpExecutionFailureCodes.WorkspacePreparationFailed,
+        harness.WorkspaceSessionFactory.Result = McpWorkspaceExecutionSessionOpenResult.Rejected(McpExecutionFailureCodes.WorkspacePreparationFailed,
             "Cannot run: the selected workspace could not be prepared safely.");
         var service = harness.Build();
 
         using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
-        var outcome = await service.SpawnForMcpAsync(new McpExecutionBindingRequest { AgentKey = "Coder" },
+        var outcome = await service.SpawnForMcpAsync(new McpExecutionBindingRequest
+            {
+                AgentKey = "Coder"
+            },
             "inspect",
             expectedBindingFingerprint: null,
             CancellationToken.None,
@@ -628,7 +648,10 @@ public sealed class SubAgentSpawnServiceTests
         var service = harness.Build();
 
         using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
-        var pending = service.SpawnForMcpAsync(new McpExecutionBindingRequest { AgentKey = "Coder" },
+        var pending = service.SpawnForMcpAsync(new McpExecutionBindingRequest
+            {
+                AgentKey = "Coder"
+            },
             "inspect",
             expectedBindingFingerprint: null,
             CancellationToken.None,
@@ -1217,6 +1240,7 @@ public sealed class SubAgentSpawnServiceTests
             {
                 throw new ArgumentException("Workspace id must be opaque and non-empty.", nameof(workspaceId));
             }
+
             cancellationToken.ThrowIfCancellationRequested();
             OpenCallCount++;
             return Task.FromResult(Result ?? throw new InvalidOperationException("No workspace session result was configured for this test."));

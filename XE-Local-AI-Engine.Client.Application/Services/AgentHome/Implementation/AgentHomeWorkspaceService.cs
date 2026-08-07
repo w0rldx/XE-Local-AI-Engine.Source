@@ -56,6 +56,7 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
             {
                 throw new AgentHomeRequestRejectedException("the AgentHome sandbox was reset and must be recreated before use.");
             }
+
             if (resolvedFolders.Count == 0)
             {
                 return [];

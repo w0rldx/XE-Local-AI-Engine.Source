@@ -66,9 +66,9 @@ internal static class McpExecutionBindingPolicy
                && binding.AllowedTools.Count == WorkspaceToolNames.Count
                && binding.AllowedTools.Select(static tool => tool.Name).Distinct(StringComparer.Ordinal).Count() == WorkspaceToolNames.Count
                && binding.AllowedTools.All(static tool => WorkspaceToolNames.Contains(tool.Name)
-                                                         && tool.Location == ToolLocation.ClientLocal
-                                                         && tool.Category == ToolCategory.ReadLocal
-                                                         && !tool.RequiresApproval);
+                                                          && tool.Location == ToolLocation.ClientLocal
+                                                          && tool.Category == ToolCategory.ReadLocal
+                                                          && !tool.RequiresApproval);
     }
 }
 

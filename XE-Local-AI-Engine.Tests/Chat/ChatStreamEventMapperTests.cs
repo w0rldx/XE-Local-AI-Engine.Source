@@ -114,7 +114,8 @@ public sealed class ChatStreamEventMapperTests
         // A terminal is one frame per turn, so carrying the whole message on it costs nothing — and it is the backstop
         // that converges a client whose delta stream fell behind. Only the DELTA path lost its content.
         var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
-        var message = NewMessage(correlation, content: "the whole answer", reasoning: "the whole reasoning", status: NodeChatMessageStatusValues.Completed, model: "model-x", inputCount: 1, outputCount: 2);
+        var message = NewMessage(correlation, content: "the whole answer", reasoning: "the whole reasoning", status: NodeChatMessageStatusValues.Completed, model: "model-x", inputCount: 1,
+            outputCount: 2);
 
         var terminal = ChatStreamEventMapper.MessageEvent(ChatStreamEventTypes.AssistantCompleted, correlation, message, Timestamp, sequence: 3);
 

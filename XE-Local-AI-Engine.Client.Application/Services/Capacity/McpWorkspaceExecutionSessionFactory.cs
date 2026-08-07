@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Capacity;
 
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
@@ -74,13 +75,13 @@ internal sealed class McpWorkspaceExecutionSessionFactory : IMcpWorkspaceExecuti
         {
             _ = await _manifestService.InitializeAsync(attachKey, cancellationToken).ConfigureAwait(false);
             var handle = await _provider.CreateOrAttachAsync(new SandboxCreateRequest
-            {
-                AttachKey = attachKey,
-                RuntimeProfile = _options.DefaultRuntimeProfile,
-                NetworkPolicy = _provider.Capabilities.HasFlag(SandboxProviderCapabilities.SupportsNetworkPolicy)
-                    ? SandboxNetworkPolicy.None
-                    : SandboxNetworkPolicy.Unrestricted
-            },
+                {
+                    AttachKey = attachKey,
+                    RuntimeProfile = _options.DefaultRuntimeProfile,
+                    NetworkPolicy = _provider.Capabilities.HasFlag(SandboxProviderCapabilities.SupportsNetworkPolicy)
+                        ? SandboxNetworkPolicy.None
+                        : SandboxNetworkPolicy.Unrestricted
+                },
                 cancellationToken).ConfigureAwait(false);
 
             ResolvedSelectedFolder workspace;
@@ -169,7 +170,7 @@ internal sealed class McpWorkspaceExecutionSessionFactory : IMcpWorkspaceExecuti
                && string.Equals(snapshot.WorkspacePath, $"workspace/selected/{workspace.Alias}", StringComparison.Ordinal);
     }
 
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
+    [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
         Justification = "The successful execution session takes ownership of the lease and exposes that ownership through IDisposable.")]
     private static McpWorkspaceExecutionSessionOpenResult SuccessWithTransferredLease(IAgentHomeExecutionLease lease) =>
         McpWorkspaceExecutionSessionOpenResult.Success(new Session(lease));

@@ -13,7 +13,8 @@ public sealed record SpawnOutcome(SpawnOutcomeKind Kind, string? FailureCode, st
         new(SpawnOutcomeKind.Failed, failureCode, displayMessage, Content: null);
 
     /// <summary>Preserves the original synchronous <c>run_agent</c> string result contract.</summary>
-    public string ToSynchronousResult() => Kind == SpawnOutcomeKind.Success ? Content ?? string.Empty : DisplayMessage;
+    public string ToSynchronousResult() =>
+        Kind == SpawnOutcomeKind.Success ? Content ?? string.Empty : DisplayMessage;
 }
 
 public enum SpawnOutcomeKind

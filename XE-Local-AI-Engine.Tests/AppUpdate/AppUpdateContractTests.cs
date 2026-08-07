@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.AppUpdate;
 
 using System.Reflection;
+using XE_Local_AI_Engine.Client.BackgroundServices;
 using XE_Local_AI_Engine.Client.Endpoints.AppUpdate.V1;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -35,7 +36,11 @@ public sealed class AppUpdateContractTests
     [Test]
     public async Task PublicAppUpdateEndpoints_AreOperatorGated()
     {
-        foreach (var fileName in new[] { "GetAppUpdateStatusEndpoint.cs", "ApplyAppUpdateEndpoint.cs" })
+        foreach (var fileName in new[]
+                 {
+                     "GetAppUpdateStatusEndpoint.cs",
+                     "ApplyAppUpdateEndpoint.cs"
+                 })
         {
             var source = await File.ReadAllTextAsync(GetEndpointPath(fileName));
             AssertEx.True(source.Contains("Policies(NodeAuthorizationPolicies.Operator)", StringComparison.Ordinal));
@@ -45,8 +50,8 @@ public sealed class AppUpdateContractTests
     [Test]
     public void ForcedRefreshAndStartupCheck_UseAnonymousSafeCadence()
     {
-        AssertEx.True(XE_Local_AI_Engine.Client.Endpoints.AppUpdate.V1.GetAppUpdateStatusEndpoint.MinRefreshInterval >= TimeSpan.FromMinutes(10));
-        AssertEx.True(XE_Local_AI_Engine.Client.BackgroundServices.AppUpdateCheckService.DefaultStartupDelay >= TimeSpan.FromMinutes(10));
+        AssertEx.True(GetAppUpdateStatusEndpoint.MinRefreshInterval >= TimeSpan.FromMinutes(10));
+        AssertEx.True(AppUpdateCheckService.DefaultStartupDelay >= TimeSpan.FromMinutes(10));
     }
 
     private static string GetEndpointPath(string fileName)

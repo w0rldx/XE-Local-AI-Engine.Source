@@ -362,7 +362,8 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
         return PlaybookPromptComposer.Compose(definition.Instructions, selected);
     }
 
-    private async Task<IReadOnlyList<AllowedToolDto>> ProjectAllowedToolsAsync(AgentDefinitionRecord definition, string? effectiveModelId, bool supportsTools, bool effectiveModelIsCloud, CancellationToken cancellationToken)
+    private async Task<IReadOnlyList<AllowedToolDto>> ProjectAllowedToolsAsync(AgentDefinitionRecord definition, string? effectiveModelId, bool supportsTools, bool effectiveModelIsCloud,
+        CancellationToken cancellationToken)
     {
         // A model that does not advertise the Ollama "tools" capability cannot drive ANY tool call, so withhold the
         // entire offer (empty) before the per-tool name gating below. This is the capability gate; the offer provider's

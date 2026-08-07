@@ -6,11 +6,11 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Tools;
+using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Cryptography;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
-using XE_Local_AI_Engine.Client.Models;
-using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Mcp.Runs;
 using XE_Local_AI_Engine.Client.Services.Workspace;
@@ -26,7 +26,10 @@ public sealed class McpAgentRunCoordinatorTests
         var workspaceId = Guid.NewGuid();
         var request = new McpAgentRunStartRequest(Guid.NewGuid(),
             "inspect the repository",
-            new McpExecutionBindingRequest { ModelId = "local-model" },
+            new McpExecutionBindingRequest
+            {
+                ModelId = "local-model"
+            },
             workspaceId);
         var existing = CreateRun(McpAgentRunStatus.Queued, version: 0, claimToken: null, McpAgentRunStopReason.None) with
         {
@@ -49,10 +52,13 @@ public sealed class McpAgentRunCoordinatorTests
     {
         using var harness = new Harness();
         harness.Resolver.ResolveAsync(Arg.Any<McpExecutionBindingRequest>(), Arg.Any<CancellationToken>())
-            .Returns(McpExecutionBindingResolution.Success(ExactCoderBinding()));
+               .Returns(McpExecutionBindingResolution.Success(ExactCoderBinding()));
         var request = new McpAgentRunStartRequest(Guid.NewGuid(),
             "inspect the repository",
-            new McpExecutionBindingRequest { AgentKey = "Coder" });
+            new McpExecutionBindingRequest
+            {
+                AgentKey = "Coder"
+            });
 
         var result = await harness.Coordinator.StartAsync(request, CancellationToken.None).ConfigureAwait(false);
 
@@ -69,9 +75,9 @@ public sealed class McpAgentRunCoordinatorTests
         using var harness = new Harness();
         var binding = ExactCoderBinding();
         harness.Resolver.ResolveAsync(Arg.Any<McpExecutionBindingRequest>(), Arg.Any<CancellationToken>())
-            .Returns(McpExecutionBindingResolution.Success(binding));
+               .Returns(McpExecutionBindingResolution.Success(binding));
         harness.WorkspaceResolver.ResolveAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns<Task<ResolvedSelectedFolder>>(_ => throw new SelectedFolderValidationException("not active"));
+               .Returns<Task<ResolvedSelectedFolder>>(_ => throw new SelectedFolderValidationException("not active"));
 
         var unknown = await harness.Coordinator.StartAsync(WorkspaceRequest(Guid.NewGuid()), CancellationToken.None).ConfigureAwait(false);
         var revoked = await harness.Coordinator.StartAsync(WorkspaceRequest(Guid.NewGuid()), CancellationToken.None).ConfigureAwait(false);
@@ -88,7 +94,10 @@ public sealed class McpAgentRunCoordinatorTests
     {
         using var harness = new Harness();
         harness.Resolver.ResolveAsync(Arg.Any<McpExecutionBindingRequest>(), Arg.Any<CancellationToken>())
-            .Returns(McpExecutionBindingResolution.Success(ExactCoderBinding() with { AllowedTools = [] }));
+               .Returns(McpExecutionBindingResolution.Success(ExactCoderBinding() with
+               {
+                   AllowedTools = []
+               }));
 
         var result = await harness.Coordinator.StartAsync(WorkspaceRequest(Guid.NewGuid()), CancellationToken.None).ConfigureAwait(false);
 
@@ -104,23 +113,23 @@ public sealed class McpAgentRunCoordinatorTests
         var workspaceId = Guid.NewGuid();
         var binding = ExactCoderBinding();
         harness.Resolver.ResolveAsync(Arg.Any<McpExecutionBindingRequest>(), Arg.Any<CancellationToken>())
-            .Returns(McpExecutionBindingResolution.Success(binding));
+               .Returns(McpExecutionBindingResolution.Success(binding));
         harness.WorkspaceResolver.ResolveAsync(workspaceId.ToString("D"), Arg.Any<CancellationToken>())
-            .Returns(new ResolvedSelectedFolder(workspaceId, "repo", "/private/not-persisted", SelectedFolderMode.ReadOnlyMount));
+               .Returns(new ResolvedSelectedFolder(workspaceId, "repo", "/private/not-persisted", SelectedFolderMode.ReadOnlyMount));
         McpAgentRunAdmissionRequest? captured = null;
         harness.Store.AdmitAsync(Arg.Any<McpAgentRunAdmissionRequest>(), Arg.Any<CancellationToken>())
-            .Returns(callInfo =>
-            {
-                captured = callInfo.Arg<McpAgentRunAdmissionRequest>();
-                return new McpAgentRunAdmissionResult(McpAgentRunAdmissionKind.Accepted,
-                    CreateRun(McpAgentRunStatus.Queued, version: 0, claimToken: null, McpAgentRunStopReason.None) with
-                    {
-                        RequestId = captured.RequestId,
-                        WorkspaceId = captured.WorkspaceId,
-                        ClaimedAtUtc = null,
-                        PayloadExpiresAtUtc = null
-                    });
-            });
+               .Returns(callInfo =>
+               {
+                   captured = callInfo.Arg<McpAgentRunAdmissionRequest>();
+                   return new McpAgentRunAdmissionResult(McpAgentRunAdmissionKind.Accepted,
+                       CreateRun(McpAgentRunStatus.Queued, version: 0, claimToken: null, McpAgentRunStopReason.None) with
+                       {
+                           RequestId = captured.RequestId,
+                           WorkspaceId = captured.WorkspaceId,
+                           ClaimedAtUtc = null,
+                           PayloadExpiresAtUtc = null
+                       });
+               });
 
         var result = await harness.Coordinator.StartAsync(WorkspaceRequest(workspaceId), CancellationToken.None).ConfigureAwait(false);
 
@@ -135,7 +144,10 @@ public sealed class McpAgentRunCoordinatorTests
     {
         using var harness = new Harness();
         var requestId = Guid.NewGuid();
-        var bindingRequest = new McpExecutionBindingRequest { ModelId = "local-model" };
+        var bindingRequest = new McpExecutionBindingRequest
+        {
+            ModelId = "local-model"
+        };
         var binding = new McpExecutionBinding(Convert.ToHexString(SHA256.HashData("binding"u8)),
             "local-model",
             "read only",
@@ -145,25 +157,25 @@ public sealed class McpAgentRunCoordinatorTests
             ReasoningEffort: null,
             SupportsThinking: false);
         harness.Resolver.ResolveAsync(bindingRequest, Arg.Any<CancellationToken>())
-            .Returns(McpExecutionBindingResolution.Success(binding));
+               .Returns(McpExecutionBindingResolution.Success(binding));
         McpAgentRunAdmissionRequest? admission = null;
         harness.Store.AdmitAsync(Arg.Any<McpAgentRunAdmissionRequest>(), Arg.Any<CancellationToken>())
-            .Returns(callInfo =>
-            {
-                admission = callInfo.Arg<McpAgentRunAdmissionRequest>();
-                var queued = CreateRun(McpAgentRunStatus.Queued,
-                    version: 0,
-                    claimToken: null,
-                    McpAgentRunStopReason.None) with
-                {
-                    RequestId = requestId,
-                    ClaimedAtUtc = null,
-                    PayloadExpiresAtUtc = null
-                };
-                return new McpAgentRunAdmissionResult(McpAgentRunAdmissionKind.Accepted, queued);
-            });
+               .Returns(callInfo =>
+               {
+                   admission = callInfo.Arg<McpAgentRunAdmissionRequest>();
+                   var queued = CreateRun(McpAgentRunStatus.Queued,
+                           version: 0,
+                           claimToken: null,
+                           McpAgentRunStopReason.None) with
+                       {
+                           RequestId = requestId,
+                           ClaimedAtUtc = null,
+                           PayloadExpiresAtUtc = null
+                       };
+                   return new McpAgentRunAdmissionResult(McpAgentRunAdmissionKind.Accepted, queued);
+               });
         harness.Store.GetLedgerSnapshotAsync(Arg.Any<CancellationToken>())
-            .Returns(EmptySnapshot());
+               .Returns(EmptySnapshot());
 
         var result = await harness.Coordinator.StartAsync(new McpAgentRunStartRequest(requestId,
                 "inspect the repository",
@@ -191,15 +203,15 @@ public sealed class McpAgentRunCoordinatorTests
         var reads = 0;
         var stops = 0;
         harness.Store.GetAsync(running.RequestId, Arg.Any<CancellationToken>())
-            .Returns(_ => Interlocked.Increment(ref reads) == 1 ? running : stopped);
+               .Returns(_ => Interlocked.Increment(ref reads) == 1 ? running : stopped);
         harness.Store.RequestStopAsync(running.RequestId,
-                Arg.Any<long>(),
-                McpAgentRunStopReason.UserCancellation,
-                Arg.Any<long>(),
-                Arg.Any<CancellationToken>())
-            .Returns(_ => Interlocked.Increment(ref stops) == 1
-                ? new McpAgentRunStopResult(McpAgentRunStopKind.Requested, stopped)
-                : new McpAgentRunStopResult(McpAgentRunStopKind.AlreadyRequested, stopped));
+                   Arg.Any<long>(),
+                   McpAgentRunStopReason.UserCancellation,
+                   Arg.Any<long>(),
+                   Arg.Any<CancellationToken>())
+               .Returns(_ => Interlocked.Increment(ref stops) == 1
+                   ? new McpAgentRunStopResult(McpAgentRunStopKind.Requested, stopped)
+                   : new McpAgentRunStopResult(McpAgentRunStopKind.AlreadyRequested, stopped));
         AssertEx.Equal(McpAgentRunRegistrationKind.Registered,
             harness.Cancellations.TryRegister(running.RequestId, claimToken, running.Version, out var executionToken));
 
@@ -225,11 +237,11 @@ public sealed class McpAgentRunCoordinatorTests
         };
         harness.Store.GetAsync(completed.RequestId, Arg.Any<CancellationToken>()).Returns(completed);
         harness.Store.RequestStopAsync(completed.RequestId,
-                completed.Version,
-                McpAgentRunStopReason.UserCancellation,
-                Arg.Any<long>(),
-                Arg.Any<CancellationToken>())
-            .Returns(new McpAgentRunStopResult(McpAgentRunStopKind.AlreadyTerminal, completed));
+                   completed.Version,
+                   McpAgentRunStopReason.UserCancellation,
+                   Arg.Any<long>(),
+                   Arg.Any<CancellationToken>())
+               .Returns(new McpAgentRunStopResult(McpAgentRunStopKind.AlreadyTerminal, completed));
         AssertEx.Equal(McpAgentRunRegistrationKind.Registered,
             harness.Cancellations.TryRegister(completed.RequestId, claimToken, version: 1, out var executionToken));
 
@@ -284,7 +296,10 @@ public sealed class McpAgentRunCoordinatorTests
     private static McpAgentRunStartRequest WorkspaceRequest(Guid workspaceId) =>
         new(Guid.NewGuid(),
             "inspect the repository",
-            new McpExecutionBindingRequest { AgentKey = "Coder" },
+            new McpExecutionBindingRequest
+            {
+                AgentKey = "Coder"
+            },
             workspaceId);
 
     private static McpExecutionBinding ExactCoderBinding() =>
@@ -350,7 +365,8 @@ public sealed class McpAgentRunCoordinatorTests
 
         public ISelectedFolderResolver WorkspaceResolver { get; }
 
-        public byte[] ComputeFingerprint(McpAgentRunStartRequest request) => Fingerprint.Compute(request);
+        public byte[] ComputeFingerprint(McpAgentRunStartRequest request) =>
+            Fingerprint.Compute(request);
 
         public void Dispose()
         {

@@ -5,7 +5,6 @@ using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.Hosting;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.AppUpdate;
-using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class AppUpdateShutdownCoordinatorTests
 {

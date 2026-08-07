@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Automation;
 
 using System.Net;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.DependencyInjection;
@@ -15,6 +16,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class SlashCommandEndpointTests
 {
     private const string Route = "/api/local/v1/automation/commands";
+
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
         Converters =
@@ -68,7 +70,15 @@ public sealed class SlashCommandEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Post, Route);
-        request.Content = JsonContent.Create(new { name = "review", action = new { type = "sendPrompt", prompt = "Review this." } });
+        request.Content = JsonContent.Create(new
+        {
+            name = "review",
+            action = new
+            {
+                type = "sendPrompt",
+                prompt = "Review this."
+            }
+        });
         using var response = await client.SendAsync(request);
         var body = await ReadJsonAsync<SlashCommandResponse>(response);
 
@@ -89,7 +99,7 @@ public sealed class SlashCommandEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Post, Route);
-        request.Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+        request.Content = new StringContent(json, Encoding.UTF8, "application/json");
         using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -108,7 +118,7 @@ public sealed class SlashCommandEndpointTests
 
         using var request = CreateRequest(factory, HttpMethod.Post, Route);
         request.Content = new StringContent("{\"name\":\"review\",\"action\":{\"type\":\"sendPrompt\",\"prompt\":\"Review this.\"}}",
-            System.Text.Encoding.UTF8, "application/json");
+            Encoding.UTF8, "application/json");
         using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Created, response.StatusCode);
@@ -127,7 +137,7 @@ public sealed class SlashCommandEndpointTests
 
         using var request = CreateRequest(factory, HttpMethod.Post, Route);
         request.Content = new StringContent($"{{\"name\":\"review\",\"action\":{{\"type\":{discriminatorJson},\"prompt\":\"Review this.\"}}}}",
-            System.Text.Encoding.UTF8, "application/json");
+            Encoding.UTF8, "application/json");
         using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -163,7 +173,15 @@ public sealed class SlashCommandEndpointTests
         var id = Guid.NewGuid();
 
         using var request = CreateRequest(factory, HttpMethod.Put, $"{Route}/{id}");
-        request.Content = JsonContent.Create(new { name = "review", action = new { type = "sendPrompt", prompt = "Review this." } });
+        request.Content = JsonContent.Create(new
+        {
+            name = "review",
+            action = new
+            {
+                type = "sendPrompt",
+                prompt = "Review this."
+            }
+        });
         using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
@@ -185,14 +203,15 @@ public sealed class SlashCommandEndpointTests
         AssertEx.Equal(HttpStatusCode.NoContent, response.StatusCode);
     }
 
-    private static TestingWebAppFactory CreateFactory(ISlashCommandService service) => new()
-    {
-        ConfigureAdditionalTestServices = services =>
+    private static TestingWebAppFactory CreateFactory(ISlashCommandService service) =>
+        new()
         {
-            services.RemoveAll<ISlashCommandService>();
-            services.AddScoped(_ => service);
-        }
-    };
+            ConfigureAdditionalTestServices = services =>
+            {
+                services.RemoveAll<ISlashCommandService>();
+                services.AddScoped(_ => service);
+            }
+        };
 
     private static HttpRequestMessage CreateRequest(TestingWebAppFactory factory, HttpMethod method, string uri)
     {

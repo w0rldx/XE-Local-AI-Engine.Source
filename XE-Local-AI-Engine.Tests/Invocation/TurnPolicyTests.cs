@@ -106,7 +106,10 @@ public sealed class TurnPolicyTests
     {
         // The regression: a model launched with a 64k window was pinned to the 8k default, so a 7k conversation failed
         // with ContextBudgetExceededException while the process had room for eight times as much.
-        var policy = ResolveWithDefaults(new ConversationContextBudgetOptions { DefaultContextTokens = 8192 });
+        var policy = ResolveWithDefaults(new ConversationContextBudgetOptions
+        {
+            DefaultContextTokens = 8192
+        });
 
         var folded = policy.WithEffectiveContext(effectiveContextTokens: 65536);
 
@@ -116,7 +119,10 @@ public sealed class TurnPolicyTests
     [Test]
     public void WithEffectiveContext_WhenLaunchedWindowIsBelowTheDefault_LowersCapacityToTheRealWindow()
     {
-        var policy = ResolveWithDefaults(new ConversationContextBudgetOptions { DefaultContextTokens = 8192 });
+        var policy = ResolveWithDefaults(new ConversationContextBudgetOptions
+        {
+            DefaultContextTokens = 8192
+        });
 
         var folded = policy.WithEffectiveContext(effectiveContextTokens: 2048);
 
@@ -147,7 +153,10 @@ public sealed class TurnPolicyTests
     public void WithEffectiveContext_WhenTheLaunchedWindowIsUnknown_LeavesThePolicyUnchanged()
     {
         // Cloud, Ollama, or a failed read: nothing better than the configured default is known.
-        var policy = ResolveWithDefaults(new ConversationContextBudgetOptions { DefaultContextTokens = 8192 });
+        var policy = ResolveWithDefaults(new ConversationContextBudgetOptions
+        {
+            DefaultContextTokens = 8192
+        });
 
         AssertEx.Equal(expected: 8192, policy.WithEffectiveContext(effectiveContextTokens: null).ContextCapacityTokens);
         AssertEx.Equal(expected: 8192, policy.WithEffectiveContext(effectiveContextTokens: 0).ContextCapacityTokens);
@@ -179,11 +188,17 @@ public sealed class TurnPolicyTests
     private static TurnPolicy ResolveWithNumCtxOverride(int numCtx)
     {
         var package = RuntimePackageBuilder.Valid()
-                                           .WithSamplingOptions(new SamplingOptions { NumCtx = numCtx })
+                                           .WithSamplingOptions(new SamplingOptions
+                                           {
+                                               NumCtx = numCtx
+                                           })
                                            .Build();
 
         return TurnPolicy.Resolve(package,
-            new ConversationContextBudgetOptions { DefaultContextTokens = 8192 },
+            new ConversationContextBudgetOptions
+            {
+                DefaultContextTokens = 8192
+            },
             new ProviderResilienceOptions(),
             new AgentToolPipelineOptions(),
             TimeSpan.FromMinutes(5));

@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.NodeSettings.V1.Mappers;
 
-using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 internal static class NodeSettingsEndpointDtoMapper

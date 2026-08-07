@@ -68,7 +68,10 @@ public sealed class McpAgentRunCompactionServiceTests
         using var time = new ManualTimerTimeProvider();
         var service = new McpAgentRunCompactionService(provider.GetRequiredService<IServiceScopeFactory>(),
             metrics,
-            Options.Create(new McpAgentRunOptions { CompactionIntervalMinutes = 1 }),
+            Options.Create(new McpAgentRunOptions
+            {
+                CompactionIntervalMinutes = 1
+            }),
             time,
             NullLogger<McpAgentRunCompactionService>.Instance);
         try
@@ -119,7 +122,8 @@ public sealed class McpAgentRunCompactionServiceTests
         {
             private TimerCallback? _callback = callback;
 
-            public bool Change(TimeSpan dueTime, TimeSpan period) => _callback is not null;
+            public bool Change(TimeSpan dueTime, TimeSpan period) =>
+                _callback is not null;
 
             public void Dispose()
             {

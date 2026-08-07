@@ -15,7 +15,10 @@ public sealed class AppUpdateChannelOptionsTests
     [Arguments("https://github.com/w0rldx/XE-Local-AI-Engine.Source")]
     public void IsConfigured_WhenPublicRepositoryUrlIsValid_DoesNotRequireAuthentication(string repositoryUrl)
     {
-        var options = new AppUpdateChannelOptions { GitHubRepositoryUrl = repositoryUrl };
+        var options = new AppUpdateChannelOptions
+        {
+            GitHubRepositoryUrl = repositoryUrl
+        };
 
         AssertEx.True(options.IsConfigured);
         AssertEx.NotNull(options.SourcePolicy);
@@ -34,7 +37,10 @@ public sealed class AppUpdateChannelOptionsTests
     [Arguments("")]
     public void IsConfigured_WhenRepositoryUrlIsInvalid_ReturnsFalse(string repositoryUrl)
     {
-        var options = new AppUpdateChannelOptions { GitHubRepositoryUrl = repositoryUrl };
+        var options = new AppUpdateChannelOptions
+        {
+            GitHubRepositoryUrl = repositoryUrl
+        };
 
         AssertEx.False(options.IsConfigured);
         AssertEx.Null(options.SourcePolicy);
