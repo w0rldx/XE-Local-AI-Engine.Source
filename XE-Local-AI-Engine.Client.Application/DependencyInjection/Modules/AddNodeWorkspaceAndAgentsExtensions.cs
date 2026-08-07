@@ -58,9 +58,15 @@ internal static class AddNodeWorkspaceAndAgentsExtensions
                    PooledConnectionLifetime = TimeSpan.FromMinutes(1)
                });
         builder.Services.AddSingleton(static _ => new CustomToolConcurrencyLimiter());
-        builder.Services.AddScoped<ICustomToolExecutor, HttpFetchExecutor>();
-        builder.Services.AddScoped<ICustomToolExecutor, HostProcessExecutor>();
-        builder.Services.AddScoped<ICustomToolCatalog, CustomToolCatalog>();
+        // Executors + catalog are SINGLETON: the invocation stack that consumes the catalog (the single-agent and
+        // orchestration factories, the offer provider) is singleton, so a scoped catalog would be a captive dependency
+        // (ValidateOnBuild fails it) and the tool it hands the resolver would out-live any request scope at execution time.
+        // The executors depend only on singletons (IHttpClientFactory, the concurrency limiter, loggers); the catalog reads
+        // the scoped, DbContext-backed store through a fresh scope per call (see CustomToolCatalog), the same
+        // singleton→scoped-store pattern the MCP connection manager and the model-provider-map resolver use.
+        builder.Services.AddSingleton<ICustomToolExecutor, HttpFetchExecutor>();
+        builder.Services.AddSingleton<ICustomToolExecutor, HostProcessExecutor>();
+        builder.Services.AddSingleton<ICustomToolCatalog, CustomToolCatalog>();
         // Operator-facing CRUD + author-time validation over the store. Reuses the P2 guards so what it accepts is
         // exactly what the executors will run; masks secret header/env values on the read path.
         builder.Services.AddScoped<ICustomToolService, CustomToolService>();

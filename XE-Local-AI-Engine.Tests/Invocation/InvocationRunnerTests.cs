@@ -1375,6 +1375,67 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
+    public async Task RunAsync_WhenFixedCustomToolApprovedForSession_SuppressesTheNextPrompt()
+    {
+        var sender = new MockHubMessageSender();
+        var conversationId = Guid.NewGuid();
+        var runner = CreateRunner(sender, CustomToolApprovalFactory(CustomToolName));
+
+        var firstTurn = RunAsync(runner, CustomToolPackage(conversationId, isFixed: true).Build());
+        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals.Single().RequestId, Approved: true), ApprovalScope.Session);
+        await firstTurn;
+
+        // A SECOND turn in the SAME conversation, same Fixed custom tool at the same version: the memo answers it.
+        await RunAsync(runner, CustomToolPackage(conversationId, isFixed: true).Build());
+
+        AssertEx.Equal(expected: 1, sender.SentApprovals.Count, "a session-scoped approval on a Fixed custom tool must not prompt again in the same conversation");
+    }
+
+    [Test]
+    public async Task RunAsync_WhenTheCustomToolVersionChanges_TheSessionApprovalNoLongerApplies()
+    {
+        var sender = new MockHubMessageSender();
+        var conversationId = Guid.NewGuid();
+        var runner = CreateRunner(sender, CustomToolApprovalFactory(CustomToolName));
+
+        var firstTurn = RunAsync(runner, CustomToolPackage(conversationId, version: 1, isFixed: true).Build());
+        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals.Single().RequestId, Approved: true), ApprovalScope.Session);
+        await firstTurn;
+
+        // The operator edited the custom tool mid-conversation: same name, new version. The memo is bound to the version.
+        var secondTurn = RunAsync(runner, CustomToolPackage(conversationId, version: 2, isFixed: true).Build());
+        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 2, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals[1].RequestId, Approved: true));
+        await secondTurn;
+
+        AssertEx.Equal(expected: 2, sender.SentApprovals.Count, "an edit that bumps the custom tool version must invalidate the memo and re-prompt");
+    }
+
+    [Test]
+    public async Task RunAsync_WhenParameterizedCustomToolApprovedForSession_PromptsAgain()
+    {
+        var sender = new MockHubMessageSender();
+        var conversationId = Guid.NewGuid();
+        var runner = CreateRunner(sender, CustomToolApprovalFactory(CustomToolName));
+
+        var firstTurn = RunAsync(runner, CustomToolPackage(conversationId, isFixed: false).Build());
+        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals.Single().RequestId, Approved: true), ApprovalScope.Session);
+        await firstTurn;
+
+        // A Parameterized custom tool is once-or-deny only: a session approval must NOT be remembered, so the next turn
+        // re-prompts even though the operator clicked "approve for session".
+        var secondTurn = RunAsync(runner, CustomToolPackage(conversationId, isFixed: false).Build());
+        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 2, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals[1].RequestId, Approved: true));
+        await secondTurn;
+
+        AssertEx.Equal(expected: 2, sender.SentApprovals.Count, "a Parameterized custom tool must never be session-approvable — one click must not grant open-ended model-chosen execution");
+    }
+
+    [Test]
     public async Task RunAsync_WhenTheNodeDisablesSessionScope_TheSkillApprovalIsNotRemembered()
     {
         var sender = new MockHubMessageSender();
@@ -2628,6 +2689,38 @@ public sealed class InvocationRunnerTests
         }
 
         var toolCall = new FunctionCallContent($"call-{toolName}", toolName, arguments);
+        yield return new AgentResponseUpdate(ChatRole.Assistant, new List<AIContent>
+        {
+            new ToolApprovalRequestContent($"approval-{toolName}", toolCall)
+        });
+        await Task.Yield();
+    }
+
+    private const string CustomToolName = "custom__weather";
+
+    private static RuntimePackageBuilder CustomToolPackage(Guid conversationId, int version = 1, bool isFixed = true)
+    {
+        return RuntimePackageBuilder.Valid()
+                                    .WithConversationId(conversationId)
+                                    .WithAllowedTool(CustomToolName)
+                                    .WithCustomTools(new ResolvedCustomTool(CustomToolName, version, isFixed));
+    }
+
+    private static IInvocationAgentFactory CustomToolApprovalFactory(string toolName)
+    {
+        var segment = 0;
+        return CreateFactory(_ =>
+        {
+            segment++;
+            return segment is 1 or 3 ? CustomToolApprovalRequestUpdates(toolName) : CreateUpdates("done");
+        });
+    }
+
+    // Stands in for the FunctionInvokingChatClient surfacing the approval request for the approval-wrapped custom tool.
+    // The custom-tool memo reads only the tool NAME (not the arguments), so the args here are incidental.
+    private static async IAsyncEnumerable<AgentResponseUpdate> CustomToolApprovalRequestUpdates(string toolName)
+    {
+        var toolCall = new FunctionCallContent($"call-{toolName}", toolName, new Dictionary<string, object?>(StringComparer.Ordinal));
         yield return new AgentResponseUpdate(ChatRole.Assistant, new List<AIContent>
         {
             new ToolApprovalRequestContent($"approval-{toolName}", toolCall)

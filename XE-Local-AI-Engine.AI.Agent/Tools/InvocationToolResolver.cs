@@ -26,6 +26,11 @@ using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 /// </summary>
 internal static class InvocationToolResolver
 {
+    // The reserved custom-tool name prefix (mirrors CustomToolValidation.ToolNamePrefix, which lives in Client.Application
+    // and cannot be referenced from this AI.Agent-layer resolver). Only offered names carrying it are ever put to the
+    // custom-tool catalog, so a non-custom offer never triggers a store read. Keep the two literals in sync.
+    private const string CustomToolNamePrefix = "custom__";
+
     public static IList<AITool> Resolve(IReadOnlyList<AITool> offeredTools,
         IAgentToolRegistry toolRegistry,
         IClientLocalToolRegistry clientLocalToolRegistry,
@@ -38,6 +43,68 @@ internal static class InvocationToolResolver
         ArgumentNullException.ThrowIfNull(mcpToolRegistry);
         ArgumentNullException.ThrowIfNull(logger);
 
+        return ResolveCore(offeredTools, toolRegistry, clientLocalToolRegistry, mcpToolRegistry, preResolvedCustom: null, logger);
+    }
+
+    /// <summary>
+    ///     The offer → executable resolution EXTENDED with the node-local custom tool catalog. Used by the single-agent and
+    ///     orchestration invocation factories (the two attended paths); the unattended sub-agent path stays on
+    ///     <see cref="Resolve" /> because it strips every approval-required offer BEFORE resolution, and custom tools are
+    ///     approval-forced, so they can never appear there. The custom names are pre-resolved through
+    ///     <paramref name="customToolCatalog" /> (a DbContext-backed, async store read) BEFORE the synchronous core runs, so
+    ///     no <c>.Result</c>/<c>.Wait()</c> ever blocks the thread pool. Each custom executable the catalog returns is ALREADY
+    ///     wrapped in <c>ApprovalRequiredAIFunction</c> (its authoritative approval floor), so the core's tighten-only wrap
+    ///     is a no-op on it.
+    /// </summary>
+    public static async Task<IList<AITool>> ResolveAsync(IReadOnlyList<AITool> offeredTools,
+        IAgentToolRegistry toolRegistry,
+        IClientLocalToolRegistry clientLocalToolRegistry,
+        IMcpToolRegistry mcpToolRegistry,
+        ICustomToolCatalog customToolCatalog,
+        ILogger logger,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(offeredTools);
+        ArgumentNullException.ThrowIfNull(toolRegistry);
+        ArgumentNullException.ThrowIfNull(clientLocalToolRegistry);
+        ArgumentNullException.ThrowIfNull(mcpToolRegistry);
+        ArgumentNullException.ThrowIfNull(customToolCatalog);
+        ArgumentNullException.ThrowIfNull(logger);
+
+        if (offeredTools.Count == 0)
+        {
+            return [];
+        }
+
+        // Pre-resolve only the offered custom__ names, once each, via the async catalog. A disabled node kill-switch or an
+        // unknown name yields null and the name simply stays unresolved (the core then skips + warns it, like any other
+        // unmatched offer).
+        var customNames = offeredTools
+                          .Select(static offer => offer.Name)
+                          .Where(static name => !string.IsNullOrWhiteSpace(name)
+                                                && name.StartsWith(CustomToolNamePrefix, StringComparison.Ordinal))
+                          .Distinct(StringComparer.Ordinal);
+
+        Dictionary<string, AITool>? preResolvedCustom = null;
+        foreach (var name in customNames)
+        {
+            var executable = await customToolCatalog.TryResolveAsync(name, cancellationToken).ConfigureAwait(false);
+            if (executable is not null)
+            {
+                (preResolvedCustom ??= new Dictionary<string, AITool>(StringComparer.Ordinal))[name] = executable;
+            }
+        }
+
+        return ResolveCore(offeredTools, toolRegistry, clientLocalToolRegistry, mcpToolRegistry, preResolvedCustom, logger);
+    }
+
+    private static IList<AITool> ResolveCore(IReadOnlyList<AITool> offeredTools,
+        IAgentToolRegistry toolRegistry,
+        IClientLocalToolRegistry clientLocalToolRegistry,
+        IMcpToolRegistry mcpToolRegistry,
+        IReadOnlyDictionary<string, AITool>? preResolvedCustom,
+        ILogger logger)
+    {
         if (offeredTools.Count == 0)
         {
             return [];
@@ -95,8 +162,10 @@ internal static class InvocationToolResolver
 
         return resolved;
 
-        // Try ClientLocal (server-driven ClientLocal) first, then MCP (node-local MCP). Both registries key on the
-        // offered name and a name cannot legitimately exist in both, so the first match wins.
+        // Try ClientLocal (server-driven ClientLocal) first, then MCP (node-local MCP), then the pre-resolved node-local
+        // custom tools. The three name spaces are disjoint (custom names carry the reserved custom__ prefix), so the first
+        // match wins. The custom executable is already approval-wrapped by the catalog, so the tighten-only wrap above sees
+        // an ApprovalRequiredAIFunction and leaves it as-is.
         AITool? ResolveDynamicTool(string name)
         {
             if (clientLocalToolRegistry.TryResolve(name, out var clientLocalTool))
@@ -104,7 +173,12 @@ internal static class InvocationToolResolver
                 return clientLocalTool;
             }
 
-            return mcpToolRegistry.TryResolve(name, out var mcpTool) ? mcpTool : null;
+            if (mcpToolRegistry.TryResolve(name, out var mcpTool))
+            {
+                return mcpTool;
+            }
+
+            return preResolvedCustom is not null && preResolvedCustom.TryGetValue(name, out var customTool) ? customTool : null;
         }
     }
 }

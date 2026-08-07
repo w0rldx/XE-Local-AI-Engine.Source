@@ -523,7 +523,8 @@ public sealed class OrchestrationAgentFactoryTests
         IAgentToolRegistry? toolRegistry = null,
         IClientLocalToolRegistry? clientLocalToolRegistry = null,
         IMcpToolRegistry? mcpToolRegistry = null,
-        int idleTimeoutSeconds = 20)
+        int idleTimeoutSeconds = 20,
+        ICustomToolCatalog? customToolCatalog = null)
     {
         return new OrchestrationAgentFactory(chatClient,
             Options.Create(new OrchestrationAgentOptions
@@ -535,7 +536,23 @@ public sealed class OrchestrationAgentFactoryTests
             FakeServiceProvider.Instance,
             toolRegistry ?? new FakeToolRegistry(),
             clientLocalToolRegistry ?? new FakeClientLocalToolRegistry(),
-            mcpToolRegistry ?? new FakeMcpToolRegistry());
+            mcpToolRegistry ?? new FakeMcpToolRegistry(),
+            customToolCatalog ?? new EmptyCustomToolCatalog());
+    }
+
+    // An always-empty custom-tool catalog: the orchestration factory tests never offer a custom__ tool to a participant,
+    // so the catalog is never consulted for one.
+    private sealed class EmptyCustomToolCatalog : ICustomToolCatalog
+    {
+        public Task<IReadOnlyList<LocalChatToolDescriptor>> GetDescriptorsAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<LocalChatToolDescriptor>>([]);
+        }
+
+        public Task<AITool?> TryResolveAsync(string name, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<AITool?>(null);
+        }
     }
 
     private static async IAsyncEnumerable<ChatResponseUpdate> ToUpdates(ChatResponse response,

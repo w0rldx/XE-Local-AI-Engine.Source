@@ -981,7 +981,8 @@ public sealed class InvocationAgentFactoryTests
     private static InvocationAgentFactory CreateSut(IChatClient chatClient,
         IAgentToolRegistry? toolRegistry = null,
         IClientLocalToolRegistry? clientLocalToolRegistry = null,
-        IMcpToolRegistry? mcpToolRegistry = null)
+        IMcpToolRegistry? mcpToolRegistry = null,
+        ICustomToolCatalog? customToolCatalog = null)
     {
         return new InvocationAgentFactory(chatClient,
             Options.Create(new InvocationAgentOptions()),
@@ -990,7 +991,23 @@ public sealed class InvocationAgentFactoryTests
             FakeServiceProvider.Instance,
             toolRegistry ?? new FakeToolRegistry(),
             clientLocalToolRegistry ?? new FakeClientLocalToolRegistry(),
-            mcpToolRegistry ?? new FakeMcpToolRegistry());
+            mcpToolRegistry ?? new FakeMcpToolRegistry(),
+            customToolCatalog ?? new EmptyCustomToolCatalog());
+    }
+
+    // An always-empty custom-tool catalog: the single-agent factory tests never offer a custom__ tool, so the catalog is
+    // never consulted for one. Kept minimal so it stays a no-op in the resolver's pre-resolution pass.
+    private sealed class EmptyCustomToolCatalog : ICustomToolCatalog
+    {
+        public Task<IReadOnlyList<LocalChatToolDescriptor>> GetDescriptorsAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<LocalChatToolDescriptor>>([]);
+        }
+
+        public Task<AITool?> TryResolveAsync(string name, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<AITool?>(null);
+        }
     }
 
     private sealed class FakeToolRegistry : IAgentToolRegistry

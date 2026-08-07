@@ -309,7 +309,7 @@ public sealed class AgentDefinitionServiceTests
     {
         store = Substitute.For<IAgentDefinitionStore>();
         var offerProvider = Substitute.For<ILocalToolOfferProvider>();
-        offerProvider.GetKnownToolNames().Returns(knownTools ?? []);
+        offerProvider.GetKnownToolNamesAsync(Arg.Any<CancellationToken>()).Returns(knownTools ?? []);
         return new AgentDefinitionService(store, offerProvider, NullLogger<AgentDefinitionService>.Instance);
     }
 

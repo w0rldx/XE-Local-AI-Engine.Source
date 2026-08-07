@@ -157,7 +157,7 @@ public sealed class McpServerEndpointTests
     {
         var service = Substitute.For<IMcpServerService>();
         var offerProvider = Substitute.For<ILocalToolOfferProvider>();
-        offerProvider.GetKnownTools().Returns([
+        offerProvider.GetKnownToolsAsync(Arg.Any<CancellationToken>()).Returns([
             new LocalToolCatalogEntry
             {
                 Name = "GetCurrentTime",

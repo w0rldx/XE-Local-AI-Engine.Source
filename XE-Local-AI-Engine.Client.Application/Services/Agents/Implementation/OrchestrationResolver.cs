@@ -129,15 +129,21 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
             ? Math.Min(topology.MaxTurnsPerAgent, OrchestrationTopologyJson.MaxTurnsPerAgentCeiling)
             : DefaultMaxTurnsPerAgent;
 
+        // Project each participant's offer here (async, so its capability/local-gated custom tools merge in). Built in a
+        // loop rather than a LINQ Select because ToSpecParticipantAsync awaits the async offer merge; ordered by key after,
+        // keeping the spec byte-identical to the prior OrderBy.
+        var specParticipants = new List<OrchestrationSpecParticipant>(participants.Count);
+        foreach (var participant in participants.Values)
+        {
+            specParticipants.Add(await ToSpecParticipantAsync(participant, activeModelId, cancellationToken).ConfigureAwait(false));
+        }
+
+        specParticipants.Sort(static (left, right) => string.CompareOrdinal(left.Key, right.Key));
+
         var spec = new OrchestrationSpec
         {
             TriageParticipantKey = ToKey(triage.Definition.Id),
-            Participants =
-            [
-                .. participants.Values
-                               .Select(participant => ToSpecParticipant(participant, activeModelId))
-                               .OrderBy(static participant => participant.Key, StringComparer.Ordinal)
-            ],
+            Participants = [.. specParticipants],
             Edges = edges,
             MaxTurnsPerAgent = maxTurnsPerAgent,
             ReturnToPrevious = topology.ReturnToPrevious
@@ -287,7 +293,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
         return edges;
     }
 
-    private OrchestrationSpecParticipant ToSpecParticipant(ResolvedParticipant participant, string? activeModelId)
+    private async Task<OrchestrationSpecParticipant> ToSpecParticipantAsync(ResolvedParticipant participant, string? activeModelId, CancellationToken cancellationToken)
     {
         var definition = participant.Definition;
         return new OrchestrationSpecParticipant
@@ -303,7 +309,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
             SupportsThinking = participant.SupportsThinking,
             // Gate on the participant's OWN effective-model locality (resolved during the async load), not the turn's
             // active model — so a cloud-pinned participant is withheld the knowledge tools even on a local-active turn.
-            Tools = ProjectAllowedTools(definition, activeModelId, participant.IsCloud)
+            Tools = await ProjectAllowedToolsAsync(definition, activeModelId, participant.IsCloud, cancellationToken).ConfigureAwait(false)
         };
     }
 
@@ -314,10 +320,10 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
     ///     definition. Names the definition allows but the offer does not contain are dropped and logged — never
     ///     fabricated, so a participant is never handed a tool the node cannot execute.
     /// </summary>
-    private IReadOnlyList<AllowedToolDto> ProjectAllowedTools(AgentDefinitionRecord definition, string? activeModelId, bool effectiveModelIsCloud)
+    private async Task<IReadOnlyList<AllowedToolDto>> ProjectAllowedToolsAsync(AgentDefinitionRecord definition, string? activeModelId, bool effectiveModelIsCloud, CancellationToken cancellationToken)
     {
         var effectiveModel = definition.ModelProfile ?? activeModelId;
-        var offered = _localToolOfferProvider.GetOfferedTools(effectiveModel, effectiveModelIsCloud);
+        var offered = await _localToolOfferProvider.GetOfferedToolsAsync(effectiveModel, effectiveModelIsCloud, cancellationToken).ConfigureAwait(false);
         var allowedNames = new HashSet<string>(definition.AllowedToolNames, StringComparer.Ordinal);
 
         var projected = offered

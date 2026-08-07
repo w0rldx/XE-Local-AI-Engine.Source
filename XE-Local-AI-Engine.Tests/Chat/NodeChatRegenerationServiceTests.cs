@@ -1128,7 +1128,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
 
         // Tool calling is enabled for all Codex ids (V0=true), so the requested local tool offer is honored on
         // regenerate. It is requested with isCloudModel: true so the knowledge-tool provider-locality gate applies.
-        offerProvider.Received().GetOfferedTools(CodexModel, true);
+        _ = offerProvider.Received().GetOfferedToolsAsync(CodexModel, true, Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -1322,6 +1322,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     {
         var provider = Substitute.For<ILocalToolOfferProvider>();
         provider.GetOfferedTools(Arg.Any<string?>(), Arg.Any<bool>()).Returns(tools);
+        provider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(tools);
+        provider.GetOfferedToolsForProfileAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(tools);
         return provider;
     }
 

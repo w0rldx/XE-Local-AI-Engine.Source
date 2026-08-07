@@ -25,6 +25,7 @@ using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Connection;
+using XE_Local_AI_Engine.Client.Services.CustomTools;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Interaction;
@@ -1557,7 +1558,35 @@ public sealed partial class InvocationRunner : IInvocationRunner
         ToolApprovalRequestContent approvalRequest,
         string? toolName)
     {
-        if (_skillSessionScopeDisabled || string.IsNullOrEmpty(toolName) || package.Skills is not { Count: > 0 } skills)
+        if (_skillSessionScopeDisabled || string.IsNullOrEmpty(toolName))
+        {
+            return null;
+        }
+
+        // Custom-tool branch, resolved BEFORE the skill-only guards (a custom tool is neither of MAF's two skill tools).
+        // A custom tool is session-approvable ONLY when its mode is Fixed — a Fixed tool runs a verbatim, operator-authored
+        // invocation the model cannot alter, so one "approve for session" grant is bounded. A Parameterized tool is
+        // once-or-deny: it returns null here (never remembered) so every model-chosen argument set re-prompts. The memo is
+        // bound to the tool's Version (mapped onto ApprovalMemoKey.SkillVersion) so a mid-conversation edit that bumps the
+        // version invalidates the grant and re-prompts — mirroring the skill-version binding. ResourceName is null (a
+        // custom tool has no sub-resource). A tool the package does not carry (a mid-turn delete) is not remembered.
+        if (toolName.StartsWith(CustomToolValidation.ToolNamePrefix, StringComparison.Ordinal))
+        {
+            if (package.CustomTools is not { Count: > 0 } customTools)
+            {
+                return null;
+            }
+
+            var customTool = customTools.FirstOrDefault(candidate => string.Equals(candidate.Name, toolName, StringComparison.Ordinal));
+            if (customTool is null || !customTool.IsFixed)
+            {
+                return null;
+            }
+
+            return new ApprovalMemoKey(package.ConversationId, toolName, customTool.Name, customTool.Version, ResourceName: null);
+        }
+
+        if (package.Skills is not { Count: > 0 } skills)
         {
             return null;
         }

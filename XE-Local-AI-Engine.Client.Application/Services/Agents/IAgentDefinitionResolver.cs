@@ -83,4 +83,5 @@ public sealed record ResolvedAgentRuntime(
     bool PlaybookEnabled = false,
     bool MemoryExtractionEnabled = true,
     bool EffectiveModelIsCloud = false,
-    AgentDefinitionKind Kind = AgentDefinitionKind.Single);
+    AgentDefinitionKind Kind = AgentDefinitionKind.Single,
+    IReadOnlyList<ResolvedCustomTool>? CustomTools = null);
