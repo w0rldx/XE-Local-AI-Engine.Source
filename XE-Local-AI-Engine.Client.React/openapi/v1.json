@@ -7745,6 +7745,266 @@
         ]
       }
     },
+    "/api/local/v1/custom-tools": {
+      "post": {
+        "tags": [
+          "Custom-Tools"
+        ],
+        "operationId": "createCustomTool",
+        "requestBody": {
+          "x-name": "CustomToolDefinition",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesCustomToolsCustomToolDefinition"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesCustomToolsCustomToolView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "Custom-Tools"
+        ],
+        "operationId": "listCustomTools",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesCustomToolsListCustomToolsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/custom-tools/{customToolId}": {
+      "delete": {
+        "tags": [
+          "Custom-Tools"
+        ],
+        "operationId": "deleteCustomTool",
+        "parameters": [
+          {
+            "name": "customToolId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "Custom-Tools"
+        ],
+        "operationId": "getCustomTool",
+        "parameters": [
+          {
+            "name": "customToolId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesCustomToolsCustomToolView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Custom-Tools"
+        ],
+        "operationId": "updateCustomTool",
+        "parameters": [
+          {
+            "name": "customToolId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "CustomToolDefinition",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesCustomToolsCustomToolDefinition"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesCustomToolsCustomToolView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/custom-tools/executable-probe": {
+      "post": {
+        "tags": [
+          "Custom-Tools"
+        ],
+        "operationId": "validateExecutable",
+        "requestBody": {
+          "x-name": "ProbeExecutableRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesCustomToolsProbeExecutableRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesCustomToolsHostExecutableProbeResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/connection/connect": {
       "post": {
         "tags": [
@@ -18169,6 +18429,296 @@
           },
           "expectedVersion": {
             "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesCustomToolsCustomToolView": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "description",
+          "kind",
+          "mode",
+          "enabled",
+          "acknowledged",
+          "version",
+          "createdAtUtc",
+          "updatedAtUtc",
+          "parameters"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceCustomToolKind"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceCustomToolMode"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "acknowledged": {
+            "type": "boolean"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "createdAtUtc": {
+            "type": "integer"
+          },
+          "updatedAtUtc": {
+            "type": "integer"
+          },
+          "parameters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesCustomToolsCustomToolParameterModel"
+            }
+          },
+          "http": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesCustomToolsHttpFetchDefinition"
+              }
+            ]
+          },
+          "command": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesCustomToolsCommandDefinition"
+              }
+            ]
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientPersistenceCustomToolKind": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "HttpFetch",
+          "Command"
+        ],
+        "enum": [
+          "HttpFetch",
+          "Command"
+        ]
+      },
+      "XE_Local_AI_EngineClientPersistenceCustomToolMode": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Fixed",
+          "Parameterized"
+        ],
+        "enum": [
+          "Fixed",
+          "Parameterized"
+        ]
+      },
+      "XE_Local_AI_EngineClientServicesCustomToolsCustomToolParameterModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesCustomToolsHttpFetchDefinition": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "method": {
+            "type": "string"
+          },
+          "urlTemplate": {
+            "type": "string"
+          },
+          "headers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesCustomToolsCustomToolHeaderModel"
+            }
+          },
+          "bodyTemplate": {
+            "type": "string",
+            "nullable": true
+          },
+          "allowedHosts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesCustomToolsCustomToolHeaderModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          },
+          "isSecret": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesCustomToolsCommandDefinition": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "executable": {
+            "type": "string"
+          },
+          "argsTemplate": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "workingDirectory": {
+            "type": "string",
+            "nullable": true
+          },
+          "timeoutSeconds": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "env": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesCustomToolsCustomToolEnvironmentVariableModel"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesCustomToolsCustomToolEnvironmentVariableModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          },
+          "isSecret": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesCustomToolsCustomToolDefinition": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceCustomToolKind"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceCustomToolMode"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "acknowledged": {
+            "type": "boolean"
+          },
+          "parameters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesCustomToolsCustomToolParameterModel"
+            }
+          },
+          "http": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesCustomToolsHttpFetchDefinition"
+              }
+            ]
+          },
+          "command": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesCustomToolsCommandDefinition"
+              }
+            ]
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesCustomToolsListCustomToolsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesCustomToolsCustomToolView"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesCustomToolsHostExecutableProbeResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true
+          },
+          "path": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesCustomToolsProbeExecutableRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "type": "string",
+            "nullable": true
           }
         }
       },

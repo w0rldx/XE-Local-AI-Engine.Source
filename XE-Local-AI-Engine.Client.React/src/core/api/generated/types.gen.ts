@@ -2306,6 +2306,87 @@ export type XeLocalAiEngineClientEndpointsDevelopmentV1ReconnectDevelopmentRepos
 	expectedVersion?: number;
 };
 
+export type XeLocalAiEngineClientServicesCustomToolsCustomToolView = {
+	id: string;
+	name: string;
+	description: string;
+	kind: XeLocalAiEngineClientPersistenceCustomToolKind;
+	mode: XeLocalAiEngineClientPersistenceCustomToolMode;
+	enabled: boolean;
+	acknowledged: boolean;
+	version: number;
+	createdAtUtc: number;
+	updatedAtUtc: number;
+	parameters: Array<XeLocalAiEngineClientServicesCustomToolsCustomToolParameterModel>;
+	http?: XeLocalAiEngineClientServicesCustomToolsHttpFetchDefinition | null;
+	command?: XeLocalAiEngineClientServicesCustomToolsCommandDefinition | null;
+};
+
+export type XeLocalAiEngineClientPersistenceCustomToolKind = "HttpFetch" | "Command";
+
+export type XeLocalAiEngineClientPersistenceCustomToolMode = "Fixed" | "Parameterized";
+
+export type XeLocalAiEngineClientServicesCustomToolsCustomToolParameterModel = {
+	name?: string;
+	type?: string;
+	description?: string;
+	required?: boolean;
+};
+
+export type XeLocalAiEngineClientServicesCustomToolsHttpFetchDefinition = {
+	method?: string;
+	urlTemplate?: string;
+	headers?: Array<XeLocalAiEngineClientServicesCustomToolsCustomToolHeaderModel>;
+	bodyTemplate?: string | null;
+	allowedHosts?: Array<string>;
+};
+
+export type XeLocalAiEngineClientServicesCustomToolsCustomToolHeaderModel = {
+	name?: string;
+	value?: string;
+	isSecret?: boolean;
+};
+
+export type XeLocalAiEngineClientServicesCustomToolsCommandDefinition = {
+	executable?: string;
+	argsTemplate?: Array<string>;
+	workingDirectory?: string | null;
+	timeoutSeconds?: number;
+	env?: Array<XeLocalAiEngineClientServicesCustomToolsCustomToolEnvironmentVariableModel>;
+};
+
+export type XeLocalAiEngineClientServicesCustomToolsCustomToolEnvironmentVariableModel = {
+	name?: string;
+	value?: string;
+	isSecret?: boolean;
+};
+
+export type XeLocalAiEngineClientServicesCustomToolsCustomToolDefinition = {
+	name?: string;
+	description?: string;
+	kind?: XeLocalAiEngineClientPersistenceCustomToolKind;
+	mode?: XeLocalAiEngineClientPersistenceCustomToolMode;
+	enabled?: boolean;
+	acknowledged?: boolean;
+	parameters?: Array<XeLocalAiEngineClientServicesCustomToolsCustomToolParameterModel>;
+	http?: XeLocalAiEngineClientServicesCustomToolsHttpFetchDefinition | null;
+	command?: XeLocalAiEngineClientServicesCustomToolsCommandDefinition | null;
+};
+
+export type XeLocalAiEngineClientServicesCustomToolsListCustomToolsResponse = {
+	items: Array<XeLocalAiEngineClientServicesCustomToolsCustomToolView>;
+};
+
+export type XeLocalAiEngineClientServicesCustomToolsHostExecutableProbeResult = {
+	ok?: boolean;
+	reason?: string | null;
+	path?: string | null;
+};
+
+export type XeLocalAiEngineClientServicesCustomToolsProbeExecutableRequest = {
+	path?: string | null;
+};
+
 export type XeLocalAiEngineClientEndpointsConnectionV1ConnectionStatusResponse = {
 	state: string;
 	lastError?: string | null;
@@ -7851,6 +7932,174 @@ export type ReconnectDevelopmentRepositoryResponses = {
 
 export type ReconnectDevelopmentRepositoryResponse =
 	ReconnectDevelopmentRepositoryResponses[keyof ReconnectDevelopmentRepositoryResponses];
+
+export type ListCustomToolsData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/custom-tools";
+};
+
+export type ListCustomToolsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListCustomToolsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientServicesCustomToolsListCustomToolsResponse;
+};
+
+export type ListCustomToolsResponse = ListCustomToolsResponses[keyof ListCustomToolsResponses];
+
+export type CreateCustomToolData = {
+	body: XeLocalAiEngineClientServicesCustomToolsCustomToolDefinition;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/custom-tools";
+};
+
+export type CreateCustomToolErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type CreateCustomToolResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientServicesCustomToolsCustomToolView;
+};
+
+export type CreateCustomToolResponse = CreateCustomToolResponses[keyof CreateCustomToolResponses];
+
+export type DeleteCustomToolData = {
+	body?: never;
+	path: {
+		customToolId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/custom-tools/{customToolId}";
+};
+
+export type DeleteCustomToolErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type DeleteCustomToolResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type DeleteCustomToolResponse = DeleteCustomToolResponses[keyof DeleteCustomToolResponses];
+
+export type GetCustomToolData = {
+	body?: never;
+	path: {
+		customToolId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/custom-tools/{customToolId}";
+};
+
+export type GetCustomToolErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetCustomToolResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientServicesCustomToolsCustomToolView;
+};
+
+export type GetCustomToolResponse = GetCustomToolResponses[keyof GetCustomToolResponses];
+
+export type UpdateCustomToolData = {
+	body: XeLocalAiEngineClientServicesCustomToolsCustomToolDefinition;
+	path: {
+		customToolId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/custom-tools/{customToolId}";
+};
+
+export type UpdateCustomToolErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type UpdateCustomToolResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientServicesCustomToolsCustomToolView;
+};
+
+export type UpdateCustomToolResponse = UpdateCustomToolResponses[keyof UpdateCustomToolResponses];
+
+export type ValidateExecutableData = {
+	body: XeLocalAiEngineClientServicesCustomToolsProbeExecutableRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/custom-tools/executable-probe";
+};
+
+export type ValidateExecutableErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ValidateExecutableResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientServicesCustomToolsHostExecutableProbeResult;
+};
+
+export type ValidateExecutableResponse = ValidateExecutableResponses[keyof ValidateExecutableResponses];
 
 export type ConnectConnectionData = {
 	body?: never;

@@ -61,6 +61,9 @@ internal static class AddNodeWorkspaceAndAgentsExtensions
         builder.Services.AddScoped<ICustomToolExecutor, HttpFetchExecutor>();
         builder.Services.AddScoped<ICustomToolExecutor, HostProcessExecutor>();
         builder.Services.AddScoped<ICustomToolCatalog, CustomToolCatalog>();
+        // Operator-facing CRUD + author-time validation over the store. Reuses the P2 guards so what it accepts is
+        // exactly what the executors will run; masks secret header/env values on the read path.
+        builder.Services.AddScoped<ICustomToolService, CustomToolService>();
         // Node-local playbook actions. Behavior and advisory trigger conditions are encrypted at rest; enabled actions
         // are folded into the agent prompt by the resolver, while the CRUD service owns operator authoring.
         builder.Services.AddScoped<IPlaybookActionStore, PlaybookActionStore>();
