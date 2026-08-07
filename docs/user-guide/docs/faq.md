@@ -312,8 +312,41 @@ One unmet rule is almost always the reason. → [Setup walkthrough](first-run.md
 address works. It isn't even your username: **signing in afterwards asks for the password only.**
 
 ### I forgot my password
-There's no recovery, because there's no server to email you. Reset the app (above). You can keep your
-downloaded models using the collapsed section.
+You can set a new one **without losing anything** — your chats, models and settings all stay. There's no
+"forgot password" email (there's no server to send one), so instead you run a short one-line command on
+your own computer.
+
+**First, stop the app** — close its console window. The reset won't run while the app is still open.
+
+**On Windows**
+
+1. Open the folder you start the app from (the one containing `XE-Local-AI-Engine.exe`).
+2. Click into the address bar, type `powershell`, and press **Enter** — a blue window opens.
+3. Paste the two lines below, change the password to the one you want, and press **Enter**:
+
+   ```powershell
+   $env:XE_LAUNCH_MODE = "desktop"
+   & ".\current\XE-Local-AI-Engine.Client.exe" --reset-admin-password "YourNewPassw0rd!"
+   ```
+
+**On Linux**
+
+In a terminal, in the folder you start the app from:
+
+```bash
+XE_LAUNCH_MODE=desktop ./XE-Local-AI-Engine.Client --reset-admin-password 'YourNewPassw0rd!'
+```
+
+When it prints **`Admin password reset succeeded`** it's finished and closes on its own. Start the app
+again and sign in with the new password. Anywhere that was signed in gets signed out.
+
+> **The new password must meet the same rules as setup** — at least 12 characters with an uppercase
+> letter, a lowercase letter, a digit and a symbol. If it doesn't, the command tells you and **changes
+> nothing**, so your old password still works. (The reset also clears a lockout from too many wrong
+> sign-in attempts.)
+
+Prefer to wipe everything and start fresh instead? See
+[How do I completely reset the app?](#how-do-i-completely-reset-the-app) above.
 
 ### How do I uninstall it?
 There's no uninstaller. Three steps:

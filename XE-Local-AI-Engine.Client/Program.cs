@@ -196,6 +196,18 @@ try
         throw;
     }
 
+    // Local admin password recovery (operator-run, single-user machine). Handled here — after identity migrations
+    // guarantee the tables + Admin role exist, and BEFORE the web host serves — so the reset runs against the SAME
+    // database the app uses (the desktop branch above already filled the connection string + operator key) and the
+    // single-instance lease already proved no other instance is holding that data directory. Resets the admin password
+    // without the old one, revokes all refresh tokens, then exits; off the flag this is a no-op and startup continues.
+    if (DesktopLaunch.TryGetResetAdminPassword(args, out var resetPassword))
+    {
+        var resetExitCode = await ResetAdminPasswordAsync(app.Services, resetPassword).ConfigureAwait(false);
+        instanceLease?.Dispose();
+        return resetExitCode;
+    }
+
     await RecoverInterruptedNodeChatMessagesAsync(app.Services).ConfigureAwait(false);
     await ReconcileStaleScheduledRunsAsync(app.Services).ConfigureAwait(false);
     ActivateInvocationResumeRegistry(app.Services);
@@ -478,6 +490,33 @@ static async Task ApplyNodeIdentityMigrationsAsync(IServiceProvider services)
     var initializationService = scope.ServiceProvider.GetRequiredService<NodeIdentityInitializationService>();
 
     await initializationService.MigrateAndSeedAsync().ConfigureAwait(false);
+}
+
+static async Task<int> ResetAdminPasswordAsync(IServiceProvider services, string? newPassword)
+{
+    ArgumentNullException.ThrowIfNull(services);
+
+    if (string.IsNullOrWhiteSpace(newPassword))
+    {
+        // ponytail: password passed on argv — acceptable on a local single-operator machine (the trust boundary is the
+        // machine), and it avoids a console-subsystem stdin prompt that the packaged GUI exe cannot reliably show.
+        Log.Error("The {Flag} flag requires a new password argument, e.g. the flag followed by <NEW_PASSWORD>.", DesktopLaunch.ResetAdminPasswordArgument);
+        return 2;
+    }
+
+    await using var scope = services.CreateAsyncScope();
+    var authService = scope.ServiceProvider.GetRequiredService<INodeAuthService>();
+
+    var result = await authService.ResetAdminPasswordAsync(newPassword, CancellationToken.None).ConfigureAwait(false);
+    if (!result.Succeeded)
+    {
+        Log.Error("Admin password reset failed: {Errors}", string.Join(" ", result.Errors));
+        return 1;
+    }
+
+    Log.Information("Admin password reset succeeded. Refresh tokens revoked and existing access tokens invalidated; "
+                    + "sign in with the new password.");
+    return 0;
 }
 
 static async Task RecoverInterruptedNodeChatMessagesAsync(IServiceProvider services)
