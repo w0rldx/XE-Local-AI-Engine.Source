@@ -128,8 +128,16 @@ function inFlightAssistantMessageId(conversation: ChatConversationModel): string
 		?.id;
 }
 
+// SignalR wraps a server HubException as "An unexpected error occurred invoking '<method>' on the server.
+// HubException: <the actual message>" — the prefix is generic noise and the tail is the user-facing sentence the
+// hub deliberately wrote (e.g. the message-size rejection). Strip the wrapper so the bubble/toast lead with the
+// sentence that helps; anything not matching the wrapper passes through untouched.
+const signalRHubErrorPrefix = /^An unexpected error occurred invoking '[^']*' on the server\.\s*HubException:\s*/;
+
 function errorMessage(error: unknown): string {
-	return apiErrorMessage(error, "Unknown error");
+	const message = apiErrorMessage(error, "Unknown error");
+	const stripped = message.replace(signalRHubErrorPrefix, "");
+	return stripped.length > 0 ? stripped : message;
 }
 
 function createId(): string {

@@ -117,6 +117,28 @@ public sealed class RuntimePackageValidatorTests
     }
 
     [Test]
+    public void Validate_WhenMessageExceedsLimit_AndTheSizeCapIsNotEnforced_ReturnsValid()
+    {
+        // The per-turn re-validation path. An over-cap message here is a message the node already stored, so failing the
+        // package would fail every remaining turn of that conversation — the poisoning this carve-out removes. The
+        // context budgeter trims oversized history downstream.
+        var result = _validator.Validate(RuntimePackageBuilder.Valid().WithUserMessage(new string(c: 'b', count: 1025)).Build(),
+            enforceMessageSizeCap: false);
+
+        AssertEx.True(result.IsValid);
+        AssertEx.Empty(result.Errors);
+    }
+
+    [Test]
+    public void Validate_WhenMessageContainsNullByte_AndTheSizeCapIsNotEnforced_StillReturnsError()
+    {
+        // The carve-out is scoped to the SIZE cap only: a null byte is an integrity fault whoever produced it.
+        var result = _validator.Validate(RuntimePackageBuilder.Valid().WithUserMessage("abc\0def").Build(), enforceMessageSizeCap: false);
+
+        AssertErrorContains(result, "conversation message");
+    }
+
+    [Test]
     public void Validate_WhenMessageContainsNullByte_ReturnsError()
     {
         var result = _validator.Validate(RuntimePackageBuilder.Valid().WithUserMessage("abc\0def").Build());

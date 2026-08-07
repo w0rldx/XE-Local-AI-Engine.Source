@@ -21,7 +21,7 @@ public sealed class RuntimePackageValidator : IRuntimePackageValidator
         _securityOptions = securityOptions.Value;
     }
 
-    public RuntimePackageValidationResult Validate(RuntimePackage package)
+    public RuntimePackageValidationResult Validate(RuntimePackage package, bool enforceMessageSizeCap = true)
     {
         ArgumentNullException.ThrowIfNull(package);
 
@@ -30,7 +30,7 @@ public sealed class RuntimePackageValidator : IRuntimePackageValidator
         ValidateSystemPrompt(package.ResolvedSystemPrompt, errors);
         ValidateModelProfile(package.ModelProfile, errors);
         ValidateReasoningEffort(package.ReasoningEffort, errors);
-        ValidateConversationContext(package.ConversationContext, errors);
+        ValidateConversationContext(package.ConversationContext, enforceMessageSizeCap, errors);
         ValidateTimeouts(package.Timeouts, errors);
         ValidateConfigHash(package.ConfigHash, errors);
         ValidateAllowedTools(package.AllowedTools, errors);
@@ -75,11 +75,13 @@ public sealed class RuntimePackageValidator : IRuntimePackageValidator
         }
     }
 
-    private void ValidateConversationContext(List<ConversationMessageDto> conversationContext, List<string> errors)
+    private void ValidateConversationContext(List<ConversationMessageDto> conversationContext, bool enforceMessageSizeCap, List<string> errors)
     {
         ArgumentNullException.ThrowIfNull(conversationContext);
 
-        var maxMessageSizeBytes = _securityOptions.MaxMessageSizeKb * 1024;
+        // Blank and null-byte content are integrity faults: they are equally wrong whoever produced them, so they are
+        // checked on every path. The size cap is not — see the interface's doc for why it is inbound-only.
+        var maxMessageSizeBytes = enforceMessageSizeCap ? _securityOptions.MaxMessageSizeKb * 1024 : int.MaxValue;
 
         var invalidMessageCount = conversationContext
                                   .Select(message => message.Content)
