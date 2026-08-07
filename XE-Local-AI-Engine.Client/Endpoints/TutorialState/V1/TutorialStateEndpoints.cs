@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.TutorialState.V1;
 using FastEndpoints;
 using FastEndpoints.Swagger;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
+using XE_Local_AI_Engine.Client.Endpoints.TutorialState.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Tutorial;
 

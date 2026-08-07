@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.Client.Endpoints.CloudSettings.V1;
+namespace XE_Local_AI_Engine.Client.Endpoints.CloudSettings.V1.Validators;
 
 using FastEndpoints;
 using FluentValidation;
