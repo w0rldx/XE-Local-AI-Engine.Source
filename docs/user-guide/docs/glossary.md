@@ -22,6 +22,7 @@ click the item inside. Written here as `Group → Item`.
 | **Models → Loaded** | What's in memory now, and eject |
 | **Automation → Agents** | Configurable assistants |
 | **Automation → Skills** | Loadable agent capabilities |
+| **Automation → Custom tools** | HTTP and host-command tools you define for agents (advanced and high-risk) |
 | **Automation → MCP** | External tool servers |
 | **Automation → Scheduler** | Unattended runs |
 | **Automation → Tools** | Available tools |

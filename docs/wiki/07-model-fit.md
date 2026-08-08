@@ -1,10 +1,10 @@
 # Model-fit / Model Advisor
 
-> Last reviewed: 2026-07-28 · Code-grounded.
+> Baseline: `50cae1410b23fa1e7258d343c1f2d926c6eb41fb` · Reviewed: 2026-08-08 · Code-grounded.
 
 Model-fit is the node's **box-aware GGUF recommendation advisor**: given the operator's use-case, it profiles the local hardware (RAM / VRAM / GPU vendor), discovers candidate GGUF repos on Hugging Face, estimates each model's memory footprint with a pure I/O-free formula, ranks the ones that fit, and caches the ranked snapshot. The React page is **cache-first** — it reads the last cached snapshot and never runs the advisor inline; the only way to (re)run the advisor is to fire the seeded Quartz `model-recommendation-check` job. This page covers the hardware profiler, the memory-fit estimator, the refresh service, the cache-read query service, the GGUF download coordinator, the Quartz wiring, the local endpoints, and the React feature.
 
-> **Discrepancy vs. older notes (CODE WINS).** Earlier docs/plans describe a "digest-pinned approved utility image" run in a container to **benchmark** models. That concept **no longer exists** — it was removed in the [runtime re-architecture](03-local-runtime-and-providers.md), which took Docker off the model path entirely, and the orphaned `approved_utility_images` table was dropped by migration. ([ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md) later permitted Docker for **Development Mode execution only**; it does not reopen a container path here.) The advisor now runs box-aware GGUF recommendation **in-process** against the [host llama.cpp runtime](03-local-runtime-and-providers.md). The **advisor refresh** still has no benchmark mode: it rejects anything but `Recommend` with *"Benchmark refresh is not yet enabled."* (`ModelFitRefreshService.RefreshAsync` — grep the message rather than a line number; it has already drifted once), and the handler's parameter schema dropped the `approved-image` and `provider-name` fields (`ModelRecommendationCheckHandler.cs:37-57`). A *separate* real benchmark now exists — the [Inference Optimizer](#inference-optimizer-operator-surface) replays a candidate profile under a metrics-enabled `llama-server` against a golden transcript — but it tunes **launch arguments for an already-chosen model**, not the advisor's model ranking. The two are distinct: the recommendation advisor stays estimator-only and **never** spawns a process.
+> **Discrepancy vs. older notes (CODE WINS).** Earlier docs/plans describe a "digest-pinned approved utility image" run in a container to **benchmark** models. That concept **no longer exists** — it was removed in the [runtime re-architecture](03-local-runtime-and-providers.md), which took Docker off the model path entirely, and the orphaned `approved_utility_images` table was dropped by migration. ([ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md) later permitted Docker for **Development Mode execution only**; it does not reopen a container path here.) The advisor now runs box-aware GGUF recommendation **in-process** against the [host llama.cpp runtime](03-local-runtime-and-providers.md). The **advisor refresh** still has no benchmark mode: it rejects anything but `Recommend` with *"Benchmark refresh is not yet enabled."* (`ModelFitRefreshService.RefreshAsync` — grep the message rather than a line number; it has already drifted once), and the handler's parameter schema dropped the `approved-image` and `provider-name` fields (`ModelRecommendationCheckHandler.cs`). A *separate* real benchmark now exists — the [Inference Optimizer](#inference-optimizer-operator-surface) replays a candidate profile under a metrics-enabled `llama-server` against a golden transcript — but it tunes **launch arguments for an already-chosen model**, not the advisor's model ranking. The two are distinct: the recommendation advisor stays estimator-only and **never** spawns a process.
 
 ## Where the code lives
 
@@ -19,7 +19,7 @@ Model-fit is the node's **box-aware GGUF recommendation advisor**: given the ope
 | Process VRAM-budget probe | `XE-Local-AI-Engine.Providers.LlamaServer/Implementation/LlamaListDevicesProcessVramBudgetProbe.cs` (`IProcessVramBudgetProbe`) |
 | Quartz handler | `XE-Local-AI-Engine.Client.Application/Services/Scheduler/Handlers/ModelRecommendationCheckHandler.cs` |
 | Local endpoints | `XE-Local-AI-Engine.Client/Endpoints/ModelFit/V1/` |
-| Route constants | `XE-Local-AI-Engine.Client/Endpoints/Common/LocalApiRoutes.cs:253` (`ModelFit`) |
+| Route constants | `XE-Local-AI-Engine.Client/Endpoints/Common/LocalApiRoutes.cs` (`ModelFit`) |
 | React feature | `XE-Local-AI-Engine.Client.React/src/features/model-fit/` |
 
 ## The two paths: cache-read vs. scheduler refresh
@@ -44,7 +44,7 @@ This is the single most important invariant of the feature. The "latest" read an
           → SignalR scheduler hub broadcasts terminal run → page invalidates the latest cache & refetches
 ```
 
-The route comment makes the contract explicit: *"Cache-first: the latest endpoint reads the cached recommendation snapshot and never runs the advisor; the refresh endpoint delegates to the scheduler trigger and never executes the advisor directly."* (`LocalApiRoutes.cs:229-234`).
+The route comment makes the contract explicit: *"Cache-first: the latest endpoint reads the cached recommendation snapshot and never runs the advisor; the refresh endpoint delegates to the scheduler trigger and never executes the advisor directly."* (`LocalApiRoutes.cs`).
 
 ## The memory-fit estimator (pure core)
 
@@ -58,7 +58,7 @@ head_dim = embedding_length / n_heads
 
 Key decisions, all in code:
 
-- **Budget selection (`Estimate`, lines 92-94).** Uses GPU VRAM iff `profile.GpuAccelAvailable && profile.VramKnown && profile.VramBytes > 0`; otherwise falls back to `profile.AvailableRamBytes`. The result records which budget it scored against via the `FitMode` enum (`Gpu` / `Cpu`). A model **fits iff `total ≤ budget`**; `HeadroomBytes = budget − estimated` (negative when it doesn't fit).
+- **Budget selection (`MemoryFitEstimator.Estimate`).** Uses GPU VRAM iff `profile.GpuAccelAvailable && profile.VramKnown && profile.VramBytes > 0`; otherwise falls back to `profile.AvailableRamBytes`. The result records which budget it scored against via the `FitMode` enum (`Gpu` / `Cpu`). A model **fits iff `total ≤ budget`**; `HeadroomBytes = budget − estimated` (negative when it doesn't fit).
 - **Weights term (`EstimateWeightsBytes`).** Prefers `paramCount × BytesPerWeight(quant)`; when the GGUF header has no param count it **falls back to the on-disk file size** (the already-quantized weights), so a file is never rejected purely for a missing param count.
 - **Bytes-per-weight table (`BytesPerWeight`).** Maps llama.cpp quant labels (`Q2_K`…`Q8_0`, the `IQ1`…`IQ4` I-quants, `F16`, `F32`) to effective bytes/weight; unknown labels fall back to the `Q4_K_M` density (~0.5625 B/weight ≈ 4.5 bits).
 - **Constants.** `DefaultQuant = "Q4_K_M"`, `RuntimeOverheadBytes ≈ 0.75 GB`, `DefaultSafetyMarginFraction = 0.12` (12% applied to weights+KV before adding the fixed overhead). The KV term can be halved by passing `kvCacheQuantized: true` (8-bit instead of fp16 KV cache).
@@ -104,13 +104,13 @@ Probing logic (`ProbeAsync`):
 - **RAM** — Linux parses `/proc/meminfo` (`MemTotal` / `MemAvailable`); otherwise an OS query.
 - **GPU vendor** — `nvidia-smi --query-gpu=name` first on every OS (NVIDIA is unambiguous); else Linux reads `/sys/class/drm` PCI vendor ids (NVIDIA/AMD/Intel), Windows uses a DXGI/WMI vendor-name seam.
 - **VRAM** — NVIDIA via `nvidia-smi --query-gpu=memory.total` (scans past warning-banner lines to the first parseable line); Windows via a DXGI seam; **Linux non-NVIDIA has no byte-accurate source → VRAM unknown**.
-- **Degrade rule (lines 69-71).** `gpuAccelAvailable = vramKnown && vendor ∈ {Nvidia, Amd, Intel}`. **VRAM unknown ⇒ no GPU budget**, even when a vendor is detected — so the estimator scores against RAM in CPU mode. This is why an AMD/Intel Linux box degrades to CPU mode in the tests.
+- **Degrade rule (`HardwareProfiler.ProbeAsync`).** `gpuAccelAvailable = vramKnown && vendor ∈ {Nvidia, Amd, Intel}`. **VRAM unknown ⇒ no GPU budget**, even when a vendor is detected — so the estimator scores against RAM in CPU mode. This is why an AMD/Intel Linux box degrades to CPU mode in the tests.
 
 ## The refresh service (the advisor)
 
-`ModelFitRefreshService.RefreshAsync` (`Implementation/ModelFitRefreshService.cs:96`) is the advisor proper. It is **scoped** (resolved per Quartz fire by the singleton handler through a fresh DI scope). Flow:
+`ModelFitRefreshService.RefreshAsync` (`Implementation/ModelFitRefreshService.cs`) is the advisor proper. It is **scoped** (resolved per Quartz fire by the singleton handler through a fresh DI scope). Flow:
 
-1. **Guard** — non-`Recommend` operations are rejected before any snapshot row exists (benchmark gate, lines 113-115).
+1. **Guard** — non-`Recommend` operations are rejected before any snapshot row exists (the `operation != Recommend` guard).
 2. **Validate** intent (`useCase`, `limit`) via `ModelFitRequestValidator` against the fixed allowlist; provider is fixed to the `"llama.cpp"` sentinel.
 3. **Open** a `Running` snapshot row (`IModelFitSnapshotStore.CreateRunningAsync`) and report progress.
 4. **Profile** hardware (`IHardwareProfiler.GetProfileAsync`), then `BuildRecommendationsAsync`:
@@ -118,7 +118,7 @@ Probing logic (`ProbeAsync`):
    - List already-downloaded GGUF keys (best-effort).
    - Inspect candidate repos **in parallel with bounded concurrency** (`SemaphoreSlim`); a stalled/failing repo is skipped (null candidate) so it never fails the whole run.
    - **Quant-ladder step-down (per repo).** Instead of taking one fixed quant, the advisor walks the repo's files against the [`QuantLadder`](#the-quant-ladder--quality-tiers) from the highest-quality quant **down** to the `Q3_K_M` quality floor (`QuantLadder.FloorRank`), estimating each with `MemoryFitEstimator`, and keeps the highest-quality quant that **fits** the budget. This is why big new models (Gemma-3-27B, Qwen-3.x) now surface at, say, `Q4_K_M` instead of being dropped because their `Q8_0` didn't fit.
-   - **Bucketed capability ranking.** The fitting candidates are ranked **capability-first but bucketed to ~1 GiB** (`EstimatedBytes / CapabilityBucketBytes`, `CapabilityBucketBytes = 1 GiB`) so a trivially-larger model no longer always outranks a much newer or far more popular peer. Within a bucket the order is **downloads (popularity) → last-modified (recency) → trusted-publisher (soft nudge) → repo id (deterministic tie-break)**, then `Take(request.Limit)` (`ModelFitRefreshService.cs:304-313`).
+   - **Bucketed capability ranking.** The fitting candidates are ranked **capability-first but bucketed to ~1 GiB** (`EstimatedBytes / CapabilityBucketBytes`, `CapabilityBucketBytes = 1 GiB`) so a trivially-larger model no longer always outranks a much newer or far more popular peer. Within a bucket the order is **downloads (popularity) → last-modified (recency) → trusted-publisher (soft nudge) → repo id (deterministic tie-break)**, then `Take(request.Limit)` (`ModelFitRefreshService.cs`).
    - Each emitted recommendation also carries `release_date` (the repo's last-modified timestamp) and `is_trusted_publisher` for the UI's recency/trust signals.
 5. **Serialize** the ranked fits to advisor JSON, parse them through `RecommendationJsonParser`, and write the terminal snapshot (`Succeeded`) plus replace the recommendation rows (`IModelFitRecommendationStore.ReplaceForSnapshotAsync`).
 
@@ -141,7 +141,7 @@ A recommendation row is actionable: the operator can download the model. `GgufDo
 - **`GetStatus`** returns the latest sanitized `GgufDownloadStatus` (phase + completed/total bytes; **never** a path/URL/token).
 - On success it writes the `model_provider_map` row pointing the GGUF at the `llamacpp` provider (through a fresh DI scope, since the map store is scoped) — the **single production writer** that makes a downloaded GGUF reachable by the runtime. Best-effort: a map-write failure never marks the download Failed.
 
-> **UI ownership note.** In the React layer the GGUF browse/download, llama.cpp runtime, HF token, and running-models hooks were **relocated** out of the model-fit feature into Model Management / Node Settings / Loaded Models. A download started from a recommendation row is owned by the Model Management feature (`useModelFit.ts:18-22`). The download/runtime/token endpoints still live physically under `Endpoints/ModelFit/V1/` (see table below) but their UI no longer renders on the advisor page.
+> **UI ownership note.** In the React layer the GGUF browse/download, llama.cpp runtime, HF token, and running-models hooks were **relocated** out of the model-fit feature into Model Management / Node Settings / Loaded Models. A download started from a recommendation row is owned by the Model Management feature (`useModelFit.ts`). The download/runtime/token endpoints still live physically under `Endpoints/ModelFit/V1/` (see table below) but their UI no longer renders on the advisor page.
 
 ## Quartz wiring
 

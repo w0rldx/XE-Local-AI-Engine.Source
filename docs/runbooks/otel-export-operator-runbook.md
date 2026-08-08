@@ -83,7 +83,7 @@ completions, tool-call arguments) is a **separate, code-owned opt-in** that defa
 ambient environment:
 
 ```csharp
-// XE-Local-AI-Engine.AI.Agent/Configuration/AgentTelemetryOptions.cs:18-24
+// AgentTelemetryOptions.CaptureSensitiveContent
 /// When true, the gen_ai instrumentation captures sensitive message content (prompts, reasoning, completions, and
 /// tool-call arguments) into telemetry spans. Default false: this is a privacy-sensitive opt-in that must be turned
 /// on deliberately and is NEVER driven by an ambient environment variable.

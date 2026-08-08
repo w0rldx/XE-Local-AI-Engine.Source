@@ -178,6 +178,7 @@ Everything below runs **on your own machine** unless you deliberately connect an
   Candidates go through a **best-effort scan for things that look like secrets** first — pattern-based,
   so treat it as a safety net rather than a guarantee
 - **MCP servers** — connect external tool servers to your agents
+- **Custom tools** — author an HTTP request or direct host-program launch for an agent. The node feature starts off and the built-in form initializes new tools as disabled. Every tool stays approval-wrapped: fixed tools may reuse an explicit session approval until edited, while parameterized tools ask on every call
 - **Skills** — a local library of capabilities agents can load on demand
 
 </details>
@@ -186,8 +187,8 @@ Everything below runs **on your own machine** unless you deliberately connect an
 <summary><b>Experimental</b> — rough edges expected</summary>
 
 - **Development Mode** — an agent works on a real Git repository of yours in an isolated copy, with a
-  reviewed approval step before anything is written back. It ships **enabled** (there is no switch to
-  leave off); what gates it is that it only acts once you register a repository.
+  reviewed approval step before anything is written back. It ships enabled, but operators can disable
+  the entire feature with `Development:Enabled=false`; otherwise it acts only after you register a repository.
   **Read the [security boundary](docs/privacy-and-data.md#development-mode-and-its-limits) before you
   register one. Never point it at code you do not trust.**
 - **Image generation** — generate images locally. Grouped as a preview feature in the app.

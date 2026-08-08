@@ -1,6 +1,6 @@
 # Code Organization Conventions
 
-> Baseline: `de2aa553d9ec557afe3de4965f9568ba3a49920f` · Reviewed: 2026-08-07 · Code-grounded.
+> Baseline: `50cae1410b23fa1e7258d343c1f2d926c6eb41fb` · Reviewed: 2026-08-08 · Code-grounded.
 > Updated 2026-08-07: endpoint areas now fold DTOs/mappers/validators into `V1/{Dtos,Mappers,Validators}/`
 > subfolders (only endpoints stay at the top level); `Dtos/` keeps a flat namespace by design.
 
@@ -29,8 +29,8 @@ they drift, so a reviewer (human or agent) has to know them.
 ### Endpoints: FastEndpoints, one per file — **not** MediatR/CQRS
 
 The API layer is **FastEndpoints**. The dominant shape is **one endpoint class per `*Endpoint.cs` file**
-under `Endpoints/{Area}/V1/` (185 such classes); a few areas group several into a plural `*Endpoints.cs`
-(only 5 — e.g. `NodeAuthEndpoints.cs`). Both are acceptable — **match the area you are editing**, don't
+under `Endpoints/{Area}/V1/`; a small number of areas group several into a plural `*Endpoints.cs`
+(for example `NodeAuthEndpoints.cs`). Both are acceptable — **match the area you are editing**, don't
 mass-convert either way. There is **no MediatR / `ISender` / CQRS vertical-slice layer** anywhere; an
 endpoint injects and calls `Client.Application` services directly and stays **orchestration-only**
 (no business logic, no persistence). It returns a **DTO record, never an EF entity**.
@@ -71,7 +71,7 @@ the entire generated hey-api client for no behavioural gain. Flat DTO namespaces
 Contrary to the near-universal C# convention: `.editorconfig` sets
 `csharp_using_directive_placement = inside_namespace:warning`, and with warnings-as-errors that makes the
 "normal" placement a **build error**. Every file is `namespace X;` first, then `using …;`
-(`DeleteNodeChatConversationEndpoint.cs:1-6`). Do not "fix" it back to usings-on-top.
+(the namespace/using order in `DeleteNodeChatConversationEndpoint.cs`). Do not "fix" it back to usings-on-top.
 
 ### An area folds into `V1/{Dtos,Mappers,Validators}/` — only endpoints stay at the top
 
@@ -112,10 +112,18 @@ Reads use `AsNoTracking`; set operations use `ExecuteUpdate/DeleteAsync`.
 ### DI + class house style
 
 Constructor injection via **primary constructors**, with each dependency null-guarded
-(`?? throw new ArgumentNullException(...)`) into a `readonly` field — this is the house style (~291
-`ArgumentNullException.ThrowIfNull`/guard sites in `Client.Application`), heavier than a plain primary
-ctor. Classes are `sealed` by default (227 sealed just under `Endpoints/`). Options bind from config via
+(`?? throw new ArgumentNullException(...)`) into a `readonly` field — this is the house style throughout
+`Client.Application`, heavier than a plain primary ctor. Classes are `sealed` by default. Options bind from config via
 the `*Options` pattern.
+
+### Custom Tools keep authoring, offering, and execution gates aligned
+
+Custom Tools follow the same endpoint/service/store separation as other areas, but their executable safety checks
+are intentionally shared across boundaries: `CustomToolService` validates authoring input, `CustomToolCatalog` reads
+live persisted definitions and applies the node switch + enabled + acknowledged + approval gates, and each
+`ICustomToolExecutor` re-runs execution-time guards. Do not move SSRF or executable-path validation into the React form
+alone, and do not treat the desktop executable probe as authorization to skip `HostExecutableGuard.Validate()` at
+launch. Secret configuration belongs in encrypted `config_json`; DTOs expose only the mask sentinel.
 
 ### Providers depend only on `Providers.Abstractions`
 
