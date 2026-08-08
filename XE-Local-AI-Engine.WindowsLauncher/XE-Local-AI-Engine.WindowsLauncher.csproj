@@ -10,7 +10,15 @@
           BeforeTargets="ComputeFilesToPublish"
           Condition="'$(UseAppHost)' == 'true' and $(RuntimeIdentifier.StartsWith('win-'))">
     <PropertyGroup>
-      <_WindowsApphostPackDirectory>$(NuGetPackageRoot)microsoft.netcore.app.host.$(RuntimeIdentifier)/$(DotNetRuntimeVersion)</_WindowsApphostPackDirectory>
+      <!--
+        Resolve the apphost pack directory from the exact apphost the SDK chose ($(AppHostSourcePath) points at
+        <pack>/runtimes/<rid>/native/apphost.exe, so three levels up is the pack root). This finds the license
+        whether the pack was downloaded to the NuGet global cache OR served from the SDK's own packs/ dir — a
+        machine whose SDK bundles $(DotNetRuntimeVersion) serves the apphost from packs/ and never populates the
+        cache, which is why the old cache-only path failed there. Falls back to the historical NuGet-cache path.
+      -->
+      <_WindowsApphostPackDirectory Condition="'$(AppHostSourcePath)' != ''">$([System.IO.Path]::GetFullPath('$([System.IO.Path]::GetDirectoryName($(AppHostSourcePath)))/../../..'))</_WindowsApphostPackDirectory>
+      <_WindowsApphostPackDirectory Condition="'$(_WindowsApphostPackDirectory)' == '' or !Exists('$(_WindowsApphostPackDirectory)/LICENSE.TXT')">$(NuGetPackageRoot)microsoft.netcore.app.host.$(RuntimeIdentifier)/$(DotNetRuntimeVersion)</_WindowsApphostPackDirectory>
     </PropertyGroup>
     <Error Condition="!Exists('$(_WindowsApphostPackDirectory)/LICENSE.TXT')"
            Text="The .NET $(DotNetRuntimeVersion) $(RuntimeIdentifier) apphost MIT license is missing from the restored host pack."/>
