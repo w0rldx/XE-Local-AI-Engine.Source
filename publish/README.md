@@ -34,7 +34,7 @@ The published payload also contains its own SPDX manifest and bundled dependency
 ## Version and tag contract
 
 [`eng/ReleaseVersion.props`](../eng/ReleaseVersion.props) is the single release-identity source. It currently composes
-`VersionPrefix` and `VersionSuffix` as `0.1.0-rc.5.2`. `Directory.Build.props` imports that file for builds.
+`VersionPrefix` and `VersionSuffix` as `1.0.0-rc.1`. `Directory.Build.props` imports that file for builds.
 
 `v0.1.0-rc.5.1` already identifies historical commit `a29224eb5f3ab07129c02874dd02b44b91a4cc13` and that version
 was published through the retired tester flow. Do not move or reuse the tag. Any public release containing later
