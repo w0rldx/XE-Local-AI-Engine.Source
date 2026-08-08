@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Hosting;
 
+using System.Globalization;
 using Velopack;
 using Velopack.Locators;
 using Velopack.Logging;
@@ -17,19 +18,16 @@ internal static class FrameworkDependentVelopackBootstrap
         var app = VelopackApp.Build().SetArgs(args);
         if (OperatingSystem.IsWindows())
         {
-            var launcherPath = ResolveLauncherPath(
-                isWindows: true,
+            var launcherPath = ResolveLauncherPath(isWindows: true,
                 Environment.ProcessPath,
                 AppContext.BaseDirectory,
                 File.Exists);
             if (launcherPath is not null)
             {
                 var defaultProcess = new DefaultProcessImpl(NullVelopackLogger.Instance);
-                var launcherProcessId = ResolveLauncherProcessId(
-                    Environment.GetEnvironmentVariable("XE_WINDOWS_LAUNCHER_PID"),
+                var launcherProcessId = ResolveLauncherProcessId(Environment.GetEnvironmentVariable("XE_WINDOWS_LAUNCHER_PID"),
                     defaultProcess.GetCurrentProcessId());
-                app.SetLocator(new WindowsVelopackLocator(
-                    new LauncherProcess(defaultProcess, launcherPath, launcherProcessId),
+                app.SetLocator(new WindowsVelopackLocator(new LauncherProcess(defaultProcess, launcherPath, launcherProcessId),
                     customLog: null));
             }
         }
@@ -53,20 +51,23 @@ internal static class FrameworkDependentVelopackBootstrap
     }
 
     internal static uint ResolveLauncherProcessId(string? value, uint managedProcessId) =>
-        uint.TryParse(value, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var parsed)
+        uint.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed)
         && parsed > 0
             ? parsed
             : managedProcessId;
 
     private sealed class LauncherProcess(IProcessImpl inner, string launcherPath, uint launcherProcessId) : IProcessImpl
     {
-        public string GetCurrentProcessPath() => launcherPath;
+        public string GetCurrentProcessPath() =>
+            launcherPath;
 
-        public uint GetCurrentProcessId() => launcherProcessId;
+        public uint GetCurrentProcessId() =>
+            launcherProcessId;
 
         public void StartProcess(string exePath, IEnumerable<string> args, string workDir, bool showWindow) =>
             inner.StartProcess(exePath, args, workDir, showWindow);
 
-        public void Exit(int exitCode) => inner.Exit(exitCode);
+        public void Exit(int exitCode) =>
+            inner.Exit(exitCode);
     }
 }

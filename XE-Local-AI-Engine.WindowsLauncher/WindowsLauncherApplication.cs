@@ -1,6 +1,8 @@
 namespace XE_Local_AI_Engine.WindowsLauncher;
 
+using System.ComponentModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 
@@ -12,10 +14,12 @@ internal static class WindowsLauncherApplication
     private const int LaunchFailureExitCode = 151;
     private const string ManagedEntryPoint = "XE-Local-AI-Engine.Client.dll";
     private const string RuntimeConfig = "XE-Local-AI-Engine.Client.runtimeconfig.json";
+
     private static readonly Uri DownloadUri = new UriBuilder(Uri.UriSchemeHttps, "dotnet.microsoft.com")
     {
         Path = "en-us/download/dotnet/10.0"
     }.Uri;
+
     private static readonly string[] RequiredPayloadFiles =
     [
         ManagedEntryPoint,
@@ -44,8 +48,7 @@ internal static class WindowsLauncherApplication
         Version requiredRuntime;
         try
         {
-            requiredRuntime = ResolveRequiredAspNetCoreRuntime(await File.ReadAllTextAsync(
-                Path.Combine(baseDirectory, RuntimeConfig)).ConfigureAwait(false));
+            requiredRuntime = ResolveRequiredAspNetCoreRuntime(await File.ReadAllTextAsync(Path.Combine(baseDirectory, RuntimeConfig)).ConfigureAwait(false));
         }
         catch (Exception exception) when (exception is IOException or JsonException or InvalidDataException)
         {
@@ -60,10 +63,11 @@ internal static class WindowsLauncherApplication
             runtimeInventory = await CaptureRuntimeInventoryAsync(dotnet).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is IOException or InvalidOperationException
-                                                       or System.ComponentModel.Win32Exception)
+                                              or Win32Exception)
         {
             return Fail($"The installed .NET host could not be inspected: {exception.Message}", MissingPrerequisiteExitCode);
         }
+
         if (!HasCompatibleAspNetCoreRuntime(runtimeInventory, requiredRuntime))
         {
             return MissingRuntime(requiredRuntime);
@@ -82,18 +86,20 @@ internal static class WindowsLauncherApplication
         {
             process.StartInfo.ArgumentList.Add(argument);
         }
+
         process.StartInfo.Environment["XE_LAUNCH_MODE"] = "desktop";
-        process.StartInfo.Environment[LauncherProcessIdVariable] = Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        process.StartInfo.Environment[LauncherProcessIdVariable] = Environment.ProcessId.ToString(CultureInfo.InvariantCulture);
         try
         {
             if (!process.Start())
             {
                 return Fail("Windows did not start the managed application.", LaunchFailureExitCode);
             }
+
             await process.WaitForExitAsync().ConfigureAwait(false);
             return process.ExitCode;
         }
-        catch (Exception exception) when (exception is InvalidOperationException or System.ComponentModel.Win32Exception)
+        catch (Exception exception) when (exception is InvalidOperationException or Win32Exception)
         {
             return Fail($"The managed application could not be started: {exception.Message}", LaunchFailureExitCode);
         }
@@ -114,6 +120,7 @@ internal static class WindowsLauncherApplication
         {
             throw new InvalidDataException("The application runtime configuration has no frameworks array.");
         }
+
         var aspNetCore = frameworks.EnumerateArray().FirstOrDefault(framework =>
             framework.TryGetProperty("name", out var name)
             && string.Equals(name.GetString(), AspNetCoreRuntimeName, StringComparison.Ordinal));
@@ -121,6 +128,7 @@ internal static class WindowsLauncherApplication
         {
             throw new InvalidDataException($"{AspNetCoreRuntimeName} is missing.");
         }
+
         var version = aspNetCore.TryGetProperty("version", out var versionElement)
             ? versionElement.GetString()
             : null;
@@ -131,10 +139,9 @@ internal static class WindowsLauncherApplication
 
     internal static bool HasCompatibleAspNetCoreRuntime(string inventory, Version required)
     {
-        foreach (var line in inventory.Split(
-                     ['\r', '\n'],
-                     StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                 .Where(line => line.StartsWith($"{AspNetCoreRuntimeName} ", StringComparison.Ordinal)))
+        foreach (var line in inventory.Split(['\r', '\n'],
+                                          StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                                      .Where(line => line.StartsWith($"{AspNetCoreRuntimeName} ", StringComparison.Ordinal)))
         {
             var versionText = line[AspNetCoreRuntimeName.Length..].TrimStart().Split(' ', 2)[0];
             if (Version.TryParse(versionText, out var installed)
@@ -145,6 +152,7 @@ internal static class WindowsLauncherApplication
                 return true;
             }
         }
+
         return false;
     }
 
@@ -164,6 +172,7 @@ internal static class WindowsLauncherApplication
                 return candidate;
             }
         }
+
         return "dotnet.exe";
     }
 
@@ -185,6 +194,7 @@ internal static class WindowsLauncherApplication
         {
             throw new InvalidOperationException("dotnet --list-runtimes did not start.");
         }
+
         var standardOutput = process.StandardOutput.ReadToEndAsync();
         var standardError = process.StandardError.ReadToEndAsync();
         await process.WaitForExitAsync().ConfigureAwait(false);
@@ -192,23 +202,27 @@ internal static class WindowsLauncherApplication
         {
             throw new InvalidOperationException(await standardError.ConfigureAwait(false));
         }
+
         return await standardOutput.ConfigureAwait(false);
     }
 
     private static int MissingRuntime(Version required)
     {
-        Console.Error.WriteLine(
-            $"XE Local AI Engine requires Microsoft ASP.NET Core Runtime {required.Major}.{required.Minor}.{required.Build} "
-            + "or a newer .NET 10 servicing patch (x64). The runtime is not bundled with the Windows portable package.");
+        Console.Error.WriteLine($"XE Local AI Engine requires Microsoft ASP.NET Core Runtime {required.Major}.{required.Minor}.{required.Build} "
+                                + "or a newer .NET 10 servicing patch (x64). The runtime is not bundled with the Windows portable package.");
         Console.Error.WriteLine($"Download it from {DownloadUri} and then start the application again.");
         try
         {
-            using var browser = Process.Start(new ProcessStartInfo(DownloadUri.AbsoluteUri) { UseShellExecute = true });
+            using var browser = Process.Start(new ProcessStartInfo(DownloadUri.AbsoluteUri)
+            {
+                UseShellExecute = true
+            });
         }
-        catch (System.ComponentModel.Win32Exception)
+        catch (Win32Exception)
         {
             // The URL is already printed; failure to open a browser does not change the prerequisite verdict.
         }
+
         return MissingPrerequisiteExitCode;
     }
 

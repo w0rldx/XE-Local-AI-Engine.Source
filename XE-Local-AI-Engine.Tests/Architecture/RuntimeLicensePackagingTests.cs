@@ -28,16 +28,14 @@ public sealed class RuntimeLicensePackagingTests
         AssertEx.Equal("LatestPatch", Property(windows, "RollForward"));
         AssertEx.Equal("$(DotNetRuntimeVersion)", Property(windows, "RuntimeFrameworkVersion"));
 
-        var windowsLauncher = XDocument.Load(RepositoryPaths.Combine(
-            "XE-Local-AI-Engine.WindowsLauncher", "Properties", "PublishProfiles", "win-x64.pubxml"));
+        var windowsLauncher = XDocument.Load(RepositoryPaths.Combine("XE-Local-AI-Engine.WindowsLauncher", "Properties", "PublishProfiles", "win-x64.pubxml"));
         AssertEx.Equal("false", Property(windowsLauncher, "SelfContained"));
         AssertEx.Equal("false", Property(windowsLauncher, "PublishSingleFile"));
         AssertEx.Equal("true", Property(windowsLauncher, "UseAppHost"));
         AssertEx.Equal("LatestPatch", Property(windowsLauncher, "RollForward"));
         AssertEx.Equal("$(DotNetRuntimeVersion)", Property(windowsLauncher, "RuntimeFrameworkVersion"));
 
-        var linux = XDocument.Load(RepositoryPaths.ClientProject(
-            "Properties", "PublishProfiles", "linux-x64.pubxml"));
+        var linux = XDocument.Load(RepositoryPaths.ClientProject("Properties", "PublishProfiles", "linux-x64.pubxml"));
         AssertEx.Equal("true", Property(linux, "SelfContained"));
         AssertEx.Equal("true", Property(linux, "PublishSingleFile"));
         AssertEx.Equal("$(DotNetRuntimeVersion)", Property(linux, "RuntimeFrameworkVersion"));
@@ -82,8 +80,7 @@ public sealed class RuntimeLicensePackagingTests
     [Test]
     public void WindowsLauncherPublish_CarriesTheApphostMitLicenseAndNotices()
     {
-        var project = XDocument.Load(RepositoryPaths.Combine(
-            "XE-Local-AI-Engine.WindowsLauncher", "XE-Local-AI-Engine.WindowsLauncher.csproj"));
+        var project = XDocument.Load(RepositoryPaths.Combine("XE-Local-AI-Engine.WindowsLauncher", "XE-Local-AI-Engine.WindowsLauncher.csproj"));
         var linkedPublishFiles = project.Descendants("ResolvedFileToPublish")
                                         .Select(static item => (string?)item.Element("RelativePath"))
                                         .Where(static path => path is not null)
