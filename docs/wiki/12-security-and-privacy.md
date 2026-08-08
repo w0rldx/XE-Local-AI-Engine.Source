@@ -1,6 +1,6 @@
 # Security & Privacy Model
 
-> Baseline: `7e64ed589e14eecc0e522e807d2e531a1095d19a` · Reviewed: 2026-07-28 · Code-grounded.
+> Baseline: `50cae1410b23fa1e7258d343c1f2d926c6eb41fb` · Reviewed: 2026-08-08 · Code-grounded.
 
 This page documents the cross-cutting security and privacy controls implemented in the XE Local AI
 Engine node and the invariants contributors are expected to preserve. It is code-and-test evidence
@@ -33,7 +33,7 @@ The node is the *single* outbound connection to the C0re platform. All platform-
 The node does **not** silently dial the platform on process start. `AutoConnectBackgroundService` gates the auto-connect on a stored, operator-controlled flag:
 
 ```csharp
-// XE-Local-AI-Engine.Client/BackgroundServices/AutoConnectBackgroundService.cs:66
+// AutoConnectBackgroundService.ExecuteAsync()
 if (!_tokenStore.AutoConnectOnStart)
 {
     // ...does not connect
@@ -80,16 +80,16 @@ Several redactors enforce "secrets never surface":
 
 | Redactor | Purpose | Location |
 |---|---|---|
-| `AccessTokenQueryRedactor` | strips `access_token=` from request query strings before Serilog logs them | `Services/Auth/AccessTokenQueryRedactor.cs`, wired in `Program.cs:83` via `UseSerilogRequestLogging` |
+| `AccessTokenQueryRedactor` | strips `access_token=` from request query strings before Serilog logs them | `Services/Auth/AccessTokenQueryRedactor.cs`, wired by the `UseSerilogRequestLogging` request-path projection in `Program.cs` |
 | `MemoryProposalSecretScanner` | rejects/redacts secrets in agent-memory proposals before persistence (PEM keys, GitHub/AWS/Azure/Slack tokens, JWTs, high-entropy bearers; ReDoS-guarded with a 2s regex timeout) | `Services/AgentHome/Implementation/MemoryProposalSecretScanner.cs` |
-| `McpServerConnectionManager.Redact` | clamps MCP connection failures to a generic message so a command path/URL/secret never reaches the UI | `Services/Mcp/Implementation/McpServerConnectionManager.cs:344` |
-| `InvocationRunner.RedactAgentRuntimeMessage` | sanitizes agent runtime failure messages before surfacing | `Services/Invocation/Implementation/InvocationRunner.FailureClassification.cs:91` |
-| `NodePatchApplyService.Redact` | redacts patch-apply output (AgentHome) | `Services/AgentHome/Implementation/NodePatchApplyService.cs:469` |
+| `McpServerConnectionManager.Redact` | clamps MCP connection failures to a generic message so a command path/URL/secret never reaches the UI | `McpServerConnectionManager.Redact` in `Services/Mcp/Implementation/McpServerConnectionManager.cs` |
+| `InvocationRunner.RedactAgentRuntimeMessage` | sanitizes agent runtime failure messages before surfacing | `InvocationRunner.RedactAgentRuntimeMessage` in `Services/Invocation/Implementation/InvocationRunner.FailureClassification.cs` |
+| `NodePatchApplyService.Redact` | redacts patch-apply output (AgentHome) | `NodePatchApplyService.Redact` in `Services/AgentHome/Implementation/NodePatchApplyService.cs` |
 
 The request-logging enricher is the canonical example — it replaces the raw query with a redacted one before anything is written:
 
 ```csharp
-// Program.cs:83
+// Program.cs, UseSerilogRequestLogging request-path projection
 var redactedQuery = AccessTokenQueryRedactor.Redact(httpContext.Request.QueryString.Value);
 diagnosticContext.Set("RequestPathWithRedactedQuery", $"{httpContext.Request.Path}{redactedQuery}");
 diagnosticContext.Set("QueryString", redactedQuery);
@@ -114,7 +114,7 @@ supported reverse-proxy/headless deployment mode.
 `LocalApiSecurityMiddleware` (`XE-Local-AI-Engine.Client/Endpoints/Common/LocalApiSecurityMiddleware.cs`, registered in `Program.cs` via `app.UseMiddleware<LocalApiSecurityMiddleware>()`) rejects any `/api/local/v1` request whose transport peer is non-loopback **or** whose `Host`/`Origin` is not loopback, returning **403** before routing:
 
 ```csharp
-// LocalApiSecurityMiddleware.cs:40
+// LocalApiSecurityMiddleware.InvokeAsync()
 if (IsLocalApiRequest(context.Request.Path)
     && (!IsLoopbackPeer(context.Connection.RemoteIpAddress)
         || !IsAllowedHost(context.Request.Host.Host)
@@ -125,7 +125,7 @@ if (IsLocalApiRequest(context.Request.Path)
 }
 ```
 
-- **Loopback peer check** is the authoritative transport-level gate: `context.Connection.RemoteIpAddress` is the address of the socket peer — the machine that opened the TCP connection to Kestrel — so a routable caller is rejected even if it forges a loopback `Host`/`Origin`. A **null** peer address means the request never traversed the network stack (the in-process/in-memory test host and in-process health probes present no peer) and is treated as loopback-equivalent; only a concrete non-loopback address is rejected (`LocalApiSecurityMiddleware.cs:52`).
+- **Loopback peer check** is the authoritative transport-level gate: `context.Connection.RemoteIpAddress` is the address of the socket peer — the machine that opened the TCP connection to Kestrel — so a routable caller is rejected even if it forges a loopback `Host`/`Origin`. A **null** peer address means the request never traversed the network stack (the in-process/in-memory test host and in-process health probes present no peer) and is treated as loopback-equivalent; only a concrete non-loopback address is rejected (the `IsLoopbackPeer` branch in `LocalApiSecurityMiddleware.cs`).
 - **Allowed hosts** are exactly `localhost`, `127.0.0.1`, `::1` (case-insensitive; IPv6 brackets normalized off).
 - **Origin check** is fail-closed: an absent `Origin` is permitted (same-origin navigation), but any *present* `Origin` must parse, be a loopback host, and match the request's scheme + host + port exactly. A non-loopback or mismatched origin is rejected.
 - Ordering matters: the middleware runs *before* `UseRouting`/`UseAuthentication`/`UseAuthorization` in `Program.cs`, so a non-local caller is rejected before it can reach an endpoint at all.
@@ -172,7 +172,7 @@ byte-at-a-time oracle over loopback), and a node with no key generated authentic
 implementations, so this node implements no OAuth profile and advertises no Protected Resource
 Metadata — see the [connect runbook](../runbooks/connect-an-mcp-client-runbook.md).
 
-Local endpoints are still authenticated and policy-gated; loopback is necessary but not sufficient. `NodeAuthorizationPolicies` (`Services/Auth/NodeAuthorizationPolicies.cs`) defines the `NodeOperator` policy (claim type `role`, `Admin`), and endpoints apply it — e.g. `ListAgentExecutionLogsEndpoint.Configure()` calls `Policies(NodeAuthorizationPolicies.Operator)` (`XE-Local-AI-Engine.Client/Endpoints/Agents/V1/ListAgentExecutionLogsEndpoint.cs:27`). JWTs are signed with the separately-derived node JWT key (§2.1). Auth wiring lives in `AddNodeAuthAndConnectionExtensions`. See [API & Hubs](09-api-and-hubs.md) for the full endpoint inventory.
+Local endpoints are still authenticated and policy-gated; loopback is necessary but not sufficient. `NodeAuthorizationPolicies` (`Services/Auth/NodeAuthorizationPolicies.cs`) defines the `NodeOperator` policy (claim type `role`, `Admin`), and endpoints apply it — e.g. `ListAgentExecutionLogsEndpoint.Configure()` calls `Policies(NodeAuthorizationPolicies.Operator)` (see `ListAgentExecutionLogsEndpoint.Configure()`). JWTs are signed with the separately-derived node JWT key (§2.1). Auth wiring lives in `AddNodeAuthAndConnectionExtensions`. See [API & Hubs](09-api-and-hubs.md) for the full endpoint inventory.
 
 ### 3.3 Desktop / loopback hosting
 
@@ -182,7 +182,7 @@ In desktop mode the node binds plain HTTP on loopback only and the HTTPS-redirec
 
 `LoopbackBindGuard` (`XE-Local-AI-Engine.Client/Hosting/LoopbackBindGuard.cs`, wired via `LoopbackBindGuard.Guard(app)` in `Program.cs`) is defense-in-depth behind the request-time middleware: instead of trusting the configured URLs, it inspects the addresses Kestrel *actually* bound (post `ApplicationStarted`, so an OS-assigned port and wildcard expansion are already resolved) and, if any is non-loopback, logs a **critical** line naming the offending address(es) and shuts the app down.
 
-- The shutdown sets `Environment.ExitCode = 1` before calling `StopApplication()`, so a supervisor/CI treats the guarded stop as an **error** (exit code 1) rather than a clean shutdown (`LoopbackBindGuard.cs:81`).
+- The shutdown sets `Environment.ExitCode = 1` before calling `StopApplication()`, so a supervisor/CI treats the guarded stop as an **error** (exit code 1) rather than a clean shutdown (see the guarded-stop branch in `LoopbackBindGuard.Guard()`).
 - Wildcard binds (`*`, `+`, `0.0.0.0`, `::`) are treated as non-loopback and trigger the guard; `localhost` and any loopback IP literal pass.
 - **Opt-out:** setting `Security:AllowNonLoopbackBind=true` skips the guard entirely — for an operator who has secured the surface themselves. It defaults to `false`, and no supported launch needs it (desktop binds `127.0.0.1`; Aspire dev binds `localhost` and exposes externally via the DCP proxy, not the app process), so the guard is a no-op on every supported launch and only fires on a deliberately overridden routable bind.
 
@@ -199,7 +199,7 @@ In desktop mode the node binds plain HTTP on loopback only and the HTTPS-redirec
 Unhandled exceptions are translated to RFC7807 ProblemDetails by `DefaultExceptionHandler` (`XE-Local-AI-Engine.Client/ExceptionHandling/DefaultExceptionHandler.cs`), registered via `app.UseExceptionHandler()` *before* FastEndpoints. Crucially, the exception *message* is only included in the response in development/test environments; in production the detail is a fixed `"An unexpected error occurred"`:
 
 ```csharp
-// DefaultExceptionHandler.cs:18
+// DefaultExceptionHandler.TryHandleAsync()
 var isDevelopment = hostEnvironment.IsDevelopment()
                     || hostEnvironment.IsEnvironment("Testing")
                     || hostEnvironment.IsEnvironment("IntegrationTests");
@@ -255,6 +255,39 @@ playbook P1–P5 / eval flow and the adaptive-memory extraction loop; the wiring
 
 - **Voice / text-to-speech delegates to Web Speech.** The repository makes no voice-model request, ships no voice inference runtime, and does not post generated audio to the node. Synthesis is provided by the browser/operating-system speech implementation; its installed voices, offline support, and any service network traffic are outside repository control. See [React Client](10-react-client.md).
 - **Inference profiling / machine key is local-only, per-box.** The per-machine launch-tuning profiles ([Local Runtime & Providers](03-local-runtime-and-providers.md)) are keyed by a `MachineKeyProvider` identifier that is a **local-only random id** — never hardware-derived, and `IMachineKeyProvider` documents it must **NEVER** be emitted in telemetry, aggregates, or logs. The profiles themselves hold only structural launch args (no secrets) and never leave the node. Keep the machine key off every outbound DTO/aggregate.
+
+### Custom Tools: operator-authored execution boundary
+
+Custom Tools are deliberately more privileged than built-in jailed AgentHome tools. An operator can author either an
+HTTP request or a **host program** definition, so enabling the feature is an acceptance of outbound-network or
+same-user host-execution risk. The `CustomToolsEnabled` node setting is a process-wide kill switch, and a definition is
+not offered unless it is also enabled and carries the server-validated danger acknowledgement. `CustomToolCatalog`
+wraps every resolved definition in `ApprovalRequiredAIFunction` unconditionally; unattended scheduler/sub-agent paths
+therefore see it as approval-gated, and no stored/per-agent flag can lower that floor.
+
+**Stored and browser-visible secrets.** `custom_tools.config_json` contains HTTP header or command-environment secret
+values and is encrypted at rest by `NodeEncryptionSaveChangesInterceptor` with the
+`custom_tool_config_json` AAD column name. List/detail DTOs replace each secret with a mask sentinel; an update that
+round-trips that sentinel resolves it against the stored record instead of clearing or disclosing the value. Tool
+descriptions are also encrypted; names, kinds, modes, parameter schemas, enabled/acknowledged flags, and versions are
+structural plaintext. Secret header/env values are scrubbed from model-facing errors and output.
+
+**HTTP fetch controls.** `CustomToolSsrfGuard.ValidateRequestUrl()` accepts only HTTP(S), rejects URL userinfo,
+non-canonical numeric hosts, and private/loopback/link-local/CGNAT/metadata/reserved address ranges. A model-parameterized
+host requires `allowedHosts`. The named client disables redirects and uses
+`CustomToolSsrfGuard.CreatePinnedConnectCallback()` to validate every DNS result and connect to the validated address,
+closing the DNS-rebind re-resolution gap. Requests have a 30-second wall-clock limit, a 64 KiB response-body cap,
+credential-bearing response headers are stripped, and the process-wide concurrency limiter defaults to four runs.
+
+**Host program controls and residual risk.** `HostProcessExecutor` does **not** use the AgentHome process jail: host
+access is the feature. It never invokes a shell, expands each template item to exactly one
+`ProcessStartInfo.ArgumentList` element, clears the inherited worker environment, overlays only an allowlist plus the
+tool's fixed environment, enforces a 1–300 second timeout (30-second default), tree-kills on cancellation/timeout, and
+caps each captured stream at 64 KiB. `HostExecutableGuard.Validate()` runs both while authoring and immediately before
+launch: absolute path only, no shell/interpreter/script, existing regular file, symlink/reparse rejection. On Linux a
+small check-to-`execve` TOCTOU window remains, and host commands retain the signed-in user's filesystem and network
+rights with no per-process CPU/memory ceiling. Approval, time/output/concurrency bounds, and explicit acknowledgement
+reduce risk; they do not create OS isolation.
 
 ---
 

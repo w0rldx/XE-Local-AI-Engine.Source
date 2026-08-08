@@ -33,13 +33,42 @@ Do not start `current\XE-Local-AI-Engine.WindowsLauncher.exe` or the adjacent cl
 top-level entry selects the current version and preserves the portable update context.
 
 ### Nothing happens when I run it — the window flashes and disappears
-- **Check the .NET prerequisite.** Windows needs the x64 ASP.NET Core Runtime 10.0.10 or a newer .NET 10 servicing
-  patch. The launcher prints the missing/outdated runtime in the console and opens Microsoft's download page.
+On the **Windows portable build, this is almost always a missing .NET runtime.** The Windows ZIP is
+framework-dependent — it deliberately does **not** bundle .NET — so it needs the **x64 ASP.NET Core Runtime
+10.0.10** (or a newer .NET 10 servicing patch) installed on your machine.
+
+> **This can fail _silently_ on the portable build — no message, no log.** If .NET 10 is missing
+> **entirely** (for example, you only have .NET 8), the small launcher is itself a .NET 10 program, so it
+> can't even start to tell you what's wrong. The window just flashes and closes, and the
+> `%LOCALAPPDATA%\XE-Local-AI-Engine\logs` folder stays empty. That isn't a crash in the app — it's the
+> .NET runtime not being there.
+
+**The fix:** install the **x64 ASP.NET Core Runtime 10.0** from Microsoft's
+[.NET 10 download page](https://dotnet.microsoft.com/en-us/download/dotnet/10.0) — under **Run apps →
+ASP.NET Core Runtime**, take the **x64** installer — then start the app again. The SDK and Hosting Bundle
+are not required.
+
+**To check what you already have,** open PowerShell and run:
+
+```powershell
+dotnet --list-runtimes
+```
+
+You need a line beginning `Microsoft.AspNetCore.App 10.0.10` (or higher). If you only see `8.0.x`, or the
+command is not found, that is the cause. → [Windows install prerequisites](install-windows.md#before-you-start--install-net-10)
+
+Once .NET 10 is installed, if it still won't start:
+
 - **Is it already running?** Only one copy can run at a time. A second launch prints *"Another
   instance ... is already running"* and closes immediately. Check your taskbar for an existing console
   window. Remember that **closing the browser tab does not stop the app**.
+- **Look for a startup log.** Recent builds record why the launcher stopped to
+  `%LOCALAPPDATA%\XE-Local-AI-Engine\logs\launcher.log` (and `startup-crash.log`). An empty or missing
+  `logs` folder points back at the missing-.NET-10 case above.
+- If .NET 10 **is** present but ASP.NET Core is missing or older than 10.0.10, the launcher can run: it
+  prints the exact requirement in the console and opens the download page — but that console closes fast
+  on a double-click, so check the log above too.
 - Wait a minute — the first launch is slow and quiet.
-- Check whether a **console window** opened. It carries the real error messages.
 - Make sure you extracted the ZIP properly. Running the `.exe` from *inside* the ZIP preview window
   cannot work — Windows shows ZIP contents as if they were a folder, but the app needs its files on
   disk.
@@ -401,7 +430,12 @@ Free to use today. No pricing decisions have been made about the future.
 itself by replacing that AppImage → [Linux installation](install-linux.md).
 
 ### Do I need Docker / Ollama / Python / .NET?
-**No.** Everything needed ships in the download. Ollama is optional and only if you already use it.
+**Docker, Python and Ollama: no** — Ollama is optional and only if you already use it.
+
+**.NET: it depends on your platform.** The **Linux** AppImage is self-contained and needs nothing. The
+**Windows** portable build is framework-dependent, so it needs the **x64 ASP.NET Core Runtime 10.0**
+installed first — see [Nothing happens when I run it](#nothing-happens-when-i-run-it--the-window-flashes-and-disappears).
+Everything else (the AI engine, models, the app itself) ships in the download.
 
 ### How much disk space will this really use?
 - App: ~100 MB to download, ~275 MB once extracted

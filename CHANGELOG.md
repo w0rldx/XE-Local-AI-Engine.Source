@@ -29,29 +29,28 @@ The tester repo is the authoritative record of what reached a tester. Reconciled
 | 0.1.0-rc.2.0 | `v0.1.0-rc.2.0` | 2026-06-29 |
 | 0.1.0-rc.3.0 | `v0.1.0-rc.3.0` | 2026-07-02 |
 | 0.1.0-rc.4.0 | `v0.1.0-rc.4.0` | 2026-07-06 |
-| 0.1.0-rc.4.1 | **none** | 2026-07-07 |
+| 0.1.0-rc.4.1 | `v0.1.0-rc.4.1` | 2026-07-07 |
 | 0.1.0-rc.5.0 | `v0.1.0-rc.5.0` | 2026-08-04 |
 | 0.1.0-rc.5.1 | `v0.1.0-rc.5.1` | 2026-08-05 |
 
 **Update 2026-08-05:** `0.1.0-rc.4.2` was never released — the version target moved directly from the burned
-`0.1.0-rc.4.1` to `0.1.0-rc.5.0`. `v0.1.0-rc.5.0` was tagged and
-published to the tester repo on 2026-08-04 (pre-release). The reconciliation counts in the paragraph below predate
-rc.5.0 and describe the run through rc.4.1.
+`0.1.0-rc.4.1` to `0.1.0-rc.5.0`. Releases `0.1.0-rc.5.0` and `0.1.0-rc.5.1` completed the historical tester-repository
+line shown in the table.
 
-All eight shipped as GitHub **pre-releases**. Seven local tags map 1:1 to a tester release. The section dates below are
+All nine shipped as GitHub **pre-releases**. All nine local release tags map 1:1 to a tester release. The section dates below are
 the **tester publish dates**, not the tag dates — they differ for
 `0.1.0-rc.1.1`, whose commit was tagged at 00:35 local time on 2026-06-27 but published at 22:41 UTC on 2026-06-26.
 
-**One unmatched entry, deliberately not papered over:** `0.1.0-rc.4.1` was published to the tester repo with **no
-source tag**, so no commit in this repository identifies it. Its section below is reconstructed from `git log` between
-`v0.1.0-rc.4.0` and the version-bump commit `2d8a4ed0`, and is marked as such. The version string is burned. See
-[`docs/velopack-release-install-guide.md`](docs/velopack-release-install-guide.md) for how that state arose and which
-gates now prevent it. No local tag lacks a tester release.
+The `v0.1.0-rc.4.1` source tag now resolves to version-bump commit `b6d5a895`, so the source and historical tester
+release inventories are fully reconciled. Its section below remains marked as reconstructed because detailed release
+notes were not recorded at publication time. The version string is burned. See
+[`docs/velopack-release-install-guide.md`](docs/velopack-release-install-guide.md) for the historical two-repository
+release model and the gates that replaced it. No local release tag lacks a tester release.
 
 ## [Unreleased]
 
-The source release identity is currently `0.1.0-rc.5.2`, composed in `eng/ReleaseVersion.props`. This version is the
-first candidate reserved for the canonical public repository's portable Windows and Linux release flow. The prior
+The source release identity is currently `1.0.0-rc.1`, composed in `eng/ReleaseVersion.props`. This is the current
+candidate for the canonical public repository's portable Windows and Linux release flow. The prior
 `v0.1.0-rc.5.1` tag remains bound to its historical source commit and is not reused.
 
 ### Added
@@ -83,8 +82,8 @@ The version and immutable tag are already used and must not be reassigned to lat
 ## [0.1.0-rc.5.0] — 2026-08-04
 
 Tagged `v0.1.0-rc.5.0` and published to the tester repo on 2026-08-04 (pre-release). **`0.1.0-rc.4.2` was never cut** — the target moved straight from the burned
-`0.1.0-rc.4.1` to `0.1.0-rc.5.0`. `0.1.0-rc.4.1` remains burned: it was published to the tester repo with no matching
-source tag.
+`0.1.0-rc.4.1` to `0.1.0-rc.5.0`. `0.1.0-rc.4.1` remains burned and its detailed notes are reconstructed; its source
+tag now resolves to version-bump commit `b6d5a895`.
 
 ### Added
 
@@ -325,10 +324,10 @@ source tag.
 
 ## [0.1.0-rc.4.1] — 2026-07-07
 
-> **Reconstructed section.** Published to the tester repo only; there is **no `v0.1.0-rc.4.1` tag in this
-> repository**, so no commit identifies what shipped. The contents below are inferred from the 15 commits between
-> `v0.1.0-rc.4.0` and the version-bump commit `2d8a4ed0` and may not match the artifact exactly. The version string is
-> burned — do not reuse it.
+> **Reconstructed section.** The source tag `v0.1.0-rc.4.1` resolves to version-bump commit `b6d5a895`, but detailed
+> release notes were not recorded at publication time. The contents below are inferred from the 15 commits between
+> `v0.1.0-rc.4.0` and that version-bump commit and may not match the artifact exactly. The version string is burned —
+> do not reuse it.
 
 ### Added
 

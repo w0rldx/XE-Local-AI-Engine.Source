@@ -1,6 +1,6 @@
 # Local Runtime & Model Providers
 
-> Last reviewed: 2026-07-28 · Code-grounded.
+> Baseline: `50cae1410b23fa1e7258d343c1f2d926c6eb41fb` · Reviewed: 2026-08-08 · Code-grounded.
 
 This page is the heart of the 2026-06-17 runtime re-architecture. It explains how XE Local AI Engine runs models through node-owned host child processes: the provider-neutral seams in `Providers.Abstractions`, the host **llama.cpp** process supervisor that spawns and tree-kills `llama-server` children, runtime-binary acquisition (prebuilt download, operator bring-your-own override, and the in-app **source build**), and the satellite providers (Ollama, HuggingFace GGUF store, capability detection, Codex OAuth cloud chat). Model *recommendation* (box-aware GGUF fit) is owned by [07-model-fit.md](07-model-fit.md); this page covers only how a model gets selected, loaded, and served.
 
@@ -87,7 +87,7 @@ Contract members:
 
 **Keying.** Each distinct `(model, role)` is a distinct process (`ProcessKey`) and counts against the loaded-cap. A chat process launches with `--jinja`; an embedding process with `--embeddings --pooling mean`.
 
-**`EnsureRunningAsync` flow** (`LlamaServerProcessSupervisor.cs:118`):
+**`EnsureRunningAsync` flow** (`LlamaServerProcessSupervisor.cs`):
 
 ```
 1. External-endpoint short-circuit: _externalEndpoints.Resolve(model, role)
@@ -99,9 +99,9 @@ Contract members:
    SpawnWithRestartAsync (linear backoff up to MaxRestartAttempts).
 ```
 
-**Spawn internals.** `SpawnWithRestartAsync` → `SpawnOnceAsync` → `SpawnCoreAsync` → `BuildLaunchSpec`. `SpawnOnceAsync` (`LlamaServerProcessSupervisor.cs:268`) no longer builds args itself: it hands `SpawnCoreAsync` a resolver delegate `(variant, ct) => _profileResolver.ResolveAsync(model, role, variant, ct)` (`:274`) that returns the launch arguments for this `(model, role, backend)`. `SpawnCoreAsync` resolves the model file + variant + binary, awaits that delegate **before** taking the admission gate (so a slow profile read never stalls admission for other keys), then `AdmitAndAllocatePortAsync` takes the admission gate, prunes exited processes, enforces the loaded-cap (evict idle LRU via `TryEvictIdleLeastRecentlyUsed`, else throw `CapReached`), and allocates a port.
+**Spawn internals.** `SpawnWithRestartAsync` → `SpawnOnceAsync` → `SpawnCoreAsync` → `BuildLaunchSpec`. `SpawnOnceAsync` (`LlamaServerProcessSupervisor.cs`) no longer builds args itself: it hands `SpawnCoreAsync` a resolver delegate `(variant, ct) => _profileResolver.ResolveAsync(model, role, variant, ct)` that returns the launch arguments for this `(model, role, backend)`. `SpawnCoreAsync` resolves the model file + variant + binary, awaits that delegate **before** taking the admission gate (so a slow profile read never stalls admission for other keys), then `AdmitAndAllocatePortAsync` takes the admission gate, prunes exited processes, enforces the loaded-cap (evict idle LRU via `TryEvictIdleLeastRecentlyUsed`, else throw `CapReached`), and allocates a port.
 
-`BuildLaunchSpec(key, exe, modelFile, port, variant, resolved)` (`:446`) builds the exact ordered argv from the resolved arguments:
+`BuildLaunchSpec(key, exe, modelFile, port, variant, resolved)` builds the exact ordered argv from the resolved arguments:
 
 ```
 -m <modelFile> --host 127.0.0.1 --port <port>
@@ -155,7 +155,7 @@ Each native path is reached only under its own `OperatingSystem.Is*` guard, so n
 For *asset selection*, the supervisor does **only enough** hardware probing to pick the prebuilt binary — the full VRAM/memory-fit math lives in the Model Advisor ([07-model-fit.md](07-model-fit.md)), explicitly NOT here. (The separate process-local VRAM-budget probe used by the variant recommender and the profile/benchmark services is `LlamaListDevicesProcessVramBudgetProbe`, §2.5.)
 
 - `IGpuVendorProbe` → `ProcessGpuVendorProbe` detects the vendor (`DetectedGpuVendor`: Nvidia/Amd/Intel/none).
-- `IGpuVariantSelector` → `GpuVariantSelector.SelectVariantAsync` (`Implementation/GpuVariantSelector.cs:54`) applies three rules in order:
+- `IGpuVariantSelector` → `GpuVariantSelector.SelectVariantAsync` (`Implementation/GpuVariantSelector.cs`) applies three rules in order:
 
 ```
 1. operator BYO override active  -> the override's configured variant  (vendor probe skipped entirely)
@@ -173,7 +173,7 @@ Rule 2 is what makes an in-app CUDA build usable on Linux: `ICudaManagedBuildSig
 
 ### Binary manager + dynamic updater
 
-`ILlamaCppBinaryManager` → `LlamaCppBinaryManager` (a partial class split across `LlamaCppBinaryManager.cs`, `.Override.cs`, `.ManagedCuda.cs`) resolves the `llama-server` executable for the selected `GpuVariant`. **Three acquisition sources exist**, checked in this order by `EnsureBinaryAsync` (`LlamaCppBinaryManager.cs:110`):
+`ILlamaCppBinaryManager` → `LlamaCppBinaryManager` (a partial class split across `LlamaCppBinaryManager.cs`, `.Override.cs`, `.ManagedCuda.cs`) resolves the `llama-server` executable for the selected `GpuVariant`. **Three acquisition sources exist**, checked in this order by `EnsureBinaryAsync` (`LlamaCppBinaryManager.cs`):
 
 | # | Source | When it wins | Verification |
 |---|---|---|---|
@@ -185,13 +185,24 @@ Sources 1 and 2 short-circuit acquisition completely — no download, no cache w
 
 **The BYO override** (`Configuration/LlamaServerRuntimeOverrideOptions.cs`) is built **only** from process environment variables — `XE_LLAMACPP_SERVER_PATH` (absolute path) and `XE_LLAMACPP_VARIANT` (`cpu`/`cuda`/`vulkan`, default `cuda`) — via `FromEnvironment()`. It is never bound from `IConfiguration`, the node-settings store, or any request DTO: a lower-trust write to that path would be arbitrary-binary execution at app privilege, and skipping the SHA256 pin is sound *only* under that containment. A set-but-unparseable variant fails fast at startup. The binary is served as the override's **own** declared variant, never the caller-passed one.
 
-**3-tier tag resolution** for the prebuilt path (`ResolveActiveTagAsync`, `LlamaCppBinaryManager.cs:268`):
+**3-tier tag resolution** for the prebuilt path (`ResolveActiveTagAsync`, `LlamaCppBinaryManager.cs`):
 
 1. **Live** — `GitHubLlamaCppReleaseCatalog` (`ILlamaCppReleaseCatalog`) queries the `ggml-org/llama.cpp` GitHub Releases API for the recommended tag. Best-effort: any network failure (DNS/connect/timeout/rate-limit) is treated as "offline" and falls through; acquisition never depends on the network.
-2. **Installed** — `IInstalledRuntimeStore` / `InstalledRuntimeStore` reads `installed-runtime.json` (the tag actually on disk, written only after a verified, smoke-tested install). Atomic temp-file write, owner-only `0600` on non-Windows, tolerant deserialize (corrupt → null). `InstalledRuntimeState` (`Contracts/IInstalledRuntimeStore.cs:19`) is `(Tag, Asset, Sha256, Variant, InstalledAtUtc)` plus six **optional trailing** source-provenance fields — `SourceBuildPath`, `SourceRepository`, `SourceCommit`, `SourceRevisionMode`, `SourceRequestedCommit`, `SourceSelection`. They are optional positionals precisely so an older file deserializes with nulls and needs no migration step. **`SourceBuildPath` presence is the single signal that the record describes a source build**; readers must key off it (or the wire `isSourceBuild` flag) and never parse the sentinel `Asset` value `(source-build:cuda)`.
+2. **Installed** — `IInstalledRuntimeStore` / `InstalledRuntimeStore` reads `installed-runtime.json` (the tag actually on disk, written only after a verified, smoke-tested install). Atomic temp-file write, owner-only `0600` on non-Windows, tolerant deserialize (corrupt → null). `InstalledRuntimeState` (`Contracts/IInstalledRuntimeStore.cs`) is `(Tag, Asset, Sha256, Variant, InstalledAtUtc)` plus six **optional trailing** source-provenance fields — `SourceBuildPath`, `SourceRepository`, `SourceCommit`, `SourceRevisionMode`, `SourceRequestedCommit`, `SourceSelection`. They are optional positionals precisely so an older file deserializes with nulls and needs no migration step. **`SourceBuildPath` presence is the single signal that the record describes a source build**; readers must key off it (or the wire `isSourceBuild` flag) and never parse the sentinel `Asset` value `(source-build:cuda)`.
 3. **Pinned floor** — `LlamaCppReleasePins` (`LlamaCppReleasePins.PinnedTag`; **read the constant, do not trust a tag quoted in prose** — this page has already gone stale against it once). The pin table keys `(OS, arch, GpuVariant)` → `(AssetName, Sha256, ServerRelativePath)`; SHA256 digests come from the GitHub release-assets `digest` field (llama.cpp publishes no `.sha256` sidecars). The offline last-resort and the asset-name template source. The same file also pins `PinnedSourceCommitSha` — the exact upstream commit `PinnedTag` resolves to — which is what the source build verifies its clone against; **re-pin both together**, along with `StoredNodeSettings.DefaultRecommendedLlamaCppTag`, which is an independent literal in a layer that may not reference this one and is the value the UI shows as "Recommended".
 
 Prebuilt acquisition: resolve tag → resolve pin → reuse cached binary if present → else download, **verify SHA256**, extract under `{cacheRoot}/llama.cpp/{tag}/{variantSlug}`. A **GPU** variant must resolve a genuine `(os, arch, variant)` row via `TryResolveExact`; plain `Resolve()` would substitute the CPU floor, and serving a CPU archive as a GPU `LlamaBinary` would make the supervisor emit GPU placement flags against a CPU build. A missing GPU prebuilt therefore **throws** the sanitized "no prebuilt for this OS and CPU architecture" — only the CPU variant uses `Resolve` (its exact pin *is* the floor). Windows CUDA additionally pairs a `cudart-…` companion archive before the binary is served (`EnsureCudartRuntimeAsync`); a CUDA build without it silently degrades to CPU-only, so a cudart failure deletes the half-CUDA variant dir and throws.
+
+**First-run acquisition visibility.** `FirstRunModelProvisioningService` publishes `DetectingGpu` before its hardware
+probe; `LlamaCppBinaryManager` then publishes `Downloading → Verifying → Extracting → Completed | Failed` through
+`IRuntimeAcquisitionStatusRegistry` only when real cache-miss/install work occurs. Cache hits and operator/source
+overrides stay silent. The registry owns one monotonic, sanitized snapshot and throttles
+byte-progress pushes through `RuntimeAcquisitionEventPublisher` / `RuntimeAcquisitionHub`; the read-only
+`GetRuntimeAcquisitionStatusEndpoint` provides the late-join hydrate because acquisition can begin before the browser
+authenticates. React's global `RuntimeAcquisitionBanner` merges hydrate and hub push by `sequence`, refetches after a
+reconnect, shows multi-archive step progress for Windows CUDA, and offers retry only after a sanitized failure. The hub
+is the tenth unconditional local hub in `Client/Program.cs`; route and DTO details are in
+[API & Hubs](09-api-and-hubs.md), and the UI placement is in [React Client](10-react-client.md).
 
 `InstallTagAsync` (the operator updater path) gates the live asset name against a strict allow-list (no path/URL metacharacters) since it is interpolated into a temp path and download URL, verifies the 64-hex digest, and enforces a disk-space guard. It **refuses outright** while a source build is recorded ("Remove the installed source-built llama.cpp runtime before installing a prebuilt runtime") — prebuilt install and source build are mutually exclusive, serialized by the manager's `_sourceMutationGate`. `ILlamaCppUpdateState` / `LlamaCppUpdateState` is the shared "is a newer runtime available?" snapshot, written by the startup check and surfaced by a read-only runtime-status endpoint — decoupled from any app-package update channel.
 
@@ -250,11 +261,11 @@ Upstream ships no prebuilt Linux CUDA `llama-server`. Rather than leave a Linux 
 - `Source` ∈ `{Official, Custom}`. **Official** means the server-selected `https://github.com/ggml-org/llama.cpp` at the engine-pinned revision (`RevisionMode = EnginePinned`, resolved commit = `LlamaCppReleasePins.PinnedSourceCommitSha`); a client-supplied repository or commit is rejected. **Custom** requires `AcknowledgeCustomSourceRisk = true` (the repository's code executes with the app user's privileges), a canonical public GitHub HTTPS URL (scheme/host/default-port/no userinfo/query/fragment, exactly `owner/repo`), and an optional full 40-hex commit SHA.
 - `Normalize` is **idempotent by contract**, and that contract is load-bearing: it runs both at the FluentValidation edge and again inside `StartAsync`. When the endpoint *also* pre-normalized, the first pass wrote the canonical official repository and the strict "the official repository is selected by the server" rule then rejected its own output — every official-source build answered `409 {"reason":"prerequisites"}` while custom-source builds worked (fixed in `2cab52ec`; the endpoint's redundant pass was dropped and `Normalize` now admits the canonical value it selects itself).
 
-**Start is a serialized transaction** (`LlamaCppSourceBuildService.StartAsync:130`), under `_startGate`, in this order: Linux-only guard → normalize → already-running check → `RecoverAsync` → prerequisite probe → **runtime mutation lease** → activity reservation → detached build task. Failure modes are typed, not exceptions: `AlreadyRunning`, `InsufficientDisk`, `MissingPrerequisites`, `ProcessesRunning` (carrying the running-process count), `RuntimeBusy`. The endpoint maps each to a `409` with a machine-readable `reason` (`already-building` / `disk` / `prerequisites` / `processes-running` / `runtime-busy`) — this is the **eject-first gate**: a build cannot start while any `llama-server` process is alive, because adoption swaps the binary tree underneath it.
+**Start is a serialized transaction** (`LlamaCppSourceBuildService.StartAsync`), under `_startGate`, in this order: Linux-only guard → normalize → already-running check → `RecoverAsync` → prerequisite probe → **runtime mutation lease** → activity reservation → detached build task. Failure modes are typed, not exceptions: `AlreadyRunning`, `InsufficientDisk`, `MissingPrerequisites`, `ProcessesRunning` (carrying the running-process count), `RuntimeBusy`. The endpoint maps each to a `409` with a machine-readable `reason` (`already-building` / `disk` / `prerequisites` / `processes-running` / `runtime-busy`) — this is the **eject-first gate**: a build cannot start while any `llama-server` process is alive, because adoption swaps the binary tree underneath it.
 
 `ILlamaCppSourceBuildActivity` is the process-wide reservation that keeps builds and model spawns mutually exclusive; release is **identity-scoped by `BuildId`** so cleanup from an older build cannot clear a newer build's reservation.
 
-**Prerequisites** (`LlamaCppSourceBuildPrerequisiteProbe.ProbeAsync:49`) is an itemized checklist, each item `(Key, Satisfied, Detail)`; `canBuild` is true only when **every** item is satisfied. The base set is `os-is-linux`, `cmake`, `gcc`, `g++`, `make-or-ninja` (satisfied by either), `git`, `free-disk` (against the cache root's drive). Backend-specific items are inserted near the front: CUDA adds `nvidia-gpu`, `nvcc` and `nvidia-smi`; Vulkan adds `glslc` and `vulkaninfo`. A non-Linux host short-circuits to a **single** unsatisfied `os-is-linux` item — the endpoint is deliberately callable from any OS so the UI can render the checklist and explain why the build is unavailable. `free-disk` is the one item the start path re-reads, to answer `InsufficientDisk` rather than the generic `MissingPrerequisites`.
+**Prerequisites** (`LlamaCppSourceBuildPrerequisiteProbe.ProbeAsync`) is an itemized checklist, each item `(Key, Satisfied, Detail)`; `canBuild` is true only when **every** item is satisfied. The base set is `os-is-linux`, `cmake`, `gcc`, `g++`, `make-or-ninja` (satisfied by either), `git`, `free-disk` (against the cache root's drive). Backend-specific items are inserted near the front: CUDA adds `nvidia-gpu`, `nvcc` and `nvidia-smi`; Vulkan adds `glslc` and `vulkaninfo`. A non-Linux host short-circuits to a **single** unsatisfied `os-is-linux` item — the endpoint is deliberately callable from any OS so the UI can render the checklist and explain why the build is unavailable. `free-disk` is the one item the start path re-reads, to answer `InsufficientDisk` rather than the generic `MissingPrerequisites`.
 
 **Build phases** (`LlamaCppSourceBuildPhase`, each pushed over the hub with the appended log lines): `Cloning → Verifying → Configuring → Building → Adopting → Completed | Cancelled | Failed`.
 
@@ -266,7 +277,7 @@ Upstream ships no prebuilt Linux CUDA `llama-server`. Rather than leave a Linux 
 
 Everything runs under a **scrubbed, allowlisted environment** with an isolated `HOME` and `TMPDIR`, in an owner-only (0700) work directory **inside the cache root — never `/tmp`**.
 
-**The adopt swap is the part worth reading twice** (`LlamaCppSourceBuildService.cs:442-500`). The built tree is moved to a sibling `.staging` dir (same filesystem ⇒ atomic moves), symlink-validated and permission-hardened there, and given a `.source-build-manifest.json`. Only then, under a freshly acquired runtime-mutation lease: any previous runtime is moved to `.backup`, the staged tree is moved to `active`, and `LlamaCppBinaryManager.AdoptSourceBuildAsync` validates the **final** binary (device smoke check + SHA256 record) and writes the provenance into `installed-runtime.json`. On any failure the staged and half-swapped trees are deleted and the backup is moved back — **a failed rebuild never loses a working runtime** (`6dec9feb`, `64a1bf2d`). The layout is:
+**The adopt swap is the part worth reading twice** (`LlamaCppSourceBuildService.cs`). The built tree is moved to a sibling `.staging` dir (same filesystem ⇒ atomic moves), symlink-validated and permission-hardened there, and given a `.source-build-manifest.json`. Only then, under a freshly acquired runtime-mutation lease: any previous runtime is moved to `.backup`, the staged tree is moved to `active`, and `LlamaCppBinaryManager.AdoptSourceBuildAsync` validates the **final** binary (device smoke check + SHA256 record) and writes the provenance into `installed-runtime.json`. On any failure the staged and half-swapped trees are deleted and the backup is moved back — **a failed rebuild never loses a working runtime** (`6dec9feb`, `64a1bf2d`). The layout is:
 
 ```
 {cacheRoot}/llama.cpp/source-build/

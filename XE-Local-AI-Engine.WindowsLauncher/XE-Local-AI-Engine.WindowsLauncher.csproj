@@ -6,38 +6,48 @@
     <AssemblyName>XE-Local-AI-Engine.WindowsLauncher</AssemblyName>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- This launcher is the packaged Windows main exe, so it must call VelopackApp.Build().Run() to handle
+         Velopack lifecycle hooks; vpk pack statically verifies that call is present in the main exe. -->
+    <PackageReference Include="Velopack" />
+  </ItemGroup>
+
   <Target Name="ValidateWindowsApphostLicenseAssets"
           BeforeTargets="ComputeFilesToPublish"
           Condition="'$(UseAppHost)' == 'true' and $(RuntimeIdentifier.StartsWith('win-'))">
     <PropertyGroup>
       <!--
-        Resolve the apphost pack directory from the exact apphost the SDK chose ($(AppHostSourcePath) points at
-        <pack>/runtimes/<rid>/native/apphost.exe, so three levels up is the pack root). This finds the license
-        whether the pack was downloaded to the NuGet global cache OR served from the SDK's own packs/ dir — a
-        machine whose SDK bundles $(DotNetRuntimeVersion) serves the apphost from packs/ and never populates the
-        cache, which is why the old cache-only path failed there. Falls back to the historical NuGet-cache path.
+        The apphost's MIT license and third-party notices are copied from a repo-vendored copy, NOT from the SDK
+        apphost pack. On a machine whose installed SDK bundles $(DotNetRuntimeVersion), the apphost is served from
+        the SDK's own packs/ dir — which omits these two files — and because packs/ is a NuGet fallback folder the
+        NuGet package that DOES carry them is never restored to the global cache. Sourcing from the SDK/cache was
+        therefore machine-dependent and failed on exactly the SDKs that match the pinned version. Vendoring follows
+        the existing third-party/dotnet/ pattern and is fully machine-independent.
+
+        Refresh these two files from the Microsoft.NETCore.App.Host.<rid> <version> NuGet package when
+        $(DotNetRuntimeVersion) changes. reconcile_payload_spdx.py records their SHA-256 into the SPDX, so a refresh
+        is captured automatically with no other change.
       -->
-      <_WindowsApphostPackDirectory Condition="'$(AppHostSourcePath)' != ''">$([System.IO.Path]::GetFullPath('$([System.IO.Path]::GetDirectoryName($(AppHostSourcePath)))/../../..'))</_WindowsApphostPackDirectory>
-      <_WindowsApphostPackDirectory Condition="'$(_WindowsApphostPackDirectory)' == '' or !Exists('$(_WindowsApphostPackDirectory)/LICENSE.TXT')">$(NuGetPackageRoot)microsoft.netcore.app.host.$(RuntimeIdentifier)/$(DotNetRuntimeVersion)</_WindowsApphostPackDirectory>
+      <_WindowsApphostLicenseDir>$(MSBuildProjectDirectory)/../third-party/dotnet</_WindowsApphostLicenseDir>
     </PropertyGroup>
-    <Error Condition="!Exists('$(_WindowsApphostPackDirectory)/LICENSE.TXT')"
-           Text="The .NET $(DotNetRuntimeVersion) $(RuntimeIdentifier) apphost MIT license is missing from the restored host pack."/>
-    <Error Condition="!Exists('$(_WindowsApphostPackDirectory)/THIRD-PARTY-NOTICES.TXT')"
-           Text="The .NET $(DotNetRuntimeVersion) $(RuntimeIdentifier) apphost third-party notices are missing from the restored host pack."/>
+    <Error Condition="!Exists('$(_WindowsApphostLicenseDir)/DOTNET-APPHOST-LICENSE.txt')"
+           Text="The vendored .NET apphost MIT license (third-party/dotnet/DOTNET-APPHOST-LICENSE.txt) is missing."/>
+    <Error Condition="!Exists('$(_WindowsApphostLicenseDir)/DOTNET-APPHOST-THIRD-PARTY-NOTICES.txt')"
+           Text="The vendored .NET apphost third-party notices (third-party/dotnet/DOTNET-APPHOST-THIRD-PARTY-NOTICES.txt) are missing."/>
     <ItemGroup>
-      <ResolvedFileToPublish Include="$(_WindowsApphostPackDirectory)/LICENSE.TXT">
+      <ResolvedFileToPublish Include="$(_WindowsApphostLicenseDir)/DOTNET-APPHOST-LICENSE.txt">
         <RelativePath>licenses/dotnet/DOTNET-APPHOST-LICENSE.txt</RelativePath>
         <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       </ResolvedFileToPublish>
-      <ResolvedFileToPublish Include="$(_WindowsApphostPackDirectory)/THIRD-PARTY-NOTICES.TXT">
+      <ResolvedFileToPublish Include="$(_WindowsApphostLicenseDir)/DOTNET-APPHOST-THIRD-PARTY-NOTICES.txt">
         <RelativePath>licenses/dotnet/DOTNET-APPHOST-THIRD-PARTY-NOTICES.txt</RelativePath>
         <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       </ResolvedFileToPublish>
-      <ResolvedFileToPublish Include="$(_WindowsApphostPackDirectory)/LICENSE.TXT">
+      <ResolvedFileToPublish Include="$(_WindowsApphostLicenseDir)/DOTNET-APPHOST-LICENSE.txt">
         <RelativePath>wwwroot/licenses/dotnet/DOTNET-APPHOST-LICENSE.txt</RelativePath>
         <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       </ResolvedFileToPublish>
-      <ResolvedFileToPublish Include="$(_WindowsApphostPackDirectory)/THIRD-PARTY-NOTICES.TXT">
+      <ResolvedFileToPublish Include="$(_WindowsApphostLicenseDir)/DOTNET-APPHOST-THIRD-PARTY-NOTICES.txt">
         <RelativePath>wwwroot/licenses/dotnet/DOTNET-APPHOST-THIRD-PARTY-NOTICES.txt</RelativePath>
         <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       </ResolvedFileToPublish>

@@ -50,6 +50,39 @@ public sealed class McpAgentRunDispatcherTests
     }
 
     [Test]
+    public async Task StopAsync_WhenTokenAlreadyCancelledWhileGateHeld_CompletesWithoutThrowing()
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        using var cancelledShutdown = new CancellationTokenSource();
+        await cancelledShutdown.CancelAsync().ConfigureAwait(false);
+        var registry = new McpAgentRunCancellationRegistry();
+        var store = Substitute.For<IMcpAgentRunStore>();
+        var executor = Substitute.For<IMcpAgentRunExecutor>();
+        var queued = CreateRun(McpAgentRunStatus.Queued, version: 0, claimToken: null, McpAgentRunStopReason.None);
+        var listStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseList = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        store.ListAsync(Arg.Any<int>(), McpAgentRunStatus.Queued, Arg.Any<CancellationToken>()).Returns(async _ =>
+        {
+            listStarted.TrySetResult();
+            await releaseList.Task.ConfigureAwait(false);
+            return [queued];
+        });
+        await using var provider = CreateProvider(store, executor);
+        using var dispatcher = CreateDispatcher(provider.GetRequiredService<IServiceScopeFactory>(),
+            registry,
+            provider.GetRequiredService<McpAgentRunMetrics>(),
+            TimeProvider.System);
+        await dispatcher.StartAsync(timeout.Token).ConfigureAwait(false);
+        await listStarted.Task.WaitAsync(timeout.Token).ConfigureAwait(false);
+
+        // A host shutdown token that has already tripped must not abort the durable stop work nor escape as an exception.
+        var stop = dispatcher.StopAsync(cancelledShutdown.Token);
+        AssertEx.False(stop.IsCompleted, "Shutdown must still wait for the admitted queue read to leave the claim gate.");
+        releaseList.TrySetResult();
+        await stop.WaitAsync(timeout.Token).ConfigureAwait(false);
+    }
+
+    [Test]
     [Arguments(McpAgentRunStopReason.UserCancellation, McpAgentRunStatus.Cancelled, "cancelled")]
     [Arguments(McpAgentRunStopReason.WatchdogExpired, McpAgentRunStatus.Failed, "watchdog_expired")]
     [Arguments(McpAgentRunStopReason.HostShutdown, McpAgentRunStatus.Interrupted, "interrupted")]

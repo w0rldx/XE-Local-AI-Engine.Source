@@ -149,26 +149,31 @@ Everything lives in one directory (`%LOCALAPPDATA%\XE-Local-AI-Engine`), separat
 - **Loopback enforced twice**: every request is checked for a loopback peer, and at startup the app
   inspects its actually-bound addresses and **shuts down with a non-zero exit** if any is routable
   (overridable only by an explicit operator setting).
-- **Development Mode ships enabled.** There's no switch to leave off; the gate is that it only acts on
-  a repository you register. It is **not an OS sandbox** — builds and scripts run as your user.
+- **Development Mode ships enabled but can be disabled.** Set `Development:Enabled=false` to remove
+  its services and surface; when enabled, it only acts on a repository you register. It is **not an
+  OS sandbox** — builds and scripts run as your user.
   [Read this before pointing it anywhere](privacy-and-data.md#development-mode-and-its-limits)
+- **Custom tools are host-powerful and default off.** HTTP tools can reach configured network hosts;
+  command tools launch a direct executable as your user. The node switch starts disabled, the built-in
+  form initializes new definitions as disabled, and every invocation remains approval-wrapped. A fixed
+  tool can reuse an explicit, version-bound session approval; a parameterized tool re-prompts for each
+  model-selected argument set. The API persists an acknowledged caller's requested enablement.
 - **MCP runs both directions.** Outbound to servers you register (they execute as you — same trust
   boundary as Dev Mode), plus an inbound server surface so external clients can drive the app.
 
 ---
 
-## What I couldn't verify for you
+## Advanced runtime boundaries
 
-I'd rather leave these open than guess:
-
-- **Multi-GPU / `--tensor-split` behaviour**
-- **Whether the local API is OpenAI-compatible** enough to point existing tooling at (it's the app's
-  own OpenAPI surface, not an `/v1/chat/completions` shim, as far as I can tell)
-- **KV-cache quantization** controls
-- **Speculative decoding** — there's draft-model handling in the registry, but I haven't confirmed how
-  it's exposed
-
-Ask and I'll dig into any of them properly.
+- **Multi-GPU launch arguments are profile-owned.** A frozen inference profile can replay explicit
+  `-ngl`, `-ts` and `-ot` values. The normal automatic launch policy does not invent a tensor split.
+- **The supported local app API is not an OpenAI-compatible API.** It is the engine's authenticated
+  `/api/local/v1` REST and SignalR surface. The supervised `llama-server` child exposes an internal,
+  loopback OpenAI-compatible `/v1` endpoint for provider adapters; that is not the public app contract.
+- **GPU KV-cache quantization is automatic, not a chat-screen control.** GPU launches default to a
+  matching `q8_0` K/V cache with flash attention, then record and use a safe non-quantized fallback if
+  that optimized combination is unsupported. CPU launches keep the non-quantized path. Frozen
+  inference profiles may replay explicit KV types.
 
 ---
 
