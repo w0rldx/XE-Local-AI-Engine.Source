@@ -1858,25 +1858,25 @@
 			"source": "frontend"
 		},
 		{
-			"id": "backend:Microsoft.Agents.AI@1.15.0",
+			"id": "backend:Microsoft.Agents.AI@1.17.0",
 			"name": "Microsoft.Agents.AI",
-			"version": "1.15.0",
+			"version": "1.17.0",
 			"license": "MIT",
 			"homepageUrl": "https://learn.microsoft.com/agent-framework/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Agents.AI.Abstractions@1.15.0",
+			"id": "backend:Microsoft.Agents.AI.Abstractions@1.17.0",
 			"name": "Microsoft.Agents.AI.Abstractions",
-			"version": "1.15.0",
+			"version": "1.17.0",
 			"license": "MIT",
 			"homepageUrl": "https://learn.microsoft.com/agent-framework/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Agents.AI.Workflows@1.15.0",
+			"id": "backend:Microsoft.Agents.AI.Workflows@1.17.0",
 			"name": "Microsoft.Agents.AI.Workflows",
-			"version": "1.15.0",
+			"version": "1.17.0",
 			"license": "MIT",
 			"homepageUrl": "https://learn.microsoft.com/agent-framework/",
 			"source": "backend"
@@ -2138,9 +2138,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.AI.Evaluation@10.6.0",
+			"id": "backend:Microsoft.Extensions.AI.Evaluation@10.7.0",
 			"name": "Microsoft.Extensions.AI.Evaluation",
-			"version": "10.6.0",
+			"version": "10.7.0",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
@@ -2562,11 +2562,11 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.VectorData.Abstractions@9.7.0",
+			"id": "backend:Microsoft.Extensions.VectorData.Abstractions@10.7.0",
 			"name": "Microsoft.Extensions.VectorData.Abstractions",
-			"version": "9.7.0",
+			"version": "10.7.0",
 			"license": "MIT",
-			"homepageUrl": "https://dot.net/",
+			"homepageUrl": "https://learn.microsoft.com/dotnet/ai/vector-stores/overview",
 			"source": "backend"
 		},
 		{

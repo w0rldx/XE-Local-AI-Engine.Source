@@ -84,9 +84,9 @@
     <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.9" />
     <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.7.0" />
     <!-- Compatibility cohort: upgrade the stable MAF trio together after verifying their matching release set. -->
-    <PackageVersion Include="Microsoft.Agents.AI" Version="1.15.0" />
-    <PackageVersion Include="Microsoft.Agents.AI.Abstractions" Version="1.15.0" />
-    <PackageVersion Include="Microsoft.Agents.AI.Workflows" Version="1.15.0" />
+    <PackageVersion Include="Microsoft.Agents.AI" Version="1.17.0" />
+    <PackageVersion Include="Microsoft.Agents.AI.Abstractions" Version="1.17.0" />
+    <PackageVersion Include="Microsoft.Agents.AI.Workflows" Version="1.17.0" />
     <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery" Version="10.7.0" />
     <PackageVersion Include="ModelContextProtocol" Version="2.0.0" />
     <PackageVersion Include="ModelContextProtocol.AspNetCore" Version="2.0.0" />
