@@ -12,9 +12,12 @@ The Windows ZIP is framework-dependent and deliberately does **not** bundle .NET
 Runtime 10.0.10** or a newer .NET 10 servicing patch from Microsoft's [.NET 10 download page](https://dotnet.microsoft.com/en-us/download/dotnet/10.0).
 The ASP.NET Core Runtime is the requirement; the SDK and Hosting Bundle are not required just to run the app.
 
-If the base .NET runtime is missing, the Microsoft apphost displays its standard missing-framework message. If .NET
-exists but ASP.NET Core is missing or older than 10.0.10, the C# launcher prints the exact requirement and opens that
-download page.
+This step is not optional. If .NET 10 is missing **entirely** (for example, you only have .NET 8), the app can close
+**silently — no message, no log** — because the launcher is itself a .NET 10 program that cannot start. If the base
+.NET runtime is present but ASP.NET Core is missing or older than 10.0.10, the C# launcher runs and prints the exact
+requirement while opening that download page. Either way, installing the runtime above is the fix. To check what you
+have, run `dotnet --list-runtimes` and look for `Microsoft.AspNetCore.App 10.0.10` or newer.
+→ [FAQ: the window flashes and disappears](faq.md#nothing-happens-when-i-run-it--the-window-flashes-and-disappears)
 
 ---
 
