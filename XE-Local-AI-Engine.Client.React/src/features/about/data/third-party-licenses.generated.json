@@ -2738,9 +2738,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "frontend:nanoid@3.3.16",
+			"id": "frontend:nanoid@3.3.17",
 			"name": "nanoid",
-			"version": "3.3.16",
+			"version": "3.3.17",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/ai/nanoid#readme",
 			"source": "frontend"
