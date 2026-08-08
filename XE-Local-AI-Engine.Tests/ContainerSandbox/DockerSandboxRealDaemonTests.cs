@@ -1,6 +1,8 @@
 namespace XE_Local_AI_Engine.Tests.ContainerSandbox;
 
+using System.Net;
 using System.Runtime.InteropServices;
+using Docker.DotNet;
 using Microsoft.Extensions.Logging.Abstractions;
 using TUnit.Core.Exceptions;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
@@ -429,7 +431,7 @@ public sealed class DockerSandboxRealDaemonTests
             new FixedTimeProvider(FixedNow),
             NullLogger<DockerSandboxRuntimeProvider>.Instance);
 
-        var exception = await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(() => provider.CreateOrAttachAsync(new SandboxCreateRequest
+        var request = new SandboxCreateRequest
         {
             AttachKey = new SandboxAttachKey
             {
@@ -445,8 +447,27 @@ public sealed class DockerSandboxRealDaemonTests
             {
                 RootPath = workspaceRoot
             }
-        }));
+        };
 
+        // Manual throw-capture rather than AssertEx.ThrowsAsync: this creates a container directly, so an absent
+        // pinned image surfaces here too and must skip (not fail), the same as ContainerFixture.CreateAsync.
+        SandboxCapabilityNotSupportedException? refusal = null;
+        try
+        {
+            await provider.CreateOrAttachAsync(request);
+        }
+        catch (SandboxCapabilityNotSupportedException caught)
+        {
+            refusal = caught;
+        }
+        catch (DockerRuntimeException dockerException) when (dockerException.InnerException is DockerApiException { StatusCode: HttpStatusCode.NotFound })
+        {
+            throw new SkipTestException(
+                $"SKIPPED — the pinned test image '{options.Image}' is not present on this daemon and Development Mode "
+                + $"never auto-pulls it. Run `docker pull {options.Image}` to enable these §3.8 hardening tests.");
+        }
+
+        var exception = AssertEx.NotNull(refusal);
         AssertEx.Contains(exception.Message, "workspace mount");
         AssertEx.Empty(Directory.GetFileSystemEntries(workspaceRoot));
     }
@@ -716,7 +737,7 @@ public sealed class DockerSandboxRealDaemonTests
             var provider = new DockerSandboxRuntimeProvider(monitor, factory, new FixedTimeProvider(FixedNow),
                 NullLogger<DockerSandboxRuntimeProvider>.Instance);
 
-            var handle = await provider.CreateOrAttachAsync(new SandboxCreateRequest
+            var request = new SandboxCreateRequest
             {
                 AttachKey = new SandboxAttachKey
                 {
@@ -733,7 +754,23 @@ public sealed class DockerSandboxRealDaemonTests
                     RootPath = workspaceRoot
                 },
                 Mounts = mounts
-            });
+            };
+
+            SandboxHandle handle;
+            try
+            {
+                handle = await provider.CreateOrAttachAsync(request);
+            }
+            catch (DockerRuntimeException exception) when (exception.InnerException is DockerApiException { StatusCode: HttpStatusCode.NotFound })
+            {
+                // Daemon reachable but the pinned image is not present, and Development Mode never auto-pulls it
+                // (production assumes a pre-provisioned image). A hard failure here would mean CI on any daemon
+                // without the image reds instead of skipping — the same class as RequireDaemonAsync's no-daemon skip.
+                workspace.Dispose();
+                throw new SkipTestException(
+                    $"SKIPPED — the pinned test image '{options.Image}' is not present on this daemon and Development Mode "
+                    + $"never auto-pulls it. Run `docker pull {options.Image}` to enable these §3.8 hardening tests.");
+            }
 
             var client = factory.Create(DockerDaemonEndpointResolver.Resolve(options));
             var daemon = await client.ProbeAsync();
