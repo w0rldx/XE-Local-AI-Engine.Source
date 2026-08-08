@@ -6,6 +6,12 @@
     <AssemblyName>XE-Local-AI-Engine.WindowsLauncher</AssemblyName>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- This launcher is the packaged Windows main exe, so it must call VelopackApp.Build().Run() to handle
+         Velopack lifecycle hooks; vpk pack statically verifies that call is present in the main exe. -->
+    <PackageReference Include="Velopack" />
+  </ItemGroup>
+
   <Target Name="ValidateWindowsApphostLicenseAssets"
           BeforeTargets="ComputeFilesToPublish"
           Condition="'$(UseAppHost)' == 'true' and $(RuntimeIdentifier.StartsWith('win-'))">
